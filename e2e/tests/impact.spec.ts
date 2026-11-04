@@ -104,30 +104,45 @@ test.describe("the summary of the last change", () => {
     await expect(body(page).locator(".impact-uses li").first()).toContainText("(0.1 m more)");
   });
 
-  test("the card is a polite live region that no key reaches, so the focus order is the page's own", async ({
-    page,
-  }) => {
-    await expect(card(page)).toHaveAttribute("aria-live", "polite");
-    await expect(card(page)).toHaveAttribute("aria-atomic", "true");
-    await expect(card(page)).not.toHaveAttribute("aria-live", "assertive");
-    await selectSidewalk(page);
-    await page.keyboard.press("+");
-    await expect(body(page)).toContainText("Newly failing");
-    await expect(card(page).locator("a, button, input, select, textarea, [tabindex]")).toHaveCount(0);
-    // Tab from the tab strip goes where it would go with no card.
-    const order = async () => {
-      await page.locator("#t-space").focus();
-      const ids: string[] = [];
-      for (let i = 0; i < 4; i++) {
-        await page.keyboard.press("Tab");
-        ids.push(await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName || ""));
-      }
-      return ids;
-    };
-    const withCard = await order();
-    await page.evaluate(() => document.getElementById("impact-card")?.remove());
-    expect(await order()).toEqual(withCard);
-  });
+  // At a tall window the notes panel does not scroll; at a short one it does, and Chromium then makes the scroller a
+  // keyboard stop of its own (with or without the card). Both are the page's own order, and the card is never a stop.
+  for (const height of [900, 420]) {
+    test(`the card is a polite live region that no key reaches, so the focus order is the page's own at ${height} px high`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1440, height });
+      await expect(card(page)).toHaveAttribute("aria-live", "polite");
+      await expect(card(page)).toHaveAttribute("aria-atomic", "true");
+      await expect(card(page)).not.toHaveAttribute("aria-live", "assertive");
+      await selectSidewalk(page);
+      await page.keyboard.press("+");
+      await expect(body(page)).toContainText("Newly failing");
+      await expect(card(page).locator("a, button, input, select, textarea, [tabindex]")).toHaveCount(0);
+      // Tab from the tab strip never stops in the card, and goes where it would go with the card out of the way. The
+      // card is hidden, not removed: a panel that overflows is a keyboard stop of its own in Chromium (a scroller
+      // with no focusable child), and taking the card out would change whether it overflows at this window size.
+      const order = async () => {
+        await page.locator("#t-space").focus();
+        const stops: { stop: string; inCard: boolean }[] = [];
+        for (let i = 0; i < 5; i++) {
+          await page.keyboard.press("Tab");
+          stops.push(
+            await page.evaluate(() => ({
+              stop: document.activeElement?.id || document.activeElement?.tagName || "",
+              inCard: !!document.activeElement?.closest("#impact-card"),
+            })),
+          );
+        }
+        return stops;
+      };
+      const withCard = await order();
+      expect(withCard.filter((s) => s.inCard)).toEqual([]);
+      await page.evaluate(() => {
+        document.getElementById("impact-card")!.style.visibility = "hidden";
+      });
+      expect(await order()).toEqual(withCard);
+    });
+  }
 
   test("the Impact tab is reached by the tab keys and remembered", async ({ page }) => {
     await page.locator("#t-space").focus();
