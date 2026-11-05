@@ -304,11 +304,7 @@ pub(super) fn lay_out(
 
     // Which half a lane is in is counted among roadway pieces only.
     let on_road = |s: &Spec| {
-        if by_lane {
-            KINDS[kinds(s)].direction != DirectionRule::None
-        } else {
-            !matches!(s.kind, "median" | "planting" | "sidewalk" | "terrace")
-        }
+        if by_lane { KINDS[kinds(s)].direction != DirectionRule::None } else { !matches!(s.kind, "median" | "planting" | "sidewalk" | "terrace") }
     };
     let count = specs.iter().filter(|s| on_road(s)).count();
     let mut out: Vec<Segment> = lead;
