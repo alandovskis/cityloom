@@ -65,7 +65,7 @@ test.describe("street templates", () => {
           break;
         }
       }
-      test.skip(!found, "no street of the Plateau tile is too narrow for any template");
+      expect(found, "a street of the Plateau tile is too narrow for some template").toBe(true);
       const before = await names(page);
       await page.locator("#transform-btn").click();
       const item = page.locator('#transform-menu [role=menuitem][aria-disabled="true"]').first();
