@@ -106,7 +106,7 @@ impl Template {
     pub fn arrange(self, class: StreetClass, row_mm: i32, side: Side, next_uid: &mut u32) -> Result<Vec<Segment>, TemplateRefusal> {
         self.applicable(class, row_mm)?;
         let too_narrow = TemplateRefusal::TooNarrow { min_mm: self.min_mm(), row_mm };
-        lay_out(self.specs(), Vec::new(), Vec::new(), row_mm, side, next_uid).ok_or(too_narrow)
+        lay_out(self.specs(), Vec::new(), Vec::new(), row_mm, side, true, next_uid).ok_or(too_narrow)
     }
 }
 
@@ -201,6 +201,22 @@ mod tests {
             assert_eq!(dirs(Template::BusCorridor), [left, left, 1 - left, 1 - left], "{side:?}");
             assert_eq!(dirs(Template::Greenway), [left, left, 1 - left, 1 - left], "{side:?}");
             assert_eq!(dirs(Template::Commercial), [left, 1 - left], "{side:?}");
+        }
+    }
+
+    #[test]
+    fn a_template_with_a_lane_each_way_keeps_both_directions_at_every_width_it_accepts() {
+        for side in [Side::Right, Side::Left] {
+            for t in [Template::Commercial, Template::Greenway, Template::BusCorridor, Template::Industrial] {
+                for row in [t.min_mm(), 11_000, 12_000, 15_000, 20_000] {
+                    if row < t.min_mm() || t.applicable(StreetClass::Local, row).is_err() {
+                        continue;
+                    }
+                    let travel = kind_index("travel").unwrap();
+                    let dirs: Vec<usize> = arranged(t, row, side).iter().filter(|s| s.kind == travel).filter_map(|s| s.direction).collect();
+                    assert!(dirs.contains(&0) && dirs.contains(&1), "{t:?} {side:?} at {row}: {dirs:?}");
+                }
+            }
         }
     }
 

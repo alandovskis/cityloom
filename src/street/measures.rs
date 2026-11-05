@@ -248,14 +248,26 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
     let lead = existing.iter().take_while(|s| !is_road(s)).cloned().collect::<Vec<_>>();
     let trail = existing.iter().rev().take_while(|s| !is_road(s)).cloned().collect::<Vec<_>>();
     let (lead, trail): (Vec<Segment>, Vec<Segment>) = if lead.len() == existing.len() { (lead, Vec::new()) } else { (lead, trail.into_iter().rev().collect()) };
-    lay_out(specs, lead, trail, row_mm, side, next_uid)
+    lay_out(specs, lead, trail, row_mm, side, false, next_uid)
 }
 
 /// Lays `specs` out between the `lead` and `trail` pieces that stay, in the width left of `row_mm`: leaves out
 /// what can go until the minimums fit, squeezes and grows the widths, and gives each piece its direction (by the
 /// half of the street it is in). None when the minimums of what cannot go do not fit. The sum of the widths is
 /// `row_mm` unless every piece is at its maximum first. Shared by the Atlas measures and the street templates.
-pub(super) fn lay_out(mut specs: Vec<Spec>, lead: Vec<Segment>, trail: Vec<Segment>, row_mm: i32, side: Side, next_uid: &mut u32) -> Option<Vec<Segment>> {
+///
+/// `by_lane` says how the halves are counted: false (the measures) among the roadway pieces, so parking and loading
+/// count; true (the templates) among the pieces that take a direction only, so a lane each way stays one each way
+/// whatever is left out beside them.
+pub(super) fn lay_out(
+    mut specs: Vec<Spec>,
+    lead: Vec<Segment>,
+    trail: Vec<Segment>,
+    row_mm: i32,
+    side: Side,
+    by_lane: bool,
+    next_uid: &mut u32,
+) -> Option<Vec<Segment>> {
     let edge: i32 = lead.iter().chain(&trail).map(|s| s.width_mm).sum();
     let room = row_mm - edge;
 
@@ -291,7 +303,13 @@ pub(super) fn lay_out(mut specs: Vec<Spec>, lead: Vec<Segment>, trail: Vec<Segme
     }
 
     // Which half a lane is in is counted among roadway pieces only.
-    let on_road = |s: &Spec| !matches!(s.kind, "median" | "planting" | "sidewalk" | "terrace");
+    let on_road = |s: &Spec| {
+        if by_lane {
+            KINDS[kinds(s)].direction != DirectionRule::None
+        } else {
+            !matches!(s.kind, "median" | "planting" | "sidewalk" | "terrace")
+        }
+    };
     let count = specs.iter().filter(|s| on_road(s)).count();
     let mut out: Vec<Segment> = lead;
     let mut idx = 0;
