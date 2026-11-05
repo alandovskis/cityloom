@@ -2299,6 +2299,26 @@ dl.prov dd:last-child {
 .transit-item {
   grid-template-columns: 40px 1fr;
 }
+/* A template has a name and no mark. */
+.template-item {
+  grid-template-columns: 1fr;
+  padding-inline-start: 10px;
+}
+/* A template that does not suit the street stays listed: dimmed, with its reason as text under it (ink-2 on the
+   panel is measured in shared/contrast.rs). */
+.template-item[aria-disabled="true"] {
+  color: var(--ink-2);
+  cursor: not-allowed;
+}
+.template-item[aria-disabled="true"]:hover {
+  background: transparent;
+}
+.template-reason {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
 .transit-item .dirtag {
   margin: 0;
   text-align: center;

@@ -531,3 +531,16 @@ impact-verdict-mixed =
        *[other] { $failing } now fail
     }.
 impact-verdict-unchanged = No change in the checks.
+
+# Street templates (src/street/model/templates.rs, page.rs, vm.rs).
+rev-template = { $name } template
+template-commercial = Commercial main street
+template-school = School street
+template-greenway = Neighbourhood greenway
+template-bus-corridor = Bus corridor
+template-industrial = Industrial access street
+transform-templates-heading = Street templates
+transform-templates-hint = Lay the street out as one of these templates. It replaces the pieces of the selected zone with ordinary ones that you can edit and undo as one change.
+template-refused-freeway = { $name } cannot be applied to a freeway.
+template-refused-narrow = { $name } needs a street at least { $min } wide. This street is { $row } wide.
+template-refused-wide = { $name } cannot use a street wider than { $max }. This street is { $row } wide.

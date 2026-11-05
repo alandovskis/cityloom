@@ -163,23 +163,25 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
 // ---- arranging a section --------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq)]
-enum Dir {
+pub(super) enum Dir {
     None,
     /// With the traffic of its half of the street.
     Half,
     Fixed(usize),
 }
 
-struct Spec {
-    kind: &'static str,
-    dir: Dir,
+/// One piece of a section to lay out (`lay_out`): its catalogue kind, which way it runs, whether it may be left out
+/// when the street is too narrow, and its other-times windows.
+pub(super) struct Spec {
+    pub(super) kind: &'static str,
+    pub(super) dir: Dir,
     /// May be left out when the street is too narrow.
-    removable: bool,
+    pub(super) removable: bool,
     /// Other times: (kind, from, to) with the same direction rule as the piece, reversed if `flip`.
     other: Vec<(&'static str, i32, i32, bool)>,
 }
 
-fn sp(kind: &'static str, dir: Dir, removable: bool) -> Spec {
+pub(super) fn sp(kind: &'static str, dir: Dir, removable: bool) -> Spec {
     Spec { kind, dir, removable, other: Vec::new() }
 }
 
@@ -246,6 +248,26 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
     let lead = existing.iter().take_while(|s| !is_road(s)).cloned().collect::<Vec<_>>();
     let trail = existing.iter().rev().take_while(|s| !is_road(s)).cloned().collect::<Vec<_>>();
     let (lead, trail): (Vec<Segment>, Vec<Segment>) = if lead.len() == existing.len() { (lead, Vec::new()) } else { (lead, trail.into_iter().rev().collect()) };
+    lay_out(specs, lead, trail, row_mm, side, false, next_uid)
+}
+
+/// Lays `specs` out between the `lead` and `trail` pieces that stay, in the width left of `row_mm`: leaves out
+/// what can go until the minimums fit, squeezes and grows the widths, and gives each piece its direction (by the
+/// half of the street it is in). None when the minimums of what cannot go do not fit. The sum of the widths is
+/// `row_mm` unless every piece is at its maximum first. Shared by the Atlas measures and the street templates.
+///
+/// `by_lane` says how the halves are counted: false (the measures) among the roadway pieces, so parking and loading
+/// count; true (the templates) among the pieces that take a direction only, so a lane each way stays one each way
+/// whatever is left out beside them.
+pub(super) fn lay_out(
+    mut specs: Vec<Spec>,
+    lead: Vec<Segment>,
+    trail: Vec<Segment>,
+    row_mm: i32,
+    side: Side,
+    by_lane: bool,
+    next_uid: &mut u32,
+) -> Option<Vec<Segment>> {
     let edge: i32 = lead.iter().chain(&trail).map(|s| s.width_mm).sum();
     let room = row_mm - edge;
 
@@ -262,7 +284,7 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
     let sum = |w: &[i32]| w.iter().sum::<i32>();
     // Squeeze other traffic before the transit lanes: a transit lane wants its width.
     'squeeze: while sum(&w) > room {
-        for pick in ["travel", "parking", "bike", "loading", "shoulder", "planting", "median", "bus"] {
+        for pick in ["travel", "parking", "bike", "loading", "shoulder", "planting", "median", "bus", "sidewalk", "terrace"] {
             if let Some(i) = (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] > KINDS[kinds(&specs[i])].min_mm).max_by_key(|&i| w[i]) {
                 w[i] -= 100;
                 continue 'squeeze;
@@ -271,7 +293,7 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
         return None;
     }
     'grow: while sum(&w) + 100 <= room {
-        for pick in ["bus", "travel", "median", "planting", "bike", "shoulder", "loading", "parking"] {
+        for pick in ["bus", "travel", "median", "planting", "bike", "shoulder", "loading", "parking", "sidewalk", "terrace"] {
             if let Some(i) = (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] + 100 <= KINDS[kinds(&specs[i])].max_mm).min_by_key(|&i| w[i]) {
                 w[i] += 100;
                 continue 'grow;
@@ -281,7 +303,9 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
     }
 
     // Which half a lane is in is counted among roadway pieces only.
-    let on_road = |s: &Spec| !matches!(s.kind, "median" | "planting");
+    let on_road = |s: &Spec| {
+        if by_lane { KINDS[kinds(s)].direction != DirectionRule::None } else { !matches!(s.kind, "median" | "planting" | "sidewalk" | "terrace") }
+    };
     let count = specs.iter().filter(|s| on_road(s)).count();
     let mut out: Vec<Segment> = lead;
     let mut idx = 0;

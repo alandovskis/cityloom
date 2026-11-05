@@ -19,7 +19,7 @@ use crate::shared::ports::Ports;
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
 use crate::street::impact::{self, Cause, Impact, Input};
-use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Use, View, ZoneRefusal};
+use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Template, TemplateView, Use, View, ZoneRefusal};
 use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
@@ -91,12 +91,15 @@ pub struct TransformMenu {
     pub pedestrian: Vec<usize>,
     /// Atlas codes of the measures the street can be arranged as.
     pub transit: Vec<&'static str>,
+    /// Every street template, with the reason one cannot be applied to the selected zone. Never empty, so the
+    /// button is always shown.
+    pub templates: Vec<TemplateView>,
 }
 
 impl TransformMenu {
     /// Nothing to offer: the button is not shown.
     pub fn is_empty(&self) -> bool {
-        self.pedestrian.is_empty() && self.transit.is_empty()
+        self.pedestrian.is_empty() && self.transit.is_empty() && self.templates.is_empty()
     }
 }
 
@@ -288,6 +291,27 @@ impl StreetVm {
         TransformMenu {
             pedestrian: if v.has_motor { PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect() } else { Vec::new() },
             transit: v.measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect(),
+            templates: v.templates.clone(),
+        }
+    }
+
+    /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
+    pub fn apply_template(&self, template: Template) -> bool {
+        let before = self.before();
+        let result = self.core.edit(|e| e.apply_template(template));
+        match result {
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.merge.set(None);
+                self.say_edit(&before);
+                true
+            }
+            Err(refusal) => {
+                self.ports.announcer.say(&text::template_refused(&self.i18n, self.units_now(), template, refusal));
+                false
+            }
         }
     }
 
@@ -1450,7 +1474,38 @@ mod tests {
         assert!(menu.pedestrian.is_empty());
         let fits: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
         assert_eq!(menu.transit, fits, "the menu offers the measures that fit on a pedestrian street too");
-        assert_eq!(menu.is_empty(), fits.is_empty());
+        assert!(!menu.is_empty(), "the templates are always listed");
+    }
+
+    #[test]
+    fn the_transform_menu_lists_all_five_templates_and_says_why_one_does_not_fit() {
+        use crate::street::model::{Template, TemplateRefusal};
+        let r = rig(2);
+        let menu = r.vm.transform_menu();
+        assert_eq!(menu.templates.len(), 5);
+        let bus = menu.templates.iter().find(|t| t.template == Template::BusCorridor).unwrap();
+        assert!(matches!(bus.refusal, Some(TemplateRefusal::TooNarrow { .. })));
+        let before = r.vm.view_now().revisions.len();
+        assert!(!r.vm.apply_template(Template::BusCorridor));
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("Bus corridor needs a street at least 13.8 m wide."), "{said:?}");
+        assert_eq!(r.vm.view_now().revisions.len(), before, "a refusal changes nothing");
+    }
+
+    #[test]
+    fn a_template_is_one_announced_undo_step_and_start_over_restores_the_street() {
+        use crate::street::model::Template;
+        let r = rig(0);
+        let first = r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>();
+        assert!(r.vm.apply_template(Template::School));
+        assert_eq!(r.said.take().len(), 1);
+        assert_eq!(r.vm.view_now().revisions.len(), 1);
+        assert_eq!(r.vm.view_now().revisions[0].label.key, "rev-template");
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>(), first);
+        assert!(r.vm.apply_template(Template::Greenway) && r.vm.reset());
+        assert_eq!(r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>(), first);
     }
 
     #[test]

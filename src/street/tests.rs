@@ -969,18 +969,23 @@ fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures
         "{button}"
     );
     assert!(h.contains(">Transform<") && h.contains("id=\"transform-menu\"") && h.contains("role=\"menu\"") && h.contains("hidden"), "{h}");
-    assert_eq!(count(&h, "role=\"group\""), 2, "{h}");
-    assert!(h.contains("Make pedestrian") && h.contains("Transit priority"), "{h}");
+    assert_eq!(count(&h, "role=\"group\""), 3, "{h}");
+    assert!(h.contains("Make pedestrian") && h.contains("Transit priority") && h.contains("Street templates"), "{h}");
     for kind in ["Sidewalk", "Planting strip", "Café terrace"] {
         assert!(h.contains(kind), "{kind}");
     }
     assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
     // The mark and the name are apart in the text, so that a visible label read as one word is not what the
     // item's name has to contain (WCAG 2.5.3).
-    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\""), "{h}");
+    // (A template has a name and no mark.)
+    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\"") - count(&h, "template-item"), "{h}");
     // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
     // reach it as the group's name and description.
-    for (group, heading, hint) in [("ped", "transform-ped-h", "transform-ped-hint"), ("transit", "transform-transit-h", "transform-transit-hint")] {
+    for (group, heading, hint) in [
+        ("ped", "transform-ped-h", "transform-ped-hint"),
+        ("transit", "transform-transit-h", "transform-transit-hint"),
+        ("templates", "transform-templates-h", "transform-templates-hint"),
+    ] {
         let tag = &h[h[..h.find(&format!("aria-labelledby=\"{heading}\"")).unwrap()].rfind('<').unwrap()..];
         assert!(tag[..tag.find('>').unwrap()].contains(&format!("aria-describedby=\"{hint}\"")), "{group}: {tag}");
         for id in [heading, hint] {
@@ -1036,15 +1041,50 @@ fn the_transform_menu_leaves_out_a_group_with_nothing_in_it_and_is_not_shown_emp
     use crate::shared::catalogue::kind_index;
     let s = street_shared(1);
     let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert_eq!(count(&h, "role=\"group\""), 2);
+    assert_eq!(count(&h, "role=\"group\""), 3);
     assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
     let menu = s.transform_menu();
     let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
     if menu.is_empty() {
         assert!(!h.contains("transform-btn"), "{h}");
     } else {
-        assert_eq!(count(&h, "role=\"group\""), 1, "{h}");
+        let groups = 1 + usize::from(!menu.transit.is_empty());
+        assert_eq!(count(&h, "role=\"group\""), groups, "the templates, and the measures if any fit: {h}");
     }
+}
+
+#[test]
+fn the_templates_are_all_listed_and_one_that_does_not_fit_is_disabled_with_its_reason_described() {
+    // Sample 2 is 12 m wide: the bus corridor needs 13.8 m.
+    let s = street_shared(2);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert_eq!(count(&h, "template-item"), 5, "{h}");
+    for name in ["Commercial main street", "School street", "Neighbourhood greenway", "Bus corridor", "Industrial access street"] {
+        assert!(h.contains(&format!("<b>{name}</b>")), "{name}");
+    }
+    assert_eq!(count(&h, "aria-disabled=\"true\""), s.transform_menu().templates.iter().filter(|t| t.refusal.is_some()).count());
+    let tag = &h[h[..h.find("data-template=\"bus-corridor\"").unwrap()].rfind("<button").unwrap()..];
+    let tag = &tag[..tag.find('>').unwrap()];
+    assert!(
+        tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""),
+        "{tag}"
+    );
+    let reason = &h[h[..h.find("id=\"template-reason-bus-corridor\"").unwrap()].rfind("<p").unwrap()..];
+    assert!(reason[..reason.find('>').unwrap()].contains("aria-hidden=\"true\""), "a menu holds only items and groups: {reason}");
+    assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
+    let school = &h[h[..h.find("data-template=\"school\"").unwrap()].rfind("<button").unwrap()..];
+    assert!(!school[..school.find('>').unwrap()].contains("aria-disabled"), "{school}");
+    assert!(!h.contains("template-reason-school"), "a template that fits has no reason");
+}
+
+#[test]
+fn the_templates_are_worded_in_french() {
+    let s = street_shared_in(2, Locale::FrCa);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    for name in ["Rue commerciale", "Rue scolaire", "Voie verte de quartier", "Corridor d’autobus", "Rue d’accès industriel", "Modèles de rue"] {
+        assert!(h.contains(name), "{name}");
+    }
+    assert!(h.contains("Le modèle «\u{a0}Corridor d’autobus\u{a0}» demande une rue d’au moins 13,8\u{a0}m"), "{h}");
 }
 
 #[test]

@@ -407,13 +407,14 @@ test.describe("the Transform menu", () => {
     await expect(page.locator("#transform-btn")).toBeFocused();
   });
 
-  test("has a group for making the street pedestrian and one for the transit measures that fit, and no others", async ({
+  test("has a group for making the street pedestrian, one for the transit measures that fit and one for the street templates", async ({
     page,
   }) => {
     await page.locator("#transform-btn").click();
     const menu = page.locator("#transform-menu");
     await expect(menu).toHaveAttribute("role", "menu");
-    await expect(menu.getByRole("group")).toHaveCount(2);
+    await expect(menu.getByRole("group")).toHaveCount(3);
+    await expect(menu.getByRole("group", { name: "Street templates" }).getByRole("menuitem")).toHaveCount(5);
     await expect(menu.getByRole("group", { name: "Make pedestrian" }).getByRole("menuitem")).toHaveCount(3);
     const transit = menu.getByRole("group", { name: "Transit priority" });
     const offered = await transit.getByRole("menuitem").count();
