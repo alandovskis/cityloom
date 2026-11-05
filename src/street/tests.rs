@@ -1069,7 +1069,8 @@ fn the_templates_are_all_listed_and_one_that_does_not_fit_is_disabled_with_its_r
         tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""),
         "{tag}"
     );
-    let reason = &h[h.find("id=\"template-reason-bus-corridor\"").unwrap()..];
+    let reason = &h[h[..h.find("id=\"template-reason-bus-corridor\"").unwrap()].rfind("<p").unwrap()..];
+    assert!(reason[..reason.find('>').unwrap()].contains("aria-hidden=\"true\""), "a menu holds only items and groups: {reason}");
     assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
     let school = &h[h[..h.find("data-template=\"school\"").unwrap()].rfind("<button").unwrap()..];
     assert!(!school[..school.find('>').unwrap()].contains("aria-disabled"), "{school}");

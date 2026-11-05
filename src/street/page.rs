@@ -534,15 +534,16 @@ fn menu_item(
 }
 
 /// One street template in the Transform menu. Unlike the measures, a template that does not suit the street stays
-/// in the list: it is `aria-disabled` (still reached by the arrows), its reason is visible under it and
-/// `aria-describedby` points at that, and choosing it says the reason instead of applying anything.
+/// in the list: it is `aria-disabled` (still reached by the arrows), its reason is visible under it (hidden from
+/// assistive technology, since a menu holds only items and groups: `aria-describedby` still reads it)
+/// and `aria-describedby` points at that, and choosing it says the reason instead of applying anything.
 fn template_item(w: SheetWatch, view: TemplateView, choose: impl Fn() + 'static) -> impl IntoView {
     let t = view.template;
     let name = move || w.i18n().tr(t.name_key(), &Args::new());
     let reason_id = format!("template-reason-{}", t.id());
     let reason = view.refusal.map(|r| {
         let text = move || said::say(&w.i18n(), w.units(), &r.said(t));
-        view! { <p class="template-reason" id=reason_id.clone()>{text}</p> }
+        view! { <p class="template-reason" id=reason_id.clone() aria-hidden="true">{text}</p> }
     });
     let disabled = view.refusal.is_some();
     view! {
