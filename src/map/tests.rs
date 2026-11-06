@@ -861,3 +861,165 @@ fn the_provenance_tab_is_worded_in_french() {
     let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
     assert!(h.contains("Noms de rues") && h.contains("lacune") && h.contains("Effet sur la conception") && h.contains("n’a pas d’étiquette de nom"), "{h}");
 }
+
+// ---- the design review report ----------------------------------------------------------------
+
+mod report {
+    use super::*;
+    use crate::shared::ports::{Ports, test_ports_with_pdf};
+    use cityloom_report::{Block, ReportData};
+
+    fn sample_in(locale: Locale) -> (Rc<MapVm>, Rc<crate::shared::ports::FakePdfWriter>, Rc<crate::shared::ports::FakeDownloads>, Rc<MemoryStorage>) {
+        let (ports, pdf, downloads) = test_ports_with_pdf();
+        let storage = Rc::new(MemoryStorage::default());
+        storage.set_now(1_793_966_400_000); // 2026-11-06 12:00:00 UTC
+        let ports = Ports { storage: storage.clone(), ..ports };
+        (MapVm::on_sample(ports, crate::i18n_for(locale)), pdf, downloads, storage)
+    }
+
+    fn texts(page: &[Block]) -> Vec<String> {
+        page.iter()
+            .flat_map(|b| match b {
+                Block::Heading { text, .. } | Block::Paragraph { text } => vec![text.clone()],
+                Block::Table { caption, head, rows } => {
+                    let mut v = vec![caption.clone()];
+                    v.extend(head.clone());
+                    v.extend(rows.iter().flatten().cloned());
+                    v
+                }
+            })
+            .collect()
+    }
+
+    fn table(data: &ReportData) -> Vec<Vec<String>> {
+        data.pages[1].iter().find_map(|b| if let Block::Table { rows, .. } = b { Some(rows.clone()) } else { None }).expect("the summary has a table")
+    }
+
+    #[test]
+    fn the_report_has_a_cover_and_a_summary_page() {
+        let (vm, ..) = sample_in(Locale::En);
+        let data = vm.report_data();
+        assert_eq!(data.pages.len(), 2);
+        assert_eq!(data.lang, "en");
+        let cover = texts(&data.pages[0]);
+        assert!(matches!(&data.pages[0][0], Block::Heading { level: 1, text } if *text == vm.title()));
+        let joined = cover.join("\n");
+        assert!(joined.contains("Design review report"), "{joined}");
+        assert!(joined.contains("2026-11-06 12:00 UTC"), "{joined}");
+        assert!(joined.contains(env!("CARGO_PKG_VERSION")), "{joined}");
+        assert!(joined.contains("Whole city"), "{joined}");
+        assert!(joined.contains("design study"), "{joined}");
+        assert!(joined.contains("placeholders"), "{joined}");
+    }
+
+    #[test]
+    fn the_summary_counts_come_from_the_city_view() {
+        let (vm, ..) = sample_in(Locale::En);
+        let v = vm.view();
+        let rows = table(&vm.report_data());
+        assert_eq!(rows.len(), 5);
+        let junctions = v.nodes.iter().filter(|n| n.junction).count();
+        assert!(rows[0][1].contains(&v.edges.len().to_string()) && rows[0][1].contains(&junctions.to_string()), "{:?}", rows[0]);
+        assert_eq!(rows[1][1], v.edited.to_string());
+        assert_eq!(rows[2][1], v.failing.to_string());
+    }
+
+    #[test]
+    fn pass_and_fail_are_words() {
+        let (vm, ..) = sample_in(Locale::En);
+        let rows = table(&vm.report_data());
+        assert_eq!(rows[2][2], "Pass");
+        assert_eq!(rows[3][2], "Pass");
+        assert_eq!(rows[4][2], "Pass");
+    }
+
+    #[test]
+    fn a_failing_place_is_a_fail() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid;
+        let store = CityStore::sample(storage);
+        let mut e = store.open().street_editor(street, 0).unwrap();
+        let u = e.view().segments[0].uid;
+        e.set_width(u, e.view().segments[0].width_mm + 8000);
+        assert!(store.write_street(street, e.snapshot()));
+        vm.reload();
+        assert!(vm.view().failing > 0, "the edit must break a check");
+        let rows = table(&vm.report_data());
+        assert_eq!((rows[1][1].as_str(), rows[2][1].as_str(), rows[2][2].as_str()), ("1", vm.view().failing.to_string().as_str(), "Fail"));
+    }
+
+    #[test]
+    fn the_report_follows_the_interface_language() {
+        let (en, ..) = sample_in(Locale::En);
+        let (fr, ..) = sample_in(Locale::FrCa);
+        let (en, fr) = (en.report_data(), fr.report_data());
+        assert_eq!((en.lang.as_str(), fr.lang.as_str()), ("en", "fr-CA"));
+        assert_ne!(texts(&en.pages[0]), texts(&fr.pages[0]));
+        assert_ne!(en.title, fr.title);
+        assert!(texts(&fr.pages[0]).join("\n").contains("Ville entière"));
+    }
+
+    #[test]
+    fn a_city_with_no_places_says_there_is_nothing_to_report() {
+        let (ports, ..) = test_ports_with_pdf();
+        let vm = MapVm::new(ports, crate::i18n_for(Locale::En)); // the default area, whose roads are not kept
+        let data = vm.report_data();
+        assert!(!data.pages[1].iter().any(|b| matches!(b, Block::Table { .. })));
+        assert!(texts(&data.pages[1]).join("\n").contains("There is nothing to report"));
+    }
+
+    #[test]
+    fn no_problems_and_no_notices_says_none_found_with_pass() {
+        let (vm, ..) = sample_in(Locale::En);
+        let page = texts(&vm.report_data().pages[1]).join("\n");
+        assert!(page.contains("No network problems and no notices were found: Pass"), "{page}");
+    }
+
+    #[test]
+    fn a_long_area_name_is_kept_whole() {
+        let name = "A very long area name that goes on and on past any sensible width, Saint-Jean-Baptiste-de-la-Salle-des-Neiges, Québec, Canada";
+        let built =
+            crate::map::report::build(&crate::map::report::Facts { area: name.to_string(), ..Default::default() }, "1.0.0", 0, &crate::i18n_for(Locale::En));
+        assert!(matches!(&built.pages[0][0], Block::Heading { level: 1, text } if text == name));
+    }
+
+    #[test]
+    fn download_report_saves_the_pdf_it_is_given() {
+        let (vm, pdf, downloads, _) = sample_in(Locale::En);
+        vm.download_report();
+        let json = pdf.asked().remove(0);
+        assert_eq!(serde_json::from_str::<ReportData>(&json).unwrap(), vm.report_data());
+        assert!(pdf.answer_with(Ok(b"%PDF".to_vec())));
+        let saved = downloads.saved();
+        assert_eq!(saved.len(), 1);
+        assert_eq!((saved[0].1.as_str(), saved[0].2.as_slice()), ("application/pdf", &b"%PDF"[..]));
+        assert!(saved[0].0.starts_with("cityloom-") && saved[0].0.ends_with(".pdf") && !saved[0].0.contains(' '), "{}", saved[0].0);
+    }
+
+    #[test]
+    fn download_report_says_when_the_writer_fails() {
+        let (ports, pdf, downloads) = test_ports_with_pdf();
+        let said = Rc::new(crate::shared::ports::RecordingAnnouncer::default());
+        let ports = Ports { announcer: said.clone(), ..ports };
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        vm.download_report();
+        pdf.answer_with(Err("boom".to_string()));
+        assert!(downloads.saved().is_empty());
+        let heard = said.take();
+        assert_eq!(heard.len(), 1);
+        assert!(heard[0].contains("could not be made"), "{heard:?}");
+        // and the next try is allowed
+        vm.download_report();
+        assert_eq!(pdf.asked().len(), 1);
+    }
+
+    #[test]
+    fn a_second_download_while_one_runs_saves_one_file() {
+        let (vm, pdf, downloads, _) = sample_in(Locale::En);
+        vm.download_report();
+        vm.download_report();
+        assert_eq!(pdf.asked().len(), 1);
+        pdf.answer_with(Ok(vec![1]));
+        assert_eq!(downloads.saved().len(), 1);
+    }
+}

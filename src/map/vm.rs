@@ -16,6 +16,7 @@ use crate::map::camera::{Camera, Insets, World};
 use crate::map::editable;
 use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
 use crate::map::overlay;
+use crate::map::report;
 use crate::map::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -336,6 +337,8 @@ pub struct MapVm {
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// The source-data findings, likewise; they are read from the city as the importer laid it out.
     source: RefCell<Option<(Rc<CityView>, Rc<SourceReport>)>>,
+    /// Whether a report is being written: a second request meanwhile is ignored.
+    report_running: Cell<bool>,
     /// In the tests: how many streets were read to check them against an area's rule.
     #[cfg(test)]
     editors_read: Cell<usize>,
@@ -382,6 +385,7 @@ impl MapVm {
             worded: RefCell::new(None),
             areas,
             network: RefCell::new(None),
+            report_running: Cell::new(false),
             source: RefCell::new(None),
             #[cfg(test)]
             editors_read: Cell::new(0),
@@ -642,6 +646,53 @@ impl MapVm {
                 i
             })
             .collect()
+    }
+
+    // ---- the design review report ----
+
+    /// The design review report as data, worded in the language the page is in now: from the city view and the
+    /// network findings already worked out, with no rule run again.
+    pub fn report_data(&self) -> cityloom_report::ReportData {
+        let v = self.view();
+        let network = self.network_report();
+        let by = |severity| network.findings.iter().filter(|f| f.severity == severity).count();
+        let facts = report::Facts {
+            area: v.name.to_string(),
+            streets: v.edges.len(),
+            junctions: v.nodes.iter().filter(|n| n.junction).count(),
+            places: v.places,
+            edited: v.edited,
+            failing: v.failing,
+            problems: by(Severity::Problem),
+            notices: by(Severity::Notice),
+        };
+        report::build(&facts, env!("CARGO_PKG_VERSION"), self.ports.storage.now_ms(), &self.i18n)
+    }
+
+    /// Writes the report as a PDF and gives it to the person to keep; says so when it cannot. A request made while
+    /// one is under way is ignored.
+    pub fn download_report(&self) {
+        if self.report_running.replace(true) {
+            return;
+        }
+        let data = self.report_data();
+        let name = format!("cityloom-{}.pdf", report::slug(&self.view().name));
+        let Ok(json) = serde_json::to_string(&data) else {
+            self.report_running.set(false);
+            return;
+        };
+        let me = self.me.clone();
+        self.ports.pdf.write(
+            json,
+            Box::new(move |result| {
+                let Some(vm) = me.upgrade() else { return };
+                vm.report_running.set(false);
+                match result {
+                    Ok(bytes) => vm.ports.downloads.save(&name, "application/pdf", bytes),
+                    Err(_) => vm.ports.announcer.say(&vm.i18n.tr_now("map-report-failed", &Args::new())),
+                }
+            }),
+        );
     }
 
     // ---- the network checks ----

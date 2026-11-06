@@ -271,3 +271,33 @@ prov-more-findings = { $n ->
     [one] 1 more finding is not listed.
    *[other] { $n } more findings are not listed.
 }
+map-report-title = Design review: { $area }
+map-report-cover-title = Design review report
+map-report-exported = Exported: { $when } UTC
+map-report-version = CityLoom version { $version }
+map-report-scope = Scope: Whole city
+map-report-study-notice = This report comes from a design study. It is not an engineering document and does not replace the review of a qualified professional.
+map-report-placeholder-notice = The rules, rates and thresholds behind the checks are placeholders and have not been verified.
+map-report-summary = Summary
+map-report-summary-caption = Summary of the city and its checks
+map-report-col-measure = Measure
+map-report-col-figure = Figure
+map-report-col-result = Result
+map-report-row-city = Streets and junctions in the city
+map-report-row-edited = Places changed from the imported layout
+map-report-row-failing = Places whose design checks fail
+map-report-row-problems = Network problems
+map-report-row-notices = Network notices
+map-report-figure-city = { $streets ->
+    [one] 1 street
+   *[other] { $streets } streets
+}, { $junctions ->
+    [one] 1 junction
+   *[other] { $junctions } junctions
+}
+map-report-pass = Pass
+map-report-fail = Fail
+map-report-notice = Notice
+map-report-none-found = No network problems and no notices were found: { $result }.
+map-report-nothing = There is nothing to report: this city has no streets or junctions.
+map-report-failed = The report could not be made. Try again.

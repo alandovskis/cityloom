@@ -679,6 +679,7 @@ name = "cityloom_editor"
 version = "0.47.0"
 dependencies = [
  "any_spawner",
+ "cityloom_report",
  "fluent-bundle",
  "fluent-syntax",
  "js-sys",

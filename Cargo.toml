@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 osm_network = { path = "osm_network" }
+cityloom_report = { path = "cityloom_report", default-features = false }
 any_spawner = { version = "0.3.0", features = ["wasm-bindgen"] }
 js-sys = "0.3.106"
 leptos = { version = "0.8.21", features = ["csr"] }
