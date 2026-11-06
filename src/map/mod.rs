@@ -11,6 +11,7 @@ pub mod home;
 pub mod network;
 pub mod network_view;
 pub mod overlay;
+mod report;
 pub mod source_quality;
 pub mod source_view;
 pub mod style;
