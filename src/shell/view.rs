@@ -12,7 +12,7 @@ use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
 use crate::shell::session_view::SessionMenu;
-use crate::shell::share_view::ShareMenu;
+use crate::shell::share_view::{ShareMenu, share_has_report};
 use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
@@ -75,7 +75,8 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
     if let Some(slot) = by_id("share-slot") {
         let i18n = vm.i18n();
-        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n/> }).forget();
+        let report = share_has_report(slot.get_attribute("data-share").as_deref());
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n report=report/> }).forget();
     }
     // Every page keeps a slot for the sign-in menu; what it holds is made here, once.
     if let Some(slot) = by_id("session-slot") {
@@ -104,6 +105,17 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
                 let _ = share.focus();
             }
             let _ = leptos::prelude::window().print();
+        });
+    }
+    // The map page's Share menu downloads the report; the map slice does that on its own listener on the same
+    // button, and the shell only closes the menu and returns the focus, as for Print.
+    if let Some(report) = by_id("report") {
+        let v = vm.clone();
+        listen(&report, "click", move |_: MouseEvent| {
+            v.close_share();
+            if let Some(share) = by_id("share-btn").and_then(|b| b.dyn_into::<HtmlElement>().ok()) {
+                let _ = share.focus();
+            }
         });
     }
     crate::shell::header::watch();

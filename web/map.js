@@ -16,4 +16,7 @@ try {
 // so and has no map to show.
 await wasm.prepare_city();
 
-wasm.mount_map(await basemap.createBasemap("basemap")).mount_shell();
+const page = wasm.mount_map(await basemap.createBasemap("basemap"));
+page.mount_shell();
+// The shell makes the Share menu's Download report item when it mounts, so it is bound after.
+page.bind_report();
