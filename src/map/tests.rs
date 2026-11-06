@@ -1022,4 +1022,31 @@ mod report {
         pdf.answer_with(Ok(vec![1]));
         assert_eq!(downloads.saved().len(), 1);
     }
+
+    fn facts() -> crate::map::report::Facts {
+        crate::map::report::Facts { area: "Bendville".into(), streets: 2, junctions: 1, places: 3, problems: 2, notices: 3, ..Default::default() }
+    }
+
+    fn built(facts: &crate::map::report::Facts, locale: Locale) -> ReportData {
+        crate::map::report::build(facts, "1.0.0", 0, &crate::i18n_for(locale))
+    }
+
+    #[test]
+    fn problems_fail_notices_notice_and_the_none_found_line_is_absent() {
+        let en = built(&facts(), Locale::En);
+        let rows = table(&en);
+        assert_eq!((rows[3][2].as_str(), rows[4][2].as_str()), ("Fail", "Notice"));
+        assert_eq!((rows[3][1].as_str(), rows[4][1].as_str()), ("2", "3"));
+        assert!(!texts(&en.pages[1]).join("\n").contains("were found"));
+        let fr = built(&facts(), Locale::FrCa);
+        let rows = table(&fr);
+        assert_eq!((rows[3][2].as_str(), rows[4][2].as_str()), ("Échec", "À noter"));
+    }
+
+    #[test]
+    fn the_city_figure_uses_singular_and_plural() {
+        let one = crate::map::report::Facts { streets: 1, junctions: 1, ..facts() };
+        assert_eq!(table(&built(&one, Locale::En))[0][1], "1 street, 1 junction");
+        assert_eq!(table(&built(&facts(), Locale::En))[0][1], "2 streets, 1 junction");
+    }
 }
