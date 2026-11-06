@@ -18,6 +18,9 @@ wasm-bindgen --target web --no-typescript --remove-name-section --remove-produce
 # The OpenStreetMap reader is its own module, loaded when a place is opened.
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/osm_import.wasm
+# The design-review PDF writer is its own module too, loaded when a report is made.
+wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
+  target/wasm32-unknown-unknown/release/cityloom_report.wasm
 # The map's libraries, from npm (`npm ci` at the repository root) into web/vendor. MapLibre is ES modules that
 # find each other beside themselves; pmtiles.js defines a global `pmtiles`.
 [ -d node_modules/maplibre-gl ] || { echo "node_modules/maplibre-gl is missing: run 'just setup' first" >&2; exit 1; }
