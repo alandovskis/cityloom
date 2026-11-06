@@ -592,6 +592,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("help-heading", "the id of an element every page shares"),
     ("help-menu", "the id of an element every page shares"),
     ("share-slot", "the id of an element the editors share"),
+    ("data-share", "the attribute of the share slot that picks the menu variant"),
     ("share-btn", "the id of an element the editors share"),
     ("share-btn-label", "the id of an element the editors share"),
     ("share-heading", "the id of an element the editors share"),

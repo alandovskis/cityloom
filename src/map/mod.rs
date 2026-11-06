@@ -45,6 +45,17 @@ impl MapPage {
         crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", true);
     }
 
+    /// Binds the Share menu's Download report item (`#report`, made by the shell's `mount_shell`) to the report's
+    /// download. The shell's own listener on the same button closes the menu.
+    pub fn bind_report(&self) {
+        use wasm_bindgen::JsCast;
+        let Some(button) = leptos::prelude::document().get_element_by_id("report") else { return };
+        let vm = self.0.clone();
+        let cb = Closure::<dyn FnMut()>::new(move || vm.download_report());
+        let _ = button.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+        cb.forget();
+    }
+
     /// The home page's city: its roads have been got (`prepare_city`), so the city behind the hero card and the
     /// line saying how it stands are drawn. Until then the page shows its search and no city, so the search
     /// is not kept waiting for the roads.
