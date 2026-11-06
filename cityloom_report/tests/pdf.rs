@@ -78,9 +78,45 @@ fn it_sets_the_document_language_and_title() {
     assert_eq!(text, "Revue de conception");
 }
 
+/// The structure types (`/S`) of every element under the structure tree root.
+fn structure_types(doc: &Document) -> Vec<String> {
+    fn walk(doc: &Document, object: &Object, out: &mut Vec<String>) {
+        match object {
+            Object::Reference(r) => {
+                if let Ok(o) = doc.get_object(*r) {
+                    walk(doc, o, out);
+                }
+            }
+            Object::Array(items) => items.iter().for_each(|i| walk(doc, i, out)),
+            Object::Dictionary(d) => {
+                if let Ok(name) = d.get(b"S").and_then(Object::as_name) {
+                    out.push(String::from_utf8_lossy(name).into_owned());
+                }
+                if let Ok(kids) = d.get(b"K") {
+                    walk(doc, kids, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let root = catalog(doc).get(b"StructTreeRoot").unwrap();
+    let mut out = vec![];
+    walk(doc, root, &mut out);
+    out
+}
+
+fn table(head: &[&str], rows: &[&[&str]]) -> Block {
+    Block::Table {
+        caption: "Rues".into(),
+        head: head.iter().map(|s| s.to_string()).collect(),
+        rows: rows.iter().map(|r| r.iter().map(|s| s.to_string()).collect()).collect(),
+    }
+}
+
 #[test]
 fn it_is_tagged() {
-    let doc = load(&data(vec![vec![heading("Un"), para("Texte")]]));
+    let blocks = vec![heading("Un"), Block::Heading { level: 2, text: "Deux".into() }, para("Texte"), table(&["Nom", "Largeur"], &[&["Parc", "18"]])];
+    let doc = load(&data(vec![blocks]));
     let cat = catalog(&doc);
     assert!(cat.has(b"StructTreeRoot"));
     let mark = cat.get(b"MarkInfo").unwrap();
@@ -89,6 +125,19 @@ fn it_is_tagged() {
         other => other.as_dict().unwrap(),
     };
     assert_eq!(mark.get(b"Marked").unwrap().as_bool().unwrap(), true);
+    let types = structure_types(&doc);
+    for wanted in ["H1", "H2", "P", "Table", "TR", "TH", "TD"] {
+        assert!(types.iter().any(|t| t == wanted), "{wanted} missing from {types:?}");
+    }
+}
+
+#[test]
+fn it_keeps_an_empty_cell_as_a_cell() {
+    let doc = load(&data(vec![vec![table(&["A", "B", "C"], &[&["x", "", "z"]])]]));
+    let types = structure_types(&doc);
+    assert_eq!(types.iter().filter(|t| *t == "TH").count(), 3, "{types:?}");
+    assert_eq!(types.iter().filter(|t| *t == "TD").count(), 3, "{types:?}");
+    assert_eq!(types.iter().filter(|t| *t == "TR").count(), 2, "{types:?}");
 }
 
 #[test]
@@ -99,24 +148,67 @@ fn it_draws_the_text_of_every_block() {
     assert!(text.contains("Voir « la rue »\u{a0}: 3\u{a0}m"), "{text:?}");
 }
 
+/// The width of `text` in points at `size`, from the font's own advances (a missing glyph is .notdef, glyph 0).
+fn measured(font: &[u8], text: &str, size: f32) -> f32 {
+    let face = ttf_parser::Face::parse(font, 0).unwrap();
+    let per_em = f32::from(face.units_per_em());
+    text.chars().map(|c| f32::from(face.glyph_hor_advance(face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0))).unwrap()) * size / per_em).sum()
+}
+
+/// Checks that the page's lines start at the left margin and end inside the right one; returns how many there are.
+fn assert_lines_inside(doc: &Document, size: f32) -> usize {
+    let starts = text_starts(doc, 1);
+    let text = page_text(doc, 1);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), starts.len(), "{lines:?} / {starts:?}");
+    for (line, (x, _)) in lines.iter().zip(&starts) {
+        assert!((x - 54.0).abs() < 0.5, "{line:?} starts at {x}");
+        let end = x + measured(REGULAR, line.trim_end(), size);
+        assert!(end <= 612.0 - 54.0, "{line:?} ends at {end}");
+    }
+    lines.len()
+}
+
 #[test]
 fn it_wraps_a_long_paragraph_inside_the_margins() {
     let long = "mot ".repeat(100);
     let doc = load(&data(vec![vec![para(long.trim())]]));
-    let starts = text_starts(&doc, 1);
-    assert!(starts.len() > 3, "{starts:?}");
-    assert!(starts.iter().all(|(x, _)| (*x - 54.0).abs() < 0.5), "{starts:?}");
+    assert!(assert_lines_inside(&doc, 11.0) > 3);
 }
 
 #[test]
 fn it_wraps_one_long_unbroken_name() {
     let name = "x".repeat(200);
     let doc = load(&data(vec![vec![para(&name)]]));
-    let starts = text_starts(&doc, 1);
-    assert!(starts.len() > 1, "{starts:?}");
-    assert!(starts.iter().all(|(x, _)| (*x - 54.0).abs() < 0.5), "{starts:?}");
+    assert!(assert_lines_inside(&doc, 11.0) > 1);
     // Every piece is drawn, none is lost.
     assert_eq!(page_text(&doc, 1).matches('x').count(), 200);
+}
+
+#[test]
+fn it_wraps_a_character_the_font_lacks_by_its_notdef_width() {
+    let face = ttf_parser::Face::parse(REGULAR, 0).unwrap();
+    assert!(face.glyph_index('中').is_none(), "the font has U+4E2D, pick another");
+    let name = "中".repeat(120);
+    let doc = load(&data(vec![vec![para(&name)]]));
+    let starts = text_starts(&doc, 1);
+    assert!(starts.len() > 1, "{starts:?}");
+    // Each line holds as many notdef glyphs as the margins allow, measured as glyph 0.
+    let per_line = ((504.0 / measured(REGULAR, "中", 11.0)) as usize).max(1);
+    assert!(per_line < 120);
+    assert_eq!(starts.len(), 120_usize.div_ceil(per_line));
+}
+
+#[test]
+fn the_fonts_are_static_and_hold_the_french_glyphs() {
+    for font in [REGULAR, BOLD] {
+        let face = ttf_parser::Face::parse(font, 0).unwrap();
+        assert!(!face.is_variable());
+        assert!(face.raw_face().table(ttf_parser::Tag::from_bytes(b"fvar")).is_none());
+        for c in ['é', 'è', 'à', 'ç', 'É', '«', '»', '\u{a0}', '\u{202f}'] {
+            assert!(face.glyph_index(c).is_some(), "no glyph for U+{:04X}", c as u32);
+        }
+    }
 }
 
 #[test]

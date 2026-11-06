@@ -39,7 +39,8 @@ impl Face {
     fn width(&self, text: &str, size: f32) -> f32 {
         let face = ttf_parser::Face::parse(&self.bytes, 0).expect("checked in new");
         let per_em = f32::from(face.units_per_em());
-        text.chars().map(|c| face.glyph_index(c).and_then(|g| face.glyph_hor_advance(g)).map_or(0.0, f32::from) * size / per_em).sum()
+        // A character the font lacks is drawn as .notdef (glyph 0), so it is measured as that.
+        text.chars().map(|c| f32::from(face.glyph_hor_advance(face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0))).unwrap_or(0)) * size / per_em).sum()
     }
 }
 
@@ -137,7 +138,11 @@ impl Pen<'_, '_> {
             for (i, cell) in cells.iter().enumerate() {
                 self.y = top;
                 let face = if is_head { self.bold } else { self.regular };
-                let lines = wrap(face, cell, BODY, cell_w - CELL_PAD);
+                let mut lines = wrap(face, cell, BODY, cell_w - CELL_PAD);
+                if lines.is_empty() {
+                    // An empty cell still is a cell: it holds one space, since an element with no content is dropped.
+                    lines.push(" ".to_string());
+                }
                 let nodes = self.lines(&lines, MARGIN + i as f32 * cell_w, BODY, is_head);
                 height = height.max(self.y - top);
                 if !nodes.is_empty() {
