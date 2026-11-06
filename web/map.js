@@ -2,6 +2,7 @@
 // is MapLibre, made by basemap.js; this sets up what every page shares, which the module binds (`mount_shell`).
 
 import "./city.js";
+import "./report.js";
 
 let wasm, basemap;
 try {
