@@ -679,6 +679,7 @@ impl MapVm {
         let name = format!("cityloom-{}.pdf", report::slug(&self.view().name));
         let Ok(json) = serde_json::to_string(&data) else {
             self.report_running.set(false);
+            self.ports.announcer.say(&self.i18n.tr_now("map-report-failed", &Args::new()));
             return;
         };
         let me = self.me.clone();
