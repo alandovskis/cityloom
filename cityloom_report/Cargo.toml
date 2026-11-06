@@ -19,3 +19,4 @@ wasm-bindgen = { version = "0.2.129", optional = true }
 
 [dev-dependencies]
 lopdf = "0.47.0"
+ttf-parser = "0.25.1"
