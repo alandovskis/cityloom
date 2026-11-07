@@ -12,10 +12,12 @@ use crate::street::model::View;
 /// The drawing's own width in points, before `flatten` scales it to the box.
 const POINT_WIDTH: f64 = 252.0;
 
-/// The street's 2.5D fitted into `box_w` by `box_h` (the view as the editor gives it for the zone shown; a
-/// selected piece is not outlined, since the outline and the press targets are not drawn in a figure).
-pub fn figure(v: &View, box_w: f32, box_h: f32) -> Figure {
-    let (diagram, projection) = diagram_and_projection(v, POINT_WIDTH);
+/// The street's 2.5D fitted into `box_w` by `box_h`, its words in `i18n`'s language. Only the shown zone's section is
+/// drawn: across a boundary the neighbour's (`iso-across`) is left out. A selected piece is not outlined, because
+/// `flatten` skips the outline and press-target layers.
+pub fn figure(v: &View, i18n: &I18n, box_w: f32, box_h: f32) -> Figure {
+    let (mut diagram, projection) = diagram_and_projection(v, i18n, POINT_WIDTH);
+    diagram.sections.retain(|s| !s.class.as_deref().is_some_and(|c| c.split_whitespace().any(|w| w == "iso-across")));
     flatten(&diagram, &projection, box_w, box_h)
 }
 

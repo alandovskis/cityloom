@@ -136,10 +136,9 @@ impl Projection for IsoFrame {
 }
 
 /// The diagram and frame of a drawing `width` wide in a window `window_height` high, for a flat figure
-/// (`junction::figure`): no selection is made, and the words (titles) are English, which a flat figure does not draw.
-pub(crate) fn build_diagram(v: &JView, width: f64, window_height: f64, units: Units) -> (IsoFrame, crate::shared::diagram::Diagram) {
-    let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
-    build::build(v, &i18n, width, window_height, units)
+/// (`junction::figure`).
+pub(crate) fn build_diagram(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoFrame, crate::shared::diagram::Diagram) {
+    build::build(v, i18n, width, window_height, units)
 }
 
 /// What the page needs to put the 2.5D picture in its `<svg>`.

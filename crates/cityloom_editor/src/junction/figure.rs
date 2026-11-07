@@ -12,9 +12,10 @@ use crate::shared::units::Units;
 /// The drawing's own size in points, before `flatten` scales it to the box.
 const POINT_SIZE: f64 = 252.0;
 
-/// The junction's 2.5D fitted into `box_w` by `box_h`, metric, with no selection.
-pub fn figure(v: &JView, box_w: f32, box_h: f32) -> Figure {
-    let (frame, diagram) = build_diagram(v, POINT_SIZE, POINT_SIZE, Units::default());
+/// The junction's 2.5D fitted into `box_w` by `box_h`, its words in `i18n`'s language and its lengths in `units`; the junction's own selection
+/// is not outlined (the outline layer is not drawn).
+pub fn figure(v: &JView, i18n: &I18n, units: Units, box_w: f32, box_h: f32) -> Figure {
+    let (frame, diagram) = build_diagram(v, i18n, POINT_SIZE, POINT_SIZE, units);
     flatten(&diagram, &frame, box_w, box_h)
 }
 

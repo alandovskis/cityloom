@@ -228,22 +228,40 @@ impl Walk<'_> {
                 }
                 self.context = outer;
             }
-            Shape::Path { runs, closed, class, .. } => {
-                // A path is runs of points: a closed one is a polygon each, an open one a line each.
-                for run in runs {
-                    if *closed && run.len() >= 3 {
-                        let st = style_in(&self.context, class, None, None);
-                        self.items.push(Item::Poly { pts: self.pts(run), fill: st.fill, stroke: st.stroke });
-                    } else if !*closed && run.len() >= 2 {
-                        let (color, width) = match paint_of(class) {
-                            Some(c) => (c, PAINT_WIDTH),
-                            None => (colour("ink-2"), LINE_WIDTH),
-                        };
-                        self.items.push(Item::Line { pts: self.pts(run), color, width });
+            Shape::Path { runs, closed, class, .. } => self.path(runs, *closed, class),
+            Shape::Elem { .. } => self.omitted += 1,
+        }
+    }
+
+    /// A path is runs of points. A press target (`*-hit`, invisible in the page) and a casing (a halo) are not
+    /// drawn; a ring the stylesheet draws as an outline only (`iso-queue`, `measure-loop`, `approach-mark`,
+    /// `curb-use-bad`) is a closed line; any other closed run is a polygon, when its class is one `style_in` knows
+    /// (otherwise it would be grey over the arms); an open run is a line.
+    fn path(&mut self, runs: &[Vec<crate::shared::diagram::Pt>], closed: bool, class: &str) {
+        let has = |f: &dyn Fn(&str) -> bool| class.split_whitespace().any(f);
+        if has(&|w| w == "hit" || w.ends_with("-hit") || w == "iso-casing") {
+            return;
+        }
+        let outline = has(&|w| matches!(w, "iso-queue" | "measure-loop" | "approach-mark" | "curb-use-bad"));
+        for run in runs {
+            let mut pts = self.pts(run);
+            if (closed || outline) && run.len() >= 3 && !outline {
+                let st = style_in(&self.context, class, None, None);
+                if st.fill != NEUTRAL {
+                    self.items.push(Item::Poly { pts, fill: st.fill, stroke: st.stroke });
+                }
+            } else if run.len() >= 2 {
+                if closed {
+                    if let Some(first) = pts.first().copied() {
+                        pts.push(first);
                     }
                 }
+                let (color, width) = match paint_of(class) {
+                    Some(c) => (c, PAINT_WIDTH),
+                    None => (colour("ink-2"), LINE_WIDTH),
+                };
+                self.items.push(Item::Line { pts, color, width });
             }
-            Shape::Elem { .. } => self.omitted += 1,
         }
     }
 
@@ -368,6 +386,19 @@ mod tests {
         let f = fig(&d);
         assert!(f.items.is_empty(), "{:?}", f.items);
         assert_eq!(f.omitted, 0);
+    }
+
+    #[test]
+    fn press_targets_and_casings_are_not_drawn_and_unknown_closed_paths_are_not_grey() {
+        let run = vec![Pt::new(0.0, 0.0, 0.0), Pt::new(1.0, 0.0, 0.0), Pt::new(1.0, 0.0, 1.0)];
+        let path = |class: &str| Shape::Path { runs: vec![run.clone()], closed: true, class: class.into(), attrs: String::new(), title: None };
+        let shapes = ["lane-hit", "lane-hit on", "iso-hit", "iso-casing", "iso-casing warn", "mystery", "iso-queue", "measure-loop"].map(path).to_vec();
+        let f = fig(&diagram(vec![], vec![layer(LayerKind::Surface, shapes)]));
+        assert!(f.items.iter().all(|i| !matches!(i, Item::Poly { .. })), "{:?}", f.items);
+        // The two rings are closed outlines: the first point is repeated.
+        let lines: Vec<_> = f.items.iter().filter_map(|i| if let Item::Line { pts, .. } = i { Some(pts) } else { None }).collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|p| p.len() == 4 && p[0] == p[3]));
     }
 
     #[test]

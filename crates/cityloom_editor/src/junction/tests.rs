@@ -3253,15 +3253,24 @@ fn figure_in_box(f: &cityloom_report::Figure, w: f32, h: f32) -> bool {
 #[test]
 fn the_junction_figure_has_polygons_inside_its_box() {
     use cityloom_report::Item;
-    let f = crate::junction::figure::figure(&Junction::new(0).view(), 252.0, 200.0);
+    let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
     assert!(f.items.iter().any(|i| matches!(i, Item::Poly { .. })), "{} {} {}", f.items.len(), f.omitted, f.width);
+    // Nothing is the grey of a class the figure does not know (a press target or a casing would be): a junction with
+    // arms and lanes, a lane selected.
+    let mut j = Junction::new(0);
+    let a = j.view().arms[0].uid;
+    j.select(Target::Lane(a, 0));
+    let f = crate::junction::figure::figure(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
+    let grey = cityloom_report::Rgb(0x9a, 0xa4, 0xb0);
+    assert!(f.items.len() > 20);
+    assert!(f.items.iter().all(|i| !matches!(i, Item::Poly { fill, .. } if *fill == grey)), "a grey polygon");
     assert!(figure_in_box(&f, 252.0, 200.0), "{f:?}");
 }
 
 #[test]
 fn a_pedestrian_arm_junction_draws() {
     let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
-    let f = crate::junction::figure::figure(&walk.view(), 252.0, 200.0);
+    let f = crate::junction::figure::figure(&walk.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
     assert!(!f.items.is_empty() && figure_in_box(&f, 252.0, 200.0));
 }
 
@@ -3271,4 +3280,16 @@ fn the_junction_alt_text_names_what_is_drawn() {
     let v = Junction::new(0).view();
     let (en, fr) = (crate::junction::figure::alt(&v, &crate::i18n_for(Locale::En)), crate::junction::figure::alt(&v, &crate::i18n_for(Locale::FrCa)));
     assert!(!en.is_empty() && en != fr, "{en} / {fr}");
+}
+
+#[test]
+fn a_fr_ca_junction_figure_has_its_own_words() {
+    use crate::shared::i18n::Locale;
+    use cityloom_report::Item;
+    let words = |l| -> Vec<String> {
+        let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(l), Units::Metres, 252.0, 200.0);
+        f.items.iter().filter_map(|i| if let Item::Text { text, .. } = i { Some(text.clone()) } else { None }).collect()
+    };
+    let (e, f) = (words(Locale::En), words(Locale::FrCa));
+    assert!(!e.is_empty() && e != f, "{e:?} {f:?}");
 }
