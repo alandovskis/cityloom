@@ -2202,9 +2202,8 @@ fn the_neighbouring_zone_is_not_drawn_in_the_figure() {
     let z = two_zones(true);
     let v = z.view();
     assert!(v.zones.joint.is_some(), "the fixture's boundary is near");
-    let (d, _) = crate::street::iso::diagram_and_projection(&v, &en(), 252.0);
-    assert_eq!(d.sections.len(), 2);
     let (all, p) = crate::street::iso::diagram_and_projection(&v, &en(), 252.0);
+    assert_eq!(all.sections.len(), 2);
     let both = crate::shared::flat::flatten(&all, &p, 252.0, 200.0);
     let one = crate::street::drawing::figure(&v, &en(), 252.0, 200.0);
     assert!(one.items.len() < both.items.len(), "{} {}", one.items.len(), both.items.len());
