@@ -59,7 +59,8 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#checks li").filter({ hasText: "Raised elements long enough" })).toHaveCount(1);
 
     // Kept: the document takes the raised tables' version, and the table is there after a reload.
-    await expect.poll(() => editsVersion(page)).toBeGreaterThan(before);
+    expect(before).not.toBe(12);
+    await expect.poll(() => editsVersion(page)).toBe(12);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Raised table.*8\.0 m long/);

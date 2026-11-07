@@ -29,9 +29,10 @@ pub const STOP_VERSION: u32 = CURB_VERSION + 1;
 /// on its next write. A junction record with no such plan reads as the suggested plan, with every `Arm.timing` kept.
 pub const SIGNAL_VERSION: u32 = STOP_VERSION + 1;
 /// What a document is written as while a street record holds raised tables or crossings (`Street.calming`): a build
-/// that does not know them treats the document as a newer one and leaves it alone. Provisional: renumbered at rebase
-/// if another version lands first.
-pub const CALMING_VERSION: u32 = SIGNAL_VERSION + 1;
+/// that does not know them treats the document as a newer one and leaves it alone. Number 11 is kept for street
+/// trees and green infrastructure (PR #127, open): if that one does not land, 11 stays unused, which a reader of
+/// versions 4 to `NEWEST` does not mind; if the two meet, whichever merges second renumbers.
+pub const CALMING_VERSION: u32 = SIGNAL_VERSION + 2;
 /// The newest version this build reads.
 pub const NEWEST: u32 = CALMING_VERSION;
 /// Where the document is kept.
@@ -536,7 +537,7 @@ mod tests {
         assert_eq!(CURB_VERSION, 8);
         assert_eq!(STOP_VERSION, 9);
         assert_eq!(SIGNAL_VERSION, 10);
-        assert_eq!(CALMING_VERSION, 11);
+        assert_eq!(CALMING_VERSION, 12);
         assert_eq!(NEWEST, CALMING_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
@@ -613,7 +614,7 @@ mod tests {
         let mut e = Edits::new();
         e.streets.insert("w7~n1~n2".into(), calming_record());
         assert_eq!(e.written_version(), CALMING_VERSION);
-        assert!(e.to_json().starts_with(r#"{"version":11,"#), "{}", e.to_json());
+        assert!(e.to_json().starts_with(r#"{"version":12,"#), "{}", e.to_json());
         assert!(e.to_json().contains(r#""kind":"table""#), "{}", e.to_json());
         // with stops, curbside uses, a speed and zones too, the calming version is the newest
         e.streets.insert("w6~n1~n2".into(), stop_record());
@@ -625,7 +626,7 @@ mod tests {
         // the draft decides on the raw JSON, and goes back to 5 when the record goes
         let mut d = Draft::new();
         assert!(d.put_street("w7~n1~n2", &calming_record()));
-        assert!(d.to_json().contains(r#""version":11"#), "{}", d.to_json());
+        assert!(d.to_json().contains(r#""version":12"#), "{}", d.to_json());
         d.remove_street("w7~n1~n2");
         assert!(d.to_json().contains(r#""version":5"#));
     }
@@ -666,7 +667,7 @@ mod tests {
         let Document::Current(back) = parse(Some(&doc.to_string())) else { panic!("not read") };
         assert_eq!(back.written_version(), CALMING_VERSION);
         let mut d = draft(Some(&doc.to_string())).unwrap();
-        assert!(d.to_json().contains(r#""version":11"#), "{}", d.to_json());
+        assert!(d.to_json().contains(r#""version":12"#), "{}", d.to_json());
         d.remove_street("w7~n1~n2");
     }
 
