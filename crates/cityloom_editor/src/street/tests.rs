@@ -2208,3 +2208,20 @@ fn the_neighbouring_zone_is_not_drawn_in_the_figure() {
     let one = crate::street::drawing::figure(&v, &en(), 252.0, 200.0);
     assert!(one.items.len() < both.items.len(), "{} {}", one.items.len(), both.items.len());
 }
+
+#[test]
+fn the_words_of_the_speed_sign_sit_inside_its_panel() {
+    use cityloom_report::Item;
+    let mut e = Editor::new(0);
+    e.set_speed(Some(50));
+    let f = crate::street::drawing::figure(&e.view(), &en(), 252.0, 200.0);
+    let words: Vec<_> =
+        f.items.iter().filter_map(|i| if let Item::Text { at, size, text, .. } = i { Some((*at, *size, text.clone())) } else { None }).collect();
+    assert_eq!(words.len(), 2, "{words:?}");
+    // Each word is centred on the same line, the number under the word, and the pair is within the figure.
+    let centre = |w: &((f32, f32), f32, String)| w.0.0 + w.2.chars().count() as f32 * w.1 * 0.6 / 2.0;
+    assert!((centre(&words[0]) - centre(&words[1])).abs() < 0.5, "{words:?}");
+    for w in &words {
+        assert!(w.0.0 >= 0.0 && w.0.0 + w.2.chars().count() as f32 * w.1 * 0.6 <= f.width + 0.01, "{w:?} in {}", f.width);
+    }
+}

@@ -31,6 +31,18 @@ const SIGN_EDGE_WIDTH: f32 = 1.0;
 const STOP_EDGE_WIDTH: f32 = 1.5;
 /// A word's size where its shape names none (a caption).
 const CAPTION_SIZE: f32 = 12.0;
+/// A caption's size in a figure fitted to its box (`flatten_fit`), in the box's own units, whatever the drawing's scale.
+const FIT_CAPTION_SIZE: f32 = 6.5;
+/// The average advance of a glyph, as a fraction of its size (conservative: wider than a proportional face's average),
+/// and the height of a word above and below its baseline, for the box a word is judged to take.
+const ADVANCE: f32 = 0.6;
+const ASCENT: f32 = 0.8;
+const DESCENT: f32 = 0.25;
+
+/// How wide a word is estimated to be set at `size`.
+fn text_width(text: &str, size: f32) -> f32 {
+    text.chars().count() as f32 * size * ADVANCE
+}
 
 /// Where a colour comes from in the stylesheets: the file and the token (`--name`).
 #[derive(Clone, Copy)]
@@ -161,6 +173,10 @@ struct Walk<'a> {
     scale: f32,
     items: Vec<Item>,
     omitted: usize,
+    /// A caption's size when it is not the drawing's scale's (`flatten_fit`).
+    caption: Option<f32>,
+    /// The words, with how much each matters when two would overprint (0 first): the item's index and its rank.
+    ranks: Vec<(usize, u8)>,
     /// The classes of the groups the walk is inside, nearest first.
     context: String,
 }
@@ -203,21 +219,24 @@ impl Walk<'_> {
                 }
             }
             Shape::Text { at, size, text, .. } => {
+                // The stylesheet centres a shape's words on their point (`text-anchor: middle`); an item starts at its left.
                 let (x, y) = self.p.at(*at);
-                self.items.push(Item::Text {
-                    at: (x as f32 * self.scale, y as f32 * self.scale),
-                    size: *size as f32 * self.scale,
-                    color: colour("ink-2"),
-                    text: text.clone(),
-                });
+                let size = *size as f32 * self.scale;
+                let x = x as f32 * self.scale - text_width(text, size) / 2.0;
+                self.word((x, y as f32 * self.scale), size, text, 1);
             }
-            Shape::Caption { px, text, .. } => {
-                self.items.push(Item::Text {
-                    at: (px.0 as f32 * self.scale, px.1 as f32 * self.scale),
-                    size: CAPTION_SIZE * self.scale,
-                    color: colour("ink-2"),
-                    text: text.clone(),
-                });
+            Shape::Caption { px, text, anchor, class } => {
+                let size = self.caption.unwrap_or(CAPTION_SIZE * self.scale);
+                let w = text_width(text, size);
+                let x = px.0 as f32 * self.scale;
+                let x = match *anchor {
+                    "middle" => x - w / 2.0,
+                    "end" => x - w,
+                    _ => x,
+                };
+                // A street's name outranks the numbers and notes set beside it.
+                let rank = if class.split_whitespace().any(|c| c == "iso-name") { 0 } else { 1 };
+                self.word((x, px.1 as f32 * self.scale), size, text, rank);
             }
             // `hidden` is aria-hidden (a sign is part of the picture, not of what it says): it is drawn.
             Shape::Group { class, shapes, .. } => {
@@ -265,6 +284,11 @@ impl Walk<'_> {
         }
     }
 
+    fn word(&mut self, at: (f32, f32), size: f32, text: &str, rank: u8) {
+        self.ranks.push((self.items.len(), rank));
+        self.items.push(Item::Text { at, size, color: colour("ink-2"), text: text.to_string() });
+    }
+
     fn layer(&mut self, l: &Layer) {
         if matches!(l.kind, LayerKind::Outline | LayerKind::Hit) {
             return;
@@ -282,14 +306,83 @@ pub fn flatten(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figur
     let (w, h) = p.size();
     let (w, h) = (w as f32, h as f32);
     let scale = if w > 0.0 && h > 0.0 { (box_w / w).min(box_h / h) } else { 1.0 };
-    let mut walk = Walk { p, scale, items: Vec::new(), omitted: 0, context: String::new() };
+    let walk = walked(d, p, scale, None);
+    Figure { width: w * scale, height: h * scale, items: walk.items, omitted: walk.omitted }
+}
+
+fn walked<'a>(d: &Diagram, p: &'a dyn Projection, scale: f32, caption: Option<f32>) -> Walk<'a> {
+    let mut walk = Walk { p, scale, items: Vec::new(), omitted: 0, caption, ranks: Vec::new(), context: String::new() };
     walk.layer(&d.ground);
     for section in &d.sections {
         for l in &section.layers {
             walk.layer(l);
         }
     }
-    Figure { width: w * scale, height: h * scale, items: walk.items, omitted: walk.omitted }
+    walk
+}
+
+/// The box an item takes: its points, or for a word its estimated extent.
+fn extent(item: &Item) -> (f32, f32, f32, f32) {
+    match item {
+        Item::Poly { pts, .. } | Item::Line { pts, .. } => {
+            pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1)))
+        }
+        Item::Text { at, size, text, .. } => (at.0, at.1 - size * ASCENT, at.0 + text_width(text, *size), at.1 + size * DESCENT),
+    }
+}
+
+fn bounds(items: &[Item]) -> (f32, f32, f32, f32) {
+    items.iter().map(extent).fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, e| (b.0.min(e.0), b.1.min(e.1), b.2.max(e.2), b.3.max(e.3)))
+}
+
+/// `flatten`, but the figure is fitted to what is drawn: the largest scale at which every shape and every word (its
+/// extent estimated from its size and length, `text_width`) lies inside `box_w` by `box_h`, moved to the box's origin,
+/// the figure being the size of what is drawn. A caption is `FIT_CAPTION_SIZE` whatever the scale. Words that would
+/// overprint a word already kept are dropped: the street names (class `iso-name`) first, then the others in order.
+pub fn flatten_fit(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figure {
+    let (w, h) = p.size();
+    let hi = if w > 0.0 && h > 0.0 { ((box_w / w as f32).min(box_h / h as f32)) * 8.0 } else { 1.0 };
+    let fits = |s: f32| {
+        let b = bounds(&walked(d, p, s, Some(FIT_CAPTION_SIZE)).items);
+        b.2 - b.0 <= box_w && b.3 - b.1 <= box_h
+    };
+    // The bounds only grow with the scale: find the last that fits.
+    let (mut lo, mut hi) = (0.0_f32, hi);
+    for _ in 0..30 {
+        let mid = (lo + hi) / 2.0;
+        if fits(mid) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let mut walk = walked(d, p, lo, Some(FIT_CAPTION_SIZE));
+    let mut order = walk.ranks.clone();
+    order.sort_by_key(|&(i, rank)| (rank, i));
+    let mut kept: Vec<(f32, f32, f32, f32)> = Vec::new();
+    let mut drop = vec![false; walk.items.len()];
+    for (i, _) in order {
+        let b = extent(&walk.items[i]);
+        if kept.iter().any(|k| b.0 < k.2 && k.0 < b.2 && b.1 < k.3 && k.1 < b.3) {
+            drop[i] = true;
+        } else {
+            kept.push(b);
+        }
+    }
+    let mut at = 0;
+    walk.items.retain(|_| {
+        at += 1;
+        !drop[at - 1]
+    });
+    let b = bounds(&walk.items);
+    let (dx, dy) = (-b.0, -b.1);
+    for item in &mut walk.items {
+        match item {
+            Item::Poly { pts, .. } | Item::Line { pts, .. } => pts.iter_mut().for_each(|q| *q = (q.0 + dx, q.1 + dy)),
+            Item::Text { at, .. } => *at = (at.0 + dx, at.1 + dy),
+        }
+    }
+    Figure { width: (b.2 - b.0).max(0.0), height: (b.3 - b.1).max(0.0), items: walk.items, omitted: walk.omitted }
 }
 
 #[cfg(test)]
@@ -481,7 +574,8 @@ mod tests {
         let f = fig(&d);
         assert_eq!(f.items.len(), 4, "{:?}", f.items);
         assert!(matches!(&f.items[0], Item::Line { color, .. } if hex(*color) == "#d6c4ae"));
-        assert!(matches!(&f.items[1], Item::Text { at: (1.0, 2.0), size, text, .. } if *size == 6.0 && text == "3 m"));
+        // A shape's words are centred on their point (the stylesheet's `text-anchor: middle`): 3 glyphs of 6 at 0.6.
+        assert!(matches!(&f.items[1], Item::Text { at, size, text, .. } if (at.0 - (1.0 - 5.4)).abs() < 1e-4 && at.1 == 2.0 && *size == 6.0 && text == "3 m"));
         assert!(matches!(&f.items[2], Item::Text { at: (10.0, 20.0), text, .. } if text == "Rue"));
     }
 

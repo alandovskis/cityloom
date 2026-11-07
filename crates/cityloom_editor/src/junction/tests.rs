@@ -3293,3 +3293,34 @@ fn a_fr_ca_junction_figure_has_its_own_words() {
     let (e, f) = (words(Locale::En), words(Locale::FrCa));
     assert!(!e.is_empty() && e != f, "{e:?} {f:?}");
 }
+
+#[test]
+fn the_junction_figure_is_fitted_to_what_is_drawn_and_its_words_are_whole_and_apart() {
+    use crate::shared::i18n::Locale;
+    use cityloom_report::Item;
+    let (bw, bh) = (246.0_f32, 190.0_f32);
+    let j = Junction::new(0);
+    for locale in [Locale::En, Locale::FrCa] {
+        let f = crate::junction::figure::figure(&j.view(), &crate::i18n_for(locale), Units::Metres, bw, bh);
+        // It uses the box: the larger dimension, relative to the box's, is at least 60%.
+        assert!((f.width / bw).max(f.height / bh) >= 0.6, "{} x {}", f.width, f.height);
+        assert!(f.width <= bw + 0.01 && f.height <= bh + 0.01, "{} x {}", f.width, f.height);
+        let boxes: Vec<(f32, f32, f32, f32)> = f
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Text { at, size, text, .. } => Some((at.0, at.1 - size * 0.8, at.0 + text.chars().count() as f32 * size * 0.6, at.1 + size * 0.25)),
+                _ => None,
+            })
+            .collect();
+        assert!(!boxes.is_empty());
+        for b in &boxes {
+            assert!(b.0 >= -0.01 && b.1 >= -0.01 && b.2 <= f.width + 0.01 && b.3 <= f.height + 0.01, "{b:?} leaves {} x {}", f.width, f.height);
+        }
+        for (i, a) in boxes.iter().enumerate() {
+            for b in &boxes[i + 1..] {
+                assert!(!(a.0 < b.2 && b.0 < a.2 && a.1 < b.3 && b.1 < a.3), "{a:?} overprints {b:?}");
+            }
+        }
+    }
+}
