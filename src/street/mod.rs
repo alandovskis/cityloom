@@ -88,7 +88,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
     mount("panel-tabs-slot", view! { <panel_tabs::PanelTabs vm=vm.clone()/> }.into_any());
-    mount("speed-slot",view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
+    mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
     mount("zone-tools-slot", view! { <zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
     mount("curb-tools-slot", view! { <curb_tools::CurbTools vm=vm.clone()/> }.into_any());
     mount("stop-tools-slot", view! { <stop_tools::StopTools vm=vm.clone()/> }.into_any());

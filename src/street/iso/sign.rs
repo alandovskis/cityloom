@@ -75,8 +75,8 @@ impl Panel {
 
 #[cfg(test)]
 mod tests {
-    use crate::street::iso::testing::{count, en};
     use crate::street::iso::iso_svg;
+    use crate::street::iso::testing::{count, en};
     use crate::street::model::Editor;
 
     #[test]
@@ -90,6 +90,9 @@ mod tests {
         // Nor does the drawing's label say it: the label says what is drawn.
         let label = crate::street::iso::iso_label(&e.view(), &en(), crate::shared::units::Units::Metres);
         assert!(!label.contains("Speed"), "{label}");
+        let fr = crate::i18n_for(crate::shared::i18n::Locale::FrCa);
+        let label = crate::street::iso::iso_label(&e.view(), &fr, crate::shared::units::Units::Metres);
+        assert!(!label.contains("vitesse"), "{label}");
     }
 
     #[test]
