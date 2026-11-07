@@ -290,10 +290,10 @@ map-report-row-failing = Lieux dont les vérifications de conception échouent
 map-report-row-problems = Problèmes du réseau
 map-report-row-notices = Avis du réseau
 map-report-figure-city = { $streets ->
-    [one] 1 rue
+    [one] { $streets } rue
    *[other] { $streets } rues
 }, { $junctions ->
-    [one] 1 jonction
+    [one] { $junctions } jonction
    *[other] { $junctions } jonctions
 }
 map-report-pass = Réussite
@@ -315,32 +315,34 @@ map-report-place-width = Largeur : { $before } avant, { $after } après.
 map-report-place-class = Classe : { $before } avant, { $after } après.
 map-report-place-speed = Limite de vitesse : { $before } avant, { $after } après.
 map-report-place-pieces = Éléments : { $added ->
-    [one] 1 ajouté
+    [one] { $added } ajouté
    *[other] { $added } ajoutés
 }, { $removed ->
-    [one] 1 retiré
+    [one] { $removed } retiré
    *[other] { $removed } retirés
 }.
 map-report-place-other = Le changement touche des détails que cette page ne résume pas, comme les zones, les usages en bordure de rue ou les arrêts. Les figures et les vérifications montrent le résultat.
 map-report-place-width-caption = Largeur par mode, avant et après
 map-report-place-col-mode = Mode
 map-report-place-share = { $length } ({ $pct } %)
-map-report-place-checks-caption = Vérifications de conception en échec
+map-report-place-checks-intro = « Avant » est la disposition importée d’OpenStreetMap; « Après » est la disposition modifiée.
+map-report-place-na = s. o.
+map-report-place-checks-caption = Vérifications de conception en échec avant ou après le changement
 map-report-place-col-check = Vérification
 map-report-place-col-detail = Détail
 map-report-place-all-pass = { $n ->
-    [one] La seule vérification est réussie
-   *[other] Les { $n } vérifications sont réussies
+    [one] { $n } vérification réussie
+   *[other] { $n } vérifications réussies
 } : { $result }.
 map-report-place-more = { $n ->
-    [one] 1 autre vérification en échec
+    [one] { $n } autre vérification en échec
    *[other] { $n } autres vérifications en échec
 }
 map-report-place-control = Signalisation : { $before } avant, { $after } après.
 map-report-place-control-same = Signalisation : { $after } (inchangée).
-map-report-place-junction-undrawn = Cette jonction ne peut pas être dessinée avec les rues qu’elle a maintenant; cette page n’a donc pas de figure.
+map-report-place-junction-undrawn = Cette jonction n’a pas pu être dessinée, avant ou après le changement; cette page n’a donc pas de figure.
 map-report-place-junction-failing = Vérifications en échec : { $failing }.
 map-report-place-left-out = Le rapport montre les { $shown } premiers lieux modifiés. { $left ->
-    [one] 1 autre lieu modifié n’est pas montré.
+    [one] { $left } autre lieu modifié n’est pas montré.
    *[other] { $left } autres lieux modifiés ne sont pas montrés.
 }

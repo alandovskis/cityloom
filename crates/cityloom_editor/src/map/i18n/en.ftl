@@ -325,7 +325,9 @@ map-report-place-other = The change is to details this page does not summarise, 
 map-report-place-width-caption = Width by mode, before and after
 map-report-place-col-mode = Mode
 map-report-place-share = { $length } ({ $pct } %)
-map-report-place-checks-caption = Design checks that fail
+map-report-place-checks-intro = Before is the layout as imported from OpenStreetMap; After is the layout as changed.
+map-report-place-na = n/a
+map-report-place-checks-caption = Design checks that fail before or after the change
 map-report-place-col-check = Check
 map-report-place-col-detail = Detail
 map-report-place-all-pass = { $n ->
@@ -338,7 +340,7 @@ map-report-place-more = { $n ->
 }
 map-report-place-control = Control: { $before } before, { $after } after.
 map-report-place-control-same = Control: { $after } (unchanged).
-map-report-place-junction-undrawn = This junction cannot be drawn with the streets it now has, so this page has no figures.
+map-report-place-junction-undrawn = This junction could not be drawn, before or after the change, so this page has no figures.
 map-report-place-junction-failing = Checks that fail: { $failing }.
 map-report-place-left-out = The report shows the first { $shown } changed places. { $left ->
     [one] 1 more changed place is not shown.

@@ -168,8 +168,10 @@ fn street_page(city: &City, uid: u32, zones: usize, name: String, region: usize,
         head: vec![tr("map-report-place-col-mode", &Args::new()), tr("map-report-place-before", &Args::new()), tr("map-report-place-after", &Args::new())],
         rows: Mode::ALL.iter().map(|&m| vec![tr(mode_key(m), &Args::new()), share(&before.outcomes.share, m), share(&after.outcomes.share, m)]).collect(),
     });
-    let checks = after.checks.iter().map(|c| (c.ok, &c.label, &c.detail)).collect::<Vec<_>>();
-    page.extend(checks_block(&checks, i18n, units));
+    fn read(c: &crate::street::model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
+        (c.id, c.ok, &c.label, &c.detail)
+    }
+    page.extend(checks_block(&pair_checks(&before.checks, &after.checks, read), i18n, units));
     page
 }
 
@@ -203,8 +205,10 @@ fn junction_page(city: &City, uid: u32, name: &str, failing: &[crate::shared::sa
         ),
     ];
     page.push(Block::Figures { items: items.to_vec() });
-    let checks = after.checks.iter().map(|c| (c.ok, &c.label, &c.detail)).collect::<Vec<_>>();
-    page.extend(checks_block(&checks, i18n, units));
+    fn read(c: &crate::junction::read_model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
+        (c.id, c.ok, &c.label, &c.detail)
+    }
+    page.extend(checks_block(&pair_checks(&before.checks, &after.checks, read), i18n, units));
     page
 }
 
@@ -218,27 +222,81 @@ fn captioned(caption: &str, what: String, figure: cityloom_report::Figure, i18n:
     Captioned { caption, alt, note, figure }
 }
 
-/// The checks of a place: a table of the failing ones (at most `MAX_FAILING_ROWS`, then a count of the rest), or one
-/// sentence that all pass.
-pub(crate) fn checks_block(checks: &[(bool, &crate::shared::said::Said, &crate::shared::said::Said)], i18n: &I18n, units: Units) -> Vec<Block> {
-    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
-    let failing: Vec<_> = checks.iter().filter(|c| !c.0).collect();
-    if failing.is_empty() {
-        let args = Args::new().num("n", checks.len() as i64).str("result", tr("map-report-pass", &Args::new()));
-        return vec![Block::Paragraph { text: tr("map-report-place-all-pass", &args) }];
+/// One check of a place as it was imported and as it is now; `None` where the check does not exist in that state.
+pub(crate) struct CheckPair<'a> {
+    pub id: &'a str,
+    pub before: Option<bool>,
+    pub after: Option<bool>,
+    pub label: &'a crate::shared::said::Said,
+    pub detail: &'a crate::shared::said::Said,
+}
+
+/// Pairs the checks of the imported state with those of the current one by id: the current ones first, then those only the
+/// imported state has.
+pub(crate) fn pair_checks<'a, T>(
+    before: &'a [T],
+    after: &'a [T],
+    read: impl Fn(&'a T) -> (&'a str, bool, &'a crate::shared::said::Said, &'a crate::shared::said::Said),
+) -> Vec<CheckPair<'a>> {
+    let mut pairs: Vec<CheckPair> = after
+        .iter()
+        .map(|c| {
+            let (id, ok, label, detail) = read(c);
+            let was = before.iter().map(&read).find(|b| b.0 == id).map(|b| b.1);
+            CheckPair { id, before: was, after: Some(ok), label, detail }
+        })
+        .collect();
+    for c in before {
+        let (id, ok, label, detail) = read(c);
+        if !pairs.iter().any(|p| p.id == id) {
+            pairs.push(CheckPair { id, before: Some(ok), after: None, label, detail });
+        }
     }
-    let fail = tr("map-report-fail", &Args::new());
-    let mut rows: Vec<Vec<String>> =
-        failing.iter().take(MAX_FAILING_ROWS).map(|c| vec![say_now(i18n, units, c.1), fail.clone(), say_now(i18n, units, c.2)]).collect();
+    pairs
+}
+
+/// The checks of a place, imported state beside the current one: a table of those that fail in either (the current
+/// failures first, at most `MAX_FAILING_ROWS`, then a count of the rest), or one sentence that all pass. A short sentence
+/// first says what Before is.
+pub(crate) fn checks_block(checks: &[CheckPair], i18n: &I18n, units: Units) -> Vec<Block> {
+    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
+    let mut blocks = vec![Block::Paragraph { text: tr("map-report-place-checks-intro", &Args::new()) }];
+    let fails = |c: &&CheckPair| c.after == Some(false) || c.before == Some(false);
+    let mut failing: Vec<&CheckPair> = checks.iter().filter(fails).collect();
+    failing.sort_by_key(|c| c.after != Some(false));
+    if failing.is_empty() {
+        let args = Args::new().num("n", checks.iter().filter(|c| c.after.is_some()).count() as i64).str("result", tr("map-report-pass", &Args::new()));
+        blocks.push(Block::Paragraph { text: tr("map-report-place-all-pass", &args) });
+        return blocks;
+    }
+    let word = |state: Option<bool>| match state {
+        Some(true) => tr("map-report-pass", &Args::new()),
+        Some(false) => tr("map-report-fail", &Args::new()),
+        None => tr("map-report-place-na", &Args::new()),
+    };
+    let mut rows: Vec<Vec<String>> = failing
+        .iter()
+        .take(MAX_FAILING_ROWS)
+        .map(|c| {
+            let detail = if c.after == Some(false) { say_now(i18n, units, c.detail) } else { String::new() };
+            vec![say_now(i18n, units, c.label), word(c.before), word(c.after), detail]
+        })
+        .collect();
     if failing.len() > MAX_FAILING_ROWS {
         let more = tr("map-report-place-more", &Args::new().num("n", (failing.len() - MAX_FAILING_ROWS) as i64));
-        rows.push(vec![more, String::new(), String::new()]);
+        rows.push(vec![more, String::new(), String::new(), String::new()]);
     }
-    vec![Block::Table {
+    blocks.push(Block::Table {
         caption: tr("map-report-place-checks-caption", &Args::new()),
-        head: vec![tr("map-report-place-col-check", &Args::new()), tr("map-report-col-result", &Args::new()), tr("map-report-place-col-detail", &Args::new())],
+        head: vec![
+            tr("map-report-place-col-check", &Args::new()),
+            tr("map-report-place-before", &Args::new()),
+            tr("map-report-place-after", &Args::new()),
+            tr("map-report-place-col-detail", &Args::new()),
+        ],
         rows,
-    }]
+    });
+    blocks
 }
 
 /// A time in milliseconds since 1970 as UTC (the civil-from-days algorithm, so no date crate): the ISO date and the

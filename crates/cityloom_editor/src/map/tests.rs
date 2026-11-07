@@ -1083,8 +1083,11 @@ mod report {
         vm.reload();
         assert!(vm.view().failing > 0);
         let page = &pages(&vm)[0];
-        let fails = tables(page).into_iter().find(|(h, _)| h[1] == "Result").expect("a checks table").1;
-        assert!(fails.iter().all(|r| r[1] == "Fail" && !r[2].is_empty()), "{fails:?}");
+        let (head, fails) = tables(page).into_iter().find(|(h, _)| h[0] == "Check").expect("a checks table");
+        assert_eq!(head.as_slice(), ["Check", "Before", "After", "Detail"]);
+        assert!(fails.iter().any(|r| r[1] == "Pass" && r[2] == "Fail" && !r[3].is_empty()), "an edit that breaks a check: {fails:?}");
+        assert!(fails.iter().all(|r| r[1] == "Fail" || r[2] == "Fail"), "{fails:?}");
+        assert!(texts(page).join("\n").contains("Before is the layout as imported"));
         let (vm, _, _, storage) = sample_in(Locale::En);
         let store = CityStore::sample(storage.clone());
         let street = a_street(&vm);
@@ -1094,20 +1097,51 @@ mod report {
         vm.reload();
         assert_eq!(vm.view().failing, 0);
         let page = &pages(&vm)[0];
-        assert!(!tables(page).iter().any(|(h, _)| h[1] == "Result"));
+        assert!(!tables(page).iter().any(|(h, _)| h[0] == "Check"));
         assert!(texts(page).join("\n").contains("pass: Pass."), "{:?}", texts(page));
+    }
+
+    fn pairs<'a>(said: &'a crate::shared::said::Said, states: &[(Option<bool>, Option<bool>)]) -> Vec<crate::map::report::CheckPair<'a>> {
+        states.iter().map(|&(before, after)| crate::map::report::CheckPair { id: "x", before, after, label: said, detail: said }).collect()
     }
 
     #[test]
     fn more_than_eight_failing_checks_are_cut_with_a_count() {
-        use crate::shared::said::Said;
-        let said = Said::new("map-report-pass");
-        let checks: Vec<_> = (0..11).map(|_| (false, &said, &said)).collect();
+        let said = crate::shared::said::Said::new("map-report-pass");
+        let checks = pairs(&said, &[(Some(true), Some(false)); 11]);
         let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
         let (_, rows) = tables(&blocks)[0];
         assert_eq!(rows.len(), 9);
         assert_eq!(rows[8][0], "3 more failing checks");
-        assert_eq!(rows[..8].iter().filter(|r| r[1] == "Fail").count(), 8);
+        assert_eq!(rows[..8].iter().filter(|r| r[1] == "Pass" && r[2] == "Fail").count(), 8);
+    }
+
+    #[test]
+    fn the_checks_table_puts_before_beside_after_and_lists_a_check_failing_in_either() {
+        let said = crate::shared::said::Said::new("map-report-pass");
+        let checks =
+            pairs(&said, &[(Some(false), Some(true)), (Some(true), Some(false)), (Some(false), Some(false)), (Some(true), Some(true)), (Some(false), None)]);
+        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let (_, rows) = tables(&blocks)[0];
+        let states: Vec<(&str, &str)> = rows.iter().map(|r| (r[1].as_str(), r[2].as_str())).collect();
+        // those failing now first, then those that only failed before; the passing one is not listed
+        assert_eq!(states, [("Pass", "Fail"), ("Fail", "Fail"), ("Fail", "Pass"), ("Fail", "n/a")]);
+        assert!(!rows[0][3].is_empty() && !rows[1][3].is_empty(), "a failing After result has its detail");
+        assert!(rows[2][3].is_empty() && rows[3][3].is_empty());
+    }
+
+    #[test]
+    fn the_plural_messages_read_right_in_french_for_zero_one_and_many() {
+        let fr = crate::i18n_for(Locale::FrCa);
+        let line =
+            |added: i64, removed: i64| fr.tr_now("map-report-place-pieces", &crate::shared::i18n::Args::new().num("added", added).num("removed", removed));
+        assert_eq!(line(2, 0), "Éléments\u{a0}: 2 ajoutés, 0 retiré.");
+        assert_eq!(line(0, 1), "Éléments\u{a0}: 0 ajouté, 1 retiré.");
+        assert_eq!(line(1, 1), "Éléments\u{a0}: 1 ajouté, 1 retiré.");
+        let pass = |n: i64| fr.tr_now("map-report-place-all-pass", &crate::shared::i18n::Args::new().num("n", n).str("result", "Réussite"));
+        assert_eq!(pass(0), "0 vérification réussie\u{a0}: Réussite.");
+        assert_eq!(pass(1), "1 vérification réussie\u{a0}: Réussite.");
+        assert_eq!(pass(5), "5 vérifications réussies\u{a0}: Réussite.");
     }
 
     #[test]
@@ -1123,7 +1157,7 @@ mod report {
         view.nodes[plain].edited = true;
         let (pages, left) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
         assert_eq!(left, 0);
-        let undrawn = pages.iter().find(|p| texts(p).join("\n").contains("cannot be drawn")).expect("a text page");
+        let undrawn = pages.iter().find(|p| texts(p).join("\n").contains("could not be drawn")).expect("a text page");
         assert!(matches!(&undrawn[0], Block::Heading { .. }));
         assert!(figures(undrawn).is_empty() && tables(undrawn).is_empty());
         assert!(pages.iter().any(|p| !figures(p).is_empty()), "the junction that can be drawn has figures");
