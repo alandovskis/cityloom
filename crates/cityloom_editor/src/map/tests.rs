@@ -989,6 +989,217 @@ mod report {
         assert!(matches!(&built.pages[0][0], Block::Heading { level: 1, text } if text == name));
     }
 
+    // ---- the pages of the changed places ----
+
+    /// A street of the sample city with its first piece made `by` wider, written as another page would.
+    fn widen_street(storage: &Rc<MemoryStorage>, uid: u32, by: i32) {
+        let store = CityStore::sample(storage.clone());
+        let mut e = store.open().street_editor(uid, 0).unwrap();
+        let u = e.view().segments[0].uid;
+        e.set_width(u, e.view().segments[0].width_mm + by);
+        assert!(store.write_street(uid, e.snapshot()));
+    }
+
+    fn change_junction(storage: &Rc<MemoryStorage>, uid: u32) {
+        let store = CityStore::sample(storage.clone());
+        let mut j = store.open().junction_editor(uid, 0).unwrap();
+        let next = (j.snapshot().control + 1) % crate::junction::model::CONTROLS.len();
+        assert!(j.set_control(next));
+        assert!(store.write_junction(uid, j.snapshot()));
+    }
+
+    fn a_street(vm: &MapVm) -> u32 {
+        vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid
+    }
+
+    fn pages(vm: &MapVm) -> Vec<Vec<Block>> {
+        vm.report_data().pages.into_iter().skip(2).collect()
+    }
+
+    fn figures(page: &[Block]) -> Vec<&cityloom_report::Captioned> {
+        page.iter().flat_map(|b| if let Block::Figures { items } = b { items.iter().collect() } else { Vec::new() }).collect()
+    }
+
+    fn tables(page: &[Block]) -> Vec<(&Vec<String>, &Vec<Vec<String>>)> {
+        page.iter().filter_map(|b| if let Block::Table { head, rows, .. } = b { Some((head, rows)) } else { None }).collect()
+    }
+
+    #[test]
+    fn one_page_per_edited_place_and_none_for_unedited() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        assert!(pages(&vm).is_empty());
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        vm.reload();
+        assert_eq!(pages(&vm).len(), 1);
+        let junction = vm.view().nodes.iter().find(|n| n.junction).unwrap().uid;
+        change_junction(&storage, junction);
+        vm.reload();
+        let p = pages(&vm);
+        assert_eq!(p.len(), vm.view().edited);
+        assert_eq!(p.len(), 2);
+    }
+
+    #[test]
+    fn no_edit_gives_no_place_pages() {
+        let (vm, ..) = sample_in(Locale::En);
+        assert_eq!(vm.report_data().pages.len(), 2);
+    }
+
+    #[test]
+    fn the_street_page_has_before_and_after_figures_with_captions() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        widen_street(&storage, a_street(&vm), 300);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        assert!(matches!(&page[0], Block::Heading { .. }));
+        let f = figures(page);
+        assert_eq!(f.len(), 2);
+        assert_eq!((f[0].caption.as_str(), f[1].caption.as_str()), ("Before", "After"));
+        assert!(f.iter().all(|c| !c.alt.is_empty() && !c.figure.items.is_empty()));
+        assert_ne!(f[0].figure, f[1].figure);
+        assert!(texts(page).join("\n").contains("Width:"), "{:?}", texts(page));
+    }
+
+    #[test]
+    fn the_width_table_gives_before_and_after_shares() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        widen_street(&storage, a_street(&vm), 300);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        let (head, rows) = tables(page)[0];
+        assert_eq!(head.as_slice(), ["Mode", "Before", "After"]);
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0][0], "Walking");
+        assert!(rows.iter().all(|r| r[1].contains('%') && r[2].contains('%')));
+        assert!(rows.iter().any(|r| r[1] != r[2]), "{rows:?}");
+    }
+
+    #[test]
+    fn a_failing_check_is_a_fail_row_and_a_passing_place_says_all_pass() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 8000);
+        vm.reload();
+        assert!(vm.view().failing > 0);
+        let page = &pages(&vm)[0];
+        let fails = tables(page).into_iter().find(|(h, _)| h[1] == "Result").expect("a checks table").1;
+        assert!(fails.iter().all(|r| r[1] == "Fail" && !r[2].is_empty()), "{fails:?}");
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let store = CityStore::sample(storage.clone());
+        let street = a_street(&vm);
+        let mut e = store.open().street_editor(street, 0).unwrap();
+        assert!(e.set_speed(Some(30)));
+        assert!(store.write_street(street, e.snapshot()));
+        vm.reload();
+        assert_eq!(vm.view().failing, 0);
+        let page = &pages(&vm)[0];
+        assert!(!tables(page).iter().any(|(h, _)| h[1] == "Result"));
+        assert!(texts(page).join("\n").contains("pass: Pass."), "{:?}", texts(page));
+    }
+
+    #[test]
+    fn more_than_eight_failing_checks_are_cut_with_a_count() {
+        use crate::shared::said::Said;
+        let said = Said::new("map-report-pass");
+        let checks: Vec<_> = (0..11).map(|_| (false, &said, &said)).collect();
+        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let (_, rows) = tables(&blocks)[0];
+        assert_eq!(rows.len(), 9);
+        assert_eq!(rows[8][0], "3 more failing checks");
+        assert_eq!(rows[..8].iter().filter(|r| r[1] == "Fail").count(), 8);
+    }
+
+    #[test]
+    fn a_junction_that_cannot_be_drawn_gets_a_text_page() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let junction = vm.view().nodes.iter().find(|n| n.junction).unwrap().uid;
+        change_junction(&storage, junction);
+        let store = CityStore::sample(storage.clone());
+        let city = store.open();
+        let mut view = city.view(0);
+        let plain = view.nodes.iter().position(|n| !n.junction).expect("a node that is no junction");
+        view.nodes[plain].junction = true;
+        view.nodes[plain].edited = true;
+        let (pages, left) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!(left, 0);
+        let undrawn = pages.iter().find(|p| texts(p).join("\n").contains("cannot be drawn")).expect("a text page");
+        assert!(matches!(&undrawn[0], Block::Heading { .. }));
+        assert!(figures(undrawn).is_empty() && tables(undrawn).is_empty());
+        assert!(pages.iter().any(|p| !figures(p).is_empty()), "the junction that can be drawn has figures");
+    }
+
+    #[test]
+    fn a_junction_page_says_the_control_before_and_after() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        assert_eq!(figures(page).len(), 2);
+        assert!(texts(page).join("\n").contains("Control:"), "{:?}", texts(page));
+    }
+
+    #[test]
+    fn more_than_forty_edited_places_give_forty_pages_and_a_note() {
+        assert_eq!(crate::map::report::MAX_PLACES, 40);
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let streets: Vec<u32> = vm.view().edges.iter().take(3).map(|e| e.uid).collect();
+        for s in &streets {
+            widen_street(&storage, *s, 100);
+        }
+        vm.reload();
+        let city = CityStore::sample(storage.clone()).open();
+        let view = city.view(0);
+        let (pages, left) = crate::map::report::place_pages_up_to(2, &city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!((pages.len(), left), (2, view.edited - 2));
+        let facts = crate::map::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
+        let data = crate::map::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
+        assert_eq!(data.pages.len(), 4);
+        assert!(texts(&data.pages[1]).join("\n").contains("not shown"), "{:?}", texts(&data.pages[1]));
+    }
+
+    #[test]
+    fn a_zoned_street_says_it_is_drawn_at_its_first_zone() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert!(texts(&pages[0]).join("\n").contains("drawn at its first zone"));
+        let (pages, _) = crate::map::report::place_pages(&city, &city.view(0), 0, &vm.i18n(), vm.units());
+        assert!(!texts(&pages[0]).join("\n").contains("first zone"));
+    }
+
+    #[test]
+    fn a_long_street_name_is_kept_whole_in_the_heading() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        let long = "Avenue du Très Long Nom de Rue Qui Continue Encore et Encore Jusqu’à Dépasser La Largeur De La Page";
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().called =
+            crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text(long.to_string()));
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert!(matches!(&pages[0][0], Block::Heading { text, .. } if text.contains(long)), "{:?}", pages[0][0]);
+    }
+
+    #[test]
+    fn the_pages_are_in_fr_ca_when_the_page_is_french() {
+        let (vm, _, _, storage) = sample_in(Locale::FrCa);
+        widen_street(&storage, a_street(&vm), 300);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        vm.reload();
+        let p = pages(&vm);
+        let all: String = p.iter().flat_map(|pg| texts(pg)).collect::<Vec<_>>().join("\n");
+        assert!(all.contains("Avant") && all.contains("Après") && all.contains("Largeur") && all.contains("Signalisation"), "{all}");
+        assert!(!all.contains("Before") && !all.contains("Width"), "{all}");
+        let f = figures(&p[1]);
+        assert!(f.iter().all(|c| c.alt.contains("Avant") || c.alt.contains("Après")));
+    }
+
     #[test]
     fn download_report_saves_the_pdf_it_is_given() {
         let (vm, pdf, downloads, _) = sample_in(Locale::En);

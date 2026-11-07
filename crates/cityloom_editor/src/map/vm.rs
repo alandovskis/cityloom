@@ -668,7 +668,10 @@ impl MapVm {
             failing: v.failing,
             problems: by(Severity::Problem),
             notices: by(Severity::Notice),
+            ..Default::default()
         };
+        let (place_pages, left_out) = self.core.read(|m| report::place_pages(&m.city, &v, m.region, &self.i18n, self.units()));
+        let facts = report::Facts { place_pages, left_out, ..facts };
         report::build(&facts, env!("CARGO_PKG_VERSION"), self.ports.storage.now_ms(), &self.i18n)
     }
 

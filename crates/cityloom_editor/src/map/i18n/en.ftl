@@ -303,3 +303,44 @@ map-report-none-found = No network problems and no notices were found: { $result
 map-report-nothing = There is nothing to report: this city has no streets or junctions.
 map-report-failed = The report could not be made. Try again.
 map-report-dismiss = Dismiss
+
+# The pages of the changed places in the report
+map-report-place-before = Before
+map-report-place-after = After
+map-report-place-alt = { $which }: { $what }
+map-report-place-omitted = Some small marks are not drawn in this figure.
+map-report-place-zones = This street has { $zones } zones. The figures show it drawn at its first zone.
+map-report-place-street-missing = This street could not be read, so there is nothing more to show here.
+map-report-place-width = Width: { $before } before, { $after } after.
+map-report-place-class = Class: { $before } before, { $after } after.
+map-report-place-speed = Speed limit: { $before } before, { $after } after.
+map-report-place-pieces = Pieces: { $added ->
+    [one] 1 added
+   *[other] { $added } added
+}, { $removed ->
+    [one] 1 removed
+   *[other] { $removed } removed
+}.
+map-report-place-other = The change is to details this page does not summarise, such as zones, curbside uses or stops. The figures and the checks show the result.
+map-report-place-width-caption = Width by mode, before and after
+map-report-place-col-mode = Mode
+map-report-place-share = { $length } ({ $pct } %)
+map-report-place-checks-caption = Design checks that fail
+map-report-place-col-check = Check
+map-report-place-col-detail = Detail
+map-report-place-all-pass = { $n ->
+    [one] The only check passes
+   *[other] All { $n } checks pass
+}: { $result }.
+map-report-place-more = { $n ->
+    [one] 1 more failing check
+   *[other] { $n } more failing checks
+}
+map-report-place-control = Control: { $before } before, { $after } after.
+map-report-place-control-same = Control: { $after } (unchanged).
+map-report-place-junction-undrawn = This junction cannot be drawn with the streets it now has, so this page has no figures.
+map-report-place-junction-failing = Checks that fail: { $failing }.
+map-report-place-left-out = The report shows the first { $shown } changed places. { $left ->
+    [one] 1 more changed place is not shown.
+   *[other] { $left } more changed places are not shown.
+}
