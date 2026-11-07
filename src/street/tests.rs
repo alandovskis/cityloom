@@ -13,7 +13,7 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::keys::Action as StreetAction;
 use crate::street::model::Editor;
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 use crate::street::{inspector, notes, page, view};
 // ---- what the keys do on the street ---------------------------------------------------
@@ -109,40 +109,16 @@ fn street_ends() -> Vec<EndView> {
     ]
 }
 
-#[test]
-fn the_street_section_is_a_labelled_group_holding_a_picture_of_the_street() {
-    let s = street_shared(0);
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains("id=\"wrap\"") && h.contains("aria-label=\"Street cross-section editor\"") && h.contains("tabindex=\"0\""));
-    assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
-    assert!(h.contains("Cross-section of Sample Street 1. 6 segments, 18.0 m of 18.0 m. Every metre of the street is used."));
-    assert_eq!(count(&h, "data-role=\"handle\""), 5);
-    assert_eq!(count(&h, "class=\"seg\""), 6);
-}
-
-#[test]
-fn the_section_follows_the_units_and_the_selection() {
-    let s = street_shared(0);
-    s.set_units(Units::Feet);
-    let u = segment(&s, 2);
-    s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains("Street width 59.1 ft") && count(&h, "class=\"sel-box\"") == 1);
-}
-
-fn street_in(mode: ViewMode, locale: Locale) -> Rc<StreetVm> {
+fn street_in(locale: Locale) -> Rc<StreetVm> {
     let (ports, _, _) = crate::shared::ports::test_ports();
-    let s = StreetVm::new(ports, crate::i18n_for(locale), Editor::new(0), None);
-    s.set_mode(mode);
-    s
+    StreetVm::new(ports, crate::i18n_for(locale), Editor::new(0), None)
 }
 
 #[test]
-fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still_reach_it() {
-    let s = street_in(ViewMode::Iso, Locale::En);
+fn the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_reach_it() {
+    let s = street_in(Locale::En);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    // The keyboard still edits the street through the group around the drawing.
-    // ...named for the view it shows, not as a cross-section.
+    // The keyboard edits the street through the group around the drawing, which is named for what it shows.
     assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Street editor, 2.5D view\""), "{h}");
     assert!(!h.to_lowercase().contains("cross-section"), "{h}");
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
@@ -154,56 +130,35 @@ fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still
 }
 
 #[test]
-fn the_group_is_as_tall_as_the_section_in_both_views_so_switching_does_not_make_the_card_jump() {
-    use crate::street::iso::iso_height;
-    use crate::street::svg::Geometry;
-    for mode in [ViewMode::Section, ViewMode::Iso] {
-        let s = street_in(mode, Locale::En);
-        let v = s.view();
-        let section = Geometry::fit(1050.0, v.row_mm).rows.height;
-        // The group keeps the taller of the two, whichever view is shown, and the 2.5D is never the taller.
-        assert!(iso_height(&v, 1050.0) <= section);
-        let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-        assert!(h.contains(&format!("min-height:{section}px")), "{mode:?} {section} {h}");
-    }
+fn the_group_keeps_the_height_the_drawing_is_held_to_and_fits_the_room_it_has() {
+    use crate::street::iso::{iso_height, max_height};
+    let s = street_in(Locale::En);
+    let v = s.view();
+    assert!(iso_height(&v, 1050.0) <= max_height(1050.0));
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains(&format!("min-height:{}px", max_height(1050.0))), "{h}");
+    // No 600 px minimum: the drawing is scaled to the group's width.
+    assert!(h.contains("iso-view"), "{h}");
 }
 
 #[test]
-fn only_the_section_keeps_the_group_600_px_wide_the_2_5d_fits_the_room_it_has() {
-    let section = street_html(|| view! { <view::StreetDrawing vm=street_in(ViewMode::Section, Locale::En)/> });
-    let iso = street_html(|| view! { <view::StreetDrawing vm=street_in(ViewMode::Iso, Locale::En)/> });
-    assert!(!section.contains("iso-view"), "{section}");
-    assert!(iso.contains("iso-view"), "{iso}");
-}
-
-#[test]
-fn in_french_the_2_5d_group_is_named_for_the_2_5d() {
-    let s = street_in(ViewMode::Iso, Locale::FrCa);
+fn in_french_the_group_is_named_for_the_2_5d() {
+    let s = street_in(Locale::FrCa);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("aria-label=\"Éditeur de la rue, vue 2,5D\"") && !h.contains("coupe"), "{h}");
 }
 
 #[test]
-fn the_drawing_s_heading_names_the_view_shown_in_each_language() {
-    for (locale, section, iso) in [(Locale::En, "Cross-section", "Street in 2.5D"), (Locale::FrCa, "Coupe transversale", "Rue en 2,5D")] {
-        let s = street_in(ViewMode::Section, locale);
-        assert_eq!(street_html(|| view! { <page::DrawingHeading vm=s.clone()/> }), section);
-        s.set_mode(ViewMode::Iso);
+fn the_drawing_s_heading_names_the_street_in_2_5d_in_each_language() {
+    for (locale, iso) in [(Locale::En, "Street in 2.5D"), (Locale::FrCa, "Rue en 2,5D")] {
+        let s = street_in(locale);
         assert_eq!(street_html(|| view! { <page::DrawingHeading vm=s.clone()/> }), iso);
     }
 }
 
 #[test]
-fn in_the_section_the_drawing_is_unchanged() {
-    let s = street_in(ViewMode::Section, Locale::En);
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert_eq!(count(&h, "data-role=\"handle\""), 5);
-    assert_eq!(count(&h, "class=\"iso-top "), 0);
-}
-
-#[test]
 fn the_2_5d_drawing_follows_the_selection() {
-    let s = street_in(ViewMode::Iso, Locale::En);
+    let s = street_in(Locale::En);
     let draw = || street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     let outline = |h: &str| h.find("class=\"iso-sel\"").map(|at| h[at..at + h[at..].find("/>").unwrap()].to_string());
     // Nothing selected: no outline.
@@ -220,38 +175,11 @@ fn the_2_5d_drawing_follows_the_selection() {
 
 #[test]
 fn the_2_5d_drawing_follows_the_language_the_shell_switches() {
-    let s = street_in(ViewMode::Iso, Locale::En);
+    let s = street_in(Locale::En);
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("<title>Trottoir</title>") && h.contains("en 2,5D, sur un tronçon de"), "{h}");
     assert!(!h.contains("<title>Sidewalk</title>"), "{h}");
-}
-
-#[test]
-fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
-    let s = street_in(ViewMode::Section, Locale::En);
-    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
-    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
-    assert!(h.contains(">Show the street as</legend>"), "{h}");
-    assert!(button_tag(&h, "view-section").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
-    // V goes to the view not shown, so only that button carries it.
-    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-section").contains("aria-keyshortcuts"));
-    assert!(h.contains(">Section</button>") && h.contains(">2.5D</button>"), "{h}");
-    s.set_mode(ViewMode::Iso);
-    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-section").contains("aria-pressed=\"false\""));
-    assert!(button_tag(&h, "view-section").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
-}
-
-#[test]
-fn the_view_toggle_reads_coupe_and_2_5d_in_french() {
-    let s = street_in(ViewMode::Section, Locale::FrCa);
-    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
-    assert!(h.contains(">Coupe</button>") && h.contains(">2,5D</button>") && h.contains(">Afficher la rue en</legend>"), "{h}");
 }
 
 #[test]
@@ -273,7 +201,7 @@ fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() 
     let b = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(b.contains(">Unnamed local street</b>"), "{b}");
     let d = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(d.contains("Cross-section of Unnamed local street."), "{d}");
+    assert!(d.contains("Unnamed local street in 2.5D"), "{d}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
     assert!(h.contains(">Rue locale sans nom</h1>"), "{h}");
@@ -777,16 +705,6 @@ fn the_heading_and_the_title_block_are_in_french() {
 }
 
 #[test]
-fn the_drawing_s_group_is_named_in_the_language_of_the_page() {
-    let s = street_shared(0);
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains("aria-label=\"Street cross-section editor\""), "{h}");
-    let s = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains("aria-label=\"Éditeur de coupe transversale de la rue\"") && !h.contains("Street cross-section editor"), "{h}");
-}
-
-#[test]
 fn the_history_buttons_are_in_french() {
     let s = street_shared_in(0, Locale::FrCa);
     let h = street_html(|| view! { <page::History vm=s.clone()/> });
@@ -927,20 +845,6 @@ fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
 }
 
 #[test]
-fn the_drawing_is_in_french_when_the_page_is() {
-    let s = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains("Aujourd’hui") && h.contains("Votre aménagement") && h.contains("Coupe transversale de"), "{h}");
-    assert!(!h.contains(">Today<") && !h.contains("Cross-section of"), "{h}");
-    let e = street_shared(0);
-    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
-    assert!(h.contains(">Today<"), "{h}");
-    e.i18n().set(Locale::FrCa);
-    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
-    assert!(h.contains(">Aujourd’hui<") && !h.contains(">Today<"), "{h}");
-}
-
-#[test]
 fn the_group_ids_are_those_of_the_add_menu() {
     let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
     assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
@@ -1065,18 +969,23 @@ fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures
         "{button}"
     );
     assert!(h.contains(">Transform<") && h.contains("id=\"transform-menu\"") && h.contains("role=\"menu\"") && h.contains("hidden"), "{h}");
-    assert_eq!(count(&h, "role=\"group\""), 2, "{h}");
-    assert!(h.contains("Make pedestrian") && h.contains("Transit priority"), "{h}");
+    assert_eq!(count(&h, "role=\"group\""), 3, "{h}");
+    assert!(h.contains("Make pedestrian") && h.contains("Transit priority") && h.contains("Street templates"), "{h}");
     for kind in ["Sidewalk", "Planting strip", "Café terrace"] {
         assert!(h.contains(kind), "{kind}");
     }
     assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
     // The mark and the name are apart in the text, so that a visible label read as one word is not what the
     // item's name has to contain (WCAG 2.5.3).
-    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\""), "{h}");
+    // (A template has a name and no mark.)
+    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\"") - count(&h, "template-item"), "{h}");
     // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
     // reach it as the group's name and description.
-    for (group, heading, hint) in [("ped", "transform-ped-h", "transform-ped-hint"), ("transit", "transform-transit-h", "transform-transit-hint")] {
+    for (group, heading, hint) in [
+        ("ped", "transform-ped-h", "transform-ped-hint"),
+        ("transit", "transform-transit-h", "transform-transit-hint"),
+        ("templates", "transform-templates-h", "transform-templates-hint"),
+    ] {
         let tag = &h[h[..h.find(&format!("aria-labelledby=\"{heading}\"")).unwrap()].rfind('<').unwrap()..];
         assert!(tag[..tag.find('>').unwrap()].contains(&format!("aria-describedby=\"{hint}\"")), "{group}: {tag}");
         for id in [heading, hint] {
@@ -1132,15 +1041,50 @@ fn the_transform_menu_leaves_out_a_group_with_nothing_in_it_and_is_not_shown_emp
     use crate::shared::catalogue::kind_index;
     let s = street_shared(1);
     let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert_eq!(count(&h, "role=\"group\""), 2);
+    assert_eq!(count(&h, "role=\"group\""), 3);
     assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
     let menu = s.transform_menu();
     let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
     if menu.is_empty() {
         assert!(!h.contains("transform-btn"), "{h}");
     } else {
-        assert_eq!(count(&h, "role=\"group\""), 1, "{h}");
+        let groups = 1 + usize::from(!menu.transit.is_empty());
+        assert_eq!(count(&h, "role=\"group\""), groups, "the templates, and the measures if any fit: {h}");
     }
+}
+
+#[test]
+fn the_templates_are_all_listed_and_one_that_does_not_fit_is_disabled_with_its_reason_described() {
+    // Sample 2 is 12 m wide: the bus corridor needs 13.8 m.
+    let s = street_shared(2);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert_eq!(count(&h, "template-item"), 5, "{h}");
+    for name in ["Commercial main street", "School street", "Neighbourhood greenway", "Bus corridor", "Industrial access street"] {
+        assert!(h.contains(&format!("<b>{name}</b>")), "{name}");
+    }
+    assert_eq!(count(&h, "aria-disabled=\"true\""), s.transform_menu().templates.iter().filter(|t| t.refusal.is_some()).count());
+    let tag = &h[h[..h.find("data-template=\"bus-corridor\"").unwrap()].rfind("<button").unwrap()..];
+    let tag = &tag[..tag.find('>').unwrap()];
+    assert!(
+        tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""),
+        "{tag}"
+    );
+    let reason = &h[h[..h.find("id=\"template-reason-bus-corridor\"").unwrap()].rfind("<p").unwrap()..];
+    assert!(reason[..reason.find('>').unwrap()].contains("aria-hidden=\"true\""), "a menu holds only items and groups: {reason}");
+    assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
+    let school = &h[h[..h.find("data-template=\"school\"").unwrap()].rfind("<button").unwrap()..];
+    assert!(!school[..school.find('>').unwrap()].contains("aria-disabled"), "{school}");
+    assert!(!h.contains("template-reason-school"), "a template that fits has no reason");
+}
+
+#[test]
+fn the_templates_are_worded_in_french() {
+    let s = street_shared_in(2, Locale::FrCa);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    for name in ["Rue commerciale", "Rue scolaire", "Voie verte de quartier", "Corridor d’autobus", "Rue d’accès industriel", "Modèles de rue"] {
+        assert!(h.contains(name), "{name}");
+    }
+    assert!(h.contains("Le modèle «\u{a0}Corridor d’autobus\u{a0}» demande une rue d’au moins 13,8\u{a0}m"), "{h}");
 }
 
 #[test]
@@ -1854,4 +1798,170 @@ fn the_green_tools_follow_the_language() {
     assert!(h.contains("aria-label=\"Commandes des arbres et plantations\"") && h.contains(">Type</label>") && h.contains(">Longueur (m)</label>"), "{h}");
     assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && h.contains(">Noue végétalisée</option>"), "{h}");
     assert!(h.contains(">Ajouter</button>") && h.contains(">Modifier</button>") && h.contains(">Retirer</button>"), "{h}");
+}
+
+// ---- the piece list ----------------------------------------------------------------
+
+fn pieces_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::piece_list::PieceList vm=s.clone()/> })
+}
+
+#[test]
+fn the_piece_list_is_a_listbox_with_one_tab_stop_and_a_cell_per_piece_with_its_kind_and_width() {
+    let s = street_in(Locale::En);
+    let v = s.view_now();
+    let h = pieces_html(&s);
+    assert_eq!(count(&h, "role=\"listbox\""), 1, "{h}");
+    assert!(h.contains("id=\"piece-list\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Pieces, left to right\""), "{h}");
+    assert_eq!(count(&h, "role=\"option\""), v.segments.len(), "{h}");
+    assert_eq!(count(&h, "tabindex"), 1, "the cells are not tab stops");
+    for (i, g) in v.segments.iter().enumerate() {
+        let name = crate::street::text::piece_text(&v, i, &s.i18n(), s.units_now());
+        assert!(h.contains(&format!("id=\"piece-cell-{}\"", g.uid)), "{h}");
+        assert!(h.contains(&format!("aria-label=\"{name}\"")), "{name}: {h}");
+    }
+    // Nothing selected: none is marked, and the keyboard lands on the first.
+    assert_eq!(count(&h, "aria-selected=\"true\""), 0);
+    assert!(h.contains(&format!("aria-activedescendant=\"piece-cell-{}\"", v.segments[0].uid)), "{h}");
+}
+
+#[test]
+fn the_selected_piece_is_the_one_marked_and_the_active_descendant() {
+    let s = street_in(Locale::En);
+    let uid = s.view_now().segments[2].uid;
+    s.select(Some(uid));
+    let h = pieces_html(&s);
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert!(h.contains(&format!("aria-activedescendant=\"piece-cell-{uid}\"")), "{h}");
+    let cell = &h[h.find(&format!("id=\"piece-cell-{uid}\"")).unwrap()..];
+    assert!(cell[..cell.find("</div>").unwrap()].contains("aria-selected=\"true\""));
+}
+
+#[test]
+fn the_piece_list_is_worded_in_french_with_the_glossary_s_word() {
+    let h = pieces_html(&street_in(Locale::FrCa));
+    assert!(h.contains("aria-label=\"Éléments, de gauche à droite\""), "{h}");
+    assert!(h.contains("Éléments de la rue"), "{h}");
+}
+
+// ---- the summary of the last change (#64) --------------------------------------------------
+
+/// A street page whose clock the test holds, so the summary can be left to settle.
+fn timed_street(locale: Locale) -> (Rc<StreetVm>, Rc<crate::shared::ports::ManualScheduler>) {
+    let (ports, _, _, time) = crate::shared::ports::test_ports_with_time();
+    (StreetVm::new(ports, crate::i18n_for(locale), Editor::new(0), None), time)
+}
+
+fn last_change(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <notes::LastChange vm=s.clone()/> })
+}
+
+#[test]
+fn the_card_says_there_is_no_change_yet_until_the_street_is_changed() {
+    let (s, time) = timed_street(Locale::En);
+    let h = last_change(&s);
+    assert!(h.contains("impact-empty") && h.contains("No change yet."), "{h}");
+    assert!(!h.contains("impact-what"));
+    let u = segment(&s, 0);
+    s.select(Some(u));
+    time.advance(2_000);
+    assert!(last_change(&s).contains("impact-empty"), "selecting is not a change");
+}
+
+#[test]
+fn an_edit_that_widens_a_sidewalk_shows_the_space_it_took_and_the_check_it_broke_apart() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    assert!(last_change(&s).contains("impact-empty"), "not until the edits settle");
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Resize sidewalk") && h.contains("Street space"), "{h}");
+    assert!(h.contains("mc mc-foot") && h.contains("Walking: 6.6 m \u{2192} 7.1 m (0.5 m more)"), "{h}");
+    assert!(h.contains("Newly failing") && !h.contains("Newly passing"), "{h}");
+    let failing = &h[h.find("Newly failing").unwrap()..];
+    assert!(failing.contains("<li class=\"bad\">") && failing.contains("Fits the street width"), "{h}");
+    assert!(h.contains("impact-verdict regressed") && h.contains("Regressed: 1 check now fails."), "{h}");
+    assert_eq!(count(&h, "<li class=\"bad\">"), 1);
+    // Units follow the page.
+    s.set_units(Units::Feet);
+    assert!(last_change(&s).contains("ft"));
+}
+
+#[test]
+fn undo_shows_what_undoing_changed_and_a_check_that_recovers_is_newly_passing() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    time.advance(600);
+    assert!(s.undo());
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Undone: Resize sidewalk"), "{h}");
+    assert!(h.contains("Walking: 7.1 m \u{2192} 6.6 m (0.5 m less)"), "{h}");
+    assert!(h.contains("Newly passing") && !h.contains("Newly failing"), "{h}");
+    assert!(h.contains("<li class=\"ok\">") && h.contains("impact-verdict improved"), "{h}");
+    assert!(s.redo());
+    time.advance(600);
+    assert!(last_change(&s).contains("Redone: Resize sidewalk"));
+}
+
+#[test]
+fn a_change_that_touches_neither_space_nor_checks_says_so_and_has_no_lists() {
+    let (s, time) = timed_street(Locale::En);
+    assert!(s.set_speed(Some(30)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("No effect on space or checks") && h.contains("Speed limit 30 km/h"), "{h}");
+    assert!(!h.contains("impact-uses") && !h.contains("impact-verdict") && !h.contains("<ul"), "{h}");
+}
+
+#[test]
+fn a_change_that_leaves_every_check_as_it_was_says_so_beside_the_space_it_moved() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_000)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Walking: 6.6 m \u{2192} 6.3 m (0.3 m less)") && !h.contains("Newly"), "{h}");
+    assert!(h.contains("impact-verdict unchanged") && h.contains("No change in the checks."), "{h}");
+}
+
+#[test]
+fn making_the_street_pedestrian_is_one_change_that_says_what_it_became() {
+    let (s, time) = timed_street(Locale::En);
+    let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+    assert!(s.apply(|e| e.make_pedestrian(sidewalk)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Made pedestrian") && h.contains("mc mc-vehicle") && h.contains("is now a pedestrian street."), "{h}");
+}
+
+#[test]
+fn the_card_is_in_french_with_plurals_and_follows_a_switch_of_language() {
+    let (s, time) = timed_street(Locale::FrCa);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Marche\u{a0}: 6,6\u{a0}m \u{2192} 7,1\u{a0}m (0,5\u{a0}m de plus)"), "{h}");
+    assert!(h.contains("Nouveaux échecs") && h.contains("Dégradation\u{a0}: 1 vérification échoue maintenant."), "{h}");
+    assert!(!h.contains("Newly") && !h.contains("Walking"), "{h}");
+    s.i18n().set(Locale::En);
+    assert!(last_change(&s).contains("Newly failing"));
+}
+
+#[test]
+fn the_card_is_a_polite_live_region_in_the_page_and_the_first_tab_is_called_impact() {
+    let page = include_str!("../../web/street.html");
+    let card = &page[page.find("id=\"impact-card\"").unwrap()..];
+    let card = &card[..card.find('>').unwrap()];
+    assert!(card.contains("aria-live=\"polite\"") && !card.contains("assertive") && card.contains("aria-atomic=\"true\""), "{card}");
+    assert!(page.contains("id=\"t-space\" aria-controls=\"p-space\" aria-selected=\"true\" data-i18n=\"ui-tab-impact\">Impact</button>"));
+    // The card is in the first tab's panel, above the width table.
+    assert!(page.find("id=\"impact-card\"").unwrap() < page.find("id=\"h-space\"").unwrap());
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let say = |i: &crate::shared::i18n::I18n| i.tr_now("ui-tab-impact", &crate::shared::i18n::Args::new());
+    assert_eq!((say(&en).as_str(), say(&fr).as_str()), ("Impact", "Incidence"));
 }

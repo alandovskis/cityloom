@@ -26,22 +26,21 @@ async function start({ hatches, junction_exists, mount_bare_shell, mount_page, o
     location.replace("map.html");
     await new Promise(() => {});
   }
-  const plan = open_junction(placeId);
-  if (!plan) {
+  const editor = open_junction(placeId);
+  if (!editor) {
     // The streets here have been changed so that the junction cannot be drawn: the module says so.
     mount_bare_shell(placeId);
     await new Promise(() => {});
   }
 
-  // The hatch patterns the plan and the swatches are filled with.
+  // The hatch patterns the key's swatches are filled with.
   document.getElementById("defs").innerHTML =
-    `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}
-  <marker id="mv-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mv-tip" d="M1 1 9 5 1 9"/></marker></defs>`;
+    `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
   // What is waiting to be kept in the city is kept when the page is left.
-  addEventListener("pagehide", () => plan.flush());
+  addEventListener("pagehide", () => editor.flush());
 
-  mount_page(plan);
+  mount_page(editor);
 
-  plan.mount_shell();
+  editor.mount_shell();
 }

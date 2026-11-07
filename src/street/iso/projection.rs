@@ -6,20 +6,19 @@
 //! middle and `(eye height - up) * f / depth` pixels under the horizon. So the centre line is vertical, parallel lines
 //! along the street meet at one vanishing point on the horizon, and the street narrows with distance.
 
-use crate::street::svg::Geometry;
-
 /// How long a stretch of the street is shown, in millimetres.
 pub const STRETCH_MM: f64 = 40_000.0;
 /// How high the eye is above the ground, in millimetres: above the tallest crown, so that every top is seen from above.
 pub const EYE_HEIGHT_MM: f64 = 9_000.0;
 /// How far behind the near end of the stretch the eye is, in millimetres.
 pub const EYE_BACK_MM: f64 = 14_000.0;
-/// The tallest the drawing grows at a `width`: as tall as the section is (`Geometry::fit`), which is as tall as the
-/// group around either view (`street/view.rs` keeps its `min-height` at least that). So the 2.5D never makes the card
-/// taller than the section does, and the status line under it stays in view at 1440 by 900 as it does with the
-/// section; a narrow street is drawn smaller, centred, rather than taller.
+/// The tallest the drawing grows at a `width`, which is also the height of the group around it
+/// (`street/view.rs` keeps its `min-height` at least that): the card does not grow taller as the street's width
+/// does, so the status line under it stays in view at 1440 by 900; a narrow street is drawn smaller, centred,
+/// rather than taller. The height scales with the width (to a point), as the section's did before it went.
 pub fn max_height(width: f64) -> f64 {
-    Geometry::fit(width, 1).rows.height
+    let factor = (width.max(680.0) / 1050.0).clamp(0.9, 1.1);
+    (484.0 * factor).round()
 }
 /// Room round the scene, in pixels.
 pub(super) const PAD: f64 = 30.0;
@@ -166,12 +165,40 @@ pub const MIN_STANDING_PX: f64 = 3.0;
 /// millimetres: near the near end, where the street is widest on the screen, so that the symbol reads.
 pub const ARROW_AT_MM: f64 = 6_000.0;
 
-/// A pixel value to two decimals, which is all a drawing needs.
+impl crate::shared::diagram::Projection for Projection {
+    fn at(&self, p: crate::shared::diagram::Pt) -> (f64, f64) {
+        Projection::at(self, p.x, p.y, p.z)
+    }
+
+    fn size(&self) -> (f64, f64) {
+        (self.width, self.height)
+    }
+
+    fn affine(&self) -> bool {
+        false
+    }
+
+    fn ground_at(&self, up: f64, u: f64, v: f64) -> [f64; 6] {
+        Projection::ground_at(self, up, u, v)
+    }
+
+    fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+        band_edges(Reach { near, far }).to_vec()
+    }
+
+    fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+        band_mid(z0, z1)
+    }
+}
+
+/// A pixel value to two decimals, as the renderer writes it (the tests' expected markup).
+#[cfg(test)]
 pub(super) fn r(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The points of a polygon whose corners are in millimetres: across, up, along.
+/// The points of a polygon whose corners are in millimetres (across, up, along), as the renderer writes them.
+#[cfg(test)]
 pub(super) fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
     corners
         .iter()
@@ -358,5 +385,22 @@ mod tests {
             assert!(hi < 1.3 * lo, "{width}: every seam is about as big as the others: {steps:?}");
         }
         assert_eq!(BANDS, 8);
+    }
+
+    #[test]
+    fn the_diagram_writes_points_as_the_street_does() {
+        use crate::shared::diagram::{Diagram, Layer, LayerKind, Pt, Shape, render::render};
+        let corners = [(1234.0, 0.0, 0.0), (5678.0, 150.0, 7_000.0), (333.0, 2_000.0, 40_000.0)];
+        let p = Projection::fit(1050.0, 18_000);
+        let pts = corners.iter().map(|&(x, y, z)| Pt::new(x, y, z)).collect();
+        let d = Diagram {
+            defs: String::new(),
+            ground: Layer { kind: LayerKind::Ground, shapes: vec![Shape::Polyline { pts, class: "c".into() }] },
+            sections: vec![],
+            outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
+            hits: Layer { kind: LayerKind::Hit, shapes: vec![] },
+        };
+        let want = format!(r#"<polyline class="c" points="{}"/>"#, points(&p, &corners));
+        assert!(render(&d, &p).contains(&want));
     }
 }

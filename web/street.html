@@ -103,7 +103,6 @@
       <div class="stage-head">
         <div class="title-card with-view">
           <div class="street" id="street"></div>
-          <div class="view-mode-tools" id="view-mode-slot"></div>
         </div>
         <div class="tools">
           <div class="add" id="add"></div>
@@ -118,13 +117,13 @@
         <div class="scroll" id="scroll"></div>
       </section>
       <div class="statusbar">
-        <p class="cue" data-i18n="st-touch-cue">On a touch screen, swipe the street sideways to see all of it.</p>
         <div class="fit-row">
           <div id="fit-slot" style="display: contents"></div>
           <div id="fit-checks-slot" style="display: contents"></div>
         </div>
         <p class="focus-hint" aria-hidden="true" data-i18n="st-focus-hint">Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.</p>
       </div>
+      <div id="pieces-slot" style="display: contents"></div>
       <div id="zones-slot" style="display: contents"></div>
       <div id="curb-slot" style="display: contents"></div>
       <div id="green-slot" style="display: contents"></div>
@@ -134,13 +133,17 @@
 
   <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
-      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="ui-tab-width">Width</button>
+      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="ui-tab-impact">Impact</button>
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1"><span data-i18n="ui-tab-checks">Checks</span><span id="checks-n-slot" style="display: contents"></span></button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
       <button type="button" role="tab" class="tab" id="t-provenance" aria-controls="p-provenance" aria-selected="false" tabindex="-1" data-i18n="ui-tab-provenance">Provenance</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
+          <section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
+            <h2 id="h-impact" class="note-h" data-i18n="st-impact-heading">Last change</h2>
+            <div id="impact"></div>
+          </section>
           <section aria-labelledby="h-space">
             <h2 id="h-space" class="note-h" data-i18n="st-space-heading">Where the width goes</h2>
             <table class="nt" id="space"></table>

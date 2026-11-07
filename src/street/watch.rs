@@ -11,7 +11,7 @@ use crate::shared::units::Units;
 use crate::street::keys::Action;
 use crate::street::model::{Editor, GreenForm, SegView, StopKind, Use, View};
 use crate::street::row::Row;
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 
 /// What a component reads of the street view-model and tells it. The view-model
 /// is kept where only this thread can reach it, so the handle is `Copy` and any
@@ -30,19 +30,6 @@ impl SheetWatch {
         self.vm.with_value(|v| v.version())
     }
 
-    /// How the drawing shows the street, drawing again when it changes.
-    pub fn mode(&self) -> ViewMode {
-        self.vm.with_value(|v| v.mode())
-    }
-
-    pub fn set_mode(&self, mode: ViewMode) {
-        self.vm.with_value(|v| v.set_mode(mode));
-    }
-
-    pub fn toggle_mode(&self) {
-        self.vm.with_value(|v| v.toggle_mode());
-    }
-
     /// The view, drawing again when the street is edited.
     pub fn view(&self) -> Rc<View> {
         self.vm.with_value(|v| v.view())
@@ -56,6 +43,11 @@ impl SheetWatch {
     /// How the street stands against each area it is inside, drawing again when the street is edited.
     pub fn area_checks(&self) -> Vec<crate::restriction::model::Finding> {
         self.vm.with_value(|v| v.area_checks())
+    }
+
+    /// What the last change did to the street, once the edits have settled, drawing again when it is shown.
+    pub fn impact(&self) -> Option<crate::street::impact::Impact> {
+        self.vm.with_value(|v| v.impact())
     }
 
     /// The page's words, for a view: ask with `tr` so it is drawn again on a language switch.
@@ -328,6 +320,10 @@ impl SheetWatch {
 
     pub fn apply_measure(&self, code: &str) -> bool {
         self.vm.with_value(|v| v.apply_measure(code))
+    }
+
+    pub fn apply_template(&self, template: crate::street::model::Template) -> bool {
+        self.vm.with_value(|v| v.apply_template(template))
     }
 
     /// What a key on the section asks for, as far as it changes the street.

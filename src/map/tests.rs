@@ -754,3 +754,110 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
     assert_eq!(camera.k, camera.fit_k);
     assert!(camera.world.x1 - camera.world.x0 > 100.0, "the world is the city's, not the empty one: {:?}", camera.world);
 }
+
+// ---- the network checks ---------------------------------------------------------------------
+
+use crate::map::network_view;
+
+/// Another page takes a crossing off one arm of a junction of the city, and the map reads the city again.
+fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
+    let store = CityStore::sample(storage.clone());
+    let mut j = store.open().junction_editor(2, 0).unwrap();
+    let arm = j.snapshot().arms.iter().find(|a| a.crossing.is_some()).map(|a| a.uid).unwrap();
+    assert!(j.set_crossing(arm, false));
+    assert!(store.write_junction(2, j.snapshot()));
+    vm.reload();
+}
+
+#[test]
+fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
+    assert!(!h.contains("aria-labelledby"), "{h}");
+    assert_eq!(count(&h, "<h3"), 6);
+    // the name and the count are read apart: "Crossings: no findings"
+    assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
+    for (id, label) in [
+        ("cycling", "Cycling links"),
+        ("access", "Pedestrian street access"),
+        ("crossings", "Crossings"),
+        ("lanes", "Lane counts"),
+        ("transit", "Transit corridors"),
+        ("walking", "Walking routes"),
+    ] {
+        assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+    }
+    assert_eq!(count(&h, "no findings"), 6);
+    assert_eq!(count(&h, "<li"), 0);
+    let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
+    assert!(lead.contains("found nothing"), "{lead}");
+}
+
+#[test]
+fn a_finding_says_why_and_links_the_street_and_the_junction() {
+    let (vm, storage) = map_vm();
+    take_a_crossing_away(&vm, &storage);
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert_eq!(count(&h, "<li data-severity"), 1, "{h}");
+    assert!(h.contains("1 finding") && h.contains("has no pedestrian crossing") && h.contains("Problem"), "{h}");
+    assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
+    assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\"") && h.contains("data-rule=\"crossings\""), "{h}");
+    // the places are a list of their own, so a screen reader says how many there are
+    assert!(h.contains("<ul class=\"net-links\"") && count(&h, "<ul class=\"net-links\"") == 1, "{h}");
+    assert_eq!(count(&h, "class=\"net-link\""), 2, "{h}");
+    let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
+    assert!(lead.contains("found 1 finding"), "{lead}");
+}
+
+#[test]
+fn the_network_checks_are_worded_in_french() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    take_a_crossing_away(&vm, &storage);
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
+}
+
+#[test]
+fn the_provenance_tab_lists_a_group_per_kind_with_its_count_source_and_impact() {
+    use crate::map::source_view;
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
+    assert_eq!(count(&h, "<h3"), 5, "{h}");
+    for (id, label) in
+        [("name", "Street names"), ("disconnected", "Disconnected streets"), ("ends", "Dead ends"), ("width", "Widths"), ("speed", "Speed limits")]
+    {
+        assert!(h.contains(&format!("id=\"src-h-{id}\"")) && h.contains(&format!("data-kind=\"{id}\"")) && h.contains(label), "{id}: {h}");
+    }
+    // the sample city's streets have no name from OpenStreetMap: each finding says so, where it comes from and what it could mislead
+    assert!(h.contains("is not in OpenStreetMap") && h.contains("Source:") && h.contains("Design impact:") && h.contains("The road has no name tag."), "{h}");
+    assert!(h.contains("href=\"street.html?street="), "{h}");
+    // a count in the heading, read apart from the name, and no mark or word of a design failure
+    assert!(h.contains("Street names</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">"), "{h}");
+    assert!(!h.contains("class=\"bad\"") && !h.contains("data-severity") && !h.contains("Problem"), "{h}");
+    let lead = map_html(|| view! { <source_view::SourceLead vm=vm.clone()/> });
+    assert!(lead.contains("may be missing or wrong"), "{lead}");
+}
+
+#[test]
+fn source_findings_do_not_reach_the_status_line_the_checks_lead_or_the_network_checks() {
+    let (vm, _) = map_vm();
+    assert!(vm.source_count() > 0, "the sample city has unnamed streets");
+    // the same numbers as a city whose findings were never worked out
+    let status = vm.status();
+    let lead = vm.checks_lead();
+    let network = vm.network_count();
+    let _ = vm.source_groups();
+    assert_eq!((vm.status(), vm.checks_lead(), vm.network_count()), (status.clone(), lead.clone(), network));
+    assert!(!status.bad || !status.text.contains("source"), "{status:?}");
+    assert!(!lead.contains("possible gap") && !lead.contains("source data"), "{lead}");
+    assert!(vm.network_rules().iter().all(|c| c.items.iter().all(|i| !i.text.contains("OpenStreetMap"))));
+}
+
+#[test]
+fn the_provenance_tab_is_worded_in_french() {
+    use crate::map::source_view;
+    let (vm, _) = map_vm_in(Locale::FrCa);
+    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
+    assert!(h.contains("Noms de rues") && h.contains("lacune") && h.contains("Effet sur la conception") && h.contains("n’a pas d’étiquette de nom"), "{h}");
+}

@@ -1,6 +1,10 @@
-//! The junction in 2.5D, as SVG markup, from the model's view: a read-only picture of what the plan draws flat.
+//! The junction in 2.5D, from the model's view, as a diagram (`shared::diagram`): `build.rs` makes its shapes, `scene.rs`
+//! gathers them into layers, and the shared renderer writes them through the oblique frame (`IsoFrame`, a `Projection`).
 //! A plan point is rotated by a fixed angle, its depth squashed, and its height lifted up the screen; there is one
-//! viewpoint, so the shapes are painted far to near with no depth buffer.
+//! viewpoint, so what stands is painted far to near with no depth buffer.
+
+mod build;
+mod scene;
 
 use std::fmt::Write;
 
@@ -8,16 +12,14 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
-use crate::junction::plan_svg::turbo_name;
 use crate::junction::read_model::JView;
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::{KINDS, MATERIALS};
+use crate::shared::diagram::render::render;
+use crate::shared::diagram::{Projection, Pt};
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::format::{esc, f1};
-use crate::shared::iso::ground::patterns;
-use crate::shared::iso::paint::{Paint, Pattern, Style, class, quads};
+use crate::shared::iso::ground::{patterns, patterns_laid};
 use crate::shared::iso::shading::shade_filters;
-use crate::shared::said::say;
 use crate::shared::units::Units;
 
 type P = (f64, f64);
@@ -30,18 +32,6 @@ pub const SQUASH: f64 = 0.55;
 pub const LIFT: f64 = 3.0;
 /// The tallest thing drawn, for the room left above the junction.
 pub const TALLEST_MM: f64 = 3000.0;
-
-/// How tall the things that stand on the ground are.
-const SIGNAL_POST_MM: f64 = 2500.0;
-const SIGN_POST_MM: f64 = 2000.0;
-const BOLLARD_MM: f64 = 900.0;
-
-/// How wide a zebra stripe is, and the gap between two, as the plan draws them.
-const ZEBRA_MM: f64 = 600.0;
-/// How thick a stop line is, and the dashes and gaps of one where traffic gives way.
-const STOP_LINE_MM: f64 = 300.0;
-const YIELD_DASH_MM: f64 = 700.0;
-const YIELD_GAP_MM: f64 = 500.0;
 
 /// The steps a curve is sampled in.
 const CURVE_STEPS: usize = 12;
@@ -102,10 +92,9 @@ pub struct IsoFrame {
 
 impl IsoFrame {
     /// The frame for a drawing `width` wide in a window `window_height` high, as big as the plan's, that holds
-    /// the points of `content` (on the ground) and the tallest thing standing above them. `bounds` is the plan's,
-    /// which only sizes the drawing: it has room round the junction for the street names the picture has none of.
-    pub fn fit(bounds: [f64; 4], content: &[P], width: f64, window_height: f64) -> IsoFrame {
-        let plan = Frame::fit(bounds, width, window_height);
+    /// the points of `content` (on the ground) and the tallest thing standing above them.
+    pub fn fit(content: &[P], width: f64, window_height: f64) -> IsoFrame {
+        let plan = Frame::fit(width, window_height);
         let ground: Vec<P> = content.iter().map(|&c| project(c, 0.0)).collect();
         let (min_x, max_x) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
         let (min_y, max_y) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
@@ -128,33 +117,42 @@ impl IsoFrame {
     }
 }
 
+/// The oblique frame as the diagram's projection: a point of the diagram is across, up and along, and here those are the
+/// plan's x, the height and the plan's y. The map is affine, so one pattern fills a whole top, and the matrix that lays
+/// it is read off three points of the ground.
+impl Projection for IsoFrame {
+    fn at(&self, p: Pt) -> (f64, f64) {
+        IsoFrame::at(self, (p.x, p.z), p.y)
+    }
+
+    fn size(&self) -> (f64, f64) {
+        (self.width, self.height)
+    }
+
+    fn ground_at(&self, _up: f64, _u: f64, _v: f64) -> [f64; 6] {
+        let (o, x, y) = (self.at((0.0, 0.0), 0.0), self.at((1.0, 0.0), 0.0), self.at((0.0, 1.0), 0.0));
+        [x.0 - o.0, x.1 - o.1, y.0 - o.0, y.1 - o.1, o.0, o.1]
+    }
+}
+
 /// What the page needs to put the 2.5D picture in its `<svg>`.
 pub struct IsoSvg {
     pub frame: IsoFrame,
     pub markup: String,
 }
 
-/// A shape that stands on the ground: its footprint, its height, and whether its sides are drawn.
-struct Solid {
-    kind_id: &'static str,
-    /// The material of its top.
-    material: &'static str,
-    foot: Vec<P>,
-    h_mm: f64,
-    sides: bool,
-}
-
 /// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
 /// `filter: brightness()` on SVG shapes may not be applied in Safari.
-fn shades(f: &IsoFrame) -> String {
-    format!("<defs>{}{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]), materials(f))
+pub(super) fn shades(f: &IsoFrame, laid: bool) -> String {
+    format!("<defs>{}{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]), materials(f, laid))
 }
 
-/// The surface materials' patterns laid on the ground as this frame projects it: the plan's x and y (in millimetres)
-/// land where `at` puts them, so the matrix is read off three of its points.
-fn materials(f: &IsoFrame) -> String {
-    let (o, x, y) = (f.at((0.0, 0.0), 0.0), f.at((1.0, 0.0), 0.0), f.at((0.0, 1.0), 0.0));
-    patterns("iso-m", [x.0 - o.0, x.1 - o.1, y.0 - o.0, y.1 - o.1, o.0, o.1])
+/// The surface materials' patterns laid on the ground as this frame projects it: the one matrix of the projection, which
+/// is affine, lays them all.
+/// `laid`: the drawing has a surface in a material no piece can be of (a curbside rain garden), so its pattern too.
+fn materials(f: &IsoFrame, laid: bool) -> String {
+    let ground = f.ground_at(0.0, 0.0, 0.0);
+    if laid { patterns_laid("iso-m", ground) } else { patterns("iso-m", ground) }
 }
 
 /// The material a surface of this kind has when nothing says otherwise: the junction's own surfaces (the core, the
@@ -163,299 +161,18 @@ fn default_material(kind_id: &str) -> &'static str {
     KINDS.iter().find(|k| k.id == kind_id).map_or("concrete", |k| MATERIALS[k.materials[0]].id)
 }
 
-/// How far a vertex may be from an edge and still be on it: where a ramp meets its top, where one surface meets
-/// another.
-const EDGE_TOLERANCE_MM: f64 = 50.0;
-
-fn distance_to_segment(p: P, a: P, b: P) -> f64 {
-    let ab = (b.0 - a.0, b.1 - a.1);
-    let len2 = ab.0 * ab.0 + ab.1 * ab.1;
-    let t = if len2 < 1e-9 { 0.0 } else { (((p.0 - a.0) * ab.0 + (p.1 - a.1) * ab.1) / len2).clamp(0.0, 1.0) };
-    (p.0 - a.0 - t * ab.0).hypot(p.1 - a.1 - t * ab.1)
-}
-
-/// Whether `p` is within `EDGE_TOLERANCE_MM` of an edge of `poly`.
-fn near_boundary(p: P, poly: &[P]) -> bool {
-    (0..poly.len()).any(|i| distance_to_segment(p, poly[i], poly[(i + 1) % poly.len()]) < EDGE_TOLERANCE_MM)
-}
-
-/// Each vertex of `foot` with `h_mm` where it lies on the boundary of `top` and 0 where it does not: the slope of a
-/// ramp rises from the road to the edge it meets.
-fn lift_to(foot: &[P], top: &[P], h_mm: f64) -> Vec<(P, f64)> {
-    foot.iter().map(|&p| (p, if near_boundary(p, top) { h_mm } else { 0.0 })).collect()
-}
-
-struct Draw {
-    f: IsoFrame,
-    flat: String,
-    solids: Vec<Solid>,
-    /// The footprints and heights of the surfaces with no wall round them, which a solid level with one does not
-    /// show a wall against.
-    tables: Vec<(Vec<P>, f64)>,
-    /// Posts with their heads, painted over the solids.
-    posts: String,
-    /// The outline of the selected arm.
-    sel: String,
-    /// The streets' names, painted last so nothing standing hides one.
-    names: String,
-}
-
-/// What a street's name takes of the drawing, a character at a time, to keep the whole name inside it.
-const NAME_CHAR_PX: f64 = 9.0;
-/// How far a name stands from the end of its arm, and from the edge of the drawing, in pixels.
-const NAME_GAP_PX: f64 = 12.0;
-const NAME_EDGE_PX: f64 = 4.0;
-
-impl Draw {
-    fn new(f: IsoFrame) -> Draw {
-        Draw { f, flat: String::new(), solids: Vec::new(), tables: Vec::new(), posts: String::new(), sel: String::new(), names: String::new() }
-    }
-
-    fn path(&self, pts: &[P], h_mm: f64) -> String {
-        let mut d = String::new();
-        for (i, p) in pts.iter().enumerate() {
-            let (x, y) = self.f.at(*p, h_mm);
-            write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
-        }
-        d.push('Z');
-        d
-    }
-
-    /// A shape lying on the ground, in the default material of its kind.
-    fn lay(&mut self, kind_id: &str, foot: &[P]) {
-        self.lay_in(kind_id, default_material(kind_id), foot);
-    }
-
-    /// A shape lying on the ground, in `material`.
-    fn lay_in(&mut self, kind_id: &str, material: &str, foot: &[P]) {
-        if foot.len() < 3 {
-            return;
-        }
-        let d = self.path(foot, 0.0);
-        write!(self.flat, "<path class=\"iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>")
-            .unwrap();
-    }
-
-    /// The stripes of a zebra crossing: `foot` is its four corners, across the street first. They run the length
-    /// of the crossing, as wide as the gaps between them.
-    fn zebra(&mut self, foot: &[P], h_mm: f64) {
-        if foot.len() != 4 {
-            return;
-        }
-        let (p0, p1, p3) = (foot[0], foot[1], foot[3]);
-        let across = (p1.0 - p0.0, p1.1 - p0.1);
-        let len = across.0.hypot(across.1);
-        if len < 1e-9 {
-            return;
-        }
-        let along = (p3.0 - p0.0, p3.1 - p0.1);
-        for k in 0..(len / (2.0 * ZEBRA_MM)).ceil() as usize {
-            let (t0, t1) = (2.0 * k as f64 * ZEBRA_MM / len, ((2.0 * k as f64 + 1.0) * ZEBRA_MM / len).min(1.0));
-            let (a, b) = ((p0.0 + across.0 * t0, p0.1 + across.1 * t0), (p0.0 + across.0 * t1, p0.1 + across.1 * t1));
-            let d = self.path(&[a, b, (b.0 + along.0, b.1 + along.1), (a.0 + along.0, a.1 + along.1)], h_mm);
-            write!(self.flat, "<path class=\"iso-zebra\" d=\"{d}\"/>").unwrap();
-        }
-    }
-
-    /// A solid double white line along `path`, an open polyline of points, lying on the road. The quads come from the
-    /// shared paint and are projected here, like the road they lie on. The line is not joined to its start: a turbo's
-    /// dividers are pieces between two streets.
-    fn divider(&mut self, path: &[P]) {
-        for (paint, quad) in quads(path, Style { paint: Paint::White, pattern: Pattern::Solid, double: true }) {
-            let d = self.path(&quad, 0.0);
-            write!(self.flat, "<path class=\"{}\" d=\"{d}\"/>", class(paint)).unwrap();
-        }
-    }
-
-    /// A stop line from `a` to `b`: a row of dashes where traffic gives way, as the plan draws it.
-    fn stop_line(&mut self, a: P, b: P, h_mm: f64, dashed: bool) {
-        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-        let len = dx.hypot(dy);
-        if len < 1e-9 {
-            return;
-        }
-        let n = (-dy / len * STOP_LINE_MM / 2.0, dx / len * STOP_LINE_MM / 2.0);
-        let at = |t: f64| (a.0 + dx * t / len, a.1 + dy * t / len);
-        let (dash, gap) = if dashed { (YIELD_DASH_MM, YIELD_GAP_MM) } else { (len, 0.0) };
-        let mut t = 0.0;
-        while t < len {
-            let (p, q) = (at(t), at((t + dash).min(len)));
-            let d = self.path(&[(p.0 + n.0, p.1 + n.1), (q.0 + n.0, q.1 + n.1), (q.0 - n.0, q.1 - n.1), (p.0 - n.0, p.1 - n.1)], h_mm);
-            write!(self.flat, "<path class=\"iso-stopline\" d=\"{d}\"/>").unwrap();
-            t += dash + gap;
-        }
-    }
-
-    /// A surface `h_mm` high with no wall round it, a table's top or a continuous sidewalk, drawn over what lies
-    /// on the ground.
-    fn table(&mut self, kind_id: &str, foot: &[P], h_mm: f64) {
-        if foot.len() < 3 {
-            return;
-        }
-        self.tables.push((foot.to_vec(), h_mm));
-        let d = self.path(foot, h_mm);
-        let material = default_material(kind_id);
-        write!(
-            self.flat,
-            "<path class=\"iso-table iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>"
-        )
-        .unwrap();
-    }
-
-    /// A ramp from the ground up to `top`: its vertices on the top's edge at `h_mm`, the rest on the ground.
-    fn ramp(&mut self, kind_id: &str, foot: &[P], top: &[P], h_mm: f64) {
-        if foot.len() < 3 {
-            return;
-        }
-        let mut d = String::new();
-        for (i, (p, h)) in lift_to(foot, top, h_mm).into_iter().enumerate() {
-            let (x, y) = self.f.at(p, h);
-            write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
-        }
-        d.push('Z');
-        write!(self.flat, "<path class=\"iso-ramp k-{kind_id}\" filter=\"url(#iso-shade-ramp)\" d=\"{d}\"/>").unwrap();
-    }
-
-    fn stand(&mut self, kind_id: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
-        self.stand_in(kind_id, default_material(kind_id), foot, h_mm, sides);
-    }
-
-    fn stand_in(&mut self, kind_id: &'static str, material: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
-        if foot.len() >= 3 {
-            self.solids.push(Solid { kind_id, material, foot, h_mm, sides });
-        }
-    }
-
-    /// The depth of a solid: how near its footprint's centre is to the viewer.
-    fn depth(s: &Solid) -> f64 {
-        let n = s.foot.len() as f64;
-        let c = s.foot.iter().fold((0.0, 0.0), |a, p| (a.0 + p.0 / n, a.1 + p.1 / n));
-        view_point(c).1
-    }
-
-    /// Whether the edge `a`-`b` of solid `i` is shared with a surface as high as it is, which a curb would be
-    /// drawn across for nothing: the solids and the tops that lie against it.
-    fn meets_level(&self, i: usize, a: P, b: P) -> bool {
-        let h = self.solids[i].h_mm;
-        let on = |foot: &[P]| near_boundary(a, foot) && near_boundary(b, foot);
-        self.solids.iter().enumerate().any(|(j, o)| j != i && o.h_mm == h && on(&o.foot)) || self.tables.iter().any(|(t, th)| *th == h && on(t))
-    }
-
-    fn render(&self, i: usize) -> String {
-        let s = &self.solids[i];
-        let id = s.kind_id;
-        let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\">", f1(Self::depth(s)));
-        if s.sides {
-            let seen: Vec<P> = s.foot.iter().map(|p| view_point(*p)).collect();
-            let n = seen.len();
-            let area: f64 = (0..n).map(|i| seen[i].0 * seen[(i + 1) % n].1 - seen[(i + 1) % n].0 * seen[i].1).sum();
-            for k in 0..n {
-                let (a, b) = (seen[k], seen[(k + 1) % n]);
-                // The edge's outward normal points towards the viewer when its depth component is positive.
-                let e = (b.0 - a.0, b.1 - a.1);
-                let toward_viewer = if area > 0.0 { -e.0 } else { e.0 } > 0.0;
-                let (pa, pb) = (s.foot[k], s.foot[(k + 1) % n]);
-                if toward_viewer && !self.meets_level(i, pa, pb) {
-                    let ((x0, y0), (x1, y1)) = (self.f.at(pa, 0.0), self.f.at(pb, 0.0));
-                    let ((x2, y2), (x3, y3)) = (self.f.at(pb, s.h_mm), self.f.at(pa, s.h_mm));
-                    write!(
-                        g,
-                        "<path class=\"iso-side k-{id}\" filter=\"url(#iso-shade-side)\" d=\"M{} {}L{} {}L{} {}L{} {}Z\"/>",
-                        f1(x0),
-                        f1(y0),
-                        f1(x1),
-                        f1(y1),
-                        f1(x2),
-                        f1(y2),
-                        f1(x3),
-                        f1(y3)
-                    )
-                    .unwrap();
-                }
-            }
-        }
-        let d = self.path(&s.foot, s.h_mm);
-        let m = s.material;
-        write!(g, "<path class=\"iso-top k-{id} mat-{m}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{m})\" d=\"{d}\"/></g>").unwrap();
-        g
-    }
-
-    /// A post from the ground up to `h_mm`, with a head on it.
-    fn post(&mut self, at: P, h_mm: f64, head: &str) {
-        let (x0, y0) = self.f.at(at, 0.0);
-        let (x1, y1) = self.f.at(at, h_mm);
-        let r = (250.0 * self.f.scale).clamp(2.5, 7.0);
-        write!(
-            self.posts,
-            "<line class=\"iso-post\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"/><circle class=\"iso-head {head}\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-            f1(x0),
-            f1(y0),
-            f1(x1),
-            f1(y1),
-            f1(x1),
-            f1(y1),
-            f1(r)
-        )
-        .unwrap();
-    }
-
-    /// The outline of a shape lying on the ground, to show what is selected.
-    fn outline(&mut self, foot: &[P]) {
-        if foot.len() >= 3 {
-            write!(self.sel, "<path class=\"sel-box\" d=\"{}\"/>", self.path(foot, 0.0)).unwrap();
-        }
-    }
-
-    /// A street's name beyond the end of its arm, away from the middle of the junction and kept inside the drawing.
-    fn name(&mut self, end: P, text: &str, selected: bool) {
-        let (ex, ey) = self.f.at(end, 0.0);
-        let (cx, cy) = self.f.at((0.0, 0.0), 0.0);
-        let len = ((ex - cx).powi(2) + (ey - cy).powi(2)).sqrt().max(1.0);
-        let (dx, dy) = ((ex - cx) / len, (ey - cy) / len);
-        let w = text.chars().count() as f64 * NAME_CHAR_PX;
-        let (anchor, shift) = if dx > 0.3 {
-            ("start", 0.0)
-        } else if dx < -0.3 {
-            ("end", w)
-        } else {
-            ("middle", w / 2.0)
-        };
-        // the left edge of the text, kept between the drawing's edges
-        let left = (ex + dx * NAME_GAP_PX - shift).min(self.f.width - NAME_EDGE_PX - w).max(NAME_EDGE_PX);
-        let y = (ey
-            + dy * NAME_GAP_PX
-            + if dy < -0.3 {
-                -4.0
-            } else if dy > 0.3 {
-                14.0
-            } else {
-                5.0
-            })
-        .min(self.f.height - NAME_EDGE_PX)
-        .max(14.0);
-        write!(
-            self.names,
-            "<text class=\"iso-name t-mark t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text>",
-            if selected { " t-blue" } else { "" },
-            f1(left + shift),
-            f1(y),
-            esc(text)
-        )
-        .unwrap();
-    }
-
-    fn finish(mut self) -> String {
-        self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
-        let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
-        format!("{}<g class=\"iso\">{}{solids}{}{}{}</g>", shades(&self.f), self.flat, self.posts, self.sel, self.names)
-    }
-}
-
 /// The points the picture reaches on the ground: each arm from its mouth to its end, the core, and a
 /// roundabout's ring, and what lies beyond an end zone. Everything drawn is inside them.
 fn content_points(v: &JView) -> Vec<P> {
-    let mut pts: Vec<P> =
-        v.arms.iter().flat_map(|a| flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly)))).chain(flatten(&v.core)).collect();
+    let mut pts: Vec<P> = v
+        .arms
+        .iter()
+        .flat_map(|a| {
+            let uses = a.curb_uses.iter().filter_map(|u| u.poly.as_ref()).flat_map(|p| flatten(p));
+            flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly))).chain(uses)
+        })
+        .chain(flatten(&v.core))
+        .collect();
     if let Some(ring) = &v.ring {
         if ring.outer_edge.is_empty() {
             let r = ring.radius_mm as f64;
@@ -467,153 +184,92 @@ fn content_points(v: &JView) -> Vec<P> {
     pts
 }
 
-/// What a screen reader is told the picture is, drawn again when the language changes.
-pub fn iso_label(v: &JView, i18n: &I18n) -> String {
-    match turbo_name(v, i18n) {
-        Some(name) => i18n.tr("jn-iso-label-turbo", &Args::new().str("arms", arms_text(v, i18n)).str("name", name)),
-        None => i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n))),
-    }
+/// "Basic turbo roundabout, regular size": what the drawing is, when the junction has a turbo.
+pub(crate) fn turbo_name(v: &JView, i18n: &I18n) -> Option<String> {
+    let t = v.turbo.as_ref()?;
+    Some(i18n.tr(t.label_key, &Args::new().str("size", i18n.tr(t.size_key, &Args::new()).to_lowercase())))
 }
 
-/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
-pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
-    let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
-    let mut d = Draw::new(f);
-    let wall = height_of("sidewalk");
-
-    // the carriageway where the streets meet, and a roundabout's ring and island
-    if let Some(ring) = &v.ring {
-        if ring.lanes.is_empty() {
-            let circle = |r: f64| -> Vec<P> {
-                (0..48)
-                    .map(|i| {
-                        let t = i as f64 * std::f64::consts::TAU / 48.0;
-                        (r * t.cos(), r * t.sin())
-                    })
-                    .collect()
-            };
-            if ring.cycle_mm.is_some_and(|c| c != 0) {
-                // The cycle track is the band outside the carriageway: the whole ring in its colour, the carriageway over it.
-                d.lay("bike", &circle(ring.radius_mm as f64));
-                d.lay("travel", &circle(ring.road_mm as f64));
-            } else {
-                d.lay("travel", &circle(ring.radius_mm as f64));
-            }
-            if let Some(bus) = &v.bus {
-                d.lay("bus", &flatten(&bus.poly));
-            }
-            d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
-        } else {
-            // A turbo: the carriageway (the lanes and the 300 mm between them) is one travel surface, the dividers are paint on it.
-            if ring.cycle_mm.is_some_and(|c| c != 0) {
-                d.lay("bike", &ring.outer_edge);
-            }
-            d.lay("travel", &ring.road_edge);
-            for divider in &ring.dividers {
-                d.divider(divider);
-            }
-            d.stand("median", ring.island_edge.clone(), height_of("median"), true);
-        }
+/// What a screen reader is told the picture is: the junction in 2.5D, its streets, and a roundabout, a turbo layout
+/// or a raised table where it is one. Drawn again when the language changes.
+pub fn iso_label(v: &JView, i18n: &I18n) -> String {
+    let arms = arms_text(v, i18n);
+    if let Some(name) = turbo_name(v, i18n) {
+        return i18n.tr("jn-iso-label-turbo", &Args::new().str("arms", arms).str("name", name));
+    }
+    let key = if v.control == "roundabout" {
+        "jn-iso-label-roundabout"
+    } else if v.raised {
+        "jn-iso-label-raised"
     } else {
-        d.lay("travel", &flatten(&v.core));
-    }
+        "jn-iso-label"
+    };
+    i18n.tr(key, &Args::new().str("arms", arms))
+}
 
-    for c in &v.corners {
-        if c.walk {
-            d.stand("sidewalk", flatten(&c.wedge), wall, true);
-        }
-        if let Some(p) = &c.protected {
-            d.lay("bike", &flatten(&p.track));
-            d.stand("sidewalk", flatten(&p.island), wall, true);
-        }
-    }
+/// The least a part to press is asked to be on the screen, in pixels (WCAG 2.2, 2.5.8 Target Size, Minimum).
+pub const MIN_TARGET_PX: f64 = 24.0;
 
-    for a in &v.arms {
-        // The arm's end zone, then the taper and the zone across: a taper's quad stands or lies like any piece.
-        for piece in a.pieces.iter().chain(&a.beyond) {
-            let id = KINDS[piece.kind].id;
-            let foot = flatten(&piece.poly);
-            // A walkway is walking surface wall to wall, whatever stands on it.
-            let h = if a.pedestrian { wall } else { height_of(id) };
-            match h {
-                h if h > 0.0 => d.stand_in(id, piece.material, foot, h, true),
-                _ => d.lay_in(id, piece.material, &foot),
-            }
-        }
-        // Where there is no parking beside the curb the road runs on, over the parking piece.
-        for gap in &a.gaps {
-            d.lay("travel", &flatten(gap));
-        }
-        // The bus lane and the queue jump run over the arm's pieces; a stop's bulb and an island stand like a sidewalk.
-        let t = &a.transit;
-        for lane in [&t.bus, &t.queue].into_iter().flatten() {
-            d.lay("bus", &flatten(lane));
-        }
-        for poly in [&t.stop_poly, &t.island].into_iter().flatten() {
-            d.stand("sidewalk", flatten(poly), wall, true);
-        }
-        for lane in &a.core_bike {
-            d.lay("bike", &flatten(lane));
-        }
-        if let Some(b) = &a.bike_box {
-            d.lay("bike", &flatten(b));
-        }
-        for bulb in a.bulbs.iter().flatten() {
-            d.stand("sidewalk", flatten(bulb), wall, true);
-        }
-        if let Some(i) = a.crossing.as_ref().and_then(|c| c.island_poly.as_ref()) {
-            d.stand("sidewalk", flatten(i), wall, true);
-        }
+/// How much wider a polygon on the screen must be made all round, as the width of a stroke, to be as thick as
+/// `MIN_TARGET_PX`: its thickness is taken as twice its area over its perimeter (a strip's width, near enough), and
+/// 0 when it is thick enough already.
+pub fn target_growth_px(points: &[P]) -> f64 {
+    let n = points.len();
+    if n < 3 {
+        return 0.0;
     }
+    let (mut twice_area, mut perimeter) = (0.0, 0.0);
+    for i in 0..n {
+        let (a, b) = (points[i], points[(i + 1) % n]);
+        twice_area += a.0 * b.1 - b.0 * a.1;
+        perimeter += (b.0 - a.0).hypot(b.1 - a.1);
+    }
+    if perimeter < 1e-9 {
+        return 0.0;
+    }
+    let thickness = twice_area.abs() / perimeter;
+    (MIN_TARGET_PX - thickness).max(0.0)
+}
 
-    // Surfaces raised to the sidewalk's level go over the road they are on, so they come after everything flat.
-    if v.raised && v.ring.is_none() {
-        d.table("sidewalk", &flatten(&v.core), wall);
+/// The attributes that make a shape of the picture pressable: what a press on it selects, as the plan's shapes say it
+/// (`drawing::selected_by` reads them back). The cycle track and the bus lane are the only one of their kind, and have
+/// no uid.
+pub fn hit_attrs(role: &str, uid: Option<u32>, lane: Option<usize>) -> String {
+    let mut a = format!(" data-role=\"{role}\"");
+    if let Some(uid) = uid {
+        write!(a, " data-uid=\"{uid}\"").unwrap();
     }
-    for a in &v.arms {
-        if let Some(r) = &a.raised {
-            let top = flatten(&r.top);
-            d.table("sidewalk", &top, wall);
-            d.ramp("travel", &flatten(&r.ramp), &top, wall);
-        }
-        // The markings lie on the road, or on the table where it is raised.
-        let level = if a.raised.is_some() { wall } else { 0.0 };
-        // Only where traffic is controlled: the street that has the right of way has no line.
-        if let Some([from, to]) = a.stop_line.filter(|_| a.role != "free") {
-            d.stop_line(from, to, level, a.role == "yield");
-        }
-        if let Some(c) = a.crossing.as_ref().filter(|c| !c.continuous) {
-            d.zebra(&flatten(&c.poly), level);
-        }
-        if let Some([end, _]) = a.stop_line {
-            match a.role {
-                "signal" => d.post(end, SIGNAL_POST_MM, "signal"),
-                "stop" => d.post(end, SIGN_POST_MM, "stop"),
-                _ => {}
-            }
-        }
-        for b in &a.transit.bollards {
-            d.post(*b, BOLLARD_MM, "bollard");
-        }
-        let selected = v.selected.kind == Some("arm") && v.selected.uid == a.uid;
-        d.name(a.end, &say(i18n, units, &a.street), selected);
-        if selected {
-            d.outline(&flatten(&a.outline));
-        }
-        let Some(c) = a.crossing.as_ref().filter(|c| c.continuous) else { continue };
-        let top = flatten(&c.poly);
-        d.table("sidewalk", &top, wall);
-        for ramp in &c.ramps {
-            d.ramp("sidewalk", &flatten(ramp), &top, wall);
-        }
+    if let Some(lane) = lane {
+        write!(a, " data-lane=\"{lane}\"").unwrap();
     }
+    a
+}
 
-    IsoSvg { frame: f, markup: d.finish() }
+/// A circle of 48 points, round the middle of the junction.
+pub(super) fn circle(r: f64) -> Vec<P> {
+    (0..48)
+        .map(|i| {
+            let t = i as f64 * std::f64::consts::TAU / 48.0;
+            (r * t.cos(), r * t.sin())
+        })
+        .collect()
+}
+
+/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high: every part the keys select can be
+/// pressed (`hit_attrs`), and the one that is selected is outlined. The diagram's layers are in one group, `iso iso-junction`.
+pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
+    let (frame, mut diagram) = build::build(v, i18n, width, window_height, units);
+    // The defs come before the group, as an element of the picture's own.
+    let defs = std::mem::take(&mut diagram.defs);
+    IsoSvg { frame, markup: format!("{defs}<g class=\"iso iso-junction\">{}</g>", render(&diagram, &frame)) }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::scene::{NAME_CHAR_PX, Scene, lift_to};
     use super::*;
+    use crate::shared::diagram::render::path_d;
+    use crate::shared::iso::format::f1;
     use serde_json::json;
 
     use crate::junction::model::*;
@@ -728,38 +384,90 @@ mod tests {
             })
             .collect::<String>()
             + "Z";
-        let at = s.markup.find(&format!("class=\"iso-flat k-travel mat-asphalt\" d=\"{d}\"")).expect("the gap is drawn as road");
+        let hit = hit_attrs("arm", Some(arm.uid), None);
+        let at = s.markup.find(&format!("class=\"iso-flat k-travel mat-asphalt\"{hit} d=\"{d}\"")).expect("the gap is drawn as road, and pressed as the arm");
         // It is painted after the arm's parking, which it covers.
         assert!(at > s.markup.find("iso-flat k-parking").unwrap());
     }
 
     fn frame() -> IsoFrame {
-        IsoFrame::fit([-5000.0, -5000.0, 5000.0, 5000.0], &[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
+        IsoFrame::fit(&[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
+    }
+
+    #[test]
+    fn the_oblique_frame_is_an_affine_projection_whose_one_matrix_lays_every_texture() {
+        let f = frame();
+        assert!(Projection::affine(&f));
+        assert_eq!(Projection::size(&f), (f.width, f.height));
+        let m = f.ground_at(0.0, 0.0, 0.0);
+        for (x, y) in [(0.0, 0.0), (1234.0, -567.0), (-9000.0, 4000.0)] {
+            let (px, py) = Projection::at(&f, Pt::new(x, 0.0, y));
+            assert!((px - (m[0] * x + m[2] * y + m[4])).abs() < 1e-6 && (py - (m[1] * x + m[3] * y + m[5])).abs() < 1e-6, "({x}, {y})");
+            // A height only lifts a point up the screen, by what `project` says, whatever the point.
+            let (hx, hy) = Projection::at(&f, Pt::new(x, 150.0, y));
+            assert!((hx - px).abs() < 1e-9 && ((py - hy) - 150.0 * LIFT * f.scale).abs() < 1e-6);
+        }
+        // The patterns of the picture are laid by that matrix.
+        assert_eq!(materials(&f, false), patterns("iso-m", m));
+    }
+
+    #[test]
+    fn the_picture_is_a_diagram_of_layers_bottom_to_top_with_what_stands_far_to_near() {
+        use crate::shared::diagram::{LayerKind, Shape};
+        let v = Junction::new(0).view();
+        let (_, d) = build::build(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 800.0, Units::Metres);
+        assert_eq!(d.ground.kind, LayerKind::Ground);
+        assert_eq!(d.sections.len(), 1);
+        let kinds: Vec<LayerKind> = d.sections[0].layers.iter().map(|l| l.kind).collect();
+        assert_eq!(kinds, [LayerKind::Surface, LayerKind::Raised, LayerKind::Markings, LayerKind::Objects, LayerKind::Signs]);
+        assert_eq!(d.outline.kind, LayerKind::Outline);
+        assert!(d.outline.shapes.is_empty(), "nothing is selected, nothing is outlined");
+        assert!(d.hits.shapes.is_empty(), "the places to press are laid with what they are on");
+        // The carriageway is the ground; the sidewalks stand, painted far to near; the words are captions.
+        assert!(!d.ground.shapes.is_empty());
+        let depth = |s: &Shape| match s {
+            Shape::Elem { attrs, .. } => attrs.split("data-depth=\"").nth(1).and_then(|r| r.split('"').next()).and_then(|n| n.parse::<f64>().ok()),
+            _ => None,
+        };
+        let depths: Vec<f64> = d.sections[0].layers[1].shapes.iter().filter_map(depth).collect();
+        assert!(depths.len() >= 8 && depths.windows(2).all(|w| w[0] <= w[1]), "{depths:?}");
+        assert!(d.sections[0].layers[4].shapes.iter().all(|s| matches!(s, Shape::Caption { .. })) && !d.sections[0].layers[4].shapes.is_empty());
     }
 
     fn square(x0: f64, x1: f64) -> Vec<(f64, f64)> {
         vec![(x0, 0.0), (x1, 0.0), (x1, 1000.0), (x0, 1000.0)]
     }
 
-    fn walls(d: Draw) -> usize {
-        count(&d.finish(), "class=\"iso-side ")
+    /// The scene as the markup of its diagram.
+    fn finished(d: Scene) -> String {
+        let f = d.f;
+        crate::shared::diagram::render::render(&d.into_diagram(String::new()), &f)
+    }
+
+    /// The path data of a polygon `h` above the ground in a frame, as the picture writes it.
+    fn path_of(frame: IsoFrame, pts: &[P], h: f64) -> String {
+        path_d(&frame, &[pts.iter().map(|&p| Pt::new(p.0, h, p.1)).collect()], true)
+    }
+
+    fn walls(d: Scene) -> usize {
+        count(&finished(d), "class=\"iso-side ")
     }
 
     #[test]
     fn no_wall_is_drawn_where_two_surfaces_at_the_same_height_meet_and_one_is_where_they_differ() {
-        let mut one = Draw::new(frame());
+        let mut one = Scene::new(frame());
         one.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
         let alone = walls(one);
         assert!(alone > 0);
         let pair = |h: f64| {
-            let mut d = Draw::new(frame());
+            let mut d = Scene::new(frame());
             d.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
             d.stand("median", square(1000.0, 2000.0), h, true);
             walls(d)
         };
         assert_eq!(pair(150.0), 2 * alone - 1, "the wall where they touch is not drawn");
         assert_eq!(pair(300.0), 2 * alone, "a step is a wall");
-        let mut table = Draw::new(frame());
+        let mut table = Scene::new(frame());
         table.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
         table.table("sidewalk", &square(1000.0, 2000.0), 150.0);
         assert_eq!(walls(table), alone - 1, "nor is one where a surface level with it begins");
@@ -767,9 +475,9 @@ mod tests {
 
     #[test]
     fn a_divider_is_drawn_as_the_open_line_it_is_and_never_joined_to_its_start() {
-        let mut d = Draw::new(frame());
+        let mut d = Scene::new(frame());
         d.divider(&[(-3_000.0, 0.0), (0.0, 3_000.0), (3_000.0, 0.0), (0.0, -3_000.0)]);
-        assert_eq!(count(&d.finish(), "<path class=\"iso-paint white"), 2 * 3, "a double line of three segments: two lines of three quads, not four");
+        assert_eq!(count(&finished(d), "<path class=\"iso-paint white"), 2 * 3, "a double line of three segments: two lines of three quads, not four");
     }
 
     #[test]
@@ -893,10 +601,12 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_beyond_draws_as_before() {
-        let (got, pinned) = (iso_fingerprint(), 13_505_848_485_995_189_453);
+        // Repinned for #140 stages 1, 2, 4, 6 and 7 (the diagram's layer groups), which gave the shapes the attributes a press reads and drew the parts that only
+        // have a place to press (a lane, a crossing, a bare corner); no shape moved.
+        let (got, pinned) = (iso_fingerprint(), 402_851_788_980_089_418);
         assert_eq!(
             got, pinned,
-            "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+            "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at the 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
         );
     }
 
@@ -919,8 +629,9 @@ mod tests {
         let d = |p: P, q: P| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt();
         assert_eq!(pts.len(), 4);
         assert!(((d(pts[0], pts[3]) - d(pts[1], pts[2])).abs() > 1.0) || ((d(pts[0], pts[1]) - d(pts[2], pts[3])).abs() > 1.0), "not a rectangle: {pts:?}");
-        let path = Draw::new(with.frame).path(&pts, 0.0);
-        assert!(with.markup.contains(&format!("<path class=\"iso-flat k-travel mat-asphalt\" d=\"{path}\"/>")), "{path}");
+        let path = path_of(with.frame, &pts, 0.0);
+        let hit = hit_attrs("arm", Some(a.uid), None);
+        assert!(with.markup.contains(&format!("<path class=\"iso-flat k-travel mat-asphalt\"{hit} d=\"{path}\"/>")), "{path}");
     }
 
     #[test]
@@ -1042,7 +753,7 @@ mod tests {
         assert_eq!(count(&m, "filter=\"url(#iso-shade-side)\""), count(&m, "class=\"iso-side "));
         assert_eq!(count(&m, "filter=\"url(#iso-shade-ramp)\""), count(&m, "class=\"iso-ramp "));
         assert!(count(&m, "class=\"iso-side ") > 0 && count(&m, "class=\"iso-ramp ") > 0);
-        let css = include_str!("../../web/editor.css");
+        let css = include_str!("../../../web/editor.css");
         assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
     }
 
@@ -1131,6 +842,149 @@ mod tests {
         assert_eq!(count(&svg(&j).markup, "sel-box"), 1);
     }
 
+    /// What a press on each pressable shape of the picture would select, in the way the view reads it (`plan::selected_by`).
+    fn pressable(markup: &str) -> Vec<Target> {
+        markup
+            .split(" data-role=\"")
+            .skip(1)
+            .map(|rest| {
+                let role = rest.split('"').next().unwrap();
+                let tag = &rest[..rest.find('>').unwrap()];
+                let number = |name: &str| tag.split(&format!("{name}=\"")).nth(1).and_then(|v| v.split('"').next()).and_then(|v| v.parse::<usize>().ok());
+                crate::junction::drawing::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
+            })
+            .collect()
+    }
+
+    /// Junctions that between them have every kind of thing the keys select: arms, lanes, crossings and corners (with
+    /// and without a sidewalk to stand on), a roundabout's cycle track and bus lane, a turbo's cycle track.
+    fn every_kind() -> Vec<(String, Junction)> {
+        let mut all: Vec<(String, Junction)> = (0..JUNCTION_SAMPLES.len()).map(|i| (format!("sample {i}"), Junction::new(i))).collect();
+        all.push(("no sidewalks".into(), junction_of(&[("travel", 3200), ("travel", 3200)])));
+        all.push(("walkways".into(), junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)])));
+        let mut round = Junction::new(0);
+        round.set_control(ROUNDABOUT);
+        let at = |j: &Junction, bearing: i32| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid;
+        let (n, so) = (at(&round, 0), at(&round, 180));
+        assert!(round.set_bus(Some((n, so))) && round.set_cycle(Some(2_000)));
+        all.push(("roundabout".into(), round));
+        let mut basic = turbo(0);
+        assert!(basic.set_cycle_track(true));
+        all.push(("turbo".into(), basic));
+        let mut raised = Junction::new(0);
+        assert!(raised.set_raised(true));
+        all.push(("raised".into(), raised));
+        all
+    }
+
+    #[test]
+    fn every_part_the_keys_step_through_can_be_pressed_in_the_picture() {
+        for (name, mut j) in every_kind() {
+            let pressable = pressable(&svg(&j).markup);
+            let targets = j.targets();
+            assert!(!targets.is_empty(), "{name}");
+            for t in targets {
+                j.select(t);
+                assert_eq!(j.selected, t, "{name}: {t:?} is not kept as the selection");
+                assert!(pressable.contains(&t), "{name}: nothing in the picture selects {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn what_is_only_looked_at_selects_nothing_and_a_bare_corner_is_still_pressed() {
+        // The core, the paint, the posts and the names say nothing about what a press selects.
+        let m = svg(&Junction::new(0)).markup;
+        for class in ["iso-flat k-travel mat-asphalt\" d=", "iso-zebra", "iso-stopline", "iso-post", "iso-head", "iso-name", "hatch"] {
+            for part in m.split(&format!("class=\"{class}")).skip(1) {
+                let tag = &part[..part.find('>').unwrap()];
+                assert!(!tag.contains("data-role"), "{class}: {tag}");
+            }
+        }
+        // A corner without a walkway beside it is bare ground: it is still pressed to be selected.
+        let bare = svg(&junction_of(&[("travel", 3200), ("travel", 3200)])).markup;
+        assert!(bare.contains("class=\"iso-hit\" data-role=\"corner\""), "{bare}");
+    }
+
+    #[test]
+    fn a_shape_that_stands_carries_what_a_press_on_it_selects() {
+        let m = svg(&walked()).markup;
+        let solids: Vec<&str> = m.split("<g class=\"iso-solid\" ").skip(1).collect();
+        assert!(!solids.is_empty());
+        let tag = |g: &&str| g.split('>').next().unwrap().to_string();
+        assert!(solids.iter().map(tag).any(|t| t.contains("data-role=\"arm\" data-uid=\"")), "a sidewalk of an arm");
+        assert!(solids.iter().map(tag).any(|t| t.contains("data-role=\"corner\" data-uid=\"")), "a corner's sidewalk");
+    }
+
+    #[test]
+    fn every_selected_part_is_outlined_in_two_tones_and_nothing_else_is() {
+        for (name, mut j) in every_kind() {
+            assert_eq!(count(&svg(&j).markup, "iso-sel"), 0, "{name}: nothing selected, nothing outlined");
+            for t in j.targets() {
+                j.select(t);
+                let m = svg(&j).markup;
+                let lines = if t == Target::Cycle { 2 } else { 1 };
+                assert_eq!(count(&m, "class=\"sel-box iso-sel\""), lines, "{name}: {t:?}");
+                assert_eq!(count(&m, "class=\"iso-sel-casing\""), lines, "{name}: {t:?}");
+                assert!(!m.contains("NaN") && !m.contains("inf"), "{name}: {t:?}");
+                // The casing is under the line, and both are over everything that stands.
+                assert!(m.find("iso-sel-casing").unwrap() < m.find("sel-box iso-sel").unwrap(), "{name}: {t:?}");
+                assert!(m.find("iso-sel-casing").unwrap() > m.rfind("class=\"iso-solid\"").unwrap_or(0), "{name}: {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_strip_narrower_than_a_finger_grows_to_one_and_a_wide_shape_does_not() {
+        let strip = |w: f64| [(0.0, 0.0), (400.0, 0.0), (400.0, w), (0.0, w)];
+        // A strip 10 px wide is made 14 px wider (its thickness is a little under its width, 2A/P).
+        let grow = target_growth_px(&strip(10.0));
+        assert!((grow - (MIN_TARGET_PX - 2.0 * 400.0 * 10.0 / (2.0 * 410.0))).abs() < 1e-9 && grow > 13.0 && grow < 15.0, "{grow}");
+        assert_eq!(target_growth_px(&strip(60.0)), 0.0);
+        assert_eq!(target_growth_px(&[(0.0, 0.0), (1.0, 1.0)]), 0.0, "a line is no shape");
+        assert_eq!(target_growth_px(&[(5.0, 5.0), (5.0, 5.0), (5.0, 5.0)]), 0.0, "nor is a point");
+    }
+
+    #[test]
+    fn on_a_narrow_drawing_the_places_to_press_that_are_thinner_than_a_finger_say_how_much_to_grow() {
+        let growing = |width: f64| {
+            let j = Junction::new(0);
+            let m = iso_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), width, 800.0, Units::Metres).markup;
+            let tags: Vec<&str> = m.split("<path class=\"lane-hit\"").skip(1).map(|t| &t[..t.find('>').unwrap()]).collect();
+            (tags.len(), tags.iter().filter(|t| t.contains("stroke-width=")).count())
+        };
+        let (lanes, wide) = growing(1440.0);
+        let (narrow_lanes, narrow) = growing(320.0);
+        assert_eq!(lanes, narrow_lanes);
+        assert!(narrow >= wide && narrow > 0, "at 320 px the lanes are thinner than a finger: {narrow} of {narrow_lanes} grow, {wide} of {lanes} at 1440");
+    }
+
+    #[test]
+    fn a_selected_lane_is_shaded_and_named_and_the_others_are_not() {
+        let mut j = Junction::new(0);
+        let arm = j.current().arms[0].uid;
+        assert!(j.current().arms[0].lanes.len() >= 2);
+        let m = svg(&j).markup;
+        assert_eq!(count(&m, "class=\"lane-hit\""), j.current().arms.iter().map(|a| a.lanes.len()).sum::<usize>());
+        assert_eq!(count(&m, "lane-hit on"), 0);
+        assert!(m.contains("<title>Lane 1 of "), "a lane has its name for the pointer");
+        j.select(Target::Lane(arm, 1));
+        let m = svg(&j).markup;
+        assert_eq!(count(&m, "class=\"lane-hit on\" data-role=\"lane\" data-uid=\""), 1);
+        assert!(m.contains(&format!("data-uid=\"{arm}\" data-lane=\"1\"")));
+    }
+
+    #[test]
+    fn a_corner_is_outlined_on_the_height_it_stands_at() {
+        let mut j = walked();
+        let c = j.view().corners.iter().find(|c| c.walk && !c.straight).map(|c| c.uid).expect("a corner with a sidewalk");
+        j.select(Target::Corner(c));
+        let (v, s) = (j.view(), svg(&j));
+        let wedge = flatten(&v.corners.iter().find(|k| k.uid == c).unwrap().wedge);
+        let d = path_of(s.frame, &wedge, height_of("sidewalk"));
+        assert!(s.markup.contains(&format!("class=\"sel-box iso-sel\" d=\"{d}\"")), "{d}");
+    }
+
     #[test]
     fn a_signal_has_a_head_on_a_post_on_each_entering_arm_and_no_control_has_none() {
         let mut j = Junction::new(0);
@@ -1216,10 +1070,10 @@ mod tests {
 
     #[test]
     fn the_whole_junction_and_its_tallest_post_are_inside_the_drawing() {
-        for width in [320.0, 400.0, 1000.0] {
+        for width in [240.0, 320.0, 400.0, 1000.0] {
             let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
             let corners = [(b[0], b[1]), (b[2], b[1]), (b[2], b[3]), (b[0], b[3])];
-            let f = IsoFrame::fit(b, &corners, width, 1000.0);
+            let f = IsoFrame::fit(&corners, width, 1000.0);
             for corner in corners {
                 for h in [0.0, TALLEST_MM] {
                     let (x, y) = f.at(corner, h);
@@ -1230,11 +1084,10 @@ mod tests {
     }
 
     #[test]
-    fn the_drawing_is_as_wide_and_as_tall_as_the_plans() {
-        let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
-        let f = IsoFrame::fit(b, &[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
-        let plan = crate::junction::frame::Frame::fit(b, 1000.0, 1000.0);
-        assert_eq!((f.width, f.height), (plan.width, plan.height));
+    fn the_drawing_is_as_wide_and_as_tall_as_the_page_leaves_room_for() {
+        let f = IsoFrame::fit(&[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
+        let size = crate::junction::frame::Frame::fit(1000.0, 1000.0);
+        assert_eq!((f.width, f.height), (size.width, size.height));
     }
 
     #[test]

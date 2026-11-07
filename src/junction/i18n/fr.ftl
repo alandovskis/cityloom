@@ -240,7 +240,7 @@ jn-turn-allowed = { $turn }, permis
 ## La page autour du plan : en-tête, titre de la fenêtre, cartouche et historique (src/junction/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = Carte de la ville
-jn-plan = Plan de la jonction
+jn-heading = Jonction en 2,5D
 jn-block-junction = Jonction
 jn-block-streets = Rues
 jn-block-changes = Modifications apportées
@@ -274,28 +274,16 @@ jn-check-length = { $detail } : { $length }
 jn-col-step = Étape
 jn-col-what-changed = Ce qui a changé
 
-## Le plan (src/junction/plan.rs, plan_svg.rs)
-jn-plan-editor = Éditeur du plan de la jonction
-# Le choix, sur le dessin, entre le plan à plat, qu’on modifie, et l’image en 2,5D, qu’on regarde.
-jn-view-group = Affichage
-jn-view-plan = Plan
-jn-view-iso = 2,5D
-jn-view-shown-plan = Plan affiché.
-jn-view-shown-iso = Jonction affichée en 2,5D.
+## Le dessin (src/junction/drawing.rs, iso/)
+jn-editor = Éditeur de la jonction
 jn-iso-label = Vue en 2,5D de la jonction. { $arms }.
+jn-iso-label-roundabout = Vue en 2,5D de la jonction. { $arms }. Carrefour giratoire.
+jn-iso-label-raised = Vue en 2,5D de la jonction. { $arms }. Carrefour surélevé.
 jn-iso-label-turbo = Vue en 2,5D de la jonction. { $arms }. { $name }.
-jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
-jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
-jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
-jn-plan-label-turbo = Plan de la jonction, nord en haut. { $arms }. { $name }.
-jn-svg-scale = Échelle
 jn-svg-bus-only = Autobus seulement
-# Sous le nom d’une rue : sa direction et sa largeur, « N · chaussée de 20,0 m ».
-jn-svg-road = { $compass } · chaussée de { $width }
-jn-svg-road-shifted = { $compass } · chaussée de { $width } · décalée de { $offset }
-jn-grip-turn = Faire pivoter { $arm }
-jn-grip-corner = Modifier le rayon du coin
-jn-grip-crossing = Déplacer le passage pour piétons
+# Ce que les boutons sous le dessin parcourent : les rues, les voies, les passages et les coins, comme les touches fléchées.
+jn-part-previous = Partie précédente
+jn-part-next = Partie suivante
 
 ## Le balisage de la page (web/intersection.html); le titre de la fenêtre est le jn-title de l’en-tête
 jn-page-description = Modifiez le fonctionnement d’une jonction de rues : coins, passages pour piétons, voies, virages et signalisation.
@@ -308,7 +296,6 @@ jn-page-key-change = modifier
 jn-page-key-turn = faire pivoter une rue
 jn-page-key-remove = retirer
 jn-page-key-details-notes = détails, notes
-jn-page-key-view = plan, 2,5D
 jn-page-key-undo = annuler
 jn-page-details-panel = Rue, coin ou passage pour piétons sélectionné
 jn-page-plan-key = Légende des bandes
@@ -589,3 +576,28 @@ jn-ph-rides-legend = Vélos
 jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
+
+## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/signal.rs `conflicts`)
+jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
+jn-conflict-vehicles = Phase { $n } : { $a } croisent { $b }.
+jn-conflict-walk = Phase { $n } : { $mv } rencontrent les piétons qui traversent du côté { $side }.
+jn-conflict-ride = Phase { $n } : { $mv } croisent les vélos du côté { $side }.
+jn-conflict-list = Avertissements de la phase { $n }
+jn-conflict-heard = Attention : { $conflict }
+jn-conflict-heard-many = Attention : { $count } mouvements se rencontrent maintenant, { $phases ->
+    [one] à la phase
+   *[other] aux phases
+} { $list }. { $first }
+jn-conflict-more = { $n ->
+    [one] Et { $n } autre rencontre.
+   *[other] Et { $n } autres rencontres.
+}
+jn-check-signal-conflicts = Mouvements qui se rencontrent
+jn-check-signal-conflicts-ok = Aucune phase ne réunit des mouvements qui se rencontrent
+jn-check-signal-conflicts-bad = { $list }
+jn-check-curb-near = Bordure dégagée des traverses
+jn-check-curb-near-ok = Aucun stationnement ni aucune zone de chargement n’est à moins de { $need } d’une traverse.
+jn-check-curb-near-bad = { $uses }
+jn-curb-near = Bordure : { $use } sur { $arm } à { $gap } de la traverse; il en faut { $need } ou plus.
+jn-curb-near-inside = Bordure : { $use } sur { $arm } atteint la traverse.
+jn-sel-arm-curb = { $use } { $side }, à { $at } du centre.

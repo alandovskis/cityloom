@@ -254,6 +254,11 @@ pub fn patterns(prefix: &str, ground: Ground) -> String {
     pattern_defs(prefix, ground, true, false)
 }
 
+/// `patterns` with the materials only a laid thing is drawn in (`LAID_ONLY`) too: for a drawing that draws one.
+pub fn patterns_laid(prefix: &str, ground: Ground) -> String {
+    pattern_defs(prefix, ground, true, true)
+}
+
 /// The same patterns without the joints of the materials that have `joints`: their fine grain only.
 pub fn fine_patterns(prefix: &str, ground: Ground) -> String {
     pattern_defs(prefix, ground, false, false)

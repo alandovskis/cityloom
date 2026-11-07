@@ -16,6 +16,7 @@ use crate::junction::model::{
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
+use crate::junction::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
 use crate::junction::signal::{self, Pattern};
 use crate::junction::stops::{self, StopView};
 use crate::junction::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
@@ -115,7 +116,7 @@ pub struct EntryWiden {
 }
 
 impl ArmLayout {
-    fn lat(&self, offset: f64, x_mm: i32) -> f64 {
+    pub(crate) fn lat(&self, offset: f64, x_mm: i32) -> f64 {
         offset + x_mm as f64 - self.prof.row_mm as f64 / 2.0
     }
 }
@@ -442,7 +443,7 @@ pub struct CrossingView {
     pub continuous: bool,
     /// The ramps up to a continuous sidewalk: the strip before the crossing (not before the mouth), then the one beyond it.
     pub ramps: Vec<Vec<Value>>,
-    /// Ends of the crossing's far side and the position of its handle.
+    /// The middle of the crossing's far edge: how far the junction reaches along the street.
     pub handle: P,
     pub distance_mm: i32,
     pub stage_mm: i32,
@@ -575,6 +576,13 @@ pub struct ArmView {
     /// The stops whose bus is trapped in a turning lane.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub stop_lane: Vec<Said>,
+    /// The street's curbside uses on the arm, nearest first. Empty (and not sent) for an arm with none, a pedestrian
+    /// arm and a turbo's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub curb_uses: Vec<CurbUseView>,
+    /// The parking or loading that stands too near the crossing, as the check says it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub curb_near: Vec<Said>,
 }
 
 #[derive(Serialize)]
@@ -604,8 +612,7 @@ pub struct CornerView {
     pub protected_why: Option<&'static str>,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
-    /// The direction the corner's arc bulges.
-    pub bisector: Option<P>,
+    /// The middle of the corner's arc, which the junction's bounds hold.
     pub handle: P,
 }
 
@@ -741,6 +748,11 @@ pub struct PhaseView {
     pub pattern: Pattern,
     /// The patterns that fit this junction's lanes, in the order they are offered (never Custom).
     pub patterns: Vec<PatternView>,
+    /// What meets in this phase, each as a sentence naming the phase, the movement and who it meets. A warning: the
+    /// phase is allowed as it is.
+    pub conflicts: Vec<Said>,
+    /// The vehicle movements that take part in a conflict, to mark on the drawing.
+    pub conflict_moves: Vec<crate::junction::signal::Move>,
 }
 
 /// One crossing or bike movement a phase can switch: the street (by uid and name) and whether it runs in the phase.
@@ -775,15 +787,21 @@ fn and_list(mut items: Vec<Said>) -> Option<Said> {
     })
 }
 
+/// How many warnings the check lists in its detail.
+const MAX_LISTED_CONFLICTS: usize = 3;
+
 fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView> {
     let plan = signal::plan(s, region)?;
     let find = |uid: u32| arms.iter().find(|a| a.uid == uid);
     let name = |uid: u32| find(uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let found = signal::conflicts(s, &plan);
     let phases = plan
         .phases
         .iter()
         .enumerate()
         .map(|(n, p)| PhaseView {
+            conflicts: found.iter().filter(|(at, _)| *at == n).map(|(_, c)| conflict_said(n, c, arms)).collect(),
+            conflict_moves: conflict_moves(found.iter().filter(|(at, _)| *at == n).map(|(_, c)| c)),
             name: phase_name(n, p, &find, &name),
             summary: phase_summary(p, arms),
             pattern: signal::pattern_of(s, region, p),
@@ -807,6 +825,46 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         })
         .collect();
     Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
+}
+
+/// The movements that take part in the conflicts, each once.
+fn conflict_moves<'a>(found: impl Iterator<Item = &'a signal::Conflict>) -> Vec<signal::Move> {
+    let mut moves: Vec<signal::Move> = Vec::new();
+    for c in found {
+        let (a, b) = match *c {
+            signal::Conflict::Vehicles { a, b } => (a, Some(b)),
+            signal::Conflict::Walk { mv, .. } | signal::Conflict::Ride { mv, .. } => (mv, None),
+        };
+        for m in std::iter::once(a).chain(b) {
+            if !moves.contains(&m) {
+                moves.push(m);
+            }
+        }
+    }
+    moves
+}
+
+/// "cars from the north side going left": a movement, by the compass point of its street and its kind of turn.
+fn move_said(m: signal::Move, arms: &[ArmView]) -> Said {
+    let bearing = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing);
+    let turn = match turn_class(bearing(m.from), bearing(m.to)) {
+        LEFT => "jn-turn-left",
+        RIGHT => "jn-turn-right",
+        _ => "jn-turn-through",
+    };
+    Said::new("jn-conflict-move").with("from", Arg::Said(Box::new(compass_said(bearing(m.from))))).with("turn", Arg::Said(Box::new(Said::new(turn))))
+}
+
+/// A conflict of phase `n` (from 0) as a sentence: the movement, and what it meets.
+pub(super) fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
+    let phase = Arg::Num(n as i64 + 1);
+    let side = |uid: u32| Arg::Said(Box::new(compass_said(arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing))));
+    let said = |m: signal::Move| Arg::Said(Box::new(move_said(m, arms)));
+    match *c {
+        signal::Conflict::Vehicles { a, b } => Said::new("jn-conflict-vehicles").with("n", phase).with("a", said(a)).with("b", said(b)),
+        signal::Conflict::Walk { mv, arm } => Said::new("jn-conflict-walk").with("n", phase).with("mv", said(mv)).with("side", side(arm)),
+        signal::Conflict::Ride { mv, arm } => Said::new("jn-conflict-ride").with("n", phase).with("mv", said(mv)).with("side", side(arm)),
+    }
 }
 
 fn option_list(all: &[u32], on: &[u32], name: &impl Fn(u32) -> Said) -> Vec<MovementOption> {
@@ -965,19 +1023,7 @@ fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, end: f64, head: i32, us
     }
 }
 
-/// The bearing, clockwise from north, of a point on the plan (north up, y
-/// growing down), in whole degrees.
-fn bearing_toward(x: f64, y: f64) -> i32 {
-    x.atan2(-y).to_degrees().rem_euclid(360.0).round() as i32
-}
-
 impl Junction {
-    /// Turns an arm to face a point on the plan, in millimetres from the
-    /// junction's centre.
-    pub fn drag_arm_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        self.set_bearing(uid, bearing_toward(x, y))
-    }
-
     /// Sets the roundabout's outside radius, which cannot be less than its
     /// least size with these streets: smaller than that is the least size.
     pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
@@ -985,40 +1031,12 @@ impl Junction {
         self.set_ring((radius_mm - ring.floor).max(0))
     }
 
-    /// Sets the curb radius at the corner clockwise of an arm from a point on
-    /// the plan: the corner's handle stands `apex_per_radius` times the radius
-    /// away from where its curbs would meet. A straight curb has no radius.
-    pub fn drag_corner_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        let Some(i) = self.current().arms.iter().position(|a| a.uid == uid) else { return false };
-        let Some(lay) = layout(self.current(), self.region) else { return false };
-        let Some(c) = lay.corners.iter().find(|c| c.a == i) else { return false };
-        let Some(f) = &c.fillet else { return false };
-        let apex_per_radius = 1.0 / (c.delta as f64 / 2.0).to_radians().sin() - 1.0;
-        self.set_corner(uid, (dist(f.c, (x, y)) / apex_per_radius).round() as i32)
-    }
-
-    /// Sets how far a crossing stands back from the junction from a point on
-    /// the plan: its handle is on the far edge, the setback plus the crossing's
-    /// width out along the arm from the mouth.
-    pub fn drag_crossing_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        let Some(i) = self.current().arms.iter().position(|a| a.uid == uid) else { return false };
-        let Some(c) = self.current().arms[i].crossing.as_ref() else { return false };
-        let width = c.width_mm;
-        let Some(lay) = layout(self.current(), self.region) else { return false };
-        let a = &lay.arms[i];
-        let mouth = at(a.bearing, self.current().arms[i].offset_mm as f64, a.mouth);
-        let out = dir(a.bearing);
-        let t = (x - mouth.0) * out.0 + (y - mouth.1) * out.1;
-        self.set_setback(uid, (t - width as f64).round() as i32)
-    }
-
     pub fn view(&self) -> JView {
         let in_force = in_force(self.current());
         let s: &State = &in_force;
         let region = self.region;
         // The current state is always valid; the layout it was checked with is
-        // rebuilt here. A gesture may hold a state the layout rejects only if a
-        // rule above was skipped, so fall back to the last good one.
+        // rebuilt here.
         let lay = layout(s, region).expect("a junction state is always drawable");
         // A roundabout is never a table, whatever its state says.
         let raised = s.raised && lay.ring.is_none();
@@ -1196,6 +1214,40 @@ impl Junction {
                     })
                     .collect()
             };
+            // The street's curbside uses, each drawn on its piece from where that piece's strip begins (parking and
+            // loading where the parking piece does, the rest beyond the crossing), and parking and loading judged
+            // against the crossing.
+            let (curb_uses, curb_near) = if walk || s.turbo.is_some() {
+                (Vec::new(), Vec::new())
+            } else {
+                let mut said = Vec::new();
+                let uses: Vec<CurbUseView> = a
+                    .curb_near
+                    .iter()
+                    .filter(|u| f64::from(u.near_mm) < len)
+                    .filter_map(|u| {
+                        let floor = if curbside::keeps_clear(u.use_) { park_t } else { far };
+                        let mut v = curbside::draw(l, off, u, floor, &|pi| cut(pi, l.mouth), len)?;
+                        v.gap_mm = stop_gap_mm(u.near_mm, far.round() as i32);
+                        if cx.is_some() && curbside::keeps_clear(u.use_) && v.gap_mm < CROSSING_CLEARANCE_MM {
+                            let arm = Arg::Said(Box::new(arm_name(a)));
+                            let use_ = Arg::MsgLower(u.use_.name_key());
+                            said.push(if v.gap_mm < 0 {
+                                Said::new("jn-curb-near-inside").with("use", use_).with("arm", arm)
+                            } else {
+                                Said::new("jn-curb-near")
+                                    .with("use", use_)
+                                    .with("arm", arm)
+                                    .with("gap", Arg::Length(v.gap_mm))
+                                    .with("need", Arg::Length(CROSSING_CLEARANCE_MM))
+                            });
+                            v.bad = true;
+                        }
+                        Some(v)
+                    })
+                    .collect();
+                (uses, said)
+            };
             let arrow_t = if cx.is_some() { far + ARROW_FROM_EDGE_MM } else { l.mouth + ARROW_FROM_EDGE_MM + 1_000.0 };
             // Where the lane at `x` ends: where its piece does.
             let lane_end = |x: i32| {
@@ -1299,6 +1351,8 @@ impl Junction {
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
                 stops,
                 stop_clear,
+                curb_uses,
+                curb_near,
                 stop_lane,
             });
         }
@@ -1361,13 +1415,13 @@ impl Junction {
             let ua = s.arms[c.a].uid;
             let ub = s.arms[c.b].uid;
             let radius = s.arms[c.a].corner_mm;
-            let (handle, bis, ok) = match &c.fillet {
+            let (handle, ok) = match &c.fillet {
                 Some(f) => {
                     let mid = sub(f.o, scale(f.u, f.r));
                     let margin = corner_prop.map_or(f64::MAX, |p| dist(mid, p));
-                    (mid, Some(f.u), margin >= MIN_SIDEWALK_AT_CORNER_MM)
+                    (mid, margin >= MIN_SIDEWALK_AT_CORNER_MM)
                 }
-                None => (scale(add(ca_in, cb_in), 0.5), None, true),
+                None => (scale(add(ca_in, cb_in), 0.5), true),
             };
             let protected = match (&c.fillet, protected_at[c.a]) {
                 (Some(f), true) => {
@@ -1408,7 +1462,6 @@ impl Junction {
                 protected_why: blockers[c.a].map(ProtectedBlocker::key),
                 wedge,
                 curb,
-                bisector: bis,
                 handle,
             });
         }
@@ -2027,6 +2080,15 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
         problems.map(|p| Said::new("jn-check-stop-lane-bad").with("stops", Arg::Said(Box::new(p)))),
     ));
 
+    // The street's parking and loading stand clear of the crossings the junction draws.
+    let problems = list(arms.iter().flat_map(|a| a.curb_near.iter().cloned()).collect());
+    out.push(check(
+        "curb-near",
+        "jn-check-curb-near",
+        Said::new("jn-check-curb-near-ok").with("need", Arg::Length(CROSSING_CLEARANCE_MM)),
+        problems.map(|p| Said::new("jn-check-curb-near-bad").with("uses", Arg::Said(Box::new(p)))),
+    ));
+
     // The end zone reaches past its stop line and arrows, and its transition fits.
     let problems = list(arms.iter().flat_map(|a| a.beyond_problems.iter().cloned()).collect());
     out.push(check(
@@ -2081,6 +2143,20 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
             (plan.cycle_s > MAX_CYCLE_S)
                 .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
         ));
+        // A phase that puts movements together that meet is allowed, and warned about.
+        let meeting: Vec<Said> = signal::conflicts(s, &plan).iter().map(|(n, c)| conflict_said(*n, c, arms)).collect();
+        let mut first: Vec<Said> = meeting.iter().take(MAX_LISTED_CONFLICTS).cloned().collect();
+        if meeting.len() > MAX_LISTED_CONFLICTS {
+            first.push(Said::new("jn-conflict-more").with("n", Arg::Num((meeting.len() - MAX_LISTED_CONFLICTS) as i64)));
+        }
+        let detail =
+            first.into_iter().reduce(|head, tail| Said::new("jn-ph-join").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
+        out.push(check(
+            "signal-conflicts",
+            "jn-check-signal-conflicts",
+            Said::new("jn-check-signal-conflicts-ok"),
+            detail.map(|list| Said::new("jn-check-signal-conflicts-bad").with("list", Arg::Said(Box::new(list)))),
+        ));
     }
     // A turbo wants its streets to meet the ring square.
     if let Some((uid, deg)) = s.turbo.as_ref().and_then(|t| t.worst_skew(&s.arms)) {
@@ -2099,7 +2175,7 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
+    use crate::junction::model::{JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
     use crate::shared::testing::{en, fr};
 
     /// How many things an `and_list` says.
@@ -2164,10 +2240,9 @@ mod tests {
         assert_eq!(v.arms.iter().filter(|a| a.pedestrian).count(), 1);
         assert_eq!(v.traffic_arms, 3);
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
-        let plan = crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
-        assert!(plan.markup.matches("data-role=\"arm\"").count() >= 4);
         let iso = crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
         assert!(iso.markup.contains("iso-"));
+        assert!(iso.markup.matches("data-role=\"arm\"").count() >= 4, "every street can be pressed");
     }
 
     const WALKWAY: [(&str, i32); 3] = [("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)];
@@ -2292,7 +2367,6 @@ mod tests {
         );
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let units = crate::shared::units::Units::Metres;
-        assert!(!crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
         assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
     }
 
@@ -2304,7 +2378,6 @@ mod tests {
         assert_eq!(v.control, "uncontrolled");
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let units = crate::shared::units::Units::Metres;
-        assert!(!crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
         assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
     }
 
@@ -3134,116 +3207,28 @@ mod tests {
     }
 
     #[test]
-    fn dragging_an_arm_turns_it_to_face_the_pointer() {
+    fn turning_an_arm_sets_its_bearing_snapped_to_the_step_and_wrapped_at_north() {
         let mut j = Junction::new(1); // 90, 180, 270
         let west = arm_of(&j, 270);
-        // The plan has north up and y growing down: up and to the left is 315°.
-        assert!(j.drag_arm_to(west, -7_071.0, -7_071.0));
+        assert!(j.set_bearing(west, 315));
         assert_eq!(j.arm(west).unwrap().bearing, 315);
-    }
-
-    #[test]
-    fn dragging_an_arm_snaps_to_the_step() {
-        let mut j = Junction::new(1);
-        let west = arm_of(&j, 270);
-        // 322.6° is nearer 325° than 320°.
-        assert!(j.drag_arm_to(west, -7_650.0, -10_000.0));
+        // 322.6 degrees is nearer 325 than 320.
+        assert!(j.set_bearing(west, 323));
         assert_eq!(j.arm(west).unwrap().bearing, 325);
-    }
-
-    #[test]
-    fn dragging_an_arm_just_short_of_north_wraps_to_north() {
-        let mut j = Junction::new(1);
-        let west = arm_of(&j, 270);
-        // 359.9° rounds to 360°, which is 0°.
-        assert!(j.drag_arm_to(west, -10.0, -10_000.0));
+        // 359.9 degrees rounds to 360, which is 0.
+        assert!(j.set_bearing(west, 360));
         assert_eq!(j.arm(west).unwrap().bearing, 0);
     }
 
     #[test]
-    fn dragging_an_arm_onto_its_neighbour_is_refused() {
+    fn turning_an_arm_onto_its_neighbour_is_refused_and_an_unknown_arm_does_nothing() {
         let mut j = Junction::new(1);
         let west = arm_of(&j, 270);
         let before = j.current().clone();
-        // Straight down is 180°, where another street already runs.
-        assert!(!j.drag_arm_to(west, 0.0, 10_000.0));
+        // 180 is where another street already runs.
+        assert!(!j.set_bearing(west, 180));
         assert_eq!(*j.current(), before);
-    }
-
-    #[test]
-    fn dragging_an_unknown_arm_does_nothing() {
-        let mut j = Junction::new(1);
-        assert!(!j.drag_arm_to(9_999, 0.0, -10_000.0));
-    }
-
-    #[test]
-    fn dragging_the_corner_handle_sets_the_radius_from_the_pointer() {
-        let mut j = Junction::new(0);
-        let n = arm_of(&j, 0);
-        // The handle stands at the arc's apex: `apex_per_radius` times the
-        // radius from where the curbs would meet, along the bisector.
-        let lay = layout(j.current(), 0).unwrap();
-        let i = j.current().arms.iter().position(|a| a.uid == n).unwrap();
-        let c = lay.corners.iter().find(|c| c.a == i).unwrap();
-        let f = c.fillet.as_ref().unwrap();
-        let k = 1.0 / (c.delta as f64 / 2.0).to_radians().sin() - 1.0;
-        let apex = |r: f64| add(f.c, scale(f.u, k * r));
-        let (x, y) = apex(9_000.0);
-        assert!(j.drag_corner_to(n, x, y));
-        assert_eq!(j.arm(n).unwrap().corner_mm, 9_000);
-    }
-
-    #[test]
-    fn dragging_the_corner_handle_beyond_the_limits_is_refused() {
-        let mut j = Junction::new(0);
-        let n = arm_of(&j, 0);
-        let before = j.arm(n).unwrap().corner_mm;
-        // On the sharp point itself the radius would be nothing.
-        let lay = layout(j.current(), 0).unwrap();
-        let i = j.current().arms.iter().position(|a| a.uid == n).unwrap();
-        let sharp = lay.corners.iter().find(|c| c.a == i).unwrap().fillet.as_ref().unwrap().c;
-        assert!(!j.drag_corner_to(n, sharp.0, sharp.1));
-        assert_eq!(j.arm(n).unwrap().corner_mm, before);
-    }
-
-    #[test]
-    fn a_straight_curb_has_no_corner_handle_to_drag() {
-        let mut j = Junction::new(1); // a T: the corner clockwise of the west arm is a straight curb
-        let west = arm_of(&j, 270);
-        let before = j.arm(west).unwrap().corner_mm;
-        assert!(!j.drag_corner_to(west, 1_000.0, 1_000.0));
-        assert_eq!(j.arm(west).unwrap().corner_mm, before);
-    }
-
-    #[test]
-    fn dragging_the_crossing_handle_sets_the_setback_from_the_pointer() {
-        let mut j = Junction::new(0);
-        let e = arm_of(&j, 90);
-        let width = j.view().arms.iter().find(|a| a.uid == e).unwrap().crossing.as_ref().unwrap().width_mm;
-        let a = j.view().arms.iter().find(|a| a.uid == e).unwrap().mouth_at;
-        // The handle is on the crossing's far edge: setback plus width out
-        // along the arm from the mouth.
-        let (x, y) = add(a, scale(dir(90.0), 5_000.0 + width as f64));
-        assert!(j.drag_crossing_to(e, x, y));
-        assert_eq!(j.arm(e).unwrap().crossing.as_ref().unwrap().setback_mm, 5_000);
-    }
-
-    #[test]
-    fn dragging_the_crossing_handle_beyond_the_limits_is_refused() {
-        let mut j = Junction::new(0);
-        let e = arm_of(&j, 90);
-        let a = j.view().arms.iter().find(|a| a.uid == e).unwrap().mouth_at;
-        let (x, y) = add(a, scale(dir(90.0), 40_000.0));
-        assert!(!j.drag_crossing_to(e, x, y));
-        assert_eq!(j.arm(e).unwrap().crossing.as_ref().unwrap().setback_mm, DEFAULT_SETBACK_MM);
-    }
-
-    #[test]
-    fn dragging_a_crossing_that_is_not_there_does_nothing() {
-        let mut j = Junction::new(0);
-        let e = arm_of(&j, 90);
-        j.set_crossing(e, false);
-        assert!(!j.drag_crossing_to(e, 5_000.0, 0.0));
+        assert!(!j.set_bearing(9_999, 0));
     }
 
     #[test]
@@ -3411,6 +3396,103 @@ mod tests {
     #[test]
     fn an_unknown_selection_name_selects_nothing() {
         assert_eq!(Target::named("wedge", 3, 0), Target::None);
+    }
+
+    // ---- conflicts in a phase ----
+
+    fn arm_by(j: &Junction, bearing: i32) -> u32 {
+        j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
+    }
+
+    fn bike_street() -> Junction {
+        junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)])
+    }
+
+    #[test]
+    fn the_suggested_plan_has_no_conflict_and_the_check_passes() {
+        for j in [Junction::new(0), bike_street()] {
+            let v = j.view();
+            assert!(v.signal.as_ref().unwrap().phases.iter().all(|p| p.conflicts.is_empty() && p.conflict_moves.is_empty()));
+            let c = check(&v, "signal-conflicts").unwrap();
+            assert!(c.ok, "{}", en(&c.detail));
+            assert!(plain(&en(&c.detail)).contains("No phase"), "{}", en(&c.detail));
+        }
+        assert!(check(&Junction::new(1).view(), "signal-conflicts").is_none(), "no signal, no check");
+    }
+
+    #[test]
+    fn traffic_into_a_walked_crossing_is_a_warning_in_both_languages_and_a_failing_check_until_the_cause_goes() {
+        let mut j = Junction::new(0);
+        let n = arm_by(&j, 0);
+        assert!(j.set_phase_walk(0, n, true), "allowed, with a warning");
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        assert!(!phase.conflicts.is_empty() && !phase.conflict_moves.is_empty());
+        let said = &phase.conflicts[0];
+        assert!(plain(&en(said)).starts_with("Phase 1: cars from the north side going "), "{}", en(said));
+        assert!(en(said).contains("meet people walking across on the north side"), "{}", en(said));
+        assert!(plain(&fr(said)).starts_with("Phase 1 : les voitures du côté nord qui vont "), "{}", fr(said));
+        assert!(fr(said).contains("rencontrent les piétons qui traversent du côté nord"), "{}", fr(said));
+        let c = check(&v, "signal-conflicts").unwrap();
+        assert!(!c.ok && en(&c.detail).contains("meet people walking across"), "{}", en(&c.detail));
+        assert!(fr(&c.detail).contains("piétons"), "{}", fr(&c.detail));
+        assert!(j.set_phase_walk(0, n, false));
+        let v = j.view();
+        assert!(v.signal.as_ref().unwrap().phases[0].conflicts.is_empty());
+        assert!(check(&v, "signal-conflicts").unwrap().ok);
+    }
+
+    #[test]
+    fn a_turn_that_gives_way_to_a_crossing_is_not_warned_about() {
+        let j = Junction::new(0);
+        let (n, e) = (arm_by(&j, 0), arm_by(&j, 90));
+        assert!(j.view().signal.as_ref().unwrap().phases[0].walk_arms.contains(&e), "east's crossing is walked while north turns into it");
+        assert!(j.view().signal.as_ref().unwrap().phases[0].moves.iter().any(|m| m.from == n && m.to == e));
+        assert!(j.view().signal.as_ref().unwrap().phases[0].conflicts.is_empty());
+    }
+
+    #[test]
+    fn traffic_across_a_bike_movement_that_rides_is_a_warning_in_both_languages() {
+        let mut j = bike_street();
+        let (n, e) = (arm_by(&j, 0), arm_by(&j, 90));
+        assert!(j.set_phase_ride(0, e, true), "east's bikes ride in north's phase, across its traffic");
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        let said = phase.conflicts.iter().find(|s| en(s).contains("bikes")).expect("a ride warning");
+        assert!(plain(&en(said)).starts_with("Phase 1: cars from the north side going "), "{}", en(said));
+        assert!(en(said).contains("cross bikes riding on the east side"), "{}", en(said));
+        assert!(fr(said).contains("croisent les vélos du côté est"), "{}", fr(said));
+        assert!(phase.conflict_moves.iter().all(|m| m.from == n));
+    }
+
+    #[test]
+    fn two_movements_that_cross_are_a_warning_in_both_languages() {
+        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        let mut j = Junction::new(0);
+        let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
+        let moves = vec![Move { from: n, to: so }, Move { from: e, to: w }];
+        j.set_plan_for_test(SignalPlan { phases: vec![StoredPhase { moves, ..Default::default() }] });
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        assert_eq!(phase.conflicts.len(), 1);
+        let said = &phase.conflicts[0];
+        assert_eq!(plain(&en(said)), "Phase 1: cars from the north side going straight on cross cars from the east side going straight on.");
+        assert_eq!(plain(&fr(said)), "Phase 1 : les voitures du côté nord qui vont tout droit croisent les voitures du côté est qui vont tout droit.");
+        assert_eq!(phase.conflict_moves.len(), 2);
+    }
+
+    #[test]
+    fn the_check_lists_only_the_first_few_warnings() {
+        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        let mut j = Junction::new(0);
+        let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
+        let moves = vec![Move { from: n, to: so }, Move { from: so, to: n }, Move { from: e, to: w }, Move { from: w, to: e }];
+        j.set_plan_for_test(SignalPlan { phases: vec![StoredPhase { moves, ..Default::default() }] });
+        let detail = en(&check(&j.view(), "signal-conflicts").unwrap().detail);
+        assert_eq!(detail.matches("Phase 1:").count(), 3, "{detail}");
+        assert!(detail.ends_with("And 1 more meeting."), "the rest is counted, not hidden: {detail}");
+        let detail = fr(&check(&j.view(), "signal-conflicts").unwrap().detail);
+        assert!(plain(&detail).ends_with("Et 1 autre rencontre."), "{detail}");
     }
 
     // ---- signal checks ----

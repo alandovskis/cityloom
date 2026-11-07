@@ -375,11 +375,13 @@ test.describe("area restrictions", () => {
     await formShown(page);
   });
 
-  test("the Notes keep Checks and Changes only, and the area rules are in the panel on the left", async ({ page }) => {
+  test("the Notes keep Checks, Changes and Provenance only, and the area rules are in the panel on the left", async ({
+    page,
+  }) => {
     await expect(page.locator("#areas-panel")).toBeVisible();
     await expect(page.locator("#areas-panel #declare-area")).toBeVisible();
     await expect(page.locator("#t-areas")).toHaveCount(0);
-    await expect(page.locator("#notes .tab")).toHaveCount(2);
+    await expect(page.locator("#notes .tab")).toHaveCount(3);
     await expect(page.locator("#notes #declare-area")).toHaveCount(0);
   });
 

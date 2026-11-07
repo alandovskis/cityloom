@@ -63,16 +63,6 @@ impl GreenKind {
         }
     }
 
-    /// The message that counts them: "2 trees".
-    pub fn count_key(self) -> &'static str {
-        match self {
-            GreenKind::Tree => "green-count-tree",
-            GreenKind::Bed => "green-count-bed",
-            GreenKind::RainGarden => "green-count-rain-garden",
-            GreenKind::Bioswale => "green-count-bioswale",
-        }
-    }
-
     /// How long a new element is along the street.
     ///
     /// UNVERIFIED (placeholder): a tree pit 1 500 mm square, a bed 4 000 mm, a rain garden 6 000 mm, a bioswale

@@ -35,22 +35,24 @@ test.describe("the junction editor on a junction of the city", () => {
   });
 
   test("a raised table is switched on from the details and drawn with its ramps", async ({ page }) => {
-    await expect(page.locator("#drawing .raised-ramp")).toHaveCount(0);
+    await expect(page.locator("#drawing .iso-ramp")).toHaveCount(0);
     await page.getByRole("checkbox", { name: "Raise the whole junction to sidewalk height" }).check();
-    await expect(page.locator("#drawing .raised-ramp").first()).toBeVisible();
+    await expect(page.locator("#drawing .iso-ramp.k-travel").first()).toBeVisible();
   });
 
   test("a street's crossing is made a continuous sidewalk from its details and drawn with ramps", async ({ page }) => {
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#drawing .continuous-ramp")).toHaveCount(0);
+    await expect(page.locator("#drawing .iso-ramp.k-sidewalk")).toHaveCount(0);
     await page.getByRole("checkbox", { name: "Sidewalk runs on across the street" }).check();
-    await expect(page.locator("#drawing .continuous-ramp").first()).toBeVisible();
+    await expect(page.locator("#drawing .iso-ramp.k-sidewalk").first()).toBeVisible();
   });
 
   test("a street with a bike lane is given a bike box from its details and it is drawn", async ({ page }) => {
     await page.locator("#wrap").focus();
-    await expect(page.locator("#drawing .bike-box")).toHaveCount(0);
+    // The box is a bike-coloured surface across the lanes, laid with the street's own pieces.
+    const bikeSurfaces = page.locator("#drawing .iso-flat.k-bike");
+    const before = await bikeSurfaces.count();
     const box = page
       .locator("#inspector")
       .getByRole("checkbox", { name: /^(Waiting box for cyclists ahead of the cars|Bike box \()/ });
@@ -59,7 +61,7 @@ test.describe("the junction editor on a junction of the city", () => {
     for (let i = 0; i < 16 && !(await box.isEnabled({ timeout: 500 }).catch(() => false)); i++)
       await page.keyboard.press("ArrowRight");
     await box.check();
-    await expect(page.locator("#drawing .bike-box").first()).toBeVisible();
+    await expect(bikeSurfaces).toHaveCount(before + 1);
   });
 
   test("a corner can be protected from its details, or says why it cannot", async ({ page }) => {
@@ -73,7 +75,9 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(protect).toBeVisible();
     if (await protect.isEnabled()) {
       await protect.check();
-      await expect(page.locator("#drawing .corner-island").first()).toBeVisible();
+      // The bike track round the corner is laid on it, and its island stands, both pressed as the corner.
+      await expect(page.locator('#drawing .iso-flat.k-bike[data-role="corner"]').first()).toBeAttached();
+      await expect(page.locator('#drawing .iso-solid[data-role="corner"]')).not.toHaveCount(0);
     } else {
       await expect(protect).toHaveAccessibleName(/^Protected corner \(/);
     }
@@ -82,10 +86,7 @@ test.describe("the junction editor on a junction of the city", () => {
   test("starts as the city lays it out and says how many streets meet and whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText(/^[3-5] streets$/);
     await expect(page.locator("#fit")).toContainText(/^[3-5] streets, /);
-    await expect(page.locator("#drawing")).toHaveAttribute(
-      "aria-label",
-      /^Plan of the junction, north up\. [3-5] streets/,
-    );
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /^2\.5D view of the junction\. [3-5] streets/);
     await expect(page.locator("#undo")).toBeDisabled();
     await expect(page.locator("#redo")).toBeDisabled();
     await expect(page.locator("#reset")).toBeDisabled();
@@ -147,24 +148,19 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#arm-count")).toHaveText(count);
   });
 
-  test("the 2.5D view is looked at, follows an edit, and is remembered across a reload", async ({ page }) => {
-    const plan = page.locator("#view-plan");
-    const iso = page.locator("#view-iso");
-    await expect(page.locator("#drawing .iso")).toHaveCount(0);
-    await expect(plan).toHaveAttribute("aria-pressed", "true");
-
-    await iso.click();
+  test("the drawing is the 2.5D, has no toggle, no grips and no V, and follows an edit", async ({ page }) => {
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
+    await expect(page.locator("#drawing .plan")).toHaveCount(0);
     await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
     // Each top is in its material's colour and pattern, the pattern laid on the ground.
     await expect(page.locator("#drawing .iso-top").first()).toHaveClass(/mat-\w+/);
     await expect(page.locator("#drawing pattern#iso-m-asphalt")).toHaveAttribute("patternTransform", /^matrix\(/);
     await expect(page.locator("#drawing .iso-name").first()).toBeVisible();
     await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
-    await expect(iso).toHaveAttribute("aria-pressed", "true");
-    await expect(live(page)).toHaveText("Showing the junction in 2.5D.");
+    await expect(page.locator("#view-mode, #view-plan, #view-iso")).toHaveCount(0);
+    await expect(page.locator("#keys kbd", { hasText: /^V$/ })).toHaveCount(0);
 
-    // The keyboard still edits the junction, and the picture follows.
+    // The keyboard edits the junction, and the picture follows.
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("#drawing .sel-box")).toHaveCount(1);
@@ -180,33 +176,18 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect.poll(async () => page.locator("#drawing").innerHTML()).not.toBe(selected);
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
 
-    // The choice is kept.
+    // V does nothing here: the drawing stays the 2.5D and nothing is announced.
+    const said = await live(page).innerText();
+    await page.keyboard.press("v");
+    await page.waitForTimeout(250);
+    await expect(page.locator("#drawing .iso")).toHaveCount(1);
+    expect(await live(page).innerText()).toBe(said);
+
+    // A choice of the plan or the 2.5D kept by an earlier build is ignored.
+    await page.evaluate(() => localStorage.setItem("cityloom-junction-view", "plan"));
     await page.reload();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
-    await expect(page.locator("#view-iso")).toHaveAttribute("aria-pressed", "true");
-
-    // V goes back to the plan from anywhere on the page.
-    await page.keyboard.press("v");
-    await expect(page.locator("#drawing .iso")).toHaveCount(0);
-    await expect(page.locator("#drawing g.arm").first()).toBeVisible();
-    await expect(page.locator("#view-plan")).toHaveAttribute("aria-pressed", "true");
-    await expect(live(page)).toHaveText("Showing the plan.");
-  });
-
-  test("a street is pressed on the plan to select it, and its handle is dragged to turn it", async ({ page }) => {
-    const arm = page.locator("#drawing g.arm").first();
-    const uid = await arm.getAttribute("data-uid");
-    await arm.click();
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
-    const grip = page.locator(`#drawing [data-role="grip-arm"][data-uid="${uid}"]`);
-    const box = (await grip.boundingBox())!;
-    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x + 120, y + 40, { steps: 8 });
-    await page.mouse.up();
-    await expect(live(page)).toContainText("bearing");
-    await expect(page.locator("#undo")).toBeEnabled();
+    await expect(page.locator("#drawing .plan")).toHaveCount(0);
   });
 
   test("the notes list the checks, the changes made and where the junction came from", async ({ page }) => {
@@ -220,7 +201,7 @@ test.describe("the junction editor on a junction of the city", () => {
   });
 });
 
-// Each junction measure of the Atlas: set on an arm from the inspector, it shows its code on the plan.
+// Each junction measure of the Atlas: set on an arm from the inspector, it shows its code in the drawing.
 const JUNCTION_MEASURES = [
   { code: "G1", list: "At the approach", name: "Offset queue-jump lane", busLane: false },
   { code: "G2", list: "At the approach", name: "Curbside queue-jump lane", busLane: false },
@@ -238,9 +219,11 @@ const JUNCTION_MEASURES = [
 
 test.describe("the junction measures of the Atlas", () => {
   for (const m of JUNCTION_MEASURES) {
-    test(`${m.code} ${m.name} is set on an arm and its code is on the plan`, async ({ page }) => {
+    test(`${m.code} ${m.name} is set on an arm and its code is in the drawing`, async ({ page }) => {
       await openJunction(page);
-      await page.locator("#drawing g.arm").first().click();
+      // The first street, as the keys reach it.
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight");
       const tag = page.locator("#drawing text.measure-tag", { hasText: new RegExp(`^${m.code}$`) });
       await expect(tag).toHaveCount(0);
       if (m.busLane) {
@@ -371,7 +354,9 @@ test.describe("a junction of a street made pedestrian", () => {
     expect(href).not.toBe("");
     await end.click();
     await expect(page.locator("#drawing")).toBeVisible();
-    const crossings = await page.locator("#drawing path.crossing").count();
+    // One shape to press for each crossing.
+    const crossingShapes = page.locator('#drawing path.iso-hit[data-role="crossing"]');
+    const crossings = await crossingShapes.count();
     expect(crossings).toBeGreaterThan(0);
     await page.goBack();
     await page.locator("#transform-btn").click();
@@ -379,7 +364,7 @@ test.describe("a junction of a street made pedestrian", () => {
     // leaving the page keeps what was waiting to be kept
     await page.locator('#street-sub a[href^="intersection.html"]').first().click();
     await expect(page.locator("#drawing")).toBeVisible();
-    await expect(page.locator("#drawing path.crossing")).toHaveCount(crossings - 1);
+    await expect(crossingShapes).toHaveCount(crossings - 1);
   });
 });
 
@@ -646,6 +631,82 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#p-checks")).toContainText("Not enough time to cross at");
   });
 
+  test("movements that meet in a phase are warned about on the card, the drawing and the checks, said aloud, never refused, and the warning goes with its cause", async ({
+    page,
+  }) => {
+    const walks = page.getByRole("group", { name: /^People walking in phase 1, / });
+    const card = page.locator("#inspector .signal-phases .phase-card").first();
+    const warning = page.locator("#inspector .phase-conflicts");
+    const meetCheck = page.locator("#p-checks li", { hasText: "Movements that meet" });
+
+    // The suggested plan meets nothing: no list, no mark, a passing check.
+    await expect(warning).toHaveCount(0);
+    await expect(card.locator("svg.phase-svg .ph-move.warn")).toHaveCount(0);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).toHaveClass(/ok/);
+    await expect(meetCheck).toContainText("No phase puts movements together that meet");
+
+    // Switch on the crossing of the street whose own cars go in phase 1: allowed (the box stays checked), and warned about.
+    const off = walks.locator("input:not(:checked)").first();
+    const id = await off.getAttribute("id");
+    await off.focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator(`#${id}`)).toBeChecked();
+    await expect(live(page)).toContainText(/Warning: /);
+    await expect(live(page)).toContainText(/meet people walking across on the/);
+    await expect(warning.first()).toContainText("Phase 1: cars from the");
+    await expect(page.getByRole("list", { name: "Warnings for phase 1" })).toBeVisible();
+    // The movement is dashed as well as coloured.
+    const marked = card.locator("svg.phase-svg .ph-move.warn .ph-line");
+    expect(await marked.count()).toBeGreaterThanOrEqual(1);
+    await expect(marked.first()).toHaveAttribute("stroke-dasharray", /\d/);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).not.toHaveClass(/ok/);
+    await expect(meetCheck).toContainText("meet people walking across");
+
+    // A later edit that leaves the warning alone does not say it again.
+    await page.locator("#undo").click();
+    await page.locator("#redo").click();
+    await page.evaluate(() => {
+      document.querySelector("#live")!.textContent = "";
+    });
+    const other = page
+      .getByRole("group", { name: /^People walking in phase 2, / })
+      .locator("input:checked")
+      .first();
+    await other.focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText("no longer walk across");
+    await expect(live(page)).not.toContainText("Warning");
+    await page.keyboard.press("Space");
+
+    // Removing the cause removes the warning.
+    await page.locator(`#${id}`).focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator(`#${id}`)).not.toBeChecked();
+    await expect(warning).toHaveCount(0);
+    await expect(card.locator("svg.phase-svg .ph-move.warn")).toHaveCount(0);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).toHaveClass(/ok/);
+  });
+
+  test("the warning about movements that meet is in French", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const walks = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
+    const off = walks.locator("input:not(:checked)").first();
+    await off.focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText(/Attention\s:\s/);
+    await expect(live(page)).toContainText("rencontrent les piétons qui traversent du côté");
+    await expect(page.getByRole("list", { name: "Avertissements de la phase 1" })).toBeVisible();
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks li", { hasText: "Mouvements qui se rencontrent" })).toContainText(
+      "rencontrent les piétons",
+    );
+  });
+
   test("the walking checklist is in French and announces a switch in French", async ({ page }) => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await page.reload();
@@ -820,21 +881,22 @@ test("a roundabout is given the basic turbo layout from its details and drawn wi
   page,
 }) => {
   await basicTurbo(page);
-  // The divider is cut where each street meets the ring, so it is drawn in several open pieces (more than one; the count depends on the crossing).
-  const dividers = page.locator("#drawing .turbo-divider");
+  // The divider is cut where each street meets the ring, so it is drawn in several pieces (more than one; the count
+  // depends on the crossing): a double line, so two lines of quads, none joined to the first (a test of the picture
+  // pins that it is open).
+  const dividers = page.locator("#drawing .iso-paint.white");
   await expect(dividers.first()).toBeAttached();
   expect(await dividers.count()).toBeGreaterThan(1);
-  expect(await dividers.evaluateAll((els) => els.every((e) => !/Z/.test(e.getAttribute("d")!)))).toBe(true);
+  expect((await dividers.count()) % 2).toBe(0);
   await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
   await expect(page.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText("Turbo size")).toBeVisible();
   await page.locator("#undo").click();
-  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(0);
+  await expect(page.locator("#drawing .iso-paint.white")).toHaveCount(0);
 });
 
-test("a turbo roundabout shows its painted dividers and its name in 2.5D", async ({ page }) => {
+test("a turbo roundabout shows its painted dividers and its name", async ({ page }) => {
   await basicTurbo(page);
-  await page.locator("#view-iso").click();
   const paint = page.locator("#drawing .iso-paint.white").first();
   await expect(paint).toBeAttached();
   await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
@@ -863,7 +925,7 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
   await expect(basic).toHaveAttribute("aria-checked", "true");
   expect(await live(page).innerText()).toBe(said);
   await page.locator("#undo").click();
-  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(0);
+  await expect(page.locator("#drawing .iso-paint.white")).toHaveCount(0);
   await expect(basic).toHaveAttribute("aria-checked", "false");
 
   await basic.click();
@@ -939,8 +1001,10 @@ test.describe("the approach of an arm whose street is divided", () => {
 
     await page.goto("/" + junction);
     await expect(page.locator("#drawing")).toBeVisible();
-    await expect(page.locator("#drawing .piece.taper").first()).toBeAttached();
-    await expect(page.locator("#drawing .approach-mark")).toHaveCount(2);
+    // The two marks across the arm, where the taper begins and ends, on a casing (the taper's own pieces are checked
+    // by the unit tests of the picture: they have no shape of their own to find here).
+    await expect(page.locator("#drawing path.approach-mark")).toHaveCount(2);
+    await expect(page.locator("#drawing .iso-casing").first()).toBeAttached();
     await page.locator("#t-checks").click();
     await expect(checkRow(page)).toBeVisible();
     await expect(checkRow(page)).not.toHaveClass(/bad/);
@@ -1083,8 +1147,11 @@ test.describe("a street's transit stop on the arm that meets it", () => {
 
     await page.goto("/" + arm.junction);
     await expect(page.locator("#drawing")).toBeVisible();
-    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
-    await expect(page.locator('#drawing g[data-role="arm"] .stop-dwell')).toHaveCount(1);
+    // The drawing has the stop's platform, the bus's dwell and its post, and marks a stop that fails its check.
+    await expect(page.locator("#drawing .stop-pad")).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-dwell")).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-pad.stop-bad")).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-post")).toHaveCount(1);
     await page.locator("#t-checks").click();
     await expect(checkRow(page, clear)).toHaveClass("bad");
     await page.locator("#wrap").focus();
@@ -1108,7 +1175,8 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     await expect(checkRow(page, "Stops clear of the junction")).toHaveClass("ok");
 
     await page.goto("/" + arm.junction);
-    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-pad")).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-pad.stop-bad")).toHaveCount(0);
     await page.locator("#t-checks").click();
     await expect(checkRow(page, clear)).not.toHaveClass(/bad/);
     await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
@@ -1121,7 +1189,7 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     await kept(page, arm.origin ? 20 : Math.floor(arm.length - STOP_M - 20));
 
     await page.goto("/" + arm.junction);
-    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
+    await expect(page.locator("#drawing .stop-pad")).toHaveCount(1);
     await page.locator("#t-checks").click();
     await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
 
@@ -1146,5 +1214,375 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     await turn.click();
     await expect(turn).toHaveAttribute("aria-pressed", "false");
     await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
+  });
+});
+
+// ---- curbside uses on an arm ---------------------------------------------------------------------------------
+
+test.describe("a street's curbside use on the arm that meets it", () => {
+  const PARKING = "0";
+  const USE_M = 6;
+  const label = "Curbside clear of crossings";
+
+  /** Finds a junction whose first street is measured from the junction itself (so a use placed at the street's
+   *  origin stands at the junction's centre) and has a curbside strip. Leaves the page on the street. */
+  const originArm = async (page: Page) => {
+    await page.goto("/map.html");
+    for (const junction of (await placesOnMap(page)).junctions) {
+      await page.goto("/" + junction);
+      await expect(page.locator("#drawing")).toBeVisible();
+      const name = (await page.locator("#street-name").innerText()).trim();
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight");
+      const link = page.locator('#inspector a.btn[href^="street.html?street="]');
+      await expect(link).toBeVisible();
+      await link.click();
+      await expect(page.locator("#zone-0")).toBeVisible();
+      const from = (
+        await page
+          .getByText(/^Measured from /)
+          .first()
+          .innerText()
+      ).trim();
+      if (
+        from === `Measured from ${name}` &&
+        (await streetLengthM(page)) >= 50 &&
+        (await page.locator(".curb-strip").count()) > 0
+      ) {
+        return { junction, street: page.url() };
+      }
+    }
+    throw new Error("no junction has a first street measured from it with a curbside lane");
+  };
+
+  const kept = (page: Page, fromM: number) =>
+    expect
+      .poll(() =>
+        page.evaluate((m) => (localStorage.getItem("cityloom-edits") ?? "").includes(`"from_mm":${m * 1000}`), fromM),
+      )
+      .toBe(true);
+
+  const checkRow = (page: Page) => page.locator("#checks li").filter({ hasText: label });
+
+  test("parking at the centre fails the check, and drawn 30 m out it passes", async ({ page }) => {
+    test.setTimeout(120_000);
+    const arm = await originArm(page);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    // A use lies in its lane in its own kind's surface; the arm's own parking is drawn too, so count what there is.
+    const parking = page.locator("#drawing .iso-flat.k-parking");
+    const base = await parking.count();
+
+    // A parking use at the street's origin: it stands on the crossing, which the junction says.
+    await page.goto(arm.street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    const strip = page.locator(".curb-strip").first();
+    const cells = strip.locator('[role="option"]');
+    await cells.nth(0).click();
+    await page.locator("#curb-use").selectOption(PARKING);
+    await page.locator("#curb-length").fill(String(USE_M));
+    await page.locator("#curb-add").click();
+    await expect(cells).toHaveCount(2);
+    await kept(page, 0);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(parking).toHaveCount(base); // it stands on the crossing: nothing of it is drawn
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page)).toHaveClass("bad");
+
+    // Moved 30 m out, it is drawn on the arm and clear.
+    await page.goto(arm.street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await cells.nth(0).click();
+    await strip.focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+Alt+ArrowRight");
+    await kept(page, 30);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(parking).toHaveCount(base + 1);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page)).not.toHaveClass(/bad/);
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toContainText(/Parking .*30\.0 m from the centre/);
+  });
+});
+
+// The drawing is pressed to select (#140): each part the keys step through has a shape that says what a
+// press on it selects. A press goes where the pointer lands on screen, so the point is found by asking the page what
+// is on top at points of the shape, and then pressed with the mouse.
+async function pressOn(page: Page, selector: string) {
+  // Some shapes of a kind are hidden or thin (a sidewalk far behind another): the first one with a visible point is pressed.
+  const at = await page.locator(selector).evaluateAll((els) => {
+    const steps = Array.from({ length: 17 }, (_, i) => (i + 0.5) / 17);
+    for (const el of els) {
+      el.scrollIntoView({ block: "center", inline: "center" });
+      const box = el.getBoundingClientRect();
+      for (const fx of steps) {
+        for (const fy of steps) {
+          const [x, y] = [box.left + box.width * fx, box.top + box.height * fy];
+          if (document.elementFromPoint(x, y)?.closest("[data-role]") === el) return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  expect(at, `a point that lands on ${selector}`).not.toBeNull();
+  await page.mouse.click(at!.x, at!.y);
+}
+
+test.describe("a part of the junction is pressed to select it", () => {
+  test.beforeEach(async ({ page }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing .iso-junction")).toHaveCount(1);
+  });
+
+  test("a street, a lane, a crossing and a corner, each outlined once selected and named as the keys name them", async ({
+    page,
+  }) => {
+    const outlined = page.locator("#drawing .iso-sel");
+    await expect(outlined).toHaveCount(0);
+    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+
+    await pressOn(page, '#drawing [data-role="arm"]');
+    await expect(live(page)).toHaveText(/^.+ \(.+\), \d+ degrees$/);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+
+    await pressOn(page, '#drawing .lane-hit[data-lane="0"]');
+    await expect(live(page)).toHaveText(/^Lane 1 of \d+, /);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#drawing .lane-hit.on")).toHaveCount(1);
+
+    await pressOn(page, '#drawing [data-role="crossing"]');
+    await expect(live(page)).toHaveText(/^(Crossing on|Continuous sidewalk across) /);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#drawing .lane-hit.on")).toHaveCount(0);
+
+    await pressOn(page, '#drawing [data-role="corner"]');
+    await expect(live(page)).toHaveText(/^(Protected corner|Corner) after /);
+    await expect(outlined).toHaveCount(1);
+
+    // The outline is two tones, the casing under the line, and the pointer goes through it.
+    const casing = page.locator("#drawing .iso-sel-casing");
+    await expect(casing).toHaveCount(1);
+    expect(await casing.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+
+    // The keyboard goes on from what was pressed.
+    const said = await live(page).innerText();
+    await page.keyboard.press("ArrowRight");
+    await expect(live(page)).not.toHaveText(said);
+    await expect(outlined).toHaveCount(1);
+
+    // A press on bare ground clears the selection.
+    const drawing = (await page.locator("#drawing").boundingBox())!;
+    await page.mouse.click(drawing.x + 3, drawing.y + 3);
+    await expect(outlined).toHaveCount(0);
+    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+  });
+
+  test("what is pressed asks for a tap, and what is only looked at lets the press through", async ({ page }) => {
+    const style = (selector: string, property: "touchAction" | "pointerEvents" | "cursor") =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((el, p) => getComputedStyle(el)[p], property);
+    expect(await style('#drawing [data-role="arm"]', "touchAction")).toBe("manipulation");
+    expect(await style('#drawing [data-role="arm"]', "cursor")).toBe("pointer");
+    for (const looked of ["#drawing .iso-zebra", "#drawing .iso-name", "#drawing .iso-post", "#drawing .hatch"])
+      expect(await style(looked, "pointerEvents"), looked).toBe("none");
+  });
+
+  // The plan's grips turned a street, sized a corner and set a crossing back; the drawing has none, so each is a field of
+  // the inspector with steppers, reached by pressing the part (#140).
+  test("a street is turned, a corner sized and a crossing set back from the inspector", async ({ page }) => {
+    const field = (id: string) => page.locator(`#inspector input[aria-labelledby="${id}"]`);
+    const picture = () => page.locator("#drawing").innerHTML();
+    const undo = page.locator("#undo");
+    await expect(undo).toBeDisabled();
+
+    // A street turns only where it keeps clear of its neighbours: one way or the other.
+    await pressOn(page, '#drawing [data-role="arm"]');
+    const bearing = field("i-h-bearing");
+    const was = await bearing.inputValue();
+    const before = await picture();
+    await page.getByRole("button", { name: /^Turn clockwise by/ }).click();
+    if ((await bearing.inputValue()) === was)
+      await page.getByRole("button", { name: /^Turn anticlockwise by/ }).click();
+    await expect(bearing).not.toHaveValue(was);
+    await expect.poll(picture).not.toBe(before);
+    await expect(undo).toBeEnabled();
+
+    // A corner's curb radius, by its stepper and by typing.
+    await pressOn(page, '#drawing [data-role="corner"]');
+    const radius = field("i-h-corner");
+    const tight = await radius.inputValue();
+    await page.getByRole("button", { name: /^Wider by/ }).click();
+    await expect(radius).not.toHaveValue(tight);
+    await radius.fill("5");
+    await radius.press("Tab");
+    await expect(radius).toHaveValue("5.0");
+    await expect.poll(picture).not.toBe(before);
+
+    // How far a crossing stands back, by its stepper and by typing.
+    await pressOn(page, '#drawing [data-role="crossing"]');
+    const setback = field("i-h-setback");
+    const near = await setback.inputValue();
+    const crossing = await picture();
+    await page.getByRole("button", { name: /^Farther by/ }).click();
+    await expect(setback).not.toHaveValue(near);
+    await expect.poll(picture).not.toBe(crossing);
+    await setback.fill("4");
+    await setback.press("Tab");
+    await expect(setback).toHaveValue("4.0");
+
+    // Each of the edits is one step to undo.
+    await page.keyboard.press("Control+z");
+    await expect(setback).not.toHaveValue("4.0");
+  });
+
+  test("the lanes carry their arrows, the crossings their lengths, and the selected street shows its turns", async ({
+    page,
+  }) => {
+    const iso = page.locator("#drawing .iso-junction");
+    await expect(iso.locator("g.lane-arrow:not(.out)").first()).toBeVisible();
+    await expect(iso.locator("g.lane-arrow.out").first()).toBeVisible();
+    await expect(iso.locator("text.t-dim").first()).toBeVisible();
+    // Every mark lies on a casing, and takes no press.
+    await expect(iso.locator(".iso-casing").first()).toBeAttached();
+    expect(
+      await iso
+        .locator("g.lane-arrow path")
+        .first()
+        .evaluate((el) => getComputedStyle(el).pointerEvents),
+    ).toBe("none");
+
+    await expect(iso.locator("path.mv")).toHaveCount(0);
+    // A lane of a street that traffic enters by: the street's turns are drawn.
+    await pressOn(page, '#drawing .lane-hit[data-lane="0"]');
+    await expect(iso.locator("path.mv").first()).toBeVisible();
+    // The turns it may not make are dashed and crossed out.
+    const turns = await iso.locator("path.mv").count();
+    const banned = await iso.locator("path.mv.no").count();
+    expect(turns).toBeGreaterThanOrEqual(2);
+    expect(banned).toBeLessThan(turns);
+    await page.keyboard.press("Escape");
+    await expect(iso.locator("path.mv")).toHaveCount(0);
+  });
+
+  test("a roundabout's ring has its arrows and its bus lane says so", async ({ page }) => {
+    const before = await page.locator("#drawing .iso-junction g.lane-arrow").count();
+    await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
+    await page.getByLabel("Bus lane through the middle").selectOption({ index: 1 });
+    await expect(page.locator("#drawing .iso-junction text", { hasText: "Bus only" })).toBeVisible();
+    // The ring's arrows are added to the lanes'.
+    expect(await page.locator("#drawing .iso-junction g.lane-arrow").count()).toBeGreaterThan(before - 1);
+  });
+
+  test("a roundabout's cycle track and bus lane are pressed too", async ({ page }) => {
+    await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await page.getByLabel("Bus lane through the middle").selectOption({ index: 1 });
+    await expect(page.locator('#drawing [data-role="bus"]').first()).toBeAttached();
+    const outlined = page.locator("#drawing .iso-sel");
+
+    await pressOn(page, '#drawing [data-role="cycle"]');
+    await expect(live(page)).toHaveText(/^Cycle track, /);
+    await expect(outlined).toHaveCount(2);
+
+    await pressOn(page, '#drawing [data-role="bus"]');
+    await expect(live(page)).toHaveText("Bus lane across the middle");
+    await expect(outlined).toHaveCount(1);
+  });
+});
+
+test("a turbo roundabout's cycle track is pressed", async ({ page }) => {
+  await basicTurbo(page);
+  await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+  await pressOn(page, '#drawing [data-role="cycle"]');
+  await expect(live(page)).toHaveText(/^Cycle track, /);
+  await expect(page.locator("#drawing .iso-sel")).toHaveCount(2);
+});
+
+// ---- the roundabout and the turbo layouts, checked in 2.5D (#140) -------------------------------------------------------
+//
+// The checks of them (the painted divider, the layouts, the cycle track) are made on the drawing's shapes:
+// the divider is paint in quads (`.iso-paint.white`), the ring a travel surface, its arrows `g.lane-arrow`.
+
+test.describe("the roundabout and the turbo layouts in 2.5D", () => {
+  const paint = (page: Page) => page.locator("#drawing .iso-junction .iso-paint.white");
+  const label = /Basic turbo roundabout, \w+ size\.$/;
+
+  test.beforeEach(async ({ page }) => {
+    await basicTurbo(page);
+    await expect(page.locator("#drawing .iso-junction")).toHaveCount(1);
+  });
+
+  test("a turbo is drawn with its painted dividers and its name, and undo takes them away", async ({ page }) => {
+    await expect(paint(page).first()).toBeAttached();
+    // A double line: two lines of quads, so an even number.
+    expect((await paint(page).count()) % 2).toBe(0);
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", label);
+    await expect(page.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute("aria-checked", "true");
+    // The ring is a travel surface with the island standing in it.
+    await expect(page.locator("#drawing .iso-junction .iso-flat.k-travel").first()).toBeAttached();
+    await expect(page.locator("#drawing .iso-junction .iso-top.k-median").first()).toBeAttached();
+    // Its streets' lanes have arrows and so has the ring.
+    await expect(page.locator("#drawing .iso-junction g.lane-arrow:not(.out)").first()).toBeAttached();
+    await page.locator("#undo").click();
+    await expect(paint(page)).toHaveCount(0);
+    await expect(page.locator("#drawing")).not.toHaveAttribute("aria-label", label);
+  });
+
+  test("each layout the streets allow draws, is named in the label and changes the dividers", async ({ page }) => {
+    const markups = new Set<string>();
+    let drawn = 0;
+    for (const [name, label] of [
+      ["Basic", /Basic turbo roundabout/],
+      ["Egg", /Egg turbo roundabout/],
+      ["Knee", /Knee turbo roundabout/],
+      ["Spiral", /Spiral turbo roundabout/],
+      ["Rotor", /Rotor turbo roundabout/],
+    ] as const) {
+      const radio = page.getByRole("radio", { name, exact: true });
+      if (!(await radio.isVisible()) || (await radio.getAttribute("aria-disabled")) === "true") continue;
+      await radio.click();
+      await expect(radio).toHaveAttribute("aria-checked", "true");
+      await expect(page.locator("#drawing")).toHaveAttribute("aria-label", label);
+      await expect(paint(page).first()).toBeAttached();
+      const markup = await page.locator("#drawing").innerHTML();
+      expect(markup).not.toMatch(/NaN|inf\b/);
+      markups.add(markup);
+      drawn++;
+    }
+    expect(drawn).toBeGreaterThanOrEqual(2);
+    expect(markups.size, "each layout is a different picture").toBe(drawn);
+  });
+
+  test("the size of the turbo redraws the ring", async ({ page }) => {
+    const before = await page.locator("#drawing").innerHTML();
+    const larger = page.getByRole("button", { name: "Next larger size" });
+    const smaller = page.getByRole("button", { name: "Next smaller size" });
+    await ((await larger.isEnabled()) ? larger : smaller).click();
+    await expect.poll(() => page.locator("#drawing").innerHTML()).not.toBe(before);
+    await expect(paint(page).first()).toBeAttached();
+  });
+
+  test("the cycle track is a band round the ring that is drawn, widened and taken away", async ({ page }) => {
+    const track = page.locator("#drawing .iso-junction .iso-flat.k-bike");
+    const before = await track.count();
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await expect(track).toHaveCount(before + 1);
+    const picture = await page.locator("#drawing").innerHTML();
+    const width = page.locator('#inspector input[aria-labelledby="i-h-cycle-width"]');
+    await width.fill("3");
+    await width.press("Tab");
+    await expect(width).toHaveValue("3.0");
+    await expect.poll(() => page.locator("#drawing").innerHTML()).not.toBe(picture);
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await expect(track).toHaveCount(before);
   });
 });

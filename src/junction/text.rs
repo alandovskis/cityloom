@@ -4,6 +4,7 @@
 //! A view words the status with `arms_text` and `fit_text`, which ask with the tracked `tr` and
 //! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
+use crate::junction::curbside::CurbUseView;
 use crate::junction::model::control_key;
 use crate::junction::read_model::{ArmView, JView};
 use crate::junction::stops::{self, StopView};
@@ -94,6 +95,16 @@ fn stop_text(a: &ArmView, st: &StopView, i18n: &I18n, units: Units) -> String {
     }
 }
 
+/// One curbside use of an arm, said for a screen reader: what it is, which side and where it begins.
+fn curb_text(u: &CurbUseView, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let side = i18n.tr_now(if u.side == Side::Left { "jn-side-left" } else { "jn-side-right" }, &Args::new());
+    i18n.tr_now(
+        "jn-sel-arm-curb",
+        &Args::new().str("use", i18n.tr_now(u.use_.name_key(), &Args::new())).str("side", side).str("at", units.length_in(u.near_mm, locale)),
+    )
+}
+
 /// What is selected, for a screen reader; nothing when nothing is.
 pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
     let s = &v.selected;
@@ -120,8 +131,13 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
                 }
                 None => i18n.tr_now("jn-sel-arm", &args),
             };
-            let Some(a) = arm.filter(|a| !a.stops.is_empty()) else { return Some(base) };
-            let stops: Vec<String> = a.stops.iter().map(|st| stop_text(a, st, i18n, units)).collect();
+            let Some(a) = arm.filter(|a| !a.stops.is_empty() || a.curb_uses.iter().any(|u| u.poly.is_some())) else { return Some(base) };
+            let stops: Vec<String> = a
+                .stops
+                .iter()
+                .map(|st| stop_text(a, st, i18n, units))
+                .chain(a.curb_uses.iter().filter(|u| u.poly.is_some()).map(|u| curb_text(u, i18n, units)))
+                .collect();
             // A sentence of its own after what the arm said, whether that ended in a full stop or not.
             format!("{base}{} {}", if base.ends_with('.') { "" } else { "." }, stops.join(" "))
         }
@@ -186,7 +202,7 @@ mod tests {
     fn the_counts_said_are_singular_at_zero_and_one_in_french_and_at_one_in_english() {
         let count = |i: &I18n, key: &str, name: &'static str, n: i64| i.tr_now(key, &Args::new().num(name, n).str("checks", "x").str("arm", "A"));
         let (en, fr) = (en(), fr());
-        let cases: [(&str, &'static str, [&str; 3], [&str; 3]); 4] = [
+        let cases: [(&str, &'static str, [&str; 3], [&str; 3]); 5] = [
             ("jn-arms", "n", ["0 streets", "1 street", "2 streets"], ["0 rue", "1 rue", "2 rues"]),
             // The status line says "jn-fit-ok" when no check fails, so it never asks for this one with 0;
             // the 0 case only pins how each language's plural rule reads it.
@@ -201,6 +217,12 @@ mod tests {
                 "n",
                 ["0 streets is too many for one signal", "1 street is too many for one signal", "2 streets is too many for one signal"],
                 ["0 rue, c’est trop pour un seul jeu de feux", "1 rue, c’est trop pour un seul jeu de feux", "2 rues, c’est trop pour un seul jeu de feux"],
+            ),
+            (
+                "jn-conflict-more",
+                "n",
+                ["And 0 more meetings.", "And 1 more meeting.", "And 2 more meetings."],
+                ["Et 0 autre rencontre.", "Et 1 autre rencontre.", "Et 2 autres rencontres."],
             ),
             ("jn-sel-arm", "degrees", ["A, 0 degrees", "A, 1 degree", "A, 2 degrees"], ["A, 0 degré", "A, 1 degré", "A, 2 degrés"]),
         ];

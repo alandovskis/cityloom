@@ -398,17 +398,6 @@
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
-#drawing .t-soft {
-  fill: var(--ink-2);
-}
-#drawing .t-faint {
-  fill: var(--ink-3);
-}
-#drawing .t-label {
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--ink-2);
-}
 #drawing .t-dim {
   font-size: 15px;
   font-weight: 500;
@@ -427,11 +416,6 @@
   stroke-width: 4px;
   stroke-linejoin: round;
 }
-#drawing .t-over {
-  fill: var(--warn);
-  font-size: 15px;
-  font-weight: 600;
-}
 #drawing .t-warn {
   fill: var(--warn);
   font-weight: 600;
@@ -441,21 +425,6 @@
   font-weight: 600;
 }
 
-.obj {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-}
-.bar-b {
-  fill: var(--ink-2);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
-.bar-w {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
 .ground {
   stroke: var(--ink-2);
   stroke-width: 3;
@@ -483,98 +452,11 @@
   stroke: none;
   opacity: 0.3;
 }
-.seg {
-  cursor: grab;
-  touch-action: none;
-}
-.seg:active {
-  cursor: grabbing;
-}
-.seg .hit {
-  fill: transparent;
-}
-.seg.lifted {
-  opacity: 0.35;
-}
-.seg:hover .obj {
-  stroke-width: 2;
-}
 .sel-box {
   fill: none;
   stroke: var(--accent);
   stroke-width: 2.5;
   pointer-events: none;
-}
-.handle {
-  cursor: ew-resize;
-  touch-action: none;
-}
-.handle .hit {
-  fill: transparent;
-}
-.handle .grip {
-  fill: var(--panel);
-  stroke: var(--ink-3);
-  stroke-width: 1;
-  transition: stroke 120ms var(--ease-out), fill 120ms var(--ease-out);
-}
-.handle .grip-arrow {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.3;
-}
-.handle:hover .grip,
-.handle.active .grip {
-  stroke: var(--accent);
-  fill: var(--accent);
-}
-.handle:hover .grip-arrow,
-.handle.active .grip-arrow {
-  stroke: var(--accent-ink);
-}
-.handle:hover .bound-line,
-.handle.active .bound-line {
-  stroke: var(--accent);
-  stroke-width: 2;
-  stroke-dasharray: none;
-}
-.caret {
-  stroke: var(--accent);
-  stroke-width: 2.6;
-  pointer-events: none;
-}
-.caret-head {
-  fill: var(--accent);
-  stroke: none;
-  pointer-events: none;
-}
-.ghost {
-  fill: var(--accent-wash);
-  stroke: var(--accent);
-  stroke-width: 1.6;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-.over-wash {
-  fill: var(--warn-wash);
-  pointer-events: none;
-}
-.cloud {
-  fill: none;
-  stroke: var(--warn-line);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.cloud.fresh {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: draw-cloud 620ms var(--ease-out) forwards;
-}
-@keyframes draw-cloud {
-  to {
-    stroke-dashoffset: 0;
-  }
 }
 .free {
   fill: none;
@@ -708,73 +590,8 @@ svg pattern circle {
   stroke-width: 1.4;
   pointer-events: none;
 }
-#drawing .badge-hands {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
 
 /* The plan of a junction. */
-#drawing .wedge,
-#drawing .wedge-g {
-  stroke: none;
-}
-#drawing .wedge-g {
-  cursor: pointer;
-}
-#drawing .wedge-g[data-role="none"] {
-  cursor: default;
-}
-#drawing .core-bike {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-}
-#drawing .raised-top {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.4;
-  stroke: none;
-  pointer-events: none;
-}
-#drawing .corner-bike,
-#drawing .corner-island {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  pointer-events: none;
-}
-#drawing .bike-box {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-}
-#drawing .continuous-ramp {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.5;
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-#drawing .raised-ramp {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.3;
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-#drawing .wedge.bare {
-  fill: var(--k-planting);
-  fill-opacity: 0.4;
-}
-#drawing .piece {
-  stroke: var(--ink);
-  stroke-width: 0.8;
-  stroke-opacity: 1;
-  stroke-linejoin: round;
-}
 #drawing .iso-flat,
 #drawing .iso-top,
 #drawing .iso-side {
@@ -783,10 +600,21 @@ svg pattern circle {
   stroke-opacity: 1;
   stroke-linejoin: round;
 }
+/* A zebra's stripes and a stop line are pavement paint, as the street's markings are: the white of --iso-paint-white
+   with its 0.5 px dark edge (--iso-paint-edge), 3:1 on every material in both themes (shared/contrast.rs). */
 #drawing .iso-zebra,
 #drawing .iso-stopline {
-  fill: var(--ink-2);
-  stroke: none;
+  fill: var(--iso-paint-white);
+  stroke: var(--iso-paint-edge);
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+}
+@media (forced-colors: active) {
+  #drawing .iso-zebra,
+  #drawing .iso-stopline {
+    fill: CanvasText;
+    stroke: none;
+  }
 }
 #drawing .iso-post {
   stroke: var(--ink-2);
@@ -803,50 +631,103 @@ svg pattern circle {
   stroke-width: 0.6;
   stroke-opacity: 0.55;
 }
-#drawing .arm,
-#drawing .bus-g,
-#drawing .cycle-g {
+/* The junction in 2.5D is pressed to select (junction/iso/ `hit_attrs`): a shape with a data-role selects what the
+   keys would, and everything else is looked at and lets the press through to what lies under it. A tap is the whole
+   gesture, so the targets ask for no double-tap zoom; the 2.5D has no grips, so nothing here is dragged. */
+#drawing .iso-junction * {
+  pointer-events: none;
+}
+#drawing .iso-junction [data-role],
+#drawing .iso-junction [data-role] * {
+  pointer-events: auto;
+}
+#drawing .iso-junction [data-role] {
   cursor: pointer;
+  touch-action: manipulation;
 }
-#drawing .arm:hover .piece,
-#drawing .bus-g:hover .piece,
-#drawing .cycle-g:hover .piece {
-  stroke-opacity: 1;
+/* A place to press that is narrower than a finger carries a stroke-width (junction/iso.rs `target_growth_px`) that
+   brings it to 24 px; the stroke is not painted, but a press lands on it. */
+#drawing .iso-junction .iso-hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-linejoin: round;
 }
-#drawing .road {
-  fill: var(--road);
-  stroke: none;
+#drawing .iso-junction .lane-hit {
+  stroke: transparent;
+  stroke-linejoin: round;
 }
-#drawing .island,
-#drawing .bulb {
-  stroke: var(--ink-2);
+/* The two buttons under the junction's drawing that step through its parts, as the arrow keys do. */
+.part-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-block: 6px;
+}
+/* What the plan draws on the ground and the 2.5D draws after it (junction/iso_marks.rs; #140): the marks keep the
+   plan's own classes and so its colours (stop-*, mv, approach-mark, dim, measure-loop, dead-cap, lane-arrow, curb-line),
+   and lie on a surface that can be anything from dark asphalt to pale concrete, so each line has a casing under it
+   in the panel's colour (a dark one under a warning, which the panel's colour does not clear 3:1). */
+#drawing .iso-junction .iso-casing {
+  fill: none;
+  stroke: var(--panel);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#drawing .iso-junction .iso-casing.warn {
+  stroke: var(--iso-sel-casing);
+}
+#drawing .iso-junction .iso-queue {
+  fill: none;
+  stroke: var(--ink);
   stroke-width: 1.6;
-  stroke-linejoin: round;
+  stroke-dasharray: 6 3;
 }
-#drawing .turbo-lane {
-  stroke: none;
-  pointer-events: none;
-}
-#drawing .turbo-divider {
+#drawing .iso-junction .curb-use-bad {
   fill: none;
-  stroke: var(--ink-2);
-  stroke-linejoin: round;
-  pointer-events: none;
 }
-#drawing .turbo-divider-gap {
-  fill: none;
-  stroke: var(--road);
-  stroke-linejoin: round;
-  pointer-events: none;
+#drawing .iso-junction .stop-post circle {
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+#drawing .iso-junction .stop-shelter {
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
+}
+@media (forced-colors: active) {
+  #drawing .iso-junction .iso-sel {
+    stroke: Highlight;
+  }
+  #drawing .iso-junction .iso-sel-casing,
+  #drawing .iso-junction .iso-casing,
+  #drawing .iso-junction .iso-casing.warn,
+  #drawing .iso-junction .lane-arrow path.halo {
+    stroke: Canvas;
+  }
+  #drawing .iso-junction .lane-arrow path:not(.halo),
+  #drawing .iso-junction .mv,
+  #drawing .iso-junction .iso-queue,
+  #drawing .iso-junction .measure-loop,
+  #drawing .iso-junction .dead-cap,
+  #drawing .iso-junction .dim,
+  #drawing .iso-junction .curb-line {
+    stroke: CanvasText;
+  }
+  #drawing .iso-junction .lane-arrow.bad path:not(.halo),
+  #drawing .iso-junction .mv.bad,
+  #drawing .iso-junction .dim-warn,
+  #drawing .iso-junction .curb-line.bad {
+    stroke: Mark;
+  }
+  #drawing .iso-junction .stop-post circle {
+    stroke: Canvas;
+  }
 }
 #drawing .approach-mark {
   fill: none;
   stroke: var(--ink-2);
   stroke-width: 2;
   stroke-dasharray: 6 4;
-  pointer-events: none;
-}
-#drawing .turbo-entry {
   pointer-events: none;
 }
 #drawing .stop-pad,
@@ -872,6 +753,14 @@ svg pattern circle {
 #drawing .stop-pad.stop-island.stop-bad {
   stroke-dasharray: 1 3;
 }
+#drawing .curb-use {
+  pointer-events: none;
+}
+#drawing .curb-use.curb-use-bad {
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
+}
 #drawing .stop-run {
   fill: none;
   stroke: var(--accent);
@@ -890,13 +779,7 @@ svg pattern circle {
   pointer-events: none;
 }
 @media (forced-colors: active) {
-  #drawing .turbo-divider {
-    stroke: CanvasText;
-  }
-  #drawing .turbo-divider-gap {
-    stroke: Canvas;
-  }
-  #drawing .approach-mark {
+      #drawing .approach-mark {
     stroke: CanvasText;
   }
   #drawing .stop-pad,
@@ -914,6 +797,9 @@ svg pattern circle {
   #drawing .stop-post {
     fill: Highlight;
   }
+  #drawing .curb-use.curb-use-bad {
+    stroke: Highlight;
+  }
 }
 #drawing .curb-line {
   fill: none;
@@ -926,42 +812,6 @@ svg pattern circle {
 #drawing .curb-line.bad {
   stroke: var(--warn-line);
   stroke-width: 3;
-}
-#drawing .crossing {
-  fill: var(--road);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
-#drawing .zebra {
-  fill: var(--ink-2);
-}
-#drawing [data-role="crossing"] {
-  cursor: pointer;
-}
-#drawing .zebra-fill {
-  stroke: none;
-}
-#drawing .stop-line {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 4;
-  pointer-events: none;
-}
-#drawing .stop-line.yield {
-  stroke-width: 3;
-  stroke-dasharray: 7 5;
-}
-#drawing .sign * {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-#drawing .sign circle {
-  fill: var(--ink-2);
-  stroke: none;
 }
 #drawing .lane-arrow path {
   fill: none;
@@ -1085,13 +935,8 @@ svg pattern circle {
   stroke: var(--mat-trees-alt);
   stroke-width: 1;
 }
-/* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
-   of them: the hover outline and the selection outline. */
-.iso-piece:hover .iso-top {
-  stroke: var(--ink);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
-}
+/* A piece's colour is the same in both themes, so the selection outline needs a halo of the panel's colour to be seen
+   on any of them. (The hover is the press target's tint, `.iso-hit-area:hover`, below.) */
 .iso-solid {
   pointer-events: none;
 }
@@ -1207,6 +1052,42 @@ svg pattern circle {
   stroke: var(--iso-sel);
   stroke-width: 2.5;
 }
+/* The press targets (street/iso/scene/hits.rs): each piece's silhouette over the whole drawing, with no paint of its own.
+   The stroke makes the target wider than the piece by 5 px a side, which is what lets a far, narrow piece be pressed;
+   narrower pieces are drawn last, so they win where targets overlap. The hover and pressed states are a tint of the
+   selection's blue with the selection's dark casing round it (a test in shared/contrast.rs reads the opacities). A tap selects and a drag scrolls the
+   page: pan and pinch stay the browser's. */
+#drawing.iso {
+  touch-action: manipulation;
+  /* The drawing is never narrower than 280 px (iso::MIN_WIDTH), so in a group narrower than that (a 280 px window,
+     less the page's margins) it is scaled down whole by its viewBox, not cut off at the right. */
+  max-width: 100%;
+  height: auto;
+}
+.iso-hit-area {
+  fill: var(--iso-sel);
+  fill-opacity: 0;
+  stroke: transparent;
+  stroke-width: 10;
+  stroke-linejoin: round;
+  pointer-events: all;
+  cursor: pointer;
+}
+.iso-hit-area:hover {
+  fill-opacity: 0.3;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.45;
+}
+.iso-hit-area:active {
+  fill-opacity: 0.55;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.75;
+}
+@media (forced-colors: active) {
+  .iso-hit-area {
+    fill: Highlight;
+  }
+}
 /* The toggle between the section and the 2.5D, at the right of the street's name, on its line: the name's
    line has room to spare, while a row of its own (or the tools' row, which wraps it where text is wider, as
    with Linux's fonts) would push the drawing and the status line under it out of view at 1440 by 900. The
@@ -1225,19 +1106,6 @@ svg pattern circle {
 }
 .title-card.with-view .street-sub {
   grid-area: 2 / 1 / 3 / 3;
-}
-.view-mode-tools {
-  grid-area: 1 / 2;
-  align-self: center;
-  margin-block: -3px;
-}
-.view-mode {
-  margin: 0;
-  border: 0;
-  min-inline-size: 0;
-}
-.view-mode .unit {
-  min-height: 26px;
 }
 /* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
 
@@ -1288,6 +1156,7 @@ svg pattern circle {
   border-radius: 6px;
 }
 .zone-strip:focus-visible,
+.piece-list:focus-visible,
 .curb-strip:focus-visible,
 .stop-strip:focus-visible,
 .green-strip:focus-visible {
@@ -1311,6 +1180,39 @@ svg pattern circle {
   cursor: pointer;
   overflow: hidden;
 }
+.piece-list-section {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 6px;
+}
+/* A cell is as wide as its words, a row of them wrapping at a narrow window; each is 24 px at least both ways
+   (WCAG 2.5.8). The selected one has the zone strip's heavy outline, so it is not shown by colour alone. */
+.piece-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  min-width: 24px;
+  min-height: 34px;
+  background: var(--zone-fill);
+  color: var(--zone-ink);
+  border: 1px solid var(--zone-edge);
+  cursor: pointer;
+}
+.piece-width {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .zone-cell.own {
   background: var(--zone-fill-own);
   /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
@@ -1323,13 +1225,13 @@ svg pattern circle {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
 }
 .zone-cell[aria-selected="true"],
+.piece-cell[aria-selected="true"],
 .curb-cell[aria-selected="true"],
 .stop-cell[aria-selected="true"] {
   outline: 3px solid var(--zone-sel);
   outline-offset: -3px;
   font-weight: 600;
 }
-.curb-name,
 .stop-name,
 .zone-name {
   min-width: 0;
@@ -1542,13 +1444,6 @@ svg pattern circle {
     background-image: linear-gradient(CanvasText, CanvasText);
   }
 }
-#drawing .sel-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3.5;
-  stroke-linecap: round;
-  pointer-events: none;
-}
 #drawing .mv {
   fill: none;
   stroke: var(--ink-2);
@@ -1567,43 +1462,6 @@ svg pattern circle {
 #drawing .mv.indirect {
   stroke-dasharray: 8 4;
 }
-#drawing .mv-x {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 2;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-#drawing .mv-tip {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-}
-#drawing .north circle {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.2;
-}
-#drawing .north path {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-#drawing .scale text {
-  fill: var(--ink-2);
-}
-#drawing .handle {
-  cursor: grab;
-}
-#drawing .handle:active {
-  cursor: grabbing;
-}
-#drawing .handle .grip {
-  fill: var(--panel);
-}
 #drawing .lane-hit {
   fill: transparent;
   cursor: pointer;
@@ -1616,18 +1474,12 @@ svg pattern circle {
   font-size: 13px;
   font-weight: 600;
 }
-#drawing .piece.queue {
-  stroke-dasharray: 6 3;
-}
 #drawing .measure-loop {
   fill: none;
   stroke: var(--ink-2);
   stroke-width: 1.6;
   stroke-dasharray: 3 2;
   pointer-events: none;
-}
-#drawing .measure-stop {
-  stroke-width: 2;
 }
 #drawing .bollard {
   fill: var(--ink-2);
@@ -1641,9 +1493,6 @@ svg pattern circle {
   stroke-width: 5;
   stroke-linecap: butt;
   pointer-events: none;
-}
-#drawing .arm.dead {
-  opacity: 0.55;
 }
 
 /* ---- legend, swatches ------------------------------------------------------- */
@@ -1879,11 +1728,6 @@ svg pattern circle {
 .stepper .unit-tag {
   font-size: 14px;
 }
-.acts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-}
 .ico {
   display: grid;
   place-items: center;
@@ -1920,9 +1764,6 @@ svg pattern circle {
   border-color: var(--danger);
   background: var(--danger);
   color: var(--panel);
-}
-.acts .ico.danger {
-  margin-left: 10px;
 }
 .opts {
   margin: 0;
@@ -2284,6 +2125,67 @@ svg pattern circle {
   color: var(--ink-2);
   font-weight: 600;
 }
+/* The Impact tab's card: what the last change did to the space and the checks (#64). The verdict is a sentence that
+   names its result, so its colour only adds to the words; its bar is the colour of its text (3:1 on the panel). */
+.impact {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.impact-what,
+.impact-none,
+.impact-class,
+.impact-verdict,
+.impact-uses li {
+  padding: 2px 8px;
+  font-size: 14px;
+}
+.impact-what {
+  color: var(--ink);
+  font-weight: 600;
+}
+.impact-none,
+.impact-class {
+  color: var(--ink-2);
+}
+.impact-sub {
+  padding: 8px 8px 2px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.impact-uses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.impact-checks li {
+  padding-block: 4px;
+}
+.impact-verdict {
+  margin: 8px 8px 0;
+  padding-inline-start: 8px;
+  border-inline-start: 4px solid currentColor;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.impact-verdict.improved {
+  color: var(--ok);
+}
+.impact-verdict.regressed {
+  color: var(--warn);
+}
+.impact-verdict.mixed {
+  color: var(--ink);
+}
+@media (forced-colors: active) {
+  .impact-verdict,
+  .impact-verdict.improved,
+  .impact-verdict.regressed,
+  .impact-verdict.mixed {
+    color: CanvasText;
+    border-inline-start-color: CanvasText;
+  }
+}
 .revs {
   min-height: 0;
 }
@@ -2471,25 +2373,38 @@ dl.prov dd:last-child {
 .transit-item {
   grid-template-columns: 40px 1fr;
 }
+/* A template has a name and no mark. */
+.template-item {
+  grid-template-columns: 1fr;
+  padding-inline-start: 10px;
+}
+/* A template that does not suit the street stays listed: dimmed, with its reason as text under it (ink-2 on the
+   panel is measured in shared/contrast.rs). */
+.template-item[aria-disabled="true"] {
+  color: var(--ink-2);
+  cursor: not-allowed;
+}
+.template-item[aria-disabled="true"]:hover {
+  background: transparent;
+}
+.template-reason {
+  margin: 0;
+  padding: 0 10px 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
 .transit-item .dirtag {
   margin: 0;
   text-align: center;
-}
-.keyhelp {
-  display: none;
 }
 
 /* ---- touch, small screens, motion --------------------------------------------- */
 
 @media (any-pointer: coarse) {
   /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
-  .view-mode-tools {
-    margin-block: -9px;
-  }
-  .view-mode .unit,
-  .add-item,
-  .check,
-  .fit-checks {
+    .add-item,
+.check,
+.fit-checks {
     min-height: 44px;
   }
   .ico,
@@ -2533,10 +2448,13 @@ dl.prov dd:last-child {
   }
   .panel.left {
     order: 2;
+    max-width: calc(100% - 16px);
   }
   .panel.right {
     order: 3;
     bottom: auto;
+    /* never wider than the window less its margins (the Notes are 340 px at a desktop width) */
+    max-width: calc(100% - 16px);
   }
   .stage-head {
     align-items: stretch;
@@ -2562,33 +2480,23 @@ dl.prov dd:last-child {
   }
   /* The Notes' edge tab stands at the window's right edge here, fixed half-way down: the toggle keeps clear of it
      across, as it scrolls past. */
-  .view-mode-tools {
-    margin-inline-end: var(--tab-w);
   }
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .cloud.fresh {
-    animation: none;
-    stroke-dasharray: none;
-    stroke-dashoffset: 0;
-  }
   .ico,
-  .turn,
-  .opt,
-  .handle .grip {
+.turn,
+.opt {
     transition: none;
   }
 }
 
 @media print {
   .bar,
-  .panel,
-  .tools,
-  .view-mode-tools,
-  .welcome,
-  .clock,
-  .statusbar {
+.panel,
+.tools,
+.welcome,
+.clock,
+.statusbar {
     display: none;
   }
   .stage-main {
@@ -2729,6 +2637,23 @@ dl.prov dd:last-child {
   stroke: var(--ph-muted);
   stroke-width: 2;
 }
+/* A movement that meets something in the phase: dashed (set on the line itself) and in the warning colour, so colour is not
+   the only cue. */
+.phase-svg .ph-move.warn .ph-line {
+  stroke: var(--warn);
+}
+.phase-svg .ph-move.warn .ph-head {
+  fill: var(--warn);
+}
+/* The sentences under a card. */
+.phase-conflicts {
+  margin: 4px 0 0;
+  padding: 6px 8px 6px 22px;
+  font-size: 0.85em;
+  color: var(--warn);
+  background: var(--warn-wash);
+  border-radius: 6px;
+}
 @media (forced-colors: active) {
   .phase-card[aria-current="true"] {
     outline: 2px solid Highlight;
@@ -2752,6 +2677,17 @@ dl.prov dd:last-child {
   }
   .phase-svg .ph-bike.lit .sym * {
     stroke: Highlight;
+  }
+  .phase-svg .ph-move.warn .ph-line {
+    stroke: Mark;
+  }
+  .phase-svg .ph-move.warn .ph-head {
+    fill: Mark;
+  }
+  .phase-conflicts {
+    color: CanvasText;
+    background: Canvas;
+    border: 1px dashed CanvasText;
   }
 }
 .signal-tools {

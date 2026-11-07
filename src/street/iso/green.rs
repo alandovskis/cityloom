@@ -1,19 +1,15 @@
-//! The green elements in the 2.5D: on the selected zone's section, each as the patch of ground it is (`Patch`, in the
-//! raised layer so that it lies over the piece it stands on) and, for a tree, the trunk and crown that stand on its pit.
+//! The green elements in the 2.5D: on the selected zone's section, each as the patch of ground it is (`Patch`, drawn by
+//! `scene::raised` in the raised layer so that it lies over the piece it stands on) and, for a tree, the trunk and crown that stand on its pit.
 //! A tree's pit is a patch of the tree-pit material flush with its piece's top; a bed is a slab of the planted material
 //! standing its planting height above it; a rain garden and a bioswale are a flush patch of the rain-garden material
 //! with an outline. An element on a roadway piece is not shown at all (`Editor::green_shown`).
 
-use std::fmt::Write;
-
 use crate::shared::catalogue::KINDS;
-use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::format::esc;
 use crate::street::model::{GreenKind, SegView, ShownGreen, TreeSize};
 
 use super::order::Bx;
-use super::projection::{Projection, Reach, drawn_mm, points};
-use super::raised::{Face, face, height_mm, inner_face, top_over};
+use super::projection::{Projection, drawn_mm};
+use super::raised::height_mm;
 use super::solids::{Block, Solid, wide_enough};
 
 /// How close to an explicit tree, along the street, an automatic tree of a strip of street trees is left out, in
@@ -33,7 +29,7 @@ const TRUNK_MM: f64 = 2_000.0;
 const CROWN_MM: f64 = 3_000.0;
 
 /// The kind a green element is drawn as: its tint and hatch, which its faces keep.
-const PLANTING: &str = "planting";
+pub(super) const PLANTING: &str = "planting";
 
 /// A patch of ground a green element covers.
 #[derive(Clone, Copy, Debug)]
@@ -73,35 +69,6 @@ pub(super) fn patches(segs: &[SegView], shown: &[ShownGreen]) -> Vec<Patch> {
             Some(Patch { kind: g.kind, along: g.along, across, base, rise })
         })
         .collect()
-}
-
-/// The patch as its own group, hovered by the element's name: its pit, its slab (top, front, and the side the eye
-/// sees) or its flush top and outline.
-pub(super) fn draw(out: &mut String, p: &Projection, i18n: &I18n, patch: &Patch) {
-    let name = i18n.tr(patch.kind.name_key(), &Args::new());
-    write!(out, "<g class=\"iso-green\"><title>{}</title>", esc(&name)).unwrap();
-    let (x0, x1) = patch.across;
-    let (n, l) = patch.along;
-    let sub = p.over(Reach { near: n, far: l });
-    let (base, top) = (patch.base, patch.base + patch.rise);
-    match patch.kind {
-        GreenKind::Tree => top_over(out, &sub, PLANTING, "trees", base, &|_| (x0, x1), true),
-        GreenKind::Bed => {
-            let hatch = format!("h-{PLANTING}");
-            face(out, Face::Front, Some(PLANTING), &hatch, &points(&sub, &[(x0, base, n), (x1, base, n), (x1, top, n), (x0, top, n)]));
-            if let Some(right) = inner_face(&sub, x0, x1) {
-                let x = if right { x1 } else { x0 };
-                face(out, Face::Side, Some(PLANTING), &hatch, &points(&sub, &[(x, base, n), (x, base, l), (x, top, l), (x, top, n)]));
-            }
-            top_over(out, &sub, PLANTING, "planted", top, &|_| (x0, x1), true);
-        }
-        GreenKind::RainGarden | GreenKind::Bioswale => {
-            top_over(out, &sub, PLANTING, "rain_garden", base, &|_| (x0, x1), true);
-            let rim = points(&sub, &[(x0, base, n), (x1, base, n), (x1, base, l), (x0, base, l)]);
-            write!(out, "<polygon class=\"iso-green-edge\" points=\"{rim}\"/>").unwrap();
-        }
-    }
-    out.push_str("</g>");
 }
 
 /// Where the explicit trees on piece `piece` stand along the stretch, at the middle of their pits: the automatic
@@ -195,16 +162,16 @@ mod tests {
 
     #[test]
     fn a_street_without_green_draws_as_before() {
-        // Hashes of what these drew at 60bfe19, before the 2.5D knew green: every sample, and a street joined to its
-        // neighbour in either direction.
+        // Hashes of what these drew on main at b6ce29d3, before the 2.5D knew green (measured there, not here): every
+        // sample, and a street joined to its neighbour in either direction.
         let h = |m: &str| (m.len(), fnv(m));
         for (i, pin) in
-            [(35652, 0x18fbf355ef73b8cc), (53017, 0x36401776cea26501), (34349, 0xa8c4c46d4918868), (39725, 0x7f5edc34ccaa6191)].into_iter().enumerate()
+            [(35769, 2280381342206955045), (53134, 17738161488425106810), (34466, 16921369358436838195), (39842, 11998779749613471576)].into_iter().enumerate()
         {
             assert_eq!(h(&drawn(&Editor::new(i))), pin, "{}", SAMPLES[i].name);
         }
-        assert_eq!(h(&iso_svg(&joined_from_last(true, 0), &en(), 1050.0).markup), (45274, 0x4a03b0e761ad60c2));
-        assert_eq!(h(&iso_svg(&joined(false, 1), &en(), 1050.0).markup), (45648, 0x3253ebfea4e98c7f));
+        assert_eq!(h(&iso_svg(&joined_from_last(true, 0), &en(), 1050.0).markup), (46606, 7707726664758557800));
+        assert_eq!(h(&iso_svg(&joined(false, 1), &en(), 1050.0).markup), (46980, 5518048351675862149));
         // A street that holds a length and an end for its elements, and none, draws the same.
         assert_eq!(drawn(&street()), drawn(&Editor::new(0)));
     }
@@ -368,8 +335,9 @@ mod tests {
         assert!(!m.contains("class=\"iso-top k-planting mat-planted\""), "no longer a bed's soil");
         assert!(m.contains("<pattern id=\"iso-m-rain_garden\""));
         // Pinned after looking at the picture: the two raised beds on the parking lanes are dark wet soil with cobbles
-        // and reeds, where they were a bed's brown mulch; nothing else of the drawing changed.
-        assert_eq!((m.len(), fnv(&m)), (45148, 0x73d487904f4efe65));
+        // and reeds, where they were a bed's brown mulch; nothing else of the drawing changed. (Re-pinned after the
+        // 2.5D became a diagram: its layers' groups add to the markup.)
+        assert_eq!((m.len(), fnv(&m)), (45265, 12954767043471335728));
     }
 
     #[test]

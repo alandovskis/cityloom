@@ -55,8 +55,6 @@ impl Junction {
             states: Vec::new(),
             cursor: 0,
             selected: Target::None,
-            gesture: None,
-            pending_label: earlier(),
             refusal: None,
             refusal_arm: None,
         };
@@ -97,7 +95,6 @@ impl Junction {
         }];
         self.cursor = 0;
         self.selected = Target::None;
-        self.gesture = None;
     }
 
     /// An arm of a sample junction: it reads the sample street `sample`, laid out for the right-hand side.

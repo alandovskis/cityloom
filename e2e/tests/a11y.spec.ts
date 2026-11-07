@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, openJunction, openLongStreet, openStreet, splitInto, test } from "./fixtures";
 
 // Keyboard and small-window behaviour that the audit (WCAG 2.2 AA) found wanting.
@@ -30,7 +32,7 @@ test("at 400% zoom the sticky bar does not cover the control the keyboard has re
   const covered = await page.evaluate(() => parseFloat(document.documentElement.style.getPropertyValue("--bar-stuck")));
   const bar = (await page.locator(".bar").boundingBox())!;
   expect(covered).toBeGreaterThanOrEqual(bar.y + bar.height);
-  for (const id of ["#add-btn", "#view-section", "#zone-strip", "#wrap"]) {
+  for (const id of ["#add-btn", "#zone-strip", "#wrap"]) {
     await page.locator(id).focus();
     const box = (await page.locator(id).boundingBox())!;
     const barNow = (await page.locator(".bar").boundingBox())!;
@@ -190,20 +192,119 @@ test("Alt and the arrows on the strip do not leave the page", async ({ page }) =
   await expect(page.locator("#zone-strip")).toBeVisible();
 });
 
-test("V and the arrow keys still work after the strip had focus", async ({ page }) => {
+test("the arrow keys still work after the strip had focus, and V changes nothing", async ({ page }) => {
   await openStreet(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   await page.locator("#zone-strip").focus();
   await page.keyboard.press("ArrowRight");
-  // back to the drawing: V switches the view, the arrows choose a piece
+  // back to the drawing: the 2.5D is the only view, so V does nothing, and the arrows choose a piece
   await page.locator("#wrap").focus();
   await page.keyboard.press("v");
   await expect(page.locator("#drawing.iso")).toBeAttached();
-  await page.keyboard.press("v");
-  await expect(page.locator("#drawing.iso")).not.toBeAttached();
   const before = await page.locator("#live").textContent();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#live")).not.toHaveText(before ?? "");
   await expect(page.locator("#wrap")).toBeFocused();
+});
+
+// The street page's single drawing (#139): what the dragging of the section offered is reachable by keyboard, and the
+// controls that stand for a press on a piece are large enough for a finger.
+test.describe("the street's 2.5D drawing", () => {
+  const cells = (page: Page) => page.locator("#piece-list [role=option]");
+  const kinds = (page: Page) => cells(page).locator(".piece-name").allInnerTexts();
+  const widths = (page: Page) => cells(page).locator(".piece-width").allInnerTexts();
+
+  test.beforeEach(async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+  });
+
+  test("every piece's cell and the buttons of the page are at least 24 by 24 px (2.5.8), also at 320 px", async ({
+    page,
+  }) => {
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      const n = await cells(page).count();
+      expect(n).toBeGreaterThan(0);
+      for (const target of [...(await cells(page).all()), page.locator("#undo"), page.locator("#add-btn")]) {
+        const b = (await target.boundingBox())!;
+        expect(b.width, `width at ${width}`).toBeGreaterThanOrEqual(24);
+        expect(b.height, `height at ${width}`).toBeGreaterThanOrEqual(24);
+      }
+    }
+  });
+
+  test("width, order, removal and addition are all done with the keyboard alone", async ({ page }) => {
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    // Width: plus and minus, with Shift for bigger steps, and Enter goes to the field.
+    const width = async () => parseFloat((await widths(page))[0].replace(",", "."));
+    const w0 = await width();
+    await page.keyboard.press("+");
+    await expect.poll(width).toBeCloseTo(w0 + 0.1, 1);
+    await page.keyboard.press("Shift+=");
+    await expect.poll(width).toBeCloseTo(w0 + 0.6, 1);
+    await page.keyboard.press("Shift+-");
+    await expect.poll(width).toBeCloseTo(w0 + 0.1, 1);
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#width")).toBeFocused();
+    await page.locator("#width").fill(String(w0 + 0.2));
+    await page.locator("#width").press("Enter");
+    await expect.poll(width).toBeCloseTo(w0 + 0.2, 1);
+    await page.locator("#wrap").focus();
+    // Order: Shift with an arrow moves the selected piece along.
+    const order = await kinds(page);
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect.poll(() => kinds(page)).not.toEqual(order);
+    expect((await kinds(page)).slice().sort()).toEqual(order.slice().sort());
+    await page.keyboard.press("Shift+ArrowLeft");
+    await expect.poll(() => kinds(page)).toEqual(order);
+    // Removal.
+    await page.keyboard.press("Delete");
+    await expect(cells(page)).toHaveCount(order.length - 1);
+    // Addition, from the menu, with the keys.
+    await page.locator("#add-btn").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#add-menu")).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(cells(page)).toHaveCount(order.length);
+    // And undo takes it back.
+    await page.keyboard.press("Control+z");
+    await expect(cells(page)).toHaveCount(order.length - 1);
+  });
+
+  test("the drawing keeps its screen-reader label and its list is the way to a piece the picture hides", async ({
+    page,
+  }) => {
+    const drawing = page.locator("#drawing");
+    await expect(drawing).toHaveAttribute("role", "img");
+    await expect(drawing).toHaveAttribute(
+      "aria-label",
+      /in 2\.5D, along a 40 m stretch\. \d+ segments?\.( Speed limit \d+ km\/h\.)?$/,
+    );
+    // The press targets are part of the picture, not of what is read: their titles are the pieces' names.
+    await expect(page.locator("#wrap")).toHaveAttribute("aria-describedby", "keys");
+  });
+
+  test("at 280 px the page does not scroll sideways, the drawing fits and a piece is chosen from the list", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The drawing is scaled down inside the window, not cut off at its right edge.
+    await expect
+      .poll(async () => {
+        const b = (await page.locator("#drawing").boundingBox())!;
+        return b.x >= -0.5 && b.x + b.width <= 280.5;
+      })
+      .toBe(true);
+    const last = cells(page).last();
+    await last.scrollIntoViewIfNeeded();
+    await last.click();
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+  });
 });

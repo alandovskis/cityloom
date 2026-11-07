@@ -15,7 +15,7 @@ test("a junction of the area opens in the junction editor and a street in the st
   await page.goto("/map.html");
   const places = await placesOnMap(page);
   await page.goto("/" + places.junctions[0]);
-  await expect(page.locator(".plan, #plan").first()).toBeVisible();
+  await expect(page.locator("#drawing .iso-junction")).toBeVisible();
   await page.goto("/" + places.streets[0]);
   await expect(page.locator("#drawing")).toBeVisible();
 });
@@ -51,7 +51,7 @@ test("an area is made again when the checksum of its tile changes, and not other
   });
   const key = "cityloom-checksum:45.5261,-73.5978";
   // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in src/place/tiles.rs)
-  const IMPORTER = "+i7";
+  const IMPORTER = "+i8";
   const stored = () => page.evaluate((k) => localStorage.getItem(k), key);
 
   await page.goto("/map.html");

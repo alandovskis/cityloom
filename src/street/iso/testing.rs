@@ -12,8 +12,18 @@ pub fn en() -> Rc<I18n> {
     crate::i18n_for(Locale::En)
 }
 
+/// The drawing without its press targets, the invisible layer that ends the markup (#139): the pins and comparisons
+/// of what is seen were made before it and are about that.
+pub fn seen(markup: &str) -> String {
+    match markup.find("<g class=\"iso-layer-hit\">") {
+        Some(at) => markup[..at].to_string(),
+        None => markup.to_string(),
+    }
+}
+
+/// The street as drawn, as `seen`.
 pub fn drawn(e: &Editor) -> String {
-    iso_svg(&e.view(), &en(), 1050.0).markup
+    seen(&iso_svg(&e.view(), &en(), 1050.0).markup)
 }
 
 pub fn count(s: &str, needle: &str) -> usize {

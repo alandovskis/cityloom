@@ -14,9 +14,9 @@ use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{SegView, View};
+use crate::street::model::{SegView, TemplateView, View};
 use crate::street::text::status_text;
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
@@ -276,38 +276,11 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The drawing's heading, for a screen reader: the view it shows.
+/// The drawing's heading, for a screen reader.
 #[component]
 pub fn DrawingHeading(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    move || {
-        let key = match w.mode() {
-            ViewMode::Section => "st-cross-section",
-            ViewMode::Iso => "st-street-2-5d",
-        };
-        w.i18n().tr(key, &Args::new())
-    }
-}
-
-/// The two ways the drawing shows the street, the section and the 2.5D: a group of two buttons, the one
-/// shown pressed. `V` does the same anywhere on the page.
-#[component]
-pub fn ViewToggle(vm: Rc<StreetVm>) -> impl IntoView {
-    let w = SheetWatch::new(vm);
-    let pressed = move |mode: ViewMode| move || (w.mode() == mode).to_string();
-    // V goes to the view not shown: only its button says so.
-    let shortcut = move |mode: ViewMode| move || (w.mode() != mode).then_some("V");
-    view! {
-        <fieldset class="units view-mode" id="view-mode">
-            <legend class="sr-only">{say(w, "view-mode-label")}</legend>
-            <button type="button" class="unit" id="view-section" aria-pressed=pressed(ViewMode::Section) aria-keyshortcuts=shortcut(ViewMode::Section) on:click=move |_| w.set_mode(ViewMode::Section)>
-                {say(w, "view-mode-section")}
-            </button>
-            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(ViewMode::Iso) aria-keyshortcuts=shortcut(ViewMode::Iso) on:click=move |_| w.set_mode(ViewMode::Iso)>
-                {say(w, "view-mode-iso")}
-            </button>
-        </fieldset>
-    }
+    move || w.i18n().tr("st-street-2-5d", &Args::new())
 }
 
 /// Where the list of pieces is drawn, in window pixels.
@@ -560,11 +533,46 @@ fn menu_item(
     }
 }
 
-/// The Transform menu, one button for the things that change the whole street at once. It has up to two groups:
+/// One street template in the Transform menu. Unlike the measures, a template that does not suit the street stays
+/// in the list: it is `aria-disabled` (still reached by the arrows), its reason is visible under it (hidden from
+/// assistive technology, since a menu holds only items and groups: `aria-describedby` still reads it)
+/// and `aria-describedby` points at that, and choosing it says the reason instead of applying anything.
+fn template_item(w: SheetWatch, view: TemplateView, choose: impl Fn() + 'static) -> impl IntoView {
+    let t = view.template;
+    let name = move || w.i18n().tr(t.name_key(), &Args::new());
+    let reason_id = format!("template-reason-{}", t.id());
+    let reason = view.refusal.map(|r| {
+        let text = move || said::say(&w.i18n(), w.units(), &r.said(t));
+        view! { <p class="template-reason" id=reason_id.clone() aria-hidden="true">{text}</p> }
+    });
+    let disabled = view.refusal.is_some();
+    view! {
+        <li role="none">
+            <button
+                type="button"
+                role="menuitem"
+                tabindex="-1"
+                class="add-item transform-item template-item"
+                class:template-disabled=disabled
+                aria-label=name
+                aria-disabled=disabled.then_some("true")
+                aria-describedby=disabled.then(|| reason_id.clone())
+                data-template=t.id()
+                on:click=move |_| choose()
+            >
+                <b>{name}</b>
+            </button>
+            {reason}
+        </li>
+    }
+}
+
+/// The Transform menu, one button for the things that change the whole street at once. It has up to three groups:
 /// Make pedestrian (while the street has a motor piece: the three things the space of its motor pieces can become,
 /// `Editor::make_pedestrian`) and Transit priority (only the Atlas measures the street can be arranged as and is not
-/// already, the Notes table's Arrange rows, `StreetVm::apply_measure`). A group with nothing in it is left out, and
-/// with neither the button is not shown. Choosing is one undoable edit and hands the focus to the drawing (whose keys
+/// already, the Notes table's Arrange rows, `StreetVm::apply_measure`) and Street templates (all five, always: one
+/// that does not suit the street is disabled and says why, `StreetVm::apply_template`). A group with nothing in it
+/// is left out. Choosing is one undoable edit and hands the focus to the drawing (whose keys
 /// edit the street); a refusal keeps it on the button. It is a WAI-ARIA menu button: the list is fixed to the
 /// window (so the stage cannot clip it) and kept inside it by `menu_box`; the arrows, Home and End move through the
 /// items, Escape closes it and returns to the button, and leaving it closes it.
@@ -628,6 +636,10 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
             .collect_view();
         menu_group(w, "transit", "st-transit-heading", "transform-transit-hint", items)
     };
+    let templates = move |views: Vec<TemplateView>| {
+        let items = views.into_iter().map(|v| template_item(w, v, move || chosen(w.apply_template(v.template)))).collect_view();
+        menu_group(w, "templates", "transform-templates-heading", "transform-templates-hint", items)
+    };
     view! {
         <div node_ref=wrap on:focusout=focus_out style="display: contents">
             {move || {
@@ -656,6 +668,7 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
                             <div id="transform-menu" class="menu ped-menu" role="menu" aria-labelledby="transform-btn" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
                                 {(!choices.pedestrian.is_empty()).then(|| pedestrian(choices.pedestrian.clone()))}
                                 {(!choices.transit.is_empty()).then(|| transit(choices.transit.clone()))}
+                                {(!choices.templates.is_empty()).then(|| templates(choices.templates.clone()))}
                             </div>
                         }
                     })

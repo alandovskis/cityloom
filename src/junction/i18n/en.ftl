@@ -240,7 +240,7 @@ jn-turn-allowed = { $turn }, allowed
 ## The page around the plan: heading, window title, title block and history (src/junction/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = City map
-jn-plan = Junction plan
+jn-heading = Junction in 2.5D
 jn-block-junction = Junction
 jn-block-streets = Streets
 jn-block-changes = Changes made
@@ -274,28 +274,16 @@ jn-check-length = { $detail }: { $length }
 jn-col-step = Step
 jn-col-what-changed = What changed
 
-## The plan (src/junction/plan.rs, plan_svg.rs)
-jn-plan-editor = Junction plan editor
-# The choice over the drawing between the flat plan, which is edited, and the 2.5D picture, which is looked at.
-jn-view-group = View
-jn-view-plan = Plan
-jn-view-iso = 2.5D
-jn-view-shown-plan = Showing the plan.
-jn-view-shown-iso = Showing the junction in 2.5D.
+## The drawing (src/junction/drawing.rs, iso/)
+jn-editor = Junction editor
 jn-iso-label = 2.5D view of the junction. { $arms }.
+jn-iso-label-roundabout = 2.5D view of the junction. { $arms }. Roundabout.
+jn-iso-label-raised = 2.5D view of the junction. { $arms }. Raised table.
 jn-iso-label-turbo = 2.5D view of the junction. { $arms }. { $name }.
-jn-plan-label = Plan of the junction, north up. { $arms }.
-jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
-jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.
-jn-plan-label-turbo = Plan of the junction, north up. { $arms }. { $name }.
-jn-svg-scale = Scale
 jn-svg-bus-only = Bus only
-# Under a street's name: the way it leaves and its width, "N · 20.0 m road".
-jn-svg-road = { $compass } · { $width } road
-jn-svg-road-shifted = { $compass } · { $width } road · shifted { $offset }
-jn-grip-turn = Turn { $arm }
-jn-grip-corner = Change the corner radius
-jn-grip-crossing = Move the crossing
+# What the buttons under the drawing step through: the streets, lanes, crossings and corners, as the arrow keys do.
+jn-part-previous = Previous part
+jn-part-next = Next part
 
 ## The page's markup (web/intersection.html); the window title is the header's jn-title
 jn-page-description = Change how a junction of streets works: corners, crossings, lanes, turns and control.
@@ -308,7 +296,6 @@ jn-page-key-change = change
 jn-page-key-turn = turn a street
 jn-page-key-remove = remove
 jn-page-key-details-notes = details, notes
-jn-page-key-view = plan, 2.5D
 jn-page-key-undo = undo
 jn-page-details-panel = Selected street, corner or crossing
 jn-page-plan-key = Key to the strips
@@ -589,3 +576,28 @@ jn-ph-rides-legend = Bikes
 jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
 jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.
+
+## Warnings: movements of a phase that meet (src/junction/signal.rs `conflicts`)
+jn-conflict-move = cars from the { $from } side going { $turn }
+jn-conflict-vehicles = Phase { $n }: { $a } cross { $b }.
+jn-conflict-walk = Phase { $n }: { $mv } meet people walking across on the { $side } side.
+jn-conflict-ride = Phase { $n }: { $mv } cross bikes riding on the { $side } side.
+jn-conflict-list = Warnings for phase { $n }
+jn-conflict-heard = Warning: { $conflict }
+jn-conflict-heard-many = Warning: { $count } movements now meet, in { $phases ->
+    [one] phase
+   *[other] phases
+} { $list }. { $first }
+jn-conflict-more = { $n ->
+    [one] And { $n } more meeting.
+   *[other] And { $n } more meetings.
+}
+jn-check-signal-conflicts = Movements that meet
+jn-check-signal-conflicts-ok = No phase puts movements together that meet
+jn-check-signal-conflicts-bad = { $list }
+jn-check-curb-near = Curbside clear of crossings
+jn-check-curb-near-ok = No parking or loading stands within { $need } of a crossing.
+jn-check-curb-near-bad = { $uses }
+jn-curb-near = The { $use } on { $arm } stands { $gap } from the crossing; { $need } or more is needed.
+jn-curb-near-inside = The { $use } on { $arm } reaches the crossing.
+jn-sel-arm-curb = { $use } { $side }, { $at } from the centre.

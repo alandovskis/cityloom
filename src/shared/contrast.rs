@@ -72,9 +72,34 @@ mod tests {
     }
 
     #[test]
+    fn the_hover_and_pressed_states_of_a_press_target_are_seen_on_every_material() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let (tint, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());
+        let opacity = |rule: &str, prop: &str| -> f64 {
+            let at = editor.find(rule).unwrap_or_else(|| panic!("{rule}"));
+            let body = &editor[at..at + editor[at..].find('}').unwrap()];
+            body.split(&format!("{prop}: ")).nth(1).unwrap().split(';').next().unwrap().parse().unwrap()
+        };
+        let state = |rule: &str| (opacity(rule, "fill-opacity"), opacity(rule, "stroke-opacity"));
+        let (hover, pressed) = (state(".iso-hit-area:hover {"), state(".iso-hit-area:active {"));
+        assert!(hover.0 > 0.0 && pressed.0 > hover.0 && pressed.1 > hover.1, "{hover:?} {pressed:?}");
+        // A state is not text or a control's edge: it has to be seen against the material it lies over, by the tint
+        // inside or the dark band round it, whichever shows better there. The ratio to the bare material is at least
+        // 1.5 hovered and 2 pressed, on every material.
+        let seen = |mat: &str, (fill, stroke): (f64, f64)| contrast(mat, &blend(&tint, mat, fill)).max(contrast(mat, &blend(&casing, mat, stroke)));
+        for m in crate::shared::catalogue::MATERIALS {
+            let mat = token(app, &format!("mat-{}", m.id)).0.unwrap();
+            let (h, p) = (seen(&mat, hover), seen(&mat, pressed));
+            assert!(h >= 1.5, "{} hovered: {h:.2}", m.id);
+            assert!(p >= 2.0 && p >= h, "{} pressed: {p:.2}", m.id);
+        }
+        assert!(editor.contains("touch-action: manipulation"));
+    }
+
+    #[test]
     fn the_boundaries_of_the_pieces_are_3_to_1_against_the_plate_and_every_lane_fill_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
-        for rule in ["#drawing .piece {", "#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
+        for rule in ["#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
             let at = editor.find(rule).unwrap_or_else(|| panic!("{rule}"));
             let body = &editor[at..at + editor[at..].find('}').unwrap()];
             let alpha: f64 = body.split("stroke-opacity: ").nth(1).unwrap().split(';').next().unwrap().parse().unwrap();
@@ -217,6 +242,90 @@ mod tests {
     }
 
     #[test]
+    fn a_movement_that_meets_something_is_3_to_1_on_its_road_and_its_warning_text_4_5_to_1_with_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (warn, road, panel) = (pick(&token(app, "warn"), i), pick(&token(editor, "ph-road"), i), pick(&token(app, "panel"), i));
+            assert!(contrast(&warn, &road) >= 3.0, "warn on the phase road {theme}: {:.2}", contrast(&warn, &road));
+            assert!(contrast(&warn, &panel) >= 4.5, "warning text on the panel {theme}: {:.2}", contrast(&warn, &panel));
+        }
+        let wash = token(app, "warn-wash").0.expect("a light wash");
+        let warn = token(app, "warn").0.unwrap();
+        assert!(contrast(&warn, &wash) >= 4.5, "warning text on its wash: {:.2}", contrast(&warn, &wash));
+        // Dark: the wash is translucent, so it is measured composited over the dark panel it lies on.
+        let at = app.find("--warn-wash: ").unwrap();
+        let rgb = &app[at..at + app[at..].find(';').unwrap()];
+        let rgb = &rgb[rgb.find("rgb(").expect("a translucent dark wash") + 4..];
+        let n: Vec<f64> = rgb[..rgb.find(')').unwrap()].split(|c: char| c == ' ' || c == '/').filter(|t| !t.is_empty()).map(|t| t.parse().unwrap()).collect();
+        let panel = pick(&token(app, "panel"), 1);
+        let under: Vec<f64> = (0..3).map(|k| f64::from(u8::from_str_radix(&panel[1 + 2 * k..3 + 2 * k], 16).unwrap())).collect();
+        let washed = format!("#{}", (0..3).map(|k| format!("{:02x}", (n[k] * n[3] + under[k] * (1.0 - n[3])).round() as u8)).collect::<String>());
+        let dark_warn = pick(&token(app, "warn"), 1);
+        assert!(contrast(&dark_warn, &washed) >= 4.5, "warning text on its wash over the panel, dark: {:.2}", contrast(&dark_warn, &washed));
+        let line = rule(editor, ".phase-svg .ph-move.warn .ph-line");
+        assert!(line.contains("stroke: var(--warn);"), "{line}");
+        let list = rule(editor, ".phase-conflicts");
+        assert!(list.contains("color: var(--warn);") && list.contains("background: var(--warn-wash);"), "{list}");
+        let forced = editor.find("  .phase-svg .ph-move.warn .ph-line {\n    stroke: Mark;").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
+    }
+
+    #[test]
+    fn the_impact_card_s_verdict_is_4_5_to_1_as_text_and_as_its_bar_in_both_themes_and_has_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i);
+            // The text of each verdict (and of the lines above it), whose bar is drawn in the text's own colour.
+            for name in ["ok", "warn", "ink", "ink-2", "ink-3"] {
+                let c = pick(&token(app, name), i);
+                assert!(contrast(&c, &panel) >= 4.5, "{name} as text on the panel {theme}: {:.2}", contrast(&c, &panel));
+            }
+        }
+        for (class, colour) in [("improved", "var(--ok)"), ("regressed", "var(--warn)"), ("mixed", "var(--ink)")] {
+            let r = rule(editor, &format!(".impact-verdict.{class}"));
+            assert!(r.contains(&format!("color: {colour};")), "{r}");
+        }
+        let base = rule(editor, ".impact-verdict");
+        assert!(base.contains("border-inline-start: 4px solid currentColor;") && base.contains("color: var(--ink-2);"), "{base}");
+        let forced = editor.find("@media (forced-colors: active) {\n  .impact-verdict,").expect("a forced-colours rule for the verdict");
+        let forced = &editor[forced..];
+        let forced = &forced[..forced.find("\n}\n").unwrap()];
+        assert!(forced.contains("color: CanvasText;") && forced.contains("border-inline-start-color: CanvasText;"), "{forced}");
+    }
+
+    #[test]
+    fn a_disabled_template_and_its_reason_are_ink_2_on_the_panel_at_4_5_to_1_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, panel) = (pick(&token(app, "ink-2"), i), pick(&token(app, "panel"), i));
+            assert!(contrast(&ink, &panel) >= 4.5, "ink-2 on the panel {theme}: {:.2}", contrast(&ink, &panel));
+        }
+        for selector in [".template-item[aria-disabled=\"true\"]", ".template-reason"] {
+            assert!(rule(editor, selector).contains("color: var(--ink-2);"), "{selector}");
+        }
+    }
+
+    #[test]
+    fn the_outline_of_a_curbside_use_too_near_a_crossing_clears_three_to_one_on_every_use_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let rule = editor.find("#drawing .curb-use.curb-use-bad {").expect("the outline has a rule");
+        let block = &editor[rule..rule + editor[rule..].find('}').unwrap()];
+        assert!(block.contains("stroke: var(--ink);"), "{block}");
+        assert!(editor.contains("  #drawing .curb-use.curb-use-bad {\n    stroke: Highlight;"), "forced-colours rule");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let ink = pick(&token(app, "ink"), i);
+            for ground in ["k-parking", "k-loading", "k-planting", "k-terrace", "k-bikerack", "k-sidewalk"] {
+                let fill = pick(&token(app, ground), i);
+                assert!(contrast(&ink, &fill) >= 3.0, "ink on {ground} {theme}: {:.2}", contrast(&ink, &fill));
+            }
+        }
+    }
+
+    #[test]
     fn the_stop_marks_clear_three_to_one_on_the_road_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
@@ -240,6 +349,79 @@ mod tests {
                 let fill = pick(&token(app, ground), i);
                 assert!(contrast(&accent, &fill) >= 3.0, "accent on {ground} {theme}: {:.2}", contrast(&accent, &fill));
             }
+        }
+    }
+
+    #[test]
+    fn the_junction_in_2_5d_outlines_its_selection_in_the_two_tones_and_is_pressed_with_a_tap() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        // The outline is the street page's two tones (no new colour): over the panel and every surface the junction
+        // lays, one of the two stands out at 3:1, in both themes.
+        let (line, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            for ground in ["panel", "road", "k-sidewalk", "k-planting", "k-bike", "k-travel", "k-bus", "k-parking", "k-median", "k-loading", "k-shoulder"] {
+                let under = pick(&token(app, ground), i);
+                let best = contrast(&line, &under).max(contrast(&casing, &under));
+                assert!(best >= 3.0, "the selection outline on {ground} {theme}: {best:.2}");
+            }
+        }
+        // It is drawn as the casing under the line, in the system colours when the page's are forced.
+        assert!(editor.contains("\n.iso-sel {\n  stroke: var(--iso-sel);") && editor.contains("\n.iso-sel-casing {\n  stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .iso-sel {\n    stroke: Highlight;").expect("forced-colours rule for the line");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        assert!(editor.contains("  #drawing .iso-junction .iso-sel-casing,\n  #drawing .iso-junction .iso-casing,"));
+        // What is only looked at lets a press through; what is pressed asks for a tap and no double-tap zoom.
+        assert!(rule(editor, "#drawing .iso-junction *").contains("pointer-events: none;"));
+        let pressed = rule(editor, "#drawing .iso-junction [data-role]");
+        assert!(pressed.contains("cursor: pointer;") && pressed.contains("touch-action: manipulation;"), "{pressed}");
+        // A lane under the pointer or selected is shaded in the accent's wash, which the accent clears 3:1 on (measured above).
+        assert!(rule(editor, "#drawing .lane-hit:hover,\n#drawing .lane-hit.on").contains("fill: var(--accent-wash);"));
+    }
+
+    #[test]
+    fn the_junction_s_zebra_and_stop_line_are_pavement_paint_that_clears_three_to_one_on_every_material() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let rule_of = rule(editor, "#drawing .iso-zebra,\n#drawing .iso-stopline");
+        assert!(rule_of.contains("fill: var(--iso-paint-white);") && rule_of.contains("stroke: var(--iso-paint-edge);"), "{rule_of}");
+        // The ink-2 they were filled with is below 3:1 on the asphalt in the light theme: the paint's fill, or the hairline round
+        // it, stands out from every material in both themes.
+        let (white_l, white_d) = token(editor, "iso-paint-white");
+        let edge = token(editor, "iso-paint-edge").0.unwrap();
+        for m in crate::shared::catalogue::MATERIALS {
+            let mat = token(app, &format!("mat-{}", m.id)).0.unwrap();
+            for (theme, fill) in [("light", white_l.clone().unwrap()), ("dark", white_d.clone().unwrap())] {
+                let best = contrast(&fill, &mat).max(contrast(&edge, &mat));
+                assert!(best >= 3.0, "{} {theme}: {best:.2}", m.id);
+            }
+        }
+        let forced = editor.find("  #drawing .iso-zebra,\n  #drawing .iso-stopline {").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+    }
+
+    #[test]
+    fn the_marks_the_2_5d_draws_on_the_ground_clear_three_to_one_on_their_casing_in_both_themes_and_have_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let dark_casing = token(editor, "iso-sel-casing").0.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i);
+            // A mark lies on any surface, so it is measured against the casing it is drawn on: the panel's colour.
+            for name in ["ink", "ink-2", "ink-3", "accent"] {
+                let line = pick(&token(app, name), i);
+                assert!(contrast(&line, &panel) >= 3.0, "{name} on the panel {theme}: {:.2}", contrast(&line, &panel));
+            }
+            // A warning is on the dark casing, which the panel's colour would not do for the amber.
+            let warn = token(app, "warn-line").0.unwrap();
+            assert!(contrast(&warn, &dark_casing) >= 3.0, "warning on its casing {theme}: {:.2}", contrast(&warn, &dark_casing));
+        }
+        // The casings are the colours said, and the forced colours turn every kind of mark into system colours.
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing").contains("stroke: var(--panel);"));
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing.warn").contains("stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .lane-arrow path:not(.halo),").expect("forced-colours rule for the marks");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        for class in [".mv", ".dim-warn", ".curb-line.bad", ".stop-post circle", ".iso-casing.warn"] {
+            assert!(editor[forced - 400..].contains(&format!("#drawing .iso-junction {class}")), "{class}");
         }
     }
 }

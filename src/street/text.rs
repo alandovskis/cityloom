@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{Check, GreenRowView, SideView, StripCell, View, ZoneRefusal};
+use crate::street::model::{Check, GreenRowView, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -79,13 +79,19 @@ pub fn redone_text(v: &View, i18n: &I18n, units: Units) -> String {
 pub fn selection_text(v: &View, i18n: &I18n, units: Units) -> Option<String> {
     let uid = v.selected?;
     let i = v.segments.iter().position(|s| s.uid == uid)?;
+    Some(piece_text(v, i, i18n, units))
+}
+
+/// Piece `i`: its kind, its width and its place among the pieces, which is how a cell of the piece list is named and
+/// what is said when the piece is selected.
+pub fn piece_text(v: &View, i: usize, i18n: &I18n, units: Units) -> String {
     let s = &v.segments[i];
     let args = Args::new()
         .str("kind", i18n.tr_now(&kind_key(KINDS[s.kind].id), &Args::new()))
         .str("width", units.length_fine_in(s.width_mm, i18n.locale_now()))
         .num("index", i as i64 + 1)
         .num("total", v.segments.len() as i64);
-    Some(i18n.tr_now("selection-position", &args))
+    i18n.tr_now("selection-position", &args)
 }
 
 /// The selected zone: its name, where it lies, how long it is, whether it has a section of its own and its place
@@ -142,6 +148,11 @@ pub fn green_cell_text(g: &GreenRowView, cell: usize, i18n: &I18n, units: Units)
 /// Why a zone operation was refused, in the page's language.
 pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
     say_now(i18n, units, &refusal.said())
+}
+
+/// Why a street template cannot be applied, in the page's language.
+pub fn template_refused(i18n: &I18n, units: Units, template: Template, refusal: TemplateRefusal) -> String {
+    say_now(i18n, units, &refusal.said(template))
 }
 
 /// What a check is called where it is listed: a failing check of a street with several zones says which zone

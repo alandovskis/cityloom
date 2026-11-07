@@ -173,3 +173,101 @@ map-svg-changed = modifié
 map-basemap-missing = Le fond de carte n’a pas pu être chargé. Construisez-le avec `just prepare`, puis rechargez la page.
 map-basemap-outside = Il n’y a pas de fond de carte pour ce lieu. La carte couvre la région de Montréal.
 map-no-roads = Les rues de ce lieu n’ont pas pu être chargées, il n’y a donc pas de carte à afficher.
+
+## Vérifications du réseau (src/map/network.rs, src/map/vm.rs)
+net-heading = Vérifications du réseau
+net-no-places = Il n’y a pas de réseau à vérifier.
+net-lead-none = Les vérifications du réseau n’ont rien trouvé dans l’ensemble des rues et des jonctions.
+net-lead = { $n ->
+    [one] Les vérifications du réseau ont trouvé 1 constat dans l’ensemble des rues et des jonctions.
+   *[other] Les vérifications du réseau ont trouvé { $n } constats dans l’ensemble des rues et des jonctions.
+}
+net-note = Elles portent sur l’ensemble du réseau et sont comptées à part des vérifications de chaque lieu. Un problème veut dire que le réseau enfreint la règle; un point à noter mérite un coup d’œil, puisque la règle peut être respectée autrement. Les règles jugent les rues telles qu’elles sont maintenant, et non par rapport à leur tracé de départ.
+net-count-none = aucun constat
+net-count-one = 1 constat
+net-count = { $n } constats
+net-rule-cycling = Liens cyclables
+net-rule-access = Accès aux rues piétonnes
+net-rule-crossings = Passages pour piétons
+net-rule-lanes = Nombre de voies
+net-rule-transit = Axes de transport en commun
+net-rule-walking = Parcours piétons
+net-severity-problem = Problème
+net-severity-notice = À noter
+net-lanes = { $n ->
+    [one] { $n } voie
+   *[other] { $n } voies
+}
+net-cycling-island = { $n ->
+    [one] Cette rue a une piste cyclable coupée du reste du réseau cyclable.
+   *[other] Ces { $n } rues ont des pistes cyclables coupées du reste du réseau cyclable.
+}
+net-cycling-ends = { $at } : la piste cyclable de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a une.
+net-access-broken = Cette rue piétonne n’a pas de trottoir continu de { $need } de large pour les véhicules d’urgence, telle qu’elle est maintenant.
+net-crossing-missing = Cette rue amène la circulation à la jonction et n’a pas de passage pour piétons.
+net-crossing-wide = Le passage pour piétons fait ici { $width } de large, soit plus que le maximum de { $max }.
+net-lanes-change = { $a } compte { $from } là où elle rejoint { $b }, qui en compte { $to } : un changement de plus de { $step } d’un coup.
+net-transit-break = { $at } : la voie réservée au transport en commun de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a une.
+net-walking-ends = { $at } : le trottoir de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a un.
+net-walking-island = { $n ->
+    [one] On ne peut pas aller à pied de cette rue au reste du réseau : une autoroute, une rue sans trottoir ou une branche sans passage pour piétons la coupe du reste.
+   *[other] On ne peut pas aller à pied de ces { $n } rues au reste du réseau : une autoroute, une rue sans trottoir ou une branche sans passage pour piétons les coupe du reste.
+}
+net-walking-block = { $street } fait { $length } de long entre ses extrémités, soit plus que le maximum de { $max } pour un îlot.
+net-unreadable = { $n ->
+    [one] 1 jonction n’a pas pu être lue; ses passages pour piétons ne sont donc pas vérifiés.
+   *[other] { $n } jonctions n’ont pas pu être lues; leurs passages pour piétons ne sont donc pas vérifiés.
+}
+net-more-findings = { $n ->
+    [one] 1 autre constat n’est pas listé.
+   *[other] { $n } autres constats ne sont pas listés.
+}
+net-more-places = { $n ->
+    [one] et 1 autre lieu
+   *[other] et { $n } autres lieux
+}
+
+## Données sources, l’onglet Provenance (src/map/source_quality.rs, src/map/vm.rs)
+prov-heading = Données sources
+prov-note = Ces constats montrent où les données OpenStreetMap derrière la carte peuvent être manquantes ou erronées. Ce ne sont pas des échecs de conception : ils sont comptés à part des vérifications de chaque lieu et des vérifications du réseau, et une rue visée ici peut quand même respecter toutes les règles. L’importateur ne peut pas distinguer une largeur indiquée sur la route de celle qu’il suppose; un constat sur une largeur peut donc n’être que la valeur par défaut.
+prov-no-places = Il n’y a pas de données sources à examiner.
+prov-lead-none = Rien ne semble manquant ni erroné dans les données sources.
+prov-lead = { $n ->
+    [one] 1 lieu des données sources peut être manquant ou erroné.
+   *[other] { $n } lieux des données sources peuvent être manquants ou erronés.
+}
+prov-count-none = rien trouvé
+prov-count-one = 1 lacune possible
+prov-count = { $n } lacunes possibles
+prov-label-source = Source :
+prov-label-impact = Effet sur la conception :
+prov-kind-name = Noms de rues
+prov-kind-disconnected = Rues déconnectées
+prov-kind-ends = Culs-de-sac
+prov-kind-width = Largeurs
+prov-kind-speed = Limites de vitesse
+prov-name = Le nom de { $street } ne figure pas dans OpenStreetMap; la carte lui donne donc un nom de son cru.
+prov-source-name = La route n’a pas d’étiquette de nom.
+prov-impact-name = Les modifications enregistrées et les notes désignent la rue par un nom inventé par la carte, et une rue du même genre pourrait être prise pour une autre.
+prov-disconnected = { $n ->
+    [one] Cette rue n’est reliée à aucune autre rue de la zone chargée.
+   *[other] Ces { $n } rues sont reliées entre elles et à aucune autre rue de la zone chargée.
+}
+prov-source-disconnected = Les routes ne partagent aucun nœud avec le reste du réseau et aucune n’atteint le bord de la zone. Les routes peuvent avoir été cartographiées sans nœud commun, ou les autres routes peuvent manquer.
+prov-impact-disconnected = Les vérifications du réseau sur les parcours piétons, cyclables et de transport en commun les compteront comme coupées, ce qui peut être une lacune des données et non de la conception.
+prov-ends = { $street } se termine à un nœud qu’aucune autre rue n’atteint.
+prov-source-ends = La route s’arrête à un nœud qui lui est propre. Ce peut être un vrai cul-de-sac, ou la route qui la prolonge peut manquer ou ne pas être reliée.
+prov-impact-ends = Il peut manquer une jonction ici; les passages et les voies que les vérifications de conception attendent ne seraient alors pas dessinés.
+prov-width-row-narrow = { $street } fait { $width } de large à l’importation, soit moins que les { $limit } qu’une rue est censée exiger.
+prov-width-row-wide = { $street } fait { $width } de large à l’importation, soit plus que les { $limit } qu’une rue est censée exiger.
+prov-width-lane-narrow = Un élément de { $street } ({ $kind }) est à la largeur minimale permise par le catalogue, soit { $limit }.
+prov-width-lane-wide = Un élément de { $street } ({ $kind }) est à la largeur maximale permise par le catalogue, soit { $limit }.
+prov-source-width = L’importateur ne peut pas distinguer une largeur indiquée sur la route de celle que suppose osm2streets, et il garde chaque élément dans les limites du catalogue; un élément à une limite peut donc y avoir été ramené.
+prov-impact-width = Les vérifications de largeur et de capacité, et la place qui reste pour les autres éléments, reposent sur cette largeur.
+prov-speed = { $street } n’a pas de limite de vitesse dans OpenStreetMap.
+prov-source-speed = La route n’a pas d’étiquette maxspeed, ou en a une qui n’a pas pu être lue.
+prov-impact-speed = La vitesse affichée pour la rue est « Non indiquée », et la règle de limite de vitesse d’une zone ne peut pas la juger.
+prov-more-findings = { $n ->
+    [one] 1 autre constat n’est pas listé.
+   *[other] { $n } autres constats ne sont pas listés.
+}

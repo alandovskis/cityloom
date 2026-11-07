@@ -2,15 +2,14 @@
 //! it changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
-use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, State, Target};
 use crate::junction::read_model::JView;
+use crate::junction::signal;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
@@ -27,42 +26,16 @@ impl Presents for Junction {
     }
 }
 
-pub const VIEW_KEY: &str = "cityloom-junction-view";
-
-/// How the junction is drawn: the plan, which is edited, or the 2.5D picture, which is only looked at.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DrawMode {
-    Plan,
-    Iso,
-}
-
-impl DrawMode {
-    pub fn key(self) -> &'static str {
-        match self {
-            DrawMode::Plan => "plan",
-            DrawMode::Iso => "iso",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<DrawMode> {
-        match s {
-            "plan" => Some(DrawMode::Plan),
-            "iso" => Some(DrawMode::Iso),
-            _ => None,
-        }
-    }
-}
-
 pub struct JunctionVm {
     core: Core<Junction>,
-    mode: RwSignal<DrawMode>,
     ports: Ports,
     i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
-    /// How the plan was last drawn, for turning a pointer position into a point on it.
-    frame: Cell<Option<Frame>>,
 }
+
+/// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
+type Meeting = (usize, u32, crate::junction::signal::Conflict);
 
 /// Whether an edit says which phases it took off their ready-made pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,8 +61,7 @@ impl JunctionVm {
                     },
                 )
             });
-            let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(DrawMode::parse).unwrap_or(DrawMode::Plan);
-            JunctionVm { core: Core::new(junction), mode: RwSignal::new(mode), ports, i18n, keeper, binding, frame: Cell::new(None) }
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding }
         })
     }
 
@@ -126,47 +98,10 @@ impl JunctionVm {
         self.core.read(f)
     }
 
-    pub fn frame(&self) -> Option<Frame> {
-        self.frame.get()
-    }
-
-    /// How the junction is drawn, which a view that reads it draws again when it changes.
-    pub fn mode(&self) -> DrawMode {
-        self.mode.get()
-    }
-
-    /// The same, for a command: nothing is watched.
-    pub fn mode_now(&self) -> DrawMode {
-        self.mode.get_untracked()
-    }
-
-    /// Draws the junction in `mode`, keeps the choice and says it. Choosing the mode it is already in says nothing,
-    /// whether or not the browser kept the choice.
-    pub fn set_mode(&self, mode: DrawMode) {
-        if self.mode.get_untracked() == mode {
-            return;
-        }
-        self.mode.set(mode);
-        self.ports.storage.remember(VIEW_KEY, mode.key());
-        let key = match mode {
-            DrawMode::Plan => "jn-view-shown-plan",
-            DrawMode::Iso => "jn-view-shown-iso",
-        };
-        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
-    }
-
-    pub fn toggle_mode(&self) {
-        self.set_mode(if self.mode_now() == DrawMode::Plan { DrawMode::Iso } else { DrawMode::Plan });
-    }
-
     // ---- what the views do ----
 
     pub fn set_units(&self, units: Units) {
         self.core.set_units(units);
-    }
-
-    pub fn set_frame(&self, frame: Frame) {
-        self.frame.set(Some(frame));
     }
 
     /// Changes the junction, tells whatever watches it, and sees that it is kept.
@@ -191,10 +126,11 @@ impl JunctionVm {
 
     fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
         let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
+        let meeting = self.meetings();
         let r = self.edit(f);
         if r.into() {
             let lost = self.lost_since(before);
-            self.say_edit_with(&lost);
+            self.say_edit_with(&lost, &meeting);
         } else {
             self.say_refusal();
         }
@@ -251,7 +187,6 @@ impl JunctionVm {
     }
 
     fn toggle_phase_movement(&self, index: usize, uid: u32, ride: bool) -> bool {
-        use crate::junction::signal;
         // The pattern of the phase, as the suggestion or the person's plan has it.
         let pattern = || {
             self.read(|j| {
@@ -264,22 +199,18 @@ impl JunctionVm {
             self.say_refusal();
             return false;
         };
+        let meeting = self.meetings();
         let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
         if done {
             let lost: Vec<usize> = match pattern() {
                 Some((after, _)) if before != signal::Pattern::Custom && after == signal::Pattern::Custom => vec![index],
                 _ => Vec::new(),
             };
-            self.say_edit_with(&lost);
+            self.say_edit_with(&lost, &meeting);
         } else {
             self.say_refusal();
         }
         done
-    }
-
-    /// A change that is not announced, as each step of a drag is.
-    pub fn quiet<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
-        self.edit(f)
     }
 
     /// A selection the person made, announced by what is selected.
@@ -294,42 +225,29 @@ impl JunctionVm {
         self.say_selection();
     }
 
-    /// The end of a gesture: kept when `commit`, and announced as an edit if it
-    /// changed anything, or else by what is selected.
-    pub fn end_gesture(&self, commit: bool) {
-        if commit {
-            let before = self.read(|j| j.gesture_baseline().filter(|b| b.signal_plan.is_some()).map(|b| (b.clone(), j.region)));
-            if self.edit(|j| j.end_gesture()) {
-                let lost = self.lost_since(before);
-                self.say_edit_with(&lost);
-            } else {
-                self.say_selection();
-            }
-        } else {
-            self.edit(|j| j.cancel_gesture());
-        }
-    }
-
     pub fn undo(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.undo());
         if done {
-            self.ports.announcer.say(&self.i18n.tr_now("jn-undone", &Args::new()));
+            self.say_with_meetings(self.i18n.tr_now("jn-undone", &Args::new()), &meeting);
         }
         done
     }
 
     pub fn redo(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.redo());
         if done {
-            self.say_edit();
+            self.say_edit_with(&[], &meeting);
         }
         done
     }
 
     pub fn reset(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.reset());
         if done {
-            self.ports.announcer.say(&self.i18n.tr_now("jn-started-over", &Args::new()));
+            self.say_with_meetings(self.i18n.tr_now("jn-started-over", &Args::new()), &meeting);
         }
         done
     }
@@ -380,32 +298,71 @@ impl JunctionVm {
         binding.keep_junction(self.core.read(|j| j.snapshot()))
     }
 
-    fn say_edit(&self) {
-        self.say_edit_with(&[]);
+    /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
+    /// phase (from 0) the edit took off its ready-made pattern.
+    fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
+        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+            self.say_parts(std::iter::once(t).chain(self.notes(meeting, lost)));
+        }
     }
 
-    /// The edit's text, then a sentence for each phase (from 0) the edit took off its ready-made pattern.
-    fn say_edit_with(&self, lost: &[usize]) {
-        if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            if let Some(note) = self.lost_note(lost) {
-                t = format!("{t} {note}");
-            }
-            self.ports.announcer.say(&t);
+    /// Says `text`, then the sentence for the movements that meet now and did not before.
+    fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)));
+    }
+
+    /// The sentences that follow an edit's text: the movements that now meet, then the phases off their pattern.
+    fn notes(&self, meeting: &[Meeting], lost: &[usize]) -> Vec<String> {
+        self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)).collect()
+    }
+
+    /// Announces the parts as one text.
+    fn say_parts(&self, parts: impl Iterator<Item = String>) {
+        self.ports.announcer.say(&parts.collect::<Vec<String>>().join(" "));
+    }
+
+    /// The movements that meet in the signal plan now, each with its phase's street.
+    fn meetings(&self) -> Vec<Meeting> {
+        self.read(|j| signal::meetings(j.current(), j.region))
+    }
+
+    /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
+    /// phases (and the first of them) when there are several. None when none arose (one that was there already is not said again).
+    fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
+        let v = self.view_now();
+        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
+        let (first, rest) = new.split_first()?;
+        let first_said = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
+        if rest.is_empty() {
+            return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", first_said)));
         }
+        let mut phases: Vec<usize> = new.iter().map(|m| m.0).collect();
+        phases.dedup();
+        let list = self.number_list(&phases);
+        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list).str("first", first_said);
+        Some(self.i18n.tr_now("jn-conflict-heard-many", &args))
+    }
+
+    /// "1", "1 and 2", "1, 2 and 3": the places (from 0) as phase numbers.
+    fn number_list(&self, places: &[usize]) -> String {
+        let numbers: Vec<String> = places.iter().map(|&i| (i + 1).to_string()).collect();
+        let Some((last, rest)) = numbers.split_last() else { return String::new() };
+        if rest.is_empty() {
+            return last.clone();
+        }
+        let head =
+            rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
+        self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()))
     }
 
     /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
     /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
     pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
-        let numbers: Vec<String> = lost.iter().map(|&i| (i + 1).to_string()).collect();
-        let (last, rest) = numbers.split_last()?;
-        if rest.is_empty() {
-            return Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", last.clone())));
+        match lost {
+            [] => None,
+            [one] => Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", (one + 1).to_string()))),
+            _ => Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", self.number_list(lost)))),
         }
-        let head =
-            rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
-        let list = self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()));
-        Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", list)))
     }
 
     fn say_refusal(&self) {
@@ -438,10 +395,12 @@ impl crate::shell::Target for JunctionVm {
 
     fn apply_region(&self, region: usize) -> bool {
         let before = self.pattern_state();
+        let meeting = self.meetings();
         let changed = self.edit(|j| j.set_region(region));
         if changed {
-            if let Some(note) = self.lost_note(&self.lost_since(before)) {
-                self.ports.announcer.say(&note);
+            let notes = self.notes(&meeting, &self.lost_since(before));
+            if !notes.is_empty() {
+                self.say_parts(notes.into_iter());
             }
         }
         changed
@@ -626,44 +585,6 @@ mod tests {
     }
 
     #[test]
-    fn the_mode_starts_as_the_plan_toggles_and_is_announced() {
-        let r = rig(0);
-        assert_eq!(r.vm.mode_now(), DrawMode::Plan);
-        r.vm.toggle_mode();
-        assert_eq!(r.vm.mode_now(), DrawMode::Iso);
-        r.vm.set_mode(DrawMode::Iso);
-        r.vm.toggle_mode();
-        assert_eq!(r.said.take(), vec!["Showing the junction in 2.5D.", "Showing the plan."]);
-    }
-
-    #[test]
-    fn choosing_the_view_already_shown_says_nothing_even_before_anything_is_kept() {
-        let r = rig(0);
-        r.vm.set_mode(DrawMode::Plan);
-        assert_eq!(r.said.take(), Vec::<String>::new());
-        assert_eq!(r.storage.recall(VIEW_KEY), None);
-    }
-
-    #[test]
-    fn the_mode_is_kept_across_a_new_view_model_and_garbage_falls_back_to_the_plan() {
-        let (ports, _, storage) = crate::shared::ports::test_ports();
-        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
-        JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).set_mode(DrawMode::Iso);
-        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("iso"));
-        assert_eq!(JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).mode_now(), DrawMode::Iso);
-        storage.remember(VIEW_KEY, "sideways");
-        assert_eq!(JunctionVm::new(ports, en, Junction::new(0), None).mode_now(), DrawMode::Plan);
-    }
-
-    #[test]
-    fn the_mode_speaks_french() {
-        let (ports, said, _) = crate::shared::ports::test_ports();
-        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
-        vm.set_mode(DrawMode::Iso);
-        assert_eq!(said.take(), vec!["Jonction affichée en 2,5D."]);
-    }
-
-    #[test]
     fn the_units_start_in_metres_and_changing_them_is_not_an_edit() {
         let r = rig(0);
         assert_eq!(r.vm.units_now(), Units::Metres);
@@ -672,15 +593,6 @@ mod tests {
         assert_eq!(r.vm.units_now(), Units::Feet);
         assert_eq!(r.vm.version().get_untracked(), 0);
         assert!(Rc::ptr_eq(&a, &r.vm.view_now()));
-    }
-
-    #[test]
-    fn the_plan_s_frame_is_kept_for_whoever_needs_to_read_a_point_from_it() {
-        let r = rig(0);
-        assert_eq!(r.vm.frame(), None);
-        let f = Frame::fit([-10.0, -10.0, 10.0, 10.0], 1000.0, 800.0);
-        r.vm.set_frame(f);
-        assert_eq!(r.vm.frame(), Some(f));
     }
 
     #[test]
@@ -728,36 +640,6 @@ mod tests {
         assert!(r.said.take().is_empty());
         r.vm.select_relative(1);
         assert_eq!(r.said.take().len(), 1);
-    }
-
-    #[test]
-    fn a_quiet_change_says_nothing() {
-        let r = rig(0);
-        r.vm.quiet(|j| j.set_control(2));
-        assert!(r.said.take().is_empty());
-    }
-
-    #[test]
-    fn a_gesture_is_one_revision_announced_when_it_ends_and_none_when_cancelled_or_unchanged() {
-        let r = rig(0);
-        let n = arm(&r.vm, 0);
-        r.vm.select(Target::Arm(n));
-        r.said.take();
-        r.vm.quiet(|j| j.begin_gesture());
-        assert!(r.vm.quiet(|j| j.drag_arm_to(n, 3_000.0, -10_000.0)));
-        r.vm.quiet(|j| j.drag_arm_to(n, 5_000.0, -10_000.0));
-        assert_eq!(r.vm.view_now().revisions.len(), 0);
-        r.vm.end_gesture(true);
-        assert_eq!(r.vm.view_now().revisions.len(), 1);
-        assert!(r.said.take()[0].starts_with("Sample Avenue 2 bearing: 25°."));
-        // Nothing changed: the selection is said instead.
-        r.vm.quiet(|j| j.begin_gesture());
-        r.vm.end_gesture(true);
-        assert_eq!(r.said.take(), vec!["Sample Avenue 2 (north-east), 25 degrees"]);
-        r.vm.quiet(|j| j.begin_gesture());
-        r.vm.quiet(|j| j.drag_arm_to(n, 9_000.0, -10_000.0));
-        r.vm.end_gesture(false);
-        assert_eq!((r.vm.view_now().revisions.len(), r.vm.read(|j| j.arm(n).unwrap().bearing)), (1, 25));
     }
 
     #[test]

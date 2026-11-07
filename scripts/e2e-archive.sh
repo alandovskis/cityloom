@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Packs the e2e fixtures into a .cityloom archive and runs the map, street and archive specs over a server that
-# unpacks it (`just e2e-archive`). Run from the repository root, after the wasm and the server are built.
+# unpacks it (`just e2e-archive`). Run from the repository root, after the wasm is built and the server is built and pinned (`scripts/pin-server.sh`).
 set -eu
 work=target/e2e-archive
 rm -rf "$work"

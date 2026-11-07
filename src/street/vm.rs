@@ -2,7 +2,8 @@
 //! changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
@@ -17,7 +18,10 @@ use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
-use crate::street::model::{CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, TreeSize, Use, View, ZoneRefusal};
+use crate::street::impact::{self, Cause, Impact, Input};
+use crate::street::model::{
+    CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View, ZoneRefusal,
+};
 use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
@@ -37,43 +41,6 @@ pub struct SpeedOption {
     pub selected: bool,
 }
 
-/// The storage key under which the view chosen for the street's drawing is kept, per browser.
-pub const VIEW_KEY: &str = "cityloom-street-view";
-
-/// How the street's drawing shows the street: its cross-section, which is edited, or the street in 2.5D,
-/// which is only looked at.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ViewMode {
-    Section,
-    Iso,
-}
-
-impl ViewMode {
-    /// The word it is kept as.
-    pub fn word(self) -> &'static str {
-        match self {
-            ViewMode::Section => "section",
-            ViewMode::Iso => "iso",
-        }
-    }
-
-    pub fn parse(word: &str) -> Option<ViewMode> {
-        match word {
-            "section" => Some(ViewMode::Section),
-            "iso" => Some(ViewMode::Iso),
-            _ => None,
-        }
-    }
-
-    /// The view the toggle goes to from this one.
-    pub fn other(self) -> ViewMode {
-        match self {
-            ViewMode::Section => ViewMode::Iso,
-            ViewMode::Iso => ViewMode::Section,
-        }
-    }
-}
-
 pub struct StreetVm {
     core: Core<Editor>,
     ports: Ports,
@@ -82,7 +49,6 @@ pub struct StreetVm {
     binding: Option<CityBinding>,
     /// The areas whose outline holds the street, read when the page opened.
     areas: Vec<Restriction>,
-    mode: ArcRwSignal<ViewMode>,
     /// A merge waiting for the choice of the section to keep: with the next zone (true) or the previous one.
     merge: ArcRwSignal<Option<bool>>,
     /// The kind picked for the free stretch (side, start) chosen on a stops row; another stretch starts from the kind
@@ -92,6 +58,21 @@ pub struct StreetVm {
     stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
     /// The name typed for the chosen free stretch, which the stop added there starts with.
     stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
+    /// What the last change did to the street, as shown.
+    impact: ArcRwSignal<Option<Impact>>,
+    /// What the last change did, waiting for the edits to settle, and the timer that shows it.
+    impact_pending: RefCell<Option<Impact>>,
+    impact_timer: Cell<Option<u32>>,
+    me: Weak<StreetVm>,
+}
+
+/// How long after the last change the summary of it is shown, in milliseconds.
+const IMPACT_DELAY_MS: u32 = 600;
+
+/// The street before an edit: its class, and what the summary of the edit is compared with.
+struct Before {
+    class: StreetClass,
+    input: Input,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -112,12 +93,15 @@ pub struct TransformMenu {
     pub pedestrian: Vec<usize>,
     /// Atlas codes of the measures the street can be arranged as.
     pub transit: Vec<&'static str>,
+    /// Every street template, with the reason one cannot be applied to the selected zone. Never empty, so the
+    /// button is always shown.
+    pub templates: Vec<TemplateView>,
 }
 
 impl TransformMenu {
     /// Nothing to offer: the button is not shown.
     pub fn is_empty(&self) -> bool {
-        self.pedestrian.is_empty() && self.transit.is_empty()
+        self.pedestrian.is_empty() && self.transit.is_empty() && self.templates.is_empty()
     }
 }
 
@@ -128,8 +112,6 @@ impl StreetVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
-            // The view chosen on an earlier visit; the section when there is none, or it is not a view.
-            let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(ViewMode::parse).unwrap_or(ViewMode::Section);
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
                 Keeper::new(
@@ -149,11 +131,14 @@ impl StreetVm {
                 keeper,
                 binding,
                 areas,
-                mode: ArcRwSignal::new(mode),
                 merge: ArcRwSignal::new(None),
                 stop_pick: ArcRwSignal::new(None),
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
+                impact: ArcRwSignal::new(None),
+                impact_pending: RefCell::new(None),
+                impact_timer: Cell::new(None),
+                me: me.clone(),
             }
         })
     }
@@ -181,6 +166,14 @@ impl StreetVm {
             return Vec::new();
         }
         self.core.version().track();
+        self.findings()
+    }
+
+    /// The same, for a command: nothing is watched.
+    fn findings(&self) -> Vec<Finding> {
+        if self.areas.is_empty() {
+            return Vec::new();
+        }
         let street = self.core.read(|e| e.snapshot());
         self.areas.iter().map(|r| Finding::of(r, &street)).collect()
     }
@@ -199,38 +192,6 @@ impl StreetVm {
 
     pub fn read<R>(&self, f: impl FnOnce(&Editor) -> R) -> R {
         self.core.read(f)
-    }
-
-    // ---- the view ----
-
-    /// How the drawing shows the street; a view that reads it is drawn again when it changes.
-    pub fn mode(&self) -> ViewMode {
-        self.mode.get()
-    }
-
-    /// The same, for a command: nothing is watched.
-    pub fn mode_now(&self) -> ViewMode {
-        self.mode.get_untracked()
-    }
-
-    /// The person chose how the drawing shows the street: it is kept for the next visit and said. Choosing
-    /// the view already shown does nothing. A store that refuses does not stop the change: it holds for this visit.
-    pub fn set_mode(&self, mode: ViewMode) {
-        if self.mode.get_untracked() == mode {
-            return;
-        }
-        self.mode.set(mode);
-        self.ports.storage.remember(VIEW_KEY, mode.word());
-        let key = match mode {
-            ViewMode::Section => "view-shown-section",
-            ViewMode::Iso => "view-shown-iso",
-        };
-        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
-    }
-
-    /// The other view: what the toggle's `V` does.
-    pub fn toggle_mode(&self) {
-        self.set_mode(self.mode_now().other());
     }
 
     // ---- what the views do ----
@@ -255,10 +216,10 @@ impl StreetVm {
     /// An edit the person made: announced by what it was and how the pieces
     /// stand. A refused edit says nothing.
     pub fn apply(&self, f: impl FnOnce(&mut Editor) -> bool) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         let done = self.edit(f);
         if done {
-            self.say_edit(before);
+            self.say_edit(&before);
         }
         done
     }
@@ -283,9 +244,9 @@ impl StreetVm {
     /// changed anything.
     pub fn end_gesture(&self, commit: bool) {
         if commit {
-            let before = self.class_now();
+            let before = self.before();
             if self.edit(|e| e.end_gesture()) {
-                self.say_edit(before);
+                self.say_edit(&before);
             }
         } else {
             self.edit(|e| e.cancel_gesture());
@@ -293,30 +254,33 @@ impl StreetVm {
     }
 
     pub fn undo(&self) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         let done = self.edit(|e| e.undo());
         if done {
             let said = text::undone_text(&self.view_now(), &self.i18n, self.units_now());
-            self.ports.announcer.say(&self.with_class_note(said, before));
+            self.ports.announcer.say(&self.with_class_note(said, &before));
+            self.record(Cause::Undo, &before);
         }
         done
     }
 
     pub fn redo(&self) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         let done = self.edit(|e| e.redo());
         if done {
             let said = text::redone_text(&self.view_now(), &self.i18n, self.units_now());
-            self.ports.announcer.say(&self.with_class_note(said, before));
+            self.ports.announcer.say(&self.with_class_note(said, &before));
+            self.record(Cause::Redo, &before);
         }
         done
     }
 
     pub fn reset(&self) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         let done = self.edit(|e| e.reset());
         if done {
-            self.ports.announcer.say(&self.with_class_note(text::started_over(&self.i18n), before));
+            self.ports.announcer.say(&self.with_class_note(text::started_over(&self.i18n), &before));
+            self.record(Cause::StartOver, &before);
         }
         done
     }
@@ -329,15 +293,36 @@ impl StreetVm {
         TransformMenu {
             pedestrian: if v.has_motor { PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect() } else { Vec::new() },
             transit: v.measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect(),
+            templates: v.templates.clone(),
+        }
+    }
+
+    /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
+    pub fn apply_template(&self, template: Template) -> bool {
+        let before = self.before();
+        let result = self.core.edit(|e| e.apply_template(template));
+        match result {
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.merge.set(None);
+                self.say_edit(&before);
+                true
+            }
+            Err(refusal) => {
+                self.ports.announcer.say(&text::template_refused(&self.i18n, self.units_now(), template, refusal));
+                false
+            }
         }
     }
 
     /// Arranges the roadway as an Atlas measure, or says it does not suit.
     pub fn apply_measure(&self, code: &str) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         let done = self.edit(|e| e.apply_measure(code));
         if done {
-            self.say_edit(before);
+            self.say_edit(&before);
         } else {
             self.ports.announcer.say(&text::measure_refused(&self.i18n));
         }
@@ -349,14 +334,14 @@ impl StreetVm {
     /// A zone edit the person made: announced like any edit, and a refusal is said in the page's words and
     /// changes nothing (not even what is kept).
     fn zone_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), ZoneRefusal>) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         match self.core.edit(f) {
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
                 }
                 self.merge.set(None);
-                self.say_edit(before);
+                self.say_edit(&before);
                 true
             }
             Err(refusal) => {
@@ -466,13 +451,13 @@ impl StreetVm {
     /// An edit of a row the person made: announced like any edit; a refusal is said in the words of what was edited
     /// and changes nothing.
     fn row_edit(&self, subject: Subject, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
-        let before = self.class_now();
+        let before = self.before();
         match self.core.edit(f) {
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
                 }
-                self.say_edit(before);
+                self.say_edit(&before);
                 true
             }
             Err(refusal) => {
@@ -805,14 +790,14 @@ impl StreetVm {
             self.say_green_refusal(GreenRefusal::Dragging);
             return false;
         }
-        let (before, revisions) = (self.class_now(), self.view_now().revisions.len());
+        let (before, revisions) = (self.before(), self.view_now().revisions.len());
         match self.core.edit(f) {
             Ok(()) if self.view_now().revisions.len() == revisions => false,
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
                 }
-                self.say_edit(before);
+                self.say_edit(&before);
                 true
             }
             Err(refusal) => {
@@ -1028,6 +1013,7 @@ impl StreetVm {
         self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
+        self.forget_impact();
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
     }
 
@@ -1044,23 +1030,73 @@ impl StreetVm {
         binding.keep_street(self.core.read(|e| e.snapshot()))
     }
 
-    /// The class the street has now, for telling after an edit whether it changed.
-    fn class_now(&self) -> StreetClass {
-        self.view_now().class
+    /// How the street stands before an edit: the class, which an edit may change, and what the impact summary
+    /// compares against.
+    fn before(&self) -> Before {
+        Before { class: self.view_now().class, input: self.impact_input() }
+    }
+
+    /// The street as the summary of an edit reads it, now.
+    fn impact_input(&self) -> Input {
+        Input::of(&self.view_now(), &self.findings())
     }
 
     /// `said`, and after it what the edit did to the street's class, if it changed.
-    fn with_class_note(&self, said: String, before: StreetClass) -> String {
-        match text::class_change_text(before, &self.view_now(), &self.i18n, self.units_now()) {
+    fn with_class_note(&self, said: String, before: &Before) -> String {
+        match text::class_change_text(before.class, &self.view_now(), &self.i18n, self.units_now()) {
             Some(note) => format!("{said} {note}"),
             None => said,
         }
     }
 
-    fn say_edit(&self, before: StreetClass) {
+    fn say_edit(&self, before: &Before) {
         if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&self.with_class_note(t, before));
+            self.record(Cause::Edit, before);
         }
+    }
+
+    // ---- the summary of the last change ----
+
+    /// What the last change did to the street, once the edits have settled: none until the street is changed, and
+    /// replaced by the next change. Drawn again when it is published.
+    pub fn impact(&self) -> Option<Impact> {
+        self.impact.get()
+    }
+
+    /// The same, for a command: nothing is watched.
+    pub fn impact_now(&self) -> Option<Impact> {
+        self.impact.get_untracked()
+    }
+
+    /// Works out what a change did and shows it a moment after the last change. Each change puts the showing off,
+    /// so a run of keyed edits is summarized by its last, once, and never while the person is still typing.
+    fn record(&self, cause: Cause, before: &Before) {
+        *self.impact_pending.borrow_mut() = Some(impact::diff(cause, &before.input, &self.impact_input()));
+        if let Some(id) = self.impact_timer.take() {
+            self.ports.scheduler.cancel(id);
+        }
+        let me = self.me.clone();
+        let id = self.ports.scheduler.after(
+            IMPACT_DELAY_MS,
+            Box::new(move || {
+                if let Some(vm) = me.upgrade() {
+                    vm.impact_timer.set(None);
+                    let shown = vm.impact_pending.borrow_mut().take();
+                    vm.impact.set(shown);
+                }
+            }),
+        );
+        self.impact_timer.set(Some(id));
+    }
+
+    /// The summary is for the street as it was edited here: a street replaced from outside (a sync) has none.
+    fn forget_impact(&self) {
+        if let Some(id) = self.impact_timer.take() {
+            self.ports.scheduler.cancel(id);
+        }
+        self.impact_pending.borrow_mut().take();
+        self.impact.set(None);
     }
 
     fn say_selection(&self) {
@@ -1336,6 +1372,151 @@ mod tests {
         assert!(r.said.take().is_empty());
     }
 
+    // ---- the summary of the last change (#64) ----
+
+    fn says(r: &Rig, impact: &Impact) -> Vec<String> {
+        let (i18n, units) = (r.vm.i18n().clone(), r.vm.units_now());
+        let mut lines = vec![text::say_now(&i18n, units, &impact.headline)];
+        lines.extend(impact.uses.iter().map(|u| text::say_now(&i18n, units, &u.said())));
+        lines.extend(impact.now_passing.iter().map(|s| format!("passes: {}", text::say_now(&i18n, units, s))));
+        lines.extend(impact.now_failing.iter().map(|s| format!("fails: {}", text::say_now(&i18n, units, s))));
+        lines
+    }
+
+    #[test]
+    fn there_is_no_summary_until_the_street_is_changed_and_selecting_does_not_make_one() {
+        let r = rig(0);
+        assert_eq!(r.vm.impact_now(), None);
+        let uid = first(&r.vm);
+        r.vm.select(Some(uid));
+        r.time.advance(2_000);
+        assert_eq!(r.vm.impact_now(), None);
+    }
+
+    #[test]
+    fn an_edit_is_summarized_a_moment_after_it_and_the_announcement_is_the_one_it_always_was() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.set_width(uid, 3_800)));
+        assert_eq!(r.said.take(), ["Resize sidewalk. 0.5 m too wide. Make a piece narrower or remove one."]);
+        assert_eq!(r.vm.impact_now(), None, "not while the person may still be editing");
+        r.time.advance(599);
+        assert_eq!(r.vm.impact_now(), None);
+        r.time.advance(1);
+        let impact = r.vm.impact_now().unwrap();
+        assert_eq!(impact.cause, Cause::Edit);
+        assert_eq!(says(&r, &impact), ["Resize sidewalk", "Walking: 6.6 m \u{2192} 7.1 m (0.5 m more)", "fails: Fits the street width"]);
+        assert!(r.said.take().is_empty(), "the summary is shown, not announced by the announcer");
+    }
+
+    #[test]
+    fn a_run_of_edits_is_summarized_once_by_its_last_and_never_while_it_goes_on() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        for width in [3_400, 3_500, 3_600] {
+            assert!(r.vm.apply(|e| e.set_width(uid, width)));
+            r.time.advance(300);
+            assert_eq!(r.vm.impact_now(), None, "each edit puts the summary off");
+        }
+        r.time.advance(300);
+        let impact = r.vm.impact_now().unwrap();
+        assert_eq!(impact.uses.iter().map(|u| (u.before_mm, u.after_mm)).collect::<Vec<_>>(), [(6_800, 6_900)], "the last edit only");
+        assert_eq!(r.time.pending(), 0);
+    }
+
+    #[test]
+    fn a_refused_edit_leaves_the_summary_as_it_was() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.remove(uid)));
+        r.time.advance(600);
+        let shown = r.vm.impact_now();
+        assert!(!r.vm.apply(|e| e.remove(uid)));
+        r.time.advance(2_000);
+        assert_eq!(r.vm.impact_now(), shown);
+        assert!(shown.is_some());
+    }
+
+    #[test]
+    fn undo_redo_and_start_over_are_summarized_as_the_reverse_and_the_edit_again() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.set_width(uid, 3_800)));
+        r.time.advance(600);
+        let edit = r.vm.impact_now().unwrap();
+        assert!(r.vm.undo());
+        r.time.advance(600);
+        let undo = r.vm.impact_now().unwrap();
+        assert_eq!(says(&r, &undo), ["Undone: Resize sidewalk", "Walking: 7.1 m \u{2192} 6.6 m (0.5 m less)", "passes: Fits the street width"]);
+        assert!(r.vm.redo());
+        r.time.advance(600);
+        let redo = r.vm.impact_now().unwrap();
+        assert_eq!(says(&r, &redo)[0], "Redone: Resize sidewalk");
+        assert_eq!((redo.uses, redo.now_failing), (edit.uses, edit.now_failing));
+        assert!(r.vm.reset());
+        r.time.advance(600);
+        let over = r.vm.impact_now().unwrap();
+        assert_eq!(says(&r, &over), ["Started over", "Walking: 7.1 m \u{2192} 6.6 m (0.5 m less)", "passes: Fits the street width"]);
+        assert!(r.vm.undo());
+        r.time.advance(600);
+        assert_eq!(says(&r, &r.vm.impact_now().unwrap())[0], "Undone: Reset to existing");
+    }
+
+    #[test]
+    fn a_measure_and_make_pedestrian_are_one_change_each() {
+        use crate::shared::catalogue::kind_index;
+        let r = rig(0);
+        let sidewalk = kind_index("sidewalk").unwrap();
+        assert!(r.vm.apply(|e| e.make_pedestrian(sidewalk)));
+        r.time.advance(600);
+        let impact = r.vm.impact_now().unwrap();
+        assert_eq!(says(&r, &impact)[0], "Made pedestrian");
+        assert!(impact.class.is_some() && impact.uses.iter().any(|u| u.mode == crate::shared::catalogue::Mode::Vehicle && u.after_mm == 0));
+        let r = rig(1);
+        let code = r.vm.transform_menu().transit[0];
+        assert!(r.vm.apply_measure(code));
+        r.time.advance(600);
+        assert_eq!(r.vm.view_now().revisions.len(), 1);
+        assert!(!r.vm.impact_now().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_change_that_does_nothing_to_space_or_checks_says_so() {
+        let r = rig(0);
+        assert!(r.vm.set_speed(Some(30)));
+        r.time.advance(600);
+        assert!(r.vm.impact_now().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_summary_is_for_the_edit_made_here_and_a_sync_reload_clears_it() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.set_width(uid, 3_000)));
+        r.time.advance(600);
+        assert!(r.vm.impact_now().is_some());
+        remote_edit(&binding);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.impact_now(), None);
+    }
+
+    #[test]
+    fn a_street_inside_an_area_is_summarized_against_the_area_s_rule_too() {
+        use crate::restriction::model::Rule;
+        use crate::shared::catalogue::kind_index;
+        let r = bendville_rig(&[("Car zone", Rule::CarFree, 0.0)]);
+        assert!(r.vm.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
+        r.time.advance(600);
+        assert!(says(&r, &r.vm.impact_now().unwrap()).contains(&"passes: Area rule: Car zone".to_string()));
+        assert!(r.vm.undo());
+        r.time.advance(600);
+        assert!(says(&r, &r.vm.impact_now().unwrap()).contains(&"fails: Area rule: Car zone".to_string()));
+    }
+
     #[test]
     fn the_street_says_what_it_says_in_the_language_the_shell_switches() {
         let r = rig(0);
@@ -1439,7 +1620,38 @@ mod tests {
         assert!(menu.pedestrian.is_empty());
         let fits: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
         assert_eq!(menu.transit, fits, "the menu offers the measures that fit on a pedestrian street too");
-        assert_eq!(menu.is_empty(), fits.is_empty());
+        assert!(!menu.is_empty(), "the templates are always listed");
+    }
+
+    #[test]
+    fn the_transform_menu_lists_all_five_templates_and_says_why_one_does_not_fit() {
+        use crate::street::model::{Template, TemplateRefusal};
+        let r = rig(2);
+        let menu = r.vm.transform_menu();
+        assert_eq!(menu.templates.len(), 5);
+        let bus = menu.templates.iter().find(|t| t.template == Template::BusCorridor).unwrap();
+        assert!(matches!(bus.refusal, Some(TemplateRefusal::TooNarrow { .. })));
+        let before = r.vm.view_now().revisions.len();
+        assert!(!r.vm.apply_template(Template::BusCorridor));
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("Bus corridor needs a street at least 13.8 m wide."), "{said:?}");
+        assert_eq!(r.vm.view_now().revisions.len(), before, "a refusal changes nothing");
+    }
+
+    #[test]
+    fn a_template_is_one_announced_undo_step_and_start_over_restores_the_street() {
+        use crate::street::model::Template;
+        let r = rig(0);
+        let first = r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>();
+        assert!(r.vm.apply_template(Template::School));
+        assert_eq!(r.said.take().len(), 1);
+        assert_eq!(r.vm.view_now().revisions.len(), 1);
+        assert_eq!(r.vm.view_now().revisions[0].label.key, "rev-template");
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>(), first);
+        assert!(r.vm.apply_template(Template::Greenway) && r.vm.reset());
+        assert_eq!(r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>(), first);
     }
 
     #[test]
@@ -1583,78 +1795,6 @@ mod tests {
         let street = store.open().street_editor(edge, 0).unwrap();
         let binding = CityBinding { store, place: Place::Street(edge) };
         assert!(StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding)).area_checks().is_empty());
-    }
-
-    #[test]
-    fn the_drawing_starts_as_the_section_and_toggling_shows_the_2_5d_keeps_the_choice_and_says_it() {
-        use crate::shared::ports::Storage;
-        let r = rig(0);
-        assert_eq!(r.vm.mode_now(), ViewMode::Section);
-        r.vm.toggle_mode();
-        assert_eq!(r.vm.mode_now(), ViewMode::Iso);
-        assert_eq!(r.storage.recall(VIEW_KEY).as_deref(), Some("iso"));
-        assert_eq!(r.said.take(), vec!["Showing the street in 2.5D"]);
-        r.vm.toggle_mode();
-        assert_eq!(r.vm.mode_now(), ViewMode::Section);
-        assert_eq!(r.storage.recall(VIEW_KEY).as_deref(), Some("section"));
-        assert_eq!(r.said.take(), vec!["Showing the section"]);
-        // Changing the view is not an edit.
-        assert_eq!(r.vm.version().get_untracked(), 0);
-    }
-
-    #[test]
-    fn choosing_the_view_already_shown_changes_nothing_and_says_nothing() {
-        let r = rig(0);
-        r.vm.set_mode(ViewMode::Section);
-        assert!(r.said.take().is_empty());
-        r.vm.set_mode(ViewMode::Iso);
-        r.said.take();
-        r.vm.set_mode(ViewMode::Iso);
-        assert!(r.said.take().is_empty());
-    }
-
-    #[test]
-    fn the_view_chosen_is_the_one_the_next_page_opens_with() {
-        let (ports, _said, _storage, _time) = test_ports_with_time();
-        let first = StreetVm::new(ports.clone(), crate::i18n_for(Locale::En), Editor::new(0), None);
-        first.set_mode(ViewMode::Iso);
-        let next = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(next.mode_now(), ViewMode::Iso);
-    }
-
-    #[test]
-    fn the_view_change_is_said_in_the_language_of_the_page() {
-        let r = rig(0);
-        r.vm.i18n().set(Locale::FrCa);
-        r.vm.toggle_mode();
-        assert_eq!(r.said.take(), vec!["Rue affichée en 2,5D"]);
-        r.vm.toggle_mode();
-        assert_eq!(r.said.take(), vec!["Coupe affichée"]);
-    }
-
-    #[test]
-    fn a_blocked_store_or_an_unknown_word_starts_the_section_and_the_toggle_still_works() {
-        use crate::shared::ports::Storage;
-        let (ports, said, storage, _time) = test_ports_with_time();
-        storage.remember(VIEW_KEY, "sideways");
-        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(vm.mode_now(), ViewMode::Section);
-        storage.blocked(true);
-        vm.toggle_mode();
-        assert_eq!(vm.mode_now(), ViewMode::Iso, "it holds for this visit");
-        assert_eq!(said.take(), vec!["Showing the street in 2.5D"]);
-        // Nothing was kept: the next visit reads what the store held before, and starts on the section.
-        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("sideways"));
-    }
-
-    #[test]
-    fn a_view_is_written_as_a_word_and_read_back() {
-        for m in [ViewMode::Section, ViewMode::Iso] {
-            assert_eq!(ViewMode::parse(m.word()), Some(m));
-            assert_ne!(m.other(), m);
-            assert_eq!(m.other().other(), m);
-        }
-        assert_eq!(ViewMode::parse(""), None);
     }
 
     #[test]

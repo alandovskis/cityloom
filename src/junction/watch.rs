@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use crate::junction::keys::{Action, Step};
 use crate::junction::model::{Junction, Target};
 use crate::junction::read_model::{ArmView, JView};
-use crate::junction::vm::{DrawMode, JunctionVm};
+use crate::junction::vm::JunctionVm;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
@@ -38,24 +38,6 @@ impl Watch {
     /// A message of the page, drawn again when the language changes.
     pub fn tr(&self, key: &str) -> String {
         self.vm.with_value(|v| v.i18n().tr(key, &Args::new()))
-    }
-
-    /// How the junction is drawn, drawing again when it changes.
-    pub fn mode(&self) -> DrawMode {
-        self.vm.with_value(|v| v.mode())
-    }
-
-    /// The same, for an event handler: nothing is watched.
-    pub fn mode_now(&self) -> DrawMode {
-        self.vm.with_value(|v| v.mode_now())
-    }
-
-    pub fn set_mode(&self, mode: DrawMode) {
-        self.vm.with_value(|v| v.set_mode(mode));
-    }
-
-    pub fn toggle_mode(&self) {
-        self.vm.with_value(|v| v.toggle_mode());
     }
 
     pub fn version(&self) -> RwSignal<u32> {
@@ -117,23 +99,6 @@ impl Watch {
     /// Switches the bike movements of street `uid` in phase `index` as the person does. Whether it was done.
     pub fn toggle_phase_ride(&self, index: usize, uid: u32) -> bool {
         self.vm.with_value(|v| v.toggle_phase_ride(index, uid))
-    }
-
-    pub fn frame(&self) -> Option<crate::junction::frame::Frame> {
-        self.vm.with_value(|v| v.frame())
-    }
-
-    pub fn set_frame(&self, frame: crate::junction::frame::Frame) {
-        self.vm.with_value(|v| v.set_frame(frame));
-    }
-
-    /// A change that is not announced, as each step of a drag is.
-    pub fn quiet(&self, f: impl FnOnce(&mut Junction) -> bool) -> bool {
-        self.vm.with_value(|v| v.quiet(f))
-    }
-
-    pub fn finish_gesture(&self, commit: bool) {
-        self.vm.with_value(|v| v.end_gesture(commit));
     }
 
     pub fn undo(&self) -> bool {

@@ -1252,6 +1252,17 @@ fn signal_phases(w: Watch) -> impl IntoView {
                 .num("all_red", i64::from(t.all_red_s));
             tr(w, key, args)
         });
+        // What meets in the phase, in sentences, under the card (not inside the button: it is only a selector).
+        let warnings = Memo::new(move |_| {
+            w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.conflicts.iter().map(|c| w.say(c)).collect::<Vec<String>>()).unwrap_or_default()
+        });
+        let warned = move || {
+            let list = warnings.get();
+            (!list.is_empty()).then(|| {
+                let label = tr(w, "jn-conflict-list", Args::new().num("n", i as i64 + 1));
+                view! { <ul class="phase-conflicts" aria-label=label>{list.into_iter().map(|t| view! { <li>{t}</li> }).collect_view()}</ul> }
+            })
+        };
         view! {
             <li>
                 <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
@@ -1261,6 +1272,7 @@ fn signal_phases(w: Watch) -> impl IntoView {
                     <span class="phase-timing">{timing}</span>
                     <span class="phase-summary">{summary}</span>
                 </button>
+                {warned}
             </li>
         }
     };

@@ -8,8 +8,8 @@ use leptos::prelude::*;
 
 use crate::junction::model::*;
 use crate::junction::signal::Pattern;
-use crate::junction::vm::{DrawMode, JunctionVm};
-use crate::junction::{inspector, notes, page, plan, turns};
+use crate::junction::vm::JunctionVm;
+use crate::junction::{drawing, inspector, notes, page, turns};
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
 
@@ -171,8 +171,8 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 13, "the ten of any junction, and a signal's time to cross, phases and cycle");
-    assert!(h.contains("Time to cross") && h.contains("Signal cycle"));
+    assert_eq!(count(&h, "<li class=\"ok\">"), 15, "the ten of any junction, and a signal's time to cross, phases, cycle and meeting movements");
+    assert!(h.contains("Time to cross") && h.contains("Signal cycle") && h.contains("Movements that meet"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
 }
@@ -204,6 +204,62 @@ fn the_changes_start_from_the_junction_today_and_list_each_edit() {
 
 fn panel(s: &Rc<JunctionVm>) -> String {
     html(|| view! { <inspector::Inspector vm=s.clone()/> }.into_any())
+}
+
+// ---- what the plan's grips edited is edited from the inspector and the keys (#140) --------------------------------------
+//
+// The plan had three grips: the end of a street (which turned it), a corner's (its curb radius) and a crossing's (how far
+// it is set back). The 2.5D has none, and the plan is gone, so each of these is a typed field with a stepper in the
+// inspector, and a key.
+
+/// The number field of the inspector with this heading id: its input, labelled by it, and the two stepper buttons
+/// whose names start with `down` and `up`.
+fn has_field(h: &str, id: &str, down: &str, up: &str) -> bool {
+    let labelled = h.contains(&format!("id=\"{id}\"")) && h.contains(&format!("aria-labelledby=\"{id}\""));
+    labelled && h.contains(&format!("aria-label=\"{down}")) && h.contains(&format!("aria-label=\"{up}"))
+}
+
+#[test]
+fn each_thing_the_old_grips_edited_has_a_field_with_steppers_in_the_inspector() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    assert!(has_field(&panel(&s), "i-h-bearing", "Turn anticlockwise by", "Turn clockwise by"), "the street's direction");
+    s.edit(|j| j.select(Target::Corner(n)));
+    assert!(has_field(&panel(&s), "i-h-corner", "Tighter by", "Wider by"), "the corner's curb radius");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    assert!(has_field(&panel(&s), "i-h-setback", "Closer by", "Farther by"), "how far the crossing is set back");
+    // The crossing's own panel is only the crossing: the same field, and its width beside it.
+    assert!(has_field(&panel(&s), "i-h-cwidth", "Narrower by", "Wider by"));
+}
+
+#[test]
+fn the_keys_step_what_the_old_grips_dragged_and_the_inspector_follows() {
+    use crate::junction::keys::{Action, Step, on_drawing};
+    assert_eq!(on_drawing("ArrowRight", true, Some("arm")), Some((Action::Step(Step::Bearing, 1), true)));
+    assert_eq!(on_drawing("+", false, Some("corner")), Some((Action::Step(Step::Corner, 1), true)));
+    assert_eq!(on_drawing("-", false, Some("crossing")), Some((Action::Step(Step::Setback, -1), true)));
+    // The steps are the field's own steppers: one press changes the number the field shows.
+    let s = shared(0);
+    let n = arm(&s, 0);
+    for (target, field, step) in
+        [(Target::Arm(n), "i-h-bearing", Step::Bearing), (Target::Corner(n), "i-h-corner", Step::Corner), (Target::Crossing(n), "i-h-setback", Step::Setback)]
+    {
+        s.edit(|j| j.select(target));
+        let shown = |s: &Rc<JunctionVm>| {
+            let h = panel(s);
+            let at = h.find(&format!("id=\"{field}\"")).unwrap();
+            h[at..].split("value=\"").nth(1).unwrap().split('"').next().unwrap().to_string()
+        };
+        let before = shown(&s);
+        s.edit(|j| match step {
+            Step::Bearing => j.step_bearing(n, 1),
+            Step::Corner => j.step_corner(n, 1),
+            Step::Setback => j.step_setback(n, 1),
+            Step::Cycle => j.step_cycle(1),
+        });
+        assert_ne!(shown(&s), before, "{field}");
+    }
 }
 
 #[test]
@@ -716,7 +772,7 @@ fn linked_shared() -> Rc<JunctionVm> {
 fn the_heading_names_the_junction_and_counts_its_streets() {
     let s = shared(0);
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
-    assert!(h.contains(">Avenue and street</h1>") && h.contains("Junction plan") && h.contains(">4 streets<"));
+    assert!(h.contains(">Avenue and street</h1>") && h.contains("Junction in 2.5D") && h.contains(">4 streets<"));
     assert!(!h.contains("City map"));
 }
 
@@ -832,95 +888,69 @@ fn the_key_lists_the_pieces_in_the_plan() {
 }
 
 #[test]
-fn the_plan_is_a_labelled_group_holding_a_picture_of_the_junction() {
+fn the_drawing_is_a_labelled_group_holding_the_2_5d_picture_of_the_junction() {
+    use crate::shared::i18n::Locale;
     let s = shared(0);
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Junction plan editor\""));
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Junction editor\""));
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
-    assert!(h.contains("Plan of the junction, north up. 4 streets."));
-    assert!(h.contains("data-role=\"grip-arm\"") && h.contains("class=\"plan\""));
+    assert!(h.contains("class=\"iso iso-junction\"") && !h.contains("class=\"plan\""), "{h}");
+    // Its parts are pressed to be selected, but there is nothing to drag.
+    assert!(!h.contains("data-role=\"grip") && h.contains("data-role=\"arm\"") && h.contains("data-role=\"lane\""), "{h}");
+    assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
+    let f = shared_in(0, Locale::FrCa);
+    let h = html(|| view! { <drawing::Drawing vm=f.clone()/> }.into_any());
+    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues.") && h.contains("aria-label=\"Éditeur de la jonction\""), "{h}");
 }
 
 #[test]
-fn the_plan_follows_the_units_and_the_selection() {
+fn the_label_of_the_drawing_describes_the_junction_as_the_plan_s_did() {
+    use crate::junction::iso::iso_label;
+    use crate::shared::i18n::Locale;
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let mut j = Junction::new(0);
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets.");
+    assert_eq!(iso_label(&Junction::new(1).view(), &en), "2.5D view of the junction. 3 streets.");
+    assert!(j.set_raised(true));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Raised table.");
+    assert_eq!(iso_label(&j.view(), &fr), "Vue en 2,5D de la jonction. 4 rues. Carrefour surélevé.");
+    assert!(j.set_control(ROUNDABOUT));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Roundabout.");
+    assert_eq!(iso_label(&j.view(), &fr), "Vue en 2,5D de la jonction. 4 rues. Carrefour giratoire.");
+    assert!(j.set_turbo(Some(0)));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Basic turbo roundabout, mini size.");
+}
+
+#[test]
+fn the_drawing_follows_the_units_and_the_selection() {
     let s = shared(0);
     s.set_units(Units::Feet);
     let n = arm(&s, 0);
     s.edit(|j| j.select(Target::Arm(n)));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
-    assert_eq!(count(&h, "class=\"arm on\""), 1);
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("2 × 29.5"), "the crossing's length is in feet");
+    assert_eq!(count(&h, "class=\"sel-box iso-sel\""), 1);
 }
 
 #[test]
-fn the_keyboard_help_names_v_for_the_view_in_both_languages() {
-    use crate::shared::i18n::{Args, Locale};
+fn the_old_choice_of_the_plan_is_ignored_and_the_junction_is_always_drawn_in_2_5d() {
+    // An earlier build kept "plan" or "iso" under this key; nothing reads it now.
+    for kept in ["plan", "iso", "sideways", ""] {
+        let ports = crate::shared::platform::browser_ports();
+        ports.storage.remember("cityloom-junction-view", kept);
+        let s = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(0), None);
+        let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+        assert!(h.contains("class=\"iso iso-junction\"") && !h.contains("class=\"plan\""), "kept {kept:?}");
+    }
+}
+
+#[test]
+fn the_page_has_no_toggle_between_views_and_no_key_for_one() {
     let page = include_str!("../../web/intersection.html");
-    assert!(page.contains("<kbd>V</kbd> <span data-i18n=\"jn-page-key-view\">"), "the page's key help lists V");
-    assert_eq!(crate::i18n_for(Locale::En).tr("jn-page-key-view", &Args::new()), "plan, 2.5D");
-    assert_eq!(crate::i18n_for(Locale::FrCa).tr("jn-page-key-view", &Args::new()), "plan, 2,5D");
-}
-
-#[test]
-fn the_view_toggle_keeps_the_touch_target_of_a_coarse_pointer() {
-    // `.view-mode .unit` (min-height 26px) outweighs app.css's `.unit` rule for a coarse pointer, so editor.css
-    // must say 44px again for it inside its own coarse-pointer block.
-    let css = include_str!("../../web/editor.css");
-    let coarse = &css[css.find("@media (any-pointer: coarse)").unwrap()..];
-    let block = &coarse[..coarse.find("\n}\n").unwrap()];
-    let rule = &block[block.find(".view-mode .unit").expect("the coarse block names the toggle's buttons")..];
-    assert!(rule[..rule.find('}').unwrap()].contains("min-height: 44px"), "{rule}");
-    // The row's negative margin was sized for a 32px toggle (`.view-mode-tools`); 12px more of button needs 6px more.
-    let tools = &block[block.find(".view-mode-tools").expect("the coarse block makes room for the taller toggle")..];
-    assert!(tools[..tools.find('}').unwrap()].contains("margin-block: -9px"), "{tools}");
-}
-
-fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
-    let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
-    vm.set_mode(mode);
-    vm
-}
-
-#[test]
-fn the_drawing_is_the_2_5d_picture_in_iso_mode_with_no_grips_and_a_label_of_its_own() {
-    use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Iso, Locale::En);
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("class=\"iso\"") && !h.contains("class=\"plan\""), "{h}");
-    assert!(!h.contains("data-role=\"grip") && !h.contains("data-role=\"arm\""), "{h}");
-    assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
-    let f = shared_mode(DrawMode::Iso, Locale::FrCa);
-    let h = html(|| view! { <plan::PlanDrawing vm=f.clone()/> }.into_any());
-    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues."), "{h}");
-}
-
-#[test]
-fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
-    use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Plan, Locale::En);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
-    assert!(h.contains(">View</legend>"), "{h}");
-    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
-    // V goes to the view not shown, so only that button carries it.
-    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-plan").contains("aria-keyshortcuts"));
-    assert!(h.contains(">Plan</button>") && h.contains(">2.5D</button>"), "{h}");
-    s.set_mode(DrawMode::Iso);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"false\""));
-    assert!(button_tag(&h, "view-plan").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
-}
-
-#[test]
-fn the_view_toggle_reads_plan_and_2_5d_in_french() {
-    use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Plan, Locale::FrCa);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(h.contains(">Plan</button>") && h.contains(">2,5D</button>") && h.contains(">Affichage</legend>"), "{h}");
+    assert!(!page.contains("<kbd>V</kbd>") && !page.contains("jn-page-key-view") && !page.contains("view-mode"), "no view to switch to");
+    for lang in [include_str!("i18n/en.ftl"), include_str!("i18n/fr.ftl")] {
+        assert!(!lang.contains("jn-view-") && !lang.contains("jn-plan-label") && !lang.contains("jn-grip-"), "the words of the plan are gone");
+    }
 }
 
 // ---- the page in French ---------------------------------------------------------------
@@ -950,14 +980,14 @@ fn speaks_french(h: &str, english: &[&str], french: &[&str]) {
 }
 
 /// English that must not be left on a French junction page, whatever the view.
-const ENGLISH: &[&str] = &["Junction plan", "Does it work", "Your changes", "Turns allowed", "Where paths meet", "streets", "Every check"];
+const ENGLISH: &[&str] = &["Junction in 2.5D", "Does it work", "Your changes", "Turns allowed", "Where paths meet", "streets", "Every check"];
 
 #[test]
 fn the_page_around_the_plan_speaks_french() {
     use crate::shared::i18n::Locale;
     let s = linked_in(Locale::FrCa);
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
-    speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Plan de la jonction", ">4 rues<", ">Jonction 4</h1>"]);
+    speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Jonction en 2,5D", ">4 rues<", ">Jonction 4</h1>"]);
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     speaks_french(&h, &["Junction<", "Streets", "Changes made"], &[">Jonction<", ">Rues<", "Modifications apportées"]);
     let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
@@ -998,39 +1028,28 @@ fn the_notes_speak_french() {
 }
 
 #[test]
-fn the_plan_speaks_french() {
+fn the_drawing_speaks_french() {
     use crate::shared::i18n::Locale;
     let s = shared_in(0, Locale::FrCa);
     let (n, e) = (arm(&s, 0), arm(&s, 90));
     s.edit(|j| j.set_offset(e, 500));
     s.edit(|j| j.select(Target::Corner(n)));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
     speaks_french(
         &h,
-        &[ENGLISH, &["Plan of the junction", "north up", "Scale", " road", "shifted", "Turn ", "Change the corner radius", "Lane 1 of"]].concat(),
-        &[
-            "aria-label=\"Éditeur du plan de la jonction\"",
-            "Plan de la jonction, nord en haut. 4 rues.",
-            ">Échelle<",
-            "E · chaussée de 11,4\u{a0}m · décalée de 0,5\u{a0}m",
-            "Faire pivoter Sample Street 1 (est)",
-            "Modifier le rayon du coin",
-            "Voie 1 sur 2, Sample Avenue 2 (nord)",
-            ">20\u{a0}m<",
-            ">2 × 9,0<",
-        ],
+        &[ENGLISH, &["2.5D view of the junction", "Junction editor", "Lane 1 of"]].concat(),
+        &["aria-label=\"Éditeur de la jonction\"", "Vue en 2,5D de la jonction. 4 rues.", "Voie 1 sur 2, Sample Avenue 2 (nord)", ">2 × 9,0<"],
     );
-    s.edit(|j| j.select(Target::Crossing(n)));
     s.edit(|j| j.set_control(ROUNDABOUT));
     let so = arm(&s, 180);
     s.edit(|j| j.set_bus(Some((n, so))));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    speaks_french(&h, &["Move the crossing", "Bus only", "Roundabout."], &["Déplacer le passage pour piétons", "Autobus seulement", "Carrefour giratoire."]);
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Bus only", "Roundabout."], &["Autobus seulement", "Carrefour giratoire."]);
 }
 
 #[test]
-fn a_switch_of_language_draws_the_plan_its_label_and_the_status_again() {
-    use crate::junction::plan_svg::{plan_label, plan_svg};
+fn a_switch_of_language_draws_the_picture_its_label_and_the_status_again() {
+    use crate::junction::iso::{iso_label, iso_svg};
     use crate::junction::text::{arms_text, fit_text};
     use crate::shared::i18n::Locale;
     let owner = Owner::new();
@@ -1038,13 +1057,13 @@ fn a_switch_of_language_draws_the_plan_its_label_and_the_status_again() {
     let i18n = crate::i18n_for(Locale::En);
     // What the views' closures do: they word the junction from the shared words, so they track them.
     let shared = StoredValue::new_local((i18n.clone(), Junction::new(0).view()));
-    let markup = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_svg(v, i18n, 1000.0, 1000.0, Units::Metres).markup));
-    let label = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_label(v, i18n)));
+    let markup = Memo::new(move |_| shared.with_value(|(i18n, v)| iso_svg(v, i18n, 1000.0, 1000.0, Units::Metres).markup));
+    let label = Memo::new(move |_| shared.with_value(|(i18n, v)| iso_label(v, i18n)));
     let status = Memo::new(move |_| shared.with_value(|(i18n, v)| format!("{} / {}", arms_text(v, i18n), fit_text(v, i18n))));
-    assert!(markup.get().contains(">Scale<") && label.get().starts_with("Plan of the junction") && status.get().starts_with("4 streets"));
+    assert!(markup.get().contains("Lane 1 of") && label.get().starts_with("2.5D view of the junction") && status.get().starts_with("4 streets"));
     i18n.set(Locale::FrCa);
-    assert!(markup.get().contains(">Échelle<") && !markup.get().contains(">Scale<"), "{}", markup.get());
-    assert!(label.get().starts_with("Plan de la jonction, nord en haut."), "{}", label.get());
+    assert!(markup.get().contains("Voie 1 sur") && !markup.get().contains("Lane 1 of"), "{}", markup.get());
+    assert!(label.get().starts_with("Vue en 2,5D de la jonction."), "{}", label.get());
     assert!(status.get().starts_with("4 rues / 4 rues, feux de circulation."), "{}", status.get());
 }
 
@@ -1059,7 +1078,7 @@ fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
         view! {
             <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Provenance vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
             <notes::Across vm=s.clone()/><notes::Conflicts vm=s.clone()/><notes::ConflictNote vm=s.clone()/><notes::Checks vm=s.clone()/>
-            <notes::Revisions vm=s.clone()/><plan::PlanDrawing vm=s.clone()/><turns::Turns vm=s.clone()/>
+            <notes::Revisions vm=s.clone()/><drawing::Drawing vm=s.clone()/><turns::Turns vm=s.clone()/>
         }
         .into_any()
     });
@@ -1806,8 +1825,104 @@ fn the_timing_panels_are_not_there_off_a_signal_and_speak_french() {
 /// The cards of the drawings row, one `<li>` each.
 fn phase_cards(h: &str) -> Vec<String> {
     let at = h.find("class=\"signal-phases\"").expect("the row is there");
-    let row = &h[at..at + h[at..].find("</ul>").unwrap()];
-    row.split("<li").skip(1).map(str::to_string).collect()
+    // The row ends at the first list end that is not inside a card: a card may hold a list of its own (its warnings),
+    // and a card's end follows its list's.
+    let end =
+        h[at..].match_indices("</ul>").map(|(i, _)| i).find(|&i| !h[at + i + 5..].starts_with("</li>") && !h[at + i + 5..].starts_with("<!></li>")).unwrap();
+    let row = &h[at..at + end];
+    row.split("<li><button").skip(1).map(|c| format!("<button{c}")).collect()
+}
+
+// ---- warnings about movements that meet ----
+
+#[test]
+fn an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, warning, several, none, several_first) in [
+        (
+            Locale::En,
+            "Warning: Phase 1: cars from the north side going straight on meet people",
+            "movements now meet, in phases 1 and 3.",
+            "Warning:",
+            "meet people walking across",
+        ),
+        (
+            Locale::FrCa,
+            "Attention : Phase 1 : les voitures du côté nord qui vont tout droit rencontrent les piétons",
+            "mouvements se rencontrent maintenant, aux phases 1 et 3.",
+            "Attention :",
+            "rencontrent les piétons",
+        ),
+    ] {
+        let s = shared_in(0, locale);
+        let (north, east, south) = (arm(&s, 0), arm(&s, 90), arm(&s, 180));
+        let said_now = || live::take_said().iter().map(|t| t.replace(['\u{a0}', '\u{202f}'], " ")).collect::<Vec<String>>();
+        s.choose_pattern(0, Pattern::ThroughOnly);
+        live::take_said();
+        // North's phase leads straight into its own crossing: allowed, and said when it is made.
+        assert!(s.toggle_phase_walk(0, north), "a warning never refuses an edit");
+        let said = said_now();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(warning), "{said:?}");
+        // The warning that is already there is not said again by a later edit that leaves it alone.
+        assert!(s.toggle_phase_walk(0, east));
+        assert!(!said_now()[0].contains(none));
+        // Removing the cause says nothing of warnings.
+        assert!(s.toggle_phase_walk(0, north));
+        assert!(!said_now()[0].contains(none));
+        // Several at once: one sentence.
+        assert!(s.toggle_phase_walk(0, east));
+        live::take_said();
+        assert!(s.apply(|j| j.set_phase_walk(0, north, true) & j.set_phase_walk(2, south, true)));
+        let said = said_now();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(several), "{said:?}");
+        assert_eq!(said[0].matches(none).count(), 1, "{said:?}");
+        assert!(said[0].contains(several_first), "the first of them is named: {said:?}");
+    }
+}
+
+#[test]
+fn undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    assert!(s.toggle_phase_walk(0, north));
+    live::take_said();
+    assert!(s.undo());
+    assert!(!live::take_said().iter().any(|t| t.contains("Warning")));
+    assert!(s.redo());
+    assert!(live::take_said().iter().any(|t| t.contains("Warning")));
+}
+
+#[test]
+fn the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list() {
+    let s = shared(0);
+    let clean = plain_panel(&s);
+    assert!(!clean.contains("phase-conflicts"), "the suggested plan has no warnings");
+    let north = arm(&s, 0);
+    assert!(s.toggle_phase_walk(0, north));
+    let cards = phase_cards(&plain_panel(&s));
+    assert!(cards[0].contains("class=\"phase-conflicts\"") && cards[0].contains("aria-label=\"Warnings for phase 1\""), "{}", cards[0]);
+    assert!(cards[0].contains("meet people walking across on the north side"), "{}", cards[0]);
+    assert!(cards[0].find("</button>").unwrap() < cards[0].find("phase-conflicts").unwrap(), "the list is not inside the button: {}", cards[0]);
+    assert!(cards[1..].iter().all(|c| !c.contains("phase-conflicts")));
+    assert!(s.toggle_phase_walk(0, north));
+    assert!(!plain_panel(&s).contains("phase-conflicts"), "removing the cause removes the warning");
+}
+
+#[test]
+fn the_checks_list_fails_while_movements_meet_and_passes_again() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    let list = |s: &Rc<JunctionVm>| html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
+    assert!(list(&s).contains("Movements that meet"));
+    let ok = count(&list(&s), "<li class=\"ok\">");
+    assert!(s.toggle_phase_walk(0, north));
+    let bad = list(&s);
+    assert_eq!(count(&bad, "<li class=\"ok\">"), ok - 1, "{bad}");
+    assert!(bad.replace(['\u{a0}', '\u{202f}'], " ").contains("meet people walking across on the north side"), "{bad}");
+    assert!(s.toggle_phase_walk(0, north));
+    assert_eq!(count(&list(&s), "<li class=\"ok\">"), ok);
 }
 
 // ---- the pattern of a phase ----
@@ -2141,18 +2256,18 @@ fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
 
 #[test]
 fn a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic() {
-    use crate::junction::plan_svg::plan_label;
+    use crate::junction::iso::iso_label;
     use crate::shared::i18n::Locale;
     let en = crate::i18n_for(Locale::En);
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), en.clone(), suspended_turbo(), None);
-    assert!(!plan_label(&s.read(|j| j.view()), &en).contains("turbo"));
+    assert!(!iso_label(&s.read(|j| j.view()), &en).contains("turbo"));
     let h = panel(&s);
     for gone in ["i-h-turbo-size", "i-h-turbo-main", "i-h-turbo-layout"] {
         assert!(!h.contains(gone), "{gone}");
     }
     let mut busy = Junction::new(0);
     assert!(busy.set_control(ROUNDABOUT) && busy.set_turbo(Some(0)));
-    assert!(plan_label(&busy.view(), &en).contains("turbo"));
+    assert!(iso_label(&busy.view(), &en).contains("turbo"));
 }
 
 // ---- an arm's end zone and what lies beyond it -------------------------------------
@@ -2183,7 +2298,7 @@ fn an_arm_without_a_beyond_draws_as_before() {
     let (got, pinned) = (arms_fingerprint(), 15_083_500_958_540_711_930);
     assert_eq!(
         got, pinned,
-        "the pieces, lane hit areas and leaving arrows of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+        "the pieces, lane hit areas and leaving arrows of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at the 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
     );
 }
 
@@ -2496,21 +2611,17 @@ fn all_phases_as(pattern: Pattern) -> Rc<JunctionVm> {
 }
 
 #[test]
-fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
+fn a_turn_of_a_street_that_changes_what_a_phase_is_says_so() {
     let s = all_phases_as(Pattern::ThroughOnly);
     let north = arm(&s, 0);
-    s.quiet(|j| j.begin_gesture());
-    assert!(s.quiet(|j| j.set_bearing(north, 340)));
-    s.end_gesture(true);
+    assert!(s.apply(|j| j.set_bearing(north, 340)));
     let said = live::take_said();
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].ends_with("Phases 2 and 4 no longer follow a ready-made pattern."), "{said:?}");
-    // A drag that leaves every phase as it was adds nothing.
+    // An edit that leaves every phase as it was adds nothing.
     let s = all_phases_as(Pattern::ThroughOnly);
     let east = arm(&s, 90);
-    s.quiet(|j| j.begin_gesture());
-    s.quiet(|j| j.set_setback(east, 4000));
-    s.end_gesture(true);
+    s.apply(|j| j.set_setback(east, 4000));
     assert!(!live::take_said().iter().any(|t| t.contains("no longer follow")));
 }
 
@@ -2672,7 +2783,7 @@ fn a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane() {
 
 // ---- the stop checks ---------------------------------------------------------------------
 
-fn check_of(j: &Junction, id: &str) -> crate::junction::read_model::Check {
+pub(crate) fn check_of(j: &Junction, id: &str) -> crate::junction::read_model::Check {
     j.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
 }
 
@@ -2996,4 +3107,134 @@ fn a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_read
     assert!(j.set_stop(uid, STOP_PLATFORM));
     let text = crate::shared::testing::fr(&check_of(&j, "transit").detail);
     assert!(text.contains("gardez soit la mesure (quai sur rue protégé par des feux), soit l\u{2019}arrêt de la rue"), "{text}");
+}
+
+// ---- curbside uses on an arm ----
+
+/// A sample junction whose north arm has the curbside uses `make` builds from the index of that arm's parking piece
+/// (or its first sidewalk when it has none), and that arm's uid.
+pub(crate) fn junction_with_uses(make: impl Fn(usize) -> Vec<crate::street::model::EndUse>) -> (Junction, u32) {
+    let mut state = Junction::new(0).current().clone();
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    let prof = arm.profile(0);
+    let piece = prof.pieces.iter().position(|p| crate::shared::catalogue::KINDS[p.kind].id == "parking").unwrap_or(0);
+    arm.curb_near = make(piece);
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
+}
+
+pub(crate) fn end_use(near_mm: i32, use_: crate::street::model::Use, piece: usize) -> crate::street::model::EndUse {
+    crate::street::model::EndUse { index: 0, side: crate::shared::catalogue::Side::Right, use_, near_mm, far_mm: near_mm + 6_000, piece: Some(piece) }
+}
+
+#[test]
+fn an_arm_draws_the_curbside_uses_its_street_has() {
+    use crate::street::model::Use;
+    let (j, uid) = junction_with_uses(|p| vec![end_use(25_000, Use::Tree, p)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.curb_uses.len(), 1);
+    let u = &a.curb_uses[0];
+    assert!(u.poly.is_some());
+    assert_eq!((u.near_mm, u.material), (25_000, "trees"));
+    assert!(v.arms.iter().filter(|x| x.uid != uid).all(|x| x.curb_uses.is_empty()));
+}
+
+#[test]
+fn an_arm_without_uses_sends_none() {
+    let v = Junction::new(0).view();
+    assert!(v.arms.iter().all(|a| a.curb_uses.is_empty()));
+    assert!(!serde_json::to_string(&v.arms[0]).unwrap().contains("curb_uses"));
+}
+
+fn near_check(near: i32, use_: crate::street::model::Use) -> (Junction, crate::junction::read_model::Check) {
+    let (j, _) = junction_with_uses(|p| vec![end_use(near, use_, p)]);
+    let c = check_of(&j, "curb-near");
+    (j, c)
+}
+
+#[test]
+fn parking_three_metres_past_the_crossing_fails_curb_near_and_names_the_arm() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let near = north_reach(&probe) + 3_000;
+    let (j, c) = near_check(near, Use::Parking);
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("Sample Avenue 2 (north)") && text.contains("3.0 m") && text.contains("5.0 m or more") && text.contains("crossing"), "{text}");
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().curb_uses[0].bad);
+}
+
+#[test]
+fn parking_five_metres_clear_passes_and_a_millimetre_short_fails() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let reach = north_reach(&probe);
+    assert!(near_check(reach + 5_000, Use::Parking).1.ok);
+    assert!(!near_check(reach + 4_999, Use::Parking).1.ok);
+    assert!(!near_check(reach + 5_000, Use::Loading).0.view().arms.is_empty());
+    assert!(!near_check(reach + 4_999, Use::Loading).1.ok, "loading is held to it too");
+}
+
+#[test]
+fn parking_that_reaches_the_crossing_says_so() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let (_, c) = near_check(north_reach(&probe) - 500, Use::Parking);
+    assert!(!c.ok);
+    assert!(said_en(&c.detail).contains("reaches the crossing"), "{}", said_en(&c.detail));
+}
+
+#[test]
+fn a_tree_beside_the_crossing_is_not_held_to_the_clearance() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let (j, c) = near_check(north_reach(&probe) + 1_000, Use::Tree);
+    assert!(c.ok, "{}", said_en(&c.detail));
+    assert!(!j.view().arms.iter().find(|a| a.bearing == 0).unwrap().curb_uses[0].bad);
+}
+
+#[test]
+fn no_uses_one_passing_check() {
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let v = Junction::new(sample).view();
+        let c = v.checks.iter().find(|c| c.id == "curb-near").expect("the check is always listed");
+        assert!(c.ok && c.amount_mm == 0, "sample {sample}");
+        assert_eq!(said_en(&c.detail), "No parking or loading stands within 5.0 m of a crossing.", "sample {sample}");
+    }
+}
+
+#[test]
+fn a_pedestrian_arm_draws_and_judges_no_uses() {
+    use crate::street::model::Use;
+    let mut state = Junction::new(0).current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(|a| a.curb_near = vec![end_use(500, Use::Parking, 0)]);
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let v = Junction::from_city(named, &state, &state, 0).unwrap().view();
+    assert!(v.arms.iter().all(|a| a.curb_uses.is_empty() || !a.pedestrian));
+}
+
+#[test]
+fn the_selected_arm_names_its_curbside_uses() {
+    use crate::street::model::Use;
+    let (mut j, uid) = junction_with_uses(|p| vec![end_use(25_000, Use::Patio, p)]);
+    j.select(Target::Arm(uid));
+    let v = j.view();
+    let text = crate::junction::text::selection_text(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres).unwrap();
+    assert!(text.contains("Patio") && text.contains("25.0 m from the centre"), "{text}");
+}
+
+#[test]
+fn a_curbside_rain_garden_on_an_arm_brings_its_pattern_and_no_other_drawing_does() {
+    use crate::street::model::Use;
+    let draw = |j: &Junction| {
+        crate::junction::iso::iso_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, crate::shared::units::Units::Metres).markup
+    };
+    let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::RainGarden, p)]);
+    let with = draw(&j);
+    assert!(with.contains("mat-rain_garden") && with.contains("id=\"iso-m-rain_garden\""), "the rain garden is filled with its own texture");
+    let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::Tree, p)]);
+    assert!(!draw(&j).contains("iso-m-rain_garden"));
+    assert!(!draw(&Junction::new(0)).contains("iso-m-rain_garden"));
 }

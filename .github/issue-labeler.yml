@@ -12,7 +12,7 @@
   - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nArea rules \(on the map\) \/ Règles de zone \(sur la carte\)(?:\r?\n|$)/'
 "A-street · rue":
   - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nStreet editor \/ Éditeur de rues(?:\r?\n|$)/'
-"A-2.5d · 2,5d":
+"A-2.5d · 2.5d":
   - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nStreet in 2\.5D \/ Rue en 2,5D(?:\r?\n|$)/'
 "A-junction · jonction":
   - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nJunction editor \/ Éditeur de jonctions(?:\r?\n|$)/'

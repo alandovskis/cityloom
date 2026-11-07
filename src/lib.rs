@@ -6,6 +6,7 @@
 #![recursion_limit = "1024"]
 
 pub mod account;
+pub mod archive;
 pub mod city;
 pub mod junction;
 pub mod map;
@@ -67,6 +68,7 @@ const RESOURCES: &[shared::i18n::Resources] = &[
     junction::RESOURCES,
     restriction::RESOURCES,
     sync::RESOURCES,
+    archive::RESOURCES,
 ];
 
 /// The words of the app in `locale`.

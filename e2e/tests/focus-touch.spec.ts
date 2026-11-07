@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { expect, mapReady, openJunction, openStreet, pressablePiece, test } from "./fixtures";
+import { expect, mapReady, openJunction, openStreet, test } from "./fixtures";
 
 /** What a keyboard user sees on a focused control: a ring of its own, not only a tint. */
 const ring = (field: Locator) =>
@@ -32,10 +32,8 @@ for (const theme of ["light", "dark"]) {
     test("the street's width field has a 2px ring in the accent", async ({ page }) => {
       await openStreet(page);
       await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-      await page
-        .locator('#drawing [data-role="seg"]')
-        .nth(await pressablePiece(page))
-        .click();
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight");
       const field = page.locator("#inspector .wfield input");
       await field.focus();
       const r = await ring(field);
@@ -46,24 +44,18 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test.describe("a touch drag moves the piece, it does not scroll the page", () => {
-  test("on the street, the pieces and every handle take no browser pan", async ({ page }) => {
-    await openStreet(page);
-    await expect(page.locator('#drawing [data-role="seg"]').first()).toBeVisible();
-    expect(await touchAction(page.locator('#drawing [data-role="seg"]'))).toBe("none");
-    expect(await touchAction(page.locator('#drawing [data-role="handle"]'))).toBe("none");
-    expect(await touchAction(page.locator('#drawing [data-role="edge"]'))).toBe("none");
-  });
-
-  test("on the junction, every grip takes no browser pan", async ({ page }) => {
+test.describe("a tap on the junction selects a part, there is nothing to drag", () => {
+  test("every part that is pressed asks for a tap and the junction has no grip that takes the browser's pan", async ({
+    page,
+  }) => {
     await openJunction(page);
     await expect(page.locator("#drawing")).toBeVisible();
-    for (const role of ["grip-arm", "grip-corner", "grip-crossing"]) {
-      const grips = page.locator(`#drawing [data-role="${role}"]`);
-      if ((await grips.count()) === 0) continue;
-      expect(await touchAction(grips), role).toBe("none");
+    for (const role of ["arm", "lane", "crossing", "corner"]) {
+      const parts = page.locator(`#drawing [data-role="${role}"]`);
+      expect(await parts.count(), role).toBeGreaterThan(0);
+      expect(await touchAction(parts), role).toBe("manipulation");
     }
-    expect(await page.locator('#drawing [data-role="grip-arm"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('#drawing [data-role^="grip"]').count()).toBe(0);
   });
 });
 

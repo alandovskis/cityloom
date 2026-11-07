@@ -23,14 +23,20 @@ mod beyond;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
+mod templates;
+pub use templates::{Template, TemplateRefusal, TemplateView};
 mod curb;
+mod curb_end;
 mod curb_shown;
 mod green;
 mod map_uses;
 mod stop;
 mod stop_end;
 use curb::Choice;
-pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
+pub use curb::{
+    CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
+};
+pub use curb_end::EndUse;
 pub use curb_shown::{ShownGreen, ShownInstance, ShownStop};
 pub use green::{Green, GreenCell, GreenForm, GreenKind, GreenRefusal, GreenRowView, TreeSize, fills, host_at};
 pub use map_uses::{MapStop, MapUse, MapUses};
@@ -43,7 +49,7 @@ pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
 /// Sidewalk on each edge is a sheet check, not a hard rule.
-const ACCESS_LANE_MM: i32 = 3000;
+pub const ACCESS_LANE_MM: i32 = 3000;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Segment {
@@ -336,7 +342,7 @@ impl Street {
                     .map(|w| Variant {
                         kind: w.kind,
                         material: KINDS[w.kind].materials[0],
-                        direction: direction_for(w.kind, g.direction),
+                        direction: direction_for(w.kind, p.direction),
                         from_min: w.from_min,
                         to_min: w.to_min,
                         days: w.days.clone(),
@@ -1234,6 +1240,23 @@ impl Editor {
         ok
     }
 
+    /// Arranges the selected zone as a street template (`Template`): its pieces are replaced by the template's,
+    /// fitted to the street's width, as one undoable edit. Refused, with the reason and nothing changed, when the
+    /// class or the width does not suit it.
+    pub fn apply_template(&mut self, template: Template) -> Result<(), TemplateRefusal> {
+        let mut next_uid = self.next_uid;
+        let arranged = template.arrange(self.class(), self.row_mm(), REGIONS[self.region].drive_side, &mut next_uid)?;
+        let ok = self.edit(Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key())))), |segs| {
+            *segs = arranged;
+            true
+        });
+        if ok {
+            self.next_uid = next_uid;
+            self.selected = None;
+        }
+        Ok(())
+    }
+
     /// Makes the street pedestrian: every motor piece (travel, parking, loading, bus, shoulder, at any hour: a bike
     /// lane with a motor hour is one too) becomes a piece of `kind` (one of `PEDESTRIAN_KINDS`) at its own width and
     /// in its own place, with that kind's surface and curb and without hours or direction; the other pieces, bike
@@ -1456,6 +1479,10 @@ impl Editor {
             green_shown: self.green_shown(),
             green: self.green_row(),
             measures: self.measure_views(segs, &now),
+            templates: Template::ALL
+                .into_iter()
+                .map(|template| TemplateView { template, refusal: template.applicable(self.class(), self.row_mm()).err() })
+                .collect(),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
@@ -1628,6 +1655,22 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     Outcomes { share: shares(segs), existing_share: shares(existing), capacity_pph: capacity(segs), existing_capacity_pph: capacity(existing) }
 }
 
+/// Whether every zone of the street has an unbroken run of sidewalk wide enough for emergency access (the `access`
+/// check of a pedestrian street, over each zone).
+pub fn walkway_access(street: &Street) -> bool {
+    street.sections().into_iter().all(|segs| access_ok(segs, true))
+}
+
+/// Whether one section meets the `access` check: a pedestrian street keeps room for emergency vehicles in an unbroken
+/// run of sidewalk, the others in a lane.
+fn access_ok(segs: &[Segment], pedestrian: bool) -> bool {
+    if pedestrian {
+        widest_walkway_mm(segs) >= ACCESS_LANE_MM
+    } else {
+        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
+    }
+}
+
 /// The widest unbroken run of adjacent sidewalk pieces; any other piece between two sidewalks breaks the run.
 fn widest_walkway_mm<'a>(segs: impl IntoIterator<Item = &'a Segment>) -> i32 {
     let (mut best, mut run) = (0, 0);
@@ -1649,12 +1692,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
     let edge_walk = |s: Option<&Segment>| s.is_some_and(|s| KINDS[s.kind].id == "sidewalk");
     // A freeway has no sidewalks to ask for, and a pedestrian street no roadway to edge.
     let both_edges = freeway || pedestrian || (edge_walk(segs.first()) && edge_walk(segs.last()));
-    // A pedestrian street keeps room for emergency vehicles in an unbroken run of sidewalk; the others in a lane.
-    let access = if pedestrian {
-        widest_walkway_mm(segs) >= ACCESS_LANE_MM
-    } else {
-        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
-    };
+    let access = access_ok(segs, pedestrian);
     // With traffic on the right, lanes coming toward the viewer (1) sit to the
     // left of lanes going away (0); with traffic on the left, the reverse. A
     // one-way street has nothing to conflict.
@@ -1833,6 +1871,8 @@ pub struct View {
     pub green: GreenRowView,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
+    /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.
+    pub templates: Vec<TemplateView>,
     pub revisions: Vec<Revision>,
     pub can_undo: bool,
     pub can_redo: bool,
@@ -1912,7 +1952,7 @@ mod tests {
         let piece = Piece {
             kind: parking,
             width_mm: 3400,
-            direction: Some(0),
+            direction: Some(1),
             variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60, days: Some("Mo-Fr".into()) }],
         };
         let s = Street::imported(StreetClass::Local, Side::Right, &[piece]);
@@ -1923,7 +1963,8 @@ mod tests {
         assert_eq!((g.kind_at(8 * 60), g.kind_at(12 * 60)), (bus, parking));
         // the width is one both kinds allow
         assert_eq!(g.width_mm, 3000);
-        assert_eq!(g.variants[0].direction, g.direction);
+        // the bus window runs the way the lane did (the parking it is outside the window has no direction)
+        assert_eq!((g.direction, g.variants[0].direction), (None, Some(1)));
         assert_eq!(g.variants[0].days.as_deref(), Some("Mo-Fr"));
         assert_eq!(s.segments[0].variants[0].days, Editor::from_street(&s, &s, 0).view().segments[0].variants[0].days);
     }

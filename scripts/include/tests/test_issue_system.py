@@ -43,7 +43,7 @@ PAGE_LABELS: dict[str, str | None] = {
     "Map / Carte": "A-map · carte",
     "Area rules (on the map) / Règles de zone (sur la carte)": "A-area-rules · règles de zone",
     "Street editor / Éditeur de rues": "A-street · rue",
-    "Street in 2.5D / Rue en 2,5D": "A-2.5d · 2,5d",
+    "Street in 2.5D / Rue en 2,5D": "A-2.5d · 2.5d",
     "Junction editor / Éditeur de jonctions": "A-junction · jonction",
     "Account / Compte": "A-accounts · comptes",
     "Documentation": "A-docs · documentation",

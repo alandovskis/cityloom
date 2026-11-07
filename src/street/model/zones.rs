@@ -107,6 +107,13 @@ impl Street {
         );
     }
 
+    /// The pieces of the zone nearest an end of the street, borrowed: what `at_end` puts in `segments`.
+    pub fn end_segments(&self, first_end: bool) -> &[Segment] {
+        let nearest_is_first_zone = (self.from_end == ZoneEnd::First) == first_end;
+        let zone = if nearest_is_first_zone { self.zones.first() } else { self.zones.last() };
+        zone.and_then(|z| z.segments.as_deref()).unwrap_or(&self.segments)
+    }
+
     /// The zone nearest an end of the street, as a street of one zone: its section as `segments`.
     /// `first_end` says whether that is the street's first end. A street with no zones gives itself.
     pub fn at_end(&self, first_end: bool) -> Street {

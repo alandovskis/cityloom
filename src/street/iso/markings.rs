@@ -5,7 +5,7 @@
 use crate::shared::catalogue::KINDS;
 use crate::shared::iso::paint::{Paint, Pattern, Style};
 use crate::street::model::SegView;
-use crate::street::svg::curb_edges;
+use crate::street::pieces::curb_edges;
 
 const SOLID_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Solid, double: false };
 const BROKEN_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Broken, double: false };
@@ -26,8 +26,8 @@ pub struct Line {
 pub enum Symbol {
     /// A straight-ahead lane arrow on a driving lane, pointing the way the lane runs.
     Ahead { toward: bool },
-    /// The reserved-lane diamond, with "BUS" beyond it.
-    Bus,
+    /// The reserved-lane diamond, with "BUS" beyond it, turned to read the way the lane runs.
+    Bus { toward: bool },
     /// The bike symbol with a small arrow, or two opposed small arrows on a two-way bike lane.
     Bike { two_way: bool, toward: bool },
 }
@@ -72,7 +72,7 @@ fn between(a: &SegView, b: &SegView, curbed: bool) -> Option<Style> {
 fn symbol(s: &SegView) -> Option<Symbol> {
     match KINDS[s.kind].id {
         "travel" => s.direction.map(|d| Symbol::Ahead { toward: d == "toward" }),
-        "bus" => Some(Symbol::Bus),
+        "bus" => Some(Symbol::Bus { toward: s.direction == Some("toward") }),
         "bike" => Some(Symbol::Bike { two_way: s.direction.is_none(), toward: s.direction == Some("toward") }),
         _ => None,
     }
@@ -306,7 +306,7 @@ mod tests {
         assert_eq!(crate::shared::catalogue::KINDS[v.segments[2].kind].id, "bus");
         let rush = markings(&v.segments);
         assert!(at(&rush, edge(&e, 1)).is_empty());
-        assert_eq!(rush.marks[0], Mark { uid: lane, symbol: Symbol::Bus });
+        assert_eq!(rush.marks[0], Mark { uid: lane, symbol: Symbol::Bus { toward: v.segments[2].direction == Some("toward") } });
     }
 
     #[test]
@@ -340,10 +340,10 @@ mod tests {
         assert_eq!(m.marks[0], Mark { uid: v.segments[2].uid, symbol: Symbol::Ahead { toward: toward(2) } });
         assert_eq!(m.marks[1], Mark { uid: v.segments[3].uid, symbol: Symbol::Ahead { toward: toward(3) } });
         assert_ne!(toward(2), toward(3));
-        // A bus lane: the diamond, whatever its direction.
+        // A bus lane: the diamond and letters, turned with its direction.
         let mut e = Editor::new(0);
         let bus = e.add(kind_index("bus").unwrap(), 3);
-        assert!(markings(&e.view().segments).marks.contains(&Mark { uid: bus, symbol: Symbol::Bus }));
+        assert!(markings(&e.view().segments).marks.iter().any(|m| m.uid == bus && matches!(m.symbol, Symbol::Bus { .. })));
         // A bike lane: two-way, then one way each way.
         let bike = e.add(kind_index("bike").unwrap(), 1);
         let find = |e: &Editor| markings(&e.view().segments).marks.into_iter().find(|m| m.uid == bike).unwrap().symbol;
@@ -365,5 +365,19 @@ mod tests {
         assert_eq!(m.marks.len(), 2);
         let ways: Vec<bool> = m.marks.iter().map(|k| matches!(k.symbol, Symbol::Ahead { toward: true })).collect();
         assert_ne!(ways[0], ways[1], "the two arrows point opposite ways");
+    }
+
+    #[test]
+    fn an_imported_part_time_bus_lane_is_marked_the_way_it_runs() {
+        use crate::shared::catalogue::StreetClass;
+        use crate::street::model::{Piece, Street, Window};
+        let (parking, bus) = (kind_index("parking").unwrap(), kind_index("bus").unwrap());
+        let lane = |direction| Piece { kind: parking, width_mm: 3000, direction, variants: vec![Window { kind: bus, from_min: 420, to_min: 540, days: None }] };
+        let street = Street::imported(StreetClass::Local, Side::Right, &[lane(Some(1)), lane(Some(0))]);
+        let mut e = Editor::from_street(&street, &street, 0);
+        assert!(e.set_time(8 * 60));
+        let marks = markings(&e.view().segments).marks;
+        let symbols: Vec<Symbol> = marks.iter().map(|m| m.symbol).collect();
+        assert_eq!(symbols, vec![Symbol::Bus { toward: true }, Symbol::Bus { toward: false }]);
     }
 }
