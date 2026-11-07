@@ -499,6 +499,19 @@ stop-refused-too-long = That would run past the end of the street.
 stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
 stop-refused-dragging = Finish the drag before changing the stops.
 
+# A raised table or crossing's names and refusals (src/street/model/calming.rs).
+calming-kind-table = Raised table
+calming-kind-crossing = Raised crossing
+calming-refused-no-anchor = Both ends of this street are cut by the edge of the map, so raised tables cannot be placed along it.
+calming-refused-elsewhere = The raised tables of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+calming-refused-dragging = Finish the drag before changing the raised tables.
+calming-refused-outside = That would run past an end of the street.
+calming-refused-overlap = That would overlap another raised table.
+calming-refused-too-short = A raised table must be at least { $min } long.
+calming-refused-freeway = A raised table cannot be placed on a freeway.
+calming-refused-no-roadway = This street has no roadway to raise.
+calming-refused-time-windows = A raised table cannot be placed where the roadway changes with the time of day.
+
 # What the last change did to the street (src/street/impact.rs and the Impact tab's card).
 st-impact-heading = Last change
 st-impact-empty = No change yet. Edit the street to see what it did to the space and the checks.

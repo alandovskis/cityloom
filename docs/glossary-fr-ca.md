@@ -389,3 +389,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |
 | unlink (a sign-in from an account) | `dissocier` | `délier`, `détacher` (suggestion) |
+| Raised table (street element) | `Plateau surélevé` | `Dos d’âne allongé` (the road-safety term for a speed table; `plateau` is the common Québec municipal word) |
+| Raised crossing | `Passage piéton surélevé` | `Traverse surélevée`, `Passage pour piétons surélevé` |

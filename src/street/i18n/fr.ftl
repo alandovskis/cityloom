@@ -499,6 +499,19 @@ stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
 stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
 stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.
 
+# Noms et refus d’un plateau surélevé ou d’un passage surélevé (src/street/model/calming.rs).
+calming-kind-table = Plateau surélevé
+calming-kind-crossing = Passage piéton surélevé
+calming-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de plateaux surélevés.
+calming-refused-elsewhere = Les plateaux surélevés de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+calming-refused-dragging = Terminez le glissement avant de modifier les plateaux surélevés.
+calming-refused-outside = Cela dépasserait une extrémité de la rue.
+calming-refused-overlap = Cela chevaucherait un autre plateau surélevé.
+calming-refused-too-short = Un plateau surélevé doit mesurer au moins { $min }.
+calming-refused-freeway = On ne peut pas placer de plateau surélevé sur une autoroute.
+calming-refused-no-roadway = Cette rue n’a pas de chaussée à surélever.
+calming-refused-time-windows = On ne peut pas placer de plateau surélevé là où la chaussée change selon l’heure de la journée.
+
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification
 st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
