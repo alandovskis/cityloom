@@ -1,0 +1,19 @@
+[package]
+name = "cityloom_report_pdf"
+version = "0.1.0"
+edition = "2024"
+
+# The PDF writer, its own wasm module (web/pkg/cityloom_report_pdf*). Nothing in the editor may depend on this crate:
+# a workspace build unifies features, so krilla would end up in the editor's wasm. `scripts/build.sh` checks that.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+cityloom_report = { path = "../cityloom_report" }
+serde_json = "1.0.151"
+ttf-parser = "0.25.1"
+krilla = { version = "0.8.2", default-features = false, features = ["simple-text"] }
+wasm-bindgen = "0.2.129"
+
+[dev-dependencies]
+lopdf = "0.47.0"

@@ -1,6 +1,7 @@
 //! Reads the written files back with lopdf.
 
-use cityloom_report::{Block, ReportData, write_pdf};
+use cityloom_report::{Block, ReportData};
+use cityloom_report_pdf::write_pdf;
 use lopdf::{Document, Object};
 
 const REGULAR: &[u8] = include_bytes!("../../web/fonts/NotoSans-Regular.ttf");
@@ -186,17 +187,17 @@ fn it_wraps_one_long_unbroken_name() {
 }
 
 #[test]
-fn it_wraps_a_character_the_font_lacks_by_its_notdef_width() {
+fn it_draws_a_question_mark_for_a_character_the_font_lacks() {
     let face = ttf_parser::Face::parse(REGULAR, 0).unwrap();
     assert!(face.glyph_index('中').is_none(), "the font has U+4E2D, pick another");
-    let name = "中".repeat(120);
-    let doc = load(&data(vec![vec![para(&name)]]));
-    let starts = text_starts(&doc, 1);
-    assert!(starts.len() > 1, "{starts:?}");
-    // Each line holds as many notdef glyphs as the margins allow, measured as glyph 0.
-    let per_line = ((504.0 / measured(REGULAR, "中", 11.0)) as usize).max(1);
-    assert!(per_line < 120);
-    assert_eq!(starts.len(), 120_usize.div_ceil(per_line));
+    // PDF/UA-1 refuses .notdef, so the file is still written, with "?" where the font has no glyph.
+    let doc = load(&data(vec![vec![para("Rue 中 Est")]]));
+    assert!(page_text(&doc, 1).contains("Rue ? Est"));
+    // And it wraps by the width of the "?" that is drawn.
+    let long = "中".repeat(200);
+    let starts = text_starts(&load(&data(vec![vec![para(&long)]])), 1);
+    let per_line = ((504.0 / measured(REGULAR, "?", 11.0)) as usize).max(1);
+    assert_eq!(starts.len(), 200_usize.div_ceil(per_line));
 }
 
 #[test]
@@ -226,4 +227,15 @@ fn it_reads_a_table() {
     assert!(at("Largeur") < at("Avenue du Parc"));
     assert!(at("Avenue du Parc") < at("18\u{a0}m"));
     assert!(at("18\u{a0}m") < at("Rue Rachel"));
+}
+
+#[test]
+fn it_asks_the_viewer_to_show_the_title() {
+    let doc = load(&data(vec![vec![heading("Un")]]));
+    let prefs = catalog(&doc).get(b"ViewerPreferences").expect("viewer preferences");
+    let prefs = match prefs {
+        Object::Reference(id) => doc.get_dictionary(*id).unwrap(),
+        other => other.as_dict().unwrap(),
+    };
+    assert_eq!(prefs.get(b"DisplayDocTitle").unwrap().as_bool().unwrap(), true);
 }

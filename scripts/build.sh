@@ -17,7 +17,7 @@ cargo build --release --target wasm32-unknown-unknown --workspace --exclude city
 dir=$(./scripts/target-dir.sh)
 wasm_dir=$(mktemp -d)
 trap 'rm -rf "$wasm_dir"' EXIT
-cp "$dir/wasm32-unknown-unknown/release/cityloom_editor.wasm" "$dir/wasm32-unknown-unknown/release/osm_import.wasm" "$dir/wasm32-unknown-unknown/release/cityloom_report.wasm" "$wasm_dir/"
+cp "$dir/wasm32-unknown-unknown/release/cityloom_editor.wasm" "$dir/wasm32-unknown-unknown/release/osm_import.wasm" "$dir/wasm32-unknown-unknown/release/cityloom_report_pdf.wasm" "$wasm_dir/"
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   "$wasm_dir/cityloom_editor.wasm"
 # The OpenStreetMap reader is its own module, loaded when a place is opened.
@@ -25,7 +25,13 @@ wasm-bindgen --target web --no-typescript --remove-name-section --remove-produce
   "$wasm_dir/osm_import.wasm"
 # The design-review PDF writer is its own module too, loaded when a report is made.
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
-  "$wasm_dir/cityloom_report.wasm"
+  "$wasm_dir/cityloom_report_pdf.wasm"
+# The editor must not carry the PDF writer (krilla): a crate that depends on `cityloom_report_pdf` would pull it in.
+# `cargo tree -p cityloom_editor | grep -c krilla` must print 0.
+if grep -q report_pdf web/pkg/cityloom_editor.js; then
+  echo "web/pkg/cityloom_editor.js exports report_pdf: the editor links the PDF writer (cityloom_report_pdf)" >&2
+  exit 1
+fi
 # The map's libraries, from npm (`npm ci` at the repository root) into web/vendor. MapLibre is ES modules that
 # find each other beside themselves; pmtiles.js defines a global `pmtiles`.
 [ -d node_modules/maplibre-gl ] || { echo "node_modules/maplibre-gl is missing: run 'just setup' first" >&2; exit 1; }

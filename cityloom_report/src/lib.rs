@@ -1,14 +1,9 @@
-//! The design-review report as plain data, and (feature `pdf`) the tagged PDF writer built from it.
+//! The design-review report as plain data.
 //!
 //! The editor builds a [`ReportData`] (the words already said in the person's language) and hands it, as JSON, to the
-//! writer, which is its own wasm module because krilla is large. The types here need serde only.
+//! PDF writer (`cityloom_report_pdf`), which is its own wasm module because krilla is large. This crate needs serde only.
 
 use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "pdf")]
-mod pdf;
-#[cfg(feature = "pdf")]
-pub use pdf::{report_pdf, write_pdf};
 
 /// A report: its language (a BCP 47 tag), its title and its pages, each a list of blocks top to bottom.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
