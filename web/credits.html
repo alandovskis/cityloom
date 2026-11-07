@@ -50,6 +50,8 @@
       <h2 id="c-type" class="note-h">Typeface</h2>
       <p>The pages are set in the system's own typeface. The CityLoom logotype is drawn from Overpass, copyright 2021 The Overpass Project Authors, used under the SIL Open Font License 1.1.
       <a href="fonts/LICENSE-overpass.txt">Read the license</a>.</p>
+      <p>The design review report (a PDF made in your browser) is set in Noto Sans, copyright The Noto Project Authors, under the SIL Open Font License 1.1, embedded in the file:
+      <a href="fonts/LICENSE-noto-sans.txt">read the license</a>.</p>
     </section>
 
     <section aria-labelledby="c-code">
@@ -58,6 +60,7 @@
         <li><b>Rust</b> compiles the editing models and the pages to WebAssembly.</li>
         <li><b>Leptos</b> draws the pages in the browser.</li>
         <li><b>wasm-bindgen</b> 0.2.129 joins the Rust code to the page.</li>
+        <li><b>krilla</b> 0.8.2 writes the design review report's PDF. It is dual-licensed under the MIT and Apache 2.0 licenses, which ask that its copyright notice and license text travel with it: <a href="https://github.com/LaurenzV/krilla/blob/master/LICENSE-MIT">MIT</a>, <a href="https://github.com/LaurenzV/krilla/blob/master/LICENSE-APACHE">Apache 2.0</a>.</li>
         <li><b>serde</b> 1.0.229 and <b>serde_json</b> 1.0.151 carry the drawing from Rust to the page.</li>
       </ul>
     </section>
