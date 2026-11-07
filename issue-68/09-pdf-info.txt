@@ -1,0 +1,35 @@
+Title:           Design review: Plateau Mont-Royal, Montréal
+Custom Metadata: no
+Metadata Stream: yes
+Tagged:          yes
+UserProperties:  no
+Suspects:        no
+Form:            none
+JavaScript:      no
+Pages:           2
+Encrypted:       no
+Page size:       612 x 792 pts (letter)
+Page rot:        0
+File size:       25263 bytes
+Optimized:       no
+PDF version:     1.7
+---
+Title:           Revue de conception : Plateau Mont-Royal, Montréal
+Custom Metadata: no
+Metadata Stream: yes
+Tagged:          yes
+UserProperties:  no
+Suspects:        no
+Form:            none
+JavaScript:      no
+Pages:           2
+Encrypted:       no
+Page size:       612 x 792 pts (letter)
+Page rot:        0
+File size:       25255 bytes
+Optimized:       no
+PDF version:     1.7
+
+language tag:
+report-en.pdf [b'en', b'en']
+report-fr.pdf [b'fr-CA', b'fr-CA']

@@ -1,0 +1,6 @@
+Running 4 tests using 4 workers
+  ✓  4 [chromium] › tests/report.spec.ts:49:1 › the report downloads in French when the page is French (3.1s)
+  ✓  2 [chromium] › tests/report.spec.ts:36:1 › the Share menu downloads the report as a PDF (3.3s)
+  ✓  1 [chromium] › tests/report.spec.ts:85:1 › the editors' Share menu still prints (3.7s)
+  ✓  3 [chromium] › tests/report.spec.ts:65:1 › a report that cannot be written saves nothing (5.0s)
+  4 passed (7.9s)
