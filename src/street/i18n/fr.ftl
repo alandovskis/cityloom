@@ -584,3 +584,18 @@ check-detail-calming-junction-crossing = L’élément surélevé se trouverait 
 check-detail-calming-junction-mouth = L’élément surélevé se trouverait à { $gap } du début de l’intersection; il en faut { $need } ou plus.
 check-detail-calming-junction-inside = L’élément surélevé empiète sur l’intersection.
 check-detail-calming-junction-ok = Chaque élément surélevé est dégagé de l’intersection.
+
+# La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
+calming-gap = Libre
+calming-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+calming-cell-failing = Ne passe pas une vérification. Voir les vérifications.
+calming-choose-gap = Choisissez d’abord un tronçon libre de la rue.
+calming-choose-element = Choisissez d’abord un plateau ou un passage surélevé.
+st-calming-heading = Plateaux et passages surélevés le long de la rue
+st-calming-caption = Plateaux et passages surélevés
+st-calming-strip-label = Plateaux et passages surélevés le long de la rue
+st-calming-tools = Commandes des éléments surélevés
+st-calming-kind = Type
+st-calming-length = Longueur ({ $unit })
+st-calming-add = Ajouter un élément surélevé
+st-calming-remove = Retirer un élément surélevé

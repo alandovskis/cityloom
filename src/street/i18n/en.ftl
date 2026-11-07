@@ -584,3 +584,18 @@ check-detail-calming-junction-crossing = The raised element would stand { $gap }
 check-detail-calming-junction-mouth = The raised element would stand { $gap } from where the junction begins; { $need } or more is needed.
 check-detail-calming-junction-inside = The raised element reaches into the junction.
 check-detail-calming-junction-ok = Every raised element stands clear of the junction.
+
+# The raised elements' strip, tools and the words said on choosing one (src/street/calming_strip.rs, calming_tools.rs).
+calming-gap = Free
+calming-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+calming-cell-failing = Fails a check. See the checks.
+calming-choose-gap = Choose a free stretch of the street first.
+calming-choose-element = Choose a raised table or crossing first.
+st-calming-heading = Raised tables and crossings along the street
+st-calming-caption = Raised tables and crossings
+st-calming-strip-label = Raised tables and crossings along the street
+st-calming-tools = Raised table commands
+st-calming-kind = Kind
+st-calming-length = Length ({ $unit })
+st-calming-add = Add raised element
+st-calming-remove = Remove raised element

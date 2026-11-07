@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{Check, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
+use crate::street::model::{CalmingStripView, Check, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -128,6 +128,21 @@ pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n:
         .num("n", cell as i64 + 1)
         .num("total", side.cells.len() as i64);
     i18n.tr_now(key, &args)
+}
+
+/// What a screen reader is told on choosing cell `cell` of the raised elements' strip: its kind (or "Free"), where it
+/// lies, how long it is and its place on the strip.
+pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let Some(c) = strip.cells.get(cell) else { return String::new() };
+    let args = Args::new()
+        .str("name", say_now(i18n, units, &c.label))
+        .str("from", units.length_in(c.from_mm, locale))
+        .str("to", units.length_in(c.to_mm, locale))
+        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .num("n", cell as i64 + 1)
+        .num("total", strip.cells.len() as i64);
+    i18n.tr_now("calming-cell", &args)
 }
 
 /// Why a zone operation was refused, in the page's language.

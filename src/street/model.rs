@@ -32,11 +32,11 @@ mod curb_shown;
 mod map_uses;
 mod stop;
 mod stop_end;
-pub use calming::CalmingView;
 pub use calming::{
     CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, Kind as CalmingKind, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM,
     MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
 };
+pub use calming::{CalmingCell, CalmingStripView, CalmingView};
 use curb::Choice;
 pub use curb::{
     CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
@@ -1480,6 +1480,7 @@ impl Editor {
             curb: self.curb_view(),
             stops: self.stops_view(),
             calming: self.calming_view(),
+            calming_strip: self.calming_strip_view(),
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             measures: self.measure_views(segs, &now),
@@ -1867,6 +1868,7 @@ pub struct View {
     pub stops: StopsView,
     /// The raised elements along the street, by position.
     pub calming: Vec<CalmingView>,
+    pub calming_strip: CalmingStripView,
     /// The curbside uses the 2.5D shows, on the selected zone's pieces.
     pub curb_shown: Vec<ShownInstance>,
     /// The transit stops the 2.5D shows, on the selected zone's pieces.

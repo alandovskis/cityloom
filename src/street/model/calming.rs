@@ -149,6 +149,46 @@ pub struct CalmingView {
     pub elsewhere: bool,
 }
 
+/// One cell of the raised elements' strip: an element, or a free stretch between two.
+#[derive(Clone, Debug, Serialize)]
+pub struct CalmingCell {
+    /// An index into the street's `calming` for an element, `None` for a free stretch.
+    pub element: Option<usize>,
+    pub from_mm: i32,
+    pub to_mm: i32,
+    pub kind: Option<Kind>,
+    /// What the cell says: the kind's name, or "Free" for a stretch.
+    pub label: Said,
+    /// The element breaks no raised-element check (a free stretch always passes).
+    pub ok: bool,
+}
+
+impl super::StripCell for CalmingCell {
+    fn instance(&self) -> Option<usize> {
+        self.element
+    }
+    fn from_mm(&self) -> i32 {
+        self.from_mm
+    }
+    fn to_mm(&self) -> i32 {
+        self.to_mm
+    }
+    fn label(&self) -> &Said {
+        &self.label
+    }
+    fn ok(&self) -> bool {
+        self.ok
+    }
+}
+
+/// The strip of the raised elements: the elements and the free stretches along the whole street, in order, and the
+/// chosen cell. No cells without a length to lay them along.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct CalmingStripView {
+    pub cells: Vec<CalmingCell>,
+    pub selected: Option<usize>,
+}
+
 impl Editor {
     /// Whether `candidate` may stand where it is, ignoring the element `own` (the one being changed).
     fn calming_fits(&self, candidate: &Calming, own: Option<usize>, frame: ZoneFrame) -> Result<(), CalmingRefusal> {
@@ -292,6 +332,37 @@ impl Editor {
         self.calming_choice.at = i.and_then(|i| self.states[self.cursor].content.calming.get(i)).map(|c| (Side::Left, c.from_mm));
     }
 
+    /// Chooses the cell that holds `at_mm`, an element or a free stretch (a free stretch is where one is added).
+    /// A setting, not history.
+    pub fn select_calming_at(&mut self, at_mm: i32) {
+        self.calming_choice.pick(Side::Left, at_mm);
+    }
+
+    /// The strip of the elements: none unless the street has a length to lay them along.
+    pub(super) fn calming_strip_view(&self) -> CalmingStripView {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        if length_mm <= 0 {
+            return CalmingStripView::default();
+        }
+        let failing: Vec<usize> = self.calming_failures().iter().map(|f| f.element).collect();
+        let gap = |from_mm: i32, to_mm: i32| CalmingCell { element: None, from_mm, to_mm, kind: None, label: Said::new("calming-gap"), ok: true };
+        let items = content.calming.iter().enumerate().map(|(k, c)| (k, c.from_mm, c.to_mm()));
+        let cells = super::curb::strip_cells(length_mm, items, gap, |k| {
+            let c = &content.calming[k];
+            CalmingCell {
+                element: Some(k),
+                from_mm: c.from_mm,
+                to_mm: c.to_mm(),
+                kind: Some(c.kind),
+                label: Said::new(c.kind.name_key()),
+                ok: !failing.contains(&k),
+            }
+        });
+        let selected = super::curb::selected_cell(&cells, self.calming_choice.at, Side::Left);
+        CalmingStripView { cells, selected }
+    }
+
     pub(super) fn calming_view(&self) -> Vec<CalmingView> {
         let selected = self.calming_sel();
         let elsewhere = self.elsewhere().is_some();
@@ -425,12 +496,18 @@ impl Editor {
                     None,
                 );
             }
-            // A stop's boarding area is along the stop, on either side: the element spans the whole roadway.
-            for s in &content.stops {
-                let gap = (c.from_mm - s.to_mm()).max(s.from_mm - c.to_mm());
+            // A stop's boarding area is along the stop, on either side: the element spans the whole roadway. The stop
+            // the detail names is the one with the smallest gap (an overlap is a negative one), the first of equals.
+            let nearest = content
+                .stops
+                .iter()
+                .map(|s| ((c.from_mm - s.to_mm()).max(s.from_mm - c.to_mm()), s))
+                .filter(|(gap, _)| *gap < CALMING_STOP_CLEAR_MM)
+                .min_by_key(|(gap, _)| *gap);
+            if let Some((gap, s)) = nearest {
                 if gap < 0 {
                     fail(2, Said::new("check-detail-calming-stop-overlap").with("stop", Arg::Said(Box::new(s.named()))), None);
-                } else if gap < CALMING_STOP_CLEAR_MM {
+                } else {
                     fail(
                         2,
                         Said::new("check-detail-calming-stop-near")
@@ -771,6 +848,93 @@ mod tests {
         assert_eq!(r.calming, s.calming, "no side to swap, measured from the same physical end");
         assert_eq!(r.from_end, ZoneEnd::Last);
         assert_eq!(r.reversed(), s);
+    }
+
+    #[test]
+    fn remove_works_on_a_freeway_street_where_nothing_can_be_added() {
+        let mut s = Street::sample(0, Side::Right);
+        s.class = StreetClass::Motorway;
+        s.length_mm = Some(LEN);
+        s.calming = vec![table(10_000)];
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(frame());
+        assert_eq!(e.add_calming(Kind::Table, 30_000, 7_000), Err(CalmingRefusal::Freeway));
+        assert_eq!(e.remove_calming(0), Ok(()));
+        assert!(e.snapshot().calming.is_empty());
+    }
+
+    #[test]
+    fn a_roadway_that_changes_with_the_clock_refuses_a_move_and_a_resize() {
+        let mut e = editor();
+        e.add_calming(Kind::Table, 10_000, 7_000).unwrap();
+        let parking = e.current().iter().find(|g| g.kind == crate::shared::catalogue::kind_index("parking").unwrap()).unwrap().uid;
+        assert!(e.add_variant(parking));
+        assert_eq!(e.move_calming(0, 20_000), Err(CalmingRefusal::TimeWindows));
+        assert_eq!(e.set_calming_length(0, 8_000), Err(CalmingRefusal::TimeWindows));
+        assert_eq!(e.set_calming_kind(0, Kind::Crossing), Err(CalmingRefusal::TimeWindows));
+        assert_eq!(e.snapshot().calming, vec![table(10_000)]);
+    }
+
+    #[test]
+    fn the_choice_after_start_over_and_then_undo_is_the_element_at_its_place() {
+        let mut e = editor();
+        e.add_calming(Kind::Table, 10_000, 7_000).unwrap();
+        e.add_calming(Kind::Crossing, 30_000, 6_000).unwrap();
+        e.select_calming(Some(0));
+        assert!(e.reset());
+        assert_eq!(e.calming_sel(), None);
+        assert!(e.undo());
+        assert_eq!(e.snapshot().calming.len(), 2);
+        assert_eq!(e.calming_sel(), Some(0), "the choice is a place, so the element standing there is chosen again");
+    }
+
+    #[test]
+    fn the_strip_has_a_cell_per_element_and_per_free_stretch_and_a_chosen_one() {
+        let mut e = editor();
+        assert!(e.view().calming_strip.cells.iter().all(|c| c.element.is_none()), "one free stretch");
+        assert_eq!(e.view().calming_strip.cells.len(), 1);
+        e.add_calming(Kind::Table, 10_000, 7_000).unwrap();
+        let v = e.view().calming_strip;
+        assert_eq!(
+            v.cells.iter().map(|c| (c.element, c.from_mm, c.to_mm)).collect::<Vec<_>>(),
+            [(None, 0, 10_000), (Some(0), 10_000, 17_000), (None, 17_000, LEN)]
+        );
+        assert_eq!(v.selected, Some(1), "the new element is the chosen cell");
+        e.select_calming_at(3_000);
+        assert_eq!(e.view().calming_strip.selected, Some(0), "a free stretch can be chosen");
+        assert_eq!(e.calming_sel(), None);
+        let bare = Street::sample(0, Side::Right);
+        assert!(Editor::from_street(&bare, &bare, 0).view().calming_strip.cells.is_empty(), "no anchor, no strip");
+    }
+
+    #[test]
+    fn a_failing_element_marks_its_cell() {
+        let mut e = editor();
+        e.add_calming(Kind::Table, 10_000, 7_000).unwrap();
+        e.add_calming(Kind::Table, 30_000, 6_000).unwrap();
+        e.set_calming_length(1, 6_000).unwrap();
+        assert!(e.view().calming_strip.cells.iter().filter(|c| c.element.is_some()).all(|c| c.ok));
+        let mut f = editor();
+        f.add_calming(Kind::Table, 10_000, 7_000).unwrap();
+        f.add_stop(Side::Right, 20_000, 9_000, StopKind::Curb).unwrap();
+        let cells = f.view().calming_strip.cells;
+        assert!(!cells.iter().find(|c| c.element == Some(0)).unwrap().ok, "the stop 3 m away fails its check");
+        assert!(cells.iter().filter(|c| c.element.is_none()).all(|c| c.ok));
+    }
+
+    #[test]
+    fn two_failing_stops_name_the_nearer_one() {
+        // The table runs 20 000 to 27 000. A stop from 31 000 (gap 4 000) and one from 40 000 would be clear, so use
+        // one before it at 6 000 to 16 000 (gap 4 000) and a nearer one after at 29 000 (gap 2 000).
+        let mut e = editor();
+        // Stops are listed left side first, so the farther one comes first.
+        e.add_stop(Side::Left, 6_000, 10_000, StopKind::Curb).unwrap();
+        e.add_stop(Side::Right, 29_000, 9_000, StopKind::Curb).unwrap();
+        e.add_calming(Kind::Table, 20_000, 7_000).unwrap();
+        let c = check(&e, "calming-stop");
+        assert!(!c.ok);
+        assert_eq!(arg_mm(&c.detail, "gap"), Some(2_000), "the stop with the smallest gap, not the first by position");
+        let Some((_, Arg::Said(stop))) = c.detail.args.iter().find(|(n, _)| *n == "stop") else { panic!("the stop is named") };
+        assert_eq!(arg_mm(stop, "at"), Some(29_000), "{stop:?}");
     }
 
     // ---- the design checks ----

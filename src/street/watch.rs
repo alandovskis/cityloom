@@ -9,7 +9,7 @@ use crate::shared::catalogue::Side;
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::street::keys::Action;
-use crate::street::model::{Editor, SegView, StopKind, Use, View};
+use crate::street::model::{CalmingKind, Editor, SegView, StopKind, Use, View};
 use crate::street::row::Row;
 use crate::street::vm::StreetVm;
 
@@ -185,6 +185,54 @@ impl SheetWatch {
 
     pub fn remove_curb(&self) -> bool {
         self.vm.with_value(|v| v.remove_curb())
+    }
+
+    pub fn select_calming(&self, cell: usize) {
+        self.vm.with_value(|v| v.select_calming(cell));
+    }
+
+    pub fn select_calming_relative(&self, delta: i32) {
+        self.vm.with_value(|v| v.select_calming_relative(delta));
+    }
+
+    pub fn select_calming_edge(&self, last: bool) {
+        self.vm.with_value(|v| v.select_calming_edge(last));
+    }
+
+    pub fn calming_kind_shown(&self) -> CalmingKind {
+        self.vm.with_value(|v| v.calming_kind_shown())
+    }
+
+    pub fn pick_calming_kind(&self, kind: CalmingKind) {
+        self.vm.with_value(|v| v.pick_calming_kind(kind));
+    }
+
+    pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.add_calming(kind, length_mm))
+    }
+
+    pub fn set_calming_length(&self, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.set_calming_length(length_mm))
+    }
+
+    pub fn remove_calming(&self) -> bool {
+        self.vm.with_value(|v| v.remove_calming())
+    }
+
+    pub fn nudge_calming(&self, delta_mm: i32) -> bool {
+        self.vm.with_value(|v| v.nudge_calming(delta_mm))
+    }
+
+    pub fn begin_calming_drag(&self) -> bool {
+        self.vm.with_value(|v| v.begin_calming_drag())
+    }
+
+    pub fn drag_calming_to(&self, from_mm: i32) {
+        self.vm.with_value(|v| v.drag_calming_to(from_mm));
+    }
+
+    pub fn end_calming_drag(&self, keep: bool) {
+        self.vm.with_value(|v| v.end_calming_drag(keep));
     }
 
     pub fn stop_kind_shown(&self) -> StopKind {
