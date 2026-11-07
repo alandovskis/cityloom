@@ -11,7 +11,7 @@ test-provider = ["dep:jsonwebtoken"]
 [dependencies]
 cityloom_prepare = { path = "../cityloom_prepare", default-features = false }
 axum = "0.8.9"
-tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "signal", "time", "fs"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "fs"] }
 tower-http = { version = "0.7.1", features = ["fs", "compression-br", "compression-gzip"] }
 percent-encoding = "2.3.2"
 cookie = { version = "0.18.2", features = ["private"] }
@@ -29,13 +29,13 @@ sha2 = "0.11.1"
 hex = "0.4.3"
 subtle = "2.6.1"
 getrandom = "0.4.3"
-uuid = { version = "1.28.0", features = ["v4", "serde"] }
+uuid = { version = "1.29.1", features = ["v4", "serde"] }
 async-trait = "0.1.92"
 time = { version = "0.3.55", features = ["formatting", "parsing", "macros"] }
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time", "migrate", "macros"] }
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["use_pem", "rust_crypto"], optional = true }
 p256 = { version = "0.14.0", features = ["ecdsa", "pem"] }
-openidconnect = { version = "4.0.1", default-features = false, features = ["timing-resistant-secret-traits"] }
+openidconnect = { version = "4.1.0", default-features = false, features = ["timing-resistant-secret-traits"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 http = "1"
 chrono = "0.4"
@@ -46,5 +46,5 @@ tower = { version = "0.5.3", features = ["util"] }
 [dev-dependencies]
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["use_pem", "rust_crypto"] }
 tempfile = "3.27.0"
-tokio = { version = "1.53.3", features = ["test-util"] }
+tokio = { version = "1.54.1", features = ["test-util"] }
 http-body-util = "0.1.5"
