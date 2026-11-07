@@ -21,7 +21,7 @@ setup-deploy:
 # Build the server as it is deployed (without the test provider) and check that the fake provider is not in it.
 check-no-fake:
     cargo build --release -p cityloom_server
-    ./scripts/check-no-fake.sh target/release/cityloom_server
+    dir=$(./scripts/target-dir.sh) && ./scripts/check-no-fake.sh "$dir/release/cityloom_server"
 
 # Build the WebAssembly module into web/pkg.
 build:
@@ -53,11 +53,13 @@ db-stop:
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
     cargo build -p cityloom_server --features test-provider
+    ./scripts/pin-server.sh
     cd e2e && npx playwright test {{args}}
 
 # The map, street and archive specs with the road tiles and the basemap served from an unpacked .cityloom archive (`cityloom_prepare pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
 e2e-archive *args: build
     cargo build -p cityloom_server --features test-provider
+    ./scripts/pin-server.sh
     scripts/e2e-archive.sh {{args}}
 
 # Everything: unit tests, then the browser tests.
