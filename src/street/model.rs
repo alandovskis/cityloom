@@ -26,6 +26,7 @@ pub use transition::{Change, Host, Transition, transition};
 mod templates;
 pub use templates::{Template, TemplateRefusal, TemplateView};
 mod calming;
+mod calming_shown;
 mod curb;
 mod curb_end;
 mod curb_shown;
@@ -37,6 +38,7 @@ pub use calming::{
     MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
 };
 pub use calming::{CalmingCell, CalmingStripView, CalmingView};
+pub use calming_shown::ShownCalming;
 use curb::Choice;
 pub use curb::{
     CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
@@ -1483,6 +1485,7 @@ impl Editor {
             calming_strip: self.calming_strip_view(),
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
+            calming_shown: self.calming_shown(),
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
                 .into_iter()
@@ -1873,6 +1876,8 @@ pub struct View {
     pub curb_shown: Vec<ShownInstance>,
     /// The transit stops the 2.5D shows, on the selected zone's pieces.
     pub stops_shown: Vec<ShownStop>,
+    /// The raised tables and crossings the 2.5D shows, on the selected zone's roadway.
+    pub calming_shown: Vec<ShownCalming>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.

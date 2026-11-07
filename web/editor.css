@@ -867,35 +867,43 @@ svg pattern circle {
 }
 /* A top is the colour of its piece's material, over the kind's tint (`k-*`) that its faces keep. */
 .iso-top.mat-asphalt,
-.iso-flat.mat-asphalt {
+.iso-flat.mat-asphalt,
+.iso-ramp.mat-asphalt {
   fill: var(--mat-asphalt);
 }
 .iso-top.mat-concrete,
-.iso-flat.mat-concrete {
+.iso-flat.mat-concrete,
+.iso-ramp.mat-concrete {
   fill: var(--mat-concrete);
 }
 .iso-top.mat-permeable,
-.iso-flat.mat-permeable {
+.iso-flat.mat-permeable,
+.iso-ramp.mat-permeable {
   fill: var(--mat-permeable);
 }
 .iso-top.mat-brick,
-.iso-flat.mat-brick {
+.iso-flat.mat-brick,
+.iso-ramp.mat-brick {
   fill: var(--mat-brick);
 }
 .iso-top.mat-grass,
-.iso-flat.mat-grass {
+.iso-flat.mat-grass,
+.iso-ramp.mat-grass {
   fill: var(--mat-grass);
 }
 .iso-top.mat-planted,
-.iso-flat.mat-planted {
+.iso-flat.mat-planted,
+.iso-ramp.mat-planted {
   fill: var(--mat-planted);
 }
 .iso-top.mat-gravel,
-.iso-flat.mat-gravel {
+.iso-flat.mat-gravel,
+.iso-ramp.mat-gravel {
   fill: var(--mat-gravel);
 }
 .iso-top.mat-trees,
-.iso-flat.mat-trees {
+.iso-flat.mat-trees,
+.iso-ramp.mat-trees {
   fill: var(--mat-trees);
 }
 /* The 2.5D's textures (shared/iso/ground.rs) are drawn in the material's own colours (`--mat-*-line`, `-alt`), whatever the

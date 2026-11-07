@@ -50,7 +50,7 @@ pub struct ShownInstance {
 
 /// The stretch the 2.5D shows of the selected zone: where it lies along the street, and how a position along the
 /// street (from the anchored end) maps into it.
-struct Stretch {
+pub(super) struct Stretch {
     /// The reach of the selected zone's run along the stretch, in millimetres from the near end.
     near: f64,
     far: f64,
@@ -63,7 +63,7 @@ struct Stretch {
 
 impl Stretch {
     /// The anchored position `pos` in stretch coordinates.
-    fn place(&self, pos: i32) -> f64 {
+    pub(super) fn place(&self, pos: i32) -> f64 {
         match self.from_end {
             ZoneEnd::First => self.near + f64::from(pos - self.start),
             ZoneEnd::Last => self.far - f64::from(pos - self.start),
@@ -72,7 +72,7 @@ impl Stretch {
 
     /// Where the span `from..to` lies along the stretch: the part inside the stretch and the zone, and the whole.
     /// None when no part of it is.
-    fn map(&self, from: i32, to: i32) -> Option<((f64, f64), (f64, f64))> {
+    pub(super) fn map(&self, from: i32, to: i32) -> Option<((f64, f64), (f64, f64))> {
         let (s, e) = (from.max(self.lo), to.min(self.hi));
         if s >= e {
             return None;
@@ -85,7 +85,7 @@ impl Stretch {
 
 impl Editor {
     /// The stretch shown for the selected zone, and the length of the street it lies in. None without a length.
-    fn stretch(&self) -> Option<Stretch> {
+    pub(super) fn stretch(&self) -> Option<Stretch> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
         if length_mm <= 0 {

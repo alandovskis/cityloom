@@ -360,6 +360,10 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-calming = { $count ->
+        [one] Un plateau surélevé est montré.
+       *[other] { $count } plateaux surélevés sont montrés.
+    }
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).

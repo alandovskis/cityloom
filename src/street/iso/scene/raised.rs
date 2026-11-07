@@ -7,6 +7,8 @@ use crate::shared::i18n::{Args, I18n};
 use crate::street::model::SegView;
 
 use super::surface::top;
+use super::tables;
+use crate::street::iso::calming::Laid;
 use crate::street::iso::curbside::{self, Lift};
 use crate::street::iso::order::{self, Bx};
 use crate::street::iso::projection::{Projection, Reach, drawn_mm};
@@ -111,6 +113,7 @@ fn lift(p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift, taper: Option<&
 
 /// The strips `standing` above the roadway and the curbside uses `lifted` into strips, in the order they are painted in
 /// among themselves (`order::paint_order`): a strip nearer the middle of the street covers the one beyond it.
+#[cfg(test)]
 pub(in crate::street::iso) fn raised(
     p: &Projection,
     segs: &[SegView],
@@ -120,13 +123,33 @@ pub(in crate::street::iso) fn raised(
     across: bool,
     taper: Option<&Draw>,
 ) -> Layer {
-    let boxes: Vec<(Bx, bool)> =
-        standing.iter().map(|&s| (strip_box(segs, s, p.reach), true)).chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, p, taper), false))).collect();
+    raised_with(p, segs, i18n, standing, lifted, across, taper, &Laid::default())
+}
+
+/// `raised` with the raised tables `laid`, each a group of its own ordered among the strips as a box over the roadway.
+#[allow(clippy::too_many_arguments)]
+pub(in crate::street::iso) fn raised_with(
+    p: &Projection,
+    segs: &[SegView],
+    i18n: &I18n,
+    standing: &[Strip],
+    lifted: &[Lift],
+    across: bool,
+    taper: Option<&Draw>,
+    laid: &Laid,
+) -> Layer {
+    let boxes: Vec<(Bx, bool)> = standing
+        .iter()
+        .map(|&s| (strip_box(segs, s, p.reach), true))
+        .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, p, taper), false)))
+        .chain(laid.tables.iter().map(|t| (laid.bx(segs, t), false)))
+        .collect();
     let shapes = order::paint_order(&boxes, p.centre_mm)
         .into_iter()
-        .map(|k| match standing.get(k) {
-            Some(&s) => strip(p, segs, i18n, s, across),
-            None => lift(p, segs, i18n, &lifted[k - standing.len()], taper),
+        .map(|k| match (standing.get(k), k.checked_sub(standing.len()).and_then(|j| lifted.get(j))) {
+            (Some(&s), _) => strip(p, segs, i18n, s, across),
+            (None, Some(l)) => lift(p, segs, i18n, l, taper),
+            (None, None) => tables::table(p, segs, i18n, laid, &laid.tables[k - standing.len() - lifted.len()]),
         })
         .collect();
     Layer { kind: LayerKind::Raised, shapes }

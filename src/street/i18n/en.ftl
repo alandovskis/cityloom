@@ -360,6 +360,10 @@ svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
     }
+svg-iso-calming = { $count ->
+        [one] One raised table is shown.
+       *[other] { $count } raised tables are shown.
+    }
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
        *[other] { $count } transit stops are shown ({ $kinds }).
