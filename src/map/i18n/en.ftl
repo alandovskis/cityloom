@@ -273,6 +273,7 @@ prov-more-findings = { $n ->
 }
 map-report-title = Design review: { $area }
 map-report-cover-title = Design review report
+map-report-when = { $date } { $hours }:{ $minutes }
 map-report-exported = Exported: { $when } UTC
 map-report-version = CityLoom version { $version }
 map-report-scope = Scope: Whole city
