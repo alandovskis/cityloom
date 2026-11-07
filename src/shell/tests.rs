@@ -124,8 +124,9 @@ fn the_editors_share_menu_is_unchanged() {
     let i18n = crate::i18n_for(Locale::En);
     let page = html(move || view! { <ShareMenu i18n=i18n report=false/> }.into_any());
     assert!(page.contains(r#"id="print""#) && !page.contains(r#"id="report""#), "{page}");
-    // The one item is Print, after the heading, as before.
-    assert_eq!(page.matches(r#"type="button""#).count(), 2, "the Share button and Print: {page}");
+    // The items are Print and Export design (#74), after the heading; the report variant swaps only Print.
+    assert!(page.contains(r#"id="share-export""#), "{page}");
+    assert_eq!(page.matches(r#"type="button""#).count(), 3, "the Share button, Print and Export design: {page}");
 }
 
 #[test]
