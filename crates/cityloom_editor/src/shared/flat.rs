@@ -174,11 +174,10 @@ impl Walk<'_> {
                     text: text.clone(),
                 });
             }
-            Shape::Group { hidden, shapes, .. } => {
-                if !*hidden {
-                    for s in shapes {
-                        self.shape(s);
-                    }
+            // `hidden` is aria-hidden (a sign is part of the picture, not of what it says): it is drawn.
+            Shape::Group { shapes, .. } => {
+                for s in shapes {
+                    self.shape(s);
                 }
             }
             Shape::Path { .. } | Shape::Elem { .. } => self.omitted += 1,
@@ -377,10 +376,25 @@ mod tests {
         let shown = Shape::Group { class: "iso-piece".into(), uid: Some(1), data: None, hidden: false, title: None, shapes: vec![text.clone()] };
         let d = diagram(vec![], vec![layer(LayerKind::Surface, vec![joints, shown, cap, hidden])]);
         let f = fig(&d);
-        assert_eq!(f.items.len(), 3, "{:?}", f.items);
+        assert_eq!(f.items.len(), 4, "{:?}", f.items);
         assert!(matches!(&f.items[0], Item::Line { color, .. } if hex(*color) == "#d6c4ae"));
         assert!(matches!(&f.items[1], Item::Text { at: (1.0, 2.0), size, text, .. } if *size == 6.0 && text == "3 m"));
         assert!(matches!(&f.items[2], Item::Text { at: (10.0, 20.0), text, .. } if text == "Rue"));
+    }
+
+    #[test]
+    fn a_hidden_group_is_drawn() {
+        let hidden = Shape::Group {
+            class: "iso-sign".into(),
+            uid: None,
+            data: None,
+            hidden: true,
+            title: None,
+            shapes: vec![tri("iso-top k-bus", Some(Face::Top), None)],
+        };
+        let d = diagram(vec![], vec![layer(LayerKind::Signs, vec![hidden])]);
+        let f = fig(&d);
+        assert!(matches!(&f.items[..], [Item::Poly { fill, .. }] if hex(*fill) == "#f2a99b"), "{:?}", f.items);
     }
 
     /// The light value of a token, as the table writes it.
