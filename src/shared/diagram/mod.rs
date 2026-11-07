@@ -211,6 +211,29 @@ pub struct Diagram {
     pub hits: Layer,
 }
 
+impl Shape {
+    /// Whether this shape, or one it holds, is a top textured in `material`: a polygon with that texture, or a shape
+    /// with its `mat-<material>` class (the junction's tops are paths).
+    fn uses_material(&self, material: &str) -> bool {
+        let class = format!("mat-{material}");
+        match self {
+            Shape::Polygon { texture, class: c, .. } => texture.as_ref().is_some_and(|t| t.material == material) || c.split(' ').any(|w| w == class),
+            Shape::Path { class: c, .. } => c.split(' ').any(|w| w == class),
+            Shape::Group { shapes, .. } | Shape::Elem { shapes, .. } => shapes.iter().any(|s| s.uses_material(material)),
+            _ => false,
+        }
+    }
+}
+
+impl Diagram {
+    /// Whether any top of the drawing is textured in `material`: a drawing carries the pattern of a material only a
+    /// laid thing is drawn in (a rain garden's) when it draws one.
+    pub fn uses_material(&self, material: &str) -> bool {
+        let layers = std::iter::once(&self.ground).chain(self.sections.iter().flat_map(|s| &s.layers)).chain([&self.outline, &self.hits]);
+        layers.flat_map(|l| &l.shapes).any(|s| s.uses_material(material))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

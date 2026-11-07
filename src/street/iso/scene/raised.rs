@@ -4,12 +4,14 @@
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::diagram::{Face, Layer, LayerKind, Pt, Shape};
 use crate::shared::i18n::{Args, I18n};
+use crate::street::model::GreenKind;
 use crate::street::model::SegView;
 
 use super::surface::top;
 use super::tables;
 use crate::street::iso::calming::Laid;
 use crate::street::iso::curbside::{self, Lift};
+use crate::street::iso::green::{PLANTING, Patch};
 use crate::street::iso::order::{self, Bx};
 use crate::street::iso::projection::{Projection, Reach, drawn_mm};
 use crate::street::iso::raised::{Strip, beside, curb_span, curb_top_mm, height_mm, inner_face, strip_box};
@@ -111,29 +113,51 @@ fn lift(p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift, taper: Option<&
     group("iso-piece", Some(segs[l.piece].uid), name, shapes)
 }
 
-/// The strips `standing` above the roadway and the curbside uses `lifted` into strips, in the order they are painted in
-/// among themselves (`order::paint_order`): a strip nearer the middle of the street covers the one beyond it.
-#[cfg(test)]
+/// A green element's patch of ground as a group of its own, hovered by the element's name: a tree's pit, a bed's slab
+/// (front, the side the eye sees, top) or a rain garden's or bioswale's flush top with its outline.
+fn patch(p: &Projection, i18n: &I18n, g: &Patch) -> Shape {
+    let name = i18n.tr(g.kind.name_key(), &Args::new());
+    let (x0, x1) = g.across;
+    let (n, l) = g.along;
+    let sub = p.over(Reach { near: n, far: l });
+    let (base, top_y) = (g.base, g.base + g.rise);
+    let shapes = match g.kind {
+        GreenKind::Tree => top(&sub, PLANTING, "trees", base, &|_| (x0, x1), true),
+        GreenKind::Bed => {
+            let hatch = format!("h-{PLANTING}");
+            let mut out = vec![plane([(x0, base, n), (x1, base, n), (x1, top_y, n), (x0, top_y, n)], Some(PLANTING), Face::Front, &hatch)];
+            if let Some(right) = inner_face(&sub, x0, x1) {
+                let x = if right { x1 } else { x0 };
+                out.push(plane([(x, base, n), (x, base, l), (x, top_y, l), (x, top_y, n)], Some(PLANTING), Face::Side, &hatch));
+            }
+            out.extend(top(&sub, PLANTING, "planted", top_y, &|_| (x0, x1), true));
+            out
+        }
+        GreenKind::RainGarden | GreenKind::Bioswale => {
+            let mut out = top(&sub, PLANTING, "rain_garden", base, &|_| (x0, x1), true);
+            out.push(Shape::Polygon {
+                pts: [(x0, n), (x1, n), (x1, l), (x0, l)].iter().map(|&(x, z)| Pt::new(x, base, z)).collect(),
+                class: "iso-green-edge".into(),
+                face: None,
+                texture: None,
+            });
+            out
+        }
+    };
+    group("iso-green", None, name, shapes)
+}
+
+/// The strips `standing` above the roadway, the curbside uses `lifted` into strips and the green patches, in the order
+/// they are painted in among themselves (`order::paint_order`): a strip nearer the middle of the street covers the one
+/// beyond it. The raised tables `laid` are each a group of their own ordered among the strips as a box over the roadway.
+#[allow(clippy::too_many_arguments)]
 pub(in crate::street::iso) fn raised(
     p: &Projection,
     segs: &[SegView],
     i18n: &I18n,
     standing: &[Strip],
     lifted: &[Lift],
-    across: bool,
-    taper: Option<&Draw>,
-) -> Layer {
-    raised_with(p, segs, i18n, standing, lifted, across, taper, &Laid::default())
-}
-
-/// `raised` with the raised tables `laid`, each a group of its own ordered among the strips as a box over the roadway.
-#[allow(clippy::too_many_arguments)]
-pub(in crate::street::iso) fn raised_with(
-    p: &Projection,
-    segs: &[SegView],
-    i18n: &I18n,
-    standing: &[Strip],
-    lifted: &[Lift],
+    patches: &[Patch],
     across: bool,
     taper: Option<&Draw>,
     laid: &Laid,
@@ -142,14 +166,18 @@ pub(in crate::street::iso) fn raised_with(
         .iter()
         .map(|&s| (strip_box(segs, s, p.reach), true))
         .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, p, taper), false)))
+        .chain(patches.iter().map(|g| (g.bounds(), false)))
         .chain(laid.tables.iter().map(|t| (laid.bx(segs, t), false)))
         .collect();
+    let lifts = standing.len() + lifted.len();
+    let greens = lifts + patches.len();
     let shapes = order::paint_order(&boxes, p.centre_mm)
         .into_iter()
-        .map(|k| match (standing.get(k), k.checked_sub(standing.len()).and_then(|j| lifted.get(j))) {
-            (Some(&s), _) => strip(p, segs, i18n, s, across),
-            (None, Some(l)) => lift(p, segs, i18n, l, taper),
-            (None, None) => tables::table(p, segs, i18n, laid, &laid.tables[k - standing.len() - lifted.len()]),
+        .map(|k| match standing.get(k) {
+            Some(&s) => strip(p, segs, i18n, s, across),
+            None if k < lifts => lift(p, segs, i18n, &lifted[k - standing.len()], taper),
+            None if k < greens => patch(p, i18n, &patches[k - lifts]),
+            None => tables::table(p, segs, i18n, laid, &laid.tables[k - greens]),
         })
         .collect();
     Layer { kind: LayerKind::Raised, shapes }
@@ -171,7 +199,7 @@ mod tests {
             let (_, standing) = split(strips(segs, p));
             let lifted = curbside::lifted(shown);
             lifts += lifted.len();
-            let layer = raised(p, segs, &i18n, &standing, &lifted, across, draw);
+            let layer = raised(p, segs, &i18n, &standing, &lifted, &[], across, draw, &Laid::default());
             assert_eq!(layer.kind, LayerKind::Raised, "{name}");
             assert_eq!(layer.shapes.len(), standing.len() + lifted.len(), "{name}");
             assert!(layer.shapes.iter().all(|s| matches!(s, Shape::Group { title: Some(_), .. })), "{name}: every strip is named for hovering");
@@ -211,9 +239,9 @@ mod tests {
             };
             let (_, standing) = split(strips(segs, &p));
             let lifted = curbside::lifted(&[on]);
-            let layer = raised(&p, segs, &i18n, &standing, &lifted, is_across, Some(&draw));
+            let layer = raised(&p, segs, &i18n, &standing, &lifted, &[], is_across, Some(&draw), &Laid::default());
             // The lifted strip follows the tapering piece: without the transition it is drawn differently.
-            let plain = layer_markup(&raised(&p, segs, &i18n, &standing, &lifted, is_across, None), &p);
+            let plain = layer_markup(&raised(&p, segs, &i18n, &standing, &lifted, &[], is_across, None, &Laid::default()), &p);
             assert_ne!(layer_markup(&layer, &p), plain);
             tapered += 1;
         }

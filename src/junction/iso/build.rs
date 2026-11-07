@@ -281,7 +281,10 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
         }
     }
 
-    (f, d.into_diagram(shades(&f)))
+    // As the street's 2.5D: the rain garden's pattern only in a drawing that has one, so every other is unchanged.
+    let mut diagram = d.into_diagram(String::new());
+    diagram.defs = shades(&f, diagram.uses_material("rain_garden"));
+    (f, diagram)
 }
 
 /// A crossing's length, to be written where there is room for it: where it wants to stand on the screen, and whether

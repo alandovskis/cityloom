@@ -368,6 +368,7 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (7, json!({"street": {"speed_kmh": null}}), 7),
         (8, json!({"street": {"curb": [{"side": "right"}]}}), 8),
         (9, json!({"street": {"stops": [{"side": "right"}]}}), 9),
+        (11, json!({"street": {"green": [{"kind": "tree"}]}}), 11),
         (12, json!({"street": {"calming": [{"from_mm": 0, "length_mm": 7000, "kind": "table"}]}}), 12),
         (NEWEST.into(), plain.clone(), 5),
     ];

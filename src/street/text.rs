@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{CalmingStripView, Check, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
+use crate::street::model::{CalmingStripView, Check, GreenRowView, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -145,6 +145,21 @@ pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: U
     i18n.tr_now("calming-cell", &args)
 }
 
+/// What a screen reader is told of element `cell` of the Green row: its name, where it lies along the street and
+/// its place in the row.
+pub fn green_cell_text(g: &GreenRowView, cell: usize, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let Some(c) = g.cells.get(cell) else { return String::new() };
+    let args = Args::new()
+        .str("name", say_now(i18n, units, &c.label))
+        .str("from", units.length_in(c.from_mm, locale))
+        .str("to", units.length_in(c.to_mm, locale))
+        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .num("n", cell as i64 + 1)
+        .num("total", g.cells.len() as i64);
+    i18n.tr_now("green-cell", &args)
+}
+
 /// Why a zone operation was refused, in the page's language.
 pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
     say_now(i18n, units, &refusal.said())
@@ -170,6 +185,10 @@ pub fn check_label(check: &Check) -> Said {
         // A raised element's row names the element (and the zone, where the zone is what fails).
         (Some(instance), false) if check.id.starts_with("calming-") => {
             Said::new("check-calming-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
+        // A row of the trees and planting names the element that fails.
+        (Some(instance), false) if check.id.starts_with("green-") => {
+            Said::new("check-green-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
         }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
@@ -458,6 +477,28 @@ mod tests {
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
         assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
+    }
+
+    #[test]
+    fn a_failing_green_row_names_its_element_in_both_languages() {
+        use crate::street::model::Check;
+        let row = Check {
+            id: "green-soil",
+            ok: false,
+            label: Said::new("check-label-green-soil"),
+            detail: Said::new("check-detail-green-soil-ok"),
+            zone: Some(
+                Said::new("green-instance")
+                    .with("kind", Arg::Msg("green-kind-tree"))
+                    .with("at", Arg::Length(42_000))
+                    .with("across", Arg::KindLower("sidewalk")),
+            ),
+        };
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Tree pits with enough soil: Tree at 42.0 m, on sidewalk");
+        let fr_row = say_now(&fr(), Units::Metres, &check_label(&row));
+        assert!(fr_row.starts_with("Fosses d’arbre avec assez de terre\u{a0}: Arbre à 42,0\u{a0}m, sur l’élément "), "{fr_row}");
+        let ok = Check { ok: true, zone: None, ..row };
+        assert_eq!(check_label(&ok), ok.label);
     }
 
     #[test]

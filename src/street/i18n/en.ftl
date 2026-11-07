@@ -192,6 +192,7 @@ material-grass = Grass
 material-planted = Planted bed
 material-gravel = Gravel
 material-trees = Street trees
+material-rain_garden = Rain garden
 curb-granite = Granite
 curb-concrete = Concrete
 curb-asphalt = Asphalt
@@ -364,6 +365,7 @@ svg-iso-calming = { $count ->
         [one] One raised table is shown.
        *[other] { $count } raised tables are shown.
     }
+svg-iso-green = Trees and plantings shown: { $count }.
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
        *[other] { $count } transit stops are shown ({ $kinds }).
@@ -502,6 +504,75 @@ stop-refused-overlap = That would overlap another stop on the same side.
 stop-refused-too-long = That would run past the end of the street.
 stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
 stop-refused-dragging = Finish the drag before changing the stops.
+
+green-kind-tree = Tree
+green-kind-bed = Planting bed
+green-kind-rain-garden = Rain garden
+green-kind-bioswale = Bioswale
+green-refused-elsewhere = The trees and planting of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+green-refused-dragging = Finish the drag before changing the trees and planting.
+green-refused-off-street = That would reach past the end of the street or the edge of its section.
+green-refused-on-roadway = That cannot stand on the roadway.
+green-refused-overlap = That would overlap another tree or planting.
+rev-green-add = Add { $kind } at { $at }
+rev-green-size = Change the size of the { $kind } at { $at }
+rev-green-resize = Resize the { $kind } at { $at }
+rev-green-move = Move the { $kind } to { $at }
+rev-green-remove = Remove the { $kind } at { $at }
+green-instance = { $kind } at { $at }, on { $across }
+green-instance-off = { $kind } at { $at }
+check-green-in = { $check }: { $instance }
+check-label-green-host = Planting stands on a piece that can hold it
+check-label-green-clear-path = Sidewalks keep a clear path
+check-label-green-spacing = Trees spaced for their crowns
+check-label-green-soil = Tree pits with enough soil
+check-label-green-sightline = Planting clear of the corners at junctions
+check-label-green-continuity = Bioswales unbroken
+check-label-green-stop = Trees and planting clear of stop platforms
+check-detail-green-host-roadway = Planting cannot stand on the roadway ({ $host }).
+check-detail-green-host-wide = It is { $width } wide, wider than the piece under it ({ $host }, { $have }).
+check-detail-green-host-overhang = It reaches { $over } past the piece under it ({ $host }).
+check-detail-green-host-off = Its centre lies beyond the edge of the section here.
+check-detail-green-host-ok = Every tree and planting stands on a piece that can hold it.
+check-detail-green-clear-path = Only { $have } of sidewalk is left beside it; { $need } or more is needed.
+check-detail-green-clear-path-ok = Every sidewalk keeps a clear path beside its trees and planting.
+check-detail-green-spacing = { $tree } stands { $gap } from { $other }; the larger of their two crowns needs { $need } between their centres.
+check-detail-green-spacing-ok = Every tree has the room its crown needs.
+check-detail-green-soil = The pit is { $length } by { $width }, too small for { $tree }.
+green-tree-s = a small tree
+green-tree-m = a medium tree
+green-tree-l = a large tree
+check-detail-green-soil-ok = Every tree pit has enough soil.
+check-detail-green-sightline = It stands { $gap } from a junction at the end of the street; { $need } or more is needed to keep the view clear.
+check-detail-green-sightline-ok = No tree or bed blocks the view at a junction.
+check-detail-green-continuity-short = The bioswale is { $length } long; { $min } or more is needed for it to carry water.
+check-detail-green-continuity-host = The bioswale passes over a change of the piece under it, which breaks the channel.
+check-detail-green-continuity-ok = Every bioswale runs unbroken.
+check-detail-green-stop = It stands on the platform of this stop: { $stop }. Trees and planting keep clear of where people board.
+check-detail-green-stop-ok = No tree or bed stands on the platform of a stop.
+
+# The Green row, its commands and what the section says (src/street/green_strip.rs, src/street/green_tools.rs).
+green-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+green-choose-element = Choose a tree or planting first.
+green-host-choice = { $kind }, { $width }
+green-size-s = Small
+green-size-m = Medium
+green-size-l = Large
+rev-green-change = Change the { $kind } at { $at }
+st-green-heading = Trees and planting along the street
+st-green-caption = Trees and planting
+st-green-strip-label = Trees and planting along the street. The arrow keys choose one; Alt with an arrow moves it 1 m along the street, with Shift 10 m.
+st-green-tools = Tree and planting commands
+st-green-kind = Kind
+st-green-size = Size
+st-green-at = Along the street, from the start ({ $unit })
+st-green-host = Across, on
+st-green-fine = Across, from the middle of that piece (cm)
+st-green-length = Length ({ $unit })
+st-green-width = Width ({ $unit })
+st-green-add = Add
+st-green-change = Change
+st-green-remove = Remove
 
 # A raised table or crossing's names and refusals (src/street/model/calming.rs).
 calming-kind-table = Raised table

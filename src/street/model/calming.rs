@@ -961,7 +961,7 @@ mod tests {
     }
 
     fn reach(crossing: bool, reach_mm: i32) -> EndInfo {
-        EndInfo { crossing, reach_mm }
+        EndInfo { crossing, reach_mm, ..Default::default() }
     }
 
     fn at_speed(speed: Speed, from_end: ZoneEnd) -> Editor {

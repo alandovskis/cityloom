@@ -20,10 +20,11 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{SegView, ShownInstance, ShownStop, View};
+use crate::street::model::{SegView, ShownGreen, ShownInstance, ShownStop, View};
 
 mod calming;
 mod curbside;
+mod green;
 mod joints;
 mod markings;
 mod order;
@@ -91,8 +92,11 @@ fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&s
     let p = base.over(run.reach);
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
-    // The selected zone's run shows the curbside uses and stops; the neighbour's, across the boundary, none.
-    let (uses, stops): (&[ShownInstance], &[ShownStop]) = if run.across { (&[], &[]) } else { (&v.curb_shown, &v.stops_shown) };
+    // The selected zone's run shows the curbside uses, the stops and the green elements; the neighbour's, across the
+    // boundary, none.
+    let (uses, stops, shown_green): (&[ShownInstance], &[ShownStop], &[ShownGreen]) =
+        if run.across { (&[], &[], &[]) } else { (&v.curb_shown, &v.stops_shown, &v.green_shown) };
+    let patches = green::patches(segs, shown_green);
     let laid = curbside::overs(segs, uses, stops);
     let lifted = curbside::lifted(&laid);
     // Raised tables lie on the selected zone's run only, over its flat roadway pieces.
@@ -102,8 +106,8 @@ fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&s
         layers: vec![
             scene::surface(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), &laid),
             scene::markings_cut(&p, segs, run.taper.as_ref(), &tables.cuts()),
-            scene::raised_with(&p, segs, i18n, &standing, &lifted, run.across, run.taper.as_ref(), &tables),
-            scene::objects(&p, segs, uses, stops),
+            scene::raised(&p, segs, i18n, &standing, &lifted, &patches, run.across, run.taper.as_ref(), &tables),
+            scene::objects(&p, segs, uses, stops, shown_green),
             scene::signs(v, segs, &p, i18n, run.across),
         ],
     }
@@ -155,9 +159,12 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
     };
     // The press targets are the selected run's pieces, over everything.
     let hits = scene::hits(&p.over(selected), &v.segments, i18n);
+    let mut diagram = Diagram { defs: String::new(), ground, sections, outline, hits };
     // The ramps' shade is in the defs only when a table is drawn, so that every other street is written as before.
     let ramp = if v.calming_shown.iter().any(|c| c.drawn()) { shade_filters(&[("iso-shade-ramp", "0.85")]) } else { String::new() };
-    Diagram { defs: format!("<defs>{}{}{}</defs>", shades(), ramp, materials()), ground, sections, outline, hits }
+    // The defs carry the pattern of a material only a laid thing is drawn in when the drawing has one.
+    diagram.defs = format!("<defs>{}{}{}</defs>", shades(), ramp, materials(diagram.uses_material("rain_garden")));
+    diagram
 }
 
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
@@ -179,6 +186,9 @@ pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
     let tables = v.calming_shown.iter().filter(|c| c.drawn()).count();
     if tables > 0 {
         label = format!("{label} {}", i18n.tr("svg-iso-calming", &Args::new().num("count", tables as i64)));
+    }
+    if !v.green_shown.is_empty() {
+        label = format!("{label} {}", i18n.tr("svg-iso-green", &Args::new().num("count", v.green_shown.len() as i64)));
     }
     let shown = stops::drawn(v, width);
     if !shown.is_empty() {
@@ -390,7 +400,8 @@ mod tests {
         let p = Projection::fit(1050.0, span_mm(&v));
         let m = drawn(&e);
         // The patterns carry no projection: they are in ground millimetres, the identity.
-        for mat in MATERIALS {
+        // The rain garden's is carried only by a drawing that draws one (`green.rs` tests it).
+        for mat in MATERIALS.iter().filter(|m| m.id != "rain_garden") {
             let at = m.find(&format!("id=\"iso-m-{}\"", mat.id)).expect("every material has a pattern");
             let start = m[..at].rfind("<pattern").unwrap();
             let tag = &m[start..start + m[start..].find('>').unwrap()];

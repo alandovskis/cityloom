@@ -59,6 +59,19 @@ mod tests {
     }
 
     #[test]
+    fn the_outline_of_a_rain_garden_is_3_to_1_against_its_fill_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let (edge_light, edge_dark) = token(editor, "iso-green-edge");
+        let (fill, _) = token(app, "mat-rain_garden");
+        let fill = fill.unwrap();
+        for (theme, edge) in [("light", edge_light), ("dark", edge_dark)] {
+            let seen = contrast(&edge.unwrap(), &fill);
+            assert!(seen >= 3.0, "{theme}: {seen:.2}");
+        }
+        assert!(editor.contains(".iso-green-edge {"), "the outline is drawn");
+    }
+
+    #[test]
     fn the_hover_and_pressed_states_of_a_press_target_are_seen_on_every_material() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let (tint, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());

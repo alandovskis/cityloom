@@ -122,6 +122,7 @@ impl Editor {
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
             calming_choice: Choice::default(),
+            green_choice: super::green::GreenChoice::default(),
             pending_label: None,
         };
         e.load_sample(sample);
@@ -156,6 +157,7 @@ impl Editor {
                 curb: Vec::new(),
                 stops: Vec::new(),
                 calming: Vec::new(),
+                green: Vec::new(),
             },
             class: s.class,
             class_before: None,
@@ -163,6 +165,7 @@ impl Editor {
             curb_move: None,
             stop_move: None,
             calming_move: None,
+            green_move: None,
         }];
         self.cursor = 0;
         self.selected = None;
