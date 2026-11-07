@@ -73,7 +73,6 @@ test.describe("street trees and green infrastructure", () => {
     await expect(cells).toHaveCount(1);
     await expect(cells.first()).toHaveAttribute("aria-label", /^Tree at /);
 
-    await page.locator('#view-mode-slot button[aria-pressed="false"]').click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Trees and plantings shown: /);
     await expect(crowns(page).first()).toBeAttached();
