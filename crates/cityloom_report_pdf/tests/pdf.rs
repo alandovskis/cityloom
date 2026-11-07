@@ -1,6 +1,6 @@
 //! Reads the written files back with lopdf.
 
-use cityloom_report::{Block, ReportData};
+use cityloom_report::{Block, Captioned, Figure, Item, ReportData, Rgb};
 use cityloom_report_pdf::write_pdf;
 use lopdf::{Document, Object};
 
@@ -238,4 +238,171 @@ fn it_asks_the_viewer_to_show_the_title() {
         other => other.as_dict().unwrap(),
     };
     assert_eq!(prefs.get(b"DisplayDocTitle").unwrap().as_bool().unwrap(), true);
+}
+
+fn captioned(name: &str, w: f32, h: f32, items: Vec<Item>) -> Captioned {
+    Captioned {
+        caption: format!("Légende {name}"),
+        alt: format!("Texte alternatif {name}"),
+        note: format!("Note {name}"),
+        figure: Figure { width: w, height: h, items, omitted: 0 },
+    }
+}
+
+fn square(w: f32, h: f32) -> Vec<Item> {
+    vec![
+        Item::Poly { pts: vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)], fill: Rgb(200, 200, 200), stroke: Some((Rgb(0, 0, 0), 1.0)) },
+        Item::Line { pts: vec![(0.0, 0.0), (w, h)], color: Rgb(255, 0, 0), width: 1.0 },
+        Item::Text { at: (2.0, h / 2.0), size: 10.0, color: Rgb(0, 0, 0), text: "Rue".into() },
+    ]
+}
+
+fn two() -> Block {
+    Block::Figures { items: vec![captioned("A", 100.0, 50.0, square(100.0, 50.0)), captioned("B", 60.0, 120.0, square(60.0, 120.0))] }
+}
+
+/// The operations of the page's content stream.
+fn operations(doc: &Document, n: u32) -> Vec<lopdf::content::Operation> {
+    let id = *doc.get_pages().get(&n).unwrap();
+    doc.get_and_decode_page_content(id).unwrap().operations
+}
+
+fn number(o: &Object) -> f32 {
+    match o {
+        Object::Integer(v) => *v as f32,
+        Object::Real(v) => *v,
+        _ => f32::NAN,
+    }
+}
+
+/// Every path point (x, y) the page draws (`m`, `l`, `c`, and both corners of `re`), as written in the stream.
+fn path_points(doc: &Document, n: u32) -> Vec<(f32, f32)> {
+    let mut pts = vec![];
+    for op in operations(doc, n) {
+        let v: Vec<f32> = op.operands.iter().map(number).collect();
+        match op.operator.as_str() {
+            "m" | "l" => pts.push((v[0], v[1])),
+            "c" => pts.extend(v.chunks(2).map(|c| (c[0], c[1]))),
+            "re" => {
+                pts.push((v[0], v[1]));
+                pts.push((v[0] + v[2], v[1] + v[3]));
+            }
+            _ => {}
+        }
+    }
+    pts
+}
+
+fn figure_alts(doc: &Document) -> Vec<String> {
+    fn walk(doc: &Document, object: &Object, out: &mut Vec<String>) {
+        match object {
+            Object::Reference(r) => {
+                if let Ok(o) = doc.get_object(*r) {
+                    walk(doc, o, out);
+                }
+            }
+            Object::Array(items) => items.iter().for_each(|i| walk(doc, i, out)),
+            Object::Dictionary(d) => {
+                if d.get(b"S").and_then(Object::as_name).is_ok_and(|n| n == b"Figure") {
+                    let alt = d.get(b"Alt").expect("a figure has /Alt").as_str().unwrap();
+                    out.push(match alt.strip_prefix(&[0xfe, 0xff]) {
+                        Some(u) => String::from_utf16(&u.chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>()).unwrap(),
+                        None => String::from_utf8(alt.to_vec()).unwrap(),
+                    });
+                }
+                if let Ok(kids) = d.get(b"K") {
+                    walk(doc, kids, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    walk(doc, catalog(doc).get(b"StructTreeRoot").unwrap(), &mut out);
+    out
+}
+
+#[test]
+fn a_figures_block_draws_inside_the_margins() {
+    let doc = load(&data(vec![vec![heading("Un"), two()]]));
+    let pts = path_points(&doc, 1);
+    assert!(pts.len() > 8, "{pts:?}");
+    for (x, y) in pts {
+        assert!((54.0 - 0.01..=558.0 + 0.01).contains(&x), "x {x}");
+        assert!((54.0 - 0.01..=738.0 + 0.01).contains(&y), "y {y}");
+    }
+    for (x, y) in text_starts(&doc, 1) {
+        assert!((54.0 - 0.01..=558.0).contains(&x) && (0.0..=738.0).contains(&y), "text at {x},{y}");
+    }
+}
+
+#[test]
+fn each_figure_is_a_tagged_figure_with_its_alt_text() {
+    let doc = load(&data(vec![vec![two()]]));
+    assert_eq!(figure_alts(&doc), ["Texte alternatif A", "Texte alternatif B"]);
+}
+
+#[test]
+fn captions_and_notes_are_in_the_page_text() {
+    let doc = load(&data(vec![vec![two()]]));
+    let text = page_text(&doc, 1);
+    let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s:?} missing in {text:?}"));
+    assert!(at("Légende A") < at("Note A"));
+    assert!(at("Légende B") < at("Note B"));
+    assert!(text.contains("Rue"), "{text:?}");
+    let types = structure_types(&doc);
+    assert!(types.iter().filter(|t| *t == "P").count() >= 4, "{types:?}");
+}
+
+#[test]
+fn one_figure_alone_stays_in_its_half() {
+    let doc = load(&data(vec![vec![Block::Figures { items: vec![captioned("A", 100.0, 50.0, square(100.0, 50.0))] }]]));
+    for (x, _) in path_points(&doc, 1) {
+        assert!((54.0 - 0.01..=54.0 + 246.0 + 0.01).contains(&x), "x {x}");
+    }
+    assert_eq!(figure_alts(&doc).len(), 1);
+}
+
+#[test]
+fn a_figure_with_no_items_still_draws_its_caption() {
+    let doc = load(&data(vec![vec![Block::Figures { items: vec![captioned("A", 100.0, 50.0, vec![])] }]]));
+    let text = page_text(&doc, 1);
+    assert!(text.contains("Légende A") && text.contains("Note A"), "{text:?}");
+}
+
+#[test]
+fn the_document_still_validates_as_ua1() {
+    // write_pdf validates against PDF/UA-1 and errors otherwise; a missing glyph in a figure's text is drawn as "?".
+    let mut items = square(100.0, 50.0);
+    items.push(Item::Text { at: (5.0, 5.0), size: 8.0, color: Rgb(1, 2, 3), text: "中".into() });
+    let block = Block::Figures { items: vec![captioned("A", 100.0, 50.0, items), captioned("B", 100.0, 50.0, vec![])] };
+    let doc = load(&data(vec![vec![heading("Un"), para("Texte"), block]]));
+    assert!(page_text(&doc, 1).contains('?'));
+}
+
+#[test]
+fn a_figures_block_taller_than_the_page_is_scaled_to_fit() {
+    let block = Block::Figures { items: vec![captioned("A", 10.0, 5000.0, square(10.0, 5000.0)), captioned("B", 10.0, 50.0, square(10.0, 50.0))] };
+    let doc = load(&data(vec![vec![heading("Un"), block]]));
+    assert_eq!(doc.get_pages().len(), 1);
+    for (x, y) in path_points(&doc, 1) {
+        assert!((54.0 - 0.01..=558.0 + 0.01).contains(&x) && (54.0 - 0.01..=738.0 + 0.01).contains(&y), "{x},{y}");
+    }
+    let text = page_text(&doc, 1);
+    assert!(text.contains("Note A") && text.contains("Note B"), "{text:?}");
+}
+
+#[test]
+fn stroke_widths_scale_with_the_fit() {
+    // 100 wide fitted into a 246 pt half is scaled 2.46, so a width of 1 is drawn 2.46; a hairline is kept at 0.25.
+    let thin = vec![Item::Line { pts: vec![(0.0, 0.0), (100.0, 50.0)], color: Rgb(0, 0, 0), width: 0.01 }];
+    let thick = vec![Item::Line { pts: vec![(0.0, 0.0), (100.0, 50.0)], color: Rgb(0, 0, 0), width: 1.0 }];
+    let widths = |items: Vec<Item>| -> Vec<f32> {
+        let doc = load(&data(vec![vec![Block::Figures { items: vec![captioned("A", 100.0, 50.0, items)] }]]));
+        operations(&doc, 1).iter().filter(|o| o.operator == "w").map(|o| number(&o.operands[0])).collect()
+    };
+    let w = widths(thick);
+    assert!(w.iter().any(|v| (v - 2.46).abs() < 0.01), "{w:?}");
+    let w = widths(thin);
+    assert!(w.iter().any(|v| (v - 0.25).abs() < 0.01), "{w:?}");
 }

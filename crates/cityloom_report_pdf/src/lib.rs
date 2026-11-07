@@ -3,19 +3,21 @@
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use krilla::color::rgb;
 use krilla::configure::{Accessibility, ConfigurationBuilder};
 use krilla::destination::XyzDestination;
-use krilla::geom::Point;
+use krilla::geom::{PathBuilder, Point, Rect};
 use krilla::metadata::Metadata;
 use krilla::outline::{Outline, OutlineNode};
 use krilla::page::PageSettings;
+use krilla::paint::{Fill, Stroke};
 use krilla::surface::Surface;
 use krilla::tagging::{ContentTag, Node, SpanTag, TableHeaderScope, Tag, TagGroup, TagTree};
 use krilla::text::{Font, TextDirection};
 use krilla::{Document, SerializeSettings};
 use wasm_bindgen::prelude::*;
 
-use cityloom_report::{Block, ReportData};
+use cityloom_report::{Block, Captioned, Item, ReportData, Rgb};
 
 const PAGE_W: f32 = 612.0;
 const PAGE_H: f32 = 792.0;
@@ -24,6 +26,12 @@ const BODY: f32 = 11.0;
 const LEADING: f32 = 1.35;
 const GAP: f32 = 8.0;
 const CELL_PAD: f32 = 4.0;
+const HALF: f32 = (PAGE_W - 2.0 * MARGIN - FIGURE_GAP) / 2.0;
+const FIGURE_GAP: f32 = 12.0;
+const CAPTION: f32 = 10.0;
+const NOTE: f32 = 8.0;
+/// The thinnest stroke a figure is drawn with, in points.
+const HAIRLINE: f32 = 0.25;
 
 /// A font with the bytes needed to wrap text.
 struct Face {
@@ -126,6 +134,97 @@ impl Pen<'_, '_> {
         (!nodes.is_empty()).then(|| Node::Group(TagGroup::with_children(tag, nodes)))
     }
 
+    /// One or two figures side by side, each in half the text width with its caption above and its note below.
+    /// The block is scaled down if it would not fit what is left of the page.
+    fn figures(&mut self, items: &[Captioned]) -> Vec<Node> {
+        let top = self.y;
+        let mut end = top;
+        let mut nodes = vec![];
+        for (slot, item) in items.iter().take(2).enumerate() {
+            let x = MARGIN + slot as f32 * (HALF + FIGURE_GAP);
+            self.y = top;
+            let caption = wrap(self.bold, &item.caption, CAPTION, HALF);
+            let note = wrap(self.regular, &item.note, NOTE, HALF);
+            let lines_h = |n: usize, size: f32| n as f32 * size * LEADING;
+            let room = self.bottom() - top - lines_h(caption.len(), CAPTION) - lines_h(note.len(), NOTE) - 2.0 * GAP;
+            let (fw, fh) = (item.figure.width.max(f32::EPSILON), item.figure.height.max(f32::EPSILON));
+            let scale = (HALF / fw).min(room.max(1.0) / fh);
+            let nodes_caption = self.lines(&caption, x, CAPTION, true);
+            if !nodes_caption.is_empty() {
+                nodes.push(Node::Group(TagGroup::with_children(Tag::P, nodes_caption)));
+            }
+            self.y += GAP / 2.0;
+            let (box_w, box_h) = (fw * scale, fh * scale);
+            if !item.figure.items.is_empty() {
+                let id = self.surface.start_tagged(ContentTag::Other);
+                self.draw_figure(item, x, self.y, scale, box_w, box_h);
+                self.surface.end_tagged();
+                nodes.push(Node::Group(TagGroup::with_children(Tag::Figure(Some(item.alt.clone())), vec![Node::from(id)])));
+            }
+            self.y += box_h + GAP / 2.0;
+            let nodes_note = self.lines(&note, x, NOTE, false);
+            if !nodes_note.is_empty() {
+                nodes.push(Node::Group(TagGroup::with_children(Tag::P, nodes_note)));
+            }
+            end = end.max(self.y);
+        }
+        self.y = end + GAP;
+        nodes
+    }
+
+    /// Draws a figure's items with its box's corner at (`x`, `y`), clipped to the box; lengths scale by `scale`.
+    fn draw_figure(&mut self, item: &Captioned, x: f32, y: f32, scale: f32, box_w: f32, box_h: f32) {
+        let colour = |c: Rgb| rgb::Color::new(c.0, c.1, c.2);
+        let at = |p: &(f32, f32)| (x + p.0 * scale, y + p.1 * scale);
+        let path = |pts: &[(f32, f32)], close: bool| {
+            let mut b = PathBuilder::new();
+            for (i, p) in pts.iter().enumerate() {
+                let (px, py) = at(p);
+                if i == 0 { b.move_to(px, py) } else { b.line_to(px, py) }
+            }
+            if close {
+                b.close();
+            }
+            b.finish()
+        };
+        if let Some(clip) = Rect::from_xywh(x, y, box_w, box_h).and_then(|r| {
+            let mut b = PathBuilder::new();
+            b.push_rect(r);
+            b.finish()
+        }) {
+            self.surface.push_clip_path(&clip, &krilla::paint::FillRule::default());
+        }
+        let stroke = |c: Rgb, w: f32| Stroke { paint: colour(c).into(), width: (w * scale).max(HAIRLINE), ..Stroke::default() };
+        for it in &item.figure.items {
+            match it {
+                Item::Poly { pts, fill, stroke: outline } => {
+                    if let Some(p) = path(pts, true) {
+                        self.surface.set_fill(Some(Fill { paint: colour(*fill).into(), ..Fill::default() }));
+                        self.surface.set_stroke(outline.map(|(c, w)| stroke(c, w)));
+                        self.surface.draw_path(&p);
+                    }
+                }
+                Item::Line { pts, color, width } => {
+                    if let Some(p) = path(pts, false) {
+                        self.surface.set_fill(None);
+                        self.surface.set_stroke(Some(stroke(*color, *width)));
+                        self.surface.draw_path(&p);
+                    }
+                }
+                Item::Text { at: pos, size, color, text } => {
+                    let text = self.regular.drawable(text);
+                    let (px, py) = at(pos);
+                    self.surface.set_stroke(None);
+                    self.surface.set_fill(Some(Fill { paint: colour(*color).into(), ..Fill::default() }));
+                    self.surface.draw_text(Point::from_xy(px, py), self.regular.font.clone(), size * scale, &text, false, TextDirection::Auto);
+                }
+            }
+        }
+        self.surface.set_stroke(None);
+        self.surface.set_fill(None);
+        self.surface.pop();
+    }
+
     fn table(&mut self, caption: &str, head: &[String], rows: &[Vec<String>]) -> Option<Node> {
         let mut children = vec![];
         if !caption.is_empty() {
@@ -195,6 +294,12 @@ pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u
                         head: head.iter().map(|c| clean(c)).collect(),
                         rows: rows.iter().map(|r| r.iter().map(|c| clean(c)).collect()).collect(),
                     },
+                    Block::Figures { items } => Block::Figures {
+                        items: items
+                            .iter()
+                            .map(|c| Captioned { caption: clean(&c.caption), alt: c.alt.clone(), note: clean(&c.note), figure: c.figure.clone() })
+                            .collect(),
+                    },
                 })
                 .collect()
         })
@@ -224,6 +329,12 @@ pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u
                 }
                 Block::Paragraph { text } => pen.text(Tag::P, text, BODY, false),
                 Block::Table { caption, head, rows } => pen.table(caption, head, rows),
+                Block::Figures { items } => {
+                    for node in pen.figures(items) {
+                        tree.push(node);
+                    }
+                    None
+                }
             };
             if let Some(node) = node {
                 tree.push(node);

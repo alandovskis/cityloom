@@ -892,6 +892,7 @@ mod report {
                     v.extend(rows.iter().flatten().cloned());
                     v
                 }
+                Block::Figures { items } => items.iter().flat_map(|c| [c.caption.clone(), c.note.clone()]).collect(),
             })
             .collect()
     }

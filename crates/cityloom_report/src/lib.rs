@@ -17,9 +17,32 @@ pub struct ReportData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Block {
-    Heading { level: u8, text: String },
-    Paragraph { text: String },
-    Table { caption: String, head: Vec<String>, rows: Vec<Vec<String>> },
+    Heading {
+        level: u8,
+        text: String,
+    },
+    Paragraph {
+        text: String,
+    },
+    Table {
+        caption: String,
+        head: Vec<String>,
+        rows: Vec<Vec<String>>,
+    },
+    /// One or two figures side by side, each with its caption above and its note below.
+    Figures {
+        items: Vec<Captioned>,
+    },
+}
+
+/// A [`Figure`] with its words: the caption above it, the alternative text a screen reader says for it, and a note
+/// under it (may be empty).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Captioned {
+    pub caption: String,
+    pub alt: String,
+    pub note: String,
+    pub figure: Figure,
 }
 
 /// A colour, 8 bits a channel.
