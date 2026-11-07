@@ -80,12 +80,12 @@ fn every_app_page_shows_the_version_in_its_footer() {
 }
 
 #[test]
-fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_in_the_language_of_the_page() {
+fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_and_export_in_the_language_of_the_page() {
     use crate::shared::testing::html;
     use crate::shell::share_view::ShareMenu;
     use leptos::prelude::*;
 
-    for (locale, print) in [(Locale::En, "Print this sheet"), (Locale::FrCa, "Imprimer cette fiche")] {
+    for (locale, print, export) in [(Locale::En, "Print this sheet", "Export design"), (Locale::FrCa, "Imprimer cette fiche", "Exporter la conception")] {
         let i18n = crate::i18n_for(locale);
         let page = html(move || view! { <ShareMenu i18n=i18n/> }.into_any());
         assert!(page.contains(r#"id="share-btn""#) && page.contains(r#"aria-controls="share-menu""#), "{page}");
@@ -94,6 +94,8 @@ fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_in_the_language_of
         assert!(menu[..menu.find('>').unwrap()].contains("hidden"), "the menu starts hidden: {page}");
         let print_at = menu.find(r#"id="print""#).expect("Print is in the menu");
         assert!(menu[print_at..].contains(print), "{locale:?} says {print}: {page}");
+        let export_at = menu.find(r#"id="share-export""#).expect("Export design is in the menu");
+        assert!(menu[export_at..].contains(export), "{locale:?} says {export}: {page}");
     }
 }
 
