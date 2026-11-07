@@ -57,6 +57,18 @@ pub trait Importer {
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>);
 }
 
+/// Writes the design review as a PDF from its JSON. The writer is a module of its own that the page
+/// loads when it is first asked. The answer arrives later, once, to `done`.
+pub trait PdfWriter {
+    fn write(&self, json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>);
+}
+
+/// Gives a person a file to keep.
+pub trait Downloads {
+    /// Hands the file to the browser; an error says it could not be.
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String>;
+}
+
 /// Opens another page of the site.
 pub trait Navigator {
     fn go(&self, href: &str);
@@ -421,11 +433,71 @@ impl Mapper for NoMapper {
     fn listen(&self, _: Box<dyn Fn(MapEvent)>) {}
 }
 
+/// A file the person chose: its name and its text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picked {
+    pub name: String,
+    pub text: String,
+}
+
+/// Hands a design archive to the person as a file, and takes one they choose. The browser side is a download and a
+/// file chooser; neither reads or writes anything of the app's own.
+pub trait ArchiveFiles {
+    /// Offers `text` to the person as a file called `name`. Says whether it could be offered.
+    fn save(&self, name: &str, text: &str) -> bool;
+    /// Lets the person choose a file and calls `done` once with its text, or with None when they chose none or it
+    /// could not be read as text. May never call `done` (a chooser that is closed without a choice says nothing in
+    /// every browser).
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>);
+}
+
+/// A file port that keeps what was saved and offers what a test staged.
+#[derive(Default)]
+pub struct FakeArchiveFiles {
+    saved: RefCell<Vec<(String, String)>>,
+    staged: RefCell<Option<Picked>>,
+    refuse: std::cell::Cell<bool>,
+}
+
+impl FakeArchiveFiles {
+    /// What was saved since this was last called, as (name, text).
+    pub fn take_saved(&self) -> Vec<(String, String)> {
+        std::mem::take(&mut *self.saved.borrow_mut())
+    }
+
+    /// The file the next `pick` gives.
+    pub fn stage(&self, name: &str, text: &str) {
+        *self.staged.borrow_mut() = Some(Picked { name: name.to_string(), text: text.to_string() });
+    }
+
+    /// Makes `save` fail, as a browser that blocks downloads does.
+    pub fn refuse_saves(&self, refuse: bool) {
+        self.refuse.set(refuse);
+    }
+}
+
+impl ArchiveFiles for FakeArchiveFiles {
+    fn save(&self, name: &str, text: &str) -> bool {
+        if self.refuse.get() {
+            return false;
+        }
+        self.saved.borrow_mut().push((name.to_string(), text.to_string()));
+        true
+    }
+
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>) {
+        let staged = self.staged.borrow_mut().take();
+        done(staged);
+    }
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
     pub navigator: Rc<dyn Navigator>,
     pub importer: Rc<dyn Importer>,
+    pub pdf: Rc<dyn PdfWriter>,
+    pub downloads: Rc<dyn Downloads>,
     pub fetcher: Rc<dyn Fetcher>,
     pub announcer: Rc<dyn Announcer>,
     pub storage: Rc<dyn Storage>,
@@ -434,6 +506,7 @@ pub struct Ports {
     pub page: Rc<dyn Page>,
     pub account: Rc<dyn Account>,
     pub work: Rc<dyn WorkSync>,
+    pub files: Rc<dyn ArchiveFiles>,
 }
 
 /// An announcer that keeps what it was told.
@@ -679,6 +752,70 @@ impl Importer for FakeImporter {
 
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
         self.asked.borrow_mut().push((osm, bounds, done));
+    }
+}
+
+type PdfRequest = (String, Box<dyn FnOnce(Result<Vec<u8>, String>)>);
+
+/// A PDF writer that keeps what it is asked to write until the test answers.
+#[derive(Default)]
+pub struct FakePdfWriter {
+    asked: RefCell<Vec<PdfRequest>>,
+}
+
+impl FakePdfWriter {
+    /// The JSON of each request not yet answered, oldest first.
+    pub fn asked(&self) -> Vec<String> {
+        self.asked.borrow().iter().map(|(j, _)| j.clone()).collect()
+    }
+
+    /// Answers the oldest request not yet answered. False when there is none.
+    pub fn answer_with(&self, result: Result<Vec<u8>, String>) -> bool {
+        let first = {
+            let mut asked = self.asked.borrow_mut();
+            if asked.is_empty() { None } else { Some(asked.remove(0)) }
+        };
+        match first {
+            Some((_, done)) => {
+                done(result);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+impl PdfWriter for FakePdfWriter {
+    fn write(&self, json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>) {
+        self.asked.borrow_mut().push((json, done));
+    }
+}
+
+/// Downloads that keep what was saved: the name, the type and the bytes.
+#[derive(Default)]
+pub struct FakeDownloads {
+    saved: RefCell<Vec<(String, String, Vec<u8>)>>,
+    fails: std::cell::Cell<bool>,
+}
+
+impl FakeDownloads {
+    /// Makes every later save fail, as a browser that refuses the file would.
+    pub fn fail(&self) {
+        self.fails.set(true);
+    }
+
+    pub fn saved(&self) -> Vec<(String, String, Vec<u8>)> {
+        self.saved.borrow().clone()
+    }
+}
+
+impl Downloads for FakeDownloads {
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String> {
+        if self.fails.get() {
+            return Err("the browser refused the file".to_string());
+        }
+        self.saved.borrow_mut().push((name.to_string(), mime.to_string(), bytes));
+        Ok(())
     }
 }
 
@@ -1013,6 +1150,8 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
         Ports {
             navigator: Rc::new(RecordingNavigator::default()),
             importer: Rc::new(FakeImporter::default()),
+            pdf: Rc::new(FakePdfWriter::default()),
+            downloads: Rc::new(FakeDownloads::default()),
             fetcher,
             announcer: announcer.clone(),
             storage: storage.clone(),
@@ -1021,6 +1160,7 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             page: Rc::new(FakePage::default()),
             account: Rc::new(FakeAccount::default()),
             work: Rc::new(FakeWorkSync::default()),
+            files: Rc::new(FakeArchiveFiles::default()),
         },
         announcer,
         storage,
@@ -1045,6 +1185,7 @@ pub struct TestPorts {
     pub announcer: Rc<RecordingAnnouncer>,
     pub storage: Rc<MemoryStorage>,
     pub work: Rc<FakeWorkSync>,
+    pub files: Rc<FakeArchiveFiles>,
 }
 
 /// The same, with the account, the navigator and the page too.
@@ -1056,7 +1197,19 @@ pub fn test_ports_full() -> TestPorts {
     ports.page = page.clone();
     let work = Rc::new(FakeWorkSync::default());
     ports.work = work.clone();
-    TestPorts { ports, account, navigator, page, announcer, storage, work }
+    let files = Rc::new(FakeArchiveFiles::default());
+    ports.files = files.clone();
+    TestPorts { ports, account, navigator, page, announcer, storage, work, files }
+}
+
+/// The same, with the PDF writer and the downloads too.
+pub fn test_ports_with_pdf() -> (Ports, Rc<FakePdfWriter>, Rc<FakeDownloads>) {
+    let (mut ports, ..) = test_ports_with_time();
+    let pdf = Rc::new(FakePdfWriter::default());
+    let downloads = Rc::new(FakeDownloads::default());
+    ports.pdf = pdf.clone();
+    ports.downloads = downloads.clone();
+    (ports, pdf, downloads)
 }
 
 /// The same, with the fetcher and the importer too.
@@ -1079,6 +1232,28 @@ pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>, 
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_fake_pdf_writer_answers_with_what_it_was_told() {
+        let (ports, pdf, _) = test_ports_with_pdf();
+        let got = Rc::new(RefCell::new(Vec::new()));
+        for _ in 0..2 {
+            let got = got.clone();
+            ports.pdf.write("{}".to_string(), Box::new(move |r| got.borrow_mut().push(r)));
+        }
+        assert_eq!(pdf.asked(), vec!["{}".to_string(), "{}".to_string()]);
+        pdf.answer_with(Ok(b"%PDF".to_vec()));
+        pdf.answer_with(Err("no".to_string()));
+        assert_eq!(*got.borrow(), vec![Ok(b"%PDF".to_vec()), Err("no".to_string())]);
+        assert!(!pdf.answer_with(Ok(vec![])));
+    }
+
+    #[test]
+    fn the_fake_downloads_keep_what_was_saved() {
+        let (ports, _, downloads) = test_ports_with_pdf();
+        ports.downloads.save("a.pdf", "application/pdf", vec![1, 2]).unwrap();
+        assert_eq!(downloads.saved(), vec![("a.pdf".to_string(), "application/pdf".to_string(), vec![1, 2])]);
+    }
 
     fn me_json() -> &'static str {
         r#"{"id":"3f2b","display_name":"Ada","store_on_server":null,"identities":[{"id":"ab12","provider":"google","label":"ada@example.org","created_at":"2026-10-14T12:00:00Z"},{"id":"cd34","provider":"osm","label":null,"created_at":"2026-10-15T12:00:00Z"}]}"#

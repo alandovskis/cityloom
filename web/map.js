@@ -2,6 +2,7 @@
 // is MapLibre, made by basemap.js; this sets up what every page shares, which the module binds (`mount_shell`).
 
 import "./city.js";
+import "./report.js";
 
 let wasm, basemap;
 try {
@@ -15,4 +16,7 @@ try {
 // so and has no map to show.
 await wasm.prepare_city();
 
-wasm.mount_map(await basemap.createBasemap("basemap")).mount_shell();
+const page = wasm.mount_map(await basemap.createBasemap("basemap"));
+page.mount_shell();
+// The shell makes the Share menu's Download report item when it mounts, so it is bound after.
+page.bind_report();

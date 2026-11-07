@@ -6,7 +6,8 @@
     "test": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "prettier": "^3.9.9"
+    "@playwright/test": "^1.65.0",
+    "pdfjs-dist": "^6.5.438",
+    "prettier": "^3.9.10"
   }
 }

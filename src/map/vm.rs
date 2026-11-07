@@ -16,6 +16,7 @@ use crate::map::camera::{Camera, Insets, World};
 use crate::map::editable;
 use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
 use crate::map::overlay;
+use crate::map::report;
 use crate::map::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -336,6 +337,10 @@ pub struct MapVm {
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// The source-data findings, likewise; they are read from the city as the importer laid it out.
     source: RefCell<Option<(Rc<CityView>, Rc<SourceReport>)>>,
+    /// Whether a report is being written: a second request meanwhile is ignored.
+    report_running: Cell<bool>,
+    /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
+    report_failed: ArcRwSignal<bool>,
     /// In the tests: how many streets were read to check them against an area's rule.
     #[cfg(test)]
     editors_read: Cell<usize>,
@@ -382,6 +387,8 @@ impl MapVm {
             worded: RefCell::new(None),
             areas,
             network: RefCell::new(None),
+            report_running: Cell::new(false),
+            report_failed: ArcRwSignal::new(false),
             source: RefCell::new(None),
             #[cfg(test)]
             editors_read: Cell::new(0),
@@ -644,6 +651,74 @@ impl MapVm {
             .collect()
     }
 
+    // ---- the design review report ----
+
+    /// The design review report as data, worded in the language the page is in now: from the city view and the
+    /// network findings already worked out, with no rule run again.
+    pub fn report_data(&self) -> cityloom_report::ReportData {
+        let v = self.core.view_now();
+        let network = self.network_report_of(v.clone());
+        let by = |severity| network.findings.iter().filter(|f| f.severity == severity).count();
+        let facts = report::Facts {
+            area: v.name.to_string(),
+            streets: v.edges.len(),
+            junctions: v.nodes.iter().filter(|n| n.junction).count(),
+            places: v.places,
+            edited: v.edited,
+            failing: v.failing,
+            problems: by(Severity::Problem),
+            notices: by(Severity::Notice),
+        };
+        report::build(&facts, env!("CARGO_PKG_VERSION"), self.ports.storage.now_ms(), &self.i18n)
+    }
+
+    /// Writes the report as a PDF and gives it to the person to keep; says so when it cannot. A request made while
+    /// one is under way is ignored.
+    pub fn download_report(&self) {
+        if self.report_running.replace(true) {
+            return;
+        }
+        self.report_failed.set(false);
+        let data = self.report_data();
+        let name = format!("cityloom-{}.pdf", report::slug(&self.core.view_now().name));
+        let Ok(json) = serde_json::to_string(&data) else {
+            self.report_running.set(false);
+            self.report_failure();
+            return;
+        };
+        let me = self.me.clone();
+        self.ports.pdf.write(
+            json,
+            Box::new(move |result| {
+                let Some(vm) = me.upgrade() else { return };
+                vm.report_running.set(false);
+                let saved = match result {
+                    Ok(bytes) => vm.ports.downloads.save(&name, "application/pdf", bytes),
+                    Err(e) => Err(e),
+                };
+                if saved.is_err() {
+                    vm.report_failure();
+                }
+            }),
+        );
+    }
+
+    /// Says a report failed: to a screen reader and, until the next attempt or a dismissal, on the page.
+    fn report_failure(&self) {
+        self.report_failed.set(true);
+        self.ports.announcer.say(&self.i18n.tr_now("map-report-failed", &Args::new()));
+    }
+
+    /// Whether the notice of a failed report is shown (tracked, for a view).
+    pub fn report_failed(&self) -> bool {
+        self.report_failed.get()
+    }
+
+    /// Closes the notice of a failed report.
+    pub fn dismiss_report_notice(&self) {
+        self.report_failed.set(false);
+    }
+
     // ---- the network checks ----
     //
     // Findings that span the loaded streets, counted apart from the places' own checks (the status line and the
@@ -653,7 +728,11 @@ impl MapVm {
 
     /// Every finding of the network checks, found again when the city changes.
     fn network_report(&self) -> Rc<NetworkReport> {
-        let view = self.view();
+        self.network_report_of(self.view())
+    }
+
+    /// The same for a view already in hand (a command reads it untracked).
+    fn network_report_of(&self, view: Rc<CityView>) -> Rc<NetworkReport> {
         if let Some((seen, found)) = &*self.network.borrow()
             && Rc::ptr_eq(seen, &view)
         {

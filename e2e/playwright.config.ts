@@ -7,10 +7,12 @@ import { fileURLToPath } from "node:url";
 // E2E_PORT moves the server off 8137 when another one already holds that port.
 const port = process.env.E2E_PORT ?? 8137;
 
-const server = fileURLToPath(new URL("../target/debug/cityloom_server", import.meta.url));
+// The server `just e2e` built and pinned (scripts/pin-server.sh): a copy, so a target directory shared with other checkouts
+// cannot swap it during the run. Running Playwright by hand after a `cargo build` needs `./scripts/pin-server.sh` first.
+const server = fileURLToPath(new URL("../target/e2e/cityloom_server", import.meta.url));
 if (!existsSync(server)) {
   throw new Error(
-    `${server} is missing: run 'just e2e' (it builds the server first) or 'cargo build -p cityloom_server'`,
+    `${server} is missing: run 'just e2e' (it builds the server first and pins a copy of it for this checkout)`,
   );
 }
 

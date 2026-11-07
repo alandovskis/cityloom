@@ -80,21 +80,62 @@ fn every_app_page_shows_the_version_in_its_footer() {
 }
 
 #[test]
-fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_in_the_language_of_the_page() {
+fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_and_export_in_the_language_of_the_page() {
     use crate::shared::testing::html;
     use crate::shell::share_view::ShareMenu;
     use leptos::prelude::*;
 
-    for (locale, print) in [(Locale::En, "Print this sheet"), (Locale::FrCa, "Imprimer cette fiche")] {
+    for (locale, print, export) in [(Locale::En, "Print this sheet", "Export design"), (Locale::FrCa, "Imprimer cette fiche", "Exporter la conception")] {
         let i18n = crate::i18n_for(locale);
-        let page = html(move || view! { <ShareMenu i18n=i18n/> }.into_any());
+        let page = html(move || view! { <ShareMenu i18n=i18n report=false/> }.into_any());
         assert!(page.contains(r#"id="share-btn""#) && page.contains(r#"aria-controls="share-menu""#), "{page}");
         assert!(page.contains(r#"id="share-btn-label""#) && page.contains(r#"id="share-heading""#), "{page}");
         let menu = &page[page.find(r#"id="share-menu""#).expect("the menu")..];
         assert!(menu[..menu.find('>').unwrap()].contains("hidden"), "the menu starts hidden: {page}");
         let print_at = menu.find(r#"id="print""#).expect("Print is in the menu");
         assert!(menu[print_at..].contains(print), "{locale:?} says {print}: {page}");
+        let export_at = menu.find(r#"id="share-export""#).expect("Export design is in the menu");
+        assert!(menu[export_at..].contains(export), "{locale:?} says {export}: {page}");
     }
+}
+
+#[test]
+fn the_report_share_menu_has_the_download_item_and_no_print_item() {
+    use crate::shared::testing::html;
+    use crate::shell::share_view::ShareMenu;
+    use leptos::prelude::*;
+
+    for (locale, said) in [(Locale::En, "Download report (PDF)"), (Locale::FrCa, "Télécharger le rapport (PDF)")] {
+        let i18n = crate::i18n_for(locale);
+        let page = html(move || view! { <ShareMenu i18n=i18n report=true/> }.into_any());
+        assert!(page.contains(r#"id="share-btn""#) && page.contains(r#"id="share-menu""#), "{page}");
+        assert!(!page.contains(r#"id="print""#), "no Print item: {page}");
+        let at = page.find(r#"id="report""#).expect("the report item");
+        assert!(page[at..].contains(said), "{locale:?} says {said}: {page}");
+    }
+}
+
+#[test]
+fn the_editors_share_menu_is_unchanged() {
+    use crate::shared::testing::html;
+    use crate::shell::share_view::ShareMenu;
+    use leptos::prelude::*;
+
+    let i18n = crate::i18n_for(Locale::En);
+    let page = html(move || view! { <ShareMenu i18n=i18n report=false/> }.into_any());
+    assert!(page.contains(r#"id="print""#) && !page.contains(r#"id="report""#), "{page}");
+    // The items are Print and Export design (#74), after the heading; the report variant swaps only Print.
+    assert!(page.contains(r#"id="share-export""#), "{page}");
+    assert_eq!(page.matches(r#"type="button""#).count(), 3, "the Share button, Print and Export design: {page}");
+}
+
+#[test]
+fn the_share_variant_follows_the_slots_data_share() {
+    use crate::shell::share_view::share_has_report;
+    assert!(share_has_report(Some("report")));
+    assert!(!share_has_report(Some("print")));
+    assert!(!share_has_report(Some("")));
+    assert!(!share_has_report(None));
 }
 
 #[test]

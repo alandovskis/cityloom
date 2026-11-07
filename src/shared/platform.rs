@@ -7,8 +7,8 @@ use wasm_bindgen::prelude::*;
 
 // `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
 use crate::shared::ports::{
-    Account, AccountError, Announcer, Answer, Fetched, Fetcher, Importer, Me, Navigator, Page, Ports, ProviderInfo, Scheduler, Storage, WorkAnswer, WorkAsk,
-    WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
+    Account, AccountError, Announcer, Answer, ArchiveFiles, Downloads, Fetched, Fetcher, Importer, Me, Navigator, Page, PdfWriter, Picked, Ports, ProviderInfo,
+    Scheduler, Storage, WorkAnswer, WorkAsk, WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
 };
 use crate::shared::{live, store};
 
@@ -181,6 +181,85 @@ async fn read_osm(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<String, String
     json.as_string().ok_or_else(|| "the map data could not be read".to_string())
 }
 
+/// The report writer, which the page script loads on first use and offers as
+/// `window.cityloomReportPdf(json) -> Promise<Uint8Array>`.
+struct BrowserPdfWriter;
+
+impl PdfWriter for BrowserPdfWriter {
+    #[cfg(target_arch = "wasm32")]
+    fn write(&self, json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>) {
+        wasm_bindgen_futures::spawn_local(async move { done(write_pdf(&json).await) });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn write(&self, _json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>) {
+        done(Err("there is no report writer here".to_string()));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn write_pdf(json: &str) -> Result<Vec<u8>, String> {
+    use wasm_bindgen::JsCast;
+    let words = |e: wasm_bindgen::JsValue| {
+        e.as_string()
+            .or_else(|| js_sys::Reflect::get(&e, &"message".into()).ok().and_then(|m| m.as_string()))
+            .unwrap_or_else(|| "the report could not be written".to_string())
+    };
+    let window = web_sys::window().ok_or("there is no window")?;
+    let write = js_sys::Reflect::get(&window, &"cityloomReportPdf".into()).map_err(words)?;
+    let write: js_sys::Function = write.dyn_into().map_err(|_| "the page has no report writer".to_string())?;
+    let promise = write.call1(&wasm_bindgen::JsValue::NULL, &json.into()).map_err(words)?;
+    let bytes = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await.map_err(words)?;
+    Ok(js_sys::Uint8Array::new(&bytes).to_vec())
+}
+
+/// Saves a file through a temporary link the browser is made to follow.
+struct BrowserDownloads;
+
+impl Downloads for BrowserDownloads {
+    #[cfg(target_arch = "wasm32")]
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String> {
+        use wasm_bindgen::JsCast;
+        let words = |e: wasm_bindgen::JsValue| e.as_string().unwrap_or_else(|| format!("{e:?}"));
+        let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(&bytes[..]));
+        let options = web_sys::BlobPropertyBag::new();
+        options.set_type(mime);
+        let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options).map_err(words)?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(words)?;
+        let link = (|| -> Result<web_sys::HtmlAnchorElement, wasm_bindgen::JsValue> {
+            let document = web_sys::window().and_then(|w| w.document()).ok_or("there is no document")?;
+            let link: web_sys::HtmlAnchorElement = document.create_element("a")?.dyn_into()?;
+            link.set_href(&url);
+            link.set_download(name);
+            link.style().set_property("display", "none")?;
+            document.body().ok_or("there is no body")?.append_child(&link)?;
+            Ok(link)
+        })();
+        let link = match link {
+            Ok(link) => link,
+            Err(error) => {
+                let _ = web_sys::Url::revoke_object_url(&url);
+                return Err(words(error));
+            }
+        };
+        link.click();
+        link.remove();
+        // The browser may read the blob after the click returns, so the URL is let go only later (as FileSaver.js does).
+        let release = wasm_bindgen::closure::Closure::once_into_js(move || {
+            let _ = web_sys::Url::revoke_object_url(&url);
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(release.unchecked_ref(), 40_000);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn save(&self, _name: &str, _mime: &str, _bytes: Vec<u8>) -> Result<(), String> {
+        Ok(())
+    }
+}
+
 struct BrowserNavigator;
 
 impl Navigator for BrowserNavigator {
@@ -191,6 +270,73 @@ impl Navigator for BrowserNavigator {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = href;
+    }
+}
+
+/// The browser's side of `ArchiveFiles`: a download through a temporary link, and a file chooser on an input that is
+/// never put in the page. Thin glue; every decision about the text is the archive slice's.
+struct BrowserFiles;
+
+impl ArchiveFiles for BrowserFiles {
+    fn save(&self, name: &str, text: &str) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(text));
+            let options = web_sys::BlobPropertyBag::new();
+            options.set_type("application/json");
+            let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options) else { return false };
+            let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else { return false };
+            let document = leptos::prelude::document();
+            let Some(link) = document.create_element("a").ok().and_then(|e| e.dyn_into::<web_sys::HtmlAnchorElement>().ok()) else {
+                return false;
+            };
+            link.set_href(&url);
+            link.set_download(name);
+            link.click();
+            let _ = web_sys::Url::revoke_object_url(&url);
+            true
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (name, text);
+            false
+        }
+    }
+
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let Some(input) = leptos::prelude::document().create_element("input").ok().and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok()) else {
+                return done(None);
+            };
+            input.set_type("file");
+            input.set_accept(".json,application/json");
+            let done = Rc::new(std::cell::RefCell::new(Some(done)));
+            let on_change = {
+                let (input, done) = (input.clone(), done.clone());
+                Closure::once_into_js(move || {
+                    let Some(file) = input.files().and_then(|f| f.get(0)) else {
+                        if let Some(done) = done.borrow_mut().take() {
+                            done(None);
+                        }
+                        return;
+                    };
+                    let name = file.name();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let text = wasm_bindgen_futures::JsFuture::from(file.text()).await.ok().and_then(|t| t.as_string());
+                        if let Some(done) = done.borrow_mut().take() {
+                            done(text.map(|text| Picked { name, text }));
+                        }
+                    });
+                })
+            };
+            let _ = input.add_event_listener_with_callback("change", on_change.unchecked_ref());
+            input.click();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        done(None);
     }
 }
 
@@ -483,6 +629,8 @@ pub fn browser_ports() -> Ports {
     Ports {
         navigator: Rc::new(BrowserNavigator),
         importer: Rc::new(BrowserImporter),
+        pdf: Rc::new(BrowserPdfWriter),
+        downloads: Rc::new(BrowserDownloads),
         fetcher: Rc::new(BrowserFetcher),
         announcer: Rc::new(BrowserAnnouncer),
         storage: Rc::new(BrowserStorage),
@@ -491,6 +639,7 @@ pub fn browser_ports() -> Ports {
         page: Rc::new(BrowserPage),
         account: Rc::new(BrowserAccount),
         work: Rc::new(BrowserWork),
+        files: Rc::new(BrowserFiles),
     }
 }
 
