@@ -39,6 +39,10 @@ const ADVANCE: f32 = 0.6;
 const ASCENT: f32 = 0.8;
 const DESCENT: f32 = 0.25;
 
+/// The white label behind a street's name in a fitted figure, and the room it has round the word.
+pub const LABEL_BACKGROUND: Rgb = Rgb(0xff, 0xff, 0xff);
+const LABEL_PAD: f32 = 2.0;
+
 /// How wide a word is estimated to be set at `size`.
 fn text_width(text: &str, size: f32) -> f32 {
     text.chars().count() as f32 * size * ADVANCE
@@ -285,6 +289,19 @@ impl Walk<'_> {
     }
 
     fn word(&mut self, at: (f32, f32), size: f32, text: &str, rank: u8) {
+        // In a fitted figure only street names are kept (the numbers beside them are not for a council figure), each
+        // on a white label so that it reads on any surface, in the page's darkest ink.
+        if self.caption.is_some() {
+            if rank != 0 {
+                return;
+            }
+            let (x0, y0, x1, y1) =
+                (at.0 - LABEL_PAD, at.1 - size * ASCENT - LABEL_PAD, at.0 + text_width(text, size) + LABEL_PAD, at.1 + size * DESCENT + LABEL_PAD);
+            self.ranks.push((self.items.len() + 1, rank));
+            self.items.push(Item::Poly { pts: vec![(x0, y0), (x1, y0), (x1, y1), (x0, y1)], fill: LABEL_BACKGROUND, stroke: None });
+            self.items.push(Item::Text { at, size, color: colour("ink"), text: text.to_string() });
+            return;
+        }
         self.ranks.push((self.items.len(), rank));
         self.items.push(Item::Text { at, size, color: colour("ink-2"), text: text.to_string() });
     }
@@ -338,7 +355,7 @@ fn bounds(items: &[Item]) -> (f32, f32, f32, f32) {
 /// `flatten`, but the figure is fitted to what is drawn: the largest scale at which every shape and every word (its
 /// extent estimated from its size and length, `text_width`) lies inside `box_w` by `box_h`, moved to the box's origin,
 /// the figure being the size of what is drawn. A caption is `FIT_CAPTION_SIZE` whatever the scale. Words that would
-/// overprint a word already kept are dropped: the street names (class `iso-name`) first, then the others in order.
+/// overprint a label already kept are dropped. Only street names (class `iso-name`) are kept, each on a white label (`LABEL_BACKGROUND`) in the page's ink.
 pub fn flatten_fit(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figure {
     let (w, h) = p.size();
     let hi = if w > 0.0 && h > 0.0 { ((box_w / w as f32).min(box_h / h as f32)) * 8.0 } else { 1.0 };
@@ -363,8 +380,10 @@ pub fn flatten_fit(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> F
     let mut drop = vec![false; walk.items.len()];
     for (i, _) in order {
         let b = extent(&walk.items[i]);
+        let b = (b.0 - LABEL_PAD, b.1 - LABEL_PAD, b.2 + LABEL_PAD, b.3 + LABEL_PAD);
         if kept.iter().any(|k| b.0 < k.2 && k.0 < b.2 && b.1 < k.3 && k.1 < b.3) {
             drop[i] = true;
+            drop[i - 1] = true;
         } else {
             kept.push(b);
         }
@@ -492,6 +511,20 @@ mod tests {
         let lines: Vec<_> = f.items.iter().filter_map(|i| if let Item::Line { pts, .. } = i { Some(pts) } else { None }).collect();
         assert_eq!(lines.len(), 2);
         assert!(lines.iter().all(|p| p.len() == 4 && p[0] == p[3]));
+    }
+
+    #[test]
+    fn a_name_in_a_fitted_figure_is_dark_ink_on_white_and_numbers_are_dropped() {
+        use crate::shared::contrast::contrast;
+        let cap = |class: &str, text: &str| Shape::Caption { px: (50.0, 25.0), class: class.into(), anchor: "middle", text: text.into() };
+        let d = diagram(vec![tri("iso-ground", None, None)], vec![layer(LayerKind::Signs, vec![cap("iso-name t-mark", "Rue Laurier"), cap("t-dim", "6.0")])]);
+        let f = flatten_fit(&d, &Flat(100.0, 50.0), 100.0, 50.0);
+        let texts: Vec<_> = f.items.iter().filter_map(|i| if let Item::Text { color, text, .. } = i { Some((*color, text.clone())) } else { None }).collect();
+        assert_eq!(texts.len(), 1, "{texts:?}");
+        assert_eq!(texts[0].1, "Rue Laurier");
+        assert!(contrast(&hex(texts[0].0), &hex(LABEL_BACKGROUND)) >= 4.5);
+        let label = f.items.iter().position(|i| matches!(i, Item::Poly { fill, .. } if *fill == LABEL_BACKGROUND)).expect("a label");
+        assert!(label < f.items.iter().position(|i| matches!(i, Item::Text { .. })).unwrap(), "the label is under the word");
     }
 
     #[test]

@@ -9,8 +9,8 @@ use crate::shared::flat::flatten_fit;
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 
-/// The drawing's own size in points, before `flatten` scales it to the box.
-const POINT_SIZE: f64 = 252.0;
+/// The frame the drawing is laid out in, large so that the names are never clamped away from the street they name; `flatten_fit` fits it to the box.
+const POINT_SIZE: f64 = 1000.0;
 
 /// The junction's 2.5D fitted into `box_w` by `box_h`, its words in `i18n`'s language and its lengths in `units`; the junction's own selection
 /// is not outlined (the outline layer is not drawn).

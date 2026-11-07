@@ -3283,15 +3283,14 @@ fn the_junction_alt_text_names_what_is_drawn() {
 }
 
 #[test]
-fn a_fr_ca_junction_figure_has_its_own_words() {
+fn the_junction_figure_keeps_street_names_only_each_on_a_white_label() {
     use crate::shared::i18n::Locale;
     use cityloom_report::Item;
-    let words = |l| -> Vec<String> {
-        let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(l), Units::Metres, 252.0, 200.0);
-        f.items.iter().filter_map(|i| if let Item::Text { text, .. } = i { Some(text.clone()) } else { None }).collect()
-    };
-    let (e, f) = (words(Locale::En), words(Locale::FrCa));
-    assert!(!e.is_empty() && e != f, "{e:?} {f:?}");
+    let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(Locale::FrCa), Units::Metres, 246.0, 190.0);
+    let words: Vec<&String> = f.items.iter().filter_map(|i| if let Item::Text { text, .. } = i { Some(text) } else { None }).collect();
+    assert!(!words.is_empty() && words.iter().all(|w| w.starts_with("Sample")), "{words:?}");
+    let labels = f.items.iter().filter(|i| matches!(i, Item::Poly { fill, .. } if *fill == crate::shared::flat::LABEL_BACKGROUND)).count();
+    assert_eq!(labels, words.len());
 }
 
 #[test]
