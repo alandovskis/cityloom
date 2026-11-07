@@ -6,7 +6,7 @@
 let writer;
 let attempts = 0;
 const load = () =>
-  (writer ??= import(`./pkg/cityloom_report.js${attempts++ ? `?retry=${attempts}` : ""}`)
+  (writer ??= import(`./pkg/cityloom_report_pdf.js${attempts++ ? `?retry=${attempts}` : ""}`)
     .then(async (m) => {
       await m.default();
       return m;

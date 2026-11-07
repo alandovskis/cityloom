@@ -713,9 +713,16 @@ dependencies = [
 name = "cityloom_report"
 version = "0.1.0"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cityloom_report_pdf"
+version = "0.1.0"
+dependencies = [
+ "cityloom_report",
  "krilla",
  "lopdf",
- "serde",
  "serde_json",
  "ttf-parser",
  "wasm-bindgen",

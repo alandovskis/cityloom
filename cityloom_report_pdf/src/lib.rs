@@ -3,16 +3,19 @@
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
-use krilla::Document;
+use krilla::configure::{Accessibility, ConfigurationBuilder};
+use krilla::destination::XyzDestination;
 use krilla::geom::Point;
 use krilla::metadata::Metadata;
+use krilla::outline::{Outline, OutlineNode};
 use krilla::page::PageSettings;
 use krilla::surface::Surface;
 use krilla::tagging::{ContentTag, Node, SpanTag, TableHeaderScope, Tag, TagGroup, TagTree};
 use krilla::text::{Font, TextDirection};
+use krilla::{Document, SerializeSettings};
 use wasm_bindgen::prelude::*;
 
-use crate::{Block, ReportData};
+use cityloom_report::{Block, ReportData};
 
 const PAGE_W: f32 = 612.0;
 const PAGE_H: f32 = 792.0;
@@ -35,11 +38,18 @@ impl Face {
         Ok(Face { font, bytes: bytes.to_vec() })
     }
 
+    /// `text` with each character the font lacks (a street name in another script) as "?". PDF/UA-1 refuses a file
+    /// that draws .notdef, and one such name must not cost the whole report.
+    fn drawable(&self, text: &str) -> String {
+        let face = ttf_parser::Face::parse(&self.bytes, 0).expect("checked in new");
+        text.chars().map(|c| if c == '\n' || face.glyph_index(c).is_some() { c } else { '?' }).collect()
+    }
+
     /// The width of `text` at `size` points, from the advance of each glyph (no kerning, so never narrower than drawn).
     fn width(&self, text: &str, size: f32) -> f32 {
         let face = ttf_parser::Face::parse(&self.bytes, 0).expect("checked in new");
         let per_em = f32::from(face.units_per_em());
-        // A character the font lacks is drawn as .notdef (glyph 0), so it is measured as that.
+        // Text is made drawable first, so every character has a glyph; glyph 0 is only a fallback.
         text.chars().map(|c| f32::from(face.glyph_hor_advance(face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0))).unwrap_or(0)) * size / per_em).sum()
     }
 }
@@ -165,11 +175,32 @@ impl Pen<'_, '_> {
 pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u8>, String> {
     let regular = Face::new(regular)?;
     let bold = Face::new(bold)?;
-    let mut document = Document::new();
+    // PDF/UA-1 asks for a tagged document and also sets /ViewerPreferences /DisplayDocTitle, so a viewer shows the title.
+    let configuration = ConfigurationBuilder::new().with_accessibility_validator(Accessibility::UA1).finish().map_err(|e| format!("{e:?}"))?;
+    let mut document = Document::new_with(SerializeSettings { configuration, ..SerializeSettings::default() });
     document.set_metadata(Metadata::new().title(data.title.clone()).language(data.lang.clone()));
     let mut tree = TagTree::new().with_lang(Some(data.lang.clone()));
     let size = PageSettings::from_wh(PAGE_W, PAGE_H).ok_or("the page size is invalid")?;
-    for blocks in &data.pages {
+    let clean = |text: &str| regular.drawable(text);
+    let pages: Vec<Vec<Block>> = data
+        .pages
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|block| match block {
+                    Block::Heading { level, text } => Block::Heading { level: *level, text: clean(text) },
+                    Block::Paragraph { text } => Block::Paragraph { text: clean(text) },
+                    Block::Table { caption, head, rows } => Block::Table {
+                        caption: clean(caption),
+                        head: head.iter().map(|c| clean(c)).collect(),
+                        rows: rows.iter().map(|r| r.iter().map(|c| clean(c)).collect()).collect(),
+                    },
+                })
+                .collect()
+        })
+        .collect();
+    let mut outline = Outline::new();
+    for (index, blocks) in pages.iter().enumerate() {
         let mut page = document.start_page_with(size.clone());
         let mut surface = page.surface();
         let mut pen = Pen { surface: &mut surface, regular: &regular, bold: &bold, y: MARGIN };
@@ -182,7 +213,14 @@ pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u
                         2 => 14.0,
                         _ => 12.0,
                     };
-                    pen.text(Tag::Hn(level, None), text, size, true)
+                    let top = pen.y;
+                    let node = pen.text(Tag::Hn(level, Some(text.clone())), text, size, true);
+                    if node.is_some() {
+                        // PDF/UA-1 wants every heading titled and a bookmark for the document.
+                        let destination = XyzDestination::new(index, Point::from_xy(MARGIN, top));
+                        outline.push_child(OutlineNode::new(text.clone(), destination));
+                    }
+                    node
                 }
                 Block::Paragraph { text } => pen.text(Tag::P, text, BODY, false),
                 Block::Table { caption, head, rows } => pen.table(caption, head, rows),
@@ -194,6 +232,7 @@ pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u
         surface.finish();
         page.finish();
     }
+    document.set_outline(outline);
     document.set_tag_tree(tree);
     document.finish().map_err(|e| format!("{e:?}"))
 }
