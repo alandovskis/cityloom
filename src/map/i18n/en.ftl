@@ -301,3 +301,4 @@ map-report-notice = Notice
 map-report-none-found = No network problems and no notices were found: { $result }.
 map-report-nothing = There is nothing to report: this city has no streets or junctions.
 map-report-failed = The report could not be made. Try again.
+map-report-dismiss = Dismiss

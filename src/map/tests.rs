@@ -1028,6 +1028,49 @@ mod report {
     }
 
     #[test]
+    fn a_failed_report_shows_a_notice_that_the_next_attempt_clears() {
+        let (ports, pdf, _downloads) = test_ports_with_pdf();
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        assert!(!vm.report_failed());
+        vm.download_report();
+        assert!(!vm.report_failed());
+        pdf.answer_with(Err("boom".to_string()));
+        assert!(vm.report_failed());
+        vm.download_report();
+        assert!(!vm.report_failed(), "a new attempt starts with no notice");
+        pdf.answer_with(Ok(b"%PDF".to_vec()));
+        assert!(!vm.report_failed());
+    }
+
+    #[test]
+    fn a_report_that_cannot_be_saved_shows_the_notice_and_dismissing_clears_it() {
+        let (ports, pdf, downloads) = test_ports_with_pdf();
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        downloads.fail();
+        vm.download_report();
+        pdf.answer_with(Ok(b"%PDF".to_vec()));
+        assert!(vm.report_failed());
+        vm.dismiss_report_notice();
+        assert!(!vm.report_failed());
+    }
+
+    #[test]
+    fn the_notice_is_drawn_as_visible_text_with_a_named_close_button_and_follows_the_language() {
+        let (ports, pdf, _d) = test_ports_with_pdf();
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        let none = map_html(|| view! { <map_ui::ReportNotice vm=vm.clone()/> });
+        assert!(!none.contains("could not be made"), "{none}");
+        vm.download_report();
+        pdf.answer_with(Err("boom".to_string()));
+        let h = map_html(|| view! { <map_ui::ReportNotice vm=vm.clone()/> });
+        assert!(h.contains("role=\"status\"") && h.contains("The report could not be made. Try again."), "{h}");
+        assert!(h.contains("<button") && h.contains("aria-label=\"Dismiss\""), "{h}");
+        vm.i18n().set(Locale::FrCa);
+        let h = map_html(|| view! { <map_ui::ReportNotice vm=vm.clone()/> });
+        assert!(h.contains("n’a pas pu être produit") && h.contains("aria-label=\"Fermer\""), "{h}");
+    }
+
+    #[test]
     fn the_french_cover_gives_the_export_date_and_time_in_the_french_way() {
         let (vm, ..) = sample_in(Locale::FrCa);
         let joined = texts(&vm.report_data().pages[0]).join("\n");

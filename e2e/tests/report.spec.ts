@@ -71,6 +71,12 @@ test("a report that cannot be written saves nothing", async ({ page, errors }) =
   await page.locator("#share-btn").click();
   await page.locator("#report").click();
   await expect(live(page)).toContainText("The report could not be made", { timeout: 5000 });
+  const notice = page.locator("#report-notice");
+  await expect(notice).toBeVisible();
+  await expect(notice).toHaveText(/The report could not be made\. Try again\./);
+  await expect(notice).toHaveAttribute("role", "status");
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(notice).toHaveCount(0);
   await page.waitForTimeout(2000);
   expect(saved).toBe(false);
   forgive(errors, /404|Failed to load|cityloom_report/i);
