@@ -98,7 +98,7 @@ jobs:
       # A positive control: the check must fail on a build with the fake provider, or its markers have drifted.
       - run: |
           cargo build --release -p cityloom_server --features test-provider
-          if ./scripts/check-no-fake.sh target/release/cityloom_server; then
+          if ./scripts/check-no-fake.sh "$(./scripts/target-dir.sh)/release/cityloom_server"; then
             echo "check-no-fake.sh passed a build with the fake provider" >&2
             exit 1
           fi

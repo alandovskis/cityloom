@@ -21,7 +21,7 @@ setup-deploy:
 # Build the server as it is deployed (without the test provider) and check that the fake provider is not in it.
 check-no-fake:
     cargo build --release -p cityloom_server
-    ./scripts/check-no-fake.sh target/release/cityloom_server
+    ./scripts/check-no-fake.sh "$(./scripts/target-dir.sh)/release/cityloom_server"
 
 # Build the WebAssembly module into web/pkg.
 build:

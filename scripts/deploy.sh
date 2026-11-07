@@ -18,7 +18,7 @@ done
 ./scripts/build.sh
 target=x86_64-unknown-linux-musl
 cargo zigbuild --release --target "$target" -p cityloom_server
-server="target/$target/release/cityloom_server"
+server="$(./scripts/target-dir.sh)/$target/release/cityloom_server"
 ./scripts/check-no-fake.sh "$server"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT

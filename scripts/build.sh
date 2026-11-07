@@ -13,11 +13,12 @@ if [ "$(uname)" = Darwin ]; then
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
 cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
+wasm_dir="$(./scripts/target-dir.sh)/wasm32-unknown-unknown/release"
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
-  target/wasm32-unknown-unknown/release/cityloom_editor.wasm
+  "$wasm_dir/cityloom_editor.wasm"
 # The OpenStreetMap reader is its own module, loaded when a place is opened.
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
-  target/wasm32-unknown-unknown/release/osm_import.wasm
+  "$wasm_dir/osm_import.wasm"
 # The map's libraries, from npm (`npm ci` at the repository root) into web/vendor. MapLibre is ES modules that
 # find each other beside themselves; pmtiles.js defines a global `pmtiles`.
 [ -d node_modules/maplibre-gl ] || { echo "node_modules/maplibre-gl is missing: run 'just setup' first" >&2; exit 1; }
