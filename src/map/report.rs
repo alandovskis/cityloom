@@ -1,10 +1,10 @@
 //! The design review report as data: the cover and the summary, worded in the interface language. Pure: the
 //! view-model gathers the `Facts` from the city and the network checks, and `build` words them. The writer of the
-//! PDF is another module (`cityloom_report`) behind the `PdfWriter` port.
+//! PDF is another module (`cityloom_report_pdf`) behind the `PdfWriter` port.
 
 use cityloom_report::{Block, ReportData};
 
-use crate::shared::i18n::{Args, I18n};
+use crate::shared::i18n::{Args, I18n, Locale};
 
 /// What the report says about the city, counted by the view-model from the city view and the cached checks.
 #[derive(Clone, Debug, Default)]
@@ -26,7 +26,7 @@ pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportD
     let cover = vec![
         Block::Heading { level: 1, text: facts.area.clone() },
         Block::Paragraph { text: say("map-report-cover-title") },
-        Block::Paragraph { text: i18n.tr_now("map-report-exported", &Args::new().str("when", utc(when_ms))) },
+        Block::Paragraph { text: i18n.tr_now("map-report-exported", &Args::new().str("when", utc(when_ms, i18n.locale_now()))) },
         Block::Paragraph { text: i18n.tr_now("map-report-version", &Args::new().str("version", version)) },
         Block::Paragraph { text: say("map-report-scope") },
         Block::Paragraph { text: say("map-report-study-notice") },
@@ -68,8 +68,9 @@ fn summary(facts: &Facts, i18n: &I18n) -> Vec<Block> {
     page
 }
 
-/// `YYYY-MM-DD HH:MM` (UTC) for a time in milliseconds since 1970 (the civil-from-days algorithm, so no date crate).
-fn utc(ms: u64) -> String {
+/// `YYYY-MM-DD HH:MM` (UTC) for a time in milliseconds since 1970 (the civil-from-days algorithm, so no date crate);
+/// in French the time is `HH h MM` with no-break spaces, as the OQLF writes it.
+fn utc(ms: u64, locale: Locale) -> String {
     let secs = ms / 1000;
     let (days, rest) = ((secs / 86_400) as i64, secs % 86_400);
     let z = days + 719_468;
@@ -81,7 +82,11 @@ fn utc(ms: u64) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02} {:02}:{:02}", rest / 3600, rest % 3600 / 60)
+    let (hours, minutes) = (rest / 3600, rest % 3600 / 60);
+    match locale {
+        Locale::En => format!("{year:04}-{month:02}-{day:02} {hours:02}:{minutes:02}"),
+        Locale::FrCa => format!("{year:04}-{month:02}-{day:02} {hours:02}\u{a0}h\u{a0}{minutes:02}"),
+    }
 }
 
 /// The area's name as a file-name part: lower-case letters and digits, one hyphen between runs, `area` if none.
@@ -120,9 +125,10 @@ mod tests {
 
     #[test]
     fn the_time_is_written_in_utc() {
-        assert_eq!(utc(0), "1970-01-01 00:00");
-        assert_eq!(utc(1_793_966_400_000), "2026-11-06 12:00");
-        assert_eq!(utc(951_782_400_000 + 86_399_000), "2000-02-29 23:59");
+        assert_eq!(utc(0, Locale::En), "1970-01-01 00:00");
+        assert_eq!(utc(1_793_966_400_000, Locale::En), "2026-11-06 12:00");
+        assert_eq!(utc(951_782_400_000 + 86_399_000, Locale::En), "2000-02-29 23:59");
+        assert_eq!(utc(1_793_966_400_000, Locale::FrCa), "2026-11-06 12\u{a0}h\u{a0}00");
     }
 
     #[test]

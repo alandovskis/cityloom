@@ -273,7 +273,7 @@ prov-more-findings = { $n ->
 }
 map-report-title = Revue de conception : { $area }
 map-report-cover-title = Rapport de revue de conception
-map-report-exported = Exporté le : { $when } UTC
+map-report-exported = Date d’exportation : { $when } UTC
 map-report-version = CityLoom, version { $version }
 map-report-scope = Portée : Ville entière
 map-report-study-notice = Ce rapport provient d’une étude de conception. Ce n’est pas un document d’ingénierie et il ne remplace pas l’examen d’un professionnel qualifié.

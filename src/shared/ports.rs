@@ -65,7 +65,8 @@ pub trait PdfWriter {
 
 /// Gives a person a file to keep.
 pub trait Downloads {
-    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>);
+    /// Hands the file to the browser; an error says it could not be.
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String>;
 }
 
 /// Opens another page of the site.
@@ -794,17 +795,27 @@ impl PdfWriter for FakePdfWriter {
 #[derive(Default)]
 pub struct FakeDownloads {
     saved: RefCell<Vec<(String, String, Vec<u8>)>>,
+    fails: std::cell::Cell<bool>,
 }
 
 impl FakeDownloads {
+    /// Makes every later save fail, as a browser that refuses the file would.
+    pub fn fail(&self) {
+        self.fails.set(true);
+    }
+
     pub fn saved(&self) -> Vec<(String, String, Vec<u8>)> {
         self.saved.borrow().clone()
     }
 }
 
 impl Downloads for FakeDownloads {
-    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) {
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String> {
+        if self.fails.get() {
+            return Err("the browser refused the file".to_string());
+        }
         self.saved.borrow_mut().push((name.to_string(), mime.to_string(), bytes));
+        Ok(())
     }
 }
 
@@ -1240,7 +1251,7 @@ mod tests {
     #[test]
     fn the_fake_downloads_keep_what_was_saved() {
         let (ports, _, downloads) = test_ports_with_pdf();
-        ports.downloads.save("a.pdf", "application/pdf", vec![1, 2]);
+        ports.downloads.save("a.pdf", "application/pdf", vec![1, 2]).unwrap();
         assert_eq!(downloads.saved(), vec![("a.pdf".to_string(), "application/pdf".to_string(), vec![1, 2])]);
     }
 

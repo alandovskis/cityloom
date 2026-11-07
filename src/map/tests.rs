@@ -1014,6 +1014,31 @@ mod report {
     }
 
     #[test]
+    fn download_report_says_when_the_file_cannot_be_saved() {
+        let (ports, pdf, downloads) = test_ports_with_pdf();
+        let said = Rc::new(crate::shared::ports::RecordingAnnouncer::default());
+        let ports = Ports { announcer: said.clone(), ..ports };
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        downloads.fail();
+        vm.download_report();
+        pdf.answer_with(Ok(b"%PDF".to_vec()));
+        let heard = said.take();
+        assert_eq!(heard.len(), 1);
+        assert!(heard[0].contains("could not be made"), "{heard:?}");
+    }
+
+    #[test]
+    fn the_french_cover_gives_the_export_date_and_time_in_the_french_way() {
+        let (vm, ..) = sample_in(Locale::FrCa);
+        let joined = texts(&vm.report_data().pages[0]).join("\n");
+        assert!(
+            joined.contains("Date d’exportation\u{202f}: 2026-11-06 12\u{a0}h\u{a0}00 UTC")
+                || joined.contains("Date d’exportation\u{a0}: 2026-11-06 12\u{a0}h\u{a0}00 UTC"),
+            "{joined}"
+        );
+    }
+
+    #[test]
     fn a_second_download_while_one_runs_saves_one_file() {
         let (vm, pdf, downloads, _) = sample_in(Locale::En);
         vm.download_report();
