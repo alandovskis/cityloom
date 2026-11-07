@@ -218,32 +218,46 @@ struct BrowserDownloads;
 
 impl Downloads for BrowserDownloads {
     #[cfg(target_arch = "wasm32")]
-    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) {
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String> {
         use wasm_bindgen::JsCast;
-        let saved = || -> Result<(), wasm_bindgen::JsValue> {
-            let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(&bytes[..]));
-            let options = web_sys::BlobPropertyBag::new();
-            options.set_type(mime);
-            let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options)?;
-            let url = web_sys::Url::create_object_url_with_blob(&blob)?;
+        let words = |e: wasm_bindgen::JsValue| e.as_string().unwrap_or_else(|| format!("{e:?}"));
+        let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(&bytes[..]));
+        let options = web_sys::BlobPropertyBag::new();
+        options.set_type(mime);
+        let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options).map_err(words)?;
+        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(words)?;
+        let link = (|| -> Result<web_sys::HtmlAnchorElement, wasm_bindgen::JsValue> {
             let document = web_sys::window().and_then(|w| w.document()).ok_or("there is no document")?;
             let link: web_sys::HtmlAnchorElement = document.create_element("a")?.dyn_into()?;
             link.set_href(&url);
             link.set_download(name);
             link.style().set_property("display", "none")?;
-            let body = document.body().ok_or("there is no body")?;
-            body.append_child(&link)?;
-            link.click();
-            link.remove();
-            web_sys::Url::revoke_object_url(&url)
+            document.body().ok_or("there is no body")?.append_child(&link)?;
+            Ok(link)
+        })();
+        let link = match link {
+            Ok(link) => link,
+            Err(error) => {
+                let _ = web_sys::Url::revoke_object_url(&url);
+                return Err(words(error));
+            }
         };
-        if let Err(error) = saved() {
-            web_sys::console::warn_2(&"The file could not be saved:".into(), &error);
+        link.click();
+        link.remove();
+        // The browser may read the blob after the click returns, so the URL is let go only later (as FileSaver.js does).
+        let release = wasm_bindgen::closure::Closure::once_into_js(move || {
+            let _ = web_sys::Url::revoke_object_url(&url);
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(release.unchecked_ref(), 40_000);
         }
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn save(&self, _name: &str, _mime: &str, _bytes: Vec<u8>) {}
+    fn save(&self, _name: &str, _mime: &str, _bytes: Vec<u8>) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 struct BrowserNavigator;

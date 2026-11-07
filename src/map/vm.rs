@@ -653,8 +653,8 @@ impl MapVm {
     /// The design review report as data, worded in the language the page is in now: from the city view and the
     /// network findings already worked out, with no rule run again.
     pub fn report_data(&self) -> cityloom_report::ReportData {
-        let v = self.view();
-        let network = self.network_report();
+        let v = self.core.view_now();
+        let network = self.network_report_of(v.clone());
         let by = |severity| network.findings.iter().filter(|f| f.severity == severity).count();
         let facts = report::Facts {
             area: v.name.to_string(),
@@ -676,7 +676,7 @@ impl MapVm {
             return;
         }
         let data = self.report_data();
-        let name = format!("cityloom-{}.pdf", report::slug(&self.view().name));
+        let name = format!("cityloom-{}.pdf", report::slug(&self.core.view_now().name));
         let Ok(json) = serde_json::to_string(&data) else {
             self.report_running.set(false);
             self.ports.announcer.say(&self.i18n.tr_now("map-report-failed", &Args::new()));
@@ -688,9 +688,12 @@ impl MapVm {
             Box::new(move |result| {
                 let Some(vm) = me.upgrade() else { return };
                 vm.report_running.set(false);
-                match result {
+                let saved = match result {
                     Ok(bytes) => vm.ports.downloads.save(&name, "application/pdf", bytes),
-                    Err(_) => vm.ports.announcer.say(&vm.i18n.tr_now("map-report-failed", &Args::new())),
+                    Err(e) => Err(e),
+                };
+                if saved.is_err() {
+                    vm.ports.announcer.say(&vm.i18n.tr_now("map-report-failed", &Args::new()));
                 }
             }),
         );
@@ -705,7 +708,11 @@ impl MapVm {
 
     /// Every finding of the network checks, found again when the city changes.
     fn network_report(&self) -> Rc<NetworkReport> {
-        let view = self.view();
+        self.network_report_of(self.view())
+    }
+
+    /// The same for a view already in hand (a command reads it untracked).
+    fn network_report_of(&self, view: Rc<CityView>) -> Rc<NetworkReport> {
         if let Some((seen, found)) = &*self.network.borrow()
             && Rc::ptr_eq(seen, &view)
         {
