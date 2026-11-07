@@ -511,6 +511,11 @@ calming-refused-too-short = Un plateau surélevé doit mesurer au moins { $min }
 calming-refused-freeway = On ne peut pas placer de plateau surélevé sur une autoroute.
 calming-refused-no-roadway = Cette rue n’a pas de chaussée à surélever.
 calming-refused-time-windows = On ne peut pas placer de plateau surélevé là où la chaussée change selon l’heure de la journée.
+rev-calming-add = Ajout : { $kind } à { $at }
+rev-calming-kind = Élément surélevé à { $at } changé en { $kind }
+rev-calming-resize = Longueur modifiée à { $at } : { $kind }
+rev-calming-move = Déplacement : { $kind } à { $at }
+rev-calming-remove = Retrait : { $kind } à { $at }
 
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification

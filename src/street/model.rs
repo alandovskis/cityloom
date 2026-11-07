@@ -32,6 +32,7 @@ mod curb_shown;
 mod map_uses;
 mod stop;
 mod stop_end;
+pub use calming::CalmingView;
 pub use calming::{
     CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, Kind as CalmingKind, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM,
     MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
@@ -568,6 +569,8 @@ struct State {
     /// that undo and redo carry the chosen one with it.
     curb_move: Option<(Side, i32, i32)>,
     stop_move: Option<(Side, i32, i32)>,
+    /// The same for a raised element (its side is always `Left`: an element has none).
+    calming_move: Option<(Side, i32, i32)>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -598,6 +601,8 @@ pub struct Editor {
     curb_choice: Choice,
     /// The same for the stops' strips (see `State.stop_move`).
     stop_choice: Choice,
+    /// The same for the raised elements: the chosen one is found by its place (the side is always `Left`).
+    calming_choice: Choice,
     pending_label: Option<Said>,
 }
 
@@ -685,6 +690,7 @@ impl Editor {
                 row_mm: today.row_mm,
                 curb_move: None,
                 stop_move: None,
+                calming_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -695,6 +701,7 @@ impl Editor {
             gesture: None,
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
+            calming_choice: Choice::default(),
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -795,7 +802,8 @@ impl Editor {
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
         let (curb_move, stop_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved());
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move });
+        let calming_move = self.calming_choice.take_moved();
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, calming_move });
         self.clamp_zone();
     }
 
@@ -819,6 +827,7 @@ impl Editor {
             self.pending_label = None;
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
         }
     }
 
@@ -833,12 +842,14 @@ impl Editor {
         if now == baseline {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
             return false;
         };
         self.push(label, now);
@@ -851,6 +862,7 @@ impl Editor {
             // The use or stop is back where it started: so is the choice.
             self.curb_choice.cancel();
             self.stop_choice.cancel();
+            self.calming_choice.cancel();
         }
     }
 
@@ -1342,6 +1354,7 @@ impl Editor {
         }
         self.curb_choice.undo(self.states[self.cursor].curb_move);
         self.stop_choice.undo(self.states[self.cursor].stop_move);
+        self.calming_choice.undo(self.states[self.cursor].calming_move);
         self.cursor -= 1;
         self.reselect();
         true
@@ -1355,6 +1368,7 @@ impl Editor {
         self.cursor += 1;
         self.curb_choice.redo(self.states[self.cursor].curb_move);
         self.stop_choice.redo(self.states[self.cursor].stop_move);
+        self.calming_choice.redo(self.states[self.cursor].calming_move);
         self.reselect();
         true
     }
@@ -1465,6 +1479,7 @@ impl Editor {
             zones: self.zones_view(),
             curb: self.curb_view(),
             stops: self.stops_view(),
+            calming: self.calming_view(),
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             measures: self.measure_views(segs, &now),
@@ -1847,6 +1862,8 @@ pub struct View {
     pub curb: CurbView,
     /// The strips of the transit stops, a row under each side's curbside strip.
     pub stops: StopsView,
+    /// The raised elements along the street, by position.
+    pub calming: Vec<CalmingView>,
     /// The curbside uses the 2.5D shows, on the selected zone's pieces.
     pub curb_shown: Vec<ShownInstance>,
     /// The transit stops the 2.5D shows, on the selected zone's pieces.

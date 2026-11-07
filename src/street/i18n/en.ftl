@@ -511,6 +511,11 @@ calming-refused-too-short = A raised table must be at least { $min } long.
 calming-refused-freeway = A raised table cannot be placed on a freeway.
 calming-refused-no-roadway = This street has no roadway to raise.
 calming-refused-time-windows = A raised table cannot be placed where the roadway changes with the time of day.
+rev-calming-add = Add a { $kind } at { $at }
+rev-calming-kind = Change the raised element at { $at } to a { $kind }
+rev-calming-resize = Resize the { $kind } at { $at }
+rev-calming-move = Move the { $kind } to { $at }
+rev-calming-remove = Remove the { $kind } at { $at }
 
 # What the last change did to the street (src/street/impact.rs and the Impact tab's card).
 st-impact-heading = Last change

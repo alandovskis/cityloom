@@ -121,6 +121,7 @@ impl Editor {
             gesture: None,
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
+            calming_choice: Choice::default(),
             pending_label: None,
         };
         e.load_sample(sample);
@@ -161,6 +162,7 @@ impl Editor {
             row_mm: s.row_mm,
             curb_move: None,
             stop_move: None,
+            calming_move: None,
         }];
         self.cursor = 0;
         self.selected = None;
