@@ -145,7 +145,7 @@ mod tests {
         let (k, m) = look(Use::Patio).unwrap();
         assert_eq!(KINDS[k].id, "terrace");
         assert_eq!(m, crate::shared::catalogue::MATERIALS[KINDS[k].materials[0]].id);
-        assert_eq!(look(Use::RainGarden).unwrap().1, "planted");
+        assert_eq!(look(Use::RainGarden).unwrap().1, "rain_garden", "drawn as the street draws it");
     }
 
     #[test]

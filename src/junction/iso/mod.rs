@@ -18,7 +18,7 @@ use crate::shared::catalogue::{KINDS, MATERIALS};
 use crate::shared::diagram::render::render;
 use crate::shared::diagram::{Projection, Pt};
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::ground::patterns;
+use crate::shared::iso::ground::{patterns, patterns_laid};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::units::Units;
 
@@ -143,14 +143,16 @@ pub struct IsoSvg {
 
 /// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
 /// `filter: brightness()` on SVG shapes may not be applied in Safari.
-pub(super) fn shades(f: &IsoFrame) -> String {
-    format!("<defs>{}{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]), materials(f))
+pub(super) fn shades(f: &IsoFrame, laid: bool) -> String {
+    format!("<defs>{}{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]), materials(f, laid))
 }
 
 /// The surface materials' patterns laid on the ground as this frame projects it: the one matrix of the projection, which
 /// is affine, lays them all.
-fn materials(f: &IsoFrame) -> String {
-    patterns("iso-m", f.ground_at(0.0, 0.0, 0.0))
+/// `laid`: the drawing has a surface in a material no piece can be of (a curbside rain garden), so its pattern too.
+fn materials(f: &IsoFrame, laid: bool) -> String {
+    let ground = f.ground_at(0.0, 0.0, 0.0);
+    if laid { patterns_laid("iso-m", ground) } else { patterns("iso-m", ground) }
 }
 
 /// The material a surface of this kind has when nothing says otherwise: the junction's own surfaces (the core, the
@@ -406,7 +408,7 @@ mod tests {
             assert!((hx - px).abs() < 1e-9 && ((py - hy) - 150.0 * LIFT * f.scale).abs() < 1e-6);
         }
         // The patterns of the picture are laid by that matrix.
-        assert_eq!(materials(&f), patterns("iso-m", m));
+        assert_eq!(materials(&f, false), patterns("iso-m", m));
     }
 
     #[test]

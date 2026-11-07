@@ -192,6 +192,7 @@ material-grass = Gazon
 material-planted = Plate-bande
 material-gravel = Gravier
 material-trees = Arbres de rue
+material-rain_garden = Jardin de pluie
 curb-granite = Granit
 curb-concrete = Béton
 curb-asphalt = Asphalte
@@ -360,6 +361,7 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
@@ -498,6 +500,75 @@ stop-refused-overlap = Cet arrêt chevaucherait un autre arrêt du même côté.
 stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
 stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
 stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.
+
+green-kind-tree = Arbre
+green-kind-bed = Plate-bande
+green-kind-rain-garden = Jardin de pluie
+green-kind-bioswale = Noue végétalisée
+green-refused-elsewhere = Les arbres et plantations de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+green-refused-dragging = Terminez le glissement avant de modifier les arbres et plantations.
+green-refused-off-street = Cela dépasserait l’extrémité de la rue ou le bord de sa coupe.
+green-refused-on-roadway = Cela ne peut pas se trouver sur la chaussée.
+green-refused-overlap = Cela chevaucherait un autre arbre ou une autre plantation.
+rev-green-add = Ajout à { $at } : { $kind }
+rev-green-size = Taille modifiée à { $at } : { $kind }
+rev-green-resize = Dimensions modifiées à { $at } : { $kind }
+rev-green-move = Déplacement à { $at } : { $kind }
+rev-green-remove = Retrait à { $at } : { $kind }
+green-instance = { $kind } à { $at }, sur l’élément { $across }
+green-instance-off = { $kind } à { $at }
+check-green-in = { $check } : { $instance }
+check-label-green-host = Plantations sur un élément qui peut les accueillir
+check-label-green-clear-path = Trottoirs avec un dégagement pour circuler
+check-label-green-spacing = Arbres espacés selon leur couronne
+check-label-green-soil = Fosses d’arbre avec assez de terre
+check-label-green-sightline = Plantations à l’écart des coins aux intersections
+check-label-green-continuity = Noues végétalisées continues
+check-label-green-stop = Arbres et plantations à l’écart des quais d’arrêt
+check-detail-green-host-roadway = On ne peut pas planter sur la chaussée ({ $host }).
+check-detail-green-host-wide = Sa largeur, { $width }, dépasse celle de l’élément en dessous ({ $host }, { $have }).
+check-detail-green-host-overhang = Son bord dépasse de { $over } l’élément en dessous ({ $host }).
+check-detail-green-host-off = Son centre se trouve au-delà du bord de la coupe à cet endroit.
+check-detail-green-host-ok = Chaque arbre et chaque plantation reposent sur un élément qui peut les accueillir.
+check-detail-green-clear-path = Il ne reste que { $have } de trottoir à côté; il en faut { $need } ou plus.
+check-detail-green-clear-path-ok = Chaque trottoir garde un dégagement à côté de ses arbres et de ses plantations.
+check-detail-green-spacing = { $tree } est à { $gap } de { $other }; la plus grande des deux couronnes demande { $need } entre leurs centres.
+check-detail-green-spacing-ok = Chaque arbre a la place que sa couronne demande.
+check-detail-green-soil = La fosse mesure { $length } sur { $width }, trop petite pour { $tree }.
+green-tree-s = un petit arbre
+green-tree-m = un arbre moyen
+green-tree-l = un grand arbre
+check-detail-green-soil-ok = Chaque fosse d’arbre a assez de terre.
+check-detail-green-sightline = Il se trouve à { $gap } d’une intersection au bout de la rue; il en faut { $need } ou plus pour garder la vue dégagée.
+check-detail-green-sightline-ok = Aucun arbre ni aucune plate-bande ne bloque la vue aux intersections.
+check-detail-green-continuity-short = La noue végétalisée fait { $length } de long; il en faut { $min } ou plus pour qu’elle achemine l’eau.
+check-detail-green-continuity-host = La noue végétalisée passe au-dessus d’un changement d’élément, ce qui interrompt le canal.
+check-detail-green-continuity-ok = Chaque noue végétalisée est continue.
+check-detail-green-stop = Il se trouve sur le quai de cet arrêt : { $stop }. Les arbres et les plantations restent à l’écart de l’endroit où l’on embarque.
+check-detail-green-stop-ok = Aucun arbre ni aucune plate-bande ne se trouve sur le quai d’un arrêt.
+
+# La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/green_strip.rs, src/street/green_tools.rs).
+green-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+green-choose-element = Choisissez d’abord un arbre ou une plantation.
+green-host-choice = { $kind }, { $width }
+green-size-s = Petit
+green-size-m = Moyen
+green-size-l = Grand
+rev-green-change = Modification à { $at } : { $kind }
+st-green-heading = Arbres et plantations le long de la rue
+st-green-caption = Arbres et plantations
+st-green-strip-label = Arbres et plantations le long de la rue. Les flèches en choisissent un; Alt avec une flèche le déplace de 1 m le long de la rue, avec Maj de 10 m.
+st-green-tools = Commandes des arbres et plantations
+st-green-kind = Type
+st-green-size = Taille
+st-green-at = Le long de la rue, depuis le début ({ $unit })
+st-green-host = Dans la coupe, sur
+st-green-fine = Dans la coupe, depuis le milieu de cet élément (cm)
+st-green-length = Longueur ({ $unit })
+st-green-width = Largeur ({ $unit })
+st-green-add = Ajouter
+st-green-change = Modifier
+st-green-remove = Retirer
 
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification

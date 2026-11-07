@@ -2,13 +2,14 @@
 //! the eye sees, in the order the eye needs among themselves.
 
 use crate::shared::diagram::{Face, Layer, LayerKind, Pt, Shape};
-use crate::street::model::{SegView, ShownInstance, ShownStop};
+use crate::street::model::{SegView, ShownGreen, ShownInstance, ShownStop};
 
 use crate::street::iso::curbside;
+use crate::street::iso::green;
 use crate::street::iso::order::{self, Bx};
 use crate::street::iso::projection::Projection;
 use crate::street::iso::raised::inner_face;
-use crate::street::iso::solids::{Block, blocks};
+use crate::street::iso::solids::{Block, blocks_among};
 use crate::street::iso::stops;
 
 fn face(corners: [(f64, f64, f64); 4], class: &str, face: Face) -> Shape {
@@ -28,11 +29,16 @@ pub(in crate::street::iso) fn block(p: &Projection, b: &Block) -> Shape {
     Shape::Group { class: format!("iso-solid s-{}", b.solid.name()), uid: None, data: None, hidden: false, title: None, shapes }
 }
 
-/// The boxes that stand on the pieces, on the shown curbside uses and on the shown stops, in the order they are painted
-/// in among themselves (`order::paint_order`): a crown nearer the middle of the street covers a shelter beyond it.
-pub(in crate::street::iso) fn objects(p: &Projection, segs: &[SegView], uses: &[ShownInstance], stops: &[ShownStop]) -> Layer {
-    let mut solids: Vec<Block> =
-        (0..segs.len()).flat_map(|i| blocks(segs, i, p)).chain(curbside::blocks(segs, uses, p)).chain(stops::blocks(segs, stops, p)).collect();
+/// The boxes that stand on the pieces, on the shown curbside uses, on the shown stops and on the shown trees, in the
+/// order they are painted in among themselves (`order::paint_order`): a crown nearer the middle of the street covers a
+/// shelter beyond it. The automatic trees of a strip are left out where an explicit tree stands.
+pub(in crate::street::iso) fn objects(p: &Projection, segs: &[SegView], uses: &[ShownInstance], stops: &[ShownStop], trees: &[ShownGreen]) -> Layer {
+    let mut solids: Vec<Block> = (0..segs.len())
+        .flat_map(|i| blocks_among(segs, i, p, &green::tree_stands(segs, trees, i, p)))
+        .chain(curbside::blocks(segs, uses, p))
+        .chain(stops::blocks(segs, stops, p))
+        .chain(green::blocks(segs, trees, p))
+        .collect();
     solids.sort_by(|a, b| b.from_eye(p).total_cmp(&a.from_eye(p)).then(a.y.0.total_cmp(&b.y.0)));
     let boxes: Vec<(Bx, bool)> = solids.iter().map(|b| (b.bounds(), false)).collect();
     let shapes = order::paint_order(&boxes, p.centre_mm).into_iter().map(|k| block(p, &solids[k])).collect();
@@ -44,13 +50,13 @@ mod tests {
     use super::*;
     use crate::shared::diagram::render::layer_markup;
     use crate::street::iso::scene::testing::each_object_run;
-    use crate::street::iso::solids::Solid;
+    use crate::street::iso::solids::{Solid, blocks};
 
     #[test]
     fn the_objects_layer_holds_one_group_per_box_of_every_kind_on_every_sample() {
         let (mut runs, mut with) = (0, std::collections::BTreeSet::new());
         each_object_run(|name, p, segs, uses, stops| {
-            let layer = objects(p, segs, uses, stops);
+            let layer = objects(p, segs, uses, stops, &[]);
             assert_eq!(layer.kind, LayerKind::Objects, "{name}");
             let m = layer_markup(&layer, p);
             assert_eq!(m.matches("<g class=\"iso-solid ").count(), layer.shapes.len(), "{name}");

@@ -98,7 +98,13 @@ impl Street {
 
     /// Brings the zoning to its canonical form (see `settle_zones`).
     pub fn settle_zones(&mut self) {
-        settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, !self.curb.is_empty() || !self.stops.is_empty());
+        settle_zones(
+            &mut self.segments,
+            &mut self.zones,
+            &mut self.from_end,
+            &mut self.length_mm,
+            !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty(),
+        );
     }
 
     /// The pieces of the zone nearest an end of the street, borrowed: what `at_end` puts in `segments`.
@@ -123,6 +129,7 @@ impl Street {
         s.zones = Vec::new();
         s.curb = Vec::new();
         s.stops = Vec::new();
+        s.green = Vec::new();
         s.from_end = ZoneEnd::First;
         s.length_mm = None;
         s
@@ -145,7 +152,7 @@ impl Street {
             own.reverse();
         }
         self.flip_zone_lanes();
-        if !self.zones.is_empty() || !self.curb.is_empty() || !self.stops.is_empty() {
+        if !self.zones.is_empty() || !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() {
             self.from_end = self.from_end.other();
         }
     }
