@@ -53,6 +53,7 @@ fn content_type(path: &str) -> &'static str {
         Some("svg") => "image/svg+xml",
         Some("wasm") => "application/wasm",
         Some("woff2") => "font/woff2",
+        Some("ttf") => "font/ttf",
         Some("pbf") => "application/x-protobuf",
         Some("txt") => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
@@ -367,14 +368,14 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     res
 }
 
-/// What is worth compressing on the fly: text and the WebAssembly modules. The tiles, the glyphs and the basemap are
+/// What is worth compressing on the fly: text, the WebAssembly modules and the TrueType fonts (the report's, which are not compressed already). The tiles, the glyphs and the basemap are
 /// already compressed, or do not compress, and are read in ranges.
 fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
     if status != StatusCode::OK {
         return false;
     }
     let kind = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
-    ["text/", "application/json", "application/wasm", "image/svg+xml"].iter().any(|k| kind.starts_with(k))
+    ["text/", "application/json", "application/wasm", "image/svg+xml", "font/ttf"].iter().any(|k| kind.starts_with(k))
 }
 
 /// How often the build's name is looked for again, when the site is served from a directory that may change.

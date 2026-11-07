@@ -248,6 +248,33 @@ pub fn Status(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
+/// The notice of a report that could not be made: visible text in the status area, with a button to close it.
+#[component]
+pub fn ReportNotice(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    view! {
+        {move || {
+            vm.with(|v| v.report_failed())
+                .then(|| {
+                    view! {
+                        <p id="report-notice" class="fit bad report-notice" role="status">
+                            {word(vm, "map-report-failed")}
+                            <button
+                                type="button"
+                                id="report-notice-close"
+                                class="report-notice-close"
+                                aria-label=word(vm, "map-report-dismiss")
+                                on:click=move |_| vm.with(|v| v.dismiss_report_notice())
+                            >
+                                <span aria-hidden="true">"\u{d7}"</span>
+                            </button>
+                        </p>
+                    }
+                })
+        }}
+    }
+}
+
 /// Opens a page of the site.
 fn go(href: &str) {
     #[cfg(target_arch = "wasm32")]

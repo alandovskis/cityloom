@@ -57,6 +57,18 @@ pub trait Importer {
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>);
 }
 
+/// Writes the design review as a PDF from its JSON. The writer is a module of its own that the page
+/// loads when it is first asked. The answer arrives later, once, to `done`.
+pub trait PdfWriter {
+    fn write(&self, json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>);
+}
+
+/// Gives a person a file to keep.
+pub trait Downloads {
+    /// Hands the file to the browser; an error says it could not be.
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String>;
+}
+
 /// Opens another page of the site.
 pub trait Navigator {
     fn go(&self, href: &str);
@@ -426,6 +438,8 @@ impl Mapper for NoMapper {
 pub struct Ports {
     pub navigator: Rc<dyn Navigator>,
     pub importer: Rc<dyn Importer>,
+    pub pdf: Rc<dyn PdfWriter>,
+    pub downloads: Rc<dyn Downloads>,
     pub fetcher: Rc<dyn Fetcher>,
     pub announcer: Rc<dyn Announcer>,
     pub storage: Rc<dyn Storage>,
@@ -679,6 +693,70 @@ impl Importer for FakeImporter {
 
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
         self.asked.borrow_mut().push((osm, bounds, done));
+    }
+}
+
+type PdfRequest = (String, Box<dyn FnOnce(Result<Vec<u8>, String>)>);
+
+/// A PDF writer that keeps what it is asked to write until the test answers.
+#[derive(Default)]
+pub struct FakePdfWriter {
+    asked: RefCell<Vec<PdfRequest>>,
+}
+
+impl FakePdfWriter {
+    /// The JSON of each request not yet answered, oldest first.
+    pub fn asked(&self) -> Vec<String> {
+        self.asked.borrow().iter().map(|(j, _)| j.clone()).collect()
+    }
+
+    /// Answers the oldest request not yet answered. False when there is none.
+    pub fn answer_with(&self, result: Result<Vec<u8>, String>) -> bool {
+        let first = {
+            let mut asked = self.asked.borrow_mut();
+            if asked.is_empty() { None } else { Some(asked.remove(0)) }
+        };
+        match first {
+            Some((_, done)) => {
+                done(result);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+impl PdfWriter for FakePdfWriter {
+    fn write(&self, json: String, done: Box<dyn FnOnce(Result<Vec<u8>, String>)>) {
+        self.asked.borrow_mut().push((json, done));
+    }
+}
+
+/// Downloads that keep what was saved: the name, the type and the bytes.
+#[derive(Default)]
+pub struct FakeDownloads {
+    saved: RefCell<Vec<(String, String, Vec<u8>)>>,
+    fails: std::cell::Cell<bool>,
+}
+
+impl FakeDownloads {
+    /// Makes every later save fail, as a browser that refuses the file would.
+    pub fn fail(&self) {
+        self.fails.set(true);
+    }
+
+    pub fn saved(&self) -> Vec<(String, String, Vec<u8>)> {
+        self.saved.borrow().clone()
+    }
+}
+
+impl Downloads for FakeDownloads {
+    fn save(&self, name: &str, mime: &str, bytes: Vec<u8>) -> Result<(), String> {
+        if self.fails.get() {
+            return Err("the browser refused the file".to_string());
+        }
+        self.saved.borrow_mut().push((name.to_string(), mime.to_string(), bytes));
+        Ok(())
     }
 }
 
@@ -1013,6 +1091,8 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
         Ports {
             navigator: Rc::new(RecordingNavigator::default()),
             importer: Rc::new(FakeImporter::default()),
+            pdf: Rc::new(FakePdfWriter::default()),
+            downloads: Rc::new(FakeDownloads::default()),
             fetcher,
             announcer: announcer.clone(),
             storage: storage.clone(),
@@ -1059,6 +1139,16 @@ pub fn test_ports_full() -> TestPorts {
     TestPorts { ports, account, navigator, page, announcer, storage, work }
 }
 
+/// The same, with the PDF writer and the downloads too.
+pub fn test_ports_with_pdf() -> (Ports, Rc<FakePdfWriter>, Rc<FakeDownloads>) {
+    let (mut ports, ..) = test_ports_with_time();
+    let pdf = Rc::new(FakePdfWriter::default());
+    let downloads = Rc::new(FakeDownloads::default());
+    ports.pdf = pdf.clone();
+    ports.downloads = downloads.clone();
+    (ports, pdf, downloads)
+}
+
 /// The same, with the fetcher and the importer too.
 pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>) {
     let (ports, fetcher, importer, _) = test_ports_with_services();
@@ -1079,6 +1169,28 @@ pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>, 
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_fake_pdf_writer_answers_with_what_it_was_told() {
+        let (ports, pdf, _) = test_ports_with_pdf();
+        let got = Rc::new(RefCell::new(Vec::new()));
+        for _ in 0..2 {
+            let got = got.clone();
+            ports.pdf.write("{}".to_string(), Box::new(move |r| got.borrow_mut().push(r)));
+        }
+        assert_eq!(pdf.asked(), vec!["{}".to_string(), "{}".to_string()]);
+        pdf.answer_with(Ok(b"%PDF".to_vec()));
+        pdf.answer_with(Err("no".to_string()));
+        assert_eq!(*got.borrow(), vec![Ok(b"%PDF".to_vec()), Err("no".to_string())]);
+        assert!(!pdf.answer_with(Ok(vec![])));
+    }
+
+    #[test]
+    fn the_fake_downloads_keep_what_was_saved() {
+        let (ports, _, downloads) = test_ports_with_pdf();
+        ports.downloads.save("a.pdf", "application/pdf", vec![1, 2]).unwrap();
+        assert_eq!(downloads.saved(), vec![("a.pdf".to_string(), "application/pdf".to_string(), vec![1, 2])]);
+    }
 
     fn me_json() -> &'static str {
         r#"{"id":"3f2b","display_name":"Ada","store_on_server":null,"identities":[{"id":"ab12","provider":"google","label":"ada@example.org","created_at":"2026-10-14T12:00:00Z"},{"id":"cd34","provider":"osm","label":null,"created_at":"2026-10-15T12:00:00Z"}]}"#
