@@ -31,6 +31,34 @@ impl Presents for Editor {
     }
 }
 
+/// The key the left panel's tab is remembered under.
+pub const PANEL_TAB_KEY: &str = "cityloom-street-panel";
+
+/// A tab of the street page's left panel: the details of the selected piece and the tools that edit the street's
+/// sections, or what is set for the street as a whole (its speed limit).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelTab {
+    Piece,
+    Street,
+}
+
+impl PanelTab {
+    /// The tabs in the order they are shown.
+    pub const ALL: [PanelTab; 2] = [PanelTab::Piece, PanelTab::Street];
+
+    /// The word the choice is kept as.
+    pub fn id(self) -> &'static str {
+        match self {
+            PanelTab::Piece => "piece",
+            PanelTab::Street => "street",
+        }
+    }
+
+    fn from_id(id: &str) -> Option<PanelTab> {
+        PanelTab::ALL.into_iter().find(|t| t.id() == id)
+    }
+}
+
 /// One choice of the Speed limit control.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpeedOption {
@@ -56,6 +84,8 @@ pub struct StreetVm {
     stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
     /// The name typed for the chosen free stretch, which the stop added there starts with.
     stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
+    /// The tab of the left panel showing.
+    panel_tab: ArcRwSignal<PanelTab>,
     /// What the last change did to the street, as shown.
     impact: ArcRwSignal<Option<Impact>>,
     /// What the last change did, waiting for the edits to settle, and the timer that shows it.
@@ -109,6 +139,7 @@ impl StreetVm {
     /// is written back to it; otherwise it is a sandbox.
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
+        let panel_tab = ports.storage.recall(PANEL_TAB_KEY).and_then(|id| PanelTab::from_id(&id)).unwrap_or(PanelTab::Piece);
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
@@ -133,6 +164,7 @@ impl StreetVm {
                 stop_pick: ArcRwSignal::new(None),
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
+                panel_tab: ArcRwSignal::new(panel_tab),
                 impact: ArcRwSignal::new(None),
                 impact_pending: RefCell::new(None),
                 impact_timer: Cell::new(None),
@@ -227,13 +259,31 @@ impl StreetVm {
         self.edit(f)
     }
 
-    /// A selection the person made, announced by what is selected.
+    /// The tab of the left panel showing, which a view that reads it draws again when another is chosen.
+    pub fn panel_tab(&self) -> PanelTab {
+        self.panel_tab.get()
+    }
+
+    /// Shows a tab of the left panel and keeps the choice.
+    pub fn show_panel_tab(&self, tab: PanelTab) {
+        self.panel_tab.set(tab);
+        self.ports.storage.remember(PANEL_TAB_KEY, tab.id());
+    }
+
+    /// A selection the person made, announced by what is selected. Pressing a piece shows its details, which are on
+    /// the Piece tab (the choice kept is not changed); letting go of the selection leaves the tab as it is.
     pub fn select(&self, uid: Option<u32>) {
+        if uid.is_some() && self.panel_tab.get_untracked() != PanelTab::Piece {
+            self.panel_tab.set(PanelTab::Piece);
+        }
         self.edit(|e| e.select(uid));
         self.say_selection();
     }
 
     pub fn select_relative(&self, delta: i32) {
+        if self.panel_tab.get_untracked() != PanelTab::Piece {
+            self.panel_tab.set(PanelTab::Piece);
+        }
         self.edit(|e| e.select_relative(delta));
         self.say_selection();
     }
@@ -980,7 +1030,7 @@ mod tests {
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
     use crate::shared::i18n::Locale;
-    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
 
     struct Rig {
         vm: Rc<StreetVm>,
@@ -992,6 +1042,46 @@ mod tests {
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
         Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(sample), None), said, time, storage }
+    }
+
+    // ---- the left panel's tabs ----
+
+    #[test]
+    fn the_left_panel_opens_on_the_piece_tab() {
+        let r = rig(0);
+        assert_eq!(r.vm.panel_tab(), PanelTab::Piece);
+    }
+
+    #[test]
+    fn the_panel_tab_chosen_is_remembered_and_comes_back() {
+        let r = rig(0);
+        r.vm.show_panel_tab(PanelTab::Street);
+        assert_eq!(r.vm.panel_tab(), PanelTab::Street);
+        assert_eq!(r.storage.recall(PANEL_TAB_KEY).as_deref(), Some("street"));
+        let (ports, _, _, _) = test_ports_with_time();
+        ports.storage.remember(PANEL_TAB_KEY, "street");
+        let again = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
+        assert_eq!(again.panel_tab(), PanelTab::Street);
+    }
+
+    #[test]
+    fn a_stored_panel_tab_that_is_not_one_is_ignored() {
+        let (ports, _, _, _) = test_ports_with_time();
+        ports.storage.remember(PANEL_TAB_KEY, "elsewhere");
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
+        assert_eq!(vm.panel_tab(), PanelTab::Piece);
+    }
+
+    #[test]
+    fn selecting_a_piece_shows_the_piece_tab() {
+        let r = rig(0);
+        let uid = r.vm.view_now().segments[0].uid;
+        r.vm.show_panel_tab(PanelTab::Street);
+        r.vm.select(Some(uid));
+        assert_eq!(r.vm.panel_tab(), PanelTab::Piece, "the details of what was pressed are what the person asked for");
+        r.vm.show_panel_tab(PanelTab::Street);
+        r.vm.select(None);
+        assert_eq!(r.vm.panel_tab(), PanelTab::Street, "letting go of the selection leaves the tab alone");
     }
 
     fn rig_on(street: crate::street::model::Street) -> Rig {
