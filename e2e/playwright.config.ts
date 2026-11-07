@@ -1,7 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // The pages are static files; the WebAssembly module they load is built first
@@ -9,15 +7,10 @@ import { fileURLToPath } from "node:url";
 // E2E_PORT moves the server off 8137 when another one already holds that port.
 const port = process.env.E2E_PORT ?? 8137;
 
-// Cargo's target directory is not always ./target (build.target-dir in ~/.cargo/config.toml, CARGO_TARGET_DIR).
-// The runner asks once; the workers that load this file again inherit the answer.
-process.env.CITYLOOM_TARGET_DIR ??= execFileSync(fileURLToPath(new URL("../scripts/target-dir.sh", import.meta.url)), {
-  encoding: "utf8",
-}).trim();
-const server = join(process.env.CITYLOOM_TARGET_DIR, "debug", "cityloom_server");
+const server = fileURLToPath(new URL("../target/e2e/cityloom_server", import.meta.url));
 if (!existsSync(server)) {
   throw new Error(
-    `${server} is missing: run 'just e2e' (it builds the server first) or 'cargo build -p cityloom_server'`,
+    `${server} is missing: run 'just e2e' (it builds the server first and pins a copy of it for this checkout)`,
   );
 }
 
