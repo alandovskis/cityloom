@@ -406,3 +406,47 @@ fn stroke_widths_scale_with_the_fit() {
     let w = widths(thin);
     assert!(w.iter().any(|v| (v - 0.25).abs() < 0.01), "{w:?}");
 }
+
+#[test]
+fn a_table_longer_than_a_page_continues_on_the_next_with_its_head_repeated() {
+    let rows: Vec<Vec<String>> = (0..70).map(|i| vec![format!("Rangée{i:02}"), "Réussite".into()]).collect();
+    let block = Block::Table { caption: "Rues".into(), head: vec!["Nom".into(), "Résultat".into()], rows };
+    let doc = load(&data(vec![vec![heading("Un"), block]]));
+    let pages = doc.get_pages().len() as u32;
+    assert!(pages >= 2, "{pages} pages");
+    let all: String = (1..=pages).map(|n| page_text(&doc, n)).collect();
+    for i in 0..70 {
+        assert!(all.contains(&format!("Rangée{i:02}")), "row {i} is missing");
+    }
+    assert!(page_text(&doc, 2).contains("Résultat"), "the head is repeated");
+}
+
+#[test]
+fn a_long_paragraph_continues_on_the_next_page() {
+    let words: Vec<String> = (0..1500).map(|i| format!("mot{i}")).collect();
+    let doc = load(&data(vec![vec![heading("Un"), para(&words.join(" "))]]));
+    let pages = doc.get_pages().len() as u32;
+    assert!(pages >= 2);
+    let all: String = (1..=pages).map(|n| page_text(&doc, n)).collect();
+    assert!(all.contains("mot1499") && all.contains("mot0"));
+}
+
+#[test]
+fn a_table_that_does_not_fit_what_is_left_splits_between_rows_and_loses_none() {
+    let rows: Vec<Vec<String>> = (0..3).map(|i| vec![format!("Rangée{i}"), "x".into()]).collect();
+    let table = Block::Table { caption: "Rues".into(), head: vec!["Nom".into(), "R".into()], rows };
+    let filler = para(&vec!["ligne"; 700].join(" "));
+    let doc = load(&data(vec![vec![filler, table]]));
+    let pages = doc.get_pages().len() as u32;
+    let all: String = (1..=pages).map(|n| page_text(&doc, n)).collect();
+    assert!(pages >= 2 && all.contains("Rues") && all.contains("Rangée0") && all.contains("Rangée2"), "{all}");
+    assert!(page_text(&doc, pages).contains("Nom"), "the head leads the continuation");
+}
+
+#[test]
+fn content_that_cannot_fit_a_page_is_an_error_and_never_dropped_silently() {
+    let tall = vec!["ligne".to_string(); 200].join("\n");
+    let block = Block::Table { caption: String::new(), head: vec!["A".into()], rows: vec![vec![tall]] };
+    let err = write_pdf(&data(vec![vec![block]]), REGULAR, BOLD).expect_err("a row taller than a page");
+    assert!(err.contains("cut"), "{err}");
+}

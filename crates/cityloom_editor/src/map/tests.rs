@@ -1173,6 +1173,56 @@ mod report {
         assert!(texts(page).join("\n").contains("Control:"), "{:?}", texts(page));
     }
 
+    /// The page with its checks replaced by the worst case: `MAX_FAILING_ROWS` plus three failing checks, each with a long
+    /// detail, so that the table is as long as a page's table gets.
+    fn with_worst_checks(mut page: Vec<Block>, i18n: &crate::shared::i18n::I18n) -> Vec<Block> {
+        use crate::shared::said::{Arg, Said};
+        let keep = page.iter().rposition(|b| matches!(b, Block::Figures { .. }) || matches!(b, Block::Table { head, .. } if head.len() == 3)).unwrap();
+        page.truncate(keep + 1);
+        let long = |n: usize| {
+            Said::new("city-name").with("name", Arg::Text(format!("Détail {n}\u{a0}: ").to_string() + &"un texte très long qui continue ".repeat(8)))
+        };
+        let (label, detail): (Vec<Said>, Vec<Said>) = (0..crate::map::report::MAX_FAILING_ROWS + 3).map(|n| (long(n), long(n))).unzip();
+        let checks: Vec<_> = label
+            .iter()
+            .zip(&detail)
+            .map(|(l, d)| crate::map::report::CheckPair { id: "x", before: Some(true), after: Some(false), label: l, detail: d })
+            .collect();
+        page.extend(crate::map::report::checks_block(&checks, i18n, crate::shared::units::Units::Metres));
+        page
+    }
+
+    fn written_text(pages: Vec<Vec<Block>>, lang: &str) -> String {
+        let data = ReportData { lang: lang.to_string(), title: "Rapport".to_string(), pages };
+        let bytes =
+            cityloom_report_pdf::write_pdf(&data, include_bytes!("../../web/fonts/NotoSans-Regular.ttf"), include_bytes!("../../web/fonts/NotoSans-Bold.ttf"))
+                .expect("a place page is written whole: the writer fails on a line it would cut");
+        let doc = lopdf::Document::load_mem(&bytes).unwrap();
+        let numbers: Vec<u32> = doc.get_pages().keys().copied().collect();
+        doc.extract_text(&numbers).unwrap()
+    }
+
+    #[test]
+    fn the_worst_street_page_and_junction_page_are_written_whole_in_fr_ca() {
+        let (vm, _, _, storage) = sample_in(Locale::FrCa);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 8000);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!(pages.len(), 2);
+        let i18n = vm.i18n();
+        let worst: Vec<Vec<Block>> = pages.into_iter().map(|p| with_worst_checks(p, &i18n)).collect();
+        for page in worst {
+            let text = written_text(vec![page], "fr-CA");
+            assert!(text.contains("Détail 0"), "{text}");
+            assert!(text.contains("Détail 7"), "the eighth row is kept");
+            assert!(text.contains("3 autres vérifications"), "the count of the rest is kept: {text}");
+        }
+    }
+
     #[test]
     fn more_than_forty_edited_places_give_forty_pages_and_a_note() {
         assert_eq!(crate::map::report::MAX_PLACES, 40);
