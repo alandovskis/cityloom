@@ -228,7 +228,22 @@ impl Walk<'_> {
                 }
                 self.context = outer;
             }
-            Shape::Path { .. } | Shape::Elem { .. } => self.omitted += 1,
+            Shape::Path { runs, closed, class, .. } => {
+                // A path is runs of points: a closed one is a polygon each, an open one a line each.
+                for run in runs {
+                    if *closed && run.len() >= 3 {
+                        let st = style_in(&self.context, class, None, None);
+                        self.items.push(Item::Poly { pts: self.pts(run), fill: st.fill, stroke: st.stroke });
+                    } else if !*closed && run.len() >= 2 {
+                        let (color, width) = match paint_of(class) {
+                            Some(c) => (c, PAINT_WIDTH),
+                            None => (colour("ink-2"), LINE_WIDTH),
+                        };
+                        self.items.push(Item::Line { pts: self.pts(run), color, width });
+                    }
+                }
+            }
+            Shape::Elem { .. } => self.omitted += 1,
         }
     }
 
@@ -356,7 +371,15 @@ mod tests {
     }
 
     #[test]
-    fn path_and_elem_are_counted_in_omitted_and_not_drawn() {
+    fn a_closed_path_is_a_polygon_per_run() {
+        let run = vec![Pt::new(0.0, 0.0, 0.0), Pt::new(1.0, 0.0, 0.0), Pt::new(1.0, 0.0, 1.0)];
+        let path = Shape::Path { runs: vec![run.clone(), run], closed: true, class: "iso-flat k-travel".into(), attrs: String::new(), title: None };
+        let f = fig(&diagram(vec![], vec![layer(LayerKind::Surface, vec![path])]));
+        assert_eq!(f.items.iter().filter(|i| matches!(i, Item::Poly { .. })).count(), 2);
+    }
+
+    #[test]
+    fn an_open_path_is_a_line_and_an_elem_is_counted_in_omitted() {
         let path = Shape::Path {
             runs: vec![vec![Pt::new(0.0, 0.0, 0.0), Pt::new(1.0, 0.0, 1.0)]],
             closed: false,
@@ -368,8 +391,9 @@ mod tests {
         let group = Shape::Group { class: "iso-solid".into(), uid: None, data: None, hidden: false, title: None, shapes: vec![path.clone()] };
         let d = diagram(vec![], vec![layer(LayerKind::Objects, vec![path, elem, group])]);
         let f = fig(&d);
-        assert!(f.items.is_empty(), "{:?}", f.items);
-        assert_eq!(f.omitted, 3);
+        // The path alone and the path in the group are lines; the elem is not drawn.
+        assert_eq!(f.items.iter().filter(|i| matches!(i, Item::Line { .. })).count(), 2, "{:?}", f.items);
+        assert_eq!(f.omitted, 1);
     }
 
     #[test]

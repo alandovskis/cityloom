@@ -3238,3 +3238,37 @@ fn a_curbside_rain_garden_on_an_arm_brings_its_pattern_and_no_other_drawing_does
     assert!(!draw(&j).contains("iso-m-rain_garden"));
     assert!(!draw(&Junction::new(0)).contains("iso-m-rain_garden"));
 }
+
+// ---- the flat figure of the 2.5D --------------------------------------------------------
+
+fn figure_in_box(f: &cityloom_report::Figure, w: f32, h: f32) -> bool {
+    use cityloom_report::Item;
+    let eps = 0.01;
+    f.items.iter().all(|i| match i {
+        Item::Poly { pts, .. } | Item::Line { pts, .. } => pts.iter().all(|p| p.0 >= -eps && p.0 <= w + eps && p.1 >= -eps && p.1 <= h + eps),
+        Item::Text { .. } => true,
+    })
+}
+
+#[test]
+fn the_junction_figure_has_polygons_inside_its_box() {
+    use cityloom_report::Item;
+    let f = crate::junction::figure::figure(&Junction::new(0).view(), 252.0, 200.0);
+    assert!(f.items.iter().any(|i| matches!(i, Item::Poly { .. })), "{} {} {}", f.items.len(), f.omitted, f.width);
+    assert!(figure_in_box(&f, 252.0, 200.0), "{f:?}");
+}
+
+#[test]
+fn a_pedestrian_arm_junction_draws() {
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let f = crate::junction::figure::figure(&walk.view(), 252.0, 200.0);
+    assert!(!f.items.is_empty() && figure_in_box(&f, 252.0, 200.0));
+}
+
+#[test]
+fn the_junction_alt_text_names_what_is_drawn() {
+    use crate::shared::i18n::Locale;
+    let v = Junction::new(0).view();
+    let (en, fr) = (crate::junction::figure::alt(&v, &crate::i18n_for(Locale::En)), crate::junction::figure::alt(&v, &crate::i18n_for(Locale::FrCa)));
+    assert!(!en.is_empty() && en != fr, "{en} / {fr}");
+}

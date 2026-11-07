@@ -7,6 +7,7 @@ pub mod curb_strip;
 pub mod curb_tools;
 pub mod green_strip;
 pub mod green_tools;
+pub mod drawing;
 pub mod impact;
 pub mod inspector;
 pub mod iso;
