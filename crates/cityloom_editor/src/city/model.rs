@@ -887,16 +887,21 @@ impl City {
     /// reaches along it. A plain connection, a map edge and a street not in the city are no junction and have
     /// neither of the others.
     pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
+        self.street_end_infos_of(edge, region, &self.junctions, &self.streets)
+    }
+
+    /// `street_end_infos` read from the given junctions and streets (the imported ones, or the edited).
+    fn street_end_infos_of(&self, edge: u32, region: usize, junctions: &BTreeMap<u32, State>, streets: &BTreeMap<u32, Street>) -> [EndInfo; 2] {
         let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
-        let has_stops = self.streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
+        let has_stops = streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
         let (a, b) = (self.layout.edges[e].a, self.layout.edges[e].b);
         let at = |n: usize, first_end: bool| {
             let arm_state =
-                self.layout.nodes[n].junction.then(|| self.junctions.get(&node_uid(n))).flatten().map(|j| (j, arm_at_end(&j.arms, edge, first_end, a == b)));
+                self.layout.nodes[n].junction.then(|| junctions.get(&node_uid(n))).flatten().map(|j| (j, arm_at_end(&j.arms, edge, first_end, a == b)));
             let crossing = arm_state.is_some_and(|(_, a)| a.is_some_and(|a| a.crossing.is_some()));
             let reach_mm = match arm_state {
                 Some((j, Some(arm))) if has_stops => {
-                    let open = self.with_streets(n, j, region);
+                    let open = self.with_streets_of(streets, n, j, region);
                     crate::junction::read_model::arm_reaches(&open, region).into_iter().find(|&(uid, _)| uid == arm.uid).map_or(0, |(_, r)| r)
                 }
                 _ => 0,
@@ -908,18 +913,18 @@ impl City {
 
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
-        self.street_editor_of(edge, region, &self.streets)
+        self.street_editor_of(edge, region, (&self.junctions, &self.streets))
     }
 
     /// The street editor on one street as it was imported: its view is the "before" of `street_editor`'s.
     pub fn street_editor_today(&self, edge: u32, region: usize) -> Option<Editor> {
-        self.street_editor_of(edge, region, &self.today_streets)
+        self.street_editor_of(edge, region, (&self.today_junctions, &self.today_streets))
     }
 
-    fn street_editor_of(&self, edge: u32, region: usize, streets: &BTreeMap<u32, Street>) -> Option<Editor> {
+    fn street_editor_of(&self, edge: u32, region: usize, (junctions, streets): (&BTreeMap<u32, State>, &BTreeMap<u32, Street>)) -> Option<Editor> {
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
         let editor = Editor::from_street(self.today_streets.get(&edge)?, streets.get(&edge)?, region);
-        Some(editor.with_frame(frame).with_ends(self.street_end_infos(edge, region)))
+        Some(editor.with_frame(frame).with_ends(self.street_end_infos_of(edge, region, junctions, streets)))
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -1327,6 +1332,7 @@ mod tests {
         let (before, now) = (city.street_editor_today(1, 0).unwrap().view(), city.street_editor(1, 0).unwrap().view());
         assert_eq!(before.class, today.class);
         assert_eq!(now.class, StreetClass::Pedestrian);
+        assert_ne!(before.class, now.class);
         assert_eq!(city.street_editor_today(1, 0).unwrap().frame(), city.street_editor(1, 0).unwrap().frame());
     }
 
@@ -1337,6 +1343,22 @@ mod tests {
         assert_eq!(before.class, now.class);
         assert_eq!(before.total_mm, now.total_mm);
         assert!(city.street_editor_today(999, 0).is_none());
+    }
+
+    #[test]
+    fn the_imported_street_ends_come_from_the_imported_junctions() {
+        let mut city = City::new();
+        let end =
+            [city.layout.edges[0].a, city.layout.edges[0].b].into_iter().find(|&n| city.layout.nodes[n].junction).expect("an end of street 1 is a junction");
+        let mut state = city.junctions[&node_uid(end)].clone();
+        state.arms.iter_mut().filter(|arm| arm.edge == 1).for_each(|arm| arm.crossing = None);
+        assert!(city.keep_junction(node_uid(end), state));
+        let today = city.street_end_infos_of(1, 0, &city.today_junctions, &city.today_streets);
+        assert!(today.iter().any(|x| x.crossing), "the imported street has its crossing");
+        assert!(city.street_end_infos(1, 0).iter().all(|x| !x.crossing), "the edited one has none");
+        assert_ne!(today, city.street_end_infos(1, 0));
+        let (before, now) = (city.street_editor_today(1, 0).unwrap().view(), city.street_editor(1, 0).unwrap().view());
+        assert_eq!(before.checks.len(), now.checks.len());
     }
 
     fn a_junction_node(city: &City) -> u32 {
