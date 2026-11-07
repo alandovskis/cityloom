@@ -85,18 +85,17 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#drawing .iso-zebra")).toHaveCount(0);
   });
 
-  test("a table that is too short is added and fails its check, and a refusal says why", async ({ page }) => {
+  test("a table that is too short or runs past the street is refused, and the refusal says why", async ({ page }) => {
     await openCalmingStreet(page, 20);
     await addElement(page, 0, 4);
-    await page.locator("#t-checks").click();
-    const row = page.locator("#checks li").filter({ hasText: "Raised elements long enough" });
-    await expect(row).not.toHaveClass("ok");
-    await expect(row).toContainText("too short");
-    // Longer than the street: refused, and said.
-    await page.locator("#calming-1").click();
+    await expect(page.locator("#live")).toContainText("A raised table must be at least");
+    await expect(cells(page)).toHaveCount(1);
+    await expect(page.locator("#undo")).toBeDisabled();
+    await page.locator("#calming-0").click();
     await page.locator("#calming-length").fill("500");
     await page.locator("#calming-add").click();
-    await expect(cells(page)).toHaveCount(2);
+    await expect(page.locator("#live")).toContainText("That would run past an end of the street.");
+    await expect(cells(page)).toHaveCount(1);
   });
 
   test("the arrows choose a cell and Alt with them moves the table by a metre; Remove takes it away", async ({
