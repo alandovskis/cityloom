@@ -10,8 +10,11 @@ import { fileURLToPath } from "node:url";
 const port = process.env.E2E_PORT ?? 8137;
 
 // Cargo's target directory is not always ./target (build.target-dir in ~/.cargo/config.toml, CARGO_TARGET_DIR).
-const targetDir = execFileSync(fileURLToPath(new URL("../scripts/target-dir.sh", import.meta.url)), { encoding: "utf8" }).trim();
-const server = join(targetDir, "debug", "cityloom_server");
+// The runner asks once; the workers that load this file again inherit the answer.
+process.env.CITYLOOM_TARGET_DIR ??= execFileSync(fileURLToPath(new URL("../scripts/target-dir.sh", import.meta.url)), {
+  encoding: "utf8",
+}).trim();
+const server = join(process.env.CITYLOOM_TARGET_DIR, "debug", "cityloom_server");
 if (!existsSync(server)) {
   throw new Error(
     `${server} is missing: run 'just e2e' (it builds the server first) or 'cargo build -p cityloom_server'`,

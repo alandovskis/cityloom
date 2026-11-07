@@ -13,7 +13,8 @@ if [ "$(uname)" = Darwin ]; then
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
 cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
-wasm_dir="$(./scripts/target-dir.sh)/wasm32-unknown-unknown/release"
+dir=$(./scripts/target-dir.sh)
+wasm_dir="$dir/wasm32-unknown-unknown/release"
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   "$wasm_dir/cityloom_editor.wasm"
 # The OpenStreetMap reader is its own module, loaded when a place is opened.

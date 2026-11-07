@@ -18,12 +18,13 @@ done
 ./scripts/build.sh
 target=x86_64-unknown-linux-musl
 cargo zigbuild --release --target "$target" -p cityloom_server
-server="$(./scripts/target-dir.sh)/$target/release/cityloom_server"
-./scripts/check-no-fake.sh "$server"
+dir=$(./scripts/target-dir.sh)
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 cp -R web "$stage/web"
-cp "$server" "$stage/cityloom_server"
+# The target directory may be shared with other checkouts, which can replace the binary at any time: check the copy that is uploaded.
+cp "$dir/$target/release/cityloom_server" "$stage/cityloom_server"
+./scripts/check-no-fake.sh "$stage/cityloom_server"
 cp deploy/Dockerfile "$stage/Dockerfile"
 find "$stage" -name .DS_Store -delete
 railway up "$stage" --path-as-root --ci \
