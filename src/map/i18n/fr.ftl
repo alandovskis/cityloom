@@ -271,3 +271,35 @@ prov-more-findings = { $n ->
     [one] 1 autre constat n’est pas listé.
    *[other] { $n } autres constats ne sont pas listés.
 }
+map-report-title = Revue de conception : { $area }
+map-report-cover-title = Rapport de revue de conception
+map-report-when = { $date } { $hours } h { $minutes }
+map-report-exported = Date d’exportation : { $when } UTC
+map-report-version = CityLoom, version { $version }
+map-report-scope = Portée : Ville entière
+map-report-study-notice = Ce rapport provient d’une étude de conception. Ce n’est pas un document d’ingénierie et il ne remplace pas l’examen d’un professionnel qualifié.
+map-report-placeholder-notice = Les règles, les taux et les seuils derrière les vérifications sont des valeurs provisoires et n’ont pas été vérifiés.
+map-report-summary = Sommaire
+map-report-summary-caption = Sommaire de la ville et de ses vérifications
+map-report-col-measure = Mesure
+map-report-col-figure = Chiffre
+map-report-col-result = Résultat
+map-report-row-city = Rues et jonctions de la ville
+map-report-row-edited = Lieux modifiés par rapport au tracé importé
+map-report-row-failing = Lieux dont les vérifications de conception échouent
+map-report-row-problems = Problèmes du réseau
+map-report-row-notices = Avis du réseau
+map-report-figure-city = { $streets ->
+    [one] 1 rue
+   *[other] { $streets } rues
+}, { $junctions ->
+    [one] 1 jonction
+   *[other] { $junctions } jonctions
+}
+map-report-pass = Réussite
+map-report-fail = Échec
+map-report-notice = À noter
+map-report-none-found = Aucun problème ni aucun avis du réseau n’a été relevé : { $result }.
+map-report-nothing = Il n’y a rien à rapporter : cette ville n’a ni rue ni jonction.
+map-report-failed = Le rapport n’a pas pu être produit. Réessayez.
+map-report-dismiss = Fermer

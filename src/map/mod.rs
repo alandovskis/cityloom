@@ -11,6 +11,7 @@ pub mod home;
 pub mod network;
 pub mod network_view;
 pub mod overlay;
+mod report;
 pub mod source_quality;
 pub mod source_view;
 pub mod style;
@@ -42,6 +43,17 @@ impl MapPage {
     /// to this page.
     pub fn mount_shell(&self) {
         crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", true);
+    }
+
+    /// Binds the Share menu's Download report item (`#report`, made by the shell's `mount_shell`) to the report's
+    /// download. The shell's own listener on the same button closes the menu.
+    pub fn bind_report(&self) {
+        use wasm_bindgen::JsCast;
+        let Some(button) = leptos::prelude::document().get_element_by_id("report") else { return };
+        let vm = self.0.clone();
+        let cb = Closure::<dyn FnMut()>::new(move || vm.download_report());
+        let _ = button.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+        cb.forget();
     }
 
     /// The home page's city: its roads have been got (`prepare_city`), so the city behind the hero card and the
@@ -81,7 +93,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());
     mount("map-slot", view! { <view::MapView vm=vm.clone()/> }.into_any());
     mount("plan-key", view! { <view::Legend vm=vm.clone()/> }.into_any());
-    mount("fit-slot", view! { <view::Status vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <view::Status vm=vm.clone()/><view::ReportNotice vm=vm.clone()/> }.into_any());
     mount("checks-lead", view! { <view::ChecksLead vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());

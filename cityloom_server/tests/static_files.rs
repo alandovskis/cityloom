@@ -13,9 +13,16 @@ fn site(cache_control: &str) -> (tempfile::TempDir, Router, Vec<u8>) {
     std::fs::write(dir.path().join("index.html"), b"home").unwrap();
     std::fs::create_dir(dir.path().join("sub")).unwrap();
     std::fs::write(dir.path().join("sub/index.html"), b"sub home").unwrap();
-    for (name, bytes) in
-        [("a.json", &b"{}"[..]), ("a.wasm", b"\0asm"), ("a.pmtiles", b"PM"), ("a.pbf", b"pb"), ("a.mjs", b"x"), ("a.woff2", b"w"), ("a.unknown", b"?")]
-    {
+    for (name, bytes) in [
+        ("a.json", &b"{}"[..]),
+        ("a.wasm", b"\0asm"),
+        ("a.pmtiles", b"PM"),
+        ("a.pbf", b"pb"),
+        ("a.mjs", b"x"),
+        ("a.woff2", b"w"),
+        ("a.ttf", b"t"),
+        ("a.unknown", b"?"),
+    ] {
         std::fs::write(dir.path().join(name), bytes).unwrap();
     }
     let router = cityloom_server::static_files::router(dir.path().to_path_buf(), cache_control.to_string());
@@ -112,6 +119,7 @@ async fn serves_each_extension_with_its_content_type() {
         ("/a.pbf", "application/x-protobuf"),
         ("/a.mjs", "text/javascript; charset=utf-8"),
         ("/a.woff2", "font/woff2"),
+        ("/a.ttf", "font/ttf"),
         ("/a.unknown", "application/octet-stream"),
     ] {
         assert_eq!(get(&router, path, None).await.1[header::CONTENT_TYPE], expected, "{path}");
@@ -145,6 +153,8 @@ fn code_site() -> (tempfile::TempDir, Router) {
     std::fs::write(root.join("data/metro/index.json"), "{}".repeat(50)).unwrap();
     std::fs::write(root.join("data/metro/0_0.osm.pbf"), vec![7u8; 500]).unwrap();
     std::fs::write(root.join("data/app.js"), "not code").unwrap();
+    std::fs::create_dir_all(root.join("fonts")).unwrap();
+    std::fs::write(root.join("fonts/Face.ttf"), vec![3u8; 800]).unwrap();
     std::fs::create_dir_all(root.join("glyphs/Font")).unwrap();
     std::fs::write(root.join("glyphs/Font/0-255.pbf"), vec![9u8; 500]).unwrap();
     // Looked at on every request: these tests change the files and ask again at once.
@@ -253,7 +263,7 @@ async fn data_is_cached_as_long_as_it_is_safe_to() {
 async fn text_and_wasm_are_compressed_with_the_best_encoding_the_client_takes() {
     let (_d, router) = code_site();
     for (accept, encoding) in [("br, gzip", "br"), ("gzip, deflate", "gzip")] {
-        for path in ["/app.css", "/map.html", "/pkg/glue_bg.wasm", "/data/metro/index.json"] {
+        for path in ["/app.css", "/map.html", "/pkg/glue_bg.wasm", "/fonts/Face.ttf", "/data/metro/index.json"] {
             let (_, headers, body) = get_with(&router, path, &[("accept-encoding", accept)]).await;
             assert_eq!(headers[header::CONTENT_ENCODING], encoding, "{path} for {accept}");
             assert!(body.len() < 200, "{path} is smaller than its 800 bytes");
