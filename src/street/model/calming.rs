@@ -7,7 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Arg, Content, Editor, SNAP_MM, Said, ZoneFrame, snap};
+use super::stop_end::stop_gap_mm;
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
 use crate::shared::catalogue::{Side, is_roadway};
 
 /// How high the plateau of a raised table stands above the roadway, in millimetres. A placeholder, UNVERIFIED
@@ -308,6 +309,152 @@ impl Editor {
                 elsewhere,
             })
             .collect()
+    }
+}
+
+impl Calming {
+    /// How the checks name it: "raised table at 20 m".
+    fn named(&self) -> Said {
+        Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(self.from_mm))
+    }
+
+    /// The same, in the zone where it fails.
+    fn named_in(&self, zone: Said) -> Said {
+        Said::new("calming-instance-zone")
+            .with("kind", Arg::MsgLower(self.kind.name_key()))
+            .with("at", Arg::Length(self.from_mm))
+            .with("zone", Arg::Said(Box::new(zone)))
+    }
+}
+
+/// The length at least which an element's ramps leave a plateau: the shorter of the two requirements is no help.
+const fn needed_mm() -> i32 {
+    let by_plateau = MIN_PLATEAU_MM + 2 * RAMP_MM;
+    if by_plateau > MIN_TABLE_MM { by_plateau } else { MIN_TABLE_MM }
+}
+
+/// One rule one element breaks, with the way the check names the element when that is not just the element.
+struct Fail {
+    element: usize,
+    rule: usize,
+    detail: Said,
+    named: Option<Said>,
+}
+
+impl Editor {
+    /// The rows of the raised elements, after the stops' (only when the street has elements): length and roadway,
+    /// speed, clearance of the transit stops and, where the city has told an end how far its junction reaches,
+    /// clearance of the junction. A row fails with the first element that breaks it, which it names.
+    ///
+    /// A street with no speed set is a note (the row passes and says so), never a failure. Every figure is a
+    /// placeholder, UNVERIFIED. Positions are measured from the anchored end, as the stops' are, and `ends` (node
+    /// `a`, node `b`) is read from that end, so the same street gives the same answer whichever end it is anchored at.
+    pub(super) fn calming_checks(&self) -> Vec<Check> {
+        let content = &self.states[self.cursor].content;
+        let fails = self.calming_failures();
+        let mut rows = vec![
+            ("calming-length", "check-label-calming-length", "check-detail-calming-length-ok"),
+            ("calming-speed", "check-label-calming-speed", "check-detail-calming-speed-unknown"),
+            ("calming-stop", "check-label-calming-stop", "check-detail-calming-stop-ok"),
+        ];
+        if self.stops_see_a_junction() {
+            rows.push(("calming-junction", "check-label-calming-junction", "check-detail-calming-junction-ok"));
+        }
+        rows.iter()
+            .enumerate()
+            .map(|(rule, &(id, label, ok_detail))| match fails.iter().find(|f| f.rule == rule) {
+                Some(f) => {
+                    let element = &content.calming[f.element];
+                    Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(f.named.clone().unwrap_or_else(|| element.named())) }
+                }
+                None => {
+                    let detail = match (rule, content.speed.kmh()) {
+                        (1, Some(kmh)) => Said::new("check-detail-calming-speed-ok").with("kmh", Arg::Num(i64::from(kmh))),
+                        _ => Said::new(ok_detail).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH))),
+                    };
+                    Check { id, ok: true, label: Said::new(label), detail, zone: None }
+                }
+            })
+            .collect()
+    }
+
+    /// Every rule each element breaks, element by element in order: `rule` indexes the rows of `calming_checks`.
+    fn calming_failures(&self) -> Vec<Fail> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        // The far end is measured from the frame's length, as the junction measures it.
+        let end_length_mm = self.frame.map_or(length_mm, |f| f.length_mm);
+        let (near, far) = match content.from_end {
+            ZoneEnd::First => (self.ends[0], self.ends[1]),
+            ZoneEnd::Last => (self.ends[1], self.ends[0]),
+        };
+        let mut out: Vec<Fail> = Vec::new();
+        for (k, c) in content.calming.iter().enumerate() {
+            let mut fail = |rule: usize, detail: Said, named: Option<Said>| {
+                if !out.iter().any(|f| f.element == k && f.rule == rule) {
+                    out.push(Fail { element: k, rule, detail, named });
+                }
+            };
+            if c.length_mm < MIN_TABLE_MM || c.length_mm - 2 * RAMP_MM < MIN_PLATEAU_MM {
+                fail(
+                    0,
+                    Said::new("check-detail-calming-length")
+                        .with("length", Arg::Length(c.length_mm))
+                        .with("ramp", Arg::Length(RAMP_MM))
+                        .with("min", Arg::Length(needed_mm())),
+                    None,
+                );
+            }
+            // The roadway to raise, in every zone the element overlaps: the zone that has none is named.
+            if content.zone_count() < 2 {
+                if !content.segments.iter().any(|g| is_roadway(g.kind)) {
+                    fail(0, Said::new("check-detail-calming-roadway"), None);
+                }
+            } else {
+                for z in 0..content.zone_count() {
+                    let (from, to) = content.span(z, length_mm);
+                    if from < c.to_mm() && c.from_mm < to && !content.section(z).iter().any(|g| is_roadway(g.kind)) {
+                        fail(0, Said::new("check-detail-calming-roadway"), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                    }
+                }
+            }
+            if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH)) {
+                fail(
+                    1,
+                    Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH))),
+                    None,
+                );
+            }
+            // A stop's boarding area is along the stop, on either side: the element spans the whole roadway.
+            for s in &content.stops {
+                let gap = (c.from_mm - s.to_mm()).max(s.from_mm - c.to_mm());
+                if gap < 0 {
+                    fail(2, Said::new("check-detail-calming-stop-overlap").with("stop", Arg::Said(Box::new(s.named()))), None);
+                } else if gap < CALMING_STOP_CLEAR_MM {
+                    fail(
+                        2,
+                        Said::new("check-detail-calming-stop-near")
+                            .with("stop", Arg::Said(Box::new(s.named())))
+                            .with("gap", Arg::Length(gap))
+                            .with("need", Arg::Length(CALMING_STOP_CLEAR_MM)),
+                        None,
+                    );
+                }
+            }
+            for (end, from_end_mm) in [(near, c.from_mm), (far, end_length_mm.saturating_sub(c.to_mm()))] {
+                if end.reach_mm <= 0 {
+                    continue;
+                }
+                let gap = stop_gap_mm(from_end_mm, end.reach_mm);
+                if gap < 0 {
+                    fail(3, Said::new("check-detail-calming-junction-inside"), None);
+                } else if gap < CALMING_JUNCTION_CLEAR_MM {
+                    let key = if end.crossing { "check-detail-calming-junction-crossing" } else { "check-detail-calming-junction-mouth" };
+                    fail(3, Said::new(key).with("gap", Arg::Length(gap)).with("need", Arg::Length(CALMING_JUNCTION_CLEAR_MM)), None);
+                }
+            }
+        }
+        out
     }
 }
 
@@ -624,5 +771,248 @@ mod tests {
         assert_eq!(r.calming, s.calming, "no side to swap, measured from the same physical end");
         assert_eq!(r.from_end, ZoneEnd::Last);
         assert_eq!(r.reversed(), s);
+    }
+
+    // ---- the design checks ----
+
+    use super::super::stop::StopKind;
+    use super::super::{Check, EndInfo};
+    use crate::street::model::Speed;
+
+    fn check(e: &Editor, id: &str) -> Check {
+        e.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+    }
+
+    fn arg_mm(said: &Said, name: &str) -> Option<i32> {
+        said.args.iter().find_map(|(n, a)| match a {
+            Arg::Length(v) if *n == name => Some(*v),
+            _ => None,
+        })
+    }
+
+    fn with_table(from_mm: i32, length_mm: i32) -> Editor {
+        let mut e = editor();
+        e.add_calming(Kind::Table, from_mm, length_mm).unwrap();
+        e
+    }
+
+    fn reach(crossing: bool, reach_mm: i32) -> EndInfo {
+        EndInfo { crossing, reach_mm }
+    }
+
+    fn at_speed(speed: Speed, from_end: ZoneEnd) -> Editor {
+        let mut s = Street::sample(0, Side::Right);
+        s.speed = speed;
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end }));
+        e.add_calming(Kind::Table, 20_000, 7_000).unwrap();
+        e
+    }
+
+    #[test]
+    fn no_calming_adds_no_checks() {
+        let e = editor().with_ends([reach(true, 9_000); 2]);
+        assert!(e.view().checks.iter().all(|c| !c.id.starts_with("calming-")));
+    }
+
+    #[test]
+    fn the_rows_follow_the_stop_rows_and_the_junction_row_needs_a_reach() {
+        let e = with_table(20_000, 7_000);
+        let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("calming-")).collect();
+        assert_eq!(ids, ["calming-length", "calming-speed", "calming-stop"]);
+        let e = with_table(20_000, 7_000).with_ends([reach(false, 9_000), EndInfo::default()]);
+        let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("calming-")).collect();
+        assert_eq!(ids, ["calming-length", "calming-speed", "calming-stop", "calming-junction"]);
+    }
+
+    #[test]
+    fn an_element_that_is_long_enough_passes_length() {
+        let c = check(&with_table(20_000, MIN_TABLE_MM), "calming-length");
+        assert!(c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-length-ok");
+        assert!(c.zone.is_none());
+    }
+
+    #[test]
+    fn a_short_element_fails_length_naming_itself_and_the_minimum() {
+        // `add_calming` refuses a short one, so a short one is a saved one: shorten the minimum by editing the state.
+        let mut e = with_table(20_000, 7_000);
+        e.edit_content(Said::new("test"), |c| {
+            c.calming[0].length_mm = MIN_TABLE_MM - SNAP_MM;
+            true
+        });
+        let c = check(&e, "calming-length");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-length");
+        assert_eq!(arg_mm(&c.detail, "length"), Some(MIN_TABLE_MM - SNAP_MM));
+        assert_eq!(arg_mm(&c.detail, "min"), Some(MIN_TABLE_MM));
+        assert_eq!(arg_mm(&c.detail, "ramp"), Some(RAMP_MM));
+        let zone = c.zone.unwrap();
+        assert_eq!(zone.key, "calming-instance");
+        assert_eq!(zone.args.len(), 2);
+    }
+
+    #[test]
+    fn speed_fails_above_the_limit_passes_at_it_and_is_a_note_when_unknown() {
+        let fail = check(&at_speed(Speed::Kmh(60), ZoneEnd::First), "calming-speed");
+        assert!(!fail.ok);
+        assert_eq!(fail.detail.key, "check-detail-calming-speed");
+        assert!(fail.detail.args.contains(&("kmh", Arg::Num(60))));
+        assert!(fail.detail.args.contains(&("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH)))));
+        assert_eq!(fail.zone.unwrap().key, "calming-instance");
+        let pass = check(&at_speed(Speed::Kmh(50), ZoneEnd::First), "calming-speed");
+        assert!(pass.ok);
+        assert_eq!(pass.detail.key, "check-detail-calming-speed-ok");
+        for unknown in [Speed::NotSet, Speed::Undecided] {
+            let note = check(&at_speed(unknown, ZoneEnd::First), "calming-speed");
+            assert!(note.ok, "a street with no speed is never failed");
+            assert_eq!(note.detail.key, "check-detail-calming-speed-unknown");
+            assert!(note.zone.is_none());
+        }
+    }
+
+    fn with_stop(table_from: i32, stop_from: i32, stop_len: i32) -> Editor {
+        let mut e = editor();
+        e.add_stop(Side::Right, stop_from, stop_len, StopKind::Curb).unwrap();
+        e.add_calming(Kind::Table, table_from, 7_000).unwrap();
+        e
+    }
+
+    #[test]
+    fn a_table_over_a_boarding_area_fails_naming_the_stop() {
+        // The stop runs 22 000 to 34 000; the table 20 000 to 27 000.
+        let c = check(&with_stop(20_000, 22_000, 12_000), "calming-stop");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-stop-overlap");
+        let Some((_, Arg::Said(stop))) = c.detail.args.iter().find(|(n, _)| *n == "stop") else { panic!("the stop is named") };
+        assert_eq!(stop.key, "stop-instance");
+    }
+
+    #[test]
+    fn five_metres_clear_of_a_stop_passes_and_4_9_fails() {
+        // The table ends at 27 000; a stop from 32 000 is 5 000 clear, from 31 900 it is 4 900.
+        let c = check(&with_stop(20_000, 32_000, 9_000), "calming-stop");
+        assert!(c.ok, "{:?}", c.detail);
+        assert_eq!(c.detail.key, "check-detail-calming-stop-ok");
+        let c = check(&with_stop(20_000, 31_900, 9_000), "calming-stop");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-stop-near");
+        assert_eq!(arg_mm(&c.detail, "gap"), Some(4_900));
+        assert_eq!(arg_mm(&c.detail, "need"), Some(CALMING_STOP_CLEAR_MM));
+        // The same on the other side of the table: a stop ending 5 000 before it.
+        assert!(check(&with_stop(20_000, 6_000, 9_000), "calming-stop").ok);
+        let c = check(&with_stop(20_000, 6_100, 9_000), "calming-stop");
+        assert!(!c.ok);
+        assert_eq!(arg_mm(&c.detail, "gap"), Some(4_900));
+    }
+
+    #[test]
+    fn a_street_with_no_stops_passes_the_stop_check() {
+        assert!(check(&with_table(20_000, 7_000), "calming-stop").ok);
+    }
+
+    #[test]
+    fn junction_clearance_is_measured_past_the_reach_at_each_end() {
+        let near = |from_mm: i32, crossing: bool| with_table(from_mm, 7_000).with_ends([reach(crossing, 9_000), EndInfo::default()]);
+        let ok = check(&near(14_000, true), "calming-junction");
+        assert!(ok.ok);
+        assert_eq!(ok.detail.key, "check-detail-calming-junction-ok");
+        let c = check(&near(13_900, true), "calming-junction");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-junction-crossing");
+        assert_eq!(arg_mm(&c.detail, "gap"), Some(4_900));
+        assert_eq!(arg_mm(&c.detail, "need"), Some(CALMING_JUNCTION_CLEAR_MM));
+        assert_eq!(check(&near(13_900, false), "calming-junction").detail.key, "check-detail-calming-junction-mouth");
+        assert_eq!(check(&near(5_000, false), "calming-junction").detail.key, "check-detail-calming-junction-inside");
+        // The far end: the table ends at 60 000 - x; its far side is x from node b.
+        let far = |from_mm: i32| with_table(from_mm, 7_000).with_ends([EndInfo::default(), reach(true, 9_000)]);
+        assert!(check(&far(60_000 - 14_000 - 7_000), "calming-junction").ok);
+        assert!(!check(&far(60_000 - 13_900 - 7_000), "calming-junction").ok);
+    }
+
+    #[test]
+    fn a_zone_boundary_names_the_failing_zone() {
+        let mut e = with_table(25_000, 10_000);
+        e.split_zone(Some(30_000)).unwrap();
+        e.select_zone(1);
+        assert!(check(&e, "calming-length").ok);
+        // The second zone loses its roadway; the table reaches into it.
+        let roadway: Vec<u32> = e.view().segments.iter().filter(|s| crate::shared::catalogue::is_roadway(s.kind)).map(|s| s.uid).collect();
+        for uid in roadway {
+            assert!(e.remove(uid));
+        }
+        let c = check(&e, "calming-length");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-roadway");
+        let named = c.zone.unwrap();
+        assert_eq!(named.key, "calming-instance-zone");
+        let Some((_, Arg::Said(zone))) = named.args.iter().find(|(n, _)| *n == "zone") else { panic!("the zone is named") };
+        assert_eq!((zone.key, zone.args.clone()), ("zone-unnamed-mid", vec![("n", Arg::Num(2))]));
+        // A table wholly in the first zone is not affected.
+        let mut e = with_table(5_000, 10_000);
+        e.split_zone(Some(30_000)).unwrap();
+        e.select_zone(1);
+        for uid in e.view().segments.iter().filter(|s| crate::shared::catalogue::is_roadway(s.kind)).map(|s| s.uid).collect::<Vec<_>>() {
+            e.remove(uid);
+        }
+        assert!(check(&e, "calming-length").ok);
+    }
+
+    #[test]
+    fn the_checks_are_the_same_whichever_end_the_street_is_anchored_at() {
+        let make = |from_end: ZoneEnd, table: i32, stop: i32| {
+            let s = Street::sample(0, Side::Right);
+            let mut e =
+                Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end })).with_ends([reach(true, 9_000), reach(false, 7_000)]);
+            e.add_stop(Side::Right, stop, 9_000, StopKind::Curb).unwrap();
+            e.add_calming(Kind::Table, table, 7_000).unwrap();
+            e
+        };
+        // Physically: the table 12 000 to 19 000 from node a, a stop 22 000 to 31 000 (3 000 clear of the table).
+        let first = make(ZoneEnd::First, 12_000, 22_000);
+        let last = make(ZoneEnd::Last, LEN - 19_000, LEN - 31_000);
+        let said = |e: &Editor| {
+            // The stop is named by its own place, measured from the anchored end, so only its gap is compared.
+            e.view()
+                .checks
+                .into_iter()
+                .filter(|c| c.id.starts_with("calming-"))
+                .map(|c| (c.id, c.ok, c.detail.key, arg_mm(&c.detail, "gap")))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(said(&first), said(&last));
+        assert!(!check(&first, "calming-stop").ok);
+        assert!(!check(&first, "calming-junction").ok);
+    }
+
+    #[test]
+    fn the_wording_is_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        use crate::shared::units::Units;
+        let mut e = with_table(20_000, 7_000).with_ends([reach(true, 17_000), EndInfo::default()]);
+        e.add_stop(Side::Right, 27_000, 9_000, StopKind::Curb).unwrap();
+        let checks = e.view().checks;
+        for locale in [Locale::En, Locale::FrCa] {
+            let i18n = crate::i18n_for(locale);
+            for c in checks.iter().filter(|c| c.id.starts_with("calming-")) {
+                let units = Units::default();
+                for said in [&c.label, &c.detail] {
+                    let text = crate::shared::said::say_now(&i18n, units, said);
+                    assert!(!text.is_empty() && !text.contains("calming"), "{}: {text}", c.id);
+                }
+                let label = crate::street::text::check_label(c);
+                let text = crate::shared::said::say_now(&i18n, units, &label);
+                assert!(!text.contains("calming-"), "{text}");
+            }
+        }
+        let en = crate::i18n_for(Locale::En);
+        let fr = crate::i18n_for(Locale::FrCa);
+        let stop = check(&e, "calming-stop");
+        let junction = check(&e, "calming-junction");
+        assert!(!stop.ok && !junction.ok);
+        let say = |i: &std::rc::Rc<crate::shared::i18n::I18n>, s: &Said| crate::shared::said::say_now(i, Units::default(), s);
+        assert_eq!(say(&en, &crate::street::text::check_label(&stop)), "Raised elements clear of transit stops: raised table at 20.0 m");
+        assert!(say(&fr, &crate::street::text::check_label(&stop)).starts_with("Éléments surélevés dégagés des arrêts"));
+        assert!(say(&en, &junction.detail).contains("pedestrian crossing"));
+        assert!(say(&fr, &junction.detail).contains("passage pour piétons"));
     }
 }

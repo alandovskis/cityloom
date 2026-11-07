@@ -152,6 +152,10 @@ pub fn check_label(check: &Check) -> Said {
         (Some(instance), false) if check.id.starts_with("stop-") => {
             Said::new("check-stop-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
         }
+        // A raised element's row names the element (and the zone, where the zone is what fails).
+        (Some(instance), false) if check.id.starts_with("calming-") => {
+            Said::new("check-calming-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
         }

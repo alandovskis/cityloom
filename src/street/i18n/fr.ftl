@@ -562,3 +562,25 @@ transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les é
 template-refused-freeway = Le modèle « { $name } » ne peut pas s’appliquer à une autoroute.
 template-refused-narrow = Le modèle « { $name } » demande une rue d’au moins { $min } de largeur. Cette rue mesure { $row } de largeur.
 template-refused-wide = Le modèle « { $name } » ne peut pas servir une rue de plus de { $max } de largeur. Cette rue mesure { $row } de largeur.
+
+# Les vérifications des éléments surélevés (src/street/model/calming.rs).
+calming-instance = { $kind } à { $at }
+calming-instance-zone = { $kind } à { $at }, dans { $zone }
+check-calming-in = { $check } : { $instance }
+check-label-calming-length = Éléments surélevés assez longs, sur une chaussée
+check-detail-calming-length = Un élément surélevé de { $length } est trop court : avec des rampes de { $ramp }, il en faut { $min } ou plus.
+check-detail-calming-roadway = Il n’y a pas de chaussée à surélever ici.
+check-detail-calming-length-ok = Chaque élément surélevé est assez long et repose sur une chaussée.
+check-label-calming-speed = Limite de vitesse adaptée aux éléments surélevés
+check-detail-calming-speed = La limite de { $kmh }{" "}km/h dépasse les { $max }{" "}km/h prévus pour un élément surélevé.
+check-detail-calming-speed-ok = La limite de { $kmh }{" "}km/h convient aux éléments surélevés.
+check-detail-calming-speed-unknown = Aucune limite de vitesse n’est indiquée : on ne peut pas la juger par rapport aux { $max }{" "}km/h prévus pour un élément surélevé.
+check-label-calming-stop = Éléments surélevés dégagés des arrêts de transport en commun
+check-detail-calming-stop-overlap = L’élément surélevé chevauche l’aire d’embarquement de { $stop }.
+check-detail-calming-stop-near = L’élément surélevé est à { $gap } de { $stop }; il en faut { $need } ou plus.
+check-detail-calming-stop-ok = Chaque élément surélevé est dégagé des arrêts de transport en commun.
+check-label-calming-junction = Éléments surélevés dégagés de l’intersection
+check-detail-calming-junction-crossing = L’élément surélevé se trouverait à { $gap } du passage pour piétons; il en faut { $need } ou plus.
+check-detail-calming-junction-mouth = L’élément surélevé se trouverait à { $gap } du début de l’intersection; il en faut { $need } ou plus.
+check-detail-calming-junction-inside = L’élément surélevé empiète sur l’intersection.
+check-detail-calming-junction-ok = Chaque élément surélevé est dégagé de l’intersection.

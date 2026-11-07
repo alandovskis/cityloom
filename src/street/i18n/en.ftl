@@ -562,3 +562,25 @@ transform-templates-hint = Lay the street out as one of these templates. It repl
 template-refused-freeway = { $name } cannot be applied to a freeway.
 template-refused-narrow = { $name } needs a street at least { $min } wide. This street is { $row } wide.
 template-refused-wide = { $name } cannot use a street wider than { $max }. This street is { $row } wide.
+
+# The design checks of the raised elements (src/street/model/calming.rs).
+calming-instance = { $kind } at { $at }
+calming-instance-zone = { $kind } at { $at }, in { $zone }
+check-calming-in = { $check }: { $instance }
+check-label-calming-length = Raised elements long enough, on a roadway
+check-detail-calming-length = A raised element of { $length } is too short: with ramps of { $ramp } it needs { $min } or more.
+check-detail-calming-roadway = There is no roadway to raise here.
+check-detail-calming-length-ok = Every raised element is long enough and stands on a roadway.
+check-label-calming-speed = Speed limit suits raised elements
+check-detail-calming-speed = The speed limit of { $kmh } km/h is above the { $max } km/h a raised element is meant for.
+check-detail-calming-speed-ok = The speed limit of { $kmh } km/h suits raised elements.
+check-detail-calming-speed-unknown = No speed limit is set, so it cannot be judged against the { $max } km/h a raised element is meant for.
+check-label-calming-stop = Raised elements clear of transit stops
+check-detail-calming-stop-overlap = The raised element overlaps the boarding area of { $stop }.
+check-detail-calming-stop-near = The raised element is { $gap } from { $stop }; { $need } or more is needed.
+check-detail-calming-stop-ok = Every raised element stands clear of the transit stops.
+check-label-calming-junction = Raised elements clear of the junction
+check-detail-calming-junction-crossing = The raised element would stand { $gap } from the pedestrian crossing; { $need } or more is needed.
+check-detail-calming-junction-mouth = The raised element would stand { $gap } from where the junction begins; { $need } or more is needed.
+check-detail-calming-junction-inside = The raised element reaches into the junction.
+check-detail-calming-junction-ok = Every raised element stands clear of the junction.

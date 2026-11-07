@@ -1517,6 +1517,9 @@ impl Editor {
         if !self.states[self.cursor].content.stops.is_empty() {
             street.extend(self.stop_checks());
         }
+        if !self.states[self.cursor].content.calming.is_empty() {
+            street.extend(self.calming_checks());
+        }
         street
     }
 

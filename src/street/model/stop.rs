@@ -352,7 +352,7 @@ pub(crate) fn kind_fits(segs: &[Segment], lane: usize, side: Side, kind: StopKin
 
 impl Stop {
     /// How the checks name it: "curb stop at 12 m, right", or "Mont-Royal (curb stop, 12 m)".
-    fn named(&self) -> Said {
+    pub(super) fn named(&self) -> Said {
         let kind = Arg::MsgLower(self.kind.name_key());
         match &self.name {
             Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Length(self.from_mm)),
@@ -515,7 +515,7 @@ impl Editor {
     }
 
     /// Whether the city has told either end how far its junction reaches, so that the stops are judged against it.
-    fn stops_see_a_junction(&self) -> bool {
+    pub(super) fn stops_see_a_junction(&self) -> bool {
         self.ends.iter().any(|e| e.reach_mm > 0)
     }
 
