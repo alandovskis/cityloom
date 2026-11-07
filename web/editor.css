@@ -1963,8 +1963,12 @@ svg pattern circle {
 
 /* ---- notes ------------------------------------------------------------------- */
 
-.notes .tabs {
+.notes .tabs,
+.panel.left .tabs {
   margin: 0 0 4px;
+}
+.panel.left .tabs {
+  margin-bottom: 12px;
 }
 .tab-n {
   margin-left: 6px;
