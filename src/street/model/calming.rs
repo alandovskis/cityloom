@@ -1015,4 +1015,69 @@ mod tests {
         assert!(say(&en, &junction.detail).contains("pedestrian crossing"));
         assert!(say(&fr, &junction.detail).contains("passage pour piétons"));
     }
+
+    #[test]
+    fn an_unnamed_stop_of_every_kind_reads_right_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        use crate::shared::units::Units;
+        let say = |locale, s: &Said| crate::shared::said::say_now(&crate::i18n_for(locale), Units::default(), s);
+        let mut got = Vec::new();
+        for kind in StopKind::ALL {
+            // Overlapping: the table 20 000 to 27 000, the stop from 22 000. Near: the stop from 31 900.
+            for (case, at) in [("overlap", 22_000), ("near", 31_900)] {
+                let c = check(&with_stop_kind(kind, at), "calming-stop");
+                assert!(!c.ok);
+                got.push((kind, case, say(Locale::En, &c.detail), say(Locale::FrCa, &c.detail)));
+            }
+        }
+        let want: Vec<(StopKind, &str, &str, &str)> = EXPECTED.to_vec();
+        let got: Vec<(StopKind, &str, &str, &str)> = got.iter().map(|(k, c, e, f)| (*k, *c, e.as_str(), f.as_str())).collect();
+        assert_eq!(got, want);
+    }
+
+    fn with_stop_kind(kind: StopKind, at: i32) -> Editor {
+        let mut e = editor();
+        e.add_stop(Side::Right, at, 9_000, kind).unwrap();
+        e.add_calming(Kind::Table, 20_000, 7_000).unwrap();
+        e
+    }
+
+    const EXPECTED: &[(StopKind, &str, &str, &str)] = &[
+        (
+            StopKind::Curb,
+            "overlap",
+            "The raised element overlaps the boarding area of a transit stop. Stop concerned: curb stop at 22.0 m, right.",
+            "L’élément surélevé chevauche l’aire d’embarquement d’un arrêt de transport en commun. Arrêt en cause\u{a0}: arrêt au trottoir à 22,0\u{a0}m, à droite.",
+        ),
+        (
+            StopKind::Curb,
+            "near",
+            "The raised element is 4.9 m from the nearest transit stop; 5.0 m or more is needed. Stop concerned: curb stop at 31.9 m, right.",
+            "L’élément surélevé est à 4,9\u{a0}m de l’arrêt de transport en commun le plus proche; il en faut 5,0\u{a0}m ou plus. Arrêt en cause\u{a0}: arrêt au trottoir à 31,9\u{a0}m, à droite.",
+        ),
+        (
+            StopKind::Bulb,
+            "overlap",
+            "The raised element overlaps the boarding area of a transit stop. Stop concerned: curb extension at 22.0 m, right.",
+            "L’élément surélevé chevauche l’aire d’embarquement d’un arrêt de transport en commun. Arrêt en cause\u{a0}: avancée de trottoir à 22,0\u{a0}m, à droite.",
+        ),
+        (
+            StopKind::Bulb,
+            "near",
+            "The raised element is 4.9 m from the nearest transit stop; 5.0 m or more is needed. Stop concerned: curb extension at 31.9 m, right.",
+            "L’élément surélevé est à 4,9\u{a0}m de l’arrêt de transport en commun le plus proche; il en faut 5,0\u{a0}m ou plus. Arrêt en cause\u{a0}: avancée de trottoir à 31,9\u{a0}m, à droite.",
+        ),
+        (
+            StopKind::Island,
+            "overlap",
+            "The raised element overlaps the boarding area of a transit stop. Stop concerned: boarding island at 22.0 m, right.",
+            "L’élément surélevé chevauche l’aire d’embarquement d’un arrêt de transport en commun. Arrêt en cause\u{a0}: îlot d’embarquement à 22,0\u{a0}m, à droite.",
+        ),
+        (
+            StopKind::Island,
+            "near",
+            "The raised element is 4.9 m from the nearest transit stop; 5.0 m or more is needed. Stop concerned: boarding island at 31.9 m, right.",
+            "L’élément surélevé est à 4,9\u{a0}m de l’arrêt de transport en commun le plus proche; il en faut 5,0\u{a0}m ou plus. Arrêt en cause\u{a0}: îlot d’embarquement à 31,9\u{a0}m, à droite.",
+        ),
+    ];
 }
