@@ -35,6 +35,7 @@ ui-theme-dark = Dark
 ui-language = Language
 ui-how = How this works
 ui-print = Print this sheet
+ui-report = Download report (PDF)
 ui-help = Help
 ui-share = Share
 ui-keyboard = Keyboard
