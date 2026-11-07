@@ -515,7 +515,7 @@ impl Editor {
     }
 
     /// Whether the city has told either end how far its junction reaches, so that the stops are judged against it.
-    fn stops_see_a_junction(&self) -> bool {
+    pub(super) fn stops_see_a_junction(&self) -> bool {
         self.ends.iter().any(|e| e.reach_mm > 0)
     }
 

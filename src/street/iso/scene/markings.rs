@@ -4,6 +4,7 @@ use crate::shared::diagram::{Layer, LayerKind, Pt, Shape};
 use crate::shared::iso::paint::{Paint, class, quads};
 use crate::street::model::SegView;
 
+use crate::street::iso::calming::outside;
 use crate::street::iso::markings::{Mark, markings as inferred};
 use crate::street::iso::paint::symbol_fits;
 use crate::street::iso::projection::{ARROW_AT_MM, Projection, STRETCH_MM};
@@ -38,7 +39,14 @@ fn symbol(p: &Projection, segs: &[SegView], mark: &Mark, draw: Option<&Draw>) ->
 /// The lines and symbols of the street, drawn flat on the ground over the reach of `p`. A line is the shared paint
 /// quads of the path `[(x, 0), (x, STRETCH_MM)]` (across, along) cut to the reach, following the transition (`draw`)
 /// where it moves an edge; a symbol is its polygons laid on its lane at `ARROW_AT_MM` from the reach's near end.
+#[cfg(test)]
 pub(in crate::street::iso) fn markings(p: &Projection, segs: &[SegView], draw: Option<&Draw>) -> Layer {
+    markings_cut(p, segs, draw, &[])
+}
+
+/// `markings` with the stretches `cuts` (along the street) left unpainted: where a raised table stands, the lines stop
+/// at the ramp feet and no symbol lies on it.
+pub(in crate::street::iso) fn markings_cut(p: &Projection, segs: &[SegView], draw: Option<&Draw>, cuts: &[(f64, f64)]) -> Layer {
     let m = inferred(segs);
     let mut shapes = Vec::new();
     for line in &m.lines {
@@ -48,15 +56,21 @@ pub(in crate::street::iso) fn markings(p: &Projection, segs: &[SegView], draw: O
             if hi.min(p.reach.far) - lo.max(p.reach.near) < 1e-9 {
                 continue;
             }
-            let corners = quad.iter().map(|&(across, along)| {
-                let along = along.clamp(p.reach.near, p.reach.far);
-                let moved = draw.map_or(0.0, |d| d.line_at(line.x_mm, p.reach, along) - x);
-                (across + moved, 0.0, along)
-            });
-            shapes.push(polygon(class(paint), corners));
+            for (from, to) in outside((lo.max(p.reach.near), hi.min(p.reach.far)), cuts) {
+                let corners = quad.iter().map(|&(across, along)| {
+                    let along = along.clamp(from, to);
+                    let moved = draw.map_or(0.0, |d| d.line_at(line.x_mm, p.reach, along) - x);
+                    (across + moved, 0.0, along)
+                });
+                shapes.push(polygon(class(paint), corners));
+            }
         }
     }
-    shapes.extend(m.marks.iter().filter_map(|mark| symbol(p, segs, mark, draw)));
+    // A symbol lies at `ARROW_AT_MM`: none where a table stands there.
+    let at = p.reach.near + ARROW_AT_MM;
+    if !cuts.iter().any(|&(a, b)| a <= at && at <= b) {
+        shapes.extend(m.marks.iter().filter_map(|mark| symbol(p, segs, mark, draw)));
+    }
     Layer { kind: LayerKind::Markings, shapes }
 }
 

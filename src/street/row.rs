@@ -93,3 +93,18 @@ pub fn strip_id<R: Row>(side: Side) -> String {
 pub fn cell_id<R: Row>(side: Side, index: usize) -> String {
     format!("{}-{}-{index}", R::ID, side_slug(side))
 }
+
+/// The raised elements' row: one strip for the whole street (an element spans the roadway, so it has no side), so its
+/// ids carry no side and it is not a `Row` of the per-side strips; it shares their cells (`StripCell`), `drag_span`
+/// and the ids' shape.
+pub struct CalmingRow;
+
+impl CalmingRow {
+    /// The id of the strip, a listbox.
+    pub const STRIP_ID: &'static str = "calming-strip";
+
+    /// The id of cell `index`.
+    pub fn cell_id(index: usize) -> String {
+        format!("calming-{index}")
+    }
+}

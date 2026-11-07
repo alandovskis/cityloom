@@ -168,8 +168,20 @@ mod tests {
         let s = &v.segments[i];
         let (x0, h) = (s.x_mm as f64, drawn_mm(height_mm("sidewalk")));
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach { near: 20_000.0, far: 40_000.0 });
-        let out =
-            layer_markup(&crate::street::iso::scene::raised(&p, &v.segments, &crate::street::iso::testing::en(), &[(h, i, None)], &[], &[], false, None), &p);
+        let out = layer_markup(
+            &crate::street::iso::scene::raised(
+                &p,
+                &v.segments,
+                &crate::street::iso::testing::en(),
+                &[(h, i, None)],
+                &[],
+                &[],
+                false,
+                None,
+                &crate::street::iso::calming::Laid::default(),
+            ),
+            &p,
+        );
         let cut = r(p.at(x0, 0.0, 20_000.0).1);
         let ys: Vec<f64> = xs_ys(&out).into_iter().map(|(_, y)| y).collect();
         let front =

@@ -20,7 +20,8 @@ use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
 use crate::street::impact::{self, Cause, Impact, Input};
 use crate::street::model::{
-    CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View, ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Template, TemplateView,
+    TreeSize, Use, View, ZoneRefusal,
 };
 use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
@@ -54,6 +55,10 @@ pub struct StreetVm {
     /// The kind picked for the free stretch (side, start) chosen on a stops row; another stretch starts from the kind
     /// that fits there.
     stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
+    /// The kind the raised element about to be added starts as.
+    calming_pick: ArcRwSignal<CalmingKind>,
+    /// Whether the drag under way is a drag of a raised element (any gesture is under way, but only this one moves it).
+    calming_drag: Cell<bool>,
     /// The shelter ticked for the chosen free stretch, which the stop added there starts with.
     stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
     /// The name typed for the chosen free stretch, which the stop added there starts with.
@@ -133,6 +138,8 @@ impl StreetVm {
                 areas,
                 merge: ArcRwSignal::new(None),
                 stop_pick: ArcRwSignal::new(None),
+                calming_pick: ArcRwSignal::new(CalmingKind::Table),
+                calming_drag: Cell::new(false),
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
                 impact: ArcRwSignal::new(None),
@@ -620,6 +627,188 @@ impl StreetVm {
 
     pub fn end_curb_drag(&self, keep: bool) {
         self.end_cell_drag(keep);
+    }
+
+    // ---- raised tables and crossings ----
+
+    /// The chosen cell of the raised elements' strip: the element in it (an index into the street's list), if any, and
+    /// where it starts.
+    fn calming_chosen(&self) -> Option<(Option<usize>, i32)> {
+        let v = self.view_now();
+        let c = v.calming_strip.cells.get(v.calming_strip.selected?)?;
+        Some((c.element, c.from_mm))
+    }
+
+    fn say_calming_refusal(&self, refusal: CalmingRefusal) {
+        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &refusal.said()));
+    }
+
+    /// An edit of the raised elements the person made: announced like any edit; a refusal is said in words and
+    /// changes nothing.
+    fn calming_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), CalmingRefusal>) -> bool {
+        let before = self.before();
+        match self.core.edit(f) {
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.say_edit(&before);
+                true
+            }
+            Err(refusal) => {
+                self.say_calming_refusal(refusal);
+                false
+            }
+        }
+    }
+
+    /// Runs `f` on the chosen element; says so when a free stretch, or nothing, is chosen.
+    fn on_chosen_calming(&self, f: impl FnOnce(&mut Editor, usize, i32) -> Result<(), CalmingRefusal>) -> bool {
+        match self.calming_chosen() {
+            Some((Some(i), from)) => self.calming_edit(|e| f(e, i, from)),
+            _ => {
+                self.say_now_key("calming-choose-element");
+                false
+            }
+        }
+    }
+
+    /// Chooses cell `cell` of the strip, announcing it. A cell that is not there is left alone, and so is the choice
+    /// while a drag is under way (it moves the chosen element).
+    pub fn select_calming(&self, cell: usize) {
+        if self.core.read(|e| e.dragging()) {
+            return;
+        }
+        let v = self.view_now();
+        let Some(c) = v.calming_strip.cells.get(cell) else { return };
+        let at = c.from_mm;
+        self.edit(|e| e.select_calming_at(at));
+        self.ports.announcer.say(&text::calming_text(&v.calming_strip, cell, &self.i18n, self.units_now()));
+    }
+
+    /// The cell `delta` places along from the chosen one (the first, or the last going back, when none is).
+    pub fn select_calming_relative(&self, delta: i32) {
+        let v = self.view_now();
+        let strip = &v.calming_strip;
+        let target = match strip.selected {
+            Some(n) => n as i64 + i64::from(delta),
+            None if delta < 0 => strip.cells.len() as i64 - 1,
+            None => 0,
+        };
+        if let Ok(cell) = usize::try_from(target) {
+            self.select_calming(cell);
+        }
+    }
+
+    /// The first cell, or the last (Home and End).
+    pub fn select_calming_edge(&self, last: bool) {
+        let n = self.view_now().calming_strip.cells.len();
+        if n > 0 {
+            self.select_calming(if last { n - 1 } else { 0 });
+        }
+    }
+
+    /// The kind the tools show: the chosen element's, else the one picked for a new element. Watched.
+    pub fn calming_kind_shown(&self) -> CalmingKind {
+        let v = self.view();
+        v.calming_strip.selected.and_then(|n| v.calming_strip.cells.get(n)).and_then(|c| c.kind).unwrap_or_else(|| self.calming_pick.get())
+    }
+
+    /// The person picks `kind`: it changes the chosen element, or is kept for the next one added.
+    pub fn pick_calming_kind(&self, kind: CalmingKind) {
+        match self.calming_chosen() {
+            Some((Some(_), _)) => {
+                self.set_calming_kind(kind);
+            }
+            _ => self.calming_pick.set(kind),
+        }
+    }
+
+    /// Adds an element of `kind` and `length_mm` at the start of the chosen free stretch. False, with the reason
+    /// said, when no free stretch is chosen or it was refused.
+    pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
+        match self.calming_chosen() {
+            Some((None, from_mm)) => self.calming_edit(|e| e.add_calming(kind, from_mm, length_mm).map(|_| ())),
+            _ => {
+                self.say_now_key("calming-choose-gap");
+                false
+            }
+        }
+    }
+
+    pub fn set_calming_kind(&self, kind: CalmingKind) -> bool {
+        self.on_chosen_calming(|e, i, _| e.set_calming_kind(i, kind))
+    }
+
+    pub fn set_calming_length(&self, length_mm: i32) -> bool {
+        self.on_chosen_calming(|e, i, _| e.set_calming_length(i, length_mm))
+    }
+
+    pub fn remove_calming(&self) -> bool {
+        self.on_chosen_calming(|e, i, _| e.remove_calming(i))
+    }
+
+    /// Moves the chosen element to start at `from_mm`. A command is not a drag: refused while one is under way.
+    pub fn move_calming(&self, from_mm: i32) -> bool {
+        if self.core.read(|e| e.dragging()) {
+            self.say_calming_refusal(CalmingRefusal::Dragging);
+            return false;
+        }
+        self.on_chosen_calming(|e, i, _| e.move_calming(i, from_mm))
+    }
+
+    /// Moves the chosen element along the street by `delta_mm`.
+    pub fn nudge_calming(&self, delta_mm: i32) -> bool {
+        if self.core.read(|e| e.dragging()) {
+            self.say_calming_refusal(CalmingRefusal::Dragging);
+            return false;
+        }
+        self.on_chosen_calming(|e, i, from| e.move_calming(i, from + delta_mm))
+    }
+
+    /// Starts a drag of the chosen element. False, with the reason said, while another drag (of a boundary, a use, a
+    /// stop or an element) is under way or when no element is chosen: then nothing is dragged and `end_calming_drag`
+    /// has nothing to end.
+    pub fn begin_calming_drag(&self) -> bool {
+        if !matches!(self.calming_chosen(), Some((Some(_), _))) {
+            self.say_now_key("calming-choose-element");
+            return false;
+        }
+        if self.core.read(|e| e.dragging()) {
+            self.say_calming_refusal(CalmingRefusal::Dragging);
+            return false;
+        }
+        self.edit(|e| e.begin_gesture());
+        self.calming_drag.set(true);
+        true
+    }
+
+    /// Whether a drag of an element is under way: the flag, and a gesture still open (an undo or a reload ends one
+    /// without telling us).
+    fn calming_dragging(&self) -> bool {
+        if self.calming_drag.get() && !self.core.read(|e| e.dragging()) {
+            self.calming_drag.set(false);
+        }
+        self.calming_drag.get()
+    }
+
+    /// One step of a drag of the chosen element: shown, not announced. Nothing unless a drag of an element is under way.
+    pub fn drag_calming_to(&self, from_mm: i32) {
+        if !self.calming_dragging() {
+            return;
+        }
+        if let Some((Some(i), _)) = self.calming_chosen() {
+            self.quiet(|e| e.move_calming(i, from_mm).is_ok());
+        }
+    }
+
+    /// The end of a drag of an element: kept as one edit, and announced, when `keep`. Nothing unless one is under way.
+    pub fn end_calming_drag(&self, keep: bool) {
+        if !self.calming_dragging() {
+            return;
+        }
+        self.calming_drag.set(false);
+        self.end_gesture(keep);
     }
 
     // ---- transit stops ----
@@ -2872,6 +3061,210 @@ mod stop_tests {
             elsewhere.said.take(),
             ["The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here."]
         );
+    }
+}
+
+#[cfg(test)]
+mod calming_tests {
+    use super::*;
+    use crate::shared::catalogue::Side;
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::{Street, ZoneEnd, ZoneFrame};
+
+    const LENGTH: i32 = 60_000;
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+    }
+
+    fn rig_in(locale: Locale) -> Rig {
+        let street = Street::sample(0, Side::Right);
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::First }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(locale), editor, None), said }
+    }
+
+    fn rig() -> Rig {
+        rig_in(Locale::En)
+    }
+
+    fn cells(r: &Rig) -> Vec<(Option<usize>, i32, i32)> {
+        r.vm.view_now().calming_strip.cells.iter().map(|c| (c.element, c.from_mm, c.to_mm)).collect()
+    }
+
+    /// A 7 m table at the start of the street, chosen.
+    fn with_table() -> Rig {
+        let r = rig();
+        r.vm.select_calming(0);
+        assert!(r.vm.add_calming(CalmingKind::Table, 7_000));
+        r.said.take();
+        r
+    }
+
+    #[test]
+    fn a_street_with_a_length_has_one_free_stretch_and_a_street_with_none_has_no_strip() {
+        assert_eq!(cells(&rig()), [(None, 0, LENGTH)]);
+        let street = Street::sample(0, Side::Right);
+        let (ports, _, _, _) = test_ports_with_time();
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
+        assert!(vm.view_now().calming_strip.cells.is_empty());
+    }
+
+    #[test]
+    fn choosing_a_cell_says_what_it_is_and_add_needs_a_free_stretch() {
+        let r = rig();
+        assert!(!r.vm.add_calming(CalmingKind::Table, 7_000), "nothing is chosen");
+        assert_eq!(r.said.take(), ["Choose a free stretch of the street first."]);
+        r.vm.select_calming(0);
+        assert_eq!(r.said.take(), ["Free, 0.0 m to 60.0 m, 60.0 m long, 1 of 1"]);
+        assert!(r.vm.add_calming(CalmingKind::Crossing, 6_000));
+        let v = r.vm.view_now();
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-calming-add");
+        assert_eq!(v.calming_strip.selected, Some(0), "the new element is the chosen cell");
+        assert_eq!(r.said.take().len(), 1, "one announcement for the edit");
+        r.vm.select_calming(0);
+        assert!(!r.vm.add_calming(CalmingKind::Table, 7_000), "an element is chosen, not a free stretch");
+        assert_eq!(r.said.take().last().unwrap(), "Choose a free stretch of the street first.");
+        r.vm.select_calming(9);
+        assert!(r.said.take().is_empty(), "a cell that is not there is left alone");
+    }
+
+    #[test]
+    fn relative_and_edge_selection_walk_the_cells() {
+        let r = with_table();
+        r.vm.select_calming_relative(1);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1));
+        r.vm.select_calming_relative(1);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1), "no wrap");
+        r.vm.select_calming_edge(false);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(0));
+        r.vm.select_calming_edge(true);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1));
+    }
+
+    #[test]
+    fn kind_length_and_remove_change_the_chosen_element_and_say_so() {
+        let r = with_table();
+        assert!(r.vm.set_calming_kind(CalmingKind::Crossing));
+        assert_eq!(r.vm.view_now().revisions.last().unwrap().label.key, "rev-calming-kind");
+        assert!(r.vm.set_calming_length(8_000));
+        assert_eq!(cells(&r)[0], (Some(0), 0, 8_000));
+        assert!(!r.vm.set_calming_length(5_000), "too short");
+        assert_eq!(r.said.take().last().unwrap(), "A raised table must be at least 6.0 m long.");
+        assert!(r.vm.remove_calming());
+        assert_eq!(cells(&r), [(None, 0, LENGTH)]);
+        assert!(!r.vm.remove_calming(), "a free stretch is chosen now");
+        assert_eq!(r.said.take().last().unwrap(), "Choose a raised table or crossing first.");
+    }
+
+    #[test]
+    fn the_kind_picked_on_a_free_stretch_is_kept_and_on_an_element_it_changes_it() {
+        let r = rig();
+        r.vm.select_calming(0);
+        assert_eq!(r.vm.calming_kind_shown(), CalmingKind::Table);
+        r.vm.pick_calming_kind(CalmingKind::Crossing);
+        assert_eq!(r.vm.calming_kind_shown(), CalmingKind::Crossing);
+        assert!(r.vm.add_calming(r.vm.calming_kind_shown(), 7_000));
+        assert_eq!(r.vm.view_now().calming_strip.cells[0].kind, Some(CalmingKind::Crossing));
+        r.vm.pick_calming_kind(CalmingKind::Table);
+        assert_eq!(r.vm.view_now().calming_strip.cells[0].kind, Some(CalmingKind::Table), "the chosen element changed");
+    }
+
+    #[test]
+    fn every_refusal_is_said_in_its_words() {
+        let r = with_table();
+        r.vm.select_calming(1);
+        assert!(!r.vm.add_calming(CalmingKind::Table, 70_000));
+        assert_eq!(r.said.take().last().unwrap(), "That would run past an end of the street.");
+        r.vm.select_calming(0);
+        assert!(!r.vm.nudge_calming(-1_000));
+        assert_eq!(r.said.take().last().unwrap(), "That would run past an end of the street.");
+        assert!(r.vm.nudge_calming(1_000));
+        assert_eq!(cells(&r)[1], (Some(0), 1_000, 8_000));
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1), "the moved element stays chosen");
+    }
+
+    #[test]
+    fn a_drag_is_one_undoable_step_quiet_while_it_goes_and_escape_cancels() {
+        let r = with_table();
+        assert!(r.vm.begin_calming_drag());
+        r.vm.drag_calming_to(10_000);
+        r.vm.drag_calming_to(12_300);
+        assert!(r.said.take().is_empty(), "quiet while it goes");
+        assert_eq!(cells(&r)[1], (Some(0), 12_300, 19_300));
+        assert_eq!(r.vm.view_now().revisions.len(), 1, "only the add so far");
+        r.vm.end_calming_drag(true);
+        assert_eq!(r.vm.view_now().revisions.len(), 2, "one edit for the whole drag");
+        assert_eq!(r.said.take().len(), 1);
+        assert!(r.vm.undo());
+        assert_eq!(cells(&r)[0], (Some(0), 0, 7_000));
+        assert!(r.vm.redo());
+        // cancelled: back as it was
+        assert!(r.vm.begin_calming_drag());
+        r.vm.drag_calming_to(30_000);
+        r.vm.end_calming_drag(false);
+        assert_eq!(cells(&r)[1], (Some(0), 12_300, 19_300));
+        assert_eq!(r.vm.view_now().revisions.len(), 2);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1), "still chosen");
+    }
+
+    #[test]
+    fn a_drag_step_or_an_end_without_a_calming_drag_does_nothing() {
+        let r = with_table();
+        // another kind of gesture under way: the element is not moved by a calming step
+        r.vm.edit(|e| e.begin_gesture());
+        r.vm.drag_calming_to(20_000);
+        assert_eq!(cells(&r)[0], (Some(0), 0, 7_000));
+        r.vm.end_calming_drag(true);
+        assert!(r.vm.core.read(|e| e.dragging()), "the other drag is not ended by ours");
+        r.vm.end_gesture(false);
+        // no drag at all
+        r.vm.drag_calming_to(20_000);
+        assert_eq!(cells(&r)[0], (Some(0), 0, 7_000));
+        assert_eq!(r.vm.view_now().revisions.len(), 1);
+    }
+
+    #[test]
+    fn drags_of_the_zones_the_curbside_the_stops_and_the_elements_refuse_each_other() {
+        let r = with_table();
+        // an element drag refuses the others
+        assert!(r.vm.begin_calming_drag());
+        assert!(!r.vm.begin_boundary_drag());
+        assert!(!r.vm.begin_curb_drag());
+        assert!(!r.vm.begin_stop_drag());
+        assert!(!r.vm.begin_calming_drag(), "and itself");
+        assert_eq!(r.said.take().last().unwrap(), "Finish the drag before changing the raised tables.");
+        // commands refuse, choosing is ignored
+        assert!(!r.vm.nudge_calming(1_000));
+        assert!(!r.vm.move_calming(10_000));
+        assert!(!r.vm.remove_calming());
+        r.vm.select_calming_edge(true);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(0), "the choice stays on the element being dragged");
+        r.vm.end_calming_drag(false);
+        // the others' drags refuse an element drag
+        assert!(r.vm.begin_boundary_drag());
+        assert!(!r.vm.begin_calming_drag());
+        r.vm.end_boundary_drag(false);
+        r.vm.select_curb(Side::Right, 0);
+        assert!(r.vm.add_curb(crate::street::model::Use::Parking, 6_000));
+        assert!(r.vm.begin_curb_drag());
+        r.vm.select_calming(0);
+        assert!(!r.vm.begin_calming_drag());
+        r.vm.end_curb_drag(false);
+        assert!(r.vm.begin_calming_drag(), "free again");
+        r.vm.end_calming_drag(false);
+    }
+
+    #[test]
+    fn the_words_follow_the_language() {
+        let r = rig_in(Locale::FrCa);
+        r.vm.select_calming(0);
+        let said = r.said.take().join(" ").replace(['\u{a0}', '\u{202f}'], " ");
+        assert!(said.starts_with("Libre, de 0,0 m à 60,0 m, 60,0 m de long, 1 sur 1"), "{said}");
+        assert!(!r.vm.remove_calming());
+        assert_eq!(r.said.take().last().unwrap(), "Choisissez d’abord un plateau ou un passage surélevé.");
     }
 }
 

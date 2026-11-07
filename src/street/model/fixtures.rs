@@ -121,6 +121,7 @@ impl Editor {
             gesture: None,
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
+            calming_choice: Choice::default(),
             green_choice: super::green::GreenChoice::default(),
             pending_label: None,
         };
@@ -155,6 +156,7 @@ impl Editor {
                 speed: Speed::Undecided,
                 curb: Vec::new(),
                 stops: Vec::new(),
+                calming: Vec::new(),
                 green: Vec::new(),
             },
             class: s.class,
@@ -162,6 +164,7 @@ impl Editor {
             row_mm: s.row_mm,
             curb_move: None,
             stop_move: None,
+            calming_move: None,
             green_move: None,
         }];
         self.cursor = 0;

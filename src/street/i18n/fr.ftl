@@ -361,6 +361,10 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-calming = { $count ->
+        [one] Un plateau surélevé est montré.
+       *[other] { $count } plateaux surélevés sont montrés.
+    }
 svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
@@ -570,6 +574,24 @@ st-green-add = Ajouter
 st-green-change = Modifier
 st-green-remove = Retirer
 
+# Noms et refus d’un plateau surélevé ou d’un passage surélevé (src/street/model/calming.rs).
+calming-kind-table = Plateau surélevé
+calming-kind-crossing = Passage piéton surélevé
+calming-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de plateaux surélevés.
+calming-refused-elsewhere = Les plateaux surélevés de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+calming-refused-dragging = Terminez le glissement avant de modifier les plateaux surélevés.
+calming-refused-outside = Cela dépasserait une extrémité de la rue.
+calming-refused-overlap = Cela chevaucherait un autre plateau surélevé.
+calming-refused-too-short = Un plateau surélevé doit mesurer au moins { $min }.
+calming-refused-freeway = On ne peut pas placer de plateau surélevé sur une autoroute.
+calming-refused-no-roadway = Cette rue n’a pas de chaussée à surélever.
+calming-refused-time-windows = On ne peut pas placer de plateau surélevé là où la chaussée change selon l’heure de la journée.
+rev-calming-add = Ajout : { $kind } à { $at }
+rev-calming-kind = Élément surélevé à { $at } changé en { $kind }
+rev-calming-resize = Longueur modifiée à { $at } : { $kind }
+rev-calming-move = Déplacement : { $kind } à { $at }
+rev-calming-remove = Retrait : { $kind } à { $at }
+
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification
 st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
@@ -615,3 +637,40 @@ transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les é
 template-refused-freeway = Le modèle « { $name } » ne peut pas s’appliquer à une autoroute.
 template-refused-narrow = Le modèle « { $name } » demande une rue d’au moins { $min } de largeur. Cette rue mesure { $row } de largeur.
 template-refused-wide = Le modèle « { $name } » ne peut pas servir une rue de plus de { $max } de largeur. Cette rue mesure { $row } de largeur.
+
+# Les vérifications des éléments surélevés (src/street/model/calming.rs).
+calming-instance = { $kind } à { $at }
+calming-instance-zone = { $kind } à { $at }, dans { $zone }
+check-calming-in = { $check } : { $instance }
+check-label-calming-length = Éléments surélevés assez longs, sur une chaussée
+check-detail-calming-length = Un élément surélevé de { $length } est trop court : avec des rampes de { $ramp }, il en faut { $min } ou plus.
+check-detail-calming-roadway = Il n’y a pas de chaussée à surélever ici.
+check-detail-calming-length-ok = Chaque élément surélevé est assez long et repose sur une chaussée.
+check-label-calming-speed = Limite de vitesse adaptée aux éléments surélevés
+check-detail-calming-speed = La limite de { $kmh }{" "}km/h dépasse les { $max }{" "}km/h prévus pour un élément surélevé.
+check-detail-calming-speed-ok = La limite de { $kmh }{" "}km/h convient aux éléments surélevés.
+check-detail-calming-speed-unknown = Aucune limite de vitesse n’est indiquée : on ne peut pas la juger par rapport aux { $max }{" "}km/h prévus pour un élément surélevé.
+check-label-calming-stop = Éléments surélevés dégagés des arrêts de transport en commun
+check-detail-calming-stop-overlap = L’élément surélevé chevauche l’aire d’embarquement d’un arrêt de transport en commun. Arrêt en cause : { $stop }.
+check-detail-calming-stop-near = L’élément surélevé est à { $gap } de l’arrêt de transport en commun le plus proche; il en faut { $need } ou plus. Arrêt en cause : { $stop }.
+check-detail-calming-stop-ok = Chaque élément surélevé est dégagé des arrêts de transport en commun.
+check-label-calming-junction = Éléments surélevés dégagés de l’intersection
+check-detail-calming-junction-crossing = L’élément surélevé se trouverait à { $gap } du passage pour piétons; il en faut { $need } ou plus.
+check-detail-calming-junction-mouth = L’élément surélevé se trouverait à { $gap } du début de l’intersection; il en faut { $need } ou plus.
+check-detail-calming-junction-inside = L’élément surélevé empiète sur l’intersection.
+check-detail-calming-junction-ok = Chaque élément surélevé est dégagé de l’intersection.
+
+# La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
+calming-gap = Libre
+calming-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+calming-cell-failing = Ne passe pas une vérification. Voir les vérifications.
+calming-choose-gap = Choisissez d’abord un tronçon libre de la rue.
+calming-choose-element = Choisissez d’abord un plateau ou un passage surélevé.
+st-calming-heading = Plateaux et passages surélevés le long de la rue
+st-calming-caption = Plateaux et passages surélevés
+st-calming-strip-label = Plateaux et passages surélevés le long de la rue
+st-calming-tools = Commandes des éléments surélevés
+st-calming-kind = Type
+st-calming-length = Longueur ({ $unit })
+st-calming-add = Ajouter un élément surélevé
+st-calming-remove = Retirer un élément surélevé

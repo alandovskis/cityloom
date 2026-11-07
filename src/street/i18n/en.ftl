@@ -361,6 +361,10 @@ svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
     }
+svg-iso-calming = { $count ->
+        [one] One raised table is shown.
+       *[other] { $count } raised tables are shown.
+    }
 svg-iso-green = Trees and plantings shown: { $count }.
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
@@ -570,6 +574,24 @@ st-green-add = Add
 st-green-change = Change
 st-green-remove = Remove
 
+# A raised table or crossing's names and refusals (src/street/model/calming.rs).
+calming-kind-table = Raised table
+calming-kind-crossing = Raised crossing
+calming-refused-no-anchor = Both ends of this street are cut by the edge of the map, so raised tables cannot be placed along it.
+calming-refused-elsewhere = The raised tables of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+calming-refused-dragging = Finish the drag before changing the raised tables.
+calming-refused-outside = That would run past an end of the street.
+calming-refused-overlap = That would overlap another raised table.
+calming-refused-too-short = A raised table must be at least { $min } long.
+calming-refused-freeway = A raised table cannot be placed on a freeway.
+calming-refused-no-roadway = This street has no roadway to raise.
+calming-refused-time-windows = A raised table cannot be placed where the roadway changes with the time of day.
+rev-calming-add = Add a { $kind } at { $at }
+rev-calming-kind = Change the raised element at { $at } to a { $kind }
+rev-calming-resize = Resize the { $kind } at { $at }
+rev-calming-move = Move the { $kind } to { $at }
+rev-calming-remove = Remove the { $kind } at { $at }
+
 # What the last change did to the street (src/street/impact.rs and the Impact tab's card).
 st-impact-heading = Last change
 st-impact-empty = No change yet. Edit the street to see what it did to the space and the checks.
@@ -615,3 +637,40 @@ transform-templates-hint = Lay the street out as one of these templates. It repl
 template-refused-freeway = { $name } cannot be applied to a freeway.
 template-refused-narrow = { $name } needs a street at least { $min } wide. This street is { $row } wide.
 template-refused-wide = { $name } cannot use a street wider than { $max }. This street is { $row } wide.
+
+# The design checks of the raised elements (src/street/model/calming.rs).
+calming-instance = { $kind } at { $at }
+calming-instance-zone = { $kind } at { $at }, in { $zone }
+check-calming-in = { $check }: { $instance }
+check-label-calming-length = Raised elements long enough, on a roadway
+check-detail-calming-length = A raised element of { $length } is too short: with ramps of { $ramp } it needs { $min } or more.
+check-detail-calming-roadway = There is no roadway to raise here.
+check-detail-calming-length-ok = Every raised element is long enough and stands on a roadway.
+check-label-calming-speed = Speed limit suits raised elements
+check-detail-calming-speed = The speed limit of { $kmh } km/h is above the { $max } km/h a raised element is meant for.
+check-detail-calming-speed-ok = The speed limit of { $kmh } km/h suits raised elements.
+check-detail-calming-speed-unknown = No speed limit is set, so it cannot be judged against the { $max } km/h a raised element is meant for.
+check-label-calming-stop = Raised elements clear of transit stops
+check-detail-calming-stop-overlap = The raised element overlaps the boarding area of a transit stop. Stop concerned: { $stop }.
+check-detail-calming-stop-near = The raised element is { $gap } from the nearest transit stop; { $need } or more is needed. Stop concerned: { $stop }.
+check-detail-calming-stop-ok = Every raised element stands clear of the transit stops.
+check-label-calming-junction = Raised elements clear of the junction
+check-detail-calming-junction-crossing = The raised element would stand { $gap } from the pedestrian crossing; { $need } or more is needed.
+check-detail-calming-junction-mouth = The raised element would stand { $gap } from where the junction begins; { $need } or more is needed.
+check-detail-calming-junction-inside = The raised element reaches into the junction.
+check-detail-calming-junction-ok = Every raised element stands clear of the junction.
+
+# The raised elements' strip, tools and the words said on choosing one (src/street/calming_strip.rs, calming_tools.rs).
+calming-gap = Free
+calming-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+calming-cell-failing = Fails a check. See the checks.
+calming-choose-gap = Choose a free stretch of the street first.
+calming-choose-element = Choose a raised table or crossing first.
+st-calming-heading = Raised tables and crossings along the street
+st-calming-caption = Raised tables and crossings
+st-calming-strip-label = Raised tables and crossings along the street
+st-calming-tools = Raised table commands
+st-calming-kind = Kind
+st-calming-length = Length ({ $unit })
+st-calming-add = Add raised element
+st-calming-remove = Remove raised element

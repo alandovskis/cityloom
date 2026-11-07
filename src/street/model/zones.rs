@@ -103,7 +103,7 @@ impl Street {
             &mut self.zones,
             &mut self.from_end,
             &mut self.length_mm,
-            !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty(),
+            !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty(),
         );
     }
 
@@ -129,6 +129,7 @@ impl Street {
         s.zones = Vec::new();
         s.curb = Vec::new();
         s.stops = Vec::new();
+        s.calming = Vec::new();
         s.green = Vec::new();
         s.from_end = ZoneEnd::First;
         s.length_mm = None;
@@ -152,7 +153,7 @@ impl Street {
             own.reverse();
         }
         self.flip_zone_lanes();
-        if !self.zones.is_empty() || !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() {
+        if !self.zones.is_empty() || !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty() {
             self.from_end = self.from_end.other();
         }
     }

@@ -17,10 +17,12 @@
 use crate::shared::diagram::render::render;
 use crate::shared::diagram::{Diagram, Layer, LayerKind, Pt, Section, Shape};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
 use crate::street::model::{SegView, ShownGreen, ShownInstance, ShownStop, View};
 
+mod calming;
 mod curbside;
 mod green;
 mod joints;
@@ -97,12 +99,14 @@ fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&s
     let patches = green::patches(segs, shown_green);
     let laid = curbside::overs(segs, uses, stops);
     let lifted = curbside::lifted(&laid);
+    // Raised tables lie on the selected zone's run only, over its flat roadway pieces.
+    let tables = if run.across { calming::Laid::default() } else { calming::Laid::of(&v.calming_shown, &flat) };
     Section {
         class: class.map(str::to_string),
         layers: vec![
             scene::surface(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), &laid),
-            scene::markings(&p, segs, run.taper.as_ref()),
-            scene::raised(&p, segs, i18n, &standing, &lifted, &patches, run.across, run.taper.as_ref()),
+            scene::markings_cut(&p, segs, run.taper.as_ref(), &tables.cuts()),
+            scene::raised(&p, segs, i18n, &standing, &lifted, &patches, run.across, run.taper.as_ref(), &tables),
             scene::objects(&p, segs, uses, stops, shown_green),
             scene::signs(v, segs, &p, i18n, run.across),
         ],
@@ -156,8 +160,10 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
     // The press targets are the selected run's pieces, over everything.
     let hits = scene::hits(&p.over(selected), &v.segments, i18n);
     let mut diagram = Diagram { defs: String::new(), ground, sections, outline, hits };
+    // The ramps' shade is in the defs only when a table is drawn, so that every other street is written as before.
+    let ramp = if v.calming_shown.iter().any(|c| c.drawn()) { shade_filters(&[("iso-shade-ramp", "0.85")]) } else { String::new() };
     // The defs carry the pattern of a material only a laid thing is drawn in when the drawing has one.
-    diagram.defs = format!("<defs>{}{}</defs>", shades(), materials(diagram.uses_material("rain_garden")));
+    diagram.defs = format!("<defs>{}{}{}</defs>", shades(), ramp, materials(diagram.uses_material("rain_garden")));
     diagram
 }
 
@@ -176,6 +182,10 @@ pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
     let mut label = iso_label_of(v, i18n, units);
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
+    }
+    let tables = v.calming_shown.iter().filter(|c| c.drawn()).count();
+    if tables > 0 {
+        label = format!("{label} {}", i18n.tr("svg-iso-calming", &Args::new().num("count", tables as i64)));
     }
     if !v.green_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-green", &Args::new().num("count", v.green_shown.len() as i64)));
