@@ -22,6 +22,13 @@ const EDGE_WIDTH: f32 = 1.0;
 const JOINT_WIDTH: f32 = 0.8;
 const PAINT_WIDTH: f32 = 1.5;
 const LINE_WIDTH: f32 = 1.0;
+/// The outline of a solid's faces (`.iso-solid polygon`), of paint (`.iso-paint`), of a junction's flat piece
+/// (`#drawing .iso-flat`), of a sign's panel, and of a stop's pad.
+const SOLID_EDGE_WIDTH: f32 = 0.8;
+const PAINT_EDGE_WIDTH: f32 = 0.5;
+const FLAT_EDGE_WIDTH: f32 = 0.6;
+const SIGN_EDGE_WIDTH: f32 = 1.0;
+const STOP_EDGE_WIDTH: f32 = 1.5;
 /// A word's size where its shape names none (a caption).
 const CAPTION_SIZE: f32 = 12.0;
 
@@ -64,6 +71,14 @@ pub const COLOURS: &[(&str, Css, Rgb)] = &[
     ("iso-paint-white", Css::Editor, Rgb(0xfb, 0xfb, 0xf8)),
     ("iso-paint-yellow", Css::Editor, Rgb(0xe3, 0xa6, 0x00)),
     ("iso-paint-edge", Css::Editor, Rgb(0x10, 0x15, 0x1a)),
+    ("ink", Css::App, Rgb(0x11, 0x18, 0x27)),
+    ("accent", Css::App, Rgb(0x1f, 0x5e, 0xe0)),
+    ("accent-wash", Css::App, Rgb(0xe8, 0xef, 0xfd)),
+    ("k-bench", Css::App, Rgb(0xd8, 0xc8, 0xad)),
+    ("k-busshelter", Css::App, Rgb(0xf6, 0xc9, 0xbf)),
+    ("s-tree", Css::Editor, Rgb(0x6f, 0xb3, 0x5e)),
+    ("iso-sign-panel", Css::Editor, Rgb(0xfb, 0xfb, 0xf8)),
+    ("iso-sign-ink", Css::Editor, Rgb(0x10, 0x15, 0x1a)),
 ];
 
 fn lookup(name: &str) -> Option<Rgb> {
@@ -87,19 +102,34 @@ fn paint_of(class: &str) -> Option<Rgb> {
     has("iso-paint").then(|| colour(if has("yellow") { "iso-paint-yellow" } else { "iso-paint-white" }))
 }
 
-/// The paint of a polygon of this class: its material's colour (the argument, else the class's `mat-*`), else the
-/// paint's, the curb's, the ground's or its kind's (`k-*`), else grey; the faces turned from the eye are darker.
+/// The paint of a polygon of this class (see `style_in`), with no enclosing group.
 pub fn style_of(class: &str, face: Option<Face>, material: Option<&str>) -> Style {
-    let words: Vec<&str> = class.split_whitespace().collect();
+    style_in("", class, face, material)
+}
+
+/// The paint of a polygon of `class` inside groups of classes `context` (nearest first): a solid's faces (`o-front`,
+/// `o-side`, `o-top`) have no colour of their own and take it from their group (`s-crown`, `s-trunk`, `s-shelter`,
+/// `s-post`), as a sign's panel does. The colour is the material's (the argument, else the class's `mat-*`), else
+/// the paint's, a sign's, a solid's, the curb's, the ground's, a stop's or its kind's (`k-*`), else grey; the faces
+/// turned from the eye are darker; the outline is the one the stylesheet gives that class.
+pub fn style_in(context: &str, class: &str, face: Option<Face>, material: Option<&str>) -> Style {
+    let words: Vec<&str> = class.split_whitespace().chain(context.split_whitespace()).collect();
     let has = |w: &str| words.contains(&w);
     let material = material.or_else(|| words.iter().find_map(|w| w.strip_prefix("mat-")));
+    let paint = has("iso-paint") || has("iso-zebra") || has("iso-stopline");
     let base = material
         .and_then(|m| lookup(&format!("mat-{m}")))
-        .or_else(|| paint_of(class))
+        .or_else(|| paint.then(|| colour(if has("yellow") { "iso-paint-yellow" } else { "iso-paint-white" })))
+        .or_else(|| (has("iso-sign-panel") || has("iso-sign-glyph-cut")).then(|| colour("iso-sign-panel")))
+        .or_else(|| has("iso-sign-glyph").then(|| colour("iso-sign-ink")))
+        .or_else(|| has("s-crown").then(|| colour("s-tree")))
+        .or_else(|| has("s-trunk").then(|| colour("k-bench")))
+        .or_else(|| has("s-shelter").then(|| colour("k-busshelter")))
+        .or_else(|| has("s-post").then(|| colour("ink-2")))
         .or_else(|| has("lane-arrow").then(|| colour("iso-paint-white")))
         .or_else(|| has("iso-curb").then(|| colour("iso-curb")))
         .or_else(|| has("iso-ground").then(|| colour("fill")))
-        .or_else(|| has("stop-pad").then(|| colour("mat-concrete")))
+        .or_else(|| (has("stop-pad") || has("stop-dwell")).then(|| colour("accent-wash")))
         .or_else(|| words.iter().find_map(|w| w.strip_prefix("k-").and_then(|k| lookup(&format!("k-{k}")))))
         .unwrap_or(NEUTRAL);
     let fill = match face {
@@ -109,8 +139,21 @@ pub fn style_of(class: &str, face: Option<Face>, material: Option<&str>) -> Styl
         Some(Face::Top) | None => base,
     };
     // Faces of one tint would run together without an outline.
-    let edged = ["iso-top", "iso-side", "iso-front", "iso-ramp", "iso-flat", "iso-curb"].iter().any(|w| has(w));
-    Style { fill, stroke: edged.then(|| (colour("ink-2"), EDGE_WIDTH)) }
+    let edged = ["iso-top", "iso-side", "iso-front", "iso-ramp", "iso-curb"].iter().any(|w| has(w));
+    let stroke = if has("iso-solid") {
+        Some((colour("ink-2"), SOLID_EDGE_WIDTH))
+    } else if has("iso-sign-panel") {
+        Some((colour("iso-sign-ink"), SIGN_EDGE_WIDTH))
+    } else if paint {
+        Some((colour("iso-paint-edge"), PAINT_EDGE_WIDTH))
+    } else if has("stop-pad") || has("stop-dwell") {
+        Some((colour("accent"), STOP_EDGE_WIDTH))
+    } else if has("iso-flat") {
+        Some((colour("ink"), FLAT_EDGE_WIDTH))
+    } else {
+        edged.then(|| (colour("ink-2"), EDGE_WIDTH))
+    };
+    Style { fill, stroke }
 }
 
 struct Walk<'a> {
@@ -118,6 +161,8 @@ struct Walk<'a> {
     scale: f32,
     items: Vec<Item>,
     omitted: usize,
+    /// The classes of the groups the walk is inside, nearest first.
+    context: String,
 }
 
 impl Walk<'_> {
@@ -133,11 +178,11 @@ impl Walk<'_> {
     fn shape(&mut self, s: &Shape) {
         match s {
             Shape::Polygon { pts, class, face, texture } => {
-                let st = style_of(class, *face, texture.as_ref().map(|t| t.material.as_str()));
+                let st = style_in(&self.context, class, *face, texture.as_ref().map(|t| t.material.as_str()));
                 self.items.push(Item::Poly { pts: self.pts(pts), fill: st.fill, stroke: st.stroke });
             }
             Shape::Plane { pts, class, face, .. } => {
-                let st = style_of(class, Some(*face), None);
+                let st = style_in(&self.context, class, Some(*face), None);
                 self.items.push(Item::Poly { pts: self.pts(pts), fill: st.fill, stroke: st.stroke });
             }
             Shape::Polyline { pts, class } => {
@@ -175,10 +220,13 @@ impl Walk<'_> {
                 });
             }
             // `hidden` is aria-hidden (a sign is part of the picture, not of what it says): it is drawn.
-            Shape::Group { shapes, .. } => {
+            Shape::Group { class, shapes, .. } => {
+                let outer = self.context.clone();
+                self.context = format!("{class} {outer}");
                 for s in shapes {
                     self.shape(s);
                 }
+                self.context = outer;
             }
             Shape::Path { .. } | Shape::Elem { .. } => self.omitted += 1,
         }
@@ -201,7 +249,7 @@ pub fn flatten(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figur
     let (w, h) = p.size();
     let (w, h) = (w as f32, h as f32);
     let scale = if w > 0.0 && h > 0.0 { (box_w / w).min(box_h / h) } else { 1.0 };
-    let mut walk = Walk { p, scale, items: Vec::new(), omitted: 0 };
+    let mut walk = Walk { p, scale, items: Vec::new(), omitted: 0, context: String::new() };
     walk.layer(&d.ground);
     for section in &d.sections {
         for l in &section.layers {
@@ -397,6 +445,93 @@ mod tests {
         assert!(matches!(&f.items[..], [Item::Poly { fill, .. }] if hex(*fill) == "#f2a99b"), "{:?}", f.items);
     }
 
+    #[test]
+    fn a_trees_three_faces_take_the_colour_of_s_tree_in_three_shades() {
+        let face = |f: Face| style_in("iso-solid s-crown", "o-top", Some(f), None);
+        let (top, front, side) = (face(Face::Top).fill, face(Face::Front).fill, face(Face::Side).fill);
+        assert_eq!(top, colour("s-tree"));
+        assert_eq!(front, dark(top, 0.9));
+        assert_eq!(side, dark(top, 0.78));
+        assert!(top != front && front != side && top != side);
+        // Through the walker, from the group.
+        let group = |c: &str| Shape::Group {
+            class: c.into(),
+            uid: None,
+            data: None,
+            hidden: false,
+            title: None,
+            shapes: vec![tri("o-front", Some(Face::Front), None)],
+        };
+        let d = diagram(
+            vec![],
+            vec![layer(
+                LayerKind::Objects,
+                vec![group("iso-solid s-crown"), group("iso-solid s-trunk"), group("iso-solid s-shelter"), group("iso-solid s-post")],
+            )],
+        );
+        let fills: Vec<Rgb> = fig(&d).items.iter().map(|i| if let Item::Poly { fill, .. } = i { *fill } else { panic!() }).collect();
+        let want: Vec<Rgb> = ["s-tree", "k-bench", "k-busshelter", "ink-2"].iter().map(|n| dark(colour(n), 0.9)).collect();
+        assert_eq!(fills, want);
+    }
+
+    #[test]
+    fn a_sign_panel_is_the_panel_colour_with_the_ink_edge() {
+        let st = style_in("iso-sign", "iso-sign-panel", None, None);
+        assert_eq!(hex(st.fill), "#fbfbf8");
+        assert_eq!(st.stroke, Some((colour("iso-sign-ink"), 1.0)));
+        assert_eq!(style_of("iso-sign-glyph-cut", None, None).fill, colour("iso-sign-panel"));
+        assert_eq!(style_of("iso-sign-glyph", None, None).fill, colour("iso-sign-ink"));
+    }
+
+    #[test]
+    fn a_polygon_inside_a_solid_has_the_thin_ink_2_edge() {
+        let st = style_in("iso-solid s-crown", "o-top", Some(Face::Top), None);
+        assert_eq!(st.stroke, Some((colour("ink-2"), 0.8)));
+        assert_eq!(style_of("o-top", Some(Face::Top), None).stroke, None);
+    }
+
+    #[test]
+    fn the_junctions_flat_pieces_take_their_kind_and_the_plans_edge() {
+        let st = style_of("iso-flat k-parking", None, None);
+        assert_eq!(hex(st.fill), "#b4bdc7");
+        assert_eq!(st.stroke, Some((colour("ink"), 0.6)));
+        assert_eq!(style_of("iso-flat k-travel mat-asphalt", None, None).fill, colour("mat-asphalt"));
+        for c in ["iso-zebra", "iso-stopline", "iso-paint white"] {
+            let st = style_of(c, None, None);
+            assert_eq!(st.fill, colour("iso-paint-white"), "{c}");
+            assert_eq!(st.stroke, Some((colour("iso-paint-edge"), 0.5)), "{c}");
+        }
+        let pad = style_of("stop-pad stop-bulb", None, None);
+        assert_eq!((pad.fill, pad.stroke), (colour("accent-wash"), Some((colour("accent"), 1.5))));
+    }
+
+    #[test]
+    fn the_classes_left_unstyled_are_listed_and_grey() {
+        // Lines and marks the figure does not paint as polygons (they are paths or lines, or have no fill in the CSS),
+        // so a polygon of one of these classes is deliberately grey.
+        for c in [
+            "mv",
+            "mv bad",
+            "approach-mark",
+            "lane-hit",
+            "iso-hit",
+            "iso-head",
+            "iso-queue",
+            "iso-casing",
+            "iso-taper",
+            "iso-mark",
+            "iso-name",
+            "stop-run",
+            "stop-post",
+            "stop-shelter",
+            "iso-post",
+            "t-dim",
+            "iso-piece",
+        ] {
+            assert_eq!(style_of(c, None, None), Style { fill: NEUTRAL, stroke: None }, "{c}");
+        }
+    }
+
     /// The light value of a token, as the table writes it.
     fn css_value(name: &str, css: &Css) -> Rgb {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
@@ -411,7 +546,7 @@ mod tests {
 
     #[test]
     fn every_flat_colour_matches_the_css() {
-        assert!(COLOURS.len() == 30, "{}", COLOURS.len());
+        assert!(COLOURS.len() == 38, "{}", COLOURS.len());
         for (name, css, rgb) in COLOURS {
             // The names are the tokens' without the leading dashes, except `ink-2`-style ones that are the same.
             assert_eq!(css_value(name, css), *rgb, "--{name}");
