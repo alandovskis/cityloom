@@ -175,6 +175,7 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("-- \\uh\\u", "the report cover's French time layout, \"12 h 00\": digits and the unit letter, no words"),
     ("the sync document serialises", "a panic message about the code, never shown"),
     ("a street and a junction have a section", "a panic message about the code, never shown"),
     ("hint archive-error", "two CSS classes of the design archive's refusal line"),

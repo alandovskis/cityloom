@@ -93,7 +93,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());
     mount("map-slot", view! { <view::MapView vm=vm.clone()/> }.into_any());
     mount("plan-key", view! { <view::Legend vm=vm.clone()/> }.into_any());
-    mount("fit-slot", view! { <view::Status vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <view::Status vm=vm.clone()/><view::ReportNotice vm=vm.clone()/> }.into_any());
     mount("checks-lead", view! { <view::ChecksLead vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());

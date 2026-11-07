@@ -339,6 +339,8 @@ pub struct MapVm {
     source: RefCell<Option<(Rc<CityView>, Rc<SourceReport>)>>,
     /// Whether a report is being written: a second request meanwhile is ignored.
     report_running: Cell<bool>,
+    /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
+    report_failed: ArcRwSignal<bool>,
     /// In the tests: how many streets were read to check them against an area's rule.
     #[cfg(test)]
     editors_read: Cell<usize>,
@@ -386,6 +388,7 @@ impl MapVm {
             areas,
             network: RefCell::new(None),
             report_running: Cell::new(false),
+            report_failed: ArcRwSignal::new(false),
             source: RefCell::new(None),
             #[cfg(test)]
             editors_read: Cell::new(0),
@@ -675,11 +678,12 @@ impl MapVm {
         if self.report_running.replace(true) {
             return;
         }
+        self.report_failed.set(false);
         let data = self.report_data();
         let name = format!("cityloom-{}.pdf", report::slug(&self.core.view_now().name));
         let Ok(json) = serde_json::to_string(&data) else {
             self.report_running.set(false);
-            self.ports.announcer.say(&self.i18n.tr_now("map-report-failed", &Args::new()));
+            self.report_failure();
             return;
         };
         let me = self.me.clone();
@@ -693,10 +697,26 @@ impl MapVm {
                     Err(e) => Err(e),
                 };
                 if saved.is_err() {
-                    vm.ports.announcer.say(&vm.i18n.tr_now("map-report-failed", &Args::new()));
+                    vm.report_failure();
                 }
             }),
         );
+    }
+
+    /// Says a report failed: to a screen reader and, until the next attempt or a dismissal, on the page.
+    fn report_failure(&self) {
+        self.report_failed.set(true);
+        self.ports.announcer.say(&self.i18n.tr_now("map-report-failed", &Args::new()));
+    }
+
+    /// Whether the notice of a failed report is shown (tracked, for a view).
+    pub fn report_failed(&self) -> bool {
+        self.report_failed.get()
+    }
+
+    /// Closes the notice of a failed report.
+    pub fn dismiss_report_notice(&self) {
+        self.report_failed.set(false);
     }
 
     // ---- the network checks ----

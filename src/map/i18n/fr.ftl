@@ -301,3 +301,4 @@ map-report-notice = À noter
 map-report-none-found = Aucun problème ni aucun avis du réseau n’a été relevé : { $result }.
 map-report-nothing = Il n’y a rien à rapporter : cette ville n’a ni rue ni jonction.
 map-report-failed = Le rapport n’a pas pu être produit. Réessayez.
+map-report-dismiss = Fermer
