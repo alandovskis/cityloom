@@ -132,7 +132,7 @@ fn an_export_holds_the_design_and_what_made_it_and_nothing_of_the_account_or_the
 #[test]
 fn the_file_is_named_by_the_day_and_is_never_a_bare_dot_cityloom() {
     assert_eq!(model::file_name(1_000_000_000_000), "cityloom-2001-09-09.cityloom-design.json");
-    assert!(!model::file_name(0).ends_with(".cityloom"));
+    assert!(!model::file_name(0).ends_with(".citymodel"));
 }
 
 // ---- nothing is overwritten without a choice ----

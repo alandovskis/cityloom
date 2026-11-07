@@ -16,7 +16,7 @@ fn pack_area(archives: &Path, tile: &[u8]) {
     let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
     let maps = vec![work.join("montreal.pmtiles")];
     let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads, basemaps: &maps };
-    archive::pack(&inputs, &archives.join("montreal.cityloom"), &mut |_, _| {}).unwrap();
+    archive::pack(&inputs, &archives.join("montreal.citymodel"), &mut |_, _| {}).unwrap();
 }
 
 fn config_with(tmp: &Path, data_root: &Path) -> Config {
@@ -42,9 +42,9 @@ async fn run_refused(config: Config) -> String {
 async fn run_refuses_a_missing_archive_and_a_tampered_one_before_it_listens() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(tmp.path().join("areas")).unwrap();
-    assert!(run_refused(config(tmp.path())).await.contains("no .cityloom file"));
+    assert!(run_refused(config(tmp.path())).await.contains("no .citymodel file"));
     pack_area(&tmp.path().join("areas"), b"a road tile of the plateau");
-    let file = tmp.path().join("areas/montreal.cityloom");
+    let file = tmp.path().join("areas/montreal.citymodel");
     let mut bytes = std::fs::read(&file).unwrap();
     let at = bytes.windows(26).position(|w| w == b"a road tile of the plateau").unwrap();
     bytes[at] ^= 1;
@@ -62,13 +62,13 @@ async fn the_errors_name_the_variable_and_the_folder() {
     assert!(message.contains("CITYLOOM_AREAS") && message.contains(tmp.path().join("areas").to_str().unwrap()), "{message}");
     // Two archives.
     std::fs::create_dir_all(tmp.path().join("areas")).unwrap();
-    std::fs::write(tmp.path().join("areas/a.cityloom"), b"").unwrap();
-    std::fs::write(tmp.path().join("areas/b.cityloom"), b"").unwrap();
+    std::fs::write(tmp.path().join("areas/a.citymodel"), b"").unwrap();
+    std::fs::write(tmp.path().join("areas/b.citymodel"), b"").unwrap();
     let message = run_refused(config(tmp.path())).await;
-    assert!(message.contains("more than one .cityloom file") && message.contains("CITYLOOM_AREAS"), "{message}");
+    assert!(message.contains("more than one .citymodel file") && message.contains("CITYLOOM_AREAS"), "{message}");
     // DATA_ROOT cannot be made: it would be inside a file.
-    std::fs::remove_file(tmp.path().join("areas/b.cityloom")).unwrap();
-    std::fs::remove_file(tmp.path().join("areas/a.cityloom")).unwrap();
+    std::fs::remove_file(tmp.path().join("areas/b.citymodel")).unwrap();
+    std::fs::remove_file(tmp.path().join("areas/a.citymodel")).unwrap();
     pack_area(&tmp.path().join("areas"), b"tile");
     std::fs::write(tmp.path().join("file"), b"x").unwrap();
     let message = run_refused(config_with(tmp.path(), &tmp.path().join("file/data"))).await;

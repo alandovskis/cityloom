@@ -2,7 +2,7 @@
 name = "cityloom_prepare"
 version = "0.1.0"
 edition = "2024"
-description = "CityLoom's data preparation: the .cityloom area archive (library) and the prepare command (binary)."
+description = "CityLoom's data preparation: the .citymodel area archive (library) and the prepare command (binary)."
 
 [features]
 # The pipeline's binary and the crates only it needs. The server depends on the library with default-features = false.

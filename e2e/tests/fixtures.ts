@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-/** `just e2e-archive`: the server serves the Plateau's tile and basemap from an unpacked `.cityloom` archive, so the
+/** `just e2e-archive`: the server serves the Plateau's tile and basemap from an unpacked `.citymodel` archive, so the
  *  fixtures do not route them (a route would answer before the server and the run would prove nothing). */
 const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;
 

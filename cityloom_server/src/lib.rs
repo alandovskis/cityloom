@@ -61,7 +61,7 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     }))
 }
 
-/// With `CITYLOOM_AREAS` set: verifies and unpacks the folder's one `.cityloom` file into `DATA_ROOT/<area>` (or
+/// With `CITYLOOM_AREAS` set: verifies and unpacks the folder's one `.citymodel` file into `DATA_ROOT/<area>` (or
 /// reuses what an earlier start unpacked) and sets `config.data_mount` to that directory, for the router. Without
 /// it nothing happens. An error is meant to stop the server: nothing unverified may be served.
 pub async fn unpack_areas(config: &mut Config) -> std::io::Result<()> {

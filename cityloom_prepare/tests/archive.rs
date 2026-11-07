@@ -56,7 +56,7 @@ fn members(path: &Path) -> Vec<(tar::Header, String, Vec<u8>)> {
 fn members_are_in_the_stated_order_with_string_sorted_tiles() {
     let dir = tempfile::tempdir().unwrap();
     let (roads, maps) = inputs_in(dir.path(), &[(10, 3), (0, 0), (2, 0)], &["montreal.pmtiles"]);
-    let out = dir.path().join("a.cityloom");
+    let out = dir.path().join("a.citymodel");
     assert_eq!(pack_to(&out, &roads, &maps).unwrap(), 4);
     let names: Vec<String> = members(&out).into_iter().map(|m| m.1).collect();
     assert_eq!(names, ["cityloom.idx", "roads/0_0.osm.pbf", "roads/10_3.osm.pbf", "roads/2_0.osm.pbf", "basemap/montreal.pmtiles"]);
@@ -71,7 +71,7 @@ fn members_are_in_the_stated_order_with_string_sorted_tiles() {
 fn headers_are_the_deterministic_ones() {
     let dir = tempfile::tempdir().unwrap();
     let (roads, maps) = inputs_in(dir.path(), &[(0, 0), (2, 0)], &["montreal.pmtiles"]);
-    let out = dir.path().join("a.cityloom");
+    let out = dir.path().join("a.citymodel");
     pack_to(&out, &roads, &maps).unwrap();
     for (h, name, _) in members(&out) {
         assert_eq!(h.mtime().unwrap(), 0, "{name}");
@@ -96,7 +96,7 @@ fn the_same_inputs_give_the_same_bytes_whatever_the_file_times_or_places() {
     for p in &m2 {
         fs::File::options().write(true).open(p).unwrap().set_modified(later).unwrap();
     }
-    let (a, b) = (dir.path().join("a.cityloom"), dir.path().join("b.cityloom"));
+    let (a, b) = (dir.path().join("a.citymodel"), dir.path().join("b.citymodel"));
     pack_to(&a, &r1, &m1).unwrap();
     pack_to(&b, &r2, &m2).unwrap();
     assert_eq!(fs::read(&a).unwrap(), fs::read(&b).unwrap());
@@ -106,7 +106,7 @@ fn the_same_inputs_give_the_same_bytes_whatever_the_file_times_or_places() {
 fn the_index_describes_the_members() {
     let dir = tempfile::tempdir().unwrap();
     let (roads, maps) = inputs_in(dir.path(), &[(0, 0), (2, 0), (10, 3)], &["montreal.pmtiles"]);
-    let out = dir.path().join("a.cityloom");
+    let out = dir.path().join("a.citymodel");
     pack_to(&out, &roads, &maps).unwrap();
     let all = members(&out);
     let index = read_index(&all[0].2).unwrap();
@@ -130,13 +130,13 @@ fn the_index_describes_the_members() {
 fn the_part_file_is_renamed_when_whole_and_removed_on_failure() {
     let dir = tempfile::tempdir().unwrap();
     let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
-    let out = dir.path().join("a.cityloom");
-    let part = dir.path().join("a.cityloom.part");
+    let out = dir.path().join("a.citymodel");
+    let part = dir.path().join("a.citymodel.part");
     pack_to(&out, &roads, &maps).unwrap();
     assert!(out.exists() && !part.exists());
 
-    let out = dir.path().join("b.cityloom");
-    let part = dir.path().join("b.cityloom.part");
+    let out = dir.path().join("b.citymodel");
+    let part = dir.path().join("b.citymodel.part");
     let mut missing = roads.clone();
     missing.push((1, 0, dir.path().join("1_0.osm.pbf")));
     assert!(matches!(pack_to(&out, &missing, &maps), Err(PackError::Io { .. })));
@@ -148,7 +148,7 @@ fn a_file_that_changes_size_while_it_is_packed_is_an_error_and_leaves_nothing() 
     for grow in [true, false] {
         let dir = tempfile::tempdir().unwrap();
         let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
-        let out = dir.path().join("a.cityloom");
+        let out = dir.path().join("a.citymodel");
         let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
         let target = maps[0].clone();
         let mut changed = false;
@@ -164,7 +164,7 @@ fn a_file_that_changes_size_while_it_is_packed_is_an_error_and_leaves_nothing() 
             }
         });
         assert!(matches!(result, Err(PackError::Io { .. })), "grow {grow}: {result:?}");
-        assert!(!out.exists() && !dir.path().join("a.cityloom.part").exists());
+        assert!(!out.exists() && !dir.path().join("a.citymodel.part").exists());
     }
 }
 
@@ -172,7 +172,7 @@ fn a_file_that_changes_size_while_it_is_packed_is_an_error_and_leaves_nothing() 
 fn refuses_what_the_server_would_refuse() {
     let dir = tempfile::tempdir().unwrap();
     let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
-    let out = dir.path().join("a.cityloom");
+    let out = dir.path().join("a.citymodel");
     let with_area = |area: &str| {
         let inputs = PackInputs { area, source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
         archive::pack(&inputs, &out, &mut |_, _| {})
@@ -197,7 +197,7 @@ fn reports_progress_up_to_the_total() {
     let sizes: u64 = roads.iter().map(|r| fs::metadata(&r.2).unwrap().len()).sum::<u64>() + fs::metadata(&maps[0]).unwrap().len();
     let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
     let mut last = (0, 0);
-    archive::pack(&inputs, &dir.path().join("a.cityloom"), &mut |done, total| last = (done, total)).unwrap();
+    archive::pack(&inputs, &dir.path().join("a.citymodel"), &mut |done, total| last = (done, total)).unwrap();
     assert_eq!(last, (sizes * 2, sizes * 2));
 }
 
@@ -308,7 +308,7 @@ fn only_areas_and_data(tmp: &Path) {
 fn a_good_archive_unpacks_and_its_index_json_matches() {
     let (_tmp, archives, data) = roots();
     let h = header("montreal");
-    let a = write_archive(&archives, "montreal.cityloom", &h, &good());
+    let a = write_archive(&archives, "montreal.citymodel", &h, &good());
     let got = archive::unpack(&a, &data).unwrap();
     assert_eq!(got, archive::Unpacked { area: "montreal".into(), dir: data.join("montreal"), reused: false, tiles: 2 });
     let dir = data.join("montreal");
@@ -334,7 +334,7 @@ fn an_archive_pack_writes_unpacks_to_the_same_files() {
     let (roads, maps) = inputs_in(&src, &[(10, 3), (0, 0)], &["montreal.pmtiles"]);
     let folder = tmp.path().join("folder");
     fs::create_dir_all(&folder).unwrap();
-    pack_to(&folder.join("a.cityloom"), &roads, &maps).unwrap();
+    pack_to(&folder.join("a.citymodel"), &roads, &maps).unwrap();
     let got = archive::unpack_folder(&folder, &data).unwrap();
     assert_eq!((got.area.as_str(), got.tiles), ("montreal", 2));
     for (x, y, path) in &roads {
@@ -348,7 +348,7 @@ fn refuses_a_tampered_tile() {
     let (tmp, archives, data) = roots();
     let mut pieces = good();
     pieces[0].1[0] ^= 1;
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &pieces);
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     let e = refused(archive::unpack(&a, &data), "checksum");
     assert!(matches!(e, ArchiveError::Member { .. }));
     assert!(names(&data).is_empty());
@@ -361,12 +361,12 @@ fn refuses_a_wrong_size() {
     // the entry says one byte more than the member holds
     let mut pieces = good();
     pieces[0].0.size += 1;
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &pieces);
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&a, &data), "size");
     // the member holds one byte more than the entry says
     let mut pieces = good();
     pieces[0].1.push(b'x');
-    let b = write_archive(&archives, "b.cityloom", &header("montreal"), &pieces);
+    let b = write_archive(&archives, "b.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&b, &data), "size");
     assert!(names(&data).is_empty());
 }
@@ -381,7 +381,7 @@ fn refuses_a_missing_tile() {
         (file_header("roads/0_0.osm.pbf", pieces[0].1.len() as u64), pieces[0].1.clone()),
         (file_header("basemap/montreal.pmtiles", pieces[2].1.len() as u64), pieces[2].1.clone()),
     ];
-    let a = archive_of(&archives, "a.cityloom", &index, members);
+    let a = archive_of(&archives, "a.citymodel", &index, members);
     match archive::unpack(&a, &data).unwrap_err() {
         ArchiveError::Missing { path } => assert_eq!(path, "roads/1_2.osm.pbf"),
         other => panic!("{other}"),
@@ -397,7 +397,7 @@ fn refuses_an_extra_member() {
     let index = archive::write_index(&header("montreal"), &entries);
     let mut members: Vec<_> = pieces.iter().map(|(e, d)| (file_header(&e.path, d.len() as u64), d.clone())).collect();
     members.push((file_header("roads/3_2.osm.pbf", 3), b"abc".to_vec()));
-    let a = archive_of(&archives, "a.cityloom", &index, members);
+    let a = archive_of(&archives, "a.citymodel", &index, members);
     refused(archive::unpack(&a, &data), "not in the index");
     assert!(names(&data).is_empty());
 }
@@ -410,7 +410,7 @@ fn refuses_a_member_that_appears_twice() {
     let index = archive::write_index(&header("montreal"), &entries);
     let mut members: Vec<_> = pieces.iter().map(|(e, d)| (file_header(&e.path, d.len() as u64), d.clone())).collect();
     members.insert(1, members[0].clone());
-    let a = archive_of(&archives, "a.cityloom", &index, members);
+    let a = archive_of(&archives, "a.citymodel", &index, members);
     refused(archive::unpack(&a, &data), "twice");
     assert!(names(&data).is_empty());
 }
@@ -420,7 +420,7 @@ fn refuses_an_index_that_lists_a_path_twice() {
     let (_tmp, archives, data) = roots();
     let mut pieces = good();
     pieces.push(pieces[0].clone());
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &pieces);
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&a, &data), "twice");
     assert!(names(&data).is_empty());
 }
@@ -441,7 +441,7 @@ fn refuses_a_symlink_a_directory_and_a_hard_link() {
             h.set_link_name("/etc/passwd").unwrap();
         }
         h.set_cksum();
-        let a = archive_of(&archives, "a.cityloom", &index, vec![(h, Vec::new())]);
+        let a = archive_of(&archives, "a.citymodel", &index, vec![(h, Vec::new())]);
         refused(archive::unpack(&a, &data), "regular file");
         assert!(names(&data).is_empty());
         only_areas_and_data(tmp.path());
@@ -460,7 +460,7 @@ fn refuses_dot_dot_in_a_path() {
     let raw = b"roads/../../escape";
     h.as_old_mut().name[..raw.len()].copy_from_slice(raw);
     h.set_cksum();
-    let a = archive_of(&archives, "a.cityloom", &index, vec![(h, b"abc".to_vec())]);
+    let a = archive_of(&archives, "a.citymodel", &index, vec![(h, b"abc".to_vec())]);
     let e = archive::unpack(&a, &data).unwrap_err();
     assert!(matches!(e, ArchiveError::Member { .. }), "{e}");
     assert!(!tmp.path().join("escape").exists() && !data.join("escape").exists());
@@ -472,7 +472,7 @@ fn refuses_a_path_outside_the_two_patterns() {
     let (_tmp, archives, data) = roots();
     let mut pieces = good();
     pieces[0].0.path = "etc/passwd".into();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &pieces);
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     let e = archive::unpack(&a, &data).unwrap_err();
     assert!(matches!(e, ArchiveError::Member { .. }), "{e}");
     assert!(names(&data).is_empty());
@@ -482,7 +482,7 @@ fn refuses_a_path_outside_the_two_patterns() {
 fn refuses_a_tile_outside_the_grid() {
     let (_tmp, archives, data) = roots();
     let pieces = vec![road(9, 0, b"far away"), basemap(b"m")];
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &pieces);
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&a, &data), "outside the grid");
     assert!(names(&data).is_empty());
 }
@@ -496,7 +496,7 @@ fn refuses_an_index_that_is_not_first() {
     let mut tar = tar::Builder::new(Vec::new());
     tar.append(&file_header("roads/0_0.osm.pbf", 3), &b"abc"[..]).unwrap();
     tar.append(&file_header("cityloom.idx", index.len() as u64), &index[..]).unwrap();
-    let a = archives.join("a.cityloom");
+    let a = archives.join("a.citymodel");
     fs::write(&a, tar.into_inner().unwrap()).unwrap();
     assert!(matches!(archive::unpack(&a, &data).unwrap_err(), ArchiveError::IndexNotFirst));
     assert!(names(&data).is_empty());
@@ -505,7 +505,7 @@ fn refuses_an_index_that_is_not_first() {
 #[test]
 fn refuses_an_index_above_one_megabyte() {
     let (_tmp, archives, data) = roots();
-    let a = archive_of(&archives, "a.cityloom", &vec![0u8; (1 << 20) + 1], vec![]);
+    let a = archive_of(&archives, "a.citymodel", &vec![0u8; (1 << 20) + 1], vec![]);
     assert!(matches!(archive::unpack(&a, &data).unwrap_err(), ArchiveError::IndexTooBig));
     assert!(names(&data).is_empty());
 }
@@ -514,7 +514,7 @@ fn refuses_an_index_above_one_megabyte() {
 fn refuses_a_bad_index() {
     use cityloom_prepare::archive::IndexError;
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     let mut bytes = fs::read(&a).unwrap();
     bytes[512 + 20] ^= 1;
     fs::write(&a, bytes).unwrap();
@@ -526,7 +526,7 @@ fn refuses_a_bad_index() {
     index[8..10].copy_from_slice(&2u16.to_le_bytes());
     let body = index[..index.len() - 32].to_vec();
     index = [body.clone(), Sha256::digest(&body).to_vec()].concat();
-    let b = archive_of(&archives, "b.cityloom", &index, vec![]);
+    let b = archive_of(&archives, "b.citymodel", &index, vec![]);
     assert!(matches!(archive::unpack(&b, &data).unwrap_err(), ArchiveError::Index(IndexError::Version(2))));
     assert!(names(&data).is_empty());
 }
@@ -535,7 +535,7 @@ fn refuses_a_bad_index() {
 fn refuses_hostile_areas() {
     for area in ["../escape", "a/b", "", "Montreal"] {
         let (tmp, archives, data) = roots();
-        let a = write_archive(&archives, "a.cityloom", &header(area), &good());
+        let a = write_archive(&archives, "a.citymodel", &header(area), &good());
         let e = archive::unpack(&a, &data).unwrap_err();
         assert!(matches!(e, ArchiveError::Area(_)), "{area:?}: {e}");
         only_areas_and_data(tmp.path());
@@ -546,7 +546,7 @@ fn refuses_hostile_areas() {
 #[test]
 fn a_truncated_archive_is_refused_and_leaves_nothing() {
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     let bytes = fs::read(&a).unwrap();
     fs::write(&a, &bytes[..bytes.len() * 6 / 10]).unwrap();
     assert!(archive::unpack(&a, &data).is_err());
@@ -556,14 +556,14 @@ fn a_truncated_archive_is_refused_and_leaves_nothing() {
 #[test]
 fn a_failure_leaves_the_area_already_there_unchanged() {
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     archive::unpack(&a, &data).unwrap();
     let before = tree(&data.join("montreal"));
     // another index (another tile), whose bytes do not match it
     let mut pieces = good();
     pieces[0] = road(0, 0, b"other tile data");
     pieces[0].1 = b"OTHER TILE DATA".to_vec();
-    let b = write_archive(&archives, "b.cityloom", &header("montreal"), &pieces);
+    let b = write_archive(&archives, "b.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&b, &data), "checksum");
     assert_eq!(tree(&data.join("montreal")), before);
     assert_eq!(names(&data), ["montreal"]);
@@ -574,7 +574,7 @@ fn a_failure_leaves_the_area_already_there_unchanged() {
 #[test]
 fn a_restart_trusts_what_it_unpacked_and_verified_earlier() {
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     archive::unpack(&a, &data).unwrap();
     let before = tree(&data.join("montreal"));
     let mut bytes = fs::read(&a).unwrap();
@@ -588,7 +588,7 @@ fn a_restart_trusts_what_it_unpacked_and_verified_earlier() {
 #[test]
 fn a_second_unpack_of_the_same_archive_skips_the_work() {
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     assert!(!archive::unpack(&a, &data).unwrap().reused);
     fs::write(data.join("montreal/sentinel"), b"x").unwrap();
     assert!(archive::unpack(&a, &data).unwrap().reused);
@@ -598,7 +598,7 @@ fn a_second_unpack_of_the_same_archive_skips_the_work() {
 #[test]
 fn a_damaged_unpacked_area_is_unpacked_again() {
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     archive::unpack(&a, &data).unwrap();
     let fresh = tree(&data.join("montreal"));
     type Damage = Box<dyn Fn(&Path)>;
@@ -623,9 +623,9 @@ fn a_damaged_unpacked_area_is_unpacked_again() {
 #[test]
 fn a_changed_archive_replaces_the_area() {
     let (_tmp, archives, data) = roots();
-    let a1 = write_archive(&archives, "a1.cityloom", &header("montreal"), &good());
+    let a1 = write_archive(&archives, "a1.citymodel", &header("montreal"), &good());
     archive::unpack(&a1, &data).unwrap();
-    let a2 = write_archive(&archives, "a2.cityloom", &header("montreal"), &[road(0, 0, b"a different tile"), basemap(&[9u8; 100])]);
+    let a2 = write_archive(&archives, "a2.citymodel", &header("montreal"), &[road(0, 0, b"a different tile"), basemap(&[9u8; 100])]);
     let got = archive::unpack(&a2, &data).unwrap();
     assert!(!got.reused);
     let dir = data.join("montreal");
@@ -643,7 +643,7 @@ fn leftovers_of_a_crashed_start_are_removed() {
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, b"x").unwrap();
     }
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     archive::unpack(&a, &data).unwrap();
     assert_eq!(names(&data), ["keep", "montreal"]);
 }
@@ -652,12 +652,12 @@ fn leftovers_of_a_crashed_start_are_removed() {
 fn unpack_folder_takes_exactly_one_archive() {
     let (tmp, archives, data) = roots();
     assert!(matches!(archive::unpack_folder(&archives, &data).unwrap_err(), ArchiveError::NoArchive(_)));
-    fs::create_dir(archives.join("x.cityloom")).unwrap();
+    fs::create_dir(archives.join("x.citymodel")).unwrap();
     assert!(matches!(archive::unpack_folder(&archives, &data).unwrap_err(), ArchiveError::NoArchive(_)));
-    write_archive(&archives, "a.cityloom", &header("montreal"), &good());
-    write_archive(&archives, "b.cityloom", &header("montreal"), &good());
+    write_archive(&archives, "a.citymodel", &header("montreal"), &good());
+    write_archive(&archives, "b.citymodel", &header("montreal"), &good());
     assert!(matches!(archive::unpack_folder(&archives, &data).unwrap_err(), ArchiveError::TooMany(_)));
-    fs::remove_file(archives.join("b.cityloom")).unwrap();
+    fs::remove_file(archives.join("b.citymodel")).unwrap();
     fs::write(archives.join("notes.txt"), b"hello").unwrap();
     assert_eq!(archive::unpack_folder(&archives, &data).unwrap().area, "montreal");
     assert!(matches!(archive::unpack_folder(&tmp.path().join("missing"), &data).unwrap_err(), ArchiveError::Io { .. }));
@@ -668,7 +668,7 @@ fn unpack_folder_takes_exactly_one_archive() {
 fn a_data_root_that_cannot_be_written_is_a_clear_error() {
     use std::os::unix::fs::PermissionsExt;
     let (_tmp, archives, data) = roots();
-    let a = write_archive(&archives, "a.cityloom", &header("montreal"), &good());
+    let a = write_archive(&archives, "a.citymodel", &header("montreal"), &good());
     fs::set_permissions(&data, fs::Permissions::from_mode(0o500)).unwrap();
     let result = archive::unpack(&a, &data);
     fs::set_permissions(&data, fs::Permissions::from_mode(0o700)).unwrap();
