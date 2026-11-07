@@ -908,9 +908,17 @@ impl City {
 
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
-        self.edge_index(edge)?;
+        self.street_editor_of(edge, region, &self.streets)
+    }
+
+    /// The street editor on one street as it was imported: its view is the "before" of `street_editor`'s.
+    pub fn street_editor_today(&self, edge: u32, region: usize) -> Option<Editor> {
+        self.street_editor_of(edge, region, &self.today_streets)
+    }
+
+    fn street_editor_of(&self, edge: u32, region: usize, streets: &BTreeMap<u32, Street>) -> Option<Editor> {
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
-        let editor = Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region);
+        let editor = Editor::from_street(self.today_streets.get(&edge)?, streets.get(&edge)?, region);
         Some(editor.with_frame(frame).with_ends(self.street_end_infos(edge, region)))
     }
 
@@ -968,6 +976,14 @@ impl City {
         let today = self.with_streets(n, self.today_junctions.get(&node)?, region);
         let now = self.with_streets(n, self.junctions.get(&node)?, region);
         Junction::from_city(self.layout.node_name(n), &today, &now, region)
+    }
+
+    /// The junction editor on one junction as it was imported, reading the streets as imported: its view is the
+    /// "before" of `junction_editor`'s. None when it cannot be drawn.
+    pub fn junction_editor_today(&self, node: u32, region: usize) -> Option<Junction> {
+        let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
+        let today = self.with_streets_of(&self.today_streets, n, self.today_junctions.get(&node)?, region);
+        Junction::from_city(self.layout.node_name(n), &today, &today, region)
     }
 
     /// Keeps what the junction editor has made of a junction.
@@ -1301,6 +1317,58 @@ mod tests {
         assert!(city.keep_street(edge, today));
         assert_eq!(crossing_of(&city), (true, false), "the junction's own record never lost it");
         assert_eq!(into(&city), before, "the lanes leading into it come back with its traffic");
+    }
+
+    #[test]
+    fn the_imported_street_view_differs_from_the_edited_one_after_an_edit() {
+        let mut city = City::new();
+        let today = city.today_streets[&1].clone();
+        assert!(city.keep_street(1, crate::street::model::pedestrianised(&today)));
+        let (before, now) = (city.street_editor_today(1, 0).unwrap().view(), city.street_editor(1, 0).unwrap().view());
+        assert_eq!(before.class, today.class);
+        assert_eq!(now.class, StreetClass::Pedestrian);
+        assert_eq!(city.street_editor_today(1, 0).unwrap().frame(), city.street_editor(1, 0).unwrap().frame());
+    }
+
+    #[test]
+    fn an_unedited_street_has_the_same_view_today_and_now() {
+        let city = City::new();
+        let (before, now) = (city.street_editor_today(1, 0).unwrap().view(), city.street_editor(1, 0).unwrap().view());
+        assert_eq!(before.class, now.class);
+        assert_eq!(before.total_mm, now.total_mm);
+        assert!(city.street_editor_today(999, 0).is_none());
+    }
+
+    fn a_junction_node(city: &City) -> u32 {
+        (0..city.layout.nodes.len()).find(|&n| city.layout.nodes[n].junction && city.junction_editor(node_uid(n), 0).is_some()).map(node_uid).unwrap()
+    }
+
+    #[test]
+    fn the_imported_junction_differs_from_the_edited_one_after_an_edit() {
+        let mut city = City::new();
+        let node = a_junction_node(&city);
+        let mut state = city.junctions[&node].clone();
+        state.control = (state.control + 1) % crate::junction::model::CONTROLS.len();
+        assert!(city.keep_junction(node, state.clone()));
+        assert_eq!(city.junction_editor(node, 0).unwrap().current().control, state.control);
+        assert_eq!(city.junction_editor_today(node, 0).unwrap().current().control, city.today_junctions[&node].control);
+        assert_ne!(city.junction_editor_today(node, 0).unwrap().current().control, state.control);
+    }
+
+    #[test]
+    fn an_unedited_junction_is_the_same_today_and_now() {
+        let city = City::new();
+        let node = a_junction_node(&city);
+        assert_eq!(city.junction_editor_today(node, 0).unwrap().current(), city.junction_editor(node, 0).unwrap().current());
+    }
+
+    #[test]
+    fn a_junction_that_cannot_be_drawn_gives_none_today_too() {
+        let city = City::new();
+        let plain = (0..city.layout.nodes.len()).find(|&n| !city.layout.nodes[n].junction).expect("a plain node");
+        assert!(city.junction_editor(node_uid(plain), 0).is_none());
+        assert!(city.junction_editor_today(node_uid(plain), 0).is_none());
+        assert!(city.junction_editor_today(9999, 0).is_none());
     }
 
     #[test]
