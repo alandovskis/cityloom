@@ -355,10 +355,7 @@ st-panel-tab-street = Rue
 st-speed-label = Limite de vitesse
 st-speed-not-set = Non indiquée
 st-speed-kmh = { $kmh }{" "}km/h
-# The speed limit sign in the 2.5D: its heading, the same word on a Canadian sign in both languages.
-iso-sign-maximum = MAXIMUM
 svg-iso-transition = Une transition de { $length } mène à { $zone }.
-svg-iso-speed = Limite de vitesse : { $kmh }{" "}km/h.
 svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.

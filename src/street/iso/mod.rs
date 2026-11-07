@@ -100,7 +100,7 @@ fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&s
             scene::markings(&p, segs, run.taper.as_ref()),
             scene::raised(&p, segs, i18n, &standing, &lifted, run.across, run.taper.as_ref()),
             scene::objects(&p, segs, uses, stops),
-            scene::signs(v, segs, &p, i18n, run.across),
+            scene::signs(v, segs, &p, run.across),
         ],
     }
 }
@@ -181,10 +181,7 @@ pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
         }
         label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", shown.len() as i64).str("kinds", kinds.join(", "))));
     }
-    match v.speed_kmh {
-        Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),
-        None => label,
-    }
+    label
 }
 
 fn iso_label_of(v: &View, i18n: &I18n, units: Units) -> String {
@@ -938,11 +935,11 @@ mod tests {
         v.speed_kmh = Some(30);
         let p = Projection::fit(1050.0, span_mm(&v)).over(Reach::STRETCH);
         let j = v.zones.joint.as_ref().unwrap();
-        assert!(scene::signs(&v, &j.segments, &p, &en(), true).shapes.is_empty());
-        assert!(!scene::signs(&v, &v.segments, &p, &en(), false).shapes.is_empty());
-        // In the whole drawing the one sign group is in the selected section.
+        assert!(scene::signs(&v, &j.segments, &p, true).shapes.is_empty());
+        // With no stop there is no sign to draw, and the speed limit has none of its own.
+        assert!(scene::signs(&v, &v.segments, &p, false).shapes.is_empty());
         let m = iso_svg(&v, &en(), 1050.0).markup;
-        assert_eq!(count(&m, "<g class=\"iso-sign\""), 1, "{m}");
+        assert_eq!(count(&m, "class=\"iso-sign\""), 0, "{m}");
     }
 
     #[test]
@@ -982,7 +979,8 @@ mod tests {
         assert!(objects.contains("class=\"iso-solid") && !objects.contains("iso-piece") && !objects.contains("iso-top"), "{objects}");
         let raised = layer_of(&m, "iso-raised");
         assert!(raised.contains("iso-piece") && !raised.contains("iso-solid"), "no object among the strips");
-        assert!(layer_of(&m, "iso-signs").contains("iso-sign"));
+        // The signs layer is the stops' signs only: a street with a speed limit has none of its own (stops.rs pins them).
+        assert!(!layer_of(&m, "iso-signs").contains("iso-sign-text") && !layer_of(&m, "iso-signs").contains("MAXIMUM"));
         let outline = layer_of(&m, "iso-layer-outline");
         assert!(outline.contains("class=\"iso-sel\"") && !outline.contains("<g "));
         // Nothing is left outside a layer: a section holds layers only, and the outline is the last of them.

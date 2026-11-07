@@ -977,8 +977,7 @@ svg pattern circle {
     stroke: none;
   }
 }
-/* The speed limit sign (street/iso/sign.rs): a white panel with its text, and no pointer events. */
-.iso-sign,
+/* A sign's panel (street/iso/sign.rs): the stop sign's white panel, with no pointer events. */
 .iso-stop-sign {
   pointer-events: none;
 }
@@ -987,11 +986,6 @@ svg pattern circle {
   stroke: var(--iso-sign-ink);
   stroke-width: 1px;
   stroke-linejoin: round;
-}
-.iso-sign-text {
-  fill: var(--iso-sign-ink);
-  font-weight: 700;
-  text-anchor: middle;
 }
 /* The stop sign's bus (street/iso/stops.rs): the ink on the panel, its windows the panel's colour. */
 .iso-sign-glyph {
@@ -1010,9 +1004,6 @@ svg pattern circle {
   .iso-sign-panel {
     fill: Canvas;
     stroke: CanvasText;
-  }
-  .iso-sign-text {
-    fill: CanvasText;
   }
 }
 #drawing .iso .sel-box {
