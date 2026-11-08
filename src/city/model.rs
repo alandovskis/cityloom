@@ -1192,7 +1192,6 @@ fn zone_bands(street: &Street, frame: Option<ZoneFrame>) -> Vec<(usize, i32, i32
         return Vec::new();
     };
     let sections = street.sections();
-    let speed = street.speed.kmh();
     let mut bands: Vec<(usize, i32, i32)> = Vec::new();
     let count = street.zones.iter().skip(1).filter(|z| z.from_mm < frame.length_mm).count();
     for (b, pair) in sections.windows(2).enumerate() {
@@ -1200,7 +1199,7 @@ fn zone_bands(street: &Street, frame: Option<ZoneFrame>) -> Vec<(usize, i32, i32
         if at >= frame.length_mm {
             break;
         }
-        let Some(t) = transition(pair[0], pair[1], speed, street.from_end) else { continue };
+        let Some(t) = transition(pair[0], pair[1], street.taper_speed_kmh(b), street.from_end) else { continue };
         // measured from the anchored end, then turned round when that is the last one
         let (from, to) = match t.host {
             Host::Near => ((at - t.length_mm).max(street.zones[b].from_mm), at),

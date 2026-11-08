@@ -7,17 +7,29 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::HtmlSelectElement;
 
-use super::vm::StreetVm;
+use super::vm::{SpeedOption, StreetVm};
 use super::watch::SheetWatch;
 use crate::shared::i18n::Args;
+
+/// The value of the option "Same as the street".
+const STREET: &str = "street";
+
+/// What an option's `value` is: its speed, nothing for Not set, or `STREET`.
+fn value_of(o: &SpeedOption) -> String {
+    if o.street { STREET.to_string() } else { o.kmh.map(|n| n.to_string()).unwrap_or_default() }
+}
+
+/// The value of the chosen option.
+fn current_value(options: &[SpeedOption]) -> String {
+    options.iter().find(|o| o.selected).map(value_of).unwrap_or_default()
+}
 
 #[component]
 pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     // A refused or unchanged choice leaves the select showing what the street has.
     let show_current = move |select: &HtmlSelectElement| {
-        let current = w.view_now().speed_kmh.map(|n| n.to_string()).unwrap_or_default();
-        select.set_value(&current);
+        select.set_value(&current_value(&w.speed_options()));
     };
     let select_ref = NodeRef::<leptos::html::Select>::new();
     let shown = view! {
@@ -28,8 +40,12 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                 id="speed-limit"
                 on:change=move |ev| {
                     let Some(select) = ev.target().and_then(|t| t.dyn_into::<HtmlSelectElement>().ok()) else { return };
-                    let kmh = select.value().parse::<u16>().ok();
-                    w.set_speed(kmh);
+                    let value = select.value();
+                    if value == STREET {
+                        w.follow_street_speed();
+                    } else {
+                        w.set_speed(value.parse::<u16>().ok());
+                    }
                     show_current(&select);
                 }
             >
@@ -37,7 +53,7 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                     w.speed_options()
                         .into_iter()
                         .map(|o| {
-                            let value = o.kmh.map(|n| n.to_string()).unwrap_or_default();
+                            let value = value_of(&o);
                             view! { <option value=value selected=o.selected>{o.label}</option> }
                         })
                         .collect_view()
@@ -49,9 +65,9 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
     // over the select is told its value. Made after the view so that it runs after the options are rebuilt.
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
-        let current = w.speed_options().into_iter().find(|o| o.selected).and_then(|o| o.kmh).map(|n| n.to_string());
+        let current = current_value(&w.speed_options());
         if let Some(select) = select_ref.get() {
-            select.set_value(&current.unwrap_or_default());
+            select.set_value(&current);
         }
     });
     shown

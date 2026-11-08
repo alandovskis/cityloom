@@ -68,6 +68,8 @@ pub struct SpeedOption {
     pub kmh: Option<u16>,
     pub label: String,
     pub selected: bool,
+    /// The choice "Same as the street", offered where the street has several zones.
+    pub street: bool,
 }
 
 pub struct StreetVm {
@@ -1185,18 +1187,33 @@ impl StreetVm {
     /// The speed limits the Speed limit control offers: Not set, then the choices, with the street's own value
     /// among them in order when it is none of them. Worded in the page language, drawing again on a switch.
     pub fn speed_options(&self) -> Vec<SpeedOption> {
-        let current = self.view().speed_kmh;
+        let view = self.view();
+        let current = view.speed_kmh;
         let mut values: Vec<u16> = SPEED_CHOICES.to_vec();
         if let Some(n) = current.filter(|n| !values.contains(n)) {
             values.push(n);
             values.sort_unstable();
         }
-        let not_set = SpeedOption { kmh: None, label: self.i18n.tr("st-speed-not-set", &Args::new()), selected: current.is_none() };
-        std::iter::once(not_set)
+        let own = !view.speed_follows;
+        // Offered only where the street has several zones: a zone may then follow the street's speed limit.
+        let street = view.zones.several.then(|| SpeedOption {
+            kmh: None,
+            label: match view.street_speed_kmh {
+                Some(n) => self.i18n.tr("st-speed-street", &Args::new().num("kmh", i64::from(n))),
+                None => self.i18n.tr("st-speed-street-not-set", &Args::new()),
+            },
+            selected: view.speed_follows,
+            street: true,
+        });
+        let not_set = SpeedOption { kmh: None, label: self.i18n.tr("st-speed-not-set", &Args::new()), selected: own && current.is_none(), street: false };
+        street
+            .into_iter()
+            .chain(std::iter::once(not_set))
             .chain(values.into_iter().map(|n| SpeedOption {
                 kmh: Some(n),
                 label: self.i18n.tr("st-speed-kmh", &Args::new().num("kmh", i64::from(n))),
-                selected: current == Some(n),
+                selected: own && current == Some(n),
+                street: false,
             }))
             .collect()
     }
@@ -1204,6 +1221,11 @@ impl StreetVm {
     /// Sets the speed limit (`None`: not set). False when refused or unchanged; the edit is announced by its label.
     pub fn set_speed(&self, kmh: Option<u16>) -> bool {
         !self.refuse_while_dragging() && self.apply(|e| e.set_speed(kmh))
+    }
+
+    /// Gives the selected zone the street's speed limit again. False when refused or already so.
+    pub fn follow_street_speed(&self) -> bool {
+        !self.refuse_while_dragging() && self.apply(|e| e.follow_street_speed())
     }
 
     pub fn reset_zone(&self) -> bool {
@@ -2246,6 +2268,30 @@ mod tests {
         assert_eq!(o.iter().filter(|x| x.selected).map(|x| x.kmh).collect::<Vec<_>>(), [Some(50)]);
         let none = speed_rig(crate::street::model::Speed::NotSet);
         assert_eq!(none.vm.speed_options().iter().filter(|x| x.selected).map(|x| x.kmh).collect::<Vec<_>>(), [None]);
+    }
+
+    #[test]
+    fn a_zone_may_follow_the_streets_speed_and_the_control_offers_that_where_there_are_zones() {
+        let mut street = Street::sample(0, Side::Right);
+        street.speed = crate::street::model::Speed::Kmh(50);
+        let r = zoned_rig(street, &[0, 20_000]);
+        let o = r.vm.speed_options();
+        assert_eq!(o.len(), 14);
+        assert!(o[0].street && o[0].selected, "the zone follows the street");
+        assert_eq!(o[0].label, "Same as the street: 50 km/h");
+        assert_eq!(o.iter().filter(|x| x.selected).count(), 1);
+        r.said.take();
+        assert!(r.vm.set_speed(Some(30)));
+        assert!(r.said.take()[0].starts_with("Speed limit 30 km/h: Zone 1"));
+        let o = r.vm.speed_options();
+        assert!(!o[0].selected);
+        assert_eq!(o.iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(30)));
+        assert!(r.vm.follow_street_speed());
+        assert!(r.said.take()[0].starts_with("Speed limit back to the street's: Zone 1"));
+        assert!(r.vm.speed_options()[0].selected);
+        assert!(!r.vm.follow_street_speed());
+        // a street of one zone has no such choice
+        assert!(speed_rig(crate::street::model::Speed::Kmh(50)).vm.speed_options().iter().all(|x| !x.street));
     }
 
     #[test]

@@ -35,8 +35,12 @@ pub const GREEN_VERSION: u32 = SIGNAL_VERSION + 1;
 /// What a document is written as while a street record holds raised tables or crossings (`Street.calming`): a build
 /// that does not know them treats the document as a newer one and leaves it alone.
 pub const CALMING_VERSION: u32 = GREEN_VERSION + 1;
+/// What a document is written as while a zone of a street record has a speed limit of its own (`Zone.speed`, written as
+/// the zone's `speed_kmh`): a build that does not know it treats the document as a newer one and leaves it alone,
+/// rather than dropping the speed on its next write.
+pub const ZONE_SPEED_VERSION: u32 = CALMING_VERSION + 1;
 /// The newest version this build reads.
-pub const NEWEST: u32 = CALMING_VERSION;
+pub const NEWEST: u32 = ZONE_SPEED_VERSION;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -88,7 +92,8 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as, the first that applies: `CALMING_VERSION` while a street record holds
+    /// The version the document is written as, the first that applies: `ZONE_SPEED_VERSION` while a zone of a street
+    /// record has a speed of its own, `CALMING_VERSION` while a street record holds
     /// raised tables or crossings, `GREEN_VERSION` while one holds green infrastructure, `SIGNAL_VERSION` while a
     /// junction record holds
     /// an edited signal plan, `STOP_VERSION` while a street record holds transit stops, `CURB_VERSION` while one holds
@@ -102,7 +107,8 @@ impl Edits {
         let signal = self.junctions.values().any(|r| r.state.signal_plan.is_some());
         let green = self.streets.values().any(|r| !r.street.green.is_empty());
         let calming = self.streets.values().any(|r| !r.street.calming.is_empty());
-        version_for(zones, speed, curb, stops, signal, green, calming)
+        let zone_speed = self.streets.values().any(|r| r.street.zones.iter().any(|z| !z.speed.is_undecided()));
+        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed)
     }
 
     pub fn to_json(&self) -> String {
@@ -112,8 +118,10 @@ impl Edits {
 }
 
 /// The version a document is written as, from what its street records hold.
-fn version_for(zones: bool, speed: bool, curb: bool, stops: bool, signal: bool, green: bool, calming: bool) -> u32 {
-    if calming {
+fn version_for(zones: bool, speed: bool, curb: bool, stops: bool, signal: bool, green: bool, calming: bool, zone_speed: bool) -> u32 {
+    if zone_speed {
+        ZONE_SPEED_VERSION
+    } else if calming {
         CALMING_VERSION
     } else if green {
         GREEN_VERSION
@@ -163,6 +171,12 @@ fn holds_stops(doc: &Map<String, Value>) -> bool {
     streets.any(|(_, r)| r.pointer("/street/stops").and_then(Value::as_array).is_some_and(|c| !c.is_empty()))
 }
 
+/// Whether any zone of any record of the streets section has a `speed_kmh` key, a number or `null` (decided on the raw JSON).
+fn holds_zone_speed(doc: &Map<String, Value>) -> bool {
+    let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
+    streets.any(|(_, r)| r.pointer("/street/zones").and_then(Value::as_array).is_some_and(|zs| zs.iter().any(|z| z.get("speed_kmh").is_some())))
+}
+
 /// Whether any record of the streets section holds a non-empty list of raised elements (decided on the raw JSON).
 fn holds_calming(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
@@ -202,8 +216,16 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         _ => return Err(damaged()),
     }
     // The version the document would be written as, whichever it was read as.
-    let written =
-        version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc), holds_signal(&doc), holds_green(&doc), holds_calming(&doc));
+    let written = version_for(
+        holds_zones(&doc),
+        holds_speed(&doc),
+        holds_curb(&doc),
+        holds_stops(&doc),
+        holds_signal(&doc),
+        holds_green(&doc),
+        holds_calming(&doc),
+        holds_zone_speed(&doc),
+    );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
@@ -304,7 +326,8 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `CALMING_VERSION` while any street record holds raised elements, else
+    /// The document as text, its version `ZONE_SPEED_VERSION` while any zone has a speed of its own, else
+    /// `CALMING_VERSION` while any street record holds raised elements, else
     /// `GREEN_VERSION` while any holds green elements, else
     /// `STOP_VERSION` while any holds transit stops, else
     /// `CURB_VERSION` while one holds curbside uses, else
@@ -312,8 +335,16 @@ impl Draft {
     /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`.
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
-        let written =
-            version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc), holds_signal(&doc), holds_green(&doc), holds_calming(&doc));
+        let written = version_for(
+            holds_zones(&doc),
+            holds_speed(&doc),
+            holds_curb(&doc),
+            holds_stops(&doc),
+            holds_signal(&doc),
+            holds_green(&doc),
+            holds_calming(&doc),
+            holds_zone_speed(&doc),
+        );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
     }
@@ -555,7 +586,8 @@ mod tests {
         assert_eq!(SIGNAL_VERSION, 10);
         assert_eq!(GREEN_VERSION, 11);
         assert_eq!(CALMING_VERSION, 12);
-        assert_eq!(NEWEST, CALMING_VERSION);
+        assert_eq!(ZONE_SPEED_VERSION, 13);
+        assert_eq!(NEWEST, ZONE_SPEED_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -661,13 +693,50 @@ mod tests {
         assert!(!holds_calming(raw.as_object().unwrap()), "an empty list is not calming");
     }
 
+    fn zone_speed_record() -> StreetRecord {
+        let mut r = zoned_record();
+        r.street.zones[1].speed = crate::street::model::Speed::Kmh(30);
+        r
+    }
+
+    #[test]
+    fn a_zone_with_a_speed_is_written_as_zone_speed_version() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), zone_speed_record());
+        assert_eq!(e.written_version(), ZONE_SPEED_VERSION);
+        assert!(e.to_json().starts_with(r#"{"version":13,"#), "{}", e.to_json());
+        assert!(e.to_json().contains(r#""speed_kmh":30"#), "{}", e.to_json());
+        // newest over calming and the rest
+        e.streets.insert("w6~n1~n2".into(), calming_record());
+        assert_eq!(e.written_version(), ZONE_SPEED_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.streets["w7~n1~n2"].street.zones[1].speed, crate::street::model::Speed::Kmh(30));
+        // the draft decides on the raw JSON, and drops back when the record goes
+        let mut d = Draft::new();
+        assert!(d.put_street("w7~n1~n2", &zone_speed_record()));
+        assert!(d.to_json().contains(r#""version":13"#), "{}", d.to_json());
+        d.remove_street("w7~n1~n2");
+        assert!(d.to_json().contains(r#""version":5"#));
+    }
+
+    #[test]
+    fn a_zoned_street_whose_zones_follow_the_street_keeps_the_zones_version() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), zoned_record());
+        assert_eq!(e.written_version(), ZONES_VERSION);
+        let raw: Value = serde_json::from_str(r#"{"streets":{"a":{"street":{"zones":[{"from_mm":0}]}}}}"#).unwrap();
+        assert!(!holds_zone_speed(raw.as_object().unwrap()));
+        let raw: Value = serde_json::from_str(r#"{"streets":{"a":{"street":{"zones":[{"from_mm":0,"speed_kmh":null}]}}}}"#).unwrap();
+        assert!(holds_zone_speed(raw.as_object().unwrap()), "a zone with no limit of its own is a decision too");
+    }
+
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, CALMING_VERSION);
+        assert_eq!(NEWEST, ZONE_SPEED_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
-        let own = format!(r#"{{"version":{CALMING_VERSION},"streets":{{}},"junctions":{{}}}}"#);
+        let own = format!(r#"{{"version":{ZONE_SPEED_VERSION},"streets":{{}},"junctions":{{}}}}"#);
         assert!(matches!(parse(Some(&own)), Document::Current(_)));
     }
 
