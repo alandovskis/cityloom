@@ -7,7 +7,7 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { expect, forgive, live, mapReady, openStreet, test } from "./fixtures";
 
-// The design review report: the map page's Share menu writes a two-page PDF in the browser (the `cityloom_report`
+// The design review report: the map page's Share menu writes a PDF in the browser (a cover, a summary and the sources pages) (the `cityloom_report`
 // module, loaded on first use by `web/report.js`) and saves it. The file is read back with pdf.js.
 
 const VERSION = readFileSync(new URL("../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
@@ -40,8 +40,11 @@ test("the Share menu downloads the report as a PDF", async ({ page }) => {
   expect(file.suggestedFilename()).toMatch(/^cityloom-.*\.pdf$/);
   expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
   const { pages, text } = await read(bytes);
-  expect(pages).toBe(2);
+  expect(pages).toBeGreaterThanOrEqual(3);
   expect(text).toContain("Plateau");
+  expect(text).toContain("Room for the transition");
+  expect(text).toContain("Federal Highway Administration");
+  expect(text).toContain("Every other rule and recommendation");
   expect(text).toContain(VERSION);
   expect(text).toMatch(/\bPass\b/);
   expect(text).toMatch(/\bFail\b/);
@@ -58,7 +61,8 @@ test("the report downloads in French when the page is French", async ({ page }) 
   await page.locator("#report").click();
   const file = await pending;
   const { pages, text } = await read(readFileSync(await file.path()));
-  expect(pages).toBe(2);
+  expect(pages).toBeGreaterThanOrEqual(3);
+  expect(text).toContain("Place pour la transition");
   expect(text).toContain("Réussite");
   expect(text).toContain("Échec");
   expect(text).toContain(VERSION);

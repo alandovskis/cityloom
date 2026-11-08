@@ -35,47 +35,81 @@ pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportD
     ReportData {
         lang: i18n.locale_now().tag().to_string(),
         title: i18n.tr_now("map-report-title", &Args::new().str("area", facts.area.clone())),
-        pages: vec![cover, summary(facts, i18n), sources(i18n)],
+        pages: [vec![cover, summary(facts, i18n)], sources(i18n)].concat(),
     }
 }
 
-/// The sources of the rules that name one, then the notice that the others are placeholders. Read from the registry
-/// the pages read, so the report cannot cite what a page does not.
-fn sources(i18n: &I18n) -> Vec<Block> {
+/// The lines a page can hold before the writer cuts it, with room to spare: the writer draws 11 pt text with a
+/// leading of 1.35 inside 54 pt margins (about 46 lines), and wraps about 90 characters a line.
+const PAGE_LINES: usize = 36;
+const LINE_CHARS: usize = 80;
+
+/// What a block costs in lines of a page, rounded up and with its gap.
+fn lines_of(block: &Block) -> usize {
+    match block {
+        Block::Heading { text, .. } => 2 + text.chars().count() / LINE_CHARS,
+        Block::Paragraph { text } => 1 + text.chars().count().div_ceil(LINE_CHARS),
+        Block::Table { .. } => PAGE_LINES,
+    }
+}
+
+/// Lays groups of blocks (a rule's heading and paragraphs, kept together) on pages of at most `PAGE_LINES`, the first
+/// page opened by `first` and the later ones by `later`, the last page closed by `last`. A group is never split; one
+/// longer than a page gets a page of its own, and the writer cuts what does not fit, so groups are kept short.
+fn paginate(first: Vec<Block>, later: &dyn Fn() -> Block, groups: Vec<Vec<Block>>, last: Block) -> Vec<Vec<Block>> {
+    let mut pages = vec![first];
+    let mut used: usize = pages[0].iter().map(lines_of).sum();
+    let mut on_page = 0;
+    for group in groups {
+        let cost: usize = group.iter().map(lines_of).sum();
+        if used + cost > PAGE_LINES && on_page > 0 {
+            let head = later();
+            used = lines_of(&head);
+            on_page = 0;
+            pages.push(vec![head]);
+        }
+        used += cost;
+        on_page += 1;
+        let last = pages.len() - 1;
+        pages[last].extend(group);
+    }
+    if used + lines_of(&last) > PAGE_LINES {
+        pages.push(vec![later()]);
+    }
+    let end = pages.len() - 1;
+    pages[end].push(last);
+    pages
+}
+
+/// The sources of the rules that name one, then the notice that the others are placeholders: a heading and the
+/// words of each rule, on as many pages as they need. Read from the registry the pages read (`note_now`), so the
+/// report cannot cite what a page does not.
+fn sources(i18n: &I18n) -> Vec<Vec<Block>> {
     let say = |key: &str| i18n.tr_now(key, &Args::new());
     let units = crate::shared::units::Units::Metres;
-    let rows = crate::shared::sources::cited()
+    let groups = crate::shared::sources::cited()
         .map(|(rule, label)| {
-            let n = crate::shared::sources::citation(rule);
-            let sources = n
-                .sources
-                .iter()
-                .map(|s| {
-                    let args = Args::new()
-                        .str("publisher", s.publisher)
-                        .str("title", s.title)
-                        .str("jurisdiction", crate::shared::said::say_now(i18n, units, &s.jurisdiction));
-                    let text = i18n.tr_now("src-source", &args);
-                    match s.url {
-                        Some(url) => format!("{text} {url}"),
-                        None => text,
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("; ");
-            vec![say(label), say(n.confidence.key()), crate::shared::said::say_now(i18n, units, &n.applies), sources]
+            let n = crate::shared::sources::note_now(rule, i18n, units);
+            let mut group = vec![
+                Block::Heading { level: 3, text: say(label) },
+                Block::Paragraph { text: i18n.tr_now("map-report-source-line", &Args::new().str("status", n.summary).str("applies", n.applies)) },
+            ];
+            group.extend(n.sources.into_iter().map(|s| Block::Paragraph {
+                text: match s.url {
+                    Some(url) => format!("{} {url}", s.text),
+                    None => s.text,
+                },
+            }));
+            group
         })
         .collect();
-    vec![
-        Block::Heading { level: 2, text: say("map-report-sources") },
-        Block::Paragraph { text: say("map-report-sources-intro") },
-        Block::Table {
-            caption: say("map-report-sources-caption"),
-            head: vec![say("map-report-col-rule"), say("map-report-col-status"), say("map-report-col-applies"), say("map-report-col-sources")],
-            rows,
-        },
+    let first = vec![Block::Heading { level: 2, text: say("map-report-sources") }, Block::Paragraph { text: say("map-report-sources-intro") }];
+    paginate(
+        first,
+        &|| Block::Heading { level: 2, text: say("map-report-sources-continued") },
+        groups,
         Block::Paragraph { text: say("map-report-sources-placeholders") },
-    ]
+    )
 }
 
 fn summary(facts: &Facts, i18n: &I18n) -> Vec<Block> {
@@ -174,5 +208,30 @@ mod tests {
         assert_eq!(slug("Plateau Mont-Royal, Montréal"), "plateau-mont-royal-montreal");
         assert_eq!(slug("???"), "area");
         assert!(slug(&"ab ".repeat(100)).len() <= 60);
+    }
+
+    #[test]
+    fn many_cited_rules_are_spread_over_pages_none_over_full_and_none_lost() {
+        let rule = |i: usize| {
+            vec![
+                Block::Heading { level: 3, text: format!("Rule {i}") },
+                Block::Paragraph { text: "word ".repeat(60) },
+                Block::Paragraph { text: "source ".repeat(40) },
+            ]
+        };
+        let pages = paginate(
+            vec![Block::Heading { level: 2, text: "Sources".into() }, Block::Paragraph { text: "intro".into() }],
+            &|| Block::Heading { level: 2, text: "Sources (continued)".into() },
+            (0..120).map(rule).collect(),
+            Block::Paragraph { text: "closing".into() },
+        );
+        assert!(pages.len() > 10);
+        for page in &pages {
+            assert!(page.iter().map(lines_of).sum::<usize>() <= PAGE_LINES, "{page:?}");
+        }
+        let headings: Vec<_> = pages.iter().flatten().filter_map(|b| if let Block::Heading { text, .. } = b { Some(text.clone()) } else { None }).collect();
+        assert!((0..120).all(|i| headings.contains(&format!("Rule {i}"))));
+        assert!(matches!(pages.last().unwrap().last(), Some(Block::Paragraph { text }) if text == "closing"));
+        assert!(matches!(&pages[1][0], Block::Heading { level: 2, text } if text == "Sources (continued)"));
     }
 }

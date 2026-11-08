@@ -9,8 +9,11 @@ use crate::shared::sources::{Confidence, note};
 use crate::shared::units::Units;
 
 /// The disclosure of the rule `rule`, worded in the page's language.
-pub fn source_note(rule: &'static str, i18n: &I18n, units: Units) -> impl IntoView + use<> {
+/// `check` is the words of the check the note sits under; it names the summary for a screen reader, since every
+/// summary would otherwise read alike.
+pub fn source_note(rule: &'static str, check: &str, i18n: &I18n, units: Units) -> impl IntoView + use<> {
     let n = note(rule, i18n, units);
+    let name = i18n.tr("src-summary-for", &Args::new().str("summary", n.summary.clone()).str("check", check));
     let open = i18n.tr("src-open", &Args::new());
     let placeholder = n.confidence == Confidence::Placeholder;
     let sources = n
@@ -23,7 +26,7 @@ pub fn source_note(rule: &'static str, i18n: &I18n, units: Units) -> impl IntoVi
         .collect_view();
     view! {
         <details class="src" class:placeholder=placeholder>
-            <summary>{n.summary}</summary>
+            <summary aria-label=name>{n.summary}</summary>
             <p>{n.applies}</p>
             <ul>{sources}</ul>
         </details>
@@ -38,16 +41,20 @@ mod tests {
 
     #[test]
     fn a_placeholder_rule_is_marked_and_lists_no_reference() {
-        let h = html(|| source_note("calming-length", &crate::i18n_for(Locale::En), Units::Metres).into_any());
-        assert!(h.contains("class=\"src placeholder\"") && h.contains("Source: placeholder, no source"));
+        let h = html(|| source_note("calming-length", "Check", &crate::i18n_for(Locale::En), Units::Metres).into_any());
+        assert!(
+            h.contains("class=\"src placeholder\"")
+                && h.contains("Source: placeholder, no source")
+                && h.contains("aria-label=\"Source: placeholder, no source (Check)\"")
+        );
         assert!(!h.contains("<a "));
     }
 
     #[test]
     fn a_cited_rule_links_each_reference_to_a_new_tab_that_says_so() {
-        let h = html(|| source_note("transition-room", &crate::i18n_for(Locale::En), Units::Metres).into_any());
+        let h = html(|| source_note("transition-room", "Check", &crate::i18n_for(Locale::En), Units::Metres).into_any());
         assert!(h.contains("class=\"src\"") && h.contains("Source: named, figures not checked"));
         assert!(h.contains("target=\"_blank\"") && h.contains("rel=\"noopener noreferrer\""));
-        assert!(h.contains("in a new tab") && h.contains("Federal Highway Administration"));
+        assert!(h.contains("opens in a new tab") && h.contains(">Open reference<") && h.contains("Federal Highway Administration"));
     }
 }

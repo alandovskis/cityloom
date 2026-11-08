@@ -896,15 +896,19 @@ mod report {
             .collect()
     }
 
+    fn texts_of(pages: &[Vec<Block>]) -> String {
+        pages.iter().flat_map(|p| texts(p)).collect::<Vec<_>>().join("\n")
+    }
+
     fn table(data: &ReportData) -> Vec<Vec<String>> {
         data.pages[1].iter().find_map(|b| if let Block::Table { rows, .. } = b { Some(rows.clone()) } else { None }).expect("the summary has a table")
     }
 
     #[test]
-    fn the_report_has_a_cover_a_summary_and_a_sources_page() {
+    fn the_report_has_a_cover_a_summary_and_the_sources_pages() {
         let (vm, ..) = sample_in(Locale::En);
         let data = vm.report_data();
-        assert_eq!(data.pages.len(), 3);
+        assert!(data.pages.len() >= 3);
         assert_eq!(data.lang, "en");
         let cover = texts(&data.pages[0]);
         assert!(matches!(&data.pages[0][0], Block::Heading { level: 1, text } if *text == vm.title()));
@@ -956,12 +960,12 @@ mod report {
     #[test]
     fn the_sources_page_lists_each_cited_rule_with_its_references_and_says_the_rest_are_placeholders() {
         let (vm, ..) = sample_in(Locale::En);
-        let page = texts(&vm.report_data().pages[2]).join("\n");
+        let page = texts_of(&vm.report_data().pages[2..]);
         assert!(page.contains("Room for the transition") && page.contains("Lane drops"), "{page}");
         assert!(page.contains("Federal Highway Administration") && page.contains("https://mutcd.fhwa.dot.gov/"), "{page}");
         assert!(page.contains("placeholder"), "{page}");
         let (fr, ..) = sample_in(Locale::FrCa);
-        let page = texts(&fr.report_data().pages[2]).join("\n");
+        let page = texts_of(&fr.report_data().pages[2..]);
         assert!(page.contains("Place pour la transition") && page.contains("provisoire"), "{page}");
     }
 

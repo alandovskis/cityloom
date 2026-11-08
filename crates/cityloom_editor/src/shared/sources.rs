@@ -1,5 +1,6 @@
 //! The sources behind the design rules (#78): one table, read by every view and by the report, so a citation is
-//! written once. A rule is named by its check id (`transition-room`, `crossing`, ...). A rule with no entry is a
+//! written once. A rule is named by its check id (`transition-room`, `crossing`, ...); the street and the junction page
+//! share one namespace, so an id used by both pages (`stop-lane` is) must not be given an entry. A rule with no entry is a
 //! synthetic placeholder, and says so: the registry never answers "nothing", so a rule cannot be shown unmarked.
 //!
 //! Every figure in the catalogue is still UNVERIFIED (see CLAUDE.md). An entry that names a source records where a
@@ -7,7 +8,7 @@
 //! `Confidence` gains a `Verified` the day a figure is checked against its source.
 
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::said::{Said, say};
+use crate::shared::said::{Said, say, say_now};
 use crate::shared::units::Units;
 
 /// How far a rule can be trusted.
@@ -202,20 +203,28 @@ pub struct Note {
 
 /// The words of a rule's citation; watched, so a view is drawn again when the language changes.
 pub fn note(rule: &'static str, i18n: &I18n, units: Units) -> Note {
+    words(rule, &|key, args| i18n.tr(key, args), &|said| say(i18n, units, said))
+}
+
+/// The same, for a command (the report): nothing is watched.
+pub fn note_now(rule: &'static str, i18n: &I18n, units: Units) -> Note {
+    words(rule, &|key, args| i18n.tr_now(key, args), &|said| say_now(i18n, units, said))
+}
+
+fn words(rule: &'static str, tr: &dyn Fn(&str, &Args) -> String, said: &dyn Fn(&Said) -> String) -> Note {
     let c = citation(rule);
-    let status = i18n.tr(c.confidence.key(), &Args::new());
+    let status = tr(c.confidence.key(), &Args::new());
     Note {
         confidence: c.confidence,
-        summary: i18n.tr("src-summary", &Args::new().str("status", status)),
-        applies: say(i18n, units, &c.applies),
+        summary: tr("src-summary", &Args::new().str("status", status)),
+        applies: said(&c.applies),
         sources: c
             .sources
             .iter()
             .map(|s| NoteSource {
-                text: i18n
-                    .tr("src-source", &Args::new().str("publisher", s.publisher).str("title", s.title).str("jurisdiction", say(i18n, units, &s.jurisdiction))),
+                text: tr("src-source", &Args::new().str("publisher", s.publisher).str("title", s.title).str("jurisdiction", said(&s.jurisdiction))),
                 url: s.url,
-                open: i18n.tr("src-open-label", &Args::new().str("title", s.title)),
+                open: tr("src-open-label", &Args::new().str("title", s.title)),
             })
             .collect(),
     }
