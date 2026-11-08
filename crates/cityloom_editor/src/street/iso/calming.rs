@@ -8,7 +8,8 @@
 //! A transition's taper is not followed: the table lies across the pieces as the section has them.
 
 use crate::shared::catalogue::Side;
-use crate::street::model::{CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingKind, SegView, ShownCalming, TABLE_HEIGHT_MM};
+use crate::shared::catalogue::is_motor;
+use crate::street::model::{CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingKind, FILTER_HEIGHT_MM, SegView, ShownCalming, TABLE_HEIGHT_MM};
 
 use super::order::Bx;
 use super::projection::drawn_mm;
@@ -64,11 +65,25 @@ impl Buildout {
     }
 }
 
+/// One modal filter to draw: a barrier across the motor pieces of the roadway, `along` the stretch.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Filter {
+    pub along: (f64, f64),
+}
+
+impl Filter {
+    /// How high it is drawn.
+    pub fn height() -> f64 {
+        drawn_mm(FILTER_HEIGHT_MM)
+    }
+}
+
 /// What the run lays the elements over: the elements drawn and the roadway pieces they lift.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Laid {
     pub tables: Vec<Table>,
     pub buildouts: Vec<Buildout>,
+    pub filters: Vec<Filter>,
     /// The pieces lifted, indices into the section's pieces: those drawn flat on the roadway, left to right.
     pub pieces: Vec<usize>,
 }
@@ -83,7 +98,7 @@ impl Laid {
         }
         let tables = shown
             .iter()
-            .filter(|s| s.kind != CalmingKind::Chicane && s.drawn())
+            .filter(|s| !matches!(s.kind, CalmingKind::Chicane | CalmingKind::ModalFilter) && s.drawn())
             .map(|s| Table { along: s.along, full: s.full, plateau: s.plateau, kind: s.kind })
             .collect();
         let buildouts = shown
@@ -91,7 +106,8 @@ impl Laid {
             .filter(|s| s.kind == CalmingKind::Chicane)
             .flat_map(|s| s.buildouts.iter().map(|&(n, l, side)| Buildout { along: (n, l), side }))
             .collect();
-        Laid { tables, buildouts, pieces }
+        let filters = shown.iter().filter(|s| s.kind == CalmingKind::ModalFilter && s.drawn()).map(|s| Filter { along: s.along }).collect();
+        Laid { tables, buildouts, filters, pieces }
     }
 
     /// The stretches of the street the markings are kept off: each element, ramp to ramp.
@@ -116,6 +132,22 @@ impl Laid {
     /// The box a build-out fills, for ordering.
     pub fn buildout_bx(&self, segs: &[SegView], b: &Buildout) -> Bx {
         Bx { x: self.buildout_across(segs, b), y: (0.0, Buildout::height()), z: b.along }
+    }
+
+    /// Where a modal filter stands across: the motor pieces of the section, so that a bike lane or a sidewalk beside
+    /// them is left clear, the way through. Nothing across when the lifted pieces hold no motor piece.
+    pub fn filter_across(&self, segs: &[SegView]) -> Option<(f64, f64)> {
+        let motor: Vec<&SegView> = self.pieces.iter().map(|&i| &segs[i]).filter(|s| is_motor(s.kind)).collect();
+        if motor.is_empty() {
+            return None;
+        }
+        Some(motor.iter().fold((f64::MAX, f64::MIN), |(lo, hi), s| (lo.min(s.x_mm as f64), hi.max((s.x_mm + s.width_mm) as f64))))
+    }
+
+    /// The box a modal filter fills, for ordering. An empty one where it has nothing to stand across.
+    pub fn filter_bx(&self, segs: &[SegView], f: &Filter) -> Bx {
+        let x = self.filter_across(segs).unwrap_or((0.0, 0.0));
+        Bx { x, y: (0.0, Filter::height()), z: f.along }
     }
 
     /// The span across of the lifted pieces.
@@ -331,5 +363,59 @@ mod drawing {
         e.add_calming(CalmingKind::Table, 5_000, 7_000).unwrap();
         let m = drawn(&e);
         assert_eq!((count(&m, "<g class=\"iso-table\""), count(&m, "<g class=\"iso-chicane\"")), (1, 2));
+    }
+    fn filter(from_mm: i32) -> Editor {
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add_calming(CalmingKind::ModalFilter, from_mm, 2_000).unwrap();
+        e
+    }
+
+    #[test]
+    fn a_modal_filter_is_one_titled_block_with_no_ramp_and_no_uid() {
+        let m = drawn(&filter(10_000));
+        assert_eq!(count(&m, "<g class=\"iso-filter\""), 1);
+        let g = &m[m.find("<g class=\"iso-filter\"").unwrap()..];
+        let g = &g[..g.find("</g>").unwrap()];
+        assert!(g.contains("<title>Modal filter</title>"), "named for a screen reader: {g}");
+        assert!(!g.contains("data-uid"), "the strip selects it, the drawing does not");
+        assert_eq!((count(&m, "iso-ramp"), count(&m, "<g class=\"iso-table\""), count(&m, "<g class=\"iso-chicane\"")), (0, 0, 0));
+        assert!(!m.contains("iso-shade-ramp"), "the ramps' shade is for tables");
+    }
+
+    #[test]
+    fn a_modal_filter_not_wholly_in_the_stretch_is_not_drawn() {
+        assert_eq!(count(&drawn(&filter(39_000)), "<g class=\"iso-filter\""), 0, "it runs to 41 m");
+        assert_eq!(count(&drawn(&filter(50_000)), "<g class=\"iso-filter\""), 0);
+        assert_eq!(count(&drawn(&filter(38_000)), "<g class=\"iso-filter\""), 1, "it ends at the 40 m");
+    }
+
+    #[test]
+    fn the_label_counts_the_modal_filters_apart_from_the_tables() {
+        let label = iso_label(&filter(10_000).view(), &en(), Units::Metres);
+        assert!(label.contains("One modal filter is shown."), "{label}");
+        assert!(!label.contains("raised table"), "{label}");
+        let none = iso_label(&filter(50_000).view(), &en(), Units::Metres);
+        assert!(!none.contains("modal filter"), "{none}");
+    }
+
+    #[test]
+    fn a_filter_stands_across_the_motor_pieces_only() {
+        use crate::shared::catalogue::{StreetClass, is_motor, is_roadway, kind_index};
+        use crate::street::model::Piece;
+        let piece = |id: &str, w: i32| Piece { kind: kind_index(id).unwrap(), width_mm: w, direction: None, variants: vec![] };
+        let pieces = [piece("sidewalk", 2_000), piece("bike", 1_800), piece("travel", 3_500), piece("travel", 3_500), piece("sidewalk", 2_000)];
+        let s = Street::imported(StreetClass::Local, Side::Right, &pieces);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add_calming(CalmingKind::ModalFilter, 10_000, 2_000).unwrap();
+        let v = e.view();
+        let flat: Vec<(f64, usize, Option<bool>)> = v.segments.iter().enumerate().filter(|(_, g)| is_roadway(g.kind)).map(|(i, _)| (0.0, i, None)).collect();
+        let laid = Laid::of(&v.calming_shown, &flat);
+        assert_eq!(laid.filters.len(), 1);
+        let motor: Vec<_> = v.segments.iter().filter(|g| is_motor(g.kind)).collect();
+        let want = (motor.iter().map(|g| g.x_mm as f64).fold(f64::MAX, f64::min), motor.iter().map(|g| (g.x_mm + g.width_mm) as f64).fold(f64::MIN, f64::max));
+        assert_eq!(laid.filter_across(&v.segments), Some(want));
+        let bike = v.segments.iter().find(|g| !is_motor(g.kind) && is_roadway(g.kind)).expect("a bike lane");
+        assert!(want.0 >= (bike.x_mm + bike.width_mm) as f64, "the bike lane is left clear");
     }
 }
