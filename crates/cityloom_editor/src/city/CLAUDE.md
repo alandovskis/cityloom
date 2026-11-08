@@ -56,8 +56,9 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
   - `GREEN_VERSION` 11: `Street.green`.
   - `CALMING_VERSION` 12 (`GREEN_VERSION + 1`): `Street.calming`.
   - `ZONE_SPEED_VERSION` 13: a zone's own `speed_kmh` (`holds_zone_speed`).
-  - `CHICANE_VERSION` 14: a chicane (`holds_chicane`), the newest and the first rule of `version_for`.
-- `NEWEST` is `CHICANE_VERSION` (14). Versions 4 up to `NEWEST` are read; above it is neither read nor written over.
+  - `CHICANE_VERSION` 14: a chicane (`holds_chicane`).
+  - `FILTER_VERSION` 15: a modal filter (`holds_filter`), the newest and the first rule of `version_for`.
+- `NEWEST` is `FILTER_VERSION` (15). Versions 4 up to `NEWEST` are read; above it is neither read nor written over.
 - An older build meeting a newer document leaves it alone; so does this build's sync (`sync::local` finds that kind not `usable` and says it is paused).
 - Whichever of two open PRs taking the next number merges second renumbers its constant.
 - Speed limit: `Street.speed` (`Speed::Undecided` | `NotSet` | `Kmh(n)`) is saved as `speed_kmh` only when the designer changed it from the import (`City::street_record` compares with `today_streets`): absent when equal (follows OSM `maxspeed` at each import); `null` for Not set against an OSM speed; a number for the designer's.
