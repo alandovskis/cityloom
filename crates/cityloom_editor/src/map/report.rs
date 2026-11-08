@@ -151,8 +151,8 @@ fn street_page(city: &City, uid: u32, zones: usize, name: String, region: usize,
     page.extend(lines.into_iter().map(|text| Block::Paragraph { text }));
     let (figure_before, figure_after) = crate::street::drawing::figures(&before, &after, i18n, FIGURE_W, FIGURE_H);
     let items = [
-        captioned("map-report-place-before", crate::street::drawing::alt(&before, i18n), figure_before, i18n),
-        captioned("map-report-place-after", crate::street::drawing::alt(&after, i18n), figure_after, i18n),
+        captioned("map-report-place-before", crate::street::drawing::alt(&before, i18n, units), figure_before, i18n),
+        captioned("map-report-place-after", crate::street::drawing::alt(&after, i18n, units), figure_after, i18n),
     ];
     page.push(Block::Figures { items: items.to_vec() });
     let share = |shares: &[crate::street::model::Share], mode: Mode| {

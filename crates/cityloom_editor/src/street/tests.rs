@@ -2191,7 +2191,10 @@ fn two_streets_with_different_widths_give_different_figures() {
 #[test]
 fn the_street_alt_text_names_what_is_drawn() {
     let v = Editor::new(0).view();
-    let (en, fr) = (crate::street::drawing::alt(&v, &crate::i18n_for(Locale::En)), crate::street::drawing::alt(&v, &crate::i18n_for(Locale::FrCa)));
+    let (en, fr) = (
+        crate::street::drawing::alt(&v, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres),
+        crate::street::drawing::alt(&v, &crate::i18n_for(Locale::FrCa), crate::shared::units::Units::Metres),
+    );
     assert!(!en.is_empty() && !fr.is_empty() && en != fr, "{en} / {fr}");
 }
 

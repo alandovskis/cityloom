@@ -34,7 +34,7 @@ pub fn figures(before: &View, after: &View, i18n: &I18n, box_w: f32, box_h: f32)
     flatten_pair((&db, &pb), (&da, &pa), box_w, box_h)
 }
 
-/// What a screen reader is told the drawing is, in metres.
-pub fn alt(v: &View, i18n: &I18n) -> String {
-    iso_label(v, i18n, Units::default())
+/// What a screen reader is told the drawing is, in the person's units.
+pub fn alt(v: &View, i18n: &I18n, units: Units) -> String {
+    iso_label(v, i18n, units)
 }
