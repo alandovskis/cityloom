@@ -5,6 +5,7 @@
 
 mod corridor;
 mod hours;
+mod ids;
 mod lane;
 pub mod merge;
 mod network;
@@ -17,6 +18,7 @@ mod zone;
 
 pub use corridor::{Corridor, UserClass};
 pub use hours::{Hours, Window};
+pub use ids::{NodeId, RoadId};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
 pub use node::{Control, Node};

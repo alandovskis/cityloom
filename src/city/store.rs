@@ -534,9 +534,9 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Direction, Lane, LaneKind, Node, NodeRef, Point, Road, RoadType, WayRef, Zone};
-        let node = |id, x_m, junction| Node {
-            id,
+        use cityloom_model::{Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
+        let node = |id: u32, x_m, junction| Node {
+            id: NodeId(id),
             osm_nodes: vec![NodeRef(id as i64)],
             osm_versions: Default::default(),
             x_m,
@@ -550,12 +550,12 @@ mod tests {
             corridors: vec![],
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
             roads: vec![Road {
-                id: 1,
+                id: RoadId(1),
                 osm_ways: vec![WayRef::new(7)],
                 name: "Only Street".into(),
                 road_type: RoadType::Local,
-                from: 1,
-                to: 2,
+                from: NodeId(1),
+                to: NodeId(2),
                 zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Direction::Forward), lane(LaneKind::Driving, Direction::Backward)])],
                 speed_kmh: None,
                 points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
@@ -860,7 +860,7 @@ mod tests {
         let mut network = tiny_network();
         // a second road of the same way between the same two nodes, along the same line: nothing tells them apart
         let mut twin = network.roads[0].clone();
-        twin.id = 2;
+        twin.id = cityloom_model::RoadId(2);
         network.roads.push(twin);
         area.keep_network(&network);
         let street = area.open().view(0).edges[0].uid;

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Lane, LaneKind, Network};
+use crate::{Lane, LaneKind, Network, NodeId, RoadId};
 
 /// Who a corridor serves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -39,8 +39,8 @@ impl UserClass {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Corridor {
     pub user: UserClass,
-    /// The `id`s of its roads, in order, none twice; at least one.
-    pub roads: Vec<u32>,
+    /// Its roads, in order, none twice; at least one.
+    pub roads: Vec<RoadId>,
 }
 
 impl Network {
@@ -52,8 +52,8 @@ impl Network {
         for user in UserClass::ALL {
             let serving: Vec<&crate::Road> = self.roads.iter().filter(|r| r.zones.iter().flat_map(|z| &z.lanes).any(|l| user.serves(l))).collect();
             // groups of roads by the nodes they meet at
-            let mut group_of: BTreeMap<u32, usize> = BTreeMap::new();
-            let mut groups: Vec<Vec<u32>> = Vec::new();
+            let mut group_of: BTreeMap<NodeId, usize> = BTreeMap::new();
+            let mut groups: Vec<Vec<RoadId>> = Vec::new();
             for road in serving {
                 let (a, b) = (group_of.get(&road.from).copied(), group_of.get(&road.to).copied());
                 let target = match (a, b) {
@@ -107,12 +107,12 @@ mod tests {
 
     fn road(id: u32, from: u32, to: u32, lanes: &[LaneKind]) -> Road {
         Road {
-            id,
+            id: RoadId(id),
             osm_ways: vec![],
             name: "Street".into(),
             road_type: RoadType::Local,
-            from,
-            to,
+            from: NodeId(from),
+            to: NodeId(to),
             zones: vec![Zone::whole(lanes.iter().map(|&k| lane(k)).collect())],
             speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)],
@@ -121,13 +121,13 @@ mod tests {
 
     fn network(roads: Vec<Road>) -> Network {
         let nodes = (1..=6)
-            .map(|id| Node { id, osm_nodes: vec![], osm_versions: Default::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None })
+            .map(|id| Node { id: NodeId(id), osm_nodes: vec![], osm_versions: Default::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None })
             .collect();
         Network { left_hand: false, nodes, roads, corridors: vec![] }
     }
 
     fn roads_of(net: &Network, user: UserClass) -> Vec<Vec<u32>> {
-        net.corridors_of(user).map(|c| c.roads.clone()).collect()
+        net.corridors_of(user).map(|c| c.roads.iter().map(|r| r.0).collect()).collect()
     }
 
     #[test]
@@ -181,6 +181,6 @@ mod tests {
         let mut value = value;
         value["corridors"] = serde_json::json!([{"user": "driver", "roads": [1, 9]}, {"user": "cyclist", "roads": [9]}]);
         let read: Network = serde_json::from_value(value).unwrap();
-        assert_eq!(read.corridors, [Corridor { user: UserClass::Driver, roads: vec![1] }]);
+        assert_eq!(read.corridors, [Corridor { user: UserClass::Driver, roads: vec![RoadId(1)] }]);
     }
 }

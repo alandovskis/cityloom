@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{Lane, Point, RoadType, Street, WayRef, Zone};
+use crate::{Lane, NodeId, Point, RoadId, RoadType, Street, WayRef, Zone};
 
 /// A street between two nodes, made from one or more OpenStreetMap ways.
 ///
@@ -12,14 +12,14 @@ use crate::{Lane, Point, RoadType, Street, WayRef, Zone};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "RoadWire", into = "RoadWire")]
 pub struct Road {
-    pub id: u32,
+    pub id: RoadId,
     /// The OSM ways it was made from, each with its version when known; the key an edit is kept under.
     pub osm_ways: Vec<WayRef>,
     pub name: String,
     /// How the road ranks, from OSM's `highway` value.
     pub road_type: RoadType,
-    pub from: u32,
-    pub to: u32,
+    pub from: NodeId,
+    pub to: NodeId,
     /// The road divided lengthways, in order from `from`: at least one, the first starting at 0 and each one after
     /// further along than the one before. A road made from one OSM way has one.
     pub zones: Vec<Zone>,
@@ -82,15 +82,15 @@ impl Road {
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct RoadWire {
-    id: u32,
+    id: RoadId,
     osm_ways: Vec<i64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     osm_versions: BTreeMap<i64, i32>,
     name: Option<String>,
     #[serde(alias = "highway")]
     road_type: RoadType,
-    from: u32,
-    to: u32,
+    from: NodeId,
+    to: NodeId,
     /// Written for a road of one zone, as `lanes` always was.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     lanes: Vec<Lane>,
@@ -157,12 +157,12 @@ mod tests {
     #[test]
     fn a_road_is_kept_with_its_ways_and_their_versions_apart_as_it_always_was() {
         let road = Road {
-            id: 1,
+            id: RoadId(1),
             osm_ways: vec![WayRef::with_version(5, 49), WayRef::new(7)],
             name: "Main".into(),
             road_type: RoadType::Local,
-            from: 1,
-            to: 2,
+            from: NodeId(1),
+            to: NodeId(2),
             zones: vec![Zone::whole(vec![])],
             speed_kmh: None,
             points: vec![Point::new(0.0, 1.0)],
@@ -173,7 +173,17 @@ mod tests {
     }
 
     fn road_of(zones: Vec<Zone>) -> Road {
-        Road { id: 1, osm_ways: vec![WayRef::new(5)], name: "Main".into(), road_type: RoadType::Local, from: 1, to: 2, zones, speed_kmh: None, points: vec![] }
+        Road {
+            id: RoadId(1),
+            osm_ways: vec![WayRef::new(5)],
+            name: "Main".into(),
+            road_type: RoadType::Local,
+            from: NodeId(1),
+            to: NodeId(2),
+            zones,
+            speed_kmh: None,
+            points: vec![],
+        }
     }
 
     fn lane(width_m: f64) -> Lane {

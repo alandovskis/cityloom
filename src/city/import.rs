@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, Point, RoadType, WayRef};
+use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, NodeId, Point, RoadType, WayRef};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -212,18 +212,18 @@ impl Layout {
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
         let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.base_lanes().is_empty()).collect();
-        let mut degree: BTreeMap<u32, usize> = BTreeMap::new();
+        let mut degree: BTreeMap<NodeId, usize> = BTreeMap::new();
         for r in &roads {
             *degree.entry(r.from).or_default() += 1;
             *degree.entry(r.to).or_default() += 1;
         }
         let nodes: Vec<_> = network.nodes.iter().filter(|n| degree.contains_key(&n.id)).collect();
-        let index: BTreeMap<u32, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
+        let index: BTreeMap<NodeId, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
         let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
         let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.x_m), y.max(n.y_m)));
         let origin_m = (!nodes.is_empty()).then_some((min_x, max_y));
         let mm_of = |x_m: f64, y_m: f64| (((x_m - min_x) * 1000.0).round() as i32, ((max_y - y_m) * 1000.0).round() as i32);
-        let node_mm = |id: u32| {
+        let node_mm = |id: NodeId| {
             let n = nodes[index[&id]];
             mm_of(n.x_m, n.y_m)
         };
@@ -279,7 +279,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeRef, Point, Road, WayRef, Zone};
+    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Road, RoadId, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -533,8 +533,8 @@ mod tests {
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.
     fn crossing() -> Network {
-        let node = |id, x_m, y_m, junction, control| Node {
-            id,
+        let node = |id: u32, x_m, y_m, junction, control| Node {
+            id: NodeId(id),
             osm_nodes: vec![NodeRef(id as i64 * 10)],
             osm_versions: Default::default(),
             x_m,
@@ -542,13 +542,13 @@ mod tests {
             junction,
             control,
         };
-        let road = |id, name: &str, to, points| Road {
-            id,
+        let road = |id: u32, name: &str, to: u32, points| Road {
+            id: RoadId(id),
             osm_ways: vec![WayRef::new(id as i64 * 100)],
             name: name.to_string(),
             road_type: RoadType::Local,
-            from: 1,
-            to,
+            from: NodeId(1),
+            to: NodeId(to),
             zones: vec![Zone::whole(vec![
                 lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
                 lane(LaneKind::Driving, Direction::Backward, 3.0),
@@ -641,7 +641,7 @@ mod tests {
         for (i, &(x, y)) in ends.iter().enumerate() {
             let id = i as u32 + 2;
             net.nodes.push(Node {
-                id,
+                id: NodeId(id),
                 osm_nodes: vec![NodeRef(id as i64)],
                 osm_versions: Default::default(),
                 x_m: x,
@@ -650,8 +650,8 @@ mod tests {
                 control: Control::None,
             });
             let mut road = crossing().roads[0].clone();
-            road.id = id;
-            road.to = id;
+            road.id = RoadId(id);
+            road.to = NodeId(id);
             road.points = vec![Point::new(0.0, 0.0), Point::new(x, y)];
             net.roads.push(road);
         }

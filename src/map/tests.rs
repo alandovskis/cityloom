@@ -723,24 +723,31 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
 /// The home page is built before the area's roads are read, so that its search does not wait for them.
 #[test]
 fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
     let (ports, _, storage) = crate::shared::ports::test_ports();
     let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     assert!(vm.view().edges.is_empty(), "no roads are kept yet");
-    let node =
-        |id, x_m| Node { id, osm_nodes: vec![NodeRef(id as i64)], osm_versions: Default::default(), x_m, y_m: 0.0, junction: false, control: Control::None };
+    let node = |id, x_m| Node {
+        id: NodeId(id),
+        osm_nodes: vec![NodeRef(id as i64)],
+        osm_versions: Default::default(),
+        x_m,
+        y_m: 0.0,
+        junction: false,
+        control: Control::None,
+    };
     let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
     let network = Network {
         left_hand: false,
         corridors: vec![],
         nodes: vec![node(1, 0.0), node(2, 100.0)],
         roads: vec![Road {
-            id: 1,
+            id: RoadId(1),
             osm_ways: vec![WayRef::new(7)],
             name: "Only Street".into(),
             road_type: RoadType::Local,
-            from: 1,
-            to: 2,
+            from: NodeId(1),
+            to: NodeId(2),
             zones: vec![Zone::whole(vec![lane(Direction::Forward), lane(Direction::Backward)])],
             speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],

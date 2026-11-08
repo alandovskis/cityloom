@@ -340,7 +340,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
     for (id, i) in &streets.intersections {
         let c = i.polygon.center();
         net.nodes.push(Node {
-            id: id.0 as u32,
+            id: NodeId(id.0 as u32),
             osm_nodes: i.osm_ids.iter().map(|n| NodeRef(n.0)).collect(),
             osm_versions: i.osm_ids.iter().filter_map(|n| Some((NodeRef(n.0), doc.nodes.get(n)?.version?))).collect(),
             x_m: c.x(),
@@ -359,12 +359,12 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         let Some(name) = r.name.clone().filter(|n| Road::is_name(Some(n))) else { continue };
         let hours = r.osm_ids.iter().find_map(|w| doc.ways.get(w).and_then(|w| bus_hours(&w.tags)));
         net.roads.push(Road {
-            id: id.0 as u32,
+            id: RoadId(id.0 as u32),
             osm_ways: r.osm_ids.iter().map(|w| WayRef { id: w.0, version: doc.ways.get(w).and_then(|way| way.version) }).collect(),
             name,
             road_type: RoadType::from_osm(&r.highway_type),
-            from: r.src_i.0 as u32,
-            to: r.dst_i.0 as u32,
+            from: NodeId(r.src_i.0 as u32),
+            to: NodeId(r.dst_i.0 as u32),
             speed_kmh: speed_kmh(r.speed_limit),
             zones: vec![Zone::whole(join_two_way_bike_lanes(
                 r.lane_specs_ltr

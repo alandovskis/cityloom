@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::NodeRef;
+use crate::{NodeId, NodeRef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -14,7 +14,7 @@ pub enum Control {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Node {
-    pub id: u32,
+    pub id: NodeId,
     /// The OSM nodes it stands for; the key an edit is kept under.
     pub osm_nodes: Vec<NodeRef>,
     /// The version OpenStreetMap had of each of them when the data was read.
