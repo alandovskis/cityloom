@@ -1,0 +1,64 @@
+# Map slice (`src/map/`)
+
+Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
+
+## Map page and overlay
+- Exception to the root's SVG rule: MapLibre basemap, no SVG. `svg.rs` and `camera.rs` remain only for the home hero (`map/home.rs`).
+- `overlay.rs` makes GeoJSON places (`hot` ids `s-<uid>` / `j-<uid>`; streets carry `class`); `style.rs` holds the layers (dotted white `places-pedestrian`; `zone-ticks` via `overlay::zone_ticks`, `style::zone_tick_layers`, `Mapper::set_zone_ticks`; rules in the root's Street zones bullet). `city::projection` places the layout on the earth.
+- The view-model reaches MapLibre only through the `Mapper` port.
+- `editable.rs`: in the open view (`MapEvent::View`, what the panels leave open) editable = a street wholly in it, a street too big for it while it crosses it, a junction whose point is in it. Sent by `Mapper::set_editable` (feature-state `editable`; `style.rs` mutes the rest). A press on a muted place opens nothing and says `map-not-editable`.
+- `MapEvent::Press` and `MapEvent::Vertex` (corner dragged) reach Rust, which decides what a press means.
+- Area rules panel: `areas.rs` (`AreasVm`, held by `MapVm`) + `areas_view.rs`, the left panel (`#inspector-toggle`, `[`; the shell opens and remembers it). Uses `restriction::draw`; the map owns the restriction UI.
+- Status line and checks lead count area-rule breakers only when no design check fails.
+- No kept roads for the area: no places, no map, page says so (`NO_ROADS`).
+- The city is read on open, on `pageshow` and when another tab writes edits; edits made on a street/junction page show on next load (known limit).
+
+## Curbside uses and transit stops on the map
+- `Street::map_uses` (`street/model/map_uses.rs`) turns `Street.curb` / `Street.stops` into `MapUse` / `MapStop` (side, along range in mm from node `a` along `shape_mm`, lateral `lo_mm`/`hi_mm`). `city::model` puts them in `EdgeView.curb_mm` / `.stops_mm` under the same gate as `zone_bands` (frame is the street's own end, length within `LENGTH_TOLERANCE_MM`). A street with neither draws and counts as before.
+- Lateral offset is positive to the right looking from `a` to `b` (layout mm, x east, y south; right normal of `(tx, ty)` is `(-ty, tx)`), `Side::Left` negative, measured from `-row_mm/2` like `PieceView.offset_mm`, so a use sits on the drawn pavement, also in a zone narrower than the row.
+- A use/stop across a zone boundary is cut there, each part taking its zone's section. A part with no curbside piece (or a stop whose section lacks what its kind needs) draws nothing, as in the 2.5D.
+- `overlay::curbside` / `overlay::stops`: thin polygon along `shape_mm` pushed to the two edges along the averaged normal, capped at 2x at a bend; a stop is a `platform` polygon plus a `dot` point carrying its `name`.
+- Layers: `curbside-casing`/`-fill`/`-line` from zoom 16, `stops-platform`/`stops-dot` from 15, `stops-name` from 17, with the places' muting expression. `set_curbside` / `set_stops` send a source only when its data changed.
+- Every feature carries `hot: "s-<uid>"` and both sources use `promoteId: "hot"`: a street's features share one id and feature state (`hot`, `editable`). MapLibre keys state by source and id, so duplicates are fine (the e2e pins `editable === false` on a muted street's use).
+- Layers go before `places-junction` (over streets, under junction marks, zone ticks, draft) so what is pressed is what is seen; `showPlaces` moves them under the marks when places arrive later (the e2e reads `getStyle().layers`). `web/basemap.js` only adds the layer ids to `hotAt` and the sources to the feature-state loop.
+- Row and screen-reader label count what the street draws (`map-curb`, `map-stops`, `curb_count` / `stop_count`). Nothing is saved differently.
+- `querySourceFeatures` is empty below the layers' `minzoom`; the e2e reads `getSource(..).serialize().data`.
+
+## Network checks (`map/network.rs`, `map/network_view.rs`, `city/model/network_read.rs`; #63, #69)
+- Findings spanning the loaded streets, in the Notes panel's Checks tab under "Does it work?" (`#network-panel`, `#network-lead`, `#network-slot`), beside the places' own checks and the Area rules.
+- `City::network_read(region)` makes a plain `NetworkRead` (`StreetRead`, `EndRead` from the zone meeting the node via `Street::at_end`, `NodeRead` with a junction's `ArmRead`s as the junction editor reads them; a pedestrian arm has no crossing). Sidewalk runs use `street::model::walkway_access` / `ACCESS_LANE_MM`.
+- `map::network::check` is the pure rule engine returning `NetworkReport { findings: Vec<NetworkFinding { rule: Check, severity: Severity, said: Said, places }>, unreadable }`. `unreadable` counts junctions the editor could not read (`NodeRead.unreadable`) or with an arm whose street is not in the network; the lead says so (`net-unreadable`), and such a junction is never taken for one with nothing found.
+- Six checks, every figure a placeholder, UNVERIFIED:
+  - **cycling**: bike-lane streets join at a node only where both have one at that end; each group but the biggest is a link cut off (`net-cycling-island`, Problem). A bike lane stopping where other streets meet and none has one: `net-cycling-ends`, Notice.
+  - **access**: pedestrian street without an unbroken sidewalk run of `ACCESS_LANE_MM` in some zone, Notice. Absolute (not against the first layout): an imported street never wide enough keeps its notice until changed.
+  - **crossings**: an arm taking traffic, neither pedestrian nor freeway, with no crossing (Problem) or one wider than `MAX_CROSSING_MM` (4.5 m, Notice).
+  - **lanes**: two streets meeting alone at a plain connection, neither pedestrian nor freeway, whose driving+transit lanes differ by more than `MAX_LANE_STEP` (1).
+  - **transit**: a transit lane stopping where others meet and none has one, Notice.
+  - **walking** (`Check::Walking`, `net-rule-walking`):
+    - `net-walking-ends`, Notice: sidewalk stops where another non-freeway street goes on without one.
+    - `net-walking-block`, Notice: non-freeway block over `MAX_BLOCK_MM` (250 m; the hand-made city's 240 m pass); names its street and end junctions.
+    - `net-walking-island`, Problem: walkable streets join at a plain connection, and at a junction only through crossable arms (pedestrian street, or arm with a crossing; an unreadable junction or arm of no known street gets the benefit of the doubt). Every route but the biggest is an island; its places are its streets, the junctions where it meets an uncrossable arm or unwalkable street, and its non-freeway streets without a sidewalk. A route touching nothing that cuts it is a fragment of the area's box: not reported.
+- Curb ramps are not modelled (covered only as sidewalk continuity and crossings).
+- `MapVm::network_rules` / `network_lead` / `network_count` (`net-*` in `map/i18n`; `NetworkCheck` per rule, `NetworkItem`s linking `street_href` / `junction_href`) rerun only when the city view changes and touch neither `status`, `checks_lead` nor Area rules counts.
+- Caps: `NETWORK_SHOWN` (50) findings per check (count is all; `net-more-findings`), `NETWORK_PLACES` (8) places per finding (`net-more-places`). A city with no places shows only the lead.
+- Known limits: the bike graph joins streets at nodes, not lanes, and does not follow a bike lane through a pedestrian street; time-of-day variants ignored; a finding links its places and does not centre the map.
+
+## Design review report (#68 PR 1 of 3; `cityloom_report/`, `map/report.rs`, `shell/share_view.rs`, `web/report.js`, `e2e/tests/report.spec.ts`)
+- Share menu (`#share-btn`, `#share-menu`, `#report`, `ui-report`) downloads a two-page Letter PDF (cover + summary of the city's checks) `cityloom-<area slug>.pdf`. The editors' menu keeps `#print`, no `#report` (`ShareMenu report=false`).
+- `cityloom_report` is data only (`ReportData`, `Block`, serde; the editor depends on it). `cityloom_report_pdf` is the writer, its own crate and wasm module (`web/pkg/cityloom_report_pdf*`; krilla, tagged PDF/UA-1, "?" for a character Noto Sans lacks), loaded on first use by `web/report.js` (`cityloomReportPdf`; fetches `web/fonts/NotoSans-{Regular,Bold}.ttf`; retries after a failure).
+- **Nothing in the editor may depend on `cityloom_report_pdf`** (feature unification would put krilla in the editor's wasm: 7.0 MB instead of 4.8 MB). `scripts/build.sh` fails if `web/pkg/cityloom_editor.js` contains `report_pdf`; `cargo tree -p cityloom_editor | grep -c krilla` must be 0.
+- Ports `PdfWriter`, `Downloads` (`save` returns a `Result`); fakes in `shared/ports.rs`. `MapVm::download_report` builds the data from the city view (`map/report.rs`, pure). A failure says `map-report-failed` via the `Announcer` and shows `ReportNotice` in `#fit-slot` (`MapVm::report_failed` / `dismiss_report_notice`; `#report-notice` `role="status"`, `#report-notice-close`, `map-report-dismiss`; reuses `fit bad` tokens; goes on the next attempt or on close).
+- Wording in `map/i18n` (`map-report-*`), so the file follows the page language. The e2e reads the file with pdf.js (`pdfjs-dist`).
+- Known limits: whole city only (no area/place scope), two pages, a table outgrowing its page is cut, nothing in it is verified engineering.
+
+## Source-data inspector (`map/source_quality.rs`, `map/source_view.rs`, `city/model/source_read.rs`; #82)
+- Provenance tab of the Notes panel (`#t-provenance` / `#p-provenance`; shell tab keys and memory carry it; slots `#source-lead`, `#source-slot`): where imported OpenStreetMap data may be missing or wrong, kept apart from the design rules. Wording: "may be missing or wrong in OpenStreetMap, not a design failure".
+- `City::source_read` (not `NetworkRead`) reads the layout as imported (`EdgeDef.section`, `EdgeDef.name`, `NodeDef.source`), unaffected by edits. `source_quality::inspect` gives `SourceReport` of `SourceFinding { kind, said, source, impact, places }`: no severity, no `Check` variant.
+- Five `Kind`s (`Name`, `Disconnected`, `DeadEnd`, `Width`, `Speed`; ids `name`, `disconnected`, `ends`, `width`, `speed`; message `prov-kind-<id>`):
+  - `Name`: `EdgeDef.name` is `None`.
+  - `Disconnected`: components other than the biggest; not reported when the group reaches a node where the road is cut at the area's box (`SourceNode.open`).
+  - `DeadEnd`: street end at a real non-junction node no other street reaches (may be real).
+  - `Width`: outside `MIN_ROW_MM`..`MAX_ROW_MM`, or a roadway piece at the catalogue's least/most for its kind (the importer clamps, so it may have been cut; the text says it cannot tell a tagged width from osm2streets' default).
+  - `Speed`: imported speed `NotSet` (not a pedestrian street).
+- Every threshold is UNVERIFIED. Not looked at (unobservable): a buffer's `buffer_type` (the model keeps only the neutral `buffer` kind).
+- View-model (`source_report` cached on the city view, `source_lead`, `source_groups`, capped by `NETWORK_SHOWN` / `NETWORK_PLACES`) feeds neither `status()`, `checks_lead()` nor the Checks tab.
