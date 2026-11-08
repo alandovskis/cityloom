@@ -79,6 +79,7 @@ pub const COLOURS: &[(&str, Css, Rgb)] = &[
     ("mat-planted", Css::App, Rgb(0x4e, 0x42, 0x30)),
     ("mat-gravel", Css::App, Rgb(0xb3, 0xaa, 0x98)),
     ("mat-trees", Css::App, Rgb(0x6a, 0x63, 0x58)),
+    ("mat-rain_garden", Css::App, Rgb(0x35, 0x57, 0x4a)),
     ("mat-concrete-line", Css::App, Rgb(0x7c, 0x80, 0x82)),
     ("mat-permeable-line", Css::App, Rgb(0x66, 0x66, 0x5f)),
     ("mat-brick-line", Css::App, Rgb(0xd6, 0xc4, 0xae)),
@@ -320,11 +321,27 @@ impl Walk<'_> {
 /// are not drawn), the projection's pixels scaled by one factor to fit `box_w` by `box_h`. The figure is the size
 /// the drawing has once fitted. Shapes it cannot draw (`Path`, `Elem`) are counted in `omitted`.
 pub fn flatten(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figure {
+    flatten_at(d, p, scale_into(p, box_w, box_h))
+}
+
+/// The scale at which the projection's whole drawing fits `box_w` by `box_h`.
+pub fn scale_into(p: &dyn Projection, box_w: f32, box_h: f32) -> f32 {
     let (w, h) = p.size();
-    let (w, h) = (w as f32, h as f32);
-    let scale = if w > 0.0 && h > 0.0 { (box_w / w).min(box_h / h) } else { 1.0 };
+    if w > 0.0 && h > 0.0 { (box_w / w as f32).min(box_h / h as f32) } else { 1.0 }
+}
+
+/// `flatten` at a given scale, the figure being the projection's size scaled.
+pub fn flatten_at(d: &Diagram, p: &dyn Projection, scale: f32) -> Figure {
+    let (w, h) = p.size();
     let walk = walked(d, p, scale, None);
-    Figure { width: w * scale, height: h * scale, items: walk.items, omitted: walk.omitted }
+    Figure { width: w as f32 * scale, height: h as f32 * scale, items: walk.items, omitted: walk.omitted }
+}
+
+/// Two drawings (Before and After) flattened at one scale, the smaller of the two that fit the box, so a longer street
+/// or a wider drawing in one does not make the other look bigger; neither is enlarged past the box.
+pub fn flatten_pair(a: (&Diagram, &dyn Projection), b: (&Diagram, &dyn Projection), box_w: f32, box_h: f32) -> (Figure, Figure) {
+    let scale = scale_into(a.1, box_w, box_h).min(scale_into(b.1, box_w, box_h));
+    (flatten_at(a.0, a.1, scale), flatten_at(b.0, b.1, scale))
 }
 
 fn walked<'a>(d: &Diagram, p: &'a dyn Projection, scale: f32, caption: Option<f32>) -> Walk<'a> {
@@ -357,6 +374,17 @@ fn bounds(items: &[Item]) -> (f32, f32, f32, f32) {
 /// the figure being the size of what is drawn. A caption is `FIT_CAPTION_SIZE` whatever the scale. Words that would
 /// overprint a label already kept are dropped. Only street names (class `iso-name`) are kept, each on a white label (`LABEL_BACKGROUND`) in the page's ink.
 pub fn flatten_fit(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> Figure {
+    flatten_fit_at(d, p, fit_scale(d, p, box_w, box_h))
+}
+
+/// Two drawings fitted to one box at one scale, the smaller of the two that fit (see `flatten_pair`).
+pub fn flatten_fit_pair(a: (&Diagram, &dyn Projection), b: (&Diagram, &dyn Projection), box_w: f32, box_h: f32) -> (Figure, Figure) {
+    let scale = fit_scale(a.0, a.1, box_w, box_h).min(fit_scale(b.0, b.1, box_w, box_h));
+    (flatten_fit_at(a.0, a.1, scale), flatten_fit_at(b.0, b.1, scale))
+}
+
+/// The largest scale at which every shape and word of the drawing lies inside the box.
+fn fit_scale(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> f32 {
     let (w, h) = p.size();
     let hi = if w > 0.0 && h > 0.0 { ((box_w / w as f32).min(box_h / h as f32)) * 8.0 } else { 1.0 };
     let fits = |s: f32| {
@@ -373,6 +401,11 @@ pub fn flatten_fit(d: &Diagram, p: &dyn Projection, box_w: f32, box_h: f32) -> F
             hi = mid;
         }
     }
+    lo
+}
+
+/// `flatten_fit` at a given scale (the figure is the size of what is drawn there).
+pub fn flatten_fit_at(d: &Diagram, p: &dyn Projection, lo: f32) -> Figure {
     let mut walk = walked(d, p, lo, Some(FIT_CAPTION_SIZE));
     let mut order = walk.ranks.clone();
     order.sort_by_key(|&(i, rank)| (rank, i));
@@ -443,6 +476,30 @@ mod tests {
     }
     fn dark(c: Rgb, f: f32) -> Rgb {
         Rgb((c.0 as f32 * f).round() as u8, (c.1 as f32 * f).round() as u8, (c.2 as f32 * f).round() as u8)
+    }
+
+    fn width_of_first_poly(f: &Figure) -> f32 {
+        let Some(Item::Poly { pts, .. }) = f.items.iter().find(|i| matches!(i, Item::Poly { .. })) else { panic!("{:?}", f.items) };
+        pts.iter().map(|p| p.0).fold(f32::MIN, f32::max) - pts.iter().map(|p| p.0).fold(f32::MAX, f32::min)
+    }
+
+    #[test]
+    fn a_pair_is_drawn_at_one_scale_and_a_longer_label_in_one_does_not_enlarge_the_other() {
+        let shape = || vec![layer(LayerKind::Surface, vec![tri("iso-top k-travel", Some(Face::Top), None)])];
+        let cap =
+            Shape::Caption { px: (10.0, 5.0), class: "iso-name t-mark".into(), anchor: "start", text: "Avenue du Très Long Nom de Rue Qui Continue".into() };
+        let plain = diagram(vec![], shape());
+        let mut long = diagram(vec![], shape());
+        long.sections[0].layers.push(layer(LayerKind::Signs, vec![cap]));
+        let p = Flat(100.0, 50.0);
+        let (a, b) = flatten_fit_pair((&plain, &p), (&long, &p), 100.0, 50.0);
+        assert!((width_of_first_poly(&a) - width_of_first_poly(&b)).abs() < 0.01, "{} {}", width_of_first_poly(&a), width_of_first_poly(&b));
+        let alone = flatten_fit(&plain, &p, 100.0, 50.0);
+        assert!(width_of_first_poly(&a) <= width_of_first_poly(&alone) + 0.01);
+        // street figures: one scale as well, and never past the box
+        let (c, d) = flatten_pair((&plain, &Flat(100.0, 50.0)), (&plain, &Flat(100.0, 200.0)), 100.0, 100.0);
+        assert!((width_of_first_poly(&c) - width_of_first_poly(&d)).abs() < 0.01);
+        assert!(c.width <= 100.0 + 0.01 && d.height <= 100.0 + 0.01);
     }
 
     #[test]
@@ -716,7 +773,7 @@ mod tests {
 
     /// The light value of a token, as the table writes it.
     fn css_value(name: &str, css: &Css) -> Rgb {
-        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
         let sheet = match css {
             Css::App => app,
             Css::Editor => editor,
@@ -728,7 +785,7 @@ mod tests {
 
     #[test]
     fn every_flat_colour_matches_the_css() {
-        assert!(COLOURS.len() == 38, "{}", COLOURS.len());
+        assert!(COLOURS.len() == 39, "{}", COLOURS.len());
         for (name, css, rgb) in COLOURS {
             // The names are the tokens' without the leading dashes, except `ink-2`-style ones that are the same.
             assert_eq!(css_value(name, css), *rgb, "--{name}");

@@ -149,14 +149,10 @@ fn street_page(city: &City, uid: u32, zones: usize, name: String, region: usize,
         lines.push(tr("map-report-place-other", &Args::new()));
     }
     page.extend(lines.into_iter().map(|text| Block::Paragraph { text }));
+    let (figure_before, figure_after) = crate::street::drawing::figures(&before, &after, i18n, FIGURE_W, FIGURE_H);
     let items = [
-        captioned(
-            "map-report-place-before",
-            crate::street::drawing::alt(&before, i18n),
-            crate::street::drawing::figure(&before, i18n, FIGURE_W, FIGURE_H),
-            i18n,
-        ),
-        captioned("map-report-place-after", crate::street::drawing::alt(&after, i18n), crate::street::drawing::figure(&after, i18n, FIGURE_W, FIGURE_H), i18n),
+        captioned("map-report-place-before", crate::street::drawing::alt(&before, i18n), figure_before, i18n),
+        captioned("map-report-place-after", crate::street::drawing::alt(&after, i18n), figure_after, i18n),
     ];
     page.push(Block::Figures { items: items.to_vec() });
     let share = |shares: &[crate::street::model::Share], mode: Mode| {
@@ -190,19 +186,10 @@ fn junction_page(city: &City, uid: u32, name: &str, failing: &[crate::shared::sa
     let control = |v: &crate::junction::read_model::JView| tr(crate::junction::model::control_key(v.control_index), &Args::new());
     let key = if before.control_index == after.control_index { "map-report-place-control-same" } else { "map-report-place-control" };
     page.push(Block::Paragraph { text: tr(key, &Args::new().str("before", control(&before)).str("after", control(&after))) });
+    let (figure_before, figure_after) = crate::junction::figure::figures(&before, &after, i18n, units, FIGURE_W, FIGURE_H);
     let items = [
-        captioned(
-            "map-report-place-before",
-            crate::junction::figure::alt(&before, i18n),
-            crate::junction::figure::figure(&before, i18n, units, FIGURE_W, FIGURE_H),
-            i18n,
-        ),
-        captioned(
-            "map-report-place-after",
-            crate::junction::figure::alt(&after, i18n),
-            crate::junction::figure::figure(&after, i18n, units, FIGURE_W, FIGURE_H),
-            i18n,
-        ),
+        captioned("map-report-place-before", crate::junction::figure::alt(&before, i18n), figure_before, i18n),
+        captioned("map-report-place-after", crate::junction::figure::alt(&after, i18n), figure_after, i18n),
     ];
     page.push(Block::Figures { items: items.to_vec() });
     fn read(c: &crate::junction::read_model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {

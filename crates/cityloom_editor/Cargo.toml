@@ -1,6 +1,6 @@
 [package]
 name = "cityloom_editor"
-version = "0.57.0"
+version = "0.58.0"
 edition = "2024"
 
 [dependencies]
@@ -25,5 +25,5 @@ fluent-syntax = "0.12.0"
 leptos = { version = "0.8.23", features = ["ssr"] }
 proc-macro2 = { version = "1.0.107", features = ["span-locations"] }
 # Tests write the report through the PDF writer; a dev-dependency stays out of the editor's own build (`cargo tree -e normal`).
-cityloom_report_pdf = { path = "cityloom_report_pdf" }
+cityloom_report_pdf = { path = "../cityloom_report_pdf" }
 lopdf = "0.47.0"

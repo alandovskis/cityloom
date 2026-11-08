@@ -1194,9 +1194,12 @@ mod report {
 
     fn written_text(pages: Vec<Vec<Block>>, lang: &str) -> String {
         let data = ReportData { lang: lang.to_string(), title: "Rapport".to_string(), pages };
-        let bytes =
-            cityloom_report_pdf::write_pdf(&data, include_bytes!("../../web/fonts/NotoSans-Regular.ttf"), include_bytes!("../../web/fonts/NotoSans-Bold.ttf"))
-                .expect("a place page is written whole: the writer fails on a line it would cut");
+        let bytes = cityloom_report_pdf::write_pdf(
+            &data,
+            include_bytes!("../../../../web/fonts/NotoSans-Regular.ttf"),
+            include_bytes!("../../../../web/fonts/NotoSans-Bold.ttf"),
+        )
+        .expect("a place page is written whole: the writer fails on a line it would cut");
         let doc = lopdf::Document::load_mem(&bytes).unwrap();
         let numbers: Vec<u32> = doc.get_pages().keys().copied().collect();
         doc.extract_text(&numbers).unwrap()

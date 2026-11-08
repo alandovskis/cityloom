@@ -5,7 +5,7 @@ use cityloom_report::Figure;
 
 use crate::junction::iso::{build_diagram, iso_label};
 use crate::junction::read_model::JView;
-use crate::shared::flat::flatten_fit;
+use crate::shared::flat::{flatten_fit, flatten_fit_pair};
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 
@@ -17,6 +17,14 @@ const POINT_SIZE: f64 = 1000.0;
 pub fn figure(v: &JView, i18n: &I18n, units: Units, box_w: f32, box_h: f32) -> Figure {
     let (frame, diagram) = build_diagram(v, i18n, POINT_SIZE, POINT_SIZE, units);
     flatten_fit(&diagram, &frame, box_w, box_h)
+}
+
+/// Before and After fitted into the box together, at one scale (the smaller of the two that fit), so a longer name in one
+/// does not make the other look larger.
+pub fn figures(before: &JView, after: &JView, i18n: &I18n, units: Units, box_w: f32, box_h: f32) -> (Figure, Figure) {
+    let (fb, db) = build_diagram(before, i18n, POINT_SIZE, POINT_SIZE, units);
+    let (fa, da) = build_diagram(after, i18n, POINT_SIZE, POINT_SIZE, units);
+    flatten_fit_pair((&db, &fb), (&da, &fa), box_w, box_h)
 }
 
 /// What a screen reader is told the drawing is.
