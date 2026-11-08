@@ -723,26 +723,26 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
 /// The home page is built before the area's roads are read, so that its search does not wait for them.
 #[test]
 fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, Way, WayRef};
     let (ports, _, storage) = crate::shared::ports::test_ports();
     let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     assert!(vm.view().edges.is_empty(), "no roads are kept yet");
-    let node = |id, x_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction: false, control: Control::None };
+    let node =
+        |id, x_m| Node { id, osm_nodes: vec![NodeRef(id as i64)], osm_versions: Default::default(), x_m, y_m: 0.0, junction: false, control: Control::None };
     let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
     let network = Network {
         left_hand: false,
         nodes: vec![node(1, 0.0), node(2, 100.0)],
         roads: vec![Road {
             id: 1,
-            osm_ways: vec![7],
-            osm_versions: Default::default(),
-            name: Some("Only Street".into()),
+            osm_ways: vec![WayRef::new(7)],
+            name: "Only Street".into(),
             highway: "residential".into(),
             from: 1,
             to: 2,
             lanes: vec![lane(Way::Forward), lane(Way::Backward)],
             speed_kmh: None,
-            points: vec![(0.0, 0.0), (100.0, 0.0)],
+            points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
         }],
     };
     assert!(CityStore::current(storage.clone()).keep_network_from(&network, None));

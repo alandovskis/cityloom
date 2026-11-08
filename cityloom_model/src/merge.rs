@@ -1,28 +1,26 @@
 //! Roads divided by a median: two one-way carriageways of one street, running side by side
 //! in opposite directions, are one street with a median between its two halves.
 
-use crate::{Lane, LaneKind, Network, Road, Way};
+use crate::{Lane, LaneKind, Network, Point, Road, Way};
 
 /// The widest a median can be, from centre line to centre line of the carriageways, for them to be one street.
 const MAX_APART_M: f64 = 60.0;
 /// A median narrower than this is drawn at least this wide.
 const MIN_MEDIAN_M: f64 = 1.0;
 
-type P = (f64, f64);
-
-fn dist(a: P, b: P) -> f64 {
-    (a.0 - b.0).hypot(a.1 - b.1)
+fn dist(a: Point, b: Point) -> f64 {
+    a.distance(b)
 }
 
 /// The nearest point of the polyline `line` to `p`.
-fn nearest(line: &[P], p: P) -> P {
+fn nearest(line: &[Point], p: Point) -> Point {
     let mut best = (f64::MAX, p);
     for w in line.windows(2) {
         let (a, b) = (w[0], w[1]);
-        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let (dx, dy) = (b.x_m() - a.x_m(), b.y_m() - a.y_m());
         let len2 = dx * dx + dy * dy;
-        let t = if len2 == 0.0 { 0.0 } else { (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2).clamp(0.0, 1.0) };
-        let q = (a.0 + t * dx, a.1 + t * dy);
+        let t = if len2 == 0.0 { 0.0 } else { (((p.x_m() - a.x_m()) * dx + (p.y_m() - a.y_m()) * dy) / len2).clamp(0.0, 1.0) };
+        let q = Point::new(a.x_m() + t * dx, a.y_m() + t * dy);
         let d = dist(p, q);
         if d < best.0 {
             best = (d, q);
@@ -61,23 +59,23 @@ fn width(road: &Road) -> f64 {
     road.lanes.iter().map(|l| l.width_m).sum()
 }
 
-fn length(line: &[P]) -> f64 {
+fn length(line: &[Point]) -> f64 {
     line.windows(2).map(|w| dist(w[0], w[1])).sum()
 }
 
 /// How far apart two carriageways run, on average, measured from `a`'s points; None when they do not run beside each other.
-fn apart(a: &[P], b: &[P]) -> Option<f64> {
+fn apart(a: &[Point], b: &[Point]) -> Option<f64> {
     let d: Vec<f64> = a.iter().map(|&p| dist(p, nearest(b, p))).collect();
     let mean = d.iter().sum::<f64>() / d.len() as f64;
     (mean <= MAX_APART_M && d.iter().all(|x| *x <= MAX_APART_M * 1.5)).then_some(mean)
 }
 
 /// Which side of `a`'s direction of travel `b` lies on: positive for the left.
-fn side_of(a: &[P], b: &[P]) -> f64 {
+fn side_of(a: &[Point], b: &[Point]) -> f64 {
     let m = (a.len() - 1) / 2;
     let (p, q) = (a[m], a[m + 1]);
     let n = nearest(b, p);
-    (q.0 - p.0) * (n.1 - p.1) - (q.1 - p.1) * (n.0 - p.0)
+    (q.x_m() - p.x_m()) * (n.y_m() - p.y_m()) - (q.y_m() - p.y_m()) * (n.x_m() - p.x_m())
 }
 
 /// Joins each pair of one-way carriageways of one street into a single road with a median.
@@ -87,7 +85,7 @@ fn side_of(a: &[P], b: &[P]) -> f64 {
 /// and run beside each other. Their ends become one node each, in the middle; a road left joining a node to itself
 /// by that (the crossing street's stub) is dropped.
 pub fn merge_dual_carriageways(net: &mut Network) {
-    let at = |net: &Network, id: u32| net.nodes.iter().find(|n| n.id == id).map(|n| (n.x_m, n.y_m));
+    let at = |net: &Network, id: u32| net.nodes.iter().find(|n| n.id == id).map(|n| Point::new(n.x_m, n.y_m));
     let oriented: Vec<Option<Road>> = net.roads.iter().map(along).collect();
     let mut taken = vec![false; net.roads.len()];
     let mut pairs: Vec<(usize, usize)> = Vec::new();
@@ -96,7 +94,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         let mut best: Option<(f64, usize)> = None;
         for j in 0..net.roads.len() {
             let Some(b) = &oriented[j] else { continue };
-            if i == j || taken[j] || a.name.is_none() || a.name != b.name || a.highway != b.highway {
+            if i == j || taken[j] || a.name != b.name || a.highway != b.highway {
                 continue;
             }
             let (Some(a0), Some(a1), Some(b0), Some(b1)) = (at(net, a.from), at(net, a.to), at(net, b.from), at(net, b.to)) else { continue };
@@ -143,23 +141,21 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         } else {
             a.lanes.iter().cloned().chain([gap]).chain(b_here.lanes.iter().cloned()).collect()
         };
-        let points: Vec<P> = a
+        let points: Vec<Point> = a
             .points
             .iter()
             .map(|&p| {
                 let q = nearest(&b.points, p);
-                ((p.0 + q.0) / 2.0, (p.1 + q.1) / 2.0)
+                Point::new((p.x_m() + q.x_m()) / 2.0, (p.y_m() + q.y_m()) / 2.0)
             })
             .collect();
         moved.push((b.to, a.from));
         moved.push((b.from, a.to));
         let mut osm_ways = a.osm_ways.clone();
         osm_ways.extend(b.osm_ways.iter().copied());
-        let osm_versions = a.osm_versions.iter().chain(&b.osm_versions).map(|(w, v)| (*w, *v)).collect();
         merged.push(Road {
             id: a.id,
             osm_ways,
-            osm_versions,
             name: a.name.clone(),
             highway: a.highway.clone(),
             from: a.from,
@@ -175,10 +171,10 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     // each merged pair's ends become one node, in the middle
     for (from, into) in moved {
         let (Some(f), Some(t)) = (at(net, from), at(net, into)) else { continue };
-        let mid = ((f.0 + t.0) / 2.0, (f.1 + t.1) / 2.0);
+        let mid = Point::new((f.x_m() + t.x_m()) / 2.0, (f.y_m() + t.y_m()) / 2.0);
         for n in &mut net.nodes {
             if n.id == into {
-                (n.x_m, n.y_m) = mid;
+                (n.x_m, n.y_m) = (mid.x_m(), mid.y_m());
             }
         }
         if from != into {
@@ -231,10 +227,18 @@ fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Node};
+    use crate::{Control, Coordinate, Node, NodeRef, WayRef};
 
     fn node(id: u32, x_m: f64, y_m: f64) -> Node {
-        Node { id, osm_nodes: vec![id as i64], osm_versions: [(id as i64, id as i32 + 100)].into(), x_m, y_m, junction: false, control: Control::None }
+        Node {
+            id,
+            osm_nodes: vec![NodeRef(id as i64)],
+            osm_versions: [(NodeRef(id as i64), id as i32 + 100)].into(),
+            x_m,
+            y_m,
+            junction: false,
+            control: Control::None,
+        }
     }
 
     #[test]
@@ -250,12 +254,11 @@ mod tests {
     }
 
     /// A one-way carriageway of two lanes, with a sidewalk on its right: lanes left to right as seen along the road.
-    fn oneway(id: u32, name: &str, from: u32, to: u32, points: Vec<P>) -> Road {
+    fn oneway(id: u32, name: &str, from: u32, to: u32, points: Vec<Point>) -> Road {
         Road {
             id,
-            osm_ways: vec![id as i64 * 10],
-            osm_versions: [(id as i64 * 10, id as i32 + 50)].into(),
-            name: Some(name.into()),
+            osm_ways: vec![WayRef::with_version(id as i64 * 10, id as i32 + 50)],
+            name: name.into(),
             highway: "primary".into(),
             from,
             to,
@@ -268,20 +271,19 @@ mod tests {
     /// Boulevard: eastbound one way at y = -10 (the south), westbound at y = +10, both between x = 0 and x = 300,
     /// meeting at node 1 and node 2, with a street across at each end.
     fn shared_ends() -> Network {
-        let mut west = oneway(2, "Boulevard", 2, 1, vec![(300.0, 0.0), (150.0, 10.0), (0.0, 0.0)]);
-        west.points = vec![(300.0, 0.0), (150.0, 10.0), (0.0, 0.0)];
-        let east = oneway(1, "Boulevard", 1, 2, vec![(0.0, 0.0), (150.0, -10.0), (300.0, 0.0)]);
+        let mut west = oneway(2, "Boulevard", 2, 1, vec![Point::new(300.0, 0.0), Point::new(150.0, 10.0), Point::new(0.0, 0.0)]);
+        west.points = vec![Point::new(300.0, 0.0), Point::new(150.0, 10.0), Point::new(0.0, 0.0)];
+        let east = oneway(1, "Boulevard", 1, 2, vec![Point::new(0.0, 0.0), Point::new(150.0, -10.0), Point::new(300.0, 0.0)]);
         let cross = |id, from, to, y| Road {
             id,
-            osm_ways: vec![id as i64],
-            osm_versions: Default::default(),
-            name: Some("Cross".into()),
+            osm_ways: vec![WayRef::new(id as i64)],
+            name: "Cross".into(),
             highway: "residential".into(),
             from,
             to,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
             speed_kmh: None,
-            points: vec![(0.0, 0.0), (0.0, y)],
+            points: vec![Point::new(0.0, 0.0), Point::new(0.0, y)],
         };
         Network {
             left_hand: false,
@@ -294,19 +296,19 @@ mod tests {
     fn a_merged_road_keeps_the_versions_of_the_ways_it_was_made_from() {
         let mut net = shared_ends();
         merge_dual_carriageways(&mut net);
-        let b = net.roads.iter().find(|r| r.name.as_deref() == Some("Boulevard")).unwrap();
-        assert_eq!(b.osm_versions, [(10, 51), (20, 52)].into());
+        let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
+        assert_eq!(b.osm_ways, [WayRef::with_version(10, 51), WayRef::with_version(20, 52)]);
     }
 
     #[test]
     fn two_opposite_carriageways_of_one_name_between_the_same_junctions_become_one_road() {
         let mut net = shared_ends();
         merge_dual_carriageways(&mut net);
-        let boulevards: Vec<&Road> = net.roads.iter().filter(|r| r.name.as_deref() == Some("Boulevard")).collect();
+        let boulevards: Vec<&Road> = net.roads.iter().filter(|r| r.name == "Boulevard").collect();
         assert_eq!(boulevards.len(), 1);
         let b = boulevards[0];
         assert_eq!((b.from, b.to), (1, 2));
-        assert_eq!(b.osm_ways, vec![10, 20]);
+        assert!(b.has_way(10) && b.has_way(20));
         assert_eq!(net.roads.len(), 3, "the two cross roads stay");
     }
 
@@ -314,7 +316,7 @@ mod tests {
     fn the_merged_road_has_the_median_between_the_carriageways_with_traffic_on_the_right_of_each() {
         let mut net = shared_ends();
         merge_dual_carriageways(&mut net);
-        let b = net.roads.iter().find(|r| r.name.as_deref() == Some("Boulevard")).unwrap();
+        let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
         // Along the merged road (west to east): the westbound half is on the left (north), the eastbound on the right (south).
         let kinds: Vec<(LaneKind, Way)> = b.lanes.iter().map(|l| (l.kind, l.way)).collect();
         use LaneKind::*;
@@ -327,8 +329,8 @@ mod tests {
         let median = b.lanes.iter().find(|l| l.kind == LaneKind::Other).unwrap();
         assert!((median.width_m - 12.0).abs() < 1.5, "{}", median.width_m);
         // the centre line runs between the two carriageways
-        assert!(b.points.iter().all(|p| p.1.abs() < 10.5));
-        assert!((b.points[1].1).abs() < 1.0, "{:?}", b.points);
+        assert!(b.points.iter().all(|p| p.y_m().abs() < 10.5));
+        assert!(b.points[1].y_m().abs() < 1.0, "{:?}", b.points);
     }
 
     #[test]
@@ -337,11 +339,11 @@ mod tests {
         let mut net = shared_ends();
         for r in &mut net.roads {
             for p in &mut r.points {
-                p.1 = -p.1;
+                p.y = Coordinate::local_metres(-p.y_m());
             }
         }
         merge_dual_carriageways(&mut net);
-        let b = net.roads.iter().find(|r| r.name.as_deref() == Some("Boulevard")).unwrap();
+        let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
         let first_driving = b.lanes.iter().find(|l| l.kind == LaneKind::Driving).unwrap();
         assert_eq!(first_driving.way, Way::Forward, "traffic going east is now on the left");
     }
@@ -356,27 +358,26 @@ mod tests {
         net.nodes.push(node(7, 300.0, 0.0));
         net.roads.iter_mut().find(|r| r.id == 2).unwrap().to = 5;
         net.roads.iter_mut().find(|r| r.id == 2).unwrap().from = 6;
-        net.roads.iter_mut().find(|r| r.id == 2).unwrap().points = vec![(300.0, 20.0), (150.0, 30.0), (0.0, 20.0)];
-        net.roads.iter_mut().find(|r| r.id == 1).unwrap().points = vec![(0.0, 0.0), (150.0, -10.0), (300.0, 0.0)];
+        net.roads.iter_mut().find(|r| r.id == 2).unwrap().points = vec![Point::new(300.0, 20.0), Point::new(150.0, 30.0), Point::new(0.0, 20.0)];
+        net.roads.iter_mut().find(|r| r.id == 1).unwrap().points = vec![Point::new(0.0, 0.0), Point::new(150.0, -10.0), Point::new(300.0, 0.0)];
         net.roads.push(Road {
             id: 9,
-            osm_ways: vec![9],
-            osm_versions: Default::default(),
-            name: Some("Cross".into()),
+            osm_ways: vec![WayRef::new(9)],
+            name: "Cross".into(),
             highway: "residential".into(),
             from: 1,
             to: 5,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
             speed_kmh: None,
-            points: vec![(0.0, 0.0), (0.0, 20.0)],
+            points: vec![Point::new(0.0, 0.0), Point::new(0.0, 20.0)],
         });
         merge_dual_carriageways(&mut net);
-        assert_eq!(net.roads.iter().filter(|r| r.name.as_deref() == Some("Boulevard")).count(), 1);
+        assert_eq!(net.roads.iter().filter(|r| r.name == "Boulevard").count(), 1);
         assert!(net.roads.iter().all(|r| r.id != 9), "the stub between the halves is gone");
         // the node the two ends became keeps the version of each OSM node it stands for
-        let joined = net.nodes.iter().find(|n| n.osm_nodes.contains(&1)).unwrap();
-        assert!(joined.osm_nodes.contains(&5), "{joined:?}");
-        assert_eq!(joined.osm_versions, [(1, 101), (5, 105)].into());
+        let joined = net.nodes.iter().find(|n| n.osm_nodes.contains(&NodeRef(1))).unwrap();
+        assert!(joined.osm_nodes.contains(&NodeRef(5)), "{joined:?}");
+        assert_eq!(joined.osm_versions, [(NodeRef(1), 101), (NodeRef(5), 105)].into());
         assert!(net.roads.iter().all(|r| r.from != r.to));
         // and no road points at a node that is no longer there
         assert!(net.roads.iter().all(|r| net.nodes.iter().any(|n| n.id == r.from) && net.nodes.iter().any(|n| n.id == r.to)));
@@ -392,7 +393,7 @@ mod tests {
             assert_eq!(net, before);
         };
         // another name
-        same(&|n| n.roads[1].name = Some("Other".into()));
+        same(&|n| n.roads[1].name = "Other".into());
         // one of them two-way
         same(&|n| n.roads[1].lanes = vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)]);
         // both the same way
@@ -401,13 +402,8 @@ mod tests {
             n.roads[1].to = 2;
             n.roads[1].points.reverse();
         });
-        // a street with no name
-        same(&|n| {
-            n.roads[0].name = None;
-            n.roads[1].name = None;
-        });
         // too far apart to be one street
-        same(&|n| n.roads[1].points = vec![(300.0, 200.0), (150.0, 200.0), (0.0, 200.0)]);
+        same(&|n| n.roads[1].points = vec![Point::new(300.0, 200.0), Point::new(150.0, 200.0), Point::new(0.0, 200.0)]);
     }
 
     #[test]

@@ -337,8 +337,8 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         let c = i.polygon.center();
         net.nodes.push(Node {
             id: id.0 as u32,
-            osm_nodes: i.osm_ids.iter().map(|n| n.0).collect(),
-            osm_versions: i.osm_ids.iter().filter_map(|n| Some((n.0, doc.nodes.get(n)?.version?))).collect(),
+            osm_nodes: i.osm_ids.iter().map(|n| NodeRef(n.0)).collect(),
+            osm_versions: i.osm_ids.iter().filter_map(|n| Some((NodeRef(n.0), doc.nodes.get(n)?.version?))).collect(),
             x_m: c.x(),
             y_m: height - c.y(),
             junction: i.kind == IntersectionKind::Intersection,
@@ -351,12 +351,13 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
     }
     for (id, r) in &streets.roads {
         // osm2streets leaves a way's conditional tags behind, so they are read from the way itself
+        // a road needs a name: a way with none, or a blank one, is not one
+        let Some(name) = r.name.clone().filter(|n| Road::is_name(Some(n))) else { continue };
         let hours = r.osm_ids.iter().find_map(|w| doc.ways.get(w).and_then(|w| bus_hours(&w.tags)));
         net.roads.push(Road {
             id: id.0 as u32,
-            osm_ways: r.osm_ids.iter().map(|w| w.0).collect(),
-            osm_versions: r.osm_ids.iter().filter_map(|w| Some((w.0, doc.ways.get(w)?.version?))).collect(),
-            name: r.name.clone(),
+            osm_ways: r.osm_ids.iter().map(|w| WayRef { id: w.0, version: doc.ways.get(w).and_then(|way| way.version) }).collect(),
+            name,
             highway: r.highway_type.clone(),
             from: r.src_i.0 as u32,
             to: r.dst_i.0 as u32,
@@ -373,7 +374,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                     })
                     .collect(),
             ),
-            points: r.center_line.points().iter().map(|p| (p.x(), height - p.y())).collect(),
+            points: r.center_line.points().iter().map(|p| Point::new(p.x(), height - p.y())).collect(),
         });
     }
     net

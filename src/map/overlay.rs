@@ -329,7 +329,7 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
 mod tests {
     use std::collections::BTreeSet;
 
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, Way, WayRef};
     use serde_json::Value;
 
     use super::*;
@@ -340,22 +340,29 @@ mod tests {
 
     /// One street that bends: east for 80 m, then north-east to a point 100 m east and 50 m north.
     fn bent_road() -> Network {
-        let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
+        let node = |id, x_m, y_m| Node {
+            id,
+            osm_nodes: vec![NodeRef(id as i64)],
+            osm_versions: Default::default(),
+            x_m,
+            y_m,
+            junction: false,
+            control: Control::None,
+        };
         let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: 1,
-                osm_ways: vec![7],
-                osm_versions: Default::default(),
-                name: Some("Bend Street".into()),
+                osm_ways: vec![WayRef::new(7)],
+                name: "Bend Street".into(),
                 highway: "residential".into(),
                 from: 1,
                 to: 2,
                 lanes: vec![lane(Way::Forward), lane(Way::Backward)],
                 speed_kmh: None,
-                points: vec![(0.0, 0.0), (80.0, 0.0), (100.0, 50.0)],
+                points: vec![Point::new(0.0, 0.0), Point::new(80.0, 0.0), Point::new(100.0, 50.0)],
             }],
         }
     }
@@ -523,7 +530,7 @@ mod tests {
         let mut n = bent_road();
         n.nodes[1].x_m = 100.0;
         n.nodes[1].y_m = 0.0;
-        n.roads[0].points = vec![(0.0, 0.0), (100.0, 0.0)];
+        n.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
         n.roads[0].lanes.iter_mut().for_each(|l| l.width_m = 4.0);
         n
     }

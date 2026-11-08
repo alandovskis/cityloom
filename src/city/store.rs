@@ -534,24 +534,30 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Lane, LaneKind, Node, Road, Way};
-        let node =
-            |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction, control: Control::None };
+        use cityloom_model::{Control, Lane, LaneKind, Node, NodeRef, Point, Road, Way, WayRef};
+        let node = |id, x_m, junction| Node {
+            id,
+            osm_nodes: vec![NodeRef(id as i64)],
+            osm_versions: Default::default(),
+            x_m,
+            y_m: 0.0,
+            junction,
+            control: Control::None,
+        };
         let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, hours: None };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
             roads: vec![Road {
                 id: 1,
-                osm_ways: vec![7],
-                osm_versions: Default::default(),
-                name: Some("Only Street".into()),
+                osm_ways: vec![WayRef::new(7)],
+                name: "Only Street".into(),
                 highway: "residential".into(),
                 from: 1,
                 to: 2,
                 lanes: vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)],
                 speed_kmh: None,
-                points: vec![(0.0, 0.0), (100.0, 0.0)],
+                points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
             }],
         }
     }

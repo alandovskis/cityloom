@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Way};
+use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Point, Way, WayRef};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -171,8 +171,12 @@ fn windows_of(hours: &str) -> Option<Vec<(i32, i32)>> {
 }
 
 /// The OSM ways or nodes with the version each had.
-fn refs(ids: &[i64], versions: &BTreeMap<i64, i32>) -> Vec<OsmRef> {
-    ids.iter().map(|&id| OsmRef { id, version: versions.get(&id).copied() }).collect()
+fn way_refs(ways: &[WayRef]) -> Vec<OsmRef> {
+    ways.iter().map(|w| OsmRef { id: w.id, version: w.version }).collect()
+}
+
+fn refs<T: Copy + Ord + Into<i64>>(ids: &[T], versions: &BTreeMap<T, i32>) -> Vec<OsmRef> {
+    ids.iter().map(|&id| OsmRef { id: id.into(), version: versions.get(&id).copied() }).collect()
 }
 
 fn control_of(c: Control) -> usize {
@@ -188,32 +192,32 @@ const LOOK_M: f64 = 20.0;
 
 /// The way a road leaves its first point and its last, in degrees clockwise from north, from a point
 /// about `LOOK_M` along it (or its far end, if it is shorter).
-fn headings(points: &[(f64, f64)]) -> Option<(f64, f64)> {
-    let along = |line: &[(f64, f64)]| -> Option<f64> {
+fn headings(points: &[Point]) -> Option<(f64, f64)> {
+    let along = |line: &[Point]| -> Option<f64> {
         let origin = *line.first()?;
         let mut run = 0.0;
         let mut at = origin;
         for &p in &line[1..] {
-            run += (p.0 - at.0).hypot(p.1 - at.1);
+            run += p.distance(at);
             at = p;
             if run >= LOOK_M {
                 break;
             }
         }
-        let (dx, dy) = (at.0 - origin.0, at.1 - origin.1);
+        let (dx, dy) = (at.x_m() - origin.x_m(), at.y_m() - origin.y_m());
         (dx != 0.0 || dy != 0.0).then(|| dx.atan2(dy).to_degrees().rem_euclid(360.0))
     };
-    let reversed: Vec<(f64, f64)> = points.iter().rev().copied().collect();
+    let reversed: Vec<Point> = points.iter().rev().copied().collect();
     Some((along(points)?, along(&reversed)?))
 }
 
 /// A road's centreline in layout millimetres with its two ends set to where its nodes are, so that a street
 /// meets its junctions; None for a road with fewer than two points.
-fn shape_mm(points: &[(f64, f64)], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(f64, f64) -> (i32, i32)) -> Option<Vec<(i32, i32)>> {
+fn shape_mm(points: &[Point], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(f64, f64) -> (i32, i32)) -> Option<Vec<(i32, i32)>> {
     if points.len() < 2 {
         return None;
     }
-    let mut line: Vec<(i32, i32)> = points.iter().map(|&(x, y)| mm_of(x, y)).collect();
+    let mut line: Vec<(i32, i32)> = points.iter().map(|p| mm_of(p.x_m(), p.y_m())).collect();
     let last = line.len() - 1;
     line[0] = from;
     line[last] = to;
@@ -232,8 +236,7 @@ impl Layout {
     /// Roads that start and end at one node, that have no lanes, that have no name, or that start or end at a node the
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
-        let roads: Vec<_> =
-            network.roads.iter().filter(|r| r.from != r.to && !r.lanes.is_empty() && r.name.as_deref().is_some_and(|n| !n.trim().is_empty())).collect();
+        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.lanes.is_empty()).collect();
         let mut degree: BTreeMap<u32, usize> = BTreeMap::new();
         for r in &roads {
             *degree.entry(r.from).or_default() += 1;
@@ -256,8 +259,8 @@ impl Layout {
                 let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street {
-                    name: r.name.clone(),
-                    source: refs(&r.osm_ways, &r.osm_versions),
+                    name: Some(r.name.clone()),
+                    source: way_refs(&r.osm_ways),
                     speed: Speed::from_kmh(r.speed_kmh),
                     ..Street::imported(class, side, &pieces)
                 };
@@ -271,7 +274,7 @@ impl Layout {
                     a: index[&r.from],
                     b: index[&r.to],
                     class,
-                    name: r.name.clone(),
+                    name: Some(r.name.clone()),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
                     legacy_rows_mm,
@@ -300,7 +303,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, Road, Way};
+    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, NodeRef, Point, Road, Way, WayRef};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -520,8 +523,8 @@ mod tests {
     fn a_street_and_a_junction_carry_the_osm_ways_and_nodes_they_were_made_from_with_their_versions() {
         use crate::shared::provenance::OsmRef;
         let mut net = crossing();
-        net.roads[1].osm_versions = [(200, 12)].into();
-        net.nodes[0].osm_versions = [(10, 4)].into();
+        net.roads[1].osm_ways = vec![WayRef::with_version(200, 12)];
+        net.nodes[0].osm_versions = [(NodeRef(10), 4)].into();
         let city = City::from_network(&net, "Testville");
         let v = city.view(0);
         let street = |i: usize| city.street_editor(v.edges[i].uid, 0).unwrap().view();
@@ -564,13 +567,19 @@ mod tests {
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.
     fn crossing() -> Network {
-        let node =
-            |id, x_m, y_m, junction, control| Node { id, osm_nodes: vec![id as i64 * 10], osm_versions: Default::default(), x_m, y_m, junction, control };
+        let node = |id, x_m, y_m, junction, control| Node {
+            id,
+            osm_nodes: vec![NodeRef(id as i64 * 10)],
+            osm_versions: Default::default(),
+            x_m,
+            y_m,
+            junction,
+            control,
+        };
         let road = |id, name: &str, to, points| Road {
             id,
-            osm_ways: vec![id as i64 * 100],
-            osm_versions: Default::default(),
-            name: Some(name.to_string()),
+            osm_ways: vec![WayRef::new(id as i64 * 100)],
+            name: name.to_string(),
             highway: "residential".into(),
             from: 1,
             to,
@@ -593,10 +602,10 @@ mod tests {
                 node(5, -200.0, 0.0, false, Control::None),
             ],
             roads: vec![
-                road(1, "Side Road", 2, vec![(0.0, 0.0), (0.0, 200.0)]),
-                road(2, "Main Street", 3, vec![(0.0, 0.0), (200.0, 0.0)]),
-                road(3, "Side Road", 4, vec![(0.0, 0.0), (0.0, -200.0)]),
-                road(4, "Main Street", 5, vec![(0.0, 0.0), (-200.0, 0.0)]),
+                road(1, "Side Road", 2, vec![Point::new(0.0, 0.0), Point::new(0.0, 200.0)]),
+                road(2, "Main Street", 3, vec![Point::new(0.0, 0.0), Point::new(200.0, 0.0)]),
+                road(3, "Side Road", 4, vec![Point::new(0.0, 0.0), Point::new(0.0, -200.0)]),
+                road(4, "Main Street", 5, vec![Point::new(0.0, 0.0), Point::new(-200.0, 0.0)]),
             ],
         }
     }
@@ -608,7 +617,7 @@ mod tests {
             let mut network = crossing();
             network.roads[0].speed_kmh = road_speed;
             let layout = Layout::from_network(&network, "x");
-            let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].osm_ways, &network.roads[0].osm_versions)).unwrap().section;
+            let street = &layout.edges.iter().find(|e| e.section.source == way_refs(&network.roads[0].osm_ways)).unwrap().section;
             assert_eq!((street.speed, street.speed_kmh()), (speed, kmh));
         }
     }
@@ -664,11 +673,19 @@ mod tests {
         net.roads.clear();
         for (i, &(x, y)) in ends.iter().enumerate() {
             let id = i as u32 + 2;
-            net.nodes.push(Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m: x, y_m: y, junction: false, control: Control::None });
+            net.nodes.push(Node {
+                id,
+                osm_nodes: vec![NodeRef(id as i64)],
+                osm_versions: Default::default(),
+                x_m: x,
+                y_m: y,
+                junction: false,
+                control: Control::None,
+            });
             let mut road = crossing().roads[0].clone();
             road.id = id;
             road.to = id;
-            road.points = vec![(0.0, 0.0), (x, y)];
+            road.points = vec![Point::new(0.0, 0.0), Point::new(x, y)];
             net.roads.push(road);
         }
         net
@@ -743,27 +760,6 @@ mod tests {
     }
 
     #[test]
-    fn a_road_without_a_name_is_not_a_street_and_the_node_only_it_reached_goes_with_it() {
-        let mut net = crossing();
-        net.roads[0].name = None;
-        let layout = Layout::from_network(&net, "Nameless");
-        assert_eq!(layout.edges.len(), 3, "the unnamed road is left out");
-        assert!(layout.edges.iter().all(|e| e.name.is_some()));
-        assert!(layout.nodes.iter().all(|n| n.source.first().is_none_or(|s| s.id != 20)), "its far end is left out");
-        // a blank name is no name
-        let mut net = crossing();
-        net.roads[0].name = Some("  ".into());
-        assert_eq!(Layout::from_network(&net, "Blank").edges.len(), 3);
-        // a meeting that loses an arm below three is a plain connection
-        let mut net = crossing();
-        net.roads[0].name = None;
-        net.roads[1].name = None;
-        let layout = Layout::from_network(&net, "Two");
-        assert_eq!(layout.edges.len(), 2);
-        assert!(layout.nodes.iter().all(|n| !n.junction));
-    }
-
-    #[test]
     fn a_road_with_no_lanes_is_not_a_street() {
         let mut net = crossing();
         net.roads[0].lanes.clear();
@@ -833,9 +829,9 @@ mod tests {
     /// far end of each lies in one half of the plane, though they leave the junction west, east and south.
     fn curving_t() -> Network {
         let mut net = star(&[(-100.0, 100.0), (100.0, 100.0), (60.0, 50.0)]);
-        net.roads[0].points = vec![(0.0, 0.0), (-30.0, 0.0), (-100.0, 100.0)];
-        net.roads[1].points = vec![(0.0, 0.0), (30.0, 0.0), (100.0, 100.0)];
-        net.roads[2].points = vec![(0.0, 0.0), (0.0, -30.0), (60.0, -30.0), (60.0, 50.0)];
+        net.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(-30.0, 0.0), Point::new(-100.0, 100.0)];
+        net.roads[1].points = vec![Point::new(0.0, 0.0), Point::new(30.0, 0.0), Point::new(100.0, 100.0)];
+        net.roads[2].points = vec![Point::new(0.0, 0.0), Point::new(0.0, -30.0), Point::new(60.0, -30.0), Point::new(60.0, 50.0)];
         net
     }
 
@@ -875,7 +871,7 @@ mod tests {
 
     #[test]
     fn a_road_with_no_centreline_or_one_point_is_the_straight_line_between_its_nodes() {
-        for points in [vec![], vec![(0.0, 0.0)]] {
+        for points in [vec![], vec![Point::new(0.0, 0.0)]] {
             let mut net = curving_t();
             net.roads[0].points = points;
             let v = City::from_network(&net, "Bare").view(0);

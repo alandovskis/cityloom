@@ -31,7 +31,7 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     assert!(!net.left_hand);
     assert!(net.roads.len() > 150, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
-    for r in net.roads.iter().filter(|r| r.name.as_deref().is_some_and(|n| !n.trim().is_empty())) {
+    for r in net.roads.iter() {
         *degree.entry(r.from).or_insert(0) += 1;
         *degree.entry(r.to).or_insert(0) += 1;
     }
@@ -462,7 +462,7 @@ mod two_way_track {
         let index = before
             .roads
             .iter()
-            .position(|r| r.osm_ways.contains(&330153470))
+            .position(|r| r.has_way(330153470))
             .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.osm_ways).collect::<Vec<_>>()));
         let view = store.open().view(0);
         let (uid, one_way_mm) = (view.edges[index].uid, view.edges[index].row_mm);
@@ -474,7 +474,7 @@ mod two_way_track {
         assert!(store.keep_network(&now));
         let city = store.open();
         let view = city.view(0);
-        let index = now.roads.iter().position(|r| r.osm_ways.contains(&330153470)).unwrap();
+        let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();
         let bike = now.roads[index].lanes.iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
         assert_eq!((bike.way, bike.width_m), (osm_import::Way::Both, 3.0), "the street is two-way now");
         assert_eq!(view.edges[index].row_mm, one_way_mm, "and is shown as it was saved");
