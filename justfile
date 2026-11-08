@@ -50,16 +50,33 @@ db port="55432":
 db-stop:
     docker rm -f cityloom-db
 
-# Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
-e2e *args: build
+# The test-provider server the browser tests start, pinned for this checkout (scripts/pin-server.sh).
+[private]
+server:
     cargo build -p cityloom_server --features test-provider
     ./scripts/pin-server.sh
-    cd e2e && npx playwright test {{args}}
 
-# The map, street and archive specs with the road tiles and the basemap served from an unpacked .citymodel archive (`citymodel_builder pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
-e2e-archive *args: build
-    cargo build -p cityloom_server --features test-provider
-    ./scripts/pin-server.sh
+# All three tiers of browser tests (e2e/tiers.json) after one build; with arguments, just those specs whatever their tier, `archive.spec.ts` skipping itself: `just e2e tests/street.spec.ts`. The integration tier needs `DATABASE_URL`.
+e2e *args: build server
+    #!/usr/bin/env sh
+    set -eu
+    cd e2e
+    if [ -n "{{args}}" ]; then exec npx playwright test {{args}}; fi
+    npx playwright test --project=ui
+    npx playwright test --project=integration
+    cd ..
+    scripts/e2e-archive.sh
+
+# UI tier: one page, the network stubbed, the static server only (no database, no archive). Builds first, like `e2e`.
+e2e-ui *args: build server
+    cd e2e && npx playwright test --project=ui {{args}}
+
+# Integration tier: the real server and a Postgres (`DATABASE_URL`: `just db` starts one): sign-in, the account and the sync. Builds first.
+e2e-integration *args: build server
+    cd e2e && npx playwright test --project=integration {{args}}
+
+# E2E tier: the whole path from data to page. Packs the e2e fixtures (`citymodel_builder pack`) into target/e2e-archive and runs `archive.spec.ts` and the delivery specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1). Builds first, like `e2e`.
+e2e-archive *args: build server
     scripts/e2e-archive.sh {{args}}
 
 # Everything: unit tests, then the browser tests.

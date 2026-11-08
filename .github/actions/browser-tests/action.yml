@@ -1,0 +1,30 @@
+name: Browser test setup
+description: >-
+  What every browser tier needs and nothing the build needs: Playwright and its Chromium, and the wasm and the pinned
+  test-provider server that the `build` job made (web/pkg, web/vendor, target/e2e/cityloom_server). The caller has
+  checked the repository out.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: lts/*
+        cache: npm
+        cache-dependency-path: e2e/package-lock.json
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: browser-build
+    # An artifact keeps no file modes.
+    - run: chmod +x target/e2e/cityloom_server
+      shell: sh
+    - run: |
+        npm ci
+        npx playwright install chromium
+        npx playwright install-deps chromium
+      shell: sh
+      working-directory: e2e

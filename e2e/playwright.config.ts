@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // The pages are static files; the WebAssembly module they load is built first
@@ -20,6 +20,25 @@ if (!existsSync(server)) {
 const fromArchive = !!process.env.E2E_ARCHIVE;
 const archiveRoot = fileURLToPath(new URL("../target/e2e-archive/", import.meta.url));
 
+// The tiers (tiers.json is the one place a spec is given its tier): a Playwright project each, so `--project=ui`,
+// `--project=integration` and `--project=e2e` run one alone (`just e2e-ui`, `just e2e-integration`, `just e2e-archive`).
+// A spec in none or in two fails here, as scripts/include/tests/test_ci_changes.py does, so a new one cannot be left out.
+const tiers: Record<"ui" | "integration" | "e2e", string[]> & { archive_also: string[] } = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./tiers.json", import.meta.url)), "utf8"),
+);
+const names = ["ui", "integration", "e2e"] as const;
+const specs = readdirSync(fileURLToPath(new URL("./tests/", import.meta.url)))
+  .filter((f) => f.endsWith(".spec.ts"))
+  .map((f) => f.slice(0, -".spec.ts".length));
+const misplaced = specs.filter((s) => names.filter((n) => tiers[n].includes(s)).length !== 1);
+const missing = names.flatMap((n) => tiers[n].filter((s) => !specs.includes(s)).map((s) => `${n}: ${s}`));
+if (misplaced.length || missing.length) {
+  throw new Error(
+    `e2e/tiers.json: every spec is in exactly one tier. In none or in two: ${misplaced.join(", ") || "-"}. Not a spec: ${missing.join(", ") || "-"}.`,
+  );
+}
+const match = (names: string[]) => new RegExp(`/(${names.join("|")})\\.spec\\.ts$`);
+
 const b64 = (byte: number, length: number) => Buffer.alloc(length, byte).toString("base64");
 
 export default defineConfig({
@@ -35,14 +54,19 @@ export default defineConfig({
     locale: "en-CA",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
+  // With E2E_ARCHIVE=1 only the E2E tier runs, and it also runs the UI specs of `archive_also` over the unpacked archive.
+  projects: (fromArchive ? (["e2e"] as const) : names).map((name) => ({
+    name,
+    testMatch: match(name === "e2e" && fromArchive ? [...tiers.e2e, ...tiers.archive_also] : tiers[name]),
+    use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+  })),
   webServer: {
     command: server,
     env: {
       WEB_ROOT: "../web",
       E2E_PORT: String(port),
       // The keys are fixed test values, not secrets. DATABASE_URL is not set here: the server takes it from the
-      // caller's environment, and the account side stays off without it (only the account specs fail).
+      // caller's environment, and the account side stays off without it (only the integration tier fails).
       BASE_URL: `http://127.0.0.1:${port}`,
       COOKIE_KEY: b64(7, 64),
       DATA_KEYS: `1:${b64(1, 32)}`,

@@ -24,7 +24,8 @@ env:
 jobs:
   # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a change to
   # documentation alone skips the Rust, browser and Railway jobs; a pull request runs every unit test but only the
-  # browser specs its files can affect. A push to main and a manual run always run every spec; anything doubtful does too.
+  # browser specs its files can affect, in the tiers that own them (e2e/tiers.json). A push to main and a manual run always
+  # run every spec; anything doubtful does too.
   changes:
     name: Changes
     runs-on: ubuntu-26.04
@@ -32,9 +33,13 @@ jobs:
     outputs:
       docs_only: ${{ steps.select.outputs.docs_only }}
       unit: ${{ steps.select.outputs.unit }}
+      browser: ${{ steps.select.outputs.browser }}
+      ui: ${{ steps.select.outputs.ui }}
+      ui_specs: ${{ steps.select.outputs.ui_specs }}
+      integration: ${{ steps.select.outputs.integration }}
+      integration_specs: ${{ steps.select.outputs.integration_specs }}
       e2e: ${{ steps.select.outputs.e2e }}
-      specs: ${{ steps.select.outputs.specs }}
-      archive: ${{ steps.select.outputs.archive }}
+      e2e_specs: ${{ steps.select.outputs.e2e_specs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -131,24 +136,14 @@ jobs:
             exit 1
           fi
 
-  e2e:
-    name: Browser tests
+  # The wasm and the test-provider server are built once and handed to the three browser tiers, so splitting them does
+  # not triple the build.
+  build:
+    name: Build for the browser tests
     needs: changes
-    if: needs.changes.outputs.e2e == 'true'
+    if: needs.changes.outputs.browser == 'true'
     runs-on: ubuntu-26.04
-    env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cityloom
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: cityloom
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,9 +160,7 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: |
-            e2e/package-lock.json
-            package-lock.json
+          cache-dependency-path: package-lock.json
 
       # wasm-bindgen-cli takes minutes to compile, so keep it for as long as its version holds.
       - id: wasm-bindgen
@@ -176,29 +169,114 @@ jobs:
         with:
           path: .tools
           key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - run: npm ci
+      - run: cargo install wasm-bindgen-cli --version ${{ steps.wasm-bindgen.outputs.version }} --root .tools
+      - run: just build
+      # The server the tiers start, copied to target/e2e (scripts/pin-server.sh).
+      - run: just server
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+          name: browser-build
+          path: |
+            web/pkg
+            web/vendor
+            target/e2e/cityloom_server
+          if-no-files-found: error
+          retention-days: 1
 
-      - run: just setup
-      - run: npx playwright install-deps chromium
+  # UI tier (e2e/tiers.json): one page, the network stubbed, the static server only. No database, no archive.
+  ui:
+    name: UI tests
+    needs: [changes, build]
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/browser-tests
+      # A pull request runs the specs its files can affect (`ui_specs`, empty for every one); main runs them all.
+      - run: npx playwright test --project=ui $SPECS
         working-directory: e2e
-      # A pull request runs the specs its files can affect (`specs`, empty for every one); main runs them all.
-      - run: |
-          # shellcheck disable=SC2086 # the specs are words; none is the same as every one
-          just e2e $SPECS
         env:
-          SPECS: ${{ needs.changes.outputs.specs }}
-      # The archive specs are three of those; they run when one of the three does.
-      - if: needs.changes.outputs.archive == 'true'
-        run: just e2e-archive
-
+          SPECS: ${{ needs.changes.outputs.ui_specs }}
       - name: Keep the report and traces of a failed run
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-ui
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # Integration tier: the real server and a Postgres (sign-in, the account, the sync).
+  integration:
+    name: Integration tests
+    needs: [changes, build]
+    if: needs.changes.outputs.integration == 'true'
+    runs-on: ubuntu-26.04
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cityloom
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cityloom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/browser-tests
+      - run: npx playwright test --project=integration $SPECS
+        working-directory: e2e
+        env:
+          SPECS: ${{ needs.changes.outputs.integration_specs }}
+      - name: Keep the report and traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-integration
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # E2E tier: the whole path from data to page. The archive is packed from the fixtures (citymodel_builder, so this job has
+  # Rust, and no database) and unpacked by a fresh server; the delivery specs read the real server's headers and ranges.
+  e2e:
+    name: E2E tests
+    needs: [changes, build]
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: ./.github/actions/browser-tests
+      # `e2e_specs` narrows the tier on a pull request (the archive spec brings the map and street specs it repeats).
+      - run: scripts/e2e-archive.sh $SPECS
+        env:
+          SPECS: ${{ needs.changes.outputs.e2e_specs }}
+      - name: Keep the report and traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-e2e
           path: |
             e2e/playwright-report/
             e2e/test-results/
@@ -253,7 +331,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [changes, format, test, e2e, docs, server-release, version]
+    needs: [changes, format, test, build, ui, integration, e2e, docs, server-release, version]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:

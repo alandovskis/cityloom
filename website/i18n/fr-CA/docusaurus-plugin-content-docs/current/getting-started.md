@@ -62,15 +62,15 @@ fond de carte, la page Carte l’indique et n’affiche aucune carte.
 ```sh
 just db            # un Postgres jetable dans Docker pour les tests du serveur et la spécification du compte
 just test          # cargo test --workspace, et une construction wasm32 du code que `cargo test` seul ne compile pas; exige `DATABASE_URL`
-just e2e           # construit, puis exécute les tests Playwright de e2e/; la spécification du compte exige `DATABASE_URL`
+just e2e           # construit, puis exécute les trois niveaux de tests Playwright de e2e/ (`just e2e-ui`, `just e2e-integration` et `just e2e-archive` en exécutent un chacun); le niveau d’intégration exige `DATABASE_URL`
 just check         # les deux
 just format        # rustfmt et Prettier
 just format-check  # la même vérification, sans rien modifier
 ```
 
 L’intégration continue exécute `just format-check`, `just test` et `just e2e` avec `RUSTFLAGS=-D warnings`; un nouvel
-avertissement du compilateur la fait donc échouer. Elle construit aussi cette documentation avec `just docs-build`. Les tâches `test` et `e2e` de l’intégration continue
-exécutent un service Postgres. Chaque demande de fusion augmente la version dans le `Cargo.toml` de la racine.
+avertissement du compilateur la fait donc échouer. Elle construit aussi cette documentation avec `just docs-build`. Les tâches `test` et d’intégration de l’intégration continue
+exécutent un service Postgres; les tâches de tests de l’interface et de bout en bout n’en ont pas besoin. Chaque demande de fusion augmente la version dans le `Cargo.toml` de la racine.
 
 `just db` démarre le Postgres dans un conteneur nommé `cityloom-db`, sur 127.0.0.1:55432, et affiche la ligne à
 exécuter : `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. Les tests du serveur et la
