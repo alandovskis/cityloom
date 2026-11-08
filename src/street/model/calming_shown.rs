@@ -6,9 +6,10 @@ use serde::Serialize;
 
 use super::Editor;
 use super::calming::{Kind, RAMP_MM};
+use crate::shared::catalogue::Side;
 
 /// One raised element as the 2.5D shows it.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ShownCalming {
     /// Where it lies along the stretch, in millimetres from the stretch's near end: only the part inside the stretch
     /// and the zone.
@@ -21,12 +22,18 @@ pub struct ShownCalming {
     pub kind: Kind,
     /// The whole element lies inside the stretch and the zone.
     pub whole: bool,
+    /// For a chicane, the build-outs that lie wholly inside the stretch and the zone, in the same coordinates, each with
+    /// the side of the section it is on; none for anything else.
+    pub buildouts: Vec<(f64, f64, Side)>,
 }
 
 impl ShownCalming {
     /// Whether the drawing shows it: the plateau lies wholly inside the stretch and the zone, so an element cut by
     /// the stretch's edge is drawn whole or not at all, as a tree is, judged on its plateau.
     pub fn drawn(&self) -> bool {
+        if self.kind == Kind::Chicane {
+            return !self.buildouts.is_empty();
+        }
         self.plateau.0 >= self.along.0 && self.plateau.1 <= self.along.1
     }
 }
@@ -47,7 +54,13 @@ impl Editor {
                 // Each ramp is `RAMP_MM` long, or half the element when that is shorter.
                 let ramp = f64::from(RAMP_MM).min((full.1 - full.0) / 2.0);
                 let plateau = (full.0 + ramp, full.1 - ramp);
-                Some(ShownCalming { along, plateau, full, kind: c.kind, whole: along == full })
+                // A chicane is its build-outs, each drawn whole or not at all.
+                let buildouts = c
+                    .buildouts()
+                    .into_iter()
+                    .filter_map(|(from, to, side)| stretch.map(from, to).filter(|(a, f)| a == f).map(|(a, _)| (a.0, a.1, side)))
+                    .collect();
+                Some(ShownCalming { along, plateau, full, kind: c.kind, whole: along == full, buildouts })
             })
             .collect()
     }
@@ -107,5 +120,33 @@ mod tests {
         let s = e.view().calming_shown;
         // 10 m to 17 m from the anchored end is 30 m to 23 m from the stretch's near end.
         assert_eq!((s[0].along, s[0].plateau), ((23_000.0, 30_000.0), (24_500.0, 28_500.0)));
+    }
+
+    #[test]
+    fn a_chicane_shows_the_build_outs_wholly_inside_the_stretch_with_their_sides() {
+        let mut e = editor(ZoneEnd::First);
+        e.add_calming(Kind::Chicane, 5_000, 24_000).unwrap();
+        let s = e.view().calming_shown;
+        assert_eq!(s[0].buildouts, vec![(5_000.0, 9_000.0, Side::Right), (15_000.0, 19_000.0, Side::Left), (25_000.0, 29_000.0, Side::Right)]);
+        assert!(s[0].drawn());
+        // The third build-out of one starting at 25 m lies past the 40 m: only the whole ones are shown.
+        let mut e = editor(ZoneEnd::First);
+        e.add_calming(Kind::Chicane, 25_000, 24_000).unwrap();
+        let s = e.view().calming_shown;
+        assert_eq!(s[0].buildouts, vec![(25_000.0, 29_000.0, Side::Right), (35_000.0, 39_000.0, Side::Left)]);
+        // One that begins inside and has no build-out whole in the stretch is not drawn.
+        let mut e = editor(ZoneEnd::First);
+        e.add_calming(Kind::Chicane, 37_000, 14_000).unwrap();
+        let s = e.view().calming_shown;
+        assert!(s[0].buildouts.is_empty() && !s[0].drawn());
+    }
+
+    #[test]
+    fn a_chicane_anchored_at_the_last_end_is_mirrored_along_the_stretch_but_keeps_its_sides() {
+        let mut e = editor(ZoneEnd::Last);
+        e.add_calming_first(Kind::Chicane, 5_000, 14_000, Some(Side::Left)).unwrap();
+        let s = e.view().calming_shown;
+        // 5 to 9 m and 15 to 19 m from the anchored end are 31 to 35 m and 21 to 25 m from the stretch's near end.
+        assert_eq!(s[0].buildouts, vec![(31_000.0, 35_000.0, Side::Left), (21_000.0, 25_000.0, Side::Right)]);
     }
 }

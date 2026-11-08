@@ -20,7 +20,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{SegView, ShownGreen, ShownInstance, ShownStop, View};
+use crate::street::model::{CalmingKind, SegView, ShownGreen, ShownInstance, ShownStop, View};
 
 mod calming;
 mod curbside;
@@ -161,7 +161,8 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
     let hits = scene::hits(&p.over(selected), &v.segments, i18n);
     let mut diagram = Diagram { defs: String::new(), ground, sections, outline, hits };
     // The ramps' shade is in the defs only when a table is drawn, so that every other street is written as before.
-    let ramp = if v.calming_shown.iter().any(|c| c.drawn()) { shade_filters(&[("iso-shade-ramp", "0.85")]) } else { String::new() };
+    let ramp =
+        if v.calming_shown.iter().any(|c| c.kind != CalmingKind::Chicane && c.drawn()) { shade_filters(&[("iso-shade-ramp", "0.85")]) } else { String::new() };
     // The defs carry the pattern of a material only a laid thing is drawn in when the drawing has one.
     diagram.defs = format!("<defs>{}{}{}</defs>", shades(), ramp, materials(diagram.uses_material("rain_garden")));
     diagram
@@ -183,9 +184,13 @@ pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
     }
-    let tables = v.calming_shown.iter().filter(|c| c.drawn()).count();
+    let tables = v.calming_shown.iter().filter(|c| c.kind != CalmingKind::Chicane && c.drawn()).count();
     if tables > 0 {
         label = format!("{label} {}", i18n.tr("svg-iso-calming", &Args::new().num("count", tables as i64)));
+    }
+    let chicanes = v.calming_shown.iter().filter(|c| c.kind == CalmingKind::Chicane && c.drawn()).count();
+    if chicanes > 0 {
+        label = format!("{label} {}", i18n.tr("svg-iso-chicane", &Args::new().num("count", chicanes as i64)));
     }
     if !v.green_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-green", &Args::new().num("count", v.green_shown.len() as i64)));

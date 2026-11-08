@@ -370,6 +370,10 @@ svg-iso-calming = { $count ->
         [one] One raised table is shown.
        *[other] { $count } raised tables are shown.
     }
+svg-iso-chicane = { $count ->
+        [one] One chicane is shown.
+       *[other] { $count } chicanes are shown.
+    }
 svg-iso-green = Trees and plantings shown: { $count }.
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
@@ -582,12 +586,13 @@ st-green-remove = Remove
 # A raised table or crossing's names and refusals (src/street/model/calming.rs).
 calming-kind-table = Raised table
 calming-kind-crossing = Raised crossing
+calming-kind-chicane = Chicane
 calming-refused-no-anchor = Both ends of this street are cut by the edge of the map, so raised tables cannot be placed along it.
 calming-refused-elsewhere = The raised tables of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
 calming-refused-dragging = Finish the drag before changing the raised tables.
 calming-refused-outside = That would run past an end of the street.
 calming-refused-overlap = That would overlap another raised table.
-calming-refused-too-short = A raised table must be at least { $min } long.
+calming-refused-too-short = This element must be at least { $min } long.
 calming-refused-freeway = A raised table cannot be placed on a freeway.
 calming-refused-no-roadway = This street has no roadway to raise.
 calming-refused-time-windows = A raised table cannot be placed where the roadway changes with the time of day.
@@ -596,7 +601,7 @@ rev-calming-kind = Change the raised element at { $at } to a { $kind }
 rev-calming-resize = Resize the { $kind } at { $at }
 rev-calming-move = Move the { $kind } to { $at }
 rev-calming-remove = Remove the { $kind } at { $at }
-
+rev-chicane-first = Change the side the { $kind } at { $at } starts on
 # What the last change did to the street (src/street/impact.rs and the Impact tab's card).
 st-impact-heading = Last change
 st-impact-empty = No change yet. Edit the street to see what it did to the space and the checks.
@@ -672,18 +677,24 @@ check-detail-calming-junction-crossing = The raised element would stand { $gap }
 check-detail-calming-junction-mouth = The raised element would stand { $gap } from where the junction begins; { $need } or more is needed.
 check-detail-calming-junction-inside = The raised element reaches into the junction.
 check-detail-calming-junction-ok = Every raised element stands clear of the junction.
-
+check-detail-chicane-length = A chicane of { $length } is too short: it needs two build-outs and the gap between them, { $min } or more.
+check-label-calming-lane = Chicanes clear of bus and bike lanes
+check-detail-calming-lane = A chicane narrows the roadway to one path, so a bus lane or a bike lane cannot go through it.
+check-detail-calming-lane-ok = No chicane crosses a bus lane or a bike lane.
 # The raised elements' strip, tools and the words said on choosing one (src/street/calming_strip.rs, calming_tools.rs).
 calming-gap = Free
 calming-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
 calming-cell-failing = Fails a check. See the checks.
 calming-choose-gap = Choose a free stretch of the street first.
-calming-choose-element = Choose a raised table or crossing first.
-st-calming-heading = Raised tables and crossings along the street
-st-calming-caption = Raised tables and crossings
-st-calming-strip-label = Raised tables and crossings along the street
+calming-choose-element = Choose a raised table, crossing or chicane first.
+st-calming-heading = Raised tables, crossings and chicanes along the street
+st-calming-caption = Raised tables, crossings and chicanes
+st-calming-strip-label = Raised tables, crossings and chicanes along the street
 st-calming-tools = Raised table commands
 st-calming-kind = Kind
 st-calming-length = Length ({ $unit })
+st-calming-first = Starts on
+st-calming-first-left = Left
+st-calming-first-right = Right
 st-calming-add = Add raised element
 st-calming-remove = Remove raised element

@@ -88,7 +88,7 @@ test.describe("raised tables and crossings", () => {
   test("a table that is too short or runs past the street is refused, and the refusal says why", async ({ page }) => {
     await openCalmingStreet(page, 20);
     await addElement(page, 0, 4);
-    await expect(page.locator("#live")).toContainText("A raised table must be at least");
+    await expect(page.locator("#live")).toContainText("This element must be at least");
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#undo")).toBeDisabled();
     await page.locator("#calming-0").click();
@@ -135,5 +135,44 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(page.locator("#calming-add")).toHaveText("Ajouter un élément surélevé");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Plateau surélevé/);
+  });
+  test("a chicane is added with the tools, drawn as build-outs, saved as version 14 and undone", async ({ page }) => {
+    await openCalmingStreet(page, 30);
+    await page.locator("#calming-0").click();
+    await page.locator("#calming-kind").selectOption("2");
+    // Only a chicane has a side to start on.
+    await expect(page.locator("#calming-first")).toBeVisible();
+    await page.locator("#calming-first").selectOption("left");
+    await page.locator("#calming-length").fill("24");
+    await page.locator("#calming-add").click();
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane.*24\.0 m long/);
+
+    // The 2.5D draws build-outs (not ramps), names them, and counts the chicane apart from the tables.
+    await expect(page.locator("#drawing .iso-chicane").first()).toBeAttached();
+    await expect(page.locator("#drawing .iso-chicane [data-uid]")).toHaveCount(0);
+    await expect(page.locator("#drawing .iso-table")).toHaveCount(0);
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /chicane/);
+    await page.screenshot({ path: "test-results/chicane.png", fullPage: true });
+
+    // Its checks include the lane row, and the document takes the chicanes' version only while one is held.
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#checks li").filter({ hasText: "Chicanes clear of bus and bike lanes" })).toHaveCount(1);
+    await expect.poll(() => editsVersion(page)).toBe(14);
+    await page.reload();
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane/);
+
+    // Undo takes it away, and the saved document goes back to what it was.
+    await page.locator("#undo").click();
+    await expect(cells(page)).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-chicane")).toHaveCount(0);
+    await expect.poll(() => editsVersion(page)).not.toBe(14);
+  });
+
+  test("a chicane that is too short is refused with its minimum", async ({ page }) => {
+    await openCalmingStreet(page, 30);
+    await addElement(page, 0, 10, "2");
+    await expect(cells(page)).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-chicane")).toHaveCount(0);
   });
 });
