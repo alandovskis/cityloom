@@ -962,7 +962,7 @@ mod report {
         let (vm, ..) = sample_in(Locale::En);
         let page = texts_of(&vm.report_data().pages[2..]);
         assert!(page.contains("Room for the transition") && page.contains("Lane drops"), "{page}");
-        assert!(page.contains("Federal Highway Administration") && page.contains("https://mutcd.fhwa.dot.gov/"), "{page}");
+        assert!(page.contains("Regional Municipality of York") && page.contains("Ministère des Transports du Québec"), "{page}");
         assert!(page.contains("placeholder"), "{page}");
         let (fr, ..) = sample_in(Locale::FrCa);
         let page = texts_of(&fr.report_data().pages[2..]);

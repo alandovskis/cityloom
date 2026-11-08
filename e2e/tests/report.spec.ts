@@ -45,7 +45,7 @@ test("the Share menu downloads the report as a PDF", async ({ page }) => {
   // A line break in the PDF is a run of spaces in the text, so these are read with whitespace collapsed.
   const flat = text.replace(/\s+/g, " ");
   expect(flat).toContain("Room for the transition");
-  expect(flat).toContain("Federal Highway Administration");
+  expect(flat).toContain("Regional Municipality of York");
   // The last cited rule and its source: a page cut short would lose them before the closing notice.
   expect(flat).toContain("Planting clear of the corners at junctions");
   expect(flat).toContain("Distance de visibilité");

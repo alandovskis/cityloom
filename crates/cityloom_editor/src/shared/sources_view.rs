@@ -5,7 +5,7 @@
 use leptos::prelude::*;
 
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::sources::{Confidence, note};
+use crate::shared::sources::{Confidence, Note, note};
 use crate::shared::units::Units;
 
 /// The disclosure of the rule `rule`, worded in the page's language.
@@ -14,7 +14,11 @@ use crate::shared::units::Units;
 pub fn source_note(rule: &'static str, check: &str, i18n: &I18n, units: Units) -> impl IntoView + use<> {
     let n = note(rule, i18n, units);
     let name = i18n.tr("src-summary-for", &Args::new().str("summary", n.summary.clone()).str("check", check));
-    let open = i18n.tr("src-open", &Args::new());
+    disclosure(n, name, i18n.tr("src-open", &Args::new()))
+}
+
+/// The disclosure of a note already worded: `name` is the summary's name for a screen reader, `open` the words of a link.
+fn disclosure(n: Note, name: String, open: String) -> impl IntoView + use<> {
     let placeholder = n.confidence == Confidence::Placeholder;
     let sources = n
         .sources
@@ -51,10 +55,27 @@ mod tests {
     }
 
     #[test]
-    fn a_cited_rule_links_each_reference_to_a_new_tab_that_says_so() {
+    fn a_cited_rule_says_its_status_and_names_its_references() {
         let h = html(|| source_note("transition-room", "Check", &crate::i18n_for(Locale::En), Units::Metres).into_any());
         assert!(h.contains("class=\"src\"") && h.contains("Source: named, figures not checked"));
-        assert!(h.contains("target=\"_blank\"") && h.contains("rel=\"noopener noreferrer\""));
-        assert!(h.contains("opens in a new tab") && h.contains(">Open reference<") && h.contains("Federal Highway Administration"));
+        assert!(h.contains("Regional Municipality of York"));
+    }
+
+    #[test]
+    fn a_reference_with_a_link_opens_in_a_new_tab_and_the_name_says_so() {
+        use crate::shared::sources::NoteSource;
+        let note = Note {
+            confidence: Confidence::Unchecked,
+            summary: "Source: named".into(),
+            applies: "Applies here.".into(),
+            sources: vec![NoteSource {
+                text: "Publisher, Title".into(),
+                url: Some("https://example.org/doc"),
+                open: "Open reference: Title (opens in a new tab)".into(),
+            }],
+        };
+        let h = html(|| disclosure(note, "Source: named (Check)".into(), "Open reference".into()).into_any());
+        assert!(h.contains("href=\"https://example.org/doc\"") && h.contains("target=\"_blank\"") && h.contains("rel=\"noopener noreferrer\""));
+        assert!(h.contains(">Open reference<") && h.contains("aria-label=\"Open reference: Title (opens in a new tab)\""));
     }
 }

@@ -36,7 +36,7 @@ pub struct Source {
     pub id: &'static str,
     pub title: &'static str,
     pub publisher: &'static str,
-    /// The message that names where it applies (`src-jurisdiction-us`, `-ca` or `-qc`).
+    /// The message that names where it applies (`src-jurisdiction-ca`, `-qc` or `-mtl`).
     pub jurisdiction: &'static str,
     /// A page that is known to hold it; `None` where no address has been confirmed.
     pub url: Option<&'static str>,
@@ -48,28 +48,16 @@ const fn doc(id: &'static str, title: &'static str, publisher: &'static str, jur
 
 const MTQ: &str = "Ministère des Transports du Québec";
 const QC: &str = "src-jurisdiction-qc";
+const MTL: &str = "src-jurisdiction-mtl";
+const VILLE: &str = "Ville de Montréal";
 
 pub const SOURCES: &[Source] = &[
-    doc(
-        "mutcd-2003",
-        "Manual on Uniform Traffic Control Devices, 2003 edition, Part 3, Figure 3B-12",
-        "Federal Highway Administration",
-        "src-jurisdiction-us",
-        Some("https://mutcd.fhwa.dot.gov/pdfs/2003r1/pdf_index.htm"),
-    ),
     doc(
         "york-ds-100",
         "Design Standard DS-100, 2023 (lane-addition tapers, based on the TAC guide)",
         "Regional Municipality of York",
         "src-jurisdiction-ca",
         None,
-    ),
-    doc(
-        "nacto-bikeway",
-        "Urban Bikeway Design Guide (bike lane tapers of at least 1:5)",
-        "National Association of City Transportation Officials",
-        "src-jurisdiction-us",
-        Some("https://nacto.org/publication/urban-bikeway-design-guide/"),
     ),
     doc("mtq-t1-c1", "Conception routière, Tome I, chapitre 1, Classification fonctionnelle (2021-06-15)", MTQ, QC, None),
     doc("mtq-t1-c7", "Conception routière, Tome I, chapitre 7, Distance de visibilité (2024-06-15)", MTQ, QC, None),
@@ -81,6 +69,14 @@ pub const SOURCES: &[Source] = &[
         MTQ,
         QC,
         None,
+    ),
+    doc("mtl-repertoire", "Répertoire des pratiques d'aménagement de la rue", VILLE, MTL, Some("https://montreal-amenagement-rues.powerappsportals.com/")),
+    doc(
+        "mtl-velorue",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Vélorue",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Types/Velorue/"),
     ),
     doc("mtq-t1-c15", "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)", MTQ, QC, None),
 ];
@@ -100,10 +96,11 @@ const fn entry(rule: &'static str, label: &'static str, applies: &'static str, s
 }
 
 const ENTRIES: &[Entry] = &[
-    entry("transition-room", "check-label-transition-room", "src-applies-transition", &["mutcd-2003", "york-ds-100", "nacto-bikeway"]),
-    entry("lane-drop", "check-label-lane-drop", "src-applies-transition", &["mutcd-2003", "york-ds-100"]),
+    entry("transition-room", "check-label-transition-room", "src-applies-transition", &["york-ds-100"]),
+    entry("lane-drop", "check-label-lane-drop", "src-applies-transition", &["york-ds-100"]),
     entry("curb-length", "check-label-curb-length", "src-applies-stall-length", &["mtq-t1-d14"]),
-    entry("curb-bike", "check-label-curb-bike", "src-applies-door-buffer", &["mtq-t1-c15"]),
+    entry("calming-passage", "check-label-calming-passage", "src-applies-diverter", &["mtl-velorue"]),
+    entry("curb-bike", "check-label-curb-bike", "src-applies-door-buffer", &["mtq-t1-c15", "mtl-velorue"]),
     entry("curb-crossing", "check-label-curb-crossing", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
     entry("curb-near", "jn-check-curb-near", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
     entry("crossing", "jn-check-crossing", "src-applies-refuge", &["mtq-t1-c8"]),
@@ -222,9 +219,9 @@ mod tests {
     fn a_rule_with_an_entry_names_its_sources_and_says_they_are_not_checked() {
         let c = citation("transition-room");
         assert_eq!(c.confidence, Confidence::Unchecked);
-        assert_eq!(c.sources.len(), 3);
-        assert_eq!(c.sources[0].publisher, "Federal Highway Administration");
-        assert_eq!(c.sources[0].jurisdiction, Said::new("src-jurisdiction-us"));
+        assert_eq!(c.sources.len(), 1);
+        assert_eq!(c.sources[0].publisher, "Regional Municipality of York");
+        assert_eq!(c.sources[0].jurisdiction, Said::new("src-jurisdiction-ca"));
     }
 
     #[test]
@@ -239,7 +236,7 @@ mod tests {
         for (i, s) in SOURCES.iter().enumerate() {
             assert!(SOURCES[..i].iter().all(|o| o.id != s.id), "{} is listed twice", s.id);
             assert!(
-                ["src-jurisdiction-us", "src-jurisdiction-ca", "src-jurisdiction-qc"].contains(&s.jurisdiction),
+                ["src-jurisdiction-ca", "src-jurisdiction-qc", "src-jurisdiction-mtl"].contains(&s.jurisdiction),
                 "{}: unknown jurisdiction {}",
                 s.id,
                 s.jurisdiction
@@ -255,9 +252,9 @@ mod tests {
             let placeholder = note("calming-length", &i18n, Units::Metres);
             assert!(placeholder.sources.is_empty() && !placeholder.summary.is_empty() && !placeholder.applies.is_empty());
             let cited = note("lane-drop", &i18n, Units::Metres);
-            assert_eq!(cited.sources.len(), 2);
-            assert!(cited.sources[0].text.contains("Federal Highway Administration"));
-            assert!(cited.sources[0].url.is_some() && cited.sources[0].open.contains("Manual on Uniform"));
+            assert_eq!(cited.sources.len(), 1);
+            assert!(cited.sources[0].text.contains("Regional Municipality of York"));
+            assert!(cited.sources[0].open.contains("Design Standard DS-100"));
             assert!(i18n.missing().is_empty(), "{:?}", i18n.missing());
         }
         let en = crate::i18n_for(crate::shared::i18n::Locale::En);
@@ -277,5 +274,16 @@ mod tests {
             assert_eq!(c.confidence, Confidence::Unchecked, "{rule}");
             assert!(!c.sources.is_empty() && c.sources[0].title.contains(chapter) && c.sources[0].publisher.contains("Transports du Québec"), "{rule}");
         }
+    }
+
+    #[test]
+    fn a_rule_the_ville_de_montreal_speaks_to_links_its_sheet() {
+        let c = citation("calming-passage");
+        assert_eq!(c.confidence, Confidence::Unchecked);
+        assert_eq!(c.sources.len(), 1);
+        assert_eq!(c.sources[0].publisher, "Ville de Montréal");
+        assert_eq!(c.sources[0].url, Some("https://montreal-amenagement-rues.powerappsportals.com/Types/Velorue/"));
+        assert_eq!(c.sources[0].jurisdiction, Said::new("src-jurisdiction-mtl"));
+        assert!(citation("curb-bike").sources.iter().any(|s| s.publisher == "Ville de Montréal"));
     }
 }
