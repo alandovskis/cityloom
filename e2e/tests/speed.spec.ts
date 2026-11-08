@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, placesOnMap, test } from "./fixtures";
+import { expect, openAnchoredStreet, placesOnMap, splitInto, test } from "./fixtures";
 
 const speed = (page: Page) => page.locator("#speed-limit");
 /** The speed limit sign the 2.5D used to draw: it is gone, the limit is set on the Street tab. */
@@ -146,5 +146,37 @@ test.describe("the left panel's tabs", () => {
     await page.locator("#piece-list [role=option]").first().click();
     await expect(page.locator("#t-piece")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#p-piece")).toBeVisible();
+  });
+});
+
+// A zone has a speed limit of its own (#148): the select on the Street tab sets the selected zone's, and a zone may
+// follow the street's again.
+test.describe("a zone's speed limit", () => {
+  test.describe.configure({ timeout: 120_000 });
+
+  test("is set for the selected zone only, the others follow the street, and Undo takes it back", async ({ page }) => {
+    await openAnchoredStreet(page, 30);
+    await splitInto(page, 2);
+    await page.locator("#t-street").click();
+    await expect(speed(page).locator("option").first()).toHaveText(/^Same as the street/);
+    await expect(speed(page)).toHaveValue("street");
+    const own = await speed(page).locator("option").first().textContent();
+    expect(own).toMatch(/^Same as the street: (\d+ km\/h|not set)$/);
+
+    // The new zone is selected; give it a speed the street does not have.
+    const chosen = own?.includes("20 km/h") ? "30" : "20";
+    await speed(page).selectOption(chosen);
+    await expect(speed(page)).toHaveValue(chosen);
+    await page.locator("#zone-0").click();
+    await expect(speed(page)).toHaveValue("street");
+    await page.locator("#zone-1").click();
+    await expect(speed(page)).toHaveValue(chosen);
+
+    await speed(page).selectOption("street");
+    await expect(speed(page)).toHaveValue("street");
+    await page.locator("#undo").click();
+    await expect(speed(page)).toHaveValue(chosen);
+    await page.locator("#undo").click();
+    await expect(speed(page)).toHaveValue("street");
   });
 });

@@ -207,7 +207,10 @@ mod tests {
         let mut s = street(&base());
         s.curb = vec![use_of(Side::Left, 24_000, 12_000)];
         s.length_mm = Some(LEN);
-        s.zones = vec![Zone { from_mm: 0, segments: None, name: None }, Zone { from_mm: 30_000, segments: Some(section(second)), name: None }];
+        s.zones = vec![
+            Zone { from_mm: 0, segments: None, name: None, speed: crate::street::model::Speed::Undecided },
+            Zone { from_mm: 30_000, segments: Some(section(second)), name: None, speed: crate::street::model::Speed::Undecided },
+        ];
         s
     }
 

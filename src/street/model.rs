@@ -20,6 +20,9 @@ mod joint;
 mod speed;
 pub use speed::Speed;
 mod beyond;
+mod school;
+pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
+mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
@@ -565,7 +568,7 @@ impl Content {
         self.sort_calming();
         green::sort_green(&mut self.green);
         let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty();
-        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, keep_anchor);
+        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.speed, &mut self.from_end, &mut self.length_mm, keep_anchor);
     }
 }
 
@@ -832,6 +835,18 @@ impl Editor {
     /// Settling can leave fewer zones than there were: the selected one falls back to the last.
     fn clamp_zone(&mut self) {
         self.zone = self.zone.min(self.states[self.cursor].content.zone_count() - 1);
+    }
+
+    /// Makes the revisions since state `from` one, labelled `label`: what a command made of several edits leaves.
+    fn squash_since(&mut self, from: usize, label: Said) {
+        if self.cursor <= from {
+            return;
+        }
+        let mut last = self.states[self.cursor].clone();
+        last.label = label;
+        self.states.truncate(from + 1);
+        self.cursor = from;
+        self.push_state(last);
     }
 
     fn push_state(&mut self, state: State) {
@@ -1274,10 +1289,17 @@ impl Editor {
     /// Arranges the selected zone as a street template (`Template`): its pieces are replaced by the template's,
     /// fitted to the street's width, as one undoable edit. Refused, with the reason and nothing changed, when the
     /// class or the width does not suit it.
-    pub fn apply_template(&mut self, template: Template) -> Result<(), TemplateRefusal> {
+    ///
+    /// The School street also makes a school zone, with a lower speed limit and a raised table, as far as each fits
+    /// (`apply_school`); the report says which parts were applied and which skipped. Still one revision.
+    pub fn apply_template(&mut self, template: Template) -> Result<TemplateReport, TemplateRefusal> {
         let mut next_uid = self.next_uid;
         let arranged = template.arrange(self.class(), self.row_mm(), REGIONS[self.region].drive_side, &mut next_uid)?;
-        let ok = self.edit(Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key())))), |segs| {
+        let label = Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key()))));
+        if template == Template::School {
+            return Ok(self.apply_school(arranged, next_uid, label));
+        }
+        let ok = self.edit(label, |segs| {
             *segs = arranged;
             true
         });
@@ -1285,7 +1307,7 @@ impl Editor {
             self.next_uid = next_uid;
             self.selected = None;
         }
-        Ok(())
+        Ok(TemplateReport::default())
     }
 
     /// Makes the street pedestrian: every motor piece (travel, parking, loading, bus, shoulder, at any hour: a bike
@@ -1401,19 +1423,43 @@ impl Editor {
         true
     }
 
-    /// Sets the speed limit to one of `SPEED_CHOICES`, or to none (`None`). False, with no revision, for any other
-    /// value (an imported one outside the choices is kept, never set) or when it is the speed already.
+    /// Sets the speed limit to one of `SPEED_CHOICES`, or to none (`None`). The selected zone's when the street has
+    /// several zones, else the street's. False, with no revision, for any other value (an imported one outside the
+    /// choices is kept, never set) or when it is the speed already.
     pub fn set_speed(&mut self, kmh: Option<u16>) -> bool {
-        let current = self.states[self.cursor].content.speed;
+        let content = &self.states[self.cursor].content;
+        let z = self.zone;
+        let zoned = content.zones.len() > 1;
+        let current = if zoned { zone_speed::speed_in(content.speed, &content.zones, z) } else { content.speed };
         if kmh.is_some_and(|n| !SPEED_CHOICES.contains(&n)) || current.kmh() == kmh {
             return false;
         }
-        let label = match kmh {
-            Some(n) => Said::new("rev-speed").with("kmh", Arg::Num(i64::from(n))),
-            None => Said::new("rev-speed-not-set"),
+        let label = match (zoned, kmh) {
+            (false, Some(n)) => Said::new("rev-speed").with("kmh", Arg::Num(i64::from(n))),
+            (false, None) => Said::new("rev-speed-not-set"),
+            (true, Some(n)) => Said::new("rev-zone-speed").with("zone", Arg::Said(Box::new(self.label_of(z)))).with("kmh", Arg::Num(i64::from(n))),
+            (true, None) => Said::new("rev-zone-speed-not-set").with("zone", Arg::Said(Box::new(self.label_of(z)))),
         };
         self.edit_content(label, |c| {
-            c.speed = Speed::from_kmh(kmh);
+            match c.zones.get_mut(z) {
+                Some(zone) if zoned => zone.speed = Speed::from_kmh(kmh),
+                _ => c.speed = Speed::from_kmh(kmh),
+            }
+            true
+        })
+    }
+
+    /// Gives the selected zone the street's speed limit again. False, with no revision, for a street of one zone or a
+    /// zone that follows the street already.
+    pub fn follow_street_speed(&mut self) -> bool {
+        let z = self.zone;
+        let content = &self.states[self.cursor].content;
+        if content.zones.len() < 2 || content.zones[z].speed.is_undecided() {
+            return false;
+        }
+        let label = Said::new("rev-zone-speed-street").with("zone", Arg::Said(Box::new(self.label_of(z))));
+        self.edit_content(label, |c| {
+            c.zones[z].speed = Speed::Undecided;
             true
         })
     }
@@ -1492,7 +1538,15 @@ impl Editor {
             class: self.class(),
             has_motor: segs.iter().any(Segment::has_motor),
             region: REGIONS[self.region].id,
-            speed_kmh: self.states[self.cursor].content.speed.kmh(),
+            speed_kmh: {
+                let content = &self.states[self.cursor].content;
+                zone_speed::speed_in(content.speed, &content.zones, self.zone).kmh()
+            },
+            street_speed_kmh: self.states[self.cursor].content.speed.kmh(),
+            speed_follows: {
+                let content = &self.states[self.cursor].content;
+                content.zones.len() > 1 && content.zones.get(self.zone).is_some_and(|z| z.speed.is_undecided())
+            },
             side: REGIONS[self.region].drive_side,
             row_mm: self.row_mm(),
             total_mm,
@@ -1878,8 +1932,12 @@ pub struct View {
     /// Some piece is a motor piece at some hour: the street can be made pedestrian.
     pub has_motor: bool,
     pub region: &'static str,
-    /// The speed limit, when the street has one.
+    /// The speed limit of the selected zone, when it has one (the street's when it has one zone).
     pub speed_kmh: Option<u16>,
+    /// The street has several zones and the selected one follows the street's speed limit.
+    pub speed_follows: bool,
+    /// The street's own speed limit, which a zone with none of its own follows.
+    pub street_speed_kmh: Option<u16>,
     /// The side of the road traffic keeps, for the 2.5D sign.
     pub side: Side,
     /// The time of day shown, in minutes after midnight.
@@ -3281,7 +3339,10 @@ mod tests {
         let mut with_lane = base.segments.clone();
         with_lane.insert(1, Segment::new(50, kind("travel"), 3300));
         base.next_uid = 51;
-        base.zones = vec![Zone { from_mm: 0, segments: None, name: None }, Zone { from_mm: 20_000, segments: Some(with_lane), name: None }];
+        base.zones = vec![
+            Zone { from_mm: 0, segments: None, name: None, speed: Speed::Undecided },
+            Zone { from_mm: 20_000, segments: Some(with_lane), name: None, speed: Speed::Undecided },
+        ];
         base.length_mm = Some(40_000);
         base.class = StreetClass::Local;
         let s = base.settled();

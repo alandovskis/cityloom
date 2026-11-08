@@ -239,7 +239,7 @@ impl Conflict {
 
 /// Whether `rule` is a speed limit and the street has no speed to check it by.
 pub fn speed_unknown(rule: Rule, street: &Street) -> bool {
-    matches!(rule, Rule::SpeedLimit { .. }) && street.speed_kmh().is_none()
+    matches!(rule, Rule::SpeedLimit { .. }) && street.max_speed_kmh().is_none()
 }
 
 /// What a street has that `rule` does not allow, a kind of piece at a time in the order the rule names them. A
@@ -247,7 +247,7 @@ pub fn speed_unknown(rule: Rule, street: &Street) -> bool {
 /// most pieces of it in any one section (never a sum), so a conflict in any zone is the street's.
 pub fn conflicts(rule: Rule, street: &Street) -> Vec<Conflict> {
     if let Rule::SpeedLimit { kmh } = rule {
-        return street.speed_kmh().filter(|&s| s > u16::from(kmh)).map(|kmh| Conflict::Speed { kmh }).into_iter().collect();
+        return street.max_speed_kmh().filter(|&s| s > u16::from(kmh)).map(|kmh| Conflict::Speed { kmh }).into_iter().collect();
     }
     let sections = street.sections();
     rule.forbids()
@@ -457,7 +457,7 @@ mod tests {
         street.segments = base;
         let mut street = zoned(street, &[0, 20_000], 40_000);
         street.zones[0].segments = Some(vec![piece(1, "sidewalk"), piece(2, "travel"), piece(4, "travel"), piece(3, "sidewalk")]);
-        street.zones[1] = Zone { from_mm: 20_000, segments: None, name: None };
+        street.zones[1] = Zone { from_mm: 20_000, segments: None, name: None, speed: crate::street::model::Speed::Undecided };
         assert_eq!(conflicts(Rule::CarFree, &street), vec![c("travel", 2)], "the most in one zone, not the sum (3)");
         let finding = Finding::of(&Restriction { id: "r1".into(), name: String::new(), rule: Rule::CarFree, ring: SQUARE.to_vec() }, &street);
         assert!(!finding.ok());

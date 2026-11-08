@@ -350,6 +350,10 @@ impl SheetWatch {
         self.vm.with_value(|v| v.set_speed(kmh))
     }
 
+    pub fn follow_street_speed(&self) -> bool {
+        self.vm.with_value(|v| v.follow_street_speed())
+    }
+
     pub fn reset_zone(&self) -> bool {
         self.vm.with_value(|v| v.reset_zone())
     }
