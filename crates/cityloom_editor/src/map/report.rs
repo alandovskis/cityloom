@@ -53,7 +53,8 @@ fn lines_of(block: &Block) -> usize {
     }
 }
 
-/// Cuts a group taller than a page into parts that each fit one, at paragraph boundaries; every part after the first
+/// Cuts a group taller than a page into parts that each fit one, at paragraph boundaries (a single paragraph taller than
+/// a page is not cut: the writer would drop its tail, but a paragraph is a status line or one source, a few lines); every part after the first
 /// repeats the group's heading, so a rule's sources are never left on a page that does not say whose they are.
 fn split_group(group: Vec<Block>) -> Vec<Vec<Block>> {
     let cost = |blocks: &[Block]| blocks.iter().map(lines_of).sum::<usize>();
@@ -67,7 +68,9 @@ fn split_group(group: Vec<Block>) -> Vec<Vec<Block>> {
     for block in group {
         let fits = parts.last().is_some_and(|part| cost(part) + lines_of(&block) <= room);
         if fits || parts.last().is_some_and(|part| part.len() == 1 && matches!(part[0], Block::Heading { .. })) {
-            parts.last_mut().map(|part| part.push(block));
+            if let Some(part) = parts.last_mut() {
+                part.push(block);
+            }
         } else if parts.is_empty() {
             parts.push(vec![block]);
         } else {
@@ -272,7 +275,8 @@ mod tests {
             }
             let headings: Vec<_> =
                 pages.iter().flatten().filter_map(|b| if let Block::Heading { level: 3, text } = b { Some(text.clone()) } else { None }).collect();
-            assert_eq!(headings.len(), crate::shared::sources::cited().count());
+            let distinct: std::collections::BTreeSet<_> = headings.iter().collect();
+            assert_eq!(distinct.len(), crate::shared::sources::cited().count(), "a cited rule has no heading, or two share one");
         }
     }
 
@@ -295,6 +299,10 @@ mod tests {
             assert!(page.iter().map(lines_of).sum::<usize>() <= PAGE_LINES, "{page:?}");
         }
         let all: Vec<&Block> = pages.iter().flatten().collect();
+        assert!(pages.len() >= 2, "the rule should have been cut over pages");
+        let paragraphs = |word: &str| all.iter().filter(|b| matches!(b, Block::Paragraph { text } if text.contains(word))).count();
+        assert!(["status", "source-a", "source-b", "source-c"].iter().all(|w| paragraphs(w) == 1), "a paragraph was lost or repeated");
+        assert!(all.iter().filter(|b| matches!(b, Block::Heading { level: 3, text } if text == "Long rule")).count() >= 2, "the heading is not repeated");
         for word in ["source-a", "source-b", "source-c", "status"] {
             assert!(all.iter().any(|b| matches!(b, Block::Paragraph { text } if text.contains(word))), "{word} was lost");
         }
