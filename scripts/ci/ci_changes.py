@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Decides what CI runs for a change (`.github/workflows/ci.yml`'s `changes` job).
 
-    scripts/ci_changes.py --event pull_request --base <sha> [--head HEAD]
+    scripts/ci/ci_changes.py --event pull_request --base <sha> [--head HEAD]
 
-Reads the files the change touches (git diff base..head) and the rules in scripts/ci-spec-map.json, prints what it
+Reads the files the change touches (git diff base..head) and the rules in scripts/ci/spec-map.json, prints what it
 decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
     docs_only  true when every file is documentation: the Rust and browser jobs and the Railway deploy are skipped
@@ -30,7 +30,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_SPECS = {"archive", "map", "street"}  # what scripts/e2e-archive.sh runs
 
 
@@ -171,7 +171,7 @@ def main() -> int:
     ap.add_argument("files", nargs="*", help="the files, instead of git diff (for trying)")
     a = ap.parse_args()
 
-    rules = json.loads((ROOT / "scripts" / "ci-spec-map.json").read_text(encoding="utf-8"))
+    rules = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
     every = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
     files = a.files or changed_files(a.base, a.head)
     if files is None:

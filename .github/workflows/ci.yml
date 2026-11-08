@@ -22,7 +22,7 @@ env:
 
 # Actions are pinned to a commit; Dependabot proposes the updates.
 jobs:
-  # What the change touches decides what runs (scripts/ci_changes.py, rules in scripts/ci-spec-map.json): a change to
+  # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a change to
   # documentation alone skips the Rust, browser and Railway jobs; a pull request runs every unit test but only the
   # browser specs its files can affect. A push to main and a manual run always run every spec; anything doubtful does too.
   changes:
@@ -44,7 +44,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: scripts/ci_changes.py --event "$EVENT" --base "$BASE"
+        run: scripts/ci/ci_changes.py --event "$EVENT" --base "$BASE"
 
   format:
     name: Format

@@ -1,4 +1,4 @@
-"""The CI selector (scripts/ci_changes.py, scripts/ci-spec-map.json): `just test-scripts`.
+"""The CI selector (scripts/ci/ci_changes.py, scripts/ci/spec-map.json): `just test-scripts`.
 
 A pull request skips the Rust and browser jobs when it changes documentation only, and runs only the browser specs
 its files can affect. These tests pin the rules, and fail when a spec is in no group or a source folder has no rule,
@@ -13,11 +13,11 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 
 import ci_changes  # noqa: E402
 
-MAP = json.loads((ROOT / "scripts" / "ci-spec-map.json").read_text(encoding="utf-8"))
+MAP = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
 SPECS = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
 
 
@@ -126,14 +126,14 @@ class Coverage(unittest.TestCase):
 
     def test_every_spec_is_in_a_group(self):
         grouped = {s for specs in MAP["groups"].values() for s in specs}
-        self.assertEqual([s for s in SPECS if s not in grouped], [], "a spec in no group of scripts/ci-spec-map.json")
+        self.assertEqual([s for s in SPECS if s not in grouped], [], "a spec in no group of scripts/ci/spec-map.json")
         self.assertEqual(sorted(grouped - set(SPECS)), [], "a group names a spec that is not there")
 
     def test_every_source_folder_has_a_rule(self):
         for entry in sorted((ROOT / "src").iterdir()):
             path = f"src/{entry.name}/mod.rs" if entry.is_dir() else f"src/{entry.name}"
             with self.subTest(path):
-                self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci-spec-map.json names {path}")
+                self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
 
     def test_every_top_level_entry_has_a_rule(self):
         for entry in sorted(ROOT.iterdir()):
@@ -144,7 +144,7 @@ class Coverage(unittest.TestCase):
                 continue
             path = f"{entry.name}/x" if entry.is_dir() else entry.name
             with self.subTest(path):
-                self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci-spec-map.json names {path}")
+                self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
 
     def test_the_rules_are_well_formed(self):
         for rule in MAP["rules"]:
