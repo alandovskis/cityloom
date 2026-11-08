@@ -15,6 +15,7 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod panel_tabs;
 pub mod piece_list;
 pub mod pieces;
 pub mod row;
@@ -90,6 +91,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("pieces-slot", view! { <piece_list::PieceList vm=vm.clone()/> }.into_any());
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
+    mount("panel-tabs-slot", view! { <panel_tabs::PanelTabs vm=vm.clone()/> }.into_any());
     mount("calming-slot", view! { <calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());

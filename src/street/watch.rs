@@ -337,6 +337,15 @@ impl SheetWatch {
         self.vm.with_value(|v| v.speed_options())
     }
 
+    /// The tab of the left panel showing, drawing again when another is chosen.
+    pub fn panel_tab(&self) -> super::vm::PanelTab {
+        self.vm.with_value(|v| v.panel_tab())
+    }
+
+    pub fn show_panel_tab(&self, tab: super::vm::PanelTab) {
+        self.vm.with_value(|v| v.show_panel_tab(tab))
+    }
+
     pub fn set_speed(&self, kmh: Option<u16>) -> bool {
         self.vm.with_value(|v| v.set_speed(kmh))
     }

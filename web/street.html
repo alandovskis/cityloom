@@ -89,13 +89,18 @@
   <aside class="panel left" id="details-panel" data-i18n-aria-label="st-piece-details" aria-label="Piece details" data-covers>
     <h2 class="sr-only" data-i18n="st-piece-details">Piece details</h2>
     <div class="panel-body">
-      <div id="speed-slot" style="display: contents"></div>
-      <div id="zone-tools-slot" style="display: contents"></div>
-      <div id="curb-tools-slot" style="display: contents"></div>
-      <div id="stop-tools-slot" style="display: contents"></div>
-      <div id="calming-tools-slot" style="display: contents"></div>
-      <div id="green-tools-slot" style="display: contents"></div>
-      <div class="inspector" id="inspector"></div>
+      <div id="panel-tabs-slot" style="display: contents"></div>
+      <div class="panel-tab" id="p-piece" role="tabpanel" aria-labelledby="t-piece">
+        <div id="zone-tools-slot" style="display: contents"></div>
+        <div id="curb-tools-slot" style="display: contents"></div>
+        <div id="stop-tools-slot" style="display: contents"></div>
+        <div id="calming-tools-slot" style="display: contents"></div>
+        <div id="green-tools-slot" style="display: contents"></div>
+        <div class="inspector" id="inspector"></div>
+      </div>
+      <div class="panel-tab" id="p-street" role="tabpanel" aria-labelledby="t-street" hidden>
+        <div id="speed-slot" style="display: contents"></div>
+      </div>
     </div>
   </aside>
 

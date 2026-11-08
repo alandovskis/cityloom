@@ -76,6 +76,7 @@ test.describe("the summary of the last change", () => {
   });
 
   test("a change to neither space nor checks says so", async ({ page }) => {
+    await page.locator("#t-street").click();
     const current = await page.locator("#speed-limit").inputValue();
     await page.locator("#speed-limit").selectOption(current === "30" ? "40" : "30");
     await expect(body(page)).toContainText("No effect on space or checks");

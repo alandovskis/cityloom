@@ -95,6 +95,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page frame | between A and B | entre A et B |  |
 | Street page frame | Start over | Recommencer |  |
 | Street page frame | Undo / Redo | Annuler / Rétablir |  |
+| Street page | Piece / Street (the tabs of the left panel) | Élément / Rue | `Élément` as for the pieces of the section; the Street tab holds the speed limit. |
 | Street page frame | Add a piece | Ajouter un élément |  |
 | Street page frame | Time of day | Heure de la journée |  |
 | Street page frame | except (clock note) | sauf |  |

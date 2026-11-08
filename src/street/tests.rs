@@ -1371,6 +1371,43 @@ fn the_zone_commands_are_worded_in_both_languages() {
     assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
 }
 
+// ---- the left panel's tabs ---------------------------------------------------------
+
+#[test]
+fn the_left_panel_has_a_piece_tab_and_a_street_tab() {
+    let vm = street_in(Locale::En);
+    let h = street_html(|| view! { <crate::street::panel_tabs::PanelTabs vm=vm.clone()/> });
+    assert!(h.contains("role=\"tablist\"") && h.contains("aria-label=\"Details sections\""), "{h}");
+    assert_eq!(count(&h, "role=\"tab\""), 2, "{h}");
+    assert!(h.contains("id=\"t-piece\"") && h.contains("aria-controls=\"p-piece\"") && h.contains(">Piece</button>"), "{h}");
+    assert!(h.contains("id=\"t-street\"") && h.contains("aria-controls=\"p-street\"") && h.contains(">Street</button>"), "{h}");
+    // One tab stop: the chosen tab is in the order of the page, the other is reached by the arrows.
+    let street_tab = &h[h.find("id=\"t-street\"").unwrap()..];
+    assert!(street_tab.split('>').next().unwrap().contains("tabindex=\"-1\""), "{h}");
+    let piece_tab = &h[h.find("id=\"t-piece\"").unwrap()..];
+    assert!(piece_tab.split('>').next().unwrap().contains("aria-selected=\"true\""), "{h}");
+}
+
+#[test]
+fn the_left_panel_tabs_follow_the_choice() {
+    use crate::street::vm::PanelTab;
+    let vm = street_in(Locale::En);
+    vm.show_panel_tab(PanelTab::Street);
+    let h = street_html(|| view! { <crate::street::panel_tabs::PanelTabs vm=vm.clone()/> });
+    let street_tab = &h[h.find("id=\"t-street\"").unwrap()..];
+    assert!(street_tab.split('>').next().unwrap().contains("aria-selected=\"true\""), "{h}");
+    let piece_tab = &h[h.find("id=\"t-piece\"").unwrap()..];
+    let attrs = piece_tab.split('>').next().unwrap();
+    assert!(attrs.contains("aria-selected=\"false\"") && attrs.contains("tabindex=\"-1\""), "{h}");
+}
+
+#[test]
+fn the_left_panel_tabs_are_in_french_too() {
+    let vm = street_in(Locale::FrCa);
+    let h = street_html(|| view! { <crate::street::panel_tabs::PanelTabs vm=vm.clone()/> });
+    assert!(h.contains(">Élément</button>") && h.contains(">Rue</button>") && h.contains("aria-label=\"Sections des détails\""), "{h}");
+}
+
 // ---- the speed limit control -------------------------------------------------------
 
 fn speed_html(locale: Locale) -> String {
