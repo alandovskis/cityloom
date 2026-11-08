@@ -197,7 +197,7 @@ mod tests {
     }
 
     fn lane(width_m: f64) -> Lane {
-        Lane { kind: crate::LaneKind::Driving, way: crate::Direction::Forward, width_m, buffer_type: None, windows: vec![], shape: vec![] }
+        Lane { kind: crate::LaneKind::Driving, direction: crate::Direction::Forward, width_m, buffer_type: None, windows: vec![], shape: vec![] }
     }
 
     #[test]

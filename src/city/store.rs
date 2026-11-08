@@ -543,7 +543,7 @@ mod tests {
             junction,
             control: Control::None,
         };
-        let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
+        let lane = |kind, way| Lane { kind, direction: way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
         Network {
             left_hand: false,
             corridors: vec![],
@@ -569,13 +569,13 @@ mod tests {
         let mut network = tiny_network();
         let curb = Lane {
             kind: if legacy { LaneKind::Other } else { LaneKind::Buffer },
-            way: Direction::Forward,
+            direction: Direction::Forward,
             width_m: 0.1,
             buffer_type: (!legacy).then_some(BufferType::Curb),
             windows: vec![],
             shape: vec![],
         };
-        let walk = Lane { kind: LaneKind::Sidewalk, way: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] };
+        let walk = Lane { kind: LaneKind::Sidewalk, direction: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] };
         let road = network.roads[0].base_lanes().to_vec();
         *network.roads[0].base_lanes_mut() = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
         network
@@ -603,7 +603,7 @@ mod tests {
         let mut network = tiny_network();
         let bike = Lane {
             kind: LaneKind::Bike,
-            way: if two_way { Direction::Both } else { Direction::Forward },
+            direction: if two_way { Direction::Both } else { Direction::Forward },
             width_m: if two_way { 3.0 } else { 1.5 },
             buffer_type: None,
             windows: vec![],

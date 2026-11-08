@@ -75,8 +75,8 @@ fn one_way_bike_lanes(lanes: &[Lane]) -> Vec<Lane> {
     lanes
         .iter()
         .map(|l| {
-            if l.kind == LaneKind::Bike && l.way == Direction::Both {
-                Lane { way: Direction::Forward, width_m: l.width_m / 2.0, ..l.clone() }
+            if l.kind == LaneKind::Bike && l.direction == Direction::Both {
+                Lane { direction: Direction::Forward, width_m: l.width_m / 2.0, ..l.clone() }
             } else {
                 l.clone()
             }
@@ -140,7 +140,7 @@ fn piece(lane: &Lane) -> Piece {
     Piece {
         kind: kind(kind_of(lane)),
         width_mm: (lane.width_m * 1000.0).round() as i32,
-        direction: (lane.way != Direction::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Direction::Backward)),
+        direction: (lane.direction != Direction::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.direction == Direction::Backward)),
         variants,
     }
 }
@@ -291,7 +291,7 @@ mod tests {
     use crate::shared::testing::en;
 
     fn lane(kind: LaneKind, way: Direction, width_m: f64) -> Lane {
-        Lane { kind, way, width_m, buffer_type: None, windows: vec![], shape: vec![] }
+        Lane { kind, direction: way, width_m, buffer_type: None, windows: vec![], shape: vec![] }
     }
 
     fn bus_lane(hours: Option<&str>) -> Lane {

@@ -52,7 +52,7 @@ pub enum Direction {
 pub struct Lane {
     /// What the lane is, except during its `windows`.
     pub kind: LaneKind,
-    pub way: Direction,
+    pub direction: Direction,
     pub width_m: f64,
     /// What a `Buffer` lane is made of, when it is known.
     pub buffer_type: Option<BufferType>,
@@ -93,7 +93,7 @@ struct LaneWire {
 
 impl From<LaneWire> for Lane {
     fn from(w: LaneWire) -> Lane {
-        let mut lane = Lane { kind: w.kind, way: w.way, width_m: w.width_m, buffer_type: w.buffer_type, windows: w.windows, shape: w.shape };
+        let mut lane = Lane { kind: w.kind, direction: w.way, width_m: w.width_m, buffer_type: w.buffer_type, windows: w.windows, shape: w.shape };
         if let (LaneKind::Bus, Some(hours)) = (lane.kind, w.hours.as_deref()) {
             lane.only_during(hours, LaneKind::Parking);
         }
@@ -103,7 +103,7 @@ impl From<LaneWire> for Lane {
 
 impl From<Lane> for LaneWire {
     fn from(l: Lane) -> LaneWire {
-        LaneWire { kind: l.kind, way: l.way, width_m: l.width_m, buffer_type: l.buffer_type, hours: None, windows: l.windows, shape: l.shape }
+        LaneWire { kind: l.kind, way: l.direction, width_m: l.width_m, buffer_type: l.buffer_type, hours: None, windows: l.windows, shape: l.shape }
     }
 }
 

@@ -68,7 +68,7 @@ mod tests {
     use crate::{Control, Direction, Junction, NodeId, Point, Provenance, Road, RoadType, Zone};
 
     fn lane(kind: LaneKind) -> Lane {
-        Lane { kind, way: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] }
+        Lane { kind, direction: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] }
     }
 
     fn road(id: u32, from: u32, to: u32, lanes: &[LaneKind]) -> Road {

@@ -43,7 +43,7 @@ fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions
     let b = between[0];
     assert!(b.has_way(100) && b.has_way(101));
     use osm_import::{Direction, LaneKind};
-    let driving = |way| b.base_lanes().iter().filter(|l| l.kind == LaneKind::Driving && l.way == way).count();
+    let driving = |way| b.base_lanes().iter().filter(|l| l.kind == LaneKind::Driving && l.direction == way).count();
     assert!(driving(Direction::Forward) >= 2 && driving(Direction::Backward) >= 2, "{:?}", b.base_lanes());
 }
 
@@ -70,7 +70,7 @@ fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
     use osm_import::{Direction, LaneKind};
     let net = import(CROSSING).unwrap();
     let side = net.roads.iter().find(|r| r.name == "Side Road").unwrap();
-    let sidewalks = |way| side.base_lanes().iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
+    let sidewalks = |way| side.base_lanes().iter().filter(|l| l.kind == LaneKind::Sidewalk && l.direction == way).count();
     assert_eq!((sidewalks(Direction::Forward), sidewalks(Direction::Backward)), (1, 1), "{:?}", side.base_lanes());
 }
 
@@ -193,7 +193,7 @@ const TWO_WAY_TRACKS: &[u8] = include_bytes!("two_way_tracks.osm");
 /// The ways of the bike lanes of the road of that name, left to right.
 fn bike_ways(net: &osm_import::Network, name: &str) -> Vec<osm_import::Direction> {
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
-    road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect()
+    road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.direction).collect()
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn de_maisonneuve_ouest_has_a_two_way_bike_lane_from_the_cycleways_mapped_beside
     assert!(!roads.is_empty());
     assert_eq!(roads.len(), net.roads.len(), "only the boulevard is a road");
     for road in roads {
-        let bikes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect();
+        let bikes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.direction).collect();
         assert_eq!(bikes, [osm_import::Direction::Both], "{:?}", road.provenance);
     }
 }

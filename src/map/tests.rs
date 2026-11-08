@@ -735,7 +735,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
         junction: false,
         control: Control::None,
     };
-    let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
+    let lane = |way| Lane { kind: LaneKind::Driving, direction: way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
     let network = Network {
         left_hand: false,
         corridors: vec![],

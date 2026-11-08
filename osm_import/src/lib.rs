@@ -372,7 +372,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                         let mut lane = Lane {
                             kind: lane_kind(l.lt),
                             buffer_type: buffer_type(l.lt),
-                            way: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
+                            direction: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
                             width_m: l.width.inner_meters(),
                             windows: Vec::new(),
                             shape: Vec::new(),
@@ -407,9 +407,9 @@ fn join_two_way_bike_lanes(lanes: Vec<Lane>) -> Vec<Lane> {
             Some(last)
                 if last.kind == LaneKind::Bike
                     && lane.kind == LaneKind::Bike
-                    && matches!((last.way, lane.way), (Direction::Forward, Direction::Backward) | (Direction::Backward, Direction::Forward)) =>
+                    && matches!((last.direction, lane.direction), (Direction::Forward, Direction::Backward) | (Direction::Backward, Direction::Forward)) =>
             {
-                last.way = Direction::Both;
+                last.direction = Direction::Both;
                 last.width_m += lane.width_m;
             }
             _ => joined.push(lane),
@@ -563,7 +563,7 @@ mod tests {
     }
 
     fn bike(way: Direction, width_m: f64) -> Lane {
-        Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, windows: vec![], shape: vec![] }
+        Lane { kind: LaneKind::Bike, direction: way, width_m, buffer_type: None, windows: vec![], shape: vec![] }
     }
 
     #[test]
