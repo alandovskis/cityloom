@@ -35,7 +35,7 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
         *degree.entry(r.from).or_insert(0) += 1;
         *degree.entry(r.to).or_insert(0) += 1;
     }
-    let candidates = net.nodes.iter().filter(|n| n.junction && (3..=5).contains(&degree.get(&n.id).copied().unwrap_or(0))).count();
+    let candidates = net.junctions.iter().filter(|n| n.junction && (3..=5).contains(&degree.get(&n.id).copied().unwrap_or(0))).count();
     let city = City::from_network(&net, "Plateau");
     let v = city.view(0);
     let junctions: Vec<_> = v.nodes.iter().filter(|n| n.junction).collect();

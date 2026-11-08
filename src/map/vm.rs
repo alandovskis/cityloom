@@ -1352,7 +1352,7 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
     use crate::shared::said::say_now;
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Junction, Lane, LaneKind, Network, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         vm_in(Locale::En)
@@ -1869,7 +1869,7 @@ mod tests {
     fn area_vm_over(before: impl FnOnce(&CityStore)) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
-        let node = |id: u32, x_m, y_m| Node {
+        let node = |id: u32, x_m, y_m| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
@@ -1881,7 +1881,7 @@ mod tests {
         let network = Network {
             left_hand: false,
             corridors: vec![],
-            nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
+            junctions: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: RoadId(1),
                 provenance: Provenance::of_ways([WayRef::new(7)]),

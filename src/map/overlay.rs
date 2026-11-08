@@ -329,7 +329,7 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
 mod tests {
     use std::collections::BTreeSet;
 
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Junction, Lane, LaneKind, Network, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
     use serde_json::Value;
 
     use super::*;
@@ -340,7 +340,7 @@ mod tests {
 
     /// One street that bends: east for 80 m, then north-east to a point 100 m east and 50 m north.
     fn bent_road() -> Network {
-        let node = |id: u32, x_m, y_m| Node {
+        let node = |id: u32, x_m, y_m| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
@@ -352,7 +352,7 @@ mod tests {
         Network {
             left_hand: false,
             corridors: vec![],
-            nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
+            junctions: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: RoadId(1),
                 provenance: Provenance::of_ways([WayRef::new(7)]),
@@ -528,8 +528,8 @@ mod tests {
     /// One straight street, east for 100 m, 8 m wide.
     fn straight_road() -> Network {
         let mut n = bent_road();
-        n.nodes[1].x_m = 100.0;
-        n.nodes[1].y_m = 0.0;
+        n.junctions[1].x_m = 100.0;
+        n.junctions[1].y_m = 0.0;
         n.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
         n.roads[0].base_lanes_mut().iter_mut().for_each(|l| l.width_m = 4.0);
         n

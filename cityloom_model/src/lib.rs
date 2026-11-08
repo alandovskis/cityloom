@@ -4,12 +4,13 @@
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.
 
 mod corridor;
+mod graph;
 mod hours;
 mod ids;
+mod junction;
 mod lane;
 pub mod merge;
 mod network;
-mod node;
 mod osm;
 mod point;
 mod provenance;
@@ -18,11 +19,12 @@ mod road_type;
 mod zone;
 
 pub use corridor::{Corridor, UserClass};
+pub use graph::{Edge, Node, connected};
 pub use hours::{Hours, Window};
 pub use ids::{NodeId, RoadId};
+pub use junction::{Control, Junction};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
-pub use node::{Control, Node};
 pub use osm::{NodeRef, OsmRef, WayRef};
 pub use point::{Coordinate, Local, Point, Street};
 pub use provenance::Provenance;

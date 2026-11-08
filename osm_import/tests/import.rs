@@ -5,8 +5,8 @@ const CROSSING: &[u8] = include_bytes!("crossing.osm");
 #[test]
 fn a_crossing_of_two_streets_is_one_signalled_junction_with_four_roads() {
     let net = import(CROSSING).expect("the crossing reads");
-    let junctions: Vec<_> = net.nodes.iter().filter(|n| n.junction).collect();
-    assert_eq!(junctions.len(), 1, "{:?}", net.nodes);
+    let junctions: Vec<_> = net.junctions.iter().filter(|n| n.junction).collect();
+    assert_eq!(junctions.len(), 1, "{:?}", net.junctions);
     assert_eq!(junctions[0].control, Control::Signals);
     assert!(junctions[0].provenance.has_node(2) && junctions[0].provenance.nodes().count() == 1);
     assert_eq!(net.roads.len(), 4);
@@ -59,7 +59,7 @@ fn an_import_can_be_clipped_to_a_box_and_keeps_only_what_lies_in_it() {
     assert!(clipped.roads.len() > 10, "{} roads", clipped.roads.len());
     assert!(clipped.roads.len() < all.roads.len() / 2, "{} of {}", clipped.roads.len(), all.roads.len());
     // nothing lies far outside the box: the data's own corner is 400 m away, the box 150 m
-    let (min_x, max_x) = clipped.nodes.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.x_m), b.max(n.x_m)));
+    let (min_x, max_x) = clipped.junctions.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.x_m), b.max(n.x_m)));
     assert!(max_x - min_x < 400.0, "{} m wide", max_x - min_x);
     // no box is the same as `import`
     assert_eq!(osm_import::import_in(PLATEAU, None).unwrap(), all);
@@ -101,7 +101,7 @@ fn a_road_and_a_node_remember_the_version_of_each_osm_way_and_node_they_were_mad
         assert!(road.provenance.ways().all(|w| w.version.is_some()), "{road:?}");
     }
     let version = |osm: i64| {
-        net.nodes.iter().find(|n| n.provenance.nodes().count() == 1 && n.provenance.has_node(osm)).map(|n| n.provenance.nodes().next().unwrap().version)
+        net.junctions.iter().find(|n| n.provenance.nodes().count() == 1 && n.provenance.has_node(osm)).map(|n| n.provenance.nodes().next().unwrap().version)
     };
     assert_eq!(version(29796354), Some(Some(5)));
     assert_eq!(version(9041670850), Some(Some(1)));
@@ -311,7 +311,7 @@ fn the_ways_of_a_bike_track_are_read_but_are_not_roads_nor_split_the_road_they_m
     let net = import(TRACK_CROSSING).unwrap();
     assert_eq!(net.roads.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.provenance)).collect::<Vec<_>>());
     assert!(net.roads[0].has_way(100) && net.roads[0].provenance.ways().count() == 1);
-    assert_eq!(net.nodes.len(), 2, "no junction where a track meets the road");
+    assert_eq!(net.junctions.len(), 2, "no junction where a track meets the road");
     // nor are those of the tracks beside a road
     let net = import(TWO_WAY_TRACKS).unwrap();
     let text = std::str::from_utf8(TWO_WAY_TRACKS).unwrap();

@@ -219,7 +219,7 @@ impl Layout {
             *degree.entry(r.from).or_default() += 1;
             *degree.entry(r.to).or_default() += 1;
         }
-        let nodes: Vec<_> = network.nodes.iter().filter(|n| degree.contains_key(&n.id)).collect();
+        let nodes: Vec<_> = network.junctions.iter().filter(|n| degree.contains_key(&n.id)).collect();
         let index: BTreeMap<NodeId, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
         let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
         let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.x_m), y.max(n.y_m)));
@@ -281,7 +281,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
+    use cityloom_model::{BufferType, Control, Direction, Junction, Lane, LaneKind, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -506,7 +506,7 @@ mod tests {
         use crate::shared::provenance::OsmRef;
         let mut net = crossing();
         net.roads[1].provenance = Provenance::of_ways([WayRef::with_version(200, 12)]);
-        net.nodes[0].provenance = Provenance::of_nodes([NodeRef::with_version(10, 4)]);
+        net.junctions[0].provenance = Provenance::of_nodes([NodeRef::with_version(10, 4)]);
         let city = City::from_network(&net, "Testville");
         let v = city.view(0);
         let street = |i: usize| city.street_editor(v.edges[i].uid, 0).unwrap().view();
@@ -535,7 +535,7 @@ mod tests {
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.
     fn crossing() -> Network {
-        let node = |id: u32, x_m, y_m, junction, control| Node {
+        let node = |id: u32, x_m, y_m, junction, control| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64 * 10)]),
             x_m,
@@ -562,7 +562,7 @@ mod tests {
         Network {
             left_hand: false,
             corridors: vec![],
-            nodes: vec![
+            junctions: vec![
                 node(1, 0.0, 0.0, true, Control::Signals),
                 node(2, 0.0, 200.0, false, Control::None),
                 node(3, 200.0, 0.0, false, Control::None),
@@ -637,11 +637,11 @@ mod tests {
     /// A node at the origin with a road to each of the given points, all of them junction-like in the data.
     fn star(ends: &[(f64, f64)]) -> Network {
         let mut net = crossing();
-        net.nodes.truncate(1);
+        net.junctions.truncate(1);
         net.roads.clear();
         for (i, &(x, y)) in ends.iter().enumerate() {
             let id = i as u32 + 2;
-            net.nodes.push(Node {
+            net.junctions.push(Junction {
                 id: NodeId(id),
                 provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
                 x_m: x,

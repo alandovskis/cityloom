@@ -89,7 +89,7 @@ fn side_of(a: &[Point], b: &[Point]) -> f64 {
 /// and run beside each other. Their ends become one node each, in the middle; a road left joining a node to itself
 /// by that (the crossing street's stub) is dropped.
 pub fn merge_dual_carriageways(net: &mut Network) {
-    let at = |net: &Network, id: NodeId| net.nodes.iter().find(|n| n.id == id).map(|n| Point::new(n.x_m, n.y_m));
+    let at = |net: &Network, id: NodeId| net.junctions.iter().find(|n| n.id == id).map(|n| Point::new(n.x_m, n.y_m));
     let oriented: Vec<Option<Road>> = net.roads.iter().map(along).collect();
     let mut taken = vec![false; net.roads.len()];
     let mut pairs: Vec<(usize, usize)> = Vec::new();
@@ -176,16 +176,16 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     for (from, into) in moved {
         let (Some(f), Some(t)) = (at(net, from), at(net, into)) else { continue };
         let mid = Point::<Local>::new((f.x_m() + t.x_m()) / 2.0, (f.y_m() + t.y_m()) / 2.0);
-        for n in &mut net.nodes {
+        for n in &mut net.junctions {
             if n.id == into {
                 (n.x_m, n.y_m) = (mid.x_m(), mid.y_m());
             }
         }
         if from != into {
-            let gone_node = net.nodes.iter().position(|n| n.id == from);
+            let gone_node = net.junctions.iter().position(|n| n.id == from);
             if let Some(g) = gone_node {
-                let g = net.nodes.remove(g);
-                if let Some(n) = net.nodes.iter_mut().find(|n| n.id == into) {
+                let g = net.junctions.remove(g);
+                if let Some(n) = net.junctions.iter_mut().find(|n| n.id == into) {
                     n.provenance.extend(g.provenance);
                     n.junction |= g.junction;
                     if n.control == crate::Control::None {
@@ -230,10 +230,10 @@ fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Coordinate, Node, NodeRef, Provenance, RoadId, RoadType, WayRef};
+    use crate::{Control, Coordinate, Junction, NodeRef, Provenance, RoadId, RoadType, WayRef};
 
-    fn node(id: u32, x_m: f64, y_m: f64) -> Node {
-        Node {
+    fn node(id: u32, x_m: f64, y_m: f64) -> Junction {
+        Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::with_version(id as i64, id as i32 + 100)]),
             x_m,
@@ -294,7 +294,7 @@ mod tests {
         Network {
             left_hand: false,
             corridors: vec![],
-            nodes: vec![node(1, 0.0, 0.0), node(2, 300.0, 0.0), node(3, 0.0, 100.0), node(4, 0.0, -100.0)],
+            junctions: vec![node(1, 0.0, 0.0), node(2, 300.0, 0.0), node(3, 0.0, 100.0), node(4, 0.0, -100.0)],
             roads: vec![east, west, cross(3, 1, 3, 100.0), cross(4, 1, 4, -100.0)],
         }
     }
@@ -371,9 +371,9 @@ mod tests {
         // the crossing street meets the eastbound half at node 1 and the westbound half at node 5, 20 m north;
         // the stub between them is road 9
         let mut net = shared_ends();
-        net.nodes.push(node(5, 0.0, 20.0));
-        net.nodes.push(node(6, 300.0, 20.0));
-        net.nodes.push(node(7, 300.0, 0.0));
+        net.junctions.push(node(5, 0.0, 20.0));
+        net.junctions.push(node(6, 300.0, 20.0));
+        net.junctions.push(node(7, 300.0, 0.0));
         net.roads.iter_mut().find(|r| r.id == RoadId(2)).unwrap().to = NodeId(5);
         net.roads.iter_mut().find(|r| r.id == RoadId(2)).unwrap().from = NodeId(6);
         net.roads.iter_mut().find(|r| r.id == RoadId(2)).unwrap().points = vec![Point::new(300.0, 20.0), Point::new(150.0, 30.0), Point::new(0.0, 20.0)];
@@ -393,12 +393,12 @@ mod tests {
         assert_eq!(net.roads.iter().filter(|r| r.name == "Boulevard").count(), 1);
         assert!(net.roads.iter().all(|r| r.id != RoadId(9)), "the stub between the halves is gone");
         // the node the two ends became keeps the version of each OSM node it stands for
-        let joined = net.nodes.iter().find(|n| n.provenance.has_node(1)).unwrap();
+        let joined = net.junctions.iter().find(|n| n.provenance.has_node(1)).unwrap();
         assert!(joined.provenance.has_node(5), "{joined:?}");
         assert_eq!(joined.provenance.nodes().collect::<Vec<_>>(), [NodeRef::with_version(1, 101), NodeRef::with_version(5, 105)]);
         assert!(net.roads.iter().all(|r| r.from != r.to));
         // and no road points at a node that is no longer there
-        assert!(net.roads.iter().all(|r| net.nodes.iter().any(|n| n.id == r.from) && net.nodes.iter().any(|n| n.id == r.to)));
+        assert!(net.roads.iter().all(|r| net.junctions.iter().any(|n| n.id == r.from) && net.junctions.iter().any(|n| n.id == r.to)));
     }
 
     #[test]

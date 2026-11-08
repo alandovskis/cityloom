@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Corridor, Node, Road};
+use crate::{Corridor, Junction, Road};
 
 /// The street network.
 ///
@@ -11,7 +11,9 @@ use crate::{Corridor, Node, Road};
 pub struct Network {
     /// Whether traffic keeps to the left.
     pub left_hand: bool,
-    pub nodes: Vec<Node>,
+    /// What stands at each node; the key stays `nodes` where a network is kept.
+    #[serde(rename = "nodes")]
+    pub junctions: Vec<Junction>,
     pub roads: Vec<Road>,
     /// The roads grouped by who they serve; see `Network::derive_corridors`. Kept only when there are some.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -21,7 +23,7 @@ pub struct Network {
 #[derive(Deserialize)]
 struct NetworkWire {
     left_hand: bool,
-    nodes: Vec<Node>,
+    nodes: Vec<Junction>,
     #[serde(deserialize_with = "crate::road::named_roads")]
     roads: Vec<Road>,
     #[serde(default)]
@@ -39,6 +41,6 @@ impl From<NetworkWire> for Network {
             })
             .filter(|c| !c.roads.is_empty())
             .collect();
-        Network { left_hand: w.left_hand, nodes: w.nodes, roads: w.roads, corridors }
+        Network { left_hand: w.left_hand, junctions: w.nodes, roads: w.roads, corridors }
     }
 }

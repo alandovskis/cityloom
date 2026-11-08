@@ -339,7 +339,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
     let mut net = Network { left_hand: streets.config.driving_side == DrivingSide::Left, ..Network::default() };
     for (id, i) in &streets.intersections {
         let c = i.polygon.center();
-        net.nodes.push(Node {
+        net.junctions.push(Junction {
             id: NodeId(id.0 as u32),
             provenance: Provenance::of_nodes(i.osm_ids.iter().map(|n| NodeRef { id: n.0, version: doc.nodes.get(n).and_then(|node| node.version) })),
             x_m: c.x(),

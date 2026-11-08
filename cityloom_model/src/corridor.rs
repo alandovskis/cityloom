@@ -1,8 +1,6 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
-use crate::{Lane, LaneKind, Network, NodeId, RoadId};
+use crate::{Lane, LaneKind, Network, RoadId};
 
 /// Who a corridor serves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -51,40 +49,8 @@ impl Network {
         let mut corridors = Vec::new();
         for user in UserClass::ALL {
             let serving: Vec<&crate::Road> = self.roads.iter().filter(|r| r.zones.iter().flat_map(|z| &z.lanes).any(|l| user.serves(l))).collect();
-            // groups of roads by the nodes they meet at
-            let mut group_of: BTreeMap<NodeId, usize> = BTreeMap::new();
-            let mut groups: Vec<Vec<RoadId>> = Vec::new();
-            for road in serving {
-                let (a, b) = (group_of.get(&road.from).copied(), group_of.get(&road.to).copied());
-                let target = match (a, b) {
-                    (Some(a), Some(b)) if a != b => {
-                        let moved = std::mem::take(&mut groups[b]);
-                        for n in group_of.values_mut().filter(|g| **g == b) {
-                            *n = a;
-                        }
-                        groups[a].extend(moved);
-                        a
-                    }
-                    (Some(g), _) | (_, Some(g)) => g,
-                    (None, None) => {
-                        groups.push(Vec::new());
-                        groups.len() - 1
-                    }
-                };
-                groups[target].push(road.id);
-                group_of.insert(road.from, target);
-                group_of.insert(road.to, target);
-            }
-            let mut found: Vec<Corridor> = groups
-                .into_iter()
-                .filter(|g| !g.is_empty())
-                .map(|mut roads| {
-                    roads.sort_unstable();
-                    roads.dedup();
-                    Corridor { user, roads }
-                })
-                .collect();
-            found.sort_by_key(|c| c.roads[0]);
+            let edges: Vec<crate::Edge> = serving.iter().map(|r| r.edge()).collect();
+            let found = crate::connected(&edges).into_iter().map(|roads| Corridor { user, roads });
             corridors.extend(found);
         }
         self.corridors = corridors;
@@ -99,7 +65,7 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Direction, Node, Point, Provenance, Road, RoadType, Zone};
+    use crate::{Control, Direction, Junction, NodeId, Point, Provenance, Road, RoadType, Zone};
 
     fn lane(kind: LaneKind) -> Lane {
         Lane { kind, way: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] }
@@ -120,9 +86,10 @@ mod tests {
     }
 
     fn network(roads: Vec<Road>) -> Network {
-        let nodes =
-            (1..=6).map(|id| Node { id: NodeId(id), provenance: Provenance::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None }).collect();
-        Network { left_hand: false, nodes, roads, corridors: vec![] }
+        let nodes = (1..=6)
+            .map(|id| Junction { id: NodeId(id), provenance: Provenance::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None })
+            .collect();
+        Network { left_hand: false, junctions: nodes, roads, corridors: vec![] }
     }
 
     fn roads_of(net: &Network, user: UserClass) -> Vec<Vec<u32>> {
