@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.55.1"
+version = "0.56.0"
 dependencies = [
  "any_spawner",
  "cityloom_model",
@@ -701,6 +701,7 @@ name = "cityloom_model"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]

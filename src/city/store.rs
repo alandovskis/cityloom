@@ -534,24 +534,26 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Lane, LaneKind, Node, Road, Way};
-        let node =
-            |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction, control: Control::None };
-        let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, hours: None };
+        use cityloom_model::{Control, Direction, Edge, Junction, Lane, LaneKind, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
+        let node = |id: u32, x_m, junction| Junction {
+            id: NodeId(id),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
+            position: Point::new(x_m, 0.0),
+            junction,
+            control: Control::None,
+        };
+        let lane = |kind, way| Lane { kind, direction: way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
         Network {
             left_hand: false,
-            nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
+            corridors: vec![],
+            junctions: vec![node(1, 0.0, false), node(2, 100.0, false)],
             roads: vec![Road {
-                id: 1,
-                osm_ways: vec![7],
-                osm_versions: Default::default(),
-                name: Some("Only Street".into()),
-                highway: "residential".into(),
-                from: 1,
-                to: 2,
-                lanes: vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)],
-                speed_kmh: None,
-                points: vec![(0.0, 0.0), (100.0, 0.0)],
+                edge: Edge { id: RoadId(1), from: NodeId(1), to: NodeId(2) },
+                provenance: Provenance::of_ways([WayRef::new(7)]),
+                name: "Only Street".into(),
+                road_type: RoadType::Local,
+                zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Direction::Forward), lane(LaneKind::Driving, Direction::Backward)])],
+                points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
             }],
         }
     }
@@ -559,18 +561,19 @@ mod tests {
     /// `tiny_network` with a sidewalk and a 0.1 m curb on each side. `legacy` makes the curb as importer version 4 did:
     /// a lane of its own that the catalogue makes a 600 mm median.
     fn curbed_network(legacy: bool) -> Network {
-        use cityloom_model::{BufferType, Lane, LaneKind, Way};
+        use cityloom_model::{BufferType, Direction, Lane, LaneKind};
         let mut network = tiny_network();
         let curb = Lane {
             kind: if legacy { LaneKind::Other } else { LaneKind::Buffer },
-            way: Way::Forward,
+            direction: Direction::Forward,
             width_m: 0.1,
             buffer_type: (!legacy).then_some(BufferType::Curb),
-            hours: None,
+            windows: vec![],
+            shape: vec![],
         };
-        let walk = Lane { kind: LaneKind::Sidewalk, way: Way::Forward, width_m: 2.0, buffer_type: None, hours: None };
-        let road = network.roads[0].lanes.clone();
-        network.roads[0].lanes = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
+        let walk = Lane { kind: LaneKind::Sidewalk, direction: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] };
+        let road = network.roads[0].base_lanes().to_vec();
+        *network.roads[0].base_lanes_mut() = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
         network
     }
 
@@ -592,16 +595,17 @@ mod tests {
     /// `tiny_network` with a bike lane beside the road: one-way, 1.5 m, as a track mapped as ways of its own was
     /// read before those ways were fetched, or two-way, 3 m, as it is read now.
     fn network_with_bike_lane(two_way: bool) -> Network {
-        use cityloom_model::{Lane, LaneKind, Way};
+        use cityloom_model::{Direction, Lane, LaneKind};
         let mut network = tiny_network();
         let bike = Lane {
             kind: LaneKind::Bike,
-            way: if two_way { Way::Both } else { Way::Forward },
+            direction: if two_way { Direction::Both } else { Direction::Forward },
             width_m: if two_way { 3.0 } else { 1.5 },
             buffer_type: None,
-            hours: None,
+            windows: vec![],
+            shape: vec![],
         };
-        network.roads[0].lanes.insert(0, bike);
+        network.roads[0].base_lanes_mut().insert(0, bike);
         network
     }
 
@@ -657,7 +661,7 @@ mod tests {
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let curbed_one_way = |legacy: bool, two_way: bool| {
             let mut n = curbed_network(legacy);
-            n.roads[0].lanes.insert(0, network_with_bike_lane(two_way).roads[0].lanes[0].clone());
+            n.roads[0].base_lanes_mut().insert(0, network_with_bike_lane(two_way).roads[0].base_lanes()[0].clone());
             n
         };
         assert!(area.keep_network(&curbed_one_way(true, false)));
@@ -785,7 +789,7 @@ mod tests {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let mut network = tiny_network();
-        network.nodes[1].osm_nodes.clear(); // where the road is cut at the area's box
+        network.junctions[1].provenance.clear(); // where the road is cut at the area's box
         area.keep_network(&network);
         let street = area.open().view(0).edges[0].uid;
         let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
@@ -811,7 +815,7 @@ mod tests {
         // area A cuts the road at its box; area B holds the whole road
         let a = CityStore::for_area(ports.storage.clone(), Area::new("A", 1.0, 2.0));
         let mut cut = tiny_network();
-        cut.nodes[1].osm_nodes.clear();
+        cut.junctions[1].provenance.clear();
         a.keep_network(&cut);
         let b = CityStore::for_area(ports.storage, Area::new("B", 1.0, 3.0));
         b.keep_network(&tiny_network());
@@ -851,7 +855,7 @@ mod tests {
         let mut network = tiny_network();
         // a second road of the same way between the same two nodes, along the same line: nothing tells them apart
         let mut twin = network.roads[0].clone();
-        twin.id = 2;
+        twin.edge.id = cityloom_model::RoadId(2);
         network.roads.push(twin);
         area.keep_network(&network);
         let street = area.open().view(0).edges[0].uid;

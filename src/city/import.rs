@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Way};
+use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, NodeId, OsmRef as ModelRef, Point, Provenance, RoadType};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -13,13 +13,13 @@ use crate::street::model::{Piece, Speed, Street, Window};
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
 
-/// The class of a road, by OpenStreetMap's `highway`.
-fn class_of(highway: &str) -> StreetClass {
-    match highway {
-        "motorway" | "motorway_link" => StreetClass::Motorway,
-        "trunk" | "trunk_link" | "primary" | "primary_link" => StreetClass::Arterial,
-        "secondary" | "secondary_link" | "tertiary" | "tertiary_link" => StreetClass::Collector,
-        _ => StreetClass::Local,
+/// The class of a road, by its type.
+fn class_of(road_type: RoadType) -> StreetClass {
+    match road_type {
+        RoadType::Motorway => StreetClass::Motorway,
+        RoadType::Highway | RoadType::Arterial => StreetClass::Arterial,
+        RoadType::Collector => StreetClass::Collector,
+        RoadType::Local => StreetClass::Local,
     }
 }
 
@@ -32,12 +32,19 @@ fn class_of(highway: &str) -> StreetClass {
 /// gives a lane anything may use that name, a shared path's included, which would make a footpath a street for cars.
 fn kind_of(lane: &Lane) -> &'static str {
     match lane.kind {
+        LaneKind::Buffer if matches!(lane.buffer_type, Some(BufferType::Planters | BufferType::Verge)) => "planting",
+        kind => kind_id(kind),
+    }
+}
+
+/// The catalogue kind a kind of lane is, a buffer being the neutral `buffer` (see `kind_of` for when it is planted).
+fn kind_id(kind: LaneKind) -> &'static str {
+    match kind {
         LaneKind::Driving => "travel",
         LaneKind::Parking => "parking",
         LaneKind::Sidewalk => "sidewalk",
         LaneKind::Bike => "bike",
         LaneKind::Bus => "bus",
-        LaneKind::Buffer if matches!(lane.buffer_type, Some(BufferType::Planters | BufferType::Verge)) => "planting",
         LaneKind::Buffer => "buffer",
         LaneKind::Other => "median",
     }
@@ -67,7 +74,13 @@ fn legacy_pieces(lanes: &[Lane]) -> Vec<Piece> {
 fn one_way_bike_lanes(lanes: &[Lane]) -> Vec<Lane> {
     lanes
         .iter()
-        .map(|l| if l.kind == LaneKind::Bike && l.way == Way::Both { Lane { way: Way::Forward, width_m: l.width_m / 2.0, ..l.clone() } } else { l.clone() })
+        .map(|l| {
+            if l.kind == LaneKind::Bike && l.direction == Direction::Both {
+                Lane { direction: Direction::Forward, width_m: l.width_m / 2.0, ..l.clone() }
+            } else {
+                l.clone()
+            }
+        })
         .collect()
 }
 
@@ -118,68 +131,36 @@ fn pieces(lanes: &[Lane]) -> Vec<Piece> {
 
 fn piece(lane: &Lane) -> Piece {
     let kind = |id| kind_index(id).expect("the catalogue has every kind of lane");
-    let (mut base, mut variants) = (kind(kind_of(lane)), Vec::new());
-    // A bus lane at some hours is parking the rest of the time
-    if let Some(windows) = lane.hours.as_deref().filter(|_| lane.kind == LaneKind::Bus).and_then(windows_of) {
-        base = kind("parking");
-        let days = days_of(lane.hours.as_deref().unwrap_or_default());
-        variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min, days: days.clone() }).collect();
-    }
+    // what the lane is at certain hours, the rest of the day being its own kind
+    let variants = lane
+        .windows
+        .iter()
+        .map(|w| Window { kind: kind(kind_id(w.kind)), from_min: w.hours.from_min, to_min: w.hours.to_min, days: w.hours.days.clone() })
+        .collect();
     Piece {
-        kind: base,
+        kind: kind(kind_of(lane)),
         width_mm: (lane.width_m * 1000.0).round() as i32,
-        direction: (lane.way != Way::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Way::Backward)),
+        direction: (lane.direction != Direction::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.direction == Direction::Backward)),
         variants,
     }
 }
 
-const SLOT_MIN: i32 = 15;
-
-/// What opening hours say before their times, as written: `Mo-Fr`, `Sa,Su`; nothing for every day.
-fn days_of(hours: &str) -> Option<String> {
-    let days: Vec<&str> = hours.split_whitespace().filter(|t| !t.contains(':')).collect();
-    (!days.is_empty()).then(|| days.join(" "))
-}
-
-/// The windows of the day, in minutes (from, to) with midnight at the end of a window as 0, that OSM
-/// opening hours name: `Mo-Fr 06:00-10:00,14:30-19:00`. The days are for `days_of`; a time to the minute:
-/// a window starts on the quarter hour before and ends on the one after. Hours with several rules, an `off`,
-/// a window past midnight or two that overlap are not read.
-fn windows_of(hours: &str) -> Option<Vec<(i32, i32)>> {
-    let time = |t: &str| {
-        let (h, m) = t.split_once(':')?;
-        let (h, m): (i32, i32) = (h.parse().ok()?, m.parse().ok()?);
-        (h < 24 && m < 60 || (h, m) == (24, 0)).then_some(h * 60 + m)
-    };
-    if hours.contains(';') || hours.split_whitespace().any(|t| t.eq_ignore_ascii_case("off")) {
-        return None;
-    }
-    let mut windows = Vec::new();
-    for range in hours.split(|c: char| c.is_whitespace() || c == ',').filter(|r| r.contains(':')) {
-        let (from, to) = range.split_once('-')?;
-        let (from, to) = (time(from)? / SLOT_MIN * SLOT_MIN, (time(to)? + SLOT_MIN - 1) / SLOT_MIN * SLOT_MIN);
-        if to <= from {
-            return None;
-        }
-        windows.push((from, to));
-    }
-    windows.sort();
-    if windows.is_empty() || windows.windows(2).any(|w| w[1].0 < w[0].1) {
-        return None;
-    }
-    Some(windows.into_iter().map(|(from, to)| (from, to % (24 * 60))).collect())
-}
-
 /// The OSM ways or nodes with the version each had.
-fn refs(ids: &[i64], versions: &BTreeMap<i64, i32>) -> Vec<OsmRef> {
-    ids.iter().map(|&id| OsmRef { id, version: versions.get(&id).copied() }).collect()
+fn refs(p: &Provenance) -> Vec<OsmRef> {
+    p.refs
+        .iter()
+        .map(|r| match r {
+            ModelRef::Way(w) => OsmRef { id: w.id, version: w.version },
+            ModelRef::Node(n) => OsmRef { id: n.id, version: n.version },
+        })
+        .collect()
 }
 
-fn control_of(c: Control) -> usize {
+fn control_of(c: &Control) -> usize {
     match c {
         Control::Signals => SIGNAL,
         Control::Signs => ALL_WAY_STOP,
-        Control::None => PRIORITY,
+        Control::None | Control::Priority(_) => PRIORITY,
     }
 }
 
@@ -188,32 +169,32 @@ const LOOK_M: f64 = 20.0;
 
 /// The way a road leaves its first point and its last, in degrees clockwise from north, from a point
 /// about `LOOK_M` along it (or its far end, if it is shorter).
-fn headings(points: &[(f64, f64)]) -> Option<(f64, f64)> {
-    let along = |line: &[(f64, f64)]| -> Option<f64> {
+fn headings(points: &[Point]) -> Option<(f64, f64)> {
+    let along = |line: &[Point]| -> Option<f64> {
         let origin = *line.first()?;
         let mut run = 0.0;
         let mut at = origin;
         for &p in &line[1..] {
-            run += (p.0 - at.0).hypot(p.1 - at.1);
+            run += p.distance(at);
             at = p;
             if run >= LOOK_M {
                 break;
             }
         }
-        let (dx, dy) = (at.0 - origin.0, at.1 - origin.1);
+        let (dx, dy) = (at.x_m() - origin.x_m(), at.y_m() - origin.y_m());
         (dx != 0.0 || dy != 0.0).then(|| dx.atan2(dy).to_degrees().rem_euclid(360.0))
     };
-    let reversed: Vec<(f64, f64)> = points.iter().rev().copied().collect();
+    let reversed: Vec<Point> = points.iter().rev().copied().collect();
     Some((along(points)?, along(&reversed)?))
 }
 
 /// A road's centreline in layout millimetres with its two ends set to where its nodes are, so that a street
 /// meets its junctions; None for a road with fewer than two points.
-fn shape_mm(points: &[(f64, f64)], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(f64, f64) -> (i32, i32)) -> Option<Vec<(i32, i32)>> {
+fn shape_mm(points: &[Point], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(f64, f64) -> (i32, i32)) -> Option<Vec<(i32, i32)>> {
     if points.len() < 2 {
         return None;
     }
-    let mut line: Vec<(i32, i32)> = points.iter().map(|&(x, y)| mm_of(x, y)).collect();
+    let mut line: Vec<(i32, i32)> = points.iter().map(|p| mm_of(p.x_m(), p.y_m())).collect();
     let last = line.len() - 1;
     line[0] = from;
     line[last] = to;
@@ -232,48 +213,48 @@ impl Layout {
     /// Roads that start and end at one node, that have no lanes, that have no name, or that start or end at a node the
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
-        let roads: Vec<_> =
-            network.roads.iter().filter(|r| r.from != r.to && !r.lanes.is_empty() && r.name.as_deref().is_some_and(|n| !n.trim().is_empty())).collect();
-        let mut degree: BTreeMap<u32, usize> = BTreeMap::new();
+        let roads: Vec<_> = network.roads.iter().filter(|r| r.edge.from != r.edge.to && !r.base_lanes().is_empty()).collect();
+        let mut degree: BTreeMap<NodeId, usize> = BTreeMap::new();
         for r in &roads {
-            *degree.entry(r.from).or_default() += 1;
-            *degree.entry(r.to).or_default() += 1;
+            *degree.entry(r.edge.from).or_default() += 1;
+            *degree.entry(r.edge.to).or_default() += 1;
         }
-        let nodes: Vec<_> = network.nodes.iter().filter(|n| degree.contains_key(&n.id)).collect();
-        let index: BTreeMap<u32, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
-        let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
-        let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.x_m), y.max(n.y_m)));
+        let nodes: Vec<_> = network.junctions.iter().filter(|n| degree.contains_key(&n.id)).collect();
+        let index: BTreeMap<NodeId, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
+        let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.edge.from) && index.contains_key(&r.edge.to)).collect();
+        let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.position.x_m()), y.max(n.position.y_m())));
         let origin_m = (!nodes.is_empty()).then_some((min_x, max_y));
         let mm_of = |x_m: f64, y_m: f64| (((x_m - min_x) * 1000.0).round() as i32, ((max_y - y_m) * 1000.0).round() as i32);
-        let node_mm = |id: u32| {
+        let node_mm = |id: NodeId| {
             let n = nodes[index[&id]];
-            mm_of(n.x_m, n.y_m)
+            mm_of(n.position.x_m(), n.position.y_m())
         };
         let edges: Vec<EdgeDef> = roads
             .iter()
             .map(|r| {
-                let class = class_of(&r.highway);
-                let pieces = pieces(&r.lanes);
+                let class = class_of(r.road_type);
+                let pieces = pieces(r.base_lanes());
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street {
-                    name: r.name.clone(),
-                    source: refs(&r.osm_ways, &r.osm_versions),
-                    speed: Speed::from_kmh(r.speed_kmh),
+                    name: Some(r.name.clone()),
+                    source: refs(&r.provenance),
+                    speed: Speed::from_kmh(r.base_speed_kmh()),
                     ..Street::imported(class, side, &pieces)
                 };
                 let row_of = |pieces: &[Piece]| Street::imported(class, side, pieces).row_mm;
-                let one_way = one_way_bike_lanes(&r.lanes);
-                let mut legacy_rows_mm: Vec<i32> = [row_of(&legacy_pieces(&r.lanes)), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
+                let one_way = one_way_bike_lanes(r.base_lanes());
+                let mut legacy_rows_mm: Vec<i32> =
+                    [row_of(&legacy_pieces(r.base_lanes())), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
                 legacy_rows_mm.sort_unstable();
                 legacy_rows_mm.dedup();
                 legacy_rows_mm.retain(|&row| row != section.row_mm);
                 EdgeDef {
-                    a: index[&r.from],
-                    b: index[&r.to],
+                    a: index[&r.edge.from],
+                    b: index[&r.edge.to],
                     class,
-                    name: r.name.clone(),
+                    name: Some(r.name.clone()),
                     headings: headings(&r.points),
-                    shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
+                    shape: shape_mm(&r.points, node_mm(r.edge.from), node_mm(r.edge.to), &mm_of),
                     legacy_rows_mm,
                     section,
                 }
@@ -285,12 +266,12 @@ impl Layout {
             .map(|n| {
                 let junction = n.junction && (MIN_ARMS..=MAX_ARMS).contains(&degree[&n.id]);
                 NodeDef {
-                    x_mm: ((n.x_m - min_x) * 1000.0).round() as i32,
-                    y_mm: ((max_y - n.y_m) * 1000.0).round() as i32,
+                    x_mm: ((n.position.x_m() - min_x) * 1000.0).round() as i32,
+                    y_mm: ((max_y - n.position.y_m()) * 1000.0).round() as i32,
                     junction,
-                    control: if junction { control_of(n.control) } else { 0 },
+                    control: if junction { control_of(&n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
-                    source: refs(&n.osm_nodes, &n.osm_versions),
+                    source: refs(&n.provenance),
                 }
             })
             .collect();
@@ -300,7 +281,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, Road, Way};
+    use cityloom_model::{BufferType, Control, Direction, Edge, Junction, Lane, LaneKind, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -309,12 +290,16 @@ mod tests {
     use crate::shared::said::{Arg, Said};
     use crate::shared::testing::en;
 
-    fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
-        Lane { kind, way, width_m, buffer_type: None, hours: None }
+    fn lane(kind: LaneKind, way: Direction, width_m: f64) -> Lane {
+        Lane { kind, direction: way, width_m, buffer_type: None, windows: vec![], shape: vec![] }
     }
 
     fn bus_lane(hours: Option<&str>) -> Lane {
-        Lane { hours: hours.map(str::to_string), ..lane(LaneKind::Bus, Way::Forward, 3.2) }
+        let mut lane = lane(LaneKind::Bus, Direction::Forward, 3.2);
+        if let Some(hours) = hours {
+            lane.only_during(hours, LaneKind::Parking);
+        }
+        lane
     }
 
     fn windows(p: &Piece) -> Vec<(&'static str, i32, i32)> {
@@ -322,7 +307,7 @@ mod tests {
     }
 
     fn buffer(buffer_type: Option<BufferType>) -> Lane {
-        Lane { buffer_type, ..lane(LaneKind::Buffer, Way::Forward, 0.6) }
+        Lane { buffer_type, ..lane(LaneKind::Buffer, Direction::Forward, 0.6) }
     }
 
     fn kind_id(lane: &Lane) -> &'static str {
@@ -331,11 +316,11 @@ mod tests {
 
     #[test]
     fn a_two_way_bike_lane_has_no_direction_and_a_one_way_one_keeps_it() {
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Both, 3.0)).direction, None);
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Forward, 1.5)).direction, Some(0));
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Backward, 1.5)).direction, Some(1));
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Both, 3.0)).direction, None);
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Forward, 1.5)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Backward, 1.5)).direction, Some(1));
         // only a bike lane can run both ways: a driving lane always has a direction
-        assert_eq!(piece(&lane(LaneKind::Driving, Way::Both, 3.0)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Driving, Direction::Both, 3.0)).direction, Some(0));
     }
 
     #[test]
@@ -376,11 +361,11 @@ mod tests {
     }
 
     fn bike() -> Lane {
-        lane(LaneKind::Bike, Way::Forward, 1.8)
+        lane(LaneKind::Bike, Direction::Forward, 1.8)
     }
 
     fn driving() -> Lane {
-        lane(LaneKind::Driving, Way::Forward, 3.3)
+        lane(LaneKind::Driving, Direction::Forward, 3.3)
     }
 
     /// The edges of the piece `i` that carry a curb in the street the lanes make, each true for its right edge.
@@ -403,7 +388,7 @@ mod tests {
         assert_eq!(curb_sides(&right, 1), [false]);
         // beside parking and a transit lane too: they are road pieces
         for road in [LaneKind::Parking, LaneKind::Bus] {
-            let lanes = [bike(), curb(), lane(road, Way::Forward, 2.4)];
+            let lanes = [bike(), curb(), lane(road, Direction::Forward, 2.4)];
             assert_eq!(ids(&lanes).len(), 2, "{road:?}");
             assert_eq!(widths(&lanes)[0], 2400, "{road:?}");
             assert_eq!(curb_sides(&lanes, 0), [true], "{road:?}");
@@ -422,7 +407,7 @@ mod tests {
 
     #[test]
     fn a_curb_buffer_between_a_sidewalk_and_a_road_lane_is_the_sidewalks_own_curb() {
-        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        let sidewalk = || lane(LaneKind::Sidewalk, Direction::Forward, 2.0);
         let left = [sidewalk(), curb(), driving()];
         assert_eq!(ids(&left), ["sidewalk", "travel"]);
         assert_eq!(widths(&left), [2600, 3300]);
@@ -431,23 +416,23 @@ mod tests {
         assert_eq!(ids(&right), ["travel", "sidewalk"]);
         assert_eq!(widths(&right), [3300, 2600]);
         assert_eq!(curb_sides(&right, 1), [false]);
-        let parked = [sidewalk(), curb(), lane(LaneKind::Parking, Way::Forward, 2.4)];
+        let parked = [sidewalk(), curb(), lane(LaneKind::Parking, Direction::Forward, 2.4)];
         assert_eq!(ids(&parked), ["sidewalk", "parking"]);
         assert_eq!(widths(&parked), [2600, 2400]);
         // the sidewalk's own maximum holds
-        let wide = [lane(LaneKind::Sidewalk, Way::Forward, 7.8), curb(), driving()];
+        let wide = [lane(LaneKind::Sidewalk, Direction::Forward, 7.8), curb(), driving()];
         assert_eq!(widths(&wide), [8000, 400, 3300]);
     }
 
     #[test]
     fn what_a_curb_adds_past_the_maximum_of_the_piece_it_joins_stays_as_a_buffer_so_no_width_is_lost() {
-        let wide_bike = [lane(LaneKind::Bike, Way::Forward, 2.8), Lane { width_m: 0.5, ..curb() }, driving()];
+        let wide_bike = [lane(LaneKind::Bike, Direction::Forward, 2.8), Lane { width_m: 0.5, ..curb() }, driving()];
         assert_eq!(ids(&wide_bike), ["bike", "buffer", "travel"]);
         assert_eq!(widths(&wide_bike), [3000, 300, 3300]);
         let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&wide_bike));
         assert_eq!(street.row_mm, 6600, "the street is as wide as its lanes");
         // a curb on each side of a lane with room for part of one: the lanes' widths are all kept
-        let both = [driving(), curb(), lane(LaneKind::Bike, Way::Forward, 2.5), curb(), driving()];
+        let both = [driving(), curb(), lane(LaneKind::Bike, Direction::Forward, 2.5), curb(), driving()];
         let w = widths(&both);
         assert_eq!(w.iter().sum::<i32>(), 3300 + 600 + 2500 + 600 + 3300);
         assert!(w.contains(&3000), "the lane is at its maximum: {w:?}");
@@ -456,23 +441,23 @@ mod tests {
     #[test]
     fn a_remainder_under_the_buffers_minimum_goes_to_the_road_lane_beside_the_curb_and_the_street_keeps_its_width() {
         // 2.95 m of bike lane and a 0.1 m curb: 50 mm too much for the lane, too little for a buffer
-        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.1), driving()];
+        let lanes = [lane(LaneKind::Bike, Direction::Forward, 2.95), curb().with_width(0.1), driving()];
         assert_eq!(ids(&lanes), ["bike", "travel"]);
         assert_eq!(widths(&lanes), [3000, 3350]);
         let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&lanes));
         assert_eq!(street.row_mm, 6350, "exactly the lanes' width");
         // the other order: the road lane is before the curb
-        let lanes = [driving(), curb().with_width(0.1), lane(LaneKind::Bike, Way::Forward, 2.95)];
+        let lanes = [driving(), curb().with_width(0.1), lane(LaneKind::Bike, Direction::Forward, 2.95)];
         assert_eq!(widths(&lanes), [3350, 3000]);
         // 150 mm and more stays a buffer
-        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.2), driving()];
+        let lanes = [lane(LaneKind::Bike, Direction::Forward, 2.95), curb().with_width(0.2), driving()];
         assert_eq!(widths(&lanes), [3000, 150, 3300]);
     }
 
     #[test]
     fn a_curb_buffer_with_no_bike_lane_or_sidewalk_to_belong_to_is_the_neutral_buffer() {
         // beside a driving lane only, at the edge, between two sidewalks, two bike lanes, or a bike lane and a sidewalk
-        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        let sidewalk = || lane(LaneKind::Sidewalk, Direction::Forward, 2.0);
         assert_eq!(ids(&[driving(), curb(), driving()]), ["travel", "buffer", "travel"]);
         assert_eq!(ids(&[curb(), driving()]), ["buffer", "travel"]);
         assert_eq!(ids(&[sidewalk(), curb(), sidewalk()]), ["sidewalk", "buffer", "sidewalk"]);
@@ -489,7 +474,7 @@ mod tests {
             assert_eq!(ids(&lanes), ["bike", "buffer", "travel"], "{t:?}");
             assert_eq!(widths(&lanes), [1800, 600, 3300], "{t:?}");
         }
-        let shoulder = lane(LaneKind::Buffer, Way::Forward, 1.0);
+        let shoulder = lane(LaneKind::Buffer, Direction::Forward, 1.0);
         assert_eq!(ids(&[shoulder, driving()]), ["buffer", "travel"]);
     }
 
@@ -504,7 +489,7 @@ mod tests {
             (LaneKind::Other, "median"),
         ];
         for (kind, id) in kinds {
-            assert_eq!(kind_id(&lane(kind, Way::Forward, 3.0)), id, "{kind:?}");
+            assert_eq!(kind_id(&lane(kind, Direction::Forward, 3.0)), id, "{kind:?}");
         }
     }
 
@@ -520,8 +505,8 @@ mod tests {
     fn a_street_and_a_junction_carry_the_osm_ways_and_nodes_they_were_made_from_with_their_versions() {
         use crate::shared::provenance::OsmRef;
         let mut net = crossing();
-        net.roads[1].osm_versions = [(200, 12)].into();
-        net.nodes[0].osm_versions = [(10, 4)].into();
+        net.roads[1].provenance = Provenance::of_ways([WayRef::with_version(200, 12)]);
+        net.junctions[0].provenance = Provenance::of_nodes([NodeRef::with_version(10, 4)]);
         let city = City::from_network(&net, "Testville");
         let v = city.view(0);
         let street = |i: usize| city.street_editor(v.edges[i].uid, 0).unwrap().view();
@@ -548,44 +533,32 @@ mod tests {
         }
     }
 
-    #[test]
-    fn hours_are_read_as_windows_of_quarter_hours_and_a_day_ends_at_midnight() {
-        assert_eq!(windows_of("07:05-09:50"), Some(vec![(420, 600)]));
-        assert_eq!(windows_of("Mo-Fr 16:00-24:00"), Some(vec![(960, 0)]));
-        assert_eq!(windows_of("Mo-Fr 10:00-12:00,06:00-08:00"), Some(vec![(360, 480), (600, 720)]));
-    }
-
-    #[test]
-    fn hours_that_overlap_or_run_past_midnight_or_say_off_are_not_read() {
-        for hours in ["06:00-10:00,09:00-12:00", "22:00-02:00", "Mo-Fr off", "10:00-10:00", ""] {
-            assert_eq!(windows_of(hours), None, "{hours:?}");
-        }
-    }
-
     /// Two streets crossing at a signalled junction, with a dead end on each arm.
     fn crossing() -> Network {
-        let node =
-            |id, x_m, y_m, junction, control| Node { id, osm_nodes: vec![id as i64 * 10], osm_versions: Default::default(), x_m, y_m, junction, control };
-        let road = |id, name: &str, to, points| Road {
-            id,
-            osm_ways: vec![id as i64 * 100],
-            osm_versions: Default::default(),
-            name: Some(name.to_string()),
-            highway: "residential".into(),
-            from: 1,
-            to,
-            lanes: vec![
-                lane(LaneKind::Sidewalk, Way::Forward, 2.0),
-                lane(LaneKind::Driving, Way::Backward, 3.0),
-                lane(LaneKind::Driving, Way::Forward, 3.0),
-                lane(LaneKind::Sidewalk, Way::Forward, 2.0),
-            ],
-            speed_kmh: None,
+        let node = |id: u32, x_m, y_m, junction, control| Junction {
+            id: NodeId(id),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64 * 10)]),
+            position: Point::new(x_m, y_m),
+            junction,
+            control,
+        };
+        let road = |id: u32, name: &str, to: u32, points| Road {
+            edge: Edge { id: RoadId(id), from: NodeId(1), to: NodeId(to) },
+            provenance: Provenance::of_ways([WayRef::new(id as i64 * 100)]),
+            name: name.to_string(),
+            road_type: RoadType::Local,
+            zones: vec![Zone::whole(vec![
+                lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
+                lane(LaneKind::Driving, Direction::Backward, 3.0),
+                lane(LaneKind::Driving, Direction::Forward, 3.0),
+                lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
+            ])],
             points,
         };
         Network {
             left_hand: false,
-            nodes: vec![
+            corridors: vec![],
+            junctions: vec![
                 node(1, 0.0, 0.0, true, Control::Signals),
                 node(2, 0.0, 200.0, false, Control::None),
                 node(3, 200.0, 0.0, false, Control::None),
@@ -593,10 +566,10 @@ mod tests {
                 node(5, -200.0, 0.0, false, Control::None),
             ],
             roads: vec![
-                road(1, "Side Road", 2, vec![(0.0, 0.0), (0.0, 200.0)]),
-                road(2, "Main Street", 3, vec![(0.0, 0.0), (200.0, 0.0)]),
-                road(3, "Side Road", 4, vec![(0.0, 0.0), (0.0, -200.0)]),
-                road(4, "Main Street", 5, vec![(0.0, 0.0), (-200.0, 0.0)]),
+                road(1, "Side Road", 2, vec![Point::new(0.0, 0.0), Point::new(0.0, 200.0)]),
+                road(2, "Main Street", 3, vec![Point::new(0.0, 0.0), Point::new(200.0, 0.0)]),
+                road(3, "Side Road", 4, vec![Point::new(0.0, 0.0), Point::new(0.0, -200.0)]),
+                road(4, "Main Street", 5, vec![Point::new(0.0, 0.0), Point::new(-200.0, 0.0)]),
             ],
         }
     }
@@ -606,9 +579,9 @@ mod tests {
         use crate::street::model::Speed;
         for (road_speed, speed, kmh) in [(Some(40), Speed::Kmh(40), Some(40)), (None, Speed::NotSet, None)] {
             let mut network = crossing();
-            network.roads[0].speed_kmh = road_speed;
+            network.roads[0].zones[0].speed_kmh = road_speed;
             let layout = Layout::from_network(&network, "x");
-            let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].osm_ways, &network.roads[0].osm_versions)).unwrap().section;
+            let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].provenance)).unwrap().section;
             assert_eq!((street.speed, street.speed_kmh()), (speed, kmh));
         }
     }
@@ -623,6 +596,16 @@ mod tests {
         assert_eq!(junctions.len(), 1);
         assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].key)));
         assert!(city.junction_editor(junctions[0].uid, 0).is_some());
+    }
+
+    #[test]
+    fn a_junction_with_priority_roads_is_run_with_priority() {
+        let mut net = crossing();
+        net.junctions[0].control = Control::Priority(vec![net.roads[0].edge.id, net.roads[2].edge.id]);
+        let city = City::from_network(&net, "Testville");
+        let v = city.view(0);
+        let junction = v.nodes.iter().find(|n| n.junction).unwrap();
+        assert_eq!(junction.control, Some(CONTROLS[PRIORITY].key));
     }
 
     #[test]
@@ -660,15 +643,21 @@ mod tests {
     /// A node at the origin with a road to each of the given points, all of them junction-like in the data.
     fn star(ends: &[(f64, f64)]) -> Network {
         let mut net = crossing();
-        net.nodes.truncate(1);
+        net.junctions.truncate(1);
         net.roads.clear();
         for (i, &(x, y)) in ends.iter().enumerate() {
             let id = i as u32 + 2;
-            net.nodes.push(Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m: x, y_m: y, junction: false, control: Control::None });
+            net.junctions.push(Junction {
+                id: NodeId(id),
+                provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
+                position: Point::new(x, y),
+                junction: false,
+                control: Control::None,
+            });
             let mut road = crossing().roads[0].clone();
-            road.id = id;
-            road.to = id;
-            road.points = vec![(0.0, 0.0), (x, y)];
+            road.edge.id = RoadId(id);
+            road.edge.to = NodeId(id);
+            road.points = vec![Point::new(0.0, 0.0), Point::new(x, y)];
             net.roads.push(road);
         }
         net
@@ -725,48 +714,23 @@ mod tests {
     }
 
     #[test]
-    fn a_road_is_classed_by_its_highway() {
+    fn a_road_is_classed_by_its_type() {
         use crate::shared::catalogue::StreetClass::*;
-        for (highway, class) in [
-            ("motorway", Motorway),
-            ("motorway_link", Motorway),
-            ("trunk", Arterial),
-            ("primary_link", Arterial),
-            ("secondary", Collector),
-            ("tertiary_link", Collector),
-            ("residential", Local),
-            ("service", Local),
-            ("footway", Local),
+        for (road_type, class) in [
+            (RoadType::Motorway, Motorway),
+            (RoadType::Highway, Arterial),
+            (RoadType::Arterial, Arterial),
+            (RoadType::Collector, Collector),
+            (RoadType::Local, Local),
         ] {
-            assert_eq!(class_of(highway), class, "{highway}");
+            assert_eq!(class_of(road_type), class, "{road_type:?}");
         }
-    }
-
-    #[test]
-    fn a_road_without_a_name_is_not_a_street_and_the_node_only_it_reached_goes_with_it() {
-        let mut net = crossing();
-        net.roads[0].name = None;
-        let layout = Layout::from_network(&net, "Nameless");
-        assert_eq!(layout.edges.len(), 3, "the unnamed road is left out");
-        assert!(layout.edges.iter().all(|e| e.name.is_some()));
-        assert!(layout.nodes.iter().all(|n| n.source.first().is_none_or(|s| s.id != 20)), "its far end is left out");
-        // a blank name is no name
-        let mut net = crossing();
-        net.roads[0].name = Some("  ".into());
-        assert_eq!(Layout::from_network(&net, "Blank").edges.len(), 3);
-        // a meeting that loses an arm below three is a plain connection
-        let mut net = crossing();
-        net.roads[0].name = None;
-        net.roads[1].name = None;
-        let layout = Layout::from_network(&net, "Two");
-        assert_eq!(layout.edges.len(), 2);
-        assert!(layout.nodes.iter().all(|n| !n.junction));
     }
 
     #[test]
     fn a_road_with_no_lanes_is_not_a_street() {
         let mut net = crossing();
-        net.roads[0].lanes.clear();
+        net.roads[0].base_lanes_mut().clear();
         let v = City::from_network(&net, "Bare").view(0);
         assert_eq!(v.edges.len(), 3, "the lane-less road is left out");
     }
@@ -774,14 +738,14 @@ mod tests {
     #[test]
     fn a_motorway_is_a_freeway_and_a_residential_street_is_not() {
         let mut net = crossing();
-        net.roads[1].highway = "motorway".into();
+        net.roads[1].road_type = RoadType::Motorway;
         let v = City::from_network(&net, "Fast").view(0);
         assert_eq!(v.edges.iter().filter(|e| e.freeway).count(), 1);
     }
 
     fn bare_street() -> Network {
         let mut net = star(&[(100.0, 0.0)]);
-        net.roads[0].lanes = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
+        *net.roads[0].base_lanes_mut() = vec![lane(LaneKind::Driving, Direction::Backward, 3.0), lane(LaneKind::Driving, Direction::Forward, 3.0)];
         net
     }
 
@@ -833,9 +797,9 @@ mod tests {
     /// far end of each lies in one half of the plane, though they leave the junction west, east and south.
     fn curving_t() -> Network {
         let mut net = star(&[(-100.0, 100.0), (100.0, 100.0), (60.0, 50.0)]);
-        net.roads[0].points = vec![(0.0, 0.0), (-30.0, 0.0), (-100.0, 100.0)];
-        net.roads[1].points = vec![(0.0, 0.0), (30.0, 0.0), (100.0, 100.0)];
-        net.roads[2].points = vec![(0.0, 0.0), (0.0, -30.0), (60.0, -30.0), (60.0, 50.0)];
+        net.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(-30.0, 0.0), Point::new(-100.0, 100.0)];
+        net.roads[1].points = vec![Point::new(0.0, 0.0), Point::new(30.0, 0.0), Point::new(100.0, 100.0)];
+        net.roads[2].points = vec![Point::new(0.0, 0.0), Point::new(0.0, -30.0), Point::new(60.0, -30.0), Point::new(60.0, 50.0)];
         net
     }
 
@@ -875,7 +839,7 @@ mod tests {
 
     #[test]
     fn a_road_with_no_centreline_or_one_point_is_the_straight_line_between_its_nodes() {
-        for points in [vec![], vec![(0.0, 0.0)]] {
+        for points in [vec![], vec![Point::new(0.0, 0.0)]] {
             let mut net = curving_t();
             net.roads[0].points = points;
             let v = City::from_network(&net, "Bare").view(0);

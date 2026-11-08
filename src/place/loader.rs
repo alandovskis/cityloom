@@ -171,10 +171,10 @@ mod tests {
         crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), crate::shared::units::Units::Metres, said)
     }
 
-    const NETWORK: &str = r#"{"left_hand":false,"nodes":[{"id":1,"osm_nodes":[1],"x_m":0.0,"y_m":0.0,"junction":false,"control":"none"},
-        {"id":2,"osm_nodes":[2],"x_m":90.0,"y_m":0.0,"junction":false,"control":"none"}],
-        "roads":[{"id":1,"osm_ways":[5],"name":"Only Street","highway":"residential","from":1,"to":2,
-        "lanes":[{"kind":"driving","way":"forward","width_m":3.0},{"kind":"driving","way":"backward","width_m":3.0}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
+    const NETWORK: &str = r#"{"left_hand":false,"junctions":[{"id":1,"provenance":[{"node":{"id":1}}],"position":[0.0,0.0],"junction":false,"control":"none"},
+        {"id":2,"provenance":[{"node":{"id":2}}],"position":[90.0,0.0],"junction":false,"control":"none"}],
+        "roads":[{"edge":{"id":1,"from":1,"to":2},"provenance":[{"way":{"id":5}}],"name":"Only Street","road_type":"local",
+        "zones":[{"from":0.0,"lanes":[{"kind":"driving","direction":"forward","width_m":3.0},{"kind":"driving","direction":"backward","width_m":3.0}]}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
 
     #[test]
     fn a_search_asks_nominatim_and_hands_on_the_places() {
@@ -365,7 +365,7 @@ mod tests {
                 }
                 _ => {
                     fetcher.answer(Ok(b"TILE".to_vec()));
-                    importer.answer(Ok(r#"{"left_hand":false,"nodes":[],"roads":[]}"#.to_string()));
+                    importer.answer(Ok(r#"{"left_hand":false,"junctions":[],"roads":[]}"#.to_string()));
                 }
             }
             assert!(fetcher.asked().is_empty(), "step {step}: Overpass is not asked");
@@ -484,7 +484,7 @@ mod tests {
         Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
         without_tiles(&fetcher);
         fetcher.answer(Ok(b"<osm/>".to_vec()));
-        importer.answer(Ok(r#"{"left_hand":false,"nodes":[],"roads":[]}"#.to_string()));
+        importer.answer(Ok(r#"{"left_hand":false,"junctions":[],"roads":[]}"#.to_string()));
         let message = result.borrow_mut().take().unwrap().unwrap_err();
         assert_eq!(en(&message), "OpenStreetMap has no streets around Mid-ocean");
         assert_eq!(fr(&message), "OpenStreetMap n’a aucune rue autour de Mid-ocean");
