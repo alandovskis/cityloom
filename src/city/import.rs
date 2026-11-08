@@ -320,7 +320,7 @@ mod tests {
     use crate::shared::testing::en;
 
     fn lane(kind: LaneKind, way: Direction, width_m: f64) -> Lane {
-        Lane { kind, way, width_m, buffer_type: None, hours: None }
+        Lane { kind, way, width_m, buffer_type: None, hours: None, shape: vec![] }
     }
 
     fn bus_lane(hours: Option<&str>) -> Lane {

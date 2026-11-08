@@ -36,7 +36,7 @@ pub(crate) mod fixtures {
             junction: false,
             control: Control::None,
         };
-        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
+        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None, shape: vec![] };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],

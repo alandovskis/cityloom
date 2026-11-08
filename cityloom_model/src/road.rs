@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{Lane, Point, RoadType, WayRef, Zone};
+use crate::{Lane, Point, RoadType, Street, WayRef, Zone};
 
 /// A street between two nodes, made from one or more OpenStreetMap ways.
 ///
@@ -51,6 +51,28 @@ impl Road {
         zones.first().is_some_and(|z| z.from.metres() == 0.0)
             && zones.windows(2).all(|w| w[1].from.metres() > w[0].from.metres())
             && zones.iter().all(|z| z.from.metres().is_finite())
+    }
+
+    /// The length of the centre line, in metres.
+    pub fn length_m(&self) -> f64 {
+        self.points.windows(2).map(|w| w[0].distance(w[1])).sum()
+    }
+
+    /// Gives every lane the shape it has by lying straight along its zone, at its place across the road: the lanes
+    /// are side by side, centred on the centre line, the first at the left. The shape runs from the zone's start to
+    /// where the next zone starts, or the road's end. Done again whenever the lanes change.
+    pub fn lay_out_lanes(&mut self) {
+        let length = self.length_m();
+        let ends: Vec<f64> = self.zones.iter().skip(1).map(|z| z.from.metres()).chain([length]).collect();
+        for (zone, end) in self.zones.iter_mut().zip(ends) {
+            let (from, end) = (zone.from.metres(), end.max(zone.from.metres()));
+            let mut left = zone.lanes.iter().map(|l| l.width_m).sum::<f64>() / 2.0;
+            for lane in &mut zone.lanes {
+                let across = left - lane.width_m / 2.0;
+                left -= lane.width_m;
+                lane.shape = vec![Point::<Street>::new(from, across), Point::new(end, across)];
+            }
+        }
     }
 
     pub fn has_way(&self, id: i64) -> bool {
@@ -155,7 +177,7 @@ mod tests {
     }
 
     fn lane(width_m: f64) -> Lane {
-        Lane { kind: crate::LaneKind::Driving, way: crate::Direction::Forward, width_m, buffer_type: None, hours: None }
+        Lane { kind: crate::LaneKind::Driving, way: crate::Direction::Forward, width_m, buffer_type: None, hours: None, shape: vec![] }
     }
 
     #[test]
@@ -184,6 +206,16 @@ mod tests {
         }
         let bad = r#"{"id":1,"osm_ways":[5],"name":"Main","road_type":"local","from":1,"to":2,"zones":[{"from":5.0,"lanes":[]}],"points":[]}"#;
         assert!(serde_json::from_str::<Road>(bad).is_err());
+    }
+
+    #[test]
+    fn lanes_are_laid_out_side_by_side_along_their_zone() {
+        let mut road = road_of(vec![Zone::whole(vec![lane(3.0), lane(1.0)]), Zone { from: Coordinate::new(60.0), lanes: vec![lane(2.0)] }]);
+        road.points = vec![Point::new(0.0, 0.0), Point::new(0.0, 100.0)];
+        road.lay_out_lanes();
+        let shapes: Vec<Vec<(f64, f64)>> = road.zones.iter().flat_map(|z| &z.lanes).map(|l| l.shape.iter().map(|p| (p.x_m(), p.y_m())).collect()).collect();
+        // 4 m wide: the 3 m lane is centred 0.5 m left of the centre line, the 1 m lane 1.5 m right of it
+        assert_eq!(shapes, [vec![(0.0, 0.5), (60.0, 0.5)], vec![(0.0, -1.5), (60.0, -1.5)], vec![(60.0, 0.0), (100.0, 0.0)]]);
     }
 
     #[test]

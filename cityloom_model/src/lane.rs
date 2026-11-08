@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{Point, Street};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LaneKind {
@@ -53,4 +55,8 @@ pub struct Lane {
     /// (`Mo-Fr 06:00-10:00,14:30-19:00`). Without it a bus lane is one all day.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hours: Option<String>,
+    /// The lane's centre line in the road's own coordinates: `x` along the road, `y` across it from its centre line,
+    /// left positive. Empty where it has not been laid out; see `Road::lay_out_lanes`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shape: Vec<Point<Street>>,
 }

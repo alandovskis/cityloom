@@ -345,3 +345,18 @@ fn a_road_without_maxspeed_has_none() {
     let road = net.roads.iter().find(|r| r.has_way(17587428)).expect("the way is a road");
     assert_eq!(road.speed_kmh, None);
 }
+
+#[test]
+fn every_lane_of_an_imported_road_is_laid_out_along_it() {
+    let net = import(RENE_LEVESQUE).unwrap();
+    for road in &net.roads {
+        let length = road.length_m();
+        for lane in road.zones.iter().flat_map(|z| &z.lanes) {
+            let ends: Vec<(f64, f64)> = lane.shape.iter().map(|p| (p.x_m(), p.y_m())).collect();
+            assert_eq!(ends.len(), 2, "{road:?}");
+            assert_eq!(ends[0].0, 0.0);
+            assert!((ends[1].0 - length).abs() < 1e-9, "{ends:?} on a road of {length}");
+            assert_eq!(ends[0].1, ends[1].1, "a lane lies straight along the road");
+        }
+    }
+}

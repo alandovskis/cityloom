@@ -34,6 +34,8 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
     cityloom_model::merge::merge_dual_carriageways(&mut network);
+    // merging changes a road's lanes, so their shapes are laid out last
+    network.roads.iter_mut().for_each(Road::lay_out_lanes);
     Ok(network)
 }
 
@@ -371,6 +373,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                         way: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
                         width_m: l.width.inner_meters(),
                         hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
+                        shape: Vec::new(),
                     })
                     .collect(),
             ))],
@@ -551,7 +554,7 @@ mod tests {
     }
 
     fn bike(way: Direction, width_m: f64) -> Lane {
-        Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, hours: None }
+        Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, hours: None, shape: vec![] }
     }
 
     #[test]

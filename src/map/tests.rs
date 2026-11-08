@@ -729,7 +729,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
     assert!(vm.view().edges.is_empty(), "no roads are kept yet");
     let node =
         |id, x_m| Node { id, osm_nodes: vec![NodeRef(id as i64)], osm_versions: Default::default(), x_m, y_m: 0.0, junction: false, control: Control::None };
-    let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
+    let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None, shape: vec![] };
     let network = Network {
         left_hand: false,
         nodes: vec![node(1, 0.0), node(2, 100.0)],

@@ -544,7 +544,7 @@ mod tests {
             junction,
             control: Control::None,
         };
-        let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, hours: None };
+        let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, hours: None, shape: vec![] };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
@@ -573,8 +573,9 @@ mod tests {
             width_m: 0.1,
             buffer_type: (!legacy).then_some(BufferType::Curb),
             hours: None,
+            shape: vec![],
         };
-        let walk = Lane { kind: LaneKind::Sidewalk, way: Direction::Forward, width_m: 2.0, buffer_type: None, hours: None };
+        let walk = Lane { kind: LaneKind::Sidewalk, way: Direction::Forward, width_m: 2.0, buffer_type: None, hours: None, shape: vec![] };
         let road = network.roads[0].base_lanes().to_vec();
         *network.roads[0].base_lanes_mut() = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
         network
@@ -606,6 +607,7 @@ mod tests {
             width_m: if two_way { 3.0 } else { 1.5 },
             buffer_type: None,
             hours: None,
+            shape: vec![],
         };
         network.roads[0].base_lanes_mut().insert(0, bike);
         network
