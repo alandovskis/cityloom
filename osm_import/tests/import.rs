@@ -81,10 +81,13 @@ fn a_bus_lane_tagged_with_hours_keeps_them() {
     let net = import(RENE_LEVESQUE).expect("the boulevard reads");
     assert!(!net.roads.is_empty());
     for road in &net.roads {
-        let bus: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == LaneKind::Bus).collect();
-        assert_eq!(bus.len(), 1, "{:?}", road.base_lanes());
-        assert_eq!(bus[0].hours.as_deref(), Some("Mo-Fr 06:00-10:00,14:30-19:00"), "{:?}", road.osm_ways);
-        assert!(road.base_lanes().iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
+        // a bus lane at certain hours is parking the rest of the time
+        let timed: Vec<_> = road.base_lanes().iter().filter(|l| !l.windows.is_empty()).collect();
+        assert_eq!(timed.len(), 1, "{:?}", road.base_lanes());
+        assert_eq!(timed[0].kind, LaneKind::Parking);
+        let hours: Vec<_> = timed[0].windows.iter().map(|w| (w.kind, w.hours.days.as_deref(), w.hours.from_min, w.hours.to_min)).collect();
+        assert_eq!(hours, [(LaneKind::Bus, Some("Mo-Fr"), 360, 600), (LaneKind::Bus, Some("Mo-Fr"), 870, 1140)], "{:?}", road.osm_ways);
+        assert!(road.base_lanes().iter().filter(|l| l.kind != LaneKind::Parking).all(|l| l.windows.is_empty()));
     }
 }
 
