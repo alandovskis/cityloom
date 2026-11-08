@@ -230,7 +230,17 @@ pub fn merge_dual_carriageways(net: &mut Network) {
             *ids = kept;
         }
     }
-    net.drop_unknown_priority();
+    drop_unknown_priority(net);
+}
+
+/// Takes from every priority control the roads the network does not have, so it never names one that is gone.
+fn drop_unknown_priority(net: &mut Network) {
+    let roads = &net.roads;
+    for j in &mut net.junctions {
+        if let crate::Control::Priority(ids) = &mut j.control {
+            ids.retain(|id| roads.iter().any(|r| r.edge.id == *id));
+        }
+    }
 }
 
 /// The lower of two known speeds, else the one known, else none.

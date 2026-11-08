@@ -6,6 +6,8 @@
 //! depends on that shape and not on osm2streets. It is built as a separate
 //! WebAssembly module, loaded when a place is opened.
 
+mod merge;
+
 use abstutil::{Tags, Timer};
 pub use cityloom_model::*;
 use osm2streets::{Direction as StreetsDirection, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
@@ -33,7 +35,7 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     let (mut streets, doc) = read_streets(osm, clip, config, &mut timer)?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
-    cityloom_model::merge::merge_dual_carriageways(&mut network);
+    merge::merge_dual_carriageways(&mut network);
     // merging changes a road's lanes, so their shapes are laid out last
     network.roads.iter_mut().for_each(Road::lay_out_lanes);
     // and the corridors, which name the roads that are left

@@ -8,7 +8,6 @@ mod graph;
 mod hours;
 mod junction;
 mod lane;
-pub mod merge;
 mod network;
 mod osm;
 mod point;
