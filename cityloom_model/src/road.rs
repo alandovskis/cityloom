@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Edge, Lane, Point, Provenance, RoadType, Street, Zone};
 
+/// A road of the network, by its id in it. Not an OSM way: see `WayRef`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RoadId(pub u32);
+
 /// A street between two nodes, made from one or more OpenStreetMap ways. A road has a name: the importer leaves out
 /// one without, or with a blank one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -79,7 +84,7 @@ impl Road {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Coordinate, NodeId, RoadId, WayRef};
+    use crate::{Coordinate, NodeId, WayRef};
 
     fn road_of(zones: Vec<Zone>) -> Road {
         Road {
@@ -94,6 +99,12 @@ mod tests {
 
     fn lane(width_m: f64) -> Lane {
         Lane { kind: crate::LaneKind::Driving, direction: crate::Direction::Forward, width_m, buffer_type: None, windows: vec![], shape: vec![] }
+    }
+
+    #[test]
+    fn a_road_id_is_kept_as_the_bare_number() {
+        assert_eq!(serde_json::to_string(&RoadId(4)).unwrap(), "4");
+        assert_eq!(serde_json::from_str::<RoadId>("4").unwrap(), RoadId(4));
     }
 
     #[test]
