@@ -1,8 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 /// An OpenStreetMap way, by its id, with the version OpenStreetMap had of it when the data was read, when that is known.
 /// Two refs are equal only if their versions are too: to ask whether a road was made from a way, compare `id`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WayRef {
     pub id: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<i32>,
 }
 
@@ -19,9 +22,10 @@ impl WayRef {
 
 /// An OpenStreetMap node, by its id, with the version OpenStreetMap had of it when the data was read, when that is known.
 /// Two refs are equal only if their versions are too: to ask whether a node was made from an OSM node, compare `id`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NodeRef {
     pub id: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<i32>,
 }
 
@@ -37,7 +41,8 @@ impl NodeRef {
 }
 
 /// A thing in OpenStreetMap that a road or a node was made from: a way or a node.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OsmRef {
     Way(WayRef),
     Node(NodeRef),

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{Lane, NodeId, Point, Provenance, RoadId, RoadType, Street, WayRef, Zone};
 
@@ -100,13 +100,6 @@ pub(crate) struct RoadWire {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     speed_kmh: Option<u16>,
     points: Vec<Point>,
-}
-
-/// The roads of a kept network, leaving out any that have no name: such a network may have been kept before a road
-/// needed one.
-pub(crate) fn named_roads<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Road>, D::Error> {
-    let wires = Vec::<RoadWire>::deserialize(d)?;
-    Ok(wires.into_iter().filter_map(|w| Road::try_from(w).ok()).collect())
 }
 
 impl TryFrom<RoadWire> for Road {

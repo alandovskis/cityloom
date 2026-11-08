@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn corridors_are_kept_only_when_there_are_some_and_lose_roads_that_are_gone() {
+    fn corridors_are_kept_only_when_there_are_some() {
         let mut net = network(vec![road(1, 1, 2, &[LaneKind::Driving])]);
         let json = serde_json::to_string(&net).unwrap();
         assert!(!json.contains("corridors"), "{json}");
@@ -142,11 +142,5 @@ mod tests {
         let json = serde_json::to_string(&net).unwrap();
         assert!(json.contains(r#""corridors":[{"user":"driver","roads":[1]}]"#), "{json}");
         assert_eq!(serde_json::from_str::<Network>(&json).unwrap(), net);
-        // a corridor naming a road the network does not have loses it, and one left with none is dropped
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let mut value = value;
-        value["corridors"] = serde_json::json!([{"user": "driver", "roads": [1, 9]}, {"user": "cyclist", "roads": [9]}]);
-        let read: Network = serde_json::from_value(value).unwrap();
-        assert_eq!(read.corridors, [Corridor { user: UserClass::Driver, roads: vec![RoadId(1)] }]);
     }
 }

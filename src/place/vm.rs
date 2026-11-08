@@ -225,10 +225,10 @@ mod tests {
     const BERLIN: &[u8] = br#"[{"display_name":"Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany","lat":"52.4990","lon":"13.4030","boundingbox":["52.48","52.51","13.38","13.43"]},
         {"display_name":"Kreuzberg, Bavaria, Germany","lat":"50.0","lon":"10.0","boundingbox":["49.9","50.1","9.9","10.1"]}]"#;
 
-    const NETWORK: &str = r#"{"left_hand":false,"nodes":[{"id":1,"osm_nodes":[1],"x_m":0.0,"y_m":0.0,"junction":false,"control":"none"},
-        {"id":2,"osm_nodes":[2],"x_m":90.0,"y_m":0.0,"junction":false,"control":"none"}],
+    const NETWORK: &str = r#"{"left_hand":false,"junctions":[{"id":1,"provenance":[{"node":{"id":1}}],"position":[0.0,0.0],"junction":false,"control":"none"},
+        {"id":2,"provenance":[{"node":{"id":2}}],"position":[90.0,0.0],"junction":false,"control":"none"}],
         "roads":[{"id":1,"osm_ways":[5],"name":"Only Street","highway":"residential","from":1,"to":2,
-        "lanes":[{"kind":"driving","way":"forward","width_m":3.0}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
+        "lanes":[{"kind":"driving","direction":"forward","width_m":3.0}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
 
     struct Fixture {
         vm: Rc<AreaVm>,

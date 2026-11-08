@@ -117,12 +117,21 @@ mod tests {
 
     #[test]
     fn a_network_has_a_node_for_each_junction_and_an_edge_for_each_road() {
-        let net: Network = serde_json::from_str(
-            r#"{"left_hand":false,"nodes":[{"id":1,"osm_nodes":[],"x_m":0.0,"y_m":0.0,"junction":false,"control":"none"},
-                {"id":2,"osm_nodes":[],"x_m":9.0,"y_m":0.0,"junction":false,"control":"none"}],
-                "roads":[{"id":7,"osm_ways":[],"name":"Main","highway":"x","from":1,"to":2,"lanes":[],"points":[]}]}"#,
-        )
-        .unwrap();
+        use crate::{Control, Junction, Point, Provenance, RoadType, Zone};
+        let junction =
+            |id: u32| Junction { id: NodeId(id), provenance: Provenance::default(), position: Point::new(0.0, 0.0), junction: false, control: Control::None };
+        let road = Road {
+            id: RoadId(7),
+            provenance: Provenance::default(),
+            name: "Main".into(),
+            road_type: RoadType::Local,
+            from: NodeId(1),
+            to: NodeId(2),
+            zones: vec![Zone::whole(vec![])],
+            speed_kmh: None,
+            points: vec![],
+        };
+        let net = Network { left_hand: false, junctions: vec![junction(1), junction(2)], roads: vec![road], corridors: vec![] };
         assert_eq!(net.nodes(), [Node { id: NodeId(1) }, Node { id: NodeId(2) }]);
         assert_eq!(net.edges(), [edge(7, 1, 2)]);
     }

@@ -1,8 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{NodeRef, OsmRef, WayRef};
 
 /// What a node or a road was made from in OpenStreetMap, each thing with the version it had when the data was
 /// read. A road's are ways and a node's are nodes; the key an edit is kept under comes from them.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Provenance {
     pub refs: Vec<OsmRef>,
 }
@@ -63,6 +66,14 @@ mod tests {
         let p = Provenance { refs: vec![WayRef::with_version(1, 3).into(), NodeRef::new(1).into(), WayRef::new(2).into()] };
         assert_eq!(p.ways().collect::<Vec<_>>(), [WayRef::with_version(1, 3), WayRef::new(2)]);
         assert_eq!(p.nodes().collect::<Vec<_>>(), [NodeRef::new(1)]);
+    }
+
+    #[test]
+    fn it_is_kept_as_a_list_of_its_things_with_the_versions_they_have() {
+        let p = Provenance { refs: vec![WayRef::with_version(1, 3).into(), NodeRef::new(2).into()] };
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(json, r#"[{"way":{"id":1,"version":3}},{"node":{"id":2}}]"#);
+        assert_eq!(serde_json::from_str::<Provenance>(&json).unwrap(), p);
     }
 
     #[test]
