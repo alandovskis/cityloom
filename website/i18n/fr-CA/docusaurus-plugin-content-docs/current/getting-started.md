@@ -46,7 +46,7 @@ routes de compte répondent 503 et les pages n’ont pas de session ouverte.
 just prepare
 ```
 
-La recette exécute `cityloom_prepare`, l’outil Rust du dépôt (`cargo run -p cityloom_prepare -- prepare`; ses arguments
+La recette exécute `citymodel_builder`, l’outil Rust du dépôt (`cargo run -p citymodel_builder -- prepare`; ses arguments
 sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
 `just prepare --refresh` en prend un plus récent). Elle découpe ensuite les routes de la région métropolitaine en
 tuiles dans `web/data/metro` (nécessite `osmium-tool`) et construit le fond de carte de la page Carte,

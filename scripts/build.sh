@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the Rust core to WebAssembly into web/pkg.
-# Needs wasm-bindgen-cli at the version pinned in Cargo.toml:
+# Needs wasm-bindgen-cli at the version pinned in crates/cityloom_editor/Cargo.toml:
 #   cargo install wasm-bindgen-cli --version <that version> --root .tools
 set -eu
 cd "$(dirname "$0")/.."
@@ -12,7 +12,7 @@ if [ "$(uname)" = Darwin ]; then
   DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
-cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
+cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
 # The target directory may be shared with other checkouts, whose builds replace these files: take both at once.
 dir=$(./scripts/target-dir.sh)
 wasm_dir=$(mktemp -d)

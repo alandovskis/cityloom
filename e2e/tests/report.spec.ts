@@ -10,7 +10,9 @@ import { expect, forgive, live, mapReady, openStreet, test } from "./fixtures";
 // The design review report: the map page's Share menu writes a two-page PDF in the browser (the `cityloom_report`
 // module, loaded on first use by `web/report.js`) and saves it. The file is read back with pdf.js.
 
-const VERSION = readFileSync(new URL("../../Cargo.toml", import.meta.url), "utf8").match(/^version = "(.+)"$/m)![1];
+const VERSION = readFileSync(new URL("../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
+  /^version = "(.+)"$/m,
+)![1];
 
 async function download(page: Page): Promise<{ file: Download; bytes: Buffer }> {
   await page.goto("/map.html");

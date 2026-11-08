@@ -17,7 +17,7 @@ Merging to `main` deploys to production (CI's `Deploy to Railway` job). That is 
 
 - Never use `gh pr merge --admin`, skip, re-run to green, cancel or disable a check, or edit `.github/`.
 - Never dismiss a code-scanning or Dependabot alert.
-- Never change a file other than `Cargo.toml` and `Cargo.lock`, and in them only the root `version` line and what `cargo update -p cityloom_editor` changes.
+- Never change a file other than `crates/cityloom_editor/Cargo.toml` and `Cargo.lock`, and in them only the `version` line of the first and what `cargo update -p cityloom_editor` changes.
 - Never force-push except your own rebase of a PR's branch, and then only with `--force-with-lease`.
 - Never resolve a conflict in any other file, even when it looks obvious. Never use `git checkout --ours` or `--theirs` on any other file.
 - Never delete a branch, worktree or file yourself (`--delete-branch` on the merge is the one exception).
@@ -25,7 +25,7 @@ Merging to `main` deploys to production (CI's `Deploy to Railway` job). That is 
 
 ## The version rule
 
-Every PR raises the root `Cargo.toml` `version` above `main`'s (semantic versioning; `scripts/check-version.sh` checks it). After a rebase the version line conflicts. Its new value is:
+Every PR raises the `version` in `crates/cityloom_editor/Cargo.toml` above `main`'s (semantic versioning; `scripts/check-version.sh` checks it). After a rebase the version line conflicts. Its new value is:
 
 - for a PR that was a patch (only the third number raised): `main`'s version with the third number plus one;
 - for a minor (second number raised, third 0): `main`'s second number plus one, third 0, if the PR's own version is not already above `main`'s; else the PR's own version;
@@ -42,8 +42,8 @@ Write the value down before you change anything, and check it against `main`'s.
    - Otherwise go to step 3.
 3. **Rebase.** `git status --porcelain --untracked-files=no` must print nothing, or STOP. Then `git rebase origin/main`.
    - No conflict: go to step 4.
-   - Conflict: `git diff --name-only --diff-filter=U`. If it lists any file other than `Cargo.toml` and `Cargo.lock`: `git rebase --abort`, STOP.
-   - Only those two: `git checkout --ours Cargo.toml Cargo.lock` (during a rebase "ours" is `main`'s side). Set the version line to the value from **The version rule** with `sed -i '' 's/^version = "<main's>"$/version = "<new>"/' Cargo.toml`, and check with `grep -m1 '^version' Cargo.toml`. Run `cargo update -q -p cityloom_editor`, then `git add Cargo.toml Cargo.lock` and `GIT_EDITOR=true git rebase --continue`. If it stops on another conflict, apply this step again; it is the same rule.
+   - Conflict: `git diff --name-only --diff-filter=U`. If it lists any file other than `crates/cityloom_editor/Cargo.toml` and `Cargo.lock`: `git rebase --abort`, STOP.
+   - Only those two: `git checkout --ours crates/cityloom_editor/Cargo.toml Cargo.lock` (during a rebase "ours" is `main`'s side). Set the version line to the value from **The version rule** with `sed -i '' 's/^version = "<main's>"$/version = "<new>"/' crates/cityloom_editor/Cargo.toml`, and check with `grep -m1 '^version' crates/cityloom_editor/Cargo.toml`. Run `cargo update -q -p cityloom_editor`, then `git add crates/cityloom_editor/Cargo.toml Cargo.lock` and `GIT_EDITOR=true git rebase --continue`. If it stops on another conflict, apply this step again; it is the same rule.
 4. **Check the rebase.**
    - `git diff --stat origin/main...HEAD` must list only files the PR changed before the rebase (compare with `gh pr diff <N> --repo alandovskis/cityloom --name-only`, read before you rebased). A file missing or added: STOP and do not push.
    - `scripts/check-version.sh` must pass.

@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.56.0"
+version = "0.56.1"
 dependencies = [
  "any_spawner",
  "cityloom_model",
@@ -702,21 +702,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "cityloom_prepare"
-version = "0.1.0"
-dependencies = [
- "clap",
- "ctrlc",
- "rlimit",
- "serde_json",
- "sha2 0.11.1",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "ureq",
 ]
 
 [[package]]
@@ -748,7 +733,7 @@ dependencies = [
  "axum-extra",
  "base64 0.23.1",
  "chrono",
- "cityloom_prepare",
+ "citymodel_builder",
  "cookie",
  "getrandom 0.4.3",
  "hex",
@@ -777,6 +762,21 @@ dependencies = [
  "url",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "citymodel_builder"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ctrlc",
+ "rlimit",
+ "serde_json",
+ "sha2 0.11.1",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "ureq",
 ]
 
 [[package]]
