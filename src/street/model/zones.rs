@@ -295,7 +295,7 @@ impl super::Content {
 impl Editor {
     /// Whether the zones can be rearranged: the street has an end to measure from, and a zoning it already has
     /// was drawn on this road.
-    fn structure_frame(&self, allow_drag: bool) -> Result<ZoneFrame, ZoneRefusal> {
+    pub(super) fn structure_frame(&self, allow_drag: bool) -> Result<ZoneFrame, ZoneRefusal> {
         if self.gesture.is_some() && !allow_drag {
             return Err(ZoneRefusal::Dragging);
         }

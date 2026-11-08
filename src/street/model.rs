@@ -20,6 +20,8 @@ mod joint;
 mod speed;
 pub use speed::Speed;
 mod beyond;
+mod school;
+pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
 mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
@@ -835,6 +837,18 @@ impl Editor {
         self.zone = self.zone.min(self.states[self.cursor].content.zone_count() - 1);
     }
 
+    /// Makes the revisions since state `from` one, labelled `label`: what a command made of several edits leaves.
+    fn squash_since(&mut self, from: usize, label: Said) {
+        if self.cursor <= from {
+            return;
+        }
+        let mut last = self.states[self.cursor].clone();
+        last.label = label;
+        self.states.truncate(from + 1);
+        self.cursor = from;
+        self.push_state(last);
+    }
+
     fn push_state(&mut self, state: State) {
         self.states.truncate(self.cursor + 1);
         self.states.push(state);
@@ -1275,10 +1289,17 @@ impl Editor {
     /// Arranges the selected zone as a street template (`Template`): its pieces are replaced by the template's,
     /// fitted to the street's width, as one undoable edit. Refused, with the reason and nothing changed, when the
     /// class or the width does not suit it.
-    pub fn apply_template(&mut self, template: Template) -> Result<(), TemplateRefusal> {
+    ///
+    /// The School street also makes a school zone, with a lower speed limit and a raised table, as far as each fits
+    /// (`apply_school`); the report says which parts were applied and which skipped. Still one revision.
+    pub fn apply_template(&mut self, template: Template) -> Result<TemplateReport, TemplateRefusal> {
         let mut next_uid = self.next_uid;
         let arranged = template.arrange(self.class(), self.row_mm(), REGIONS[self.region].drive_side, &mut next_uid)?;
-        let ok = self.edit(Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key())))), |segs| {
+        let label = Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key()))));
+        if template == Template::School {
+            return Ok(self.apply_school(arranged, next_uid, label));
+        }
+        let ok = self.edit(label, |segs| {
             *segs = arranged;
             true
         });
@@ -1286,7 +1307,7 @@ impl Editor {
             self.next_uid = next_uid;
             self.selected = None;
         }
-        Ok(())
+        Ok(TemplateReport::default())
     }
 
     /// Makes the street pedestrian: every motor piece (travel, parking, loading, bus, shoulder, at any hour: a bike

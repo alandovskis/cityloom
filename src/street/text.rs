@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{CalmingStripView, Check, GreenRowView, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
+use crate::street::model::{CalmingStripView, Check, GreenRowView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -168,6 +168,13 @@ pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
 /// Why a street template cannot be applied, in the page's language.
 pub fn template_refused(i18n: &I18n, units: Units, template: Template, refusal: TemplateRefusal) -> String {
     say_now(i18n, units, &refusal.said(template))
+}
+
+/// What a template did, part by part, in the page's language: the parts applied, then those skipped and why.
+/// Nothing for a template that has only its pieces.
+pub fn template_report(i18n: &I18n, units: Units, report: &TemplateReport) -> Option<String> {
+    let parts: Vec<String> = report.applied.iter().chain(&report.skipped).map(|s| say_now(i18n, units, s)).collect();
+    (!parts.is_empty()).then(|| parts.join(" "))
 }
 
 /// What a check is called where it is listed: a failing check of a street with several zones says which zone

@@ -152,7 +152,7 @@ pub struct TemplateView {
 mod tests {
     use super::*;
     use crate::shared::catalogue::{DirectionRule, is_roadway};
-    use crate::street::model::{Editor, SAMPLES, Street};
+    use crate::street::model::{Editor, SAMPLES, Street, TemplateReport};
 
     fn arranged(t: Template, row_mm: i32, side: Side) -> Vec<Segment> {
         t.arrange(StreetClass::Local, row_mm, side, &mut 1).unwrap_or_else(|r| panic!("{t:?} at {row_mm}: {r:?}"))
@@ -245,7 +245,7 @@ mod tests {
         let mut e = Editor::new(0);
         let before = e.snapshot();
         assert_eq!(SAMPLES[0].row_mm, 18_000);
-        assert_eq!(e.apply_template(Template::Greenway), Ok(()));
+        assert_eq!(e.apply_template(Template::Greenway), Ok(TemplateReport::default()));
         let v = e.view();
         assert_eq!(v.revisions.len(), 1);
         assert!(v.delta_mm <= 0 && v.delta_mm > -100, "fits: {}", v.delta_mm);
@@ -282,7 +282,7 @@ mod tests {
         let mut e = Editor::from_street(&today, &crate::street::model::zoned(today.clone(), &[0, 20_000, 40_000], 60_000), 0);
         let base = e.snapshot().segments;
         assert!(e.select_zone(1));
-        assert_eq!(e.apply_template(Template::School), Ok(()));
+        assert!(e.apply_template(Template::School).is_ok());
         let s = e.snapshot();
         assert_eq!(s.segments, base);
         assert!(s.zones[1].segments.is_some());

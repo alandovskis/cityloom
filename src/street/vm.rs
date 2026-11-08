@@ -361,12 +361,15 @@ impl StreetVm {
         let before = self.before();
         let result = self.core.edit(|e| e.apply_template(template));
         match result {
-            Ok(()) => {
+            Ok(report) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
                 }
                 self.merge.set(None);
                 self.say_edit(&before);
+                if let Some(said) = text::template_report(&self.i18n, self.units_now(), &report) {
+                    self.ports.announcer.say(&said);
+                }
                 true
             }
             Err(refusal) => {
@@ -1946,7 +1949,11 @@ mod tests {
         let r = rig(0);
         let first = r.vm.view_now().segments.iter().map(|s| (s.kind, s.width_mm)).collect::<Vec<_>>();
         assert!(r.vm.apply_template(Template::School));
-        assert_eq!(r.said.take().len(), 1);
+        // the edit, then what the School street did part by part
+        let said = r.said.take();
+        assert_eq!(said.len(), 2, "{said:?}");
+        assert!(said[1].contains("The speed limit there is 30 km/h."), "{said:?}");
+        assert!(said[1].contains("No raised table was added."), "{said:?}");
         assert_eq!(r.vm.view_now().revisions.len(), 1);
         assert_eq!(r.vm.view_now().revisions[0].label.key, "rev-template");
         assert!(r.vm.undo());
