@@ -42,8 +42,11 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 ///
 /// 8: a bus window of a lane that is parking the rest of the time keeps the way the lane runs (it was two-way).
 ///
+/// 9: the network is kept in its own shape (junctions with a provenance and a position, lanes with a direction and
+/// shape, corridors), which an earlier network cannot be read as.
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
-pub const IMPORTER_VERSION: u32 = 8;
+pub const IMPORTER_VERSION: u32 = 9;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {

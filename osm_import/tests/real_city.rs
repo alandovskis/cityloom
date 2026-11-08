@@ -31,11 +31,11 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     assert!(!net.left_hand);
     assert!(net.roads.len() > 150, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
-    for r in net.roads.iter().filter(|r| r.name.as_deref().is_some_and(|n| !n.trim().is_empty())) {
-        *degree.entry(r.from).or_insert(0) += 1;
-        *degree.entry(r.to).or_insert(0) += 1;
+    for r in net.roads.iter() {
+        *degree.entry(r.edge.from).or_insert(0) += 1;
+        *degree.entry(r.edge.to).or_insert(0) += 1;
     }
-    let candidates = net.nodes.iter().filter(|n| n.junction && (3..=5).contains(&degree.get(&n.id).copied().unwrap_or(0))).count();
+    let candidates = net.junctions.iter().filter(|n| n.junction && (3..=5).contains(&degree.get(&n.id).copied().unwrap_or(0))).count();
     let city = City::from_network(&net, "Plateau");
     let v = city.view(0);
     let junctions: Vec<_> = v.nodes.iter().filter(|n| n.junction).collect();
@@ -49,9 +49,9 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     }
     // only a bike lane runs both ways. (The extract holds the roads only, no `highway=cycleway` ways and no
     // `oneway=no` on a side, so it has no two-way track to count; `tests/import.rs` pins them on fixtures.)
-    assert!(net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.way == osm_import::Way::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
+    assert!(net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.direction == osm_import::Direction::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
     // the streets with a median in them
-    assert!(net.roads.iter().any(|r| r.lanes.iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
+    assert!(net.roads.iter().any(|r| r.base_lanes().iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
 }
 
 #[test]
@@ -68,8 +68,8 @@ fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
         medians += view.segments.iter().filter(|s| s.kind == median).count();
         buffers += view.segments.iter().filter(|s| s.kind == buffer).count();
     }
-    let others = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Other).count();
-    let curbs = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    let others = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Other).count();
+    let curbs = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
     assert_eq!(medians, others, "a median is a lane of the road that no lane uses, and nothing else");
     assert!(buffers > 0 && buffers <= curbs, "{buffers} buffers of {curbs} curbs: those beside a bike lane or a sidewalk are its own");
 }
@@ -80,7 +80,7 @@ fn every_street_of_the_montreal_extract_that_changed_width_with_the_buffers_is_f
     use osm_import::{BufferType, LaneKind};
     let net = import(PLATEAU).expect("the extract reads");
     let mut old = net.clone();
-    for l in old.roads.iter_mut().flat_map(|r| r.lanes.iter_mut()) {
+    for l in old.roads.iter_mut().flat_map(|r| r.base_lanes_mut().iter_mut()) {
         if l.kind == LaneKind::Buffer && !matches!(l.buffer_type, Some(BufferType::Planters | BufferType::Verge)) {
             (l.kind, l.buffer_type) = (LaneKind::Other, None);
         }
@@ -106,7 +106,7 @@ fn every_street_of_the_montreal_extract_that_changed_width_with_the_buffers_is_f
 fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
     // Every buffer of the extract is a curb that osm2streets inferred; none is a planter or a verge.
     let net = import(PLATEAU).expect("the extract reads");
-    let buffers = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    let buffers = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
     assert!(buffers > 100, "{buffers} buffers");
     let city = City::from_network(&net, "Plateau");
     let planting = cityloom_editor::shared::catalogue::kind_index("planting").unwrap();
@@ -462,8 +462,8 @@ mod two_way_track {
         let index = before
             .roads
             .iter()
-            .position(|r| r.osm_ways.contains(&330153470))
-            .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.osm_ways).collect::<Vec<_>>()));
+            .position(|r| r.has_way(330153470))
+            .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.provenance).collect::<Vec<_>>()));
         let view = store.open().view(0);
         let (uid, one_way_mm) = (view.edges[index].uid, view.edges[index].row_mm);
         assert_eq!(one_way_mm, 10_700, "as De Maisonneuve was imported until now");
@@ -474,9 +474,9 @@ mod two_way_track {
         assert!(store.keep_network(&now));
         let city = store.open();
         let view = city.view(0);
-        let index = now.roads.iter().position(|r| r.osm_ways.contains(&330153470)).unwrap();
-        let bike = now.roads[index].lanes.iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
-        assert_eq!((bike.way, bike.width_m), (osm_import::Way::Both, 3.0), "the street is two-way now");
+        let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();
+        let bike = now.roads[index].base_lanes().iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
+        assert_eq!((bike.direction, bike.width_m), (osm_import::Direction::Both, 3.0), "the street is two-way now");
         assert_eq!(view.edges[index].row_mm, one_way_mm, "and is shown as it was saved");
         assert!(view.edges[index].edited, "and the record made at {one_way_mm} mm still applies");
         assert_eq!(city.street_editor(view.edges[index].uid, 0).unwrap().snapshot(), edited);

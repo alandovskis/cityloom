@@ -17,7 +17,9 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 pub(crate) mod fixtures {
     use std::rc::Rc;
 
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{
+        Control, Direction, Edge, Junction, Lane, LaneKind, Network, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone,
+    };
 
     use crate::city::projection::{self, Projection};
     use crate::city::store::CityStore;
@@ -27,22 +29,25 @@ pub(crate) mod fixtures {
 
     /// One street of two driving lanes that bends: east for 80 m, then north-east to 100 m east and 50 m north.
     pub fn bent_network() -> Network {
-        let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
-        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
+        let node = |id: u32, x_m, y_m| Junction {
+            id: NodeId(id),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
+            position: Point::new(x_m, y_m),
+            junction: false,
+            control: Control::None,
+        };
+        let lane = |way| Lane { kind: LaneKind::Driving, direction: way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
         Network {
             left_hand: false,
-            nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
+            corridors: vec![],
+            junctions: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
-                id: 1,
-                osm_ways: vec![7],
-                osm_versions: Default::default(),
-                name: Some("Bend Street".into()),
-                highway: "residential".into(),
-                from: 1,
-                to: 2,
-                lanes: vec![lane(Way::Forward), lane(Way::Backward)],
-                speed_kmh: None,
-                points: vec![(0.0, 0.0), (80.0, 0.0), (100.0, 50.0)],
+                edge: Edge { id: RoadId(1), from: NodeId(1), to: NodeId(2) },
+                provenance: Provenance::of_ways([WayRef::new(7)]),
+                name: "Bend Street".into(),
+                road_type: RoadType::Local,
+                zones: vec![Zone::whole(vec![lane(Direction::Forward), lane(Direction::Backward)])],
+                points: vec![Point::new(0.0, 0.0), Point::new(80.0, 0.0), Point::new(100.0, 50.0)],
             }],
         }
     }
