@@ -89,7 +89,7 @@ fn side_of(a: &[Point], b: &[Point]) -> f64 {
 /// and run beside each other. Their ends become one node each, in the middle; a road left joining a node to itself
 /// by that (the crossing street's stub) is dropped.
 pub fn merge_dual_carriageways(net: &mut Network) {
-    let at = |net: &Network, id: NodeId| net.junctions.iter().find(|n| n.id == id).map(|n| Point::new(n.x_m, n.y_m));
+    let at = |net: &Network, id: NodeId| net.junctions.iter().find(|n| n.id == id).map(|n| n.position);
     let oriented: Vec<Option<Road>> = net.roads.iter().map(along).collect();
     let mut taken = vec![false; net.roads.len()];
     let mut pairs: Vec<(usize, usize)> = Vec::new();
@@ -178,7 +178,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         let mid = Point::<Local>::new((f.x_m() + t.x_m()) / 2.0, (f.y_m() + t.y_m()) / 2.0);
         for n in &mut net.junctions {
             if n.id == into {
-                (n.x_m, n.y_m) = (mid.x_m(), mid.y_m());
+                n.position = mid;
             }
         }
         if from != into {
@@ -236,8 +236,7 @@ mod tests {
         Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::with_version(id as i64, id as i32 + 100)]),
-            x_m,
-            y_m,
+            position: Point::new(x_m, y_m),
             junction: false,
             control: Control::None,
         }

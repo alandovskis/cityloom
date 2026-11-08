@@ -730,8 +730,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
     let node = |id, x_m| Junction {
         id: NodeId(id),
         provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
-        x_m,
-        y_m: 0.0,
+        position: Point::new(x_m, 0.0),
         junction: false,
         control: Control::None,
     };

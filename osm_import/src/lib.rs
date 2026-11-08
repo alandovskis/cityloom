@@ -342,8 +342,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         net.junctions.push(Junction {
             id: NodeId(id.0 as u32),
             provenance: Provenance::of_nodes(i.osm_ids.iter().map(|n| NodeRef { id: n.0, version: doc.nodes.get(n).and_then(|node| node.version) })),
-            x_m: c.x(),
-            y_m: height - c.y(),
+            position: Point::new(c.x(), height - c.y()),
             junction: i.kind == IntersectionKind::Intersection,
             control: match i.control {
                 IntersectionControl::Signalled => Control::Signals,

@@ -87,7 +87,7 @@ mod tests {
 
     fn network(roads: Vec<Road>) -> Network {
         let nodes = (1..=6)
-            .map(|id| Junction { id: NodeId(id), provenance: Provenance::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None })
+            .map(|id| Junction { id: NodeId(id), provenance: Provenance::default(), position: Point::new(0.0, 0.0), junction: false, control: Control::None })
             .collect();
         Network { left_hand: false, junctions: nodes, roads, corridors: vec![] }
     }

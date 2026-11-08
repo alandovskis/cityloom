@@ -222,12 +222,12 @@ impl Layout {
         let nodes: Vec<_> = network.junctions.iter().filter(|n| degree.contains_key(&n.id)).collect();
         let index: BTreeMap<NodeId, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
         let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
-        let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.x_m), y.max(n.y_m)));
+        let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.position.x_m()), y.max(n.position.y_m())));
         let origin_m = (!nodes.is_empty()).then_some((min_x, max_y));
         let mm_of = |x_m: f64, y_m: f64| (((x_m - min_x) * 1000.0).round() as i32, ((max_y - y_m) * 1000.0).round() as i32);
         let node_mm = |id: NodeId| {
             let n = nodes[index[&id]];
-            mm_of(n.x_m, n.y_m)
+            mm_of(n.position.x_m(), n.position.y_m())
         };
         let edges: Vec<EdgeDef> = roads
             .iter()
@@ -266,8 +266,8 @@ impl Layout {
             .map(|n| {
                 let junction = n.junction && (MIN_ARMS..=MAX_ARMS).contains(&degree[&n.id]);
                 NodeDef {
-                    x_mm: ((n.x_m - min_x) * 1000.0).round() as i32,
-                    y_mm: ((max_y - n.y_m) * 1000.0).round() as i32,
+                    x_mm: ((n.position.x_m() - min_x) * 1000.0).round() as i32,
+                    y_mm: ((max_y - n.position.y_m()) * 1000.0).round() as i32,
                     junction,
                     control: if junction { control_of(n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
@@ -538,8 +538,7 @@ mod tests {
         let node = |id: u32, x_m, y_m, junction, control| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64 * 10)]),
-            x_m,
-            y_m,
+            position: Point::new(x_m, y_m),
             junction,
             control,
         };
@@ -644,8 +643,7 @@ mod tests {
             net.junctions.push(Junction {
                 id: NodeId(id),
                 provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
-                x_m: x,
-                y_m: y,
+                position: Point::new(x, y),
                 junction: false,
                 control: Control::None,
             });

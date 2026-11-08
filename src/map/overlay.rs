@@ -343,8 +343,7 @@ mod tests {
         let node = |id: u32, x_m, y_m| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
-            x_m,
-            y_m,
+            position: Point::new(x_m, y_m),
             junction: false,
             control: Control::None,
         };
@@ -528,8 +527,7 @@ mod tests {
     /// One straight street, east for 100 m, 8 m wide.
     fn straight_road() -> Network {
         let mut n = bent_road();
-        n.junctions[1].x_m = 100.0;
-        n.junctions[1].y_m = 0.0;
+        n.junctions[1].position = Point::new(100.0, 0.0);
         n.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
         n.roads[0].base_lanes_mut().iter_mut().for_each(|l| l.width_m = 4.0);
         n

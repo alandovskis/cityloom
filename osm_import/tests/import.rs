@@ -59,7 +59,7 @@ fn an_import_can_be_clipped_to_a_box_and_keeps_only_what_lies_in_it() {
     assert!(clipped.roads.len() > 10, "{} roads", clipped.roads.len());
     assert!(clipped.roads.len() < all.roads.len() / 2, "{} of {}", clipped.roads.len(), all.roads.len());
     // nothing lies far outside the box: the data's own corner is 400 m away, the box 150 m
-    let (min_x, max_x) = clipped.junctions.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.x_m), b.max(n.x_m)));
+    let (min_x, max_x) = clipped.junctions.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.position.x_m()), b.max(n.position.x_m())));
     assert!(max_x - min_x < 400.0, "{} m wide", max_x - min_x);
     // no box is the same as `import`
     assert_eq!(osm_import::import_in(PLATEAU, None).unwrap(), all);

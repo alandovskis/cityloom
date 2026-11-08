@@ -30,8 +30,7 @@ pub(crate) mod fixtures {
         let node = |id: u32, x_m, y_m| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
-            x_m,
-            y_m,
+            position: Point::new(x_m, y_m),
             junction: false,
             control: Control::None,
         };

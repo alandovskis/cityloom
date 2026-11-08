@@ -538,8 +538,7 @@ mod tests {
         let node = |id: u32, x_m, junction| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
-            x_m,
-            y_m: 0.0,
+            position: Point::new(x_m, 0.0),
             junction,
             control: Control::None,
         };

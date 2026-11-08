@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{NodeId, NodeRef, Provenance};
+use crate::{NodeId, NodeRef, Point, Provenance};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -22,8 +22,8 @@ pub struct Junction {
     pub id: NodeId,
     /// The OSM nodes it stands for, each with its version when known; the key an edit is kept under.
     pub provenance: Provenance,
-    pub x_m: f64,
-    pub y_m: f64,
+    /// Where it lies, in metres from the south-west corner of the data.
+    pub position: Point,
     /// Where three or more roads meet and traffic gives way, as opposed to a street running off the data or ending.
     pub junction: bool,
     pub control: Control,
@@ -44,7 +44,7 @@ struct JunctionWire {
 impl From<JunctionWire> for Junction {
     fn from(w: JunctionWire) -> Junction {
         let nodes = w.osm_nodes.iter().map(|&id| NodeRef { id, version: w.osm_versions.get(&id).copied() });
-        Junction { id: w.id, provenance: Provenance::of_nodes(nodes), x_m: w.x_m, y_m: w.y_m, junction: w.junction, control: w.control }
+        Junction { id: w.id, provenance: Provenance::of_nodes(nodes), position: Point::new(w.x_m, w.y_m), junction: w.junction, control: w.control }
     }
 }
 
@@ -54,8 +54,8 @@ impl From<Junction> for JunctionWire {
             id: n.id,
             osm_nodes: n.provenance.nodes().map(|r| r.id).collect(),
             osm_versions: n.provenance.nodes().filter_map(|r| Some((r.id, r.version?))).collect(),
-            x_m: n.x_m,
-            y_m: n.y_m,
+            x_m: n.position.x_m(),
+            y_m: n.position.y_m(),
             junction: n.junction,
             control: n.control,
         }
@@ -67,7 +67,7 @@ mod tests {
     use super::*;
 
     fn node(provenance: Provenance) -> Junction {
-        Junction { id: NodeId(1), provenance, x_m: 1.0, y_m: 2.0, junction: false, control: Control::None }
+        Junction { id: NodeId(1), provenance, position: Point::new(1.0, 2.0), junction: false, control: Control::None }
     }
 
     #[test]
