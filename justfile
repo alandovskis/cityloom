@@ -1,6 +1,6 @@
 # Common operations. `just` lists them.
 
-wasm_bindgen := `sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' Cargo.toml`
+wasm_bindgen := `sed -n 's/^wasm-bindgen = "\(.*\)"/\1/p' crates/cityloom_editor/Cargo.toml`
 
 [private]
 default:
@@ -31,7 +31,7 @@ build:
 test:
     @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
     cargo test --workspace --features cityloom_server/test-provider
-    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
+    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
 
 # A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
 db port="55432":
@@ -75,7 +75,7 @@ e2e-ui *args: build server
 e2e-integration *args: build server
     cd e2e && npx playwright test --project=integration {{args}}
 
-# E2E tier: the whole path from data to page. Packs the e2e fixtures (`cityloom_prepare pack`) into target/e2e-archive and runs `archive.spec.ts` and the delivery specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1). Builds first, like `e2e`.
+# E2E tier: the whole path from data to page. Packs the e2e fixtures (`citymodel_builder pack`) into target/e2e-archive and runs `archive.spec.ts` and the delivery specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1). Builds first, like `e2e`.
 e2e-archive *args: build server
     scripts/e2e-archive.sh {{args}}
 
@@ -102,13 +102,13 @@ sonar-reports:
     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool), build the basemap in web/data/basemap (needs Java 21+) and pack both into data/montreal.cityloom. `just prepare --refresh` downloads a newer extract. Runs `cityloom_prepare prepare`; arguments go to it.
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool), build the basemap in web/data/basemap (needs Java 21+) and pack both into data/montreal.cityloom. `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
 prepare *args:
-    cargo run --release -q -p cityloom_prepare -- prepare {{args}}
+    cargo run --release -q -p citymodel_builder -- prepare {{args}}
 
-# Pack web/data/metro and web/data/basemap into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
+# Pack web/data/metro and web/data/basemap into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `citymodel_builder pack`.
 pack *args:
-    cargo run --release -q -p cityloom_prepare -- pack {{args}}
+    cargo run --release -q -p citymodel_builder -- pack {{args}}
 
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:

@@ -17,7 +17,7 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
 Only a pull request is narrowed. A push to main and a manual run run every spec (a push may still be docs_only),
 and so does anything doubtful: no files, a base that is not there, a file no rule names. A version bump alone
-(Cargo.toml's version and the editor's line of Cargo.lock) is not a change to those files.
+(the version in the editor's Cargo.toml and its line of Cargo.lock) is not a change to those files.
 
 Standard library only; scripts/include/tests/test_ci_changes.py tests it.
 """
@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+EDITOR_TOML = "crates/cityloom_editor/Cargo.toml"  # where the product's version is
 TIERS = ("ui", "integration", "e2e")  # the tiers of e2e/tiers.json, and the CI job of each
 
 
@@ -172,7 +173,7 @@ def changed_files(base: str, head: str) -> list[str] | None:
         return None  # only a commit id or HEAD goes to git
     try:
         files = [f for f in git("diff", "--name-only", "--no-renames", base, head, "--").splitlines() if f]
-        for name, norm in (("Cargo.toml", normalize_toml), ("Cargo.lock", normalize_lock)):
+        for name, norm in ((EDITOR_TOML, normalize_toml), ("Cargo.lock", normalize_lock)):
             if name in files and norm(git("show", f"{base}:{name}")) == norm(git("show", f"{head}:{name}")):
                 files.remove(name)
         return files

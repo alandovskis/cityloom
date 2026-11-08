@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { expect, PLATEAU_PBF, PLATEAU_TILES, placesOnMap, test } from "./fixtures";
 
-// Run by `just e2e-archive`: the server unpacked the archive `cityloom_prepare pack` made of the fixtures, and the
+// Run by `just e2e-archive`: the server unpacked the archive `citymodel_builder pack` made of the fixtures, and the
 // fixtures do not route the road data or the basemap (see fixtures.ts), so what the page gets is what the server
 // served from it.
 test.skip(!process.env.E2E_ARCHIVE, "needs `just e2e-archive`");
