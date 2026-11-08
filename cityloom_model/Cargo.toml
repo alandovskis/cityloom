@@ -1,5 +1,5 @@
 [package]
-name = "osm_network"
+name = "cityloom_model"
 version = "0.1.0"
 edition = "2024"
 description = "The plain street network that osm_import produces and the editor reads."

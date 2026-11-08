@@ -1352,7 +1352,7 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
     use crate::shared::said::say_now;
-    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         vm_in(Locale::En)

@@ -63,7 +63,7 @@ français sont dans `docs/glossary-fr-ca.md`.
 L’espace de travail compte quatre caisses :
 
 - `cityloom_editor` (la caisse racine) est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
-- `osm_network` est le type de réseau simple (serde seulement).
+- `cityloom_model` est le type de réseau simple (serde seulement).
 - `osm_import` exécute [osm2streets](https://github.com/a-b-street/osm2streets) et remplit le réseau. Il est construit
   comme son propre module WebAssembly, `web/pkg/osm_import*`, que `web/city.js` charge à la première ouverture d’un
   lieu. Cela garde osm2streets hors du module de l’éditeur.

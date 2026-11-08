@@ -17,7 +17,7 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 pub(crate) mod fixtures {
     use std::rc::Rc;
 
-    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
 
     use crate::city::projection::{self, Projection};
     use crate::city::store::CityStore;

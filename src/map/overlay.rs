@@ -329,7 +329,7 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
 mod tests {
     use std::collections::BTreeSet;
 
-    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
     use serde_json::Value;
 
     use super::*;

@@ -723,7 +723,7 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
 /// The home page is built before the area's roads are read, so that its search does not wait for them.
 #[test]
 fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
-    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, Road, Way};
     let (ports, _, storage) = crate::shared::ports::test_ports();
     let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     assert!(vm.view().edges.is_empty(), "no roads are kept yet");

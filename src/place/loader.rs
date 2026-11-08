@@ -124,7 +124,7 @@ impl Loader {
                 finish(
                     read.map_err(problem)
                         .and_then(|json| serde_json::from_str(&json).map_err(|e| Said::new("place-roads-not-understood").with("e", Arg::Text(e.to_string()))))
-                        .and_then(|network: osm_network::Network| {
+                        .and_then(|network: cityloom_model::Network| {
                             if network.roads.is_empty() {
                                 return Err(Said::new("place-no-streets").with("area", label(&area)));
                             }

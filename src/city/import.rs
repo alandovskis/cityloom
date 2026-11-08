@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use osm_network::{BufferType, Control, Lane, LaneKind, Network, Way};
+use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Way};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -300,7 +300,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use osm_network::{BufferType, Control, Lane, LaneKind, Node, Road, Way};
+    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, Road, Way};
 
     use super::*;
     use crate::junction::model::CONTROLS;

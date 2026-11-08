@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use osm_network::Network;
+use cityloom_model::Network;
 
 use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits, JUNCTIONS, STREETS};
 use crate::city::model::{City, Layout};
@@ -534,7 +534,7 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
+        use cityloom_model::{Control, Lane, LaneKind, Node, Road, Way};
         let node =
             |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction, control: Control::None };
         let lane = |kind, way| Lane { kind, way, width_m: 3.0, buffer_type: None, hours: None };
@@ -559,7 +559,7 @@ mod tests {
     /// `tiny_network` with a sidewalk and a 0.1 m curb on each side. `legacy` makes the curb as importer version 4 did:
     /// a lane of its own that the catalogue makes a 600 mm median.
     fn curbed_network(legacy: bool) -> Network {
-        use osm_network::{BufferType, Lane, LaneKind, Way};
+        use cityloom_model::{BufferType, Lane, LaneKind, Way};
         let mut network = tiny_network();
         let curb = Lane {
             kind: if legacy { LaneKind::Other } else { LaneKind::Buffer },
@@ -592,7 +592,7 @@ mod tests {
     /// `tiny_network` with a bike lane beside the road: one-way, 1.5 m, as a track mapped as ways of its own was
     /// read before those ways were fetched, or two-way, 3 m, as it is read now.
     fn network_with_bike_lane(two_way: bool) -> Network {
-        use osm_network::{Lane, LaneKind, Way};
+        use cityloom_model::{Lane, LaneKind, Way};
         let mut network = tiny_network();
         let bike = Lane {
             kind: LaneKind::Bike,
