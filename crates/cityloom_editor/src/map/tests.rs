@@ -901,10 +901,10 @@ mod report {
     }
 
     #[test]
-    fn the_report_has_a_cover_and_a_summary_page() {
+    fn the_report_has_a_cover_a_summary_and_a_sources_page() {
         let (vm, ..) = sample_in(Locale::En);
         let data = vm.report_data();
-        assert_eq!(data.pages.len(), 2);
+        assert_eq!(data.pages.len(), 3);
         assert_eq!(data.lang, "en");
         let cover = texts(&data.pages[0]);
         assert!(matches!(&data.pages[0][0], Block::Heading { level: 1, text } if *text == vm.title()));
@@ -951,6 +951,18 @@ mod report {
         assert!(vm.view().failing > 0, "the edit must break a check");
         let rows = table(&vm.report_data());
         assert_eq!((rows[1][1].as_str(), rows[2][1].as_str(), rows[2][2].as_str()), ("1", vm.view().failing.to_string().as_str(), "Fail"));
+    }
+
+    #[test]
+    fn the_sources_page_lists_each_cited_rule_with_its_references_and_says_the_rest_are_placeholders() {
+        let (vm, ..) = sample_in(Locale::En);
+        let page = texts(&vm.report_data().pages[2]).join("\n");
+        assert!(page.contains("Room for the transition") && page.contains("Lane drops"), "{page}");
+        assert!(page.contains("Federal Highway Administration") && page.contains("https://mutcd.fhwa.dot.gov/"), "{page}");
+        assert!(page.contains("placeholder"), "{page}");
+        let (fr, ..) = sample_in(Locale::FrCa);
+        let page = texts(&fr.report_data().pages[2]).join("\n");
+        assert!(page.contains("Place pour la transition") && page.contains("provisoire"), "{page}");
     }
 
     #[test]

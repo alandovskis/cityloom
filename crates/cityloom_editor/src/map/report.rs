@@ -35,8 +35,47 @@ pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportD
     ReportData {
         lang: i18n.locale_now().tag().to_string(),
         title: i18n.tr_now("map-report-title", &Args::new().str("area", facts.area.clone())),
-        pages: vec![cover, summary(facts, i18n)],
+        pages: vec![cover, summary(facts, i18n), sources(i18n)],
     }
+}
+
+/// The sources of the rules that name one, then the notice that the others are placeholders. Read from the registry
+/// the pages read, so the report cannot cite what a page does not.
+fn sources(i18n: &I18n) -> Vec<Block> {
+    let say = |key: &str| i18n.tr_now(key, &Args::new());
+    let units = crate::shared::units::Units::Metres;
+    let rows = crate::shared::sources::cited()
+        .map(|(rule, label)| {
+            let n = crate::shared::sources::citation(rule);
+            let sources = n
+                .sources
+                .iter()
+                .map(|s| {
+                    let args = Args::new()
+                        .str("publisher", s.publisher)
+                        .str("title", s.title)
+                        .str("jurisdiction", crate::shared::said::say_now(i18n, units, &s.jurisdiction));
+                    let text = i18n.tr_now("src-source", &args);
+                    match s.url {
+                        Some(url) => format!("{text} {url}"),
+                        None => text,
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            vec![say(label), say(n.confidence.key()), crate::shared::said::say_now(i18n, units, &n.applies), sources]
+        })
+        .collect();
+    vec![
+        Block::Heading { level: 2, text: say("map-report-sources") },
+        Block::Paragraph { text: say("map-report-sources-intro") },
+        Block::Table {
+            caption: say("map-report-sources-caption"),
+            head: vec![say("map-report-col-rule"), say("map-report-col-status"), say("map-report-col-applies"), say("map-report-col-sources")],
+            rows,
+        },
+        Block::Paragraph { text: say("map-report-sources-placeholders") },
+    ]
 }
 
 fn summary(facts: &Facts, i18n: &I18n) -> Vec<Block> {

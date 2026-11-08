@@ -19,6 +19,8 @@ pub mod provenance;
 pub mod random;
 pub mod said;
 pub mod shortcut;
+pub mod sources;
+pub mod sources_view;
 pub mod store;
 pub mod symbols;
 #[cfg(test)]
