@@ -34,6 +34,10 @@ impl ShownCalming {
         if self.kind == Kind::Chicane {
             return !self.buildouts.is_empty();
         }
+        // A modal filter is a block: whole or not at all.
+        if self.kind == Kind::ModalFilter {
+            return self.whole;
+        }
         self.plateau.0 >= self.along.0 && self.plateau.1 <= self.along.1
     }
 }

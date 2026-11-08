@@ -38,8 +38,8 @@ mod map_uses;
 mod stop;
 mod stop_end;
 pub use calming::{
-    CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, Kind as CalmingKind,
-    MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
+    CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, FILTER_HEIGHT_MM,
+    Kind as CalmingKind, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
 };
 pub use calming::{CalmingCell, CalmingStripView, CalmingView};
 pub use calming_shown::ShownCalming;

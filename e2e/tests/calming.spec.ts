@@ -175,4 +175,46 @@ test.describe("raised tables and crossings", () => {
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#drawing .iso-chicane")).toHaveCount(0);
   });
+  test("a modal filter is added with the tools, drawn as one block, saved as version 15 and undone", async ({
+    page,
+  }) => {
+    await openCalmingStreet(page, 30);
+    await page.locator("#calming-0").click();
+    await page.locator("#calming-kind").selectOption("3");
+    // Only a chicane has a side to start on.
+    await expect(page.locator("#calming-first")).toHaveCount(0);
+    await page.locator("#calming-length").fill("2");
+    await page.locator("#calming-add").click();
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter.*2\.0 m long/);
+
+    // The 2.5D draws one block, names it, and counts it apart from the tables and chicanes.
+    await expect(page.locator("#drawing .iso-filter").first()).toBeAttached();
+    await expect(page.locator("#drawing .iso-filter [data-uid]")).toHaveCount(0);
+    await expect(page.locator("#drawing .iso-table, #drawing .iso-chicane")).toHaveCount(0);
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /modal filter/);
+    await page.screenshot({ path: "test-results/modal-filter.png", fullPage: true });
+
+    // Its checks include the bus-lane and passage rows, and the document takes version 15 only while one is held.
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#checks li").filter({ hasText: "Modal filters clear of bus lanes" })).toHaveCount(1);
+    await expect(
+      page.locator("#checks li").filter({ hasText: "Modal filters passable on foot and by bike" }),
+    ).toHaveCount(1);
+    await expect.poll(() => editsVersion(page)).toBe(15);
+    await page.reload();
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter/);
+
+    await page.locator("#undo").click();
+    await expect(cells(page)).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-filter")).toHaveCount(0);
+    await expect.poll(() => editsVersion(page)).not.toBe(15);
+  });
+
+  test("a modal filter shorter than its minimum is refused", async ({ page }) => {
+    await openCalmingStreet(page, 30);
+    await addElement(page, 0, 0.5, "3");
+    await expect(cells(page)).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-filter")).toHaveCount(0);
+  });
 });

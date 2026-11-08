@@ -2041,7 +2041,7 @@ fn the_calming_strip_has_a_cell_per_element_and_stretch_one_tab_stop_and_the_cho
     assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
     assert!(h.contains("aria-label=\"Raised table, 0.0 m to 7.0 m, 7.0 m long, 1 of 2\""), "{h}");
     assert!(h.contains("aria-label=\"Free, 7.0 m to 40.0 m, 33.0 m long, 2 of 2\""), "{h}");
-    assert!(h.contains(">Raised tables, crossings and chicanes along the street</h2>") && h.contains("class=\"sr-only\""), "{h}");
+    assert!(h.contains(">Raised tables, crossings, chicanes and modal filters along the street</h2>") && h.contains("class=\"sr-only\""), "{h}");
     assert!(h.contains("class=\"calming-cell gap\"") || h.contains("calming-cell gap"), "the free stretch is marked: {h}");
 }
 
@@ -2061,7 +2061,7 @@ fn the_calming_strip_shows_a_free_stretch_chosen_and_nothing_without_a_length() 
 fn the_calming_strip_follows_the_language() {
     let s = calming_street(Locale::FrCa);
     let h = calming_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
-    assert!(h.contains(">Plateaux, passages surélevés et chicanes le long de la rue</h2>"), "{h}");
+    assert!(h.contains(">Plateaux, passages surélevés, chicanes et filtres modaux le long de la rue</h2>"), "{h}");
     assert!(h.contains("aria-label=\"Plateau surélevé, de 0,0 m à 7,0 m, 7,0 m de long, 1 sur 2\""), "{h}");
 }
 
@@ -2087,12 +2087,19 @@ fn the_calming_tools_render_labelled_controls_with_the_kinds_in_order_and_the_de
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
     }
     assert!(h.contains("<select id=\"calming-kind\""), "{h}");
-    assert_eq!(count(&h, "<option"), 3, "{h}");
+    assert_eq!(count(&h, "<option"), 4, "{h}");
     let table = h.find("value=\"0\"").unwrap();
     let crossing = h.find("value=\"1\"").unwrap();
     let chicane = h.find("value=\"2\"").unwrap();
-    assert!(table < crossing && crossing < chicane, "{h}");
-    assert!(h.contains(">Raised table</option>") && h.contains(">Raised crossing</option>") && h.contains(">Chicane</option>"), "{h}");
+    let filter = h.find("value=\"3\"").unwrap();
+    assert!(table < crossing && crossing < chicane && chicane < filter, "{h}");
+    assert!(
+        h.contains(">Raised table</option>")
+            && h.contains(">Raised crossing</option>")
+            && h.contains(">Chicane</option>")
+            && h.contains(">Modal filter</option>"),
+        "{h}"
+    );
     assert!(!h.contains("calming-first"), "only a chicane has a side to start on: {h}");
     assert!(h.contains("placeholder=\"7.0\""), "the default length, in the locale's units: {h}");
     for id in ["calming-add", "calming-remove"] {

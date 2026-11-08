@@ -44,7 +44,11 @@ pub const ZONE_SPEED_VERSION: u32 = CALMING_VERSION + 1;
 /// document as a newer one. Tables and crossings alone keep `CALMING_VERSION`.
 pub const CHICANE_VERSION: u32 = ZONE_SPEED_VERSION + 1;
 /// The newest version this build reads.
-pub const NEWEST: u32 = CHICANE_VERSION;
+/// What a document is written as while a street record holds a modal filter (a `Street.calming` element of the kind
+/// `modal_filter`): a build before it fails to read the kind, so it must treat the document as a newer one. Chicanes,
+/// tables and crossings alone keep their own versions.
+pub const FILTER_VERSION: u32 = CHICANE_VERSION + 1;
+pub const NEWEST: u32 = FILTER_VERSION;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -96,7 +100,8 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as, the first that applies: `CHICANE_VERSION` while a street record holds a
+    /// The version the document is written as, the first that applies: `FILTER_VERSION` while a street record holds a
+    /// modal filter, `CHICANE_VERSION` while one holds a
     /// chicane, `ZONE_SPEED_VERSION` while a zone of a street
     /// record has a speed of its own, `CALMING_VERSION` while a street record holds
     /// raised tables or crossings, `GREEN_VERSION` while one holds green infrastructure, `SIGNAL_VERSION` while a
@@ -114,7 +119,8 @@ impl Edits {
         let calming = self.streets.values().any(|r| !r.street.calming.is_empty());
         let zone_speed = self.streets.values().any(|r| r.street.zones.iter().any(|z| !z.speed.is_undecided()));
         let chicane = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::Chicane));
-        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed, chicane)
+        let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
+        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter)
     }
 
     pub fn to_json(&self) -> String {
@@ -125,8 +131,21 @@ impl Edits {
 
 /// The version a document is written as, from what its street records hold.
 #[allow(clippy::too_many_arguments)]
-fn version_for(zones: bool, speed: bool, curb: bool, stops: bool, signal: bool, green: bool, calming: bool, zone_speed: bool, chicane: bool) -> u32 {
-    if chicane {
+fn version_for(
+    zones: bool,
+    speed: bool,
+    curb: bool,
+    stops: bool,
+    signal: bool,
+    green: bool,
+    calming: bool,
+    zone_speed: bool,
+    chicane: bool,
+    filter: bool,
+) -> u32 {
+    if filter {
+        FILTER_VERSION
+    } else if chicane {
         CHICANE_VERSION
     } else if zone_speed {
         ZONE_SPEED_VERSION
@@ -194,6 +213,14 @@ fn holds_chicane(doc: &Map<String, Value>) -> bool {
     })
 }
 
+/// Whether any record of the streets section holds a modal filter among its raised elements (decided on the raw JSON).
+fn holds_filter(doc: &Map<String, Value>) -> bool {
+    let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
+    streets.any(|(_, r)| {
+        r.pointer("/street/calming").and_then(Value::as_array).is_some_and(|c| c.iter().any(|e| e.get("kind").and_then(Value::as_str) == Some("modal_filter")))
+    })
+}
+
 /// Whether any record of the streets section holds a non-empty list of raised elements (decided on the raw JSON).
 fn holds_calming(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
@@ -228,7 +255,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
-        // and 12 with raised elements, 13 with a zone's speed and 14 with chicanes.
+        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes and 15 with modal filters.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
@@ -243,6 +270,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_calming(&doc),
         holds_zone_speed(&doc),
         holds_chicane(&doc),
+        holds_filter(&doc),
     );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
@@ -344,7 +372,8 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `CHICANE_VERSION` while any street record holds a chicane, else
+    /// The document as text, its version `FILTER_VERSION` while any street record holds a modal filter, else
+    /// `CHICANE_VERSION` while any holds a chicane, else
     /// `ZONE_SPEED_VERSION` while any zone has a speed of its own, else
     /// `CALMING_VERSION` while any street record holds raised elements, else
     /// `GREEN_VERSION` while any holds green elements, else
@@ -364,6 +393,7 @@ impl Draft {
             holds_calming(&doc),
             holds_zone_speed(&doc),
             holds_chicane(&doc),
+            holds_filter(&doc),
         );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
@@ -608,7 +638,8 @@ mod tests {
         assert_eq!(CALMING_VERSION, 12);
         assert_eq!(ZONE_SPEED_VERSION, 13);
         assert_eq!(CHICANE_VERSION, 14);
-        assert_eq!(NEWEST, CHICANE_VERSION);
+        assert_eq!(FILTER_VERSION, 15);
+        assert_eq!(NEWEST, FILTER_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -758,6 +789,47 @@ mod tests {
         assert_eq!(back.written_version(), ZONE_SPEED_VERSION);
     }
 
+    fn filter_record() -> StreetRecord {
+        let mut r = street_record();
+        r.street.calming.push(crate::street::model::Calming {
+            from_mm: 10_000,
+            length_mm: 2_000,
+            kind: crate::street::model::CalmingKind::ModalFilter,
+            first: None,
+        });
+        r
+    }
+
+    #[test]
+    fn a_modal_filter_is_written_as_filter_version_and_chicanes_alone_keep_theirs() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), chicane_record());
+        assert_eq!(e.written_version(), CHICANE_VERSION, "a chicane is readable by the build before filters");
+        e.streets.insert("w8~n1~n2".into(), filter_record());
+        assert_eq!(e.written_version(), FILTER_VERSION);
+        assert!(e.to_json().starts_with(r#"{"version":15,"#), "{}", e.to_json());
+        assert!(e.to_json().contains(r#""kind":"modal_filter""#), "{}", e.to_json());
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.streets["w8~n1~n2"].street.calming, filter_record().street.calming);
+        // the draft decides on the raw JSON, and drops back when the filter goes
+        let mut d = Draft::new();
+        assert!(d.put_street("w7~n1~n2", &chicane_record()));
+        assert!(d.put_street("w8~n1~n2", &filter_record()));
+        assert!(d.to_json().contains(r#""version":15"#), "{}", d.to_json());
+        d.remove_street("w8~n1~n2");
+        assert!(d.to_json().contains(r#""version":14"#), "{}", d.to_json());
+    }
+
+    #[test]
+    fn a_document_of_the_version_before_filters_is_read_and_rewritten_as_it_is() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), chicane_record());
+        let text = e.to_json();
+        assert!(text.contains(r#""version":14"#));
+        let Document::Current(back) = parse(Some(&text)) else { panic!("not read") };
+        assert_eq!(back.written_version(), CHICANE_VERSION);
+    }
+
     fn zone_speed_record() -> StreetRecord {
         let mut r = zoned_record();
         r.street.zones[1].speed = crate::street::model::Speed::Kmh(30);
@@ -797,11 +869,11 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, CHICANE_VERSION);
+        assert_eq!(NEWEST, FILTER_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
-        let own = format!(r#"{{"version":{CHICANE_VERSION},"streets":{{}},"junctions":{{}}}}"#);
+        let own = format!(r#"{{"version":{FILTER_VERSION},"streets":{{}},"junctions":{{}}}}"#);
         assert!(matches!(parse(Some(&own)), Document::Current(_)));
     }
 
