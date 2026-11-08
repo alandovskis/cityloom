@@ -363,3 +363,15 @@ fn every_lane_of_an_imported_road_is_laid_out_along_it() {
         }
     }
 }
+
+#[test]
+fn an_imported_network_has_corridors_for_the_users_its_lanes_serve() {
+    use osm_import::UserClass;
+    let net = import(RENE_LEVESQUE).unwrap();
+    assert!(net.corridors_of(UserClass::Driver).count() >= 1 && net.corridors_of(UserClass::Pedestrian).count() >= 1);
+    for corridor in &net.corridors {
+        assert!(corridor.roads.iter().all(|id| net.roads.iter().any(|r| r.id == *id)), "{corridor:?} names a road the network lacks");
+    }
+    // the boulevard's bus lane is a timed one, so the boulevard is a transit corridor
+    assert!(net.corridors_of(UserClass::Transit).next().is_some());
+}

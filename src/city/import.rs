@@ -560,6 +560,7 @@ mod tests {
         };
         Network {
             left_hand: false,
+            corridors: vec![],
             nodes: vec![
                 node(1, 0.0, 0.0, true, Control::Signals),
                 node(2, 0.0, 200.0, false, Control::None),

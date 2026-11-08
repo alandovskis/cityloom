@@ -295,6 +295,7 @@ mod tests {
         };
         Network {
             left_hand: false,
+            corridors: vec![],
             nodes: vec![node(1, 0.0, 0.0), node(2, 300.0, 0.0), node(3, 0.0, 100.0), node(4, 0.0, -100.0)],
             roads: vec![east, west, cross(3, 1, 3, 100.0), cross(4, 1, 4, -100.0)],
         }

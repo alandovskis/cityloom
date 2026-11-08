@@ -36,6 +36,8 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     cityloom_model::merge::merge_dual_carriageways(&mut network);
     // merging changes a road's lanes, so their shapes are laid out last
     network.roads.iter_mut().for_each(Road::lay_out_lanes);
+    // and the corridors, which name the roads that are left
+    network.derive_corridors();
     Ok(network)
 }
 

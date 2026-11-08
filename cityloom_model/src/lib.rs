@@ -3,6 +3,7 @@
 //!
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.
 
+mod corridor;
 mod hours;
 mod lane;
 pub mod merge;
@@ -14,6 +15,7 @@ mod road;
 mod road_type;
 mod zone;
 
+pub use corridor::{Corridor, UserClass};
 pub use hours::{Hours, Window};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
