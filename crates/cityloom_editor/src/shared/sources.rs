@@ -42,70 +42,47 @@ pub struct Source {
     pub url: Option<&'static str>,
 }
 
+const fn doc(id: &'static str, title: &'static str, publisher: &'static str, jurisdiction: &'static str, url: Option<&'static str>) -> Source {
+    Source { id, title, publisher, jurisdiction, url }
+}
+
+const MTQ: &str = "Ministère des Transports du Québec";
+const QC: &str = "src-jurisdiction-qc";
+
 pub const SOURCES: &[Source] = &[
-    Source {
-        id: "mutcd-2003",
-        title: "Manual on Uniform Traffic Control Devices, 2003 edition, Part 3, Figure 3B-12",
-        publisher: "Federal Highway Administration",
-        jurisdiction: "src-jurisdiction-us",
-        url: Some("https://mutcd.fhwa.dot.gov/pdfs/2003r1/pdf_index.htm"),
-    },
-    Source {
-        id: "york-ds-100",
-        title: "Design Standard DS-100, 2023 (lane-addition tapers, based on the TAC guide)",
-        publisher: "Regional Municipality of York",
-        jurisdiction: "src-jurisdiction-ca",
-        url: None,
-    },
-    Source {
-        id: "nacto-bikeway",
-        title: "Urban Bikeway Design Guide (bike lane tapers of at least 1:5)",
-        publisher: "National Association of City Transportation Officials",
-        jurisdiction: "src-jurisdiction-us",
-        url: Some("https://nacto.org/publication/urban-bikeway-design-guide/"),
-    },
-    Source {
-        id: "mtq-t1-c1",
-        title: "Conception routière, Tome I, chapitre 1, Classification fonctionnelle (2021-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
-    Source {
-        id: "mtq-t1-c7",
-        title: "Conception routière, Tome I, chapitre 7, Distance de visibilité (2024-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
-    Source {
-        id: "mtq-t1-c8",
-        title: "Conception routière, Tome I, chapitre 8, Carrefours plans (2026-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
-    Source {
-        id: "mtq-t1-c14",
-        title: "Conception routière, Tome I, chapitre 14, Stationnement (2026-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
-    Source {
-        id: "mtq-t1-d14",
-        title: "Conception routière, Tome I, chapitre 14, dessins normalisés 001 et 002, Stationnement sur rue en parallèle (2006-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
-    Source {
-        id: "mtq-t1-c15",
-        title: "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)",
-        publisher: "Ministère des Transports du Québec",
-        jurisdiction: "src-jurisdiction-qc",
-        url: None,
-    },
+    doc(
+        "mutcd-2003",
+        "Manual on Uniform Traffic Control Devices, 2003 edition, Part 3, Figure 3B-12",
+        "Federal Highway Administration",
+        "src-jurisdiction-us",
+        Some("https://mutcd.fhwa.dot.gov/pdfs/2003r1/pdf_index.htm"),
+    ),
+    doc(
+        "york-ds-100",
+        "Design Standard DS-100, 2023 (lane-addition tapers, based on the TAC guide)",
+        "Regional Municipality of York",
+        "src-jurisdiction-ca",
+        None,
+    ),
+    doc(
+        "nacto-bikeway",
+        "Urban Bikeway Design Guide (bike lane tapers of at least 1:5)",
+        "National Association of City Transportation Officials",
+        "src-jurisdiction-us",
+        Some("https://nacto.org/publication/urban-bikeway-design-guide/"),
+    ),
+    doc("mtq-t1-c1", "Conception routière, Tome I, chapitre 1, Classification fonctionnelle (2021-06-15)", MTQ, QC, None),
+    doc("mtq-t1-c7", "Conception routière, Tome I, chapitre 7, Distance de visibilité (2024-06-15)", MTQ, QC, None),
+    doc("mtq-t1-c8", "Conception routière, Tome I, chapitre 8, Carrefours plans (2026-06-15)", MTQ, QC, None),
+    doc("mtq-t1-c14", "Conception routière, Tome I, chapitre 14, Stationnement (2026-06-15)", MTQ, QC, None),
+    doc(
+        "mtq-t1-d14",
+        "Conception routière, Tome I, chapitre 14, dessins normalisés 001 et 002, Stationnement sur rue en parallèle (2006-06-15)",
+        MTQ,
+        QC,
+        None,
+    ),
+    doc("mtq-t1-c15", "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)", MTQ, QC, None),
 ];
 
 /// What is known of one rule.
@@ -118,20 +95,19 @@ struct Entry {
     sources: &'static [&'static str],
 }
 
+const fn entry(rule: &'static str, label: &'static str, applies: &'static str, sources: &'static [&'static str]) -> Entry {
+    Entry { rule, label, applies, sources }
+}
+
 const ENTRIES: &[Entry] = &[
-    Entry {
-        rule: "transition-room",
-        label: "check-label-transition-room",
-        applies: "src-applies-transition",
-        sources: &["mutcd-2003", "york-ds-100", "nacto-bikeway"],
-    },
-    Entry { rule: "lane-drop", label: "check-label-lane-drop", applies: "src-applies-transition", sources: &["mutcd-2003", "york-ds-100"] },
-    Entry { rule: "curb-length", label: "check-label-curb-length", applies: "src-applies-stall-length", sources: &["mtq-t1-d14"] },
-    Entry { rule: "curb-bike", label: "check-label-curb-bike", applies: "src-applies-door-buffer", sources: &["mtq-t1-c15"] },
-    Entry { rule: "curb-crossing", label: "check-label-curb-crossing", applies: "src-applies-parking-setback", sources: &["mtq-t1-c14", "mtq-t1-d14"] },
-    Entry { rule: "curb-near", label: "jn-check-curb-near", applies: "src-applies-parking-setback", sources: &["mtq-t1-c14", "mtq-t1-d14"] },
-    Entry { rule: "crossing", label: "jn-check-crossing", applies: "src-applies-refuge", sources: &["mtq-t1-c8"] },
-    Entry { rule: "green-sightline", label: "check-label-green-sightline", applies: "src-applies-sight-triangle", sources: &["mtq-t1-c7"] },
+    entry("transition-room", "check-label-transition-room", "src-applies-transition", &["mutcd-2003", "york-ds-100", "nacto-bikeway"]),
+    entry("lane-drop", "check-label-lane-drop", "src-applies-transition", &["mutcd-2003", "york-ds-100"]),
+    entry("curb-length", "check-label-curb-length", "src-applies-stall-length", &["mtq-t1-d14"]),
+    entry("curb-bike", "check-label-curb-bike", "src-applies-door-buffer", &["mtq-t1-c15"]),
+    entry("curb-crossing", "check-label-curb-crossing", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
+    entry("curb-near", "jn-check-curb-near", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
+    entry("crossing", "jn-check-crossing", "src-applies-refuge", &["mtq-t1-c8"]),
+    entry("green-sightline", "check-label-green-sightline", "src-applies-sight-triangle", &["mtq-t1-c7"]),
 ];
 
 /// The rule's source as a view reads it.
