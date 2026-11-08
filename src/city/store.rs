@@ -534,11 +534,10 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
+        use cityloom_model::{Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
         let node = |id: u32, x_m, junction| Node {
             id: NodeId(id),
-            osm_nodes: vec![NodeRef(id as i64)],
-            osm_versions: Default::default(),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
             y_m: 0.0,
             junction,
@@ -551,7 +550,7 @@ mod tests {
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
             roads: vec![Road {
                 id: RoadId(1),
-                osm_ways: vec![WayRef::new(7)],
+                provenance: Provenance::of_ways([WayRef::new(7)]),
                 name: "Only Street".into(),
                 road_type: RoadType::Local,
                 from: NodeId(1),
@@ -794,7 +793,7 @@ mod tests {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let mut network = tiny_network();
-        network.nodes[1].osm_nodes.clear(); // where the road is cut at the area's box
+        network.nodes[1].provenance.clear(); // where the road is cut at the area's box
         area.keep_network(&network);
         let street = area.open().view(0).edges[0].uid;
         let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
@@ -820,7 +819,7 @@ mod tests {
         // area A cuts the road at its box; area B holds the whole road
         let a = CityStore::for_area(ports.storage.clone(), Area::new("A", 1.0, 2.0));
         let mut cut = tiny_network();
-        cut.nodes[1].osm_nodes.clear();
+        cut.nodes[1].provenance.clear();
         a.keep_network(&cut);
         let b = CityStore::for_area(ports.storage, Area::new("B", 1.0, 3.0));
         b.keep_network(&tiny_network());

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{Lane, NodeId, Point, RoadId, RoadType, Street, WayRef, Zone};
+use crate::{Lane, NodeId, Point, Provenance, RoadId, RoadType, Street, WayRef, Zone};
 
 /// A street between two nodes, made from one or more OpenStreetMap ways.
 ///
@@ -14,7 +14,7 @@ use crate::{Lane, NodeId, Point, RoadId, RoadType, Street, WayRef, Zone};
 pub struct Road {
     pub id: RoadId,
     /// The OSM ways it was made from, each with its version when known; the key an edit is kept under.
-    pub osm_ways: Vec<WayRef>,
+    pub provenance: Provenance,
     pub name: String,
     /// How the road ranks, from OSM's `highway` value.
     pub road_type: RoadType,
@@ -76,7 +76,7 @@ impl Road {
     }
 
     pub fn has_way(&self, id: i64) -> bool {
-        self.osm_ways.iter().any(|w| w.id == id)
+        self.provenance.has_way(id)
     }
 }
 
@@ -121,8 +121,18 @@ impl TryFrom<RoadWire> for Road {
         if !Road::is_zoned(&zones) {
             return Err("a road's zones start at 0 and run on in order");
         }
-        let osm_ways = w.osm_ways.iter().map(|&id| WayRef { id, version: w.osm_versions.get(&id).copied() }).collect();
-        Ok(Road { id: w.id, osm_ways, name, road_type: w.road_type, from: w.from, to: w.to, zones, speed_kmh: w.speed_kmh, points: w.points })
+        let ways = w.osm_ways.iter().map(|&id| WayRef { id, version: w.osm_versions.get(&id).copied() });
+        Ok(Road {
+            id: w.id,
+            provenance: Provenance::of_ways(ways),
+            name,
+            road_type: w.road_type,
+            from: w.from,
+            to: w.to,
+            zones,
+            speed_kmh: w.speed_kmh,
+            points: w.points,
+        })
     }
 }
 
@@ -132,10 +142,10 @@ impl From<Road> for RoadWire {
             Ok([whole]) => (whole.lanes, Vec::new()),
             Err(zones) => (Vec::new(), zones),
         };
-        let osm_versions = r.osm_ways.iter().filter_map(|w| Some((w.id, w.version?))).collect();
+        let osm_versions = r.provenance.ways().filter_map(|w| Some((w.id, w.version?))).collect();
         RoadWire {
             id: r.id,
-            osm_ways: r.osm_ways.iter().map(|w| w.id).collect(),
+            osm_ways: r.provenance.ways().map(|w| w.id).collect(),
             osm_versions,
             name: Some(r.name),
             road_type: r.road_type,
@@ -158,7 +168,7 @@ mod tests {
     fn a_road_is_kept_with_its_ways_and_their_versions_apart_as_it_always_was() {
         let road = Road {
             id: RoadId(1),
-            osm_ways: vec![WayRef::with_version(5, 49), WayRef::new(7)],
+            provenance: Provenance::of_ways([WayRef::with_version(5, 49), WayRef::new(7)]),
             name: "Main".into(),
             road_type: RoadType::Local,
             from: NodeId(1),
@@ -175,7 +185,7 @@ mod tests {
     fn road_of(zones: Vec<Zone>) -> Road {
         Road {
             id: RoadId(1),
-            osm_ways: vec![WayRef::new(5)],
+            provenance: Provenance::of_ways([WayRef::new(5)]),
             name: "Main".into(),
             road_type: RoadType::Local,
             from: NodeId(1),
@@ -239,6 +249,6 @@ mod tests {
     #[test]
     fn a_road_kept_before_versions_existed_reads_with_none() {
         let json = r#"{"id":1,"osm_ways":[5],"name":"Main","highway":"x","from":1,"to":2,"lanes":[],"points":[]}"#;
-        assert_eq!(serde_json::from_str::<Road>(json).unwrap().osm_ways, [WayRef::new(5)]);
+        assert_eq!(serde_json::from_str::<Road>(json).unwrap().provenance, Provenance::of_ways([WayRef::new(5)]));
     }
 }

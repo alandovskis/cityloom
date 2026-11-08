@@ -99,7 +99,7 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Direction, Node, Point, Road, RoadType, Zone};
+    use crate::{Control, Direction, Node, Point, Provenance, Road, RoadType, Zone};
 
     fn lane(kind: LaneKind) -> Lane {
         Lane { kind, way: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] }
@@ -108,7 +108,7 @@ mod tests {
     fn road(id: u32, from: u32, to: u32, lanes: &[LaneKind]) -> Road {
         Road {
             id: RoadId(id),
-            osm_ways: vec![],
+            provenance: Provenance::default(),
             name: "Street".into(),
             road_type: RoadType::Local,
             from: NodeId(from),
@@ -120,9 +120,8 @@ mod tests {
     }
 
     fn network(roads: Vec<Road>) -> Network {
-        let nodes = (1..=6)
-            .map(|id| Node { id: NodeId(id), osm_nodes: vec![], osm_versions: Default::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None })
-            .collect();
+        let nodes =
+            (1..=6).map(|id| Node { id: NodeId(id), provenance: Provenance::default(), x_m: 0.0, y_m: 0.0, junction: false, control: Control::None }).collect();
         Network { left_hand: false, nodes, roads, corridors: vec![] }
     }
 

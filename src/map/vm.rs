@@ -1352,7 +1352,7 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
     use crate::shared::said::say_now;
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         vm_in(Locale::En)
@@ -1871,8 +1871,7 @@ mod tests {
         let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id: u32, x_m, y_m| Node {
             id: NodeId(id),
-            osm_nodes: vec![NodeRef(id as i64)],
-            osm_versions: Default::default(),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
             y_m,
             junction: false,
@@ -1885,7 +1884,7 @@ mod tests {
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: RoadId(1),
-                osm_ways: vec![WayRef::new(7)],
+                provenance: Provenance::of_ways([WayRef::new(7)]),
                 name: "Bend Street".into(),
                 road_type: RoadType::Local,
                 from: NodeId(1),

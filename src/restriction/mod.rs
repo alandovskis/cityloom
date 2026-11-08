@@ -17,7 +17,7 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 pub(crate) mod fixtures {
     use std::rc::Rc;
 
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
 
     use crate::city::projection::{self, Projection};
     use crate::city::store::CityStore;
@@ -29,8 +29,7 @@ pub(crate) mod fixtures {
     pub fn bent_network() -> Network {
         let node = |id: u32, x_m, y_m| Node {
             id: NodeId(id),
-            osm_nodes: vec![NodeRef(id as i64)],
-            osm_versions: Default::default(),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
             y_m,
             junction: false,
@@ -43,7 +42,7 @@ pub(crate) mod fixtures {
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: RoadId(1),
-                osm_ways: vec![WayRef::new(7)],
+                provenance: Provenance::of_ways([WayRef::new(7)]),
                 name: "Bend Street".into(),
                 road_type: RoadType::Local,
                 from: NodeId(1),

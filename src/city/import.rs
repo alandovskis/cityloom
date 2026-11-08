@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, NodeId, Point, RoadType, WayRef};
+use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, NodeId, OsmRef as ModelRef, Point, Provenance, RoadType};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -146,12 +146,14 @@ fn piece(lane: &Lane) -> Piece {
 }
 
 /// The OSM ways or nodes with the version each had.
-fn way_refs(ways: &[WayRef]) -> Vec<OsmRef> {
-    ways.iter().map(|w| OsmRef { id: w.id, version: w.version }).collect()
-}
-
-fn refs<T: Copy + Ord + Into<i64>>(ids: &[T], versions: &BTreeMap<T, i32>) -> Vec<OsmRef> {
-    ids.iter().map(|&id| OsmRef { id: id.into(), version: versions.get(&id).copied() }).collect()
+fn refs(p: &Provenance) -> Vec<OsmRef> {
+    p.refs
+        .iter()
+        .map(|r| match r {
+            ModelRef::Way(w) => OsmRef { id: w.id, version: w.version },
+            ModelRef::Node(n) => OsmRef { id: n.id, version: n.version },
+        })
+        .collect()
 }
 
 fn control_of(c: Control) -> usize {
@@ -235,7 +237,7 @@ impl Layout {
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street {
                     name: Some(r.name.clone()),
-                    source: way_refs(&r.osm_ways),
+                    source: refs(&r.provenance),
                     speed: Speed::from_kmh(r.speed_kmh),
                     ..Street::imported(class, side, &pieces)
                 };
@@ -269,7 +271,7 @@ impl Layout {
                     junction,
                     control: if junction { control_of(n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
-                    source: refs(&n.osm_nodes, &n.osm_versions),
+                    source: refs(&n.provenance),
                 }
             })
             .collect();
@@ -279,7 +281,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Road, RoadId, WayRef, Zone};
+    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -503,8 +505,8 @@ mod tests {
     fn a_street_and_a_junction_carry_the_osm_ways_and_nodes_they_were_made_from_with_their_versions() {
         use crate::shared::provenance::OsmRef;
         let mut net = crossing();
-        net.roads[1].osm_ways = vec![WayRef::with_version(200, 12)];
-        net.nodes[0].osm_versions = [(NodeRef(10), 4)].into();
+        net.roads[1].provenance = Provenance::of_ways([WayRef::with_version(200, 12)]);
+        net.nodes[0].provenance = Provenance::of_nodes([NodeRef::with_version(10, 4)]);
         let city = City::from_network(&net, "Testville");
         let v = city.view(0);
         let street = |i: usize| city.street_editor(v.edges[i].uid, 0).unwrap().view();
@@ -535,8 +537,7 @@ mod tests {
     fn crossing() -> Network {
         let node = |id: u32, x_m, y_m, junction, control| Node {
             id: NodeId(id),
-            osm_nodes: vec![NodeRef(id as i64 * 10)],
-            osm_versions: Default::default(),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64 * 10)]),
             x_m,
             y_m,
             junction,
@@ -544,7 +545,7 @@ mod tests {
         };
         let road = |id: u32, name: &str, to: u32, points| Road {
             id: RoadId(id),
-            osm_ways: vec![WayRef::new(id as i64 * 100)],
+            provenance: Provenance::of_ways([WayRef::new(id as i64 * 100)]),
             name: name.to_string(),
             road_type: RoadType::Local,
             from: NodeId(1),
@@ -584,7 +585,7 @@ mod tests {
             let mut network = crossing();
             network.roads[0].speed_kmh = road_speed;
             let layout = Layout::from_network(&network, "x");
-            let street = &layout.edges.iter().find(|e| e.section.source == way_refs(&network.roads[0].osm_ways)).unwrap().section;
+            let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].provenance)).unwrap().section;
             assert_eq!((street.speed, street.speed_kmh()), (speed, kmh));
         }
     }
@@ -642,8 +643,7 @@ mod tests {
             let id = i as u32 + 2;
             net.nodes.push(Node {
                 id: NodeId(id),
-                osm_nodes: vec![NodeRef(id as i64)],
-                osm_versions: Default::default(),
+                provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
                 x_m: x,
                 y_m: y,
                 junction: false,

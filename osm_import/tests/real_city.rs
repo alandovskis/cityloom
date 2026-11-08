@@ -463,7 +463,7 @@ mod two_way_track {
             .roads
             .iter()
             .position(|r| r.has_way(330153470))
-            .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.osm_ways).collect::<Vec<_>>()));
+            .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.provenance).collect::<Vec<_>>()));
         let view = store.open().view(0);
         let (uid, one_way_mm) = (view.edges[index].uid, view.edges[index].row_mm);
         assert_eq!(one_way_mm, 10_700, "as De Maisonneuve was imported until now");

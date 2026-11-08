@@ -329,7 +329,7 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
 mod tests {
     use std::collections::BTreeSet;
 
-    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Road, RoadId, RoadType, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeId, NodeRef, Point, Provenance, Road, RoadId, RoadType, WayRef, Zone};
     use serde_json::Value;
 
     use super::*;
@@ -342,8 +342,7 @@ mod tests {
     fn bent_road() -> Network {
         let node = |id: u32, x_m, y_m| Node {
             id: NodeId(id),
-            osm_nodes: vec![NodeRef(id as i64)],
-            osm_versions: Default::default(),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
             x_m,
             y_m,
             junction: false,
@@ -356,7 +355,7 @@ mod tests {
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: RoadId(1),
-                osm_ways: vec![WayRef::new(7)],
+                provenance: Provenance::of_ways([WayRef::new(7)]),
                 name: "Bend Street".into(),
                 road_type: RoadType::Local,
                 from: NodeId(1),
