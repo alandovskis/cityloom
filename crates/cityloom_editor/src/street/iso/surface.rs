@@ -1,0 +1,78 @@
+//! The surface layer: the top of every roadway piece, at the height of the ground, with its tint and hatch. The
+//! markings are painted over it and a raised piece stands over both.
+
+use super::raised::Strip;
+
+/// The strips split into the roadway's (a slab drawn at the ground) and the rest, each keeping its order.
+pub(super) fn split(strips: Vec<Strip>) -> (Vec<Strip>, Vec<Strip>) {
+    strips.into_iter().partition(|&(top, _, edge)| edge.is_none() && top == 0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::catalogue::KINDS;
+    use crate::shared::contrast::{contrast, token};
+    use crate::street::iso::projection::Projection;
+    use crate::street::iso::raised::{height_mm, strips};
+    use crate::street::model::Editor;
+
+    #[test]
+    fn the_roadway_slabs_are_the_surface_and_everything_else_stands_above_it() {
+        for sample in 0..4 {
+            let v = Editor::new(sample).view();
+            let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
+            let (flat, standing) = split(strips(&v.segments, &p));
+            assert!(flat.iter().all(|&(top, i, edge)| top == 0.0 && edge.is_none() && height_mm(KINDS[v.segments[i].kind].id) == 0), "sample {sample}");
+            assert!(standing.iter().all(|&(top, _, edge)| top > 0.0 || edge.is_some()), "sample {sample}");
+            assert_eq!(flat.len() + standing.len(), strips(&v.segments, &p).len());
+            assert_eq!(flat.len(), v.segments.iter().filter(|s| height_mm(KINDS[s.kind].id) == 0).count());
+            // Both keep the order of the strips: from the farthest from the middle of the street to the nearest.
+            let order = strips(&v.segments, &p);
+            for part in [&flat, &standing] {
+                let at: Vec<usize> = part.iter().map(|s| order.iter().position(|o| o == s).unwrap()).collect();
+                assert!(at.windows(2).all(|w| w[0] < w[1]), "sample {sample}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_material_is_one_colour_in_both_themes() {
+        let app = include_str!("../../../../../web/app.css");
+        for m in crate::shared::catalogue::MATERIALS {
+            for name in [format!("mat-{}", m.id), format!("mat-{}-line", m.id), format!("mat-{}-alt", m.id)] {
+                let (light, dark) = token(app, &name);
+                assert!(light.is_some() && light == dark, "--{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_outlines_are_seen_on_every_material() {
+        let css = include_str!("../../../../../web/editor.css");
+        // A halo of the panel's colour keeps the junction's selection box seen on any material (the street's hover is the
+        // press target's tint, measured in shared/contrast.rs).
+        for rule in ["#drawing .iso .sel-box {"] {
+            let at = css.find(rule).unwrap_or_else(|| panic!("{rule}"));
+            assert!(css[at..at + css[at..].find('}').unwrap()].contains("drop-shadow(0 0 1px var(--panel))"), "{rule}");
+        }
+    }
+
+    #[test]
+    fn the_paint_keeps_3_to_1_against_every_materials_colour_in_both_themes() {
+        let (app, editor) = (include_str!("../../../../../web/app.css"), include_str!("../../../../../web/editor.css"));
+        let (edge_light, edge_dark) = token(editor, "iso-paint-edge");
+        for m in crate::shared::catalogue::MATERIALS {
+            let (mat, _) = token(app, &format!("mat-{}", m.id));
+            let mat = mat.unwrap();
+            for paint in ["white", "yellow"] {
+                let (pl, pd) = token(editor, &format!("iso-paint-{paint}"));
+                // The paint's fill, or the hairline round it, is 3:1 against the surface.
+                for (theme, fill, edge) in [("light", pl, &edge_light), ("dark", pd, &edge_dark)] {
+                    let best = [fill, edge.clone()].iter().flatten().map(|c| contrast(c, &mat)).fold(1.0, f64::max);
+                    assert!(best >= 3.0, "{} {paint} {theme}: {best:.2}", m.id);
+                }
+            }
+        }
+    }
+}

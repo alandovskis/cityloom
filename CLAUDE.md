@@ -2,6 +2,8 @@
 
 CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home), `web/map.html`, `web/street.html`, `web/intersection.html`. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
 
+Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_model`, `cityloom_report`, `cityloom_report_pdf`, `osm_import`, `cityloom_server`, `citymodel_builder`); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `osm_import/…`) are inside `crates/`.
+
 ## Commands
 
 `just` lists the recipes. The ones used most:
@@ -15,7 +17,7 @@ just build           # release wasm + wasm-bindgen into web/pkg (gitignored)
 just prepare         # downloads Geofabrik's Quebec extract (~1.2 GB) into data/, cuts roads into web/data/metro (needs osmium-tool),
                      # builds the basemap web/data/basemap/montreal.pmtiles (Planetiler, Java 21+), packs data/montreal.citymodel;
                      # all gitignored; args pass through (--refresh). Without tiles places come from Overpass; without the basemap the map shows none
-just pack            # cityloom_prepare pack only; `cargo run -p cityloom_prepare --release -- tiles|basemap|pack` runs one step
+just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|basemap|pack` runs one step
 just test-scripts    # scripts/include/tests (the issue system's consistency test and the CI selector's); CI's test job runs it
 just e2e-archive     # packs the e2e fixtures into target/e2e-archive and runs archive, map and street specs against a fresh server that unpacks it (E2E_ARCHIVE=1); builds first; E2E_PORT moves the port
 just e2e             # builds wasm and server, runs Playwright in e2e/; `just e2e tests/street.spec.ts` for one spec; account-server.spec.ts needs DATABASE_URL
@@ -61,7 +63,7 @@ Translation: English and fr-CA on all four pages and the shell.
 - Non-`Send` values inside reactive closures go in `StoredValue::new_local`; views take a `Copy` handle (`junction::watch::Watch`, `street::watch::SheetWatch`) over an `Rc<…Vm>`.
 - `any_spawner::Executor::init_wasm_bindgen()` must run at the top of every `mount_*` function before any component creates an effect.
 - `#![recursion_limit = "1024"]` is needed for the Leptos `view!` macros. New web-sys APIs need their feature added in `Cargo.toml`.
-- Versioning: `version` in the root `Cargo.toml` (semver) is the product's version, shown in the app pages' footer. Every pull request raises it (major: breaking, minor: feature, patch: fix) and runs `cargo update -p cityloom_editor` for `Cargo.lock`; CI's `version` job (`scripts/check-version.sh`) fails the PR otherwise.
+- Versioning: `version` in `crates/cityloom_editor/Cargo.toml` (semver) is the product's version, shown in the app pages' footer. Every pull request raises it (major: breaking, minor: feature, patch: fix) and runs `cargo update -p cityloom_editor` for `Cargo.lock`; CI's `version` job (`scripts/check-version.sh`) fails the PR otherwise.
 - Merging and deploying: `.claude/agents/deploy.md` (Haiku) merges the PRs it is told to, one at a time, by a fixed runbook (rebase on the version line only, tests, CI, a `CLEAN` merge, deploy, live site) and stops on anything needing judgment (another conflict, a failing or pending check, a failed deploy), handing it back to the session that sent it.
 - Real-browser checks: a background tab throttles timers to ~1 s, pauses `requestAnimationFrame` and ignores `.focus()`, so use microtask waits and expect focus behaviour to be unverifiable. After rebuilding, bust the cache with `fetch(url, {cache: 'reload'})` for the wasm, glue JS and page script, then reload.
 
@@ -79,6 +81,6 @@ Folder-level `CLAUDE.md` files hold the details of each area and load when you w
 - `src/archive/CLAUDE.md`: Archive slice (`src/archive/`)
 - `src/shared/CLAUDE.md`: Shared kernel (`src/shared/`)
 - `src/account/CLAUDE.md`: Account slice (`src/account/`)
-- `cityloom_prepare/CLAUDE.md`: `cityloom_prepare`
+- `citymodel_builder/CLAUDE.md`: `citymodel_builder`
 - `cityloom_server/CLAUDE.md`: `cityloom_server`
 - `e2e/CLAUDE.md`: End-to-end tests (`e2e/`)

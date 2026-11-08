@@ -230,7 +230,7 @@ jobs:
         with:
           path: website/build
 
-  # Every pull request raises the version in Cargo.toml (semantic versioning); the pages show it in the menu. A change
+  # Every pull request raises the version in crates/cityloom_editor/Cargo.toml (semantic versioning); the pages show it in the menu. A change
   # to documentation alone does not need one: it changes nothing the pages show.
   version:
     name: Version bump
@@ -322,7 +322,7 @@ jobs:
 
       # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the
       # code that makes them change. Run the workflow again after clearing the cache to take a newer extract.
-      # The key hashes only the sources that decide the tiles and the basemap (cityloom_prepare's tiles, basemap and
+      # The key hashes only the sources that decide the tiles and the basemap (citymodel_builder's tiles, basemap and
       # metro_index modules): a change to the progress display, the archive or a dependency must not make them again.
       - id: tiles
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -330,7 +330,7 @@ jobs:
           path: |
             web/data/metro
             web/data/basemap/montreal.pmtiles
-          key: tiles-${{ hashFiles('cityloom_prepare/src/tiles.rs', 'cityloom_prepare/src/basemap.rs', 'cityloom_prepare/src/metro_index.rs') }}
+          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/basemap.rs', 'crates/citymodel_builder/src/metro_index.rs') }}
       - if: steps.tiles.outputs.cache-hit != 'true'
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:

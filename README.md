@@ -5,7 +5,7 @@
 Streetmix at city scale: residents compose and compare whole-city scenarios.
 This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`street.html`) and the intersection editor (`intersection.html`). The home page finds a place by name; its streets come from OpenStreetMap (through Nominatim, Overpass and osm2streets) and become a city that the map opens the other two surfaces on, a street or junction at a time. What is edited is kept in browser storage.
 
-- `src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
+- `crates/`: every crate. `crates/cityloom_editor/src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
   - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.
   - `map/`: the city map (view-model, the overlay and its projection onto the basemap, views). `city/`: the city (made from OpenStreetMap), how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
   - `shared/`: what every slice uses: the catalogue and units, the ports a view-model reaches the browser through (`ports.rs`, with test fakes) and their browser side (`platform.rs`), the reactive `core.rs`, the `keeper.rs` that debounces writes, and the helpers views bind with.

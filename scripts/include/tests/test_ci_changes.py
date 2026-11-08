@@ -33,12 +33,12 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.e2e)
 
     def test_documentation_with_code_is_code(self):
-        s = pick("README.md", "src/junction/model.rs")
+        s = pick("README.md", "crates/cityloom_editor/src/junction/model.rs")
         self.assertFalse(s.docs_only)
         self.assertTrue(s.e2e)
 
     def test_one_slice_runs_its_specs_and_the_cross_ones(self):
-        s = pick("src/junction/vm.rs")
+        s = pick("crates/cityloom_editor/src/junction/vm.rs")
         self.assertIn("junction", s.specs)
         self.assertIn("a11y", s.specs)
         self.assertNotIn("street", s.specs)
@@ -46,7 +46,7 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.all)
 
     def test_a_unit_test_file_runs_no_browser_test(self):
-        s = pick("src/street/tests.rs", "src/map/tests.rs")
+        s = pick("crates/cityloom_editor/src/street/tests.rs", "crates/cityloom_editor/src/map/tests.rs")
         self.assertFalse(s.docs_only)
         self.assertEqual(s.specs, [])
         self.assertFalse(s.e2e)
@@ -61,7 +61,7 @@ class Selection(unittest.TestCase):
         self.assertTrue(pick("e2e/playwright.config.ts").all)
 
     def test_shared_code_and_the_build_run_all(self):
-        for f in ("src/shared/ports.rs", "web/app.css", "justfile", ".github/workflows/ci.yml", "Cargo.lock", "cityloom_server/src/app.rs", "scripts/build.sh"):
+        for f in ("crates/cityloom_editor/src/shared/ports.rs", "web/app.css", "justfile", ".github/workflows/ci.yml", "Cargo.lock", "crates/cityloom_server/src/app.rs", "scripts/build.sh"):
             with self.subTest(f):
                 self.assertTrue(pick(f).all)
 
@@ -71,22 +71,22 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.docs_only)
 
     def test_a_folder_of_src_no_rule_names_runs_all(self):
-        self.assertTrue(pick("src/brand_new/mod.rs").all)
+        self.assertTrue(pick("crates/cityloom_editor/src/brand_new/mod.rs").all)
 
     def test_slices_union(self):
-        s = pick("src/junction/vm.rs", "src/account/vm.rs")
+        s = pick("crates/cityloom_editor/src/junction/vm.rs", "crates/cityloom_editor/src/account/vm.rs")
         self.assertIn("junction", s.specs)
         self.assertIn("account-server", s.specs)
 
     def test_all_wins_over_a_narrow_file(self):
-        s = pick("src/junction/vm.rs", "web/app.css")
+        s = pick("crates/cityloom_editor/src/junction/vm.rs", "web/app.css")
         self.assertTrue(s.all)
 
     def test_the_archive_run_follows_its_specs(self):
-        self.assertTrue(pick("src/street/vm.rs").archive)  # the street spec is one of its three
-        self.assertFalse(pick("src/account/vm.rs").archive)
+        self.assertTrue(pick("crates/cityloom_editor/src/street/vm.rs").archive)  # the street spec is one of its three
+        self.assertFalse(pick("crates/cityloom_editor/src/account/vm.rs").archive)
         self.assertTrue(pick("web/app.css").archive)
-        self.assertFalse(pick("src/street/tests.rs").archive)
+        self.assertFalse(pick("crates/cityloom_editor/src/street/tests.rs").archive)
 
     def test_no_files_runs_all(self):
         s = pick()
@@ -103,7 +103,7 @@ class Globs(unittest.TestCase):
         self.assertFalse(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/sub/a.spec.ts"))
         self.assertTrue(ci_changes.glob("**/*.md", "README.md"))
         self.assertTrue(ci_changes.glob("**/*.md", "a/b/c.md"))
-        self.assertTrue(ci_changes.glob("**/tests.rs", "src/street/tests.rs"))
+        self.assertTrue(ci_changes.glob("**/tests.rs", "crates/cityloom_editor/src/street/tests.rs"))
         self.assertTrue(ci_changes.glob("website/**", "website/docs/a.md"))
         self.assertFalse(ci_changes.glob("website/**", "websites/a"))
 
@@ -130,8 +130,14 @@ class Coverage(unittest.TestCase):
         self.assertEqual(sorted(grouped - set(SPECS)), [], "a group names a spec that is not there")
 
     def test_every_source_folder_has_a_rule(self):
-        for entry in sorted((ROOT / "src").iterdir()):
-            path = f"src/{entry.name}/mod.rs" if entry.is_dir() else f"src/{entry.name}"
+        for entry in sorted((ROOT / "crates/cityloom_editor" / "src").iterdir()):
+            path = f"crates/cityloom_editor/src/{entry.name}/mod.rs" if entry.is_dir() else f"crates/cityloom_editor/src/{entry.name}"
+            with self.subTest(path):
+                self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
+
+    def test_every_crate_has_a_rule(self):
+        for entry in sorted((ROOT / "crates").iterdir()):
+            path = f"crates/{entry.name}/src/lib.rs"
             with self.subTest(path):
                 self.assertTrue(ci_changes.matched(MAP, path), f"no rule in scripts/ci/spec-map.json names {path}")
 
@@ -139,8 +145,8 @@ class Coverage(unittest.TestCase):
         for entry in sorted(ROOT.iterdir()):
             if entry.name.startswith(".git") and entry.name not in (".github", ".gitignore"):
                 continue
-            # src is checked folder by folder above; the rest is not in git or is the assistant's.
-            if entry.name in ("target", "node_modules", ".claude", ".impeccable", ".tools", ".env", "src"):
+            # src and the crates are checked on their own; the rest is not in git or is the assistant's.
+            if entry.name in ("target", "node_modules", ".claude", ".impeccable", ".tools", ".env", "crates"):
                 continue
             path = f"{entry.name}/x" if entry.is_dir() else entry.name
             with self.subTest(path):

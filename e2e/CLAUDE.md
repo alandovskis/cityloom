@@ -25,4 +25,4 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 
 ## Archive mode
 
-`E2E_ARCHIVE=1` (`just e2e-archive`): `fixtures.ts` skips routes for the metro index, default tile and default basemap (a route would answer before the server and prove nothing); `playwright.config.ts` starts a fresh server (never reused) with `CITYLOOM_AREAS` and `DATA_ROOT` in `target/e2e-archive`, which it unpacks and serves. The wasm build excludes `cityloom_server` and `cityloom_prepare` (justfile `test`).
+`E2E_ARCHIVE=1` (`just e2e-archive`): `fixtures.ts` skips routes for the metro index, default tile and default basemap (a route would answer before the server and prove nothing); `playwright.config.ts` starts a fresh server (never reused) with `CITYLOOM_AREAS` and `DATA_ROOT` in `target/e2e-archive`, which it unpacks and serves. The wasm build excludes `cityloom_server` and `citymodel_builder` (justfile `test`).
