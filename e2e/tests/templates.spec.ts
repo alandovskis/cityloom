@@ -1,9 +1,17 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
+import { expect, live, openAnchoredStreet, openStreet, placesOnMap, test } from "./fixtures";
 
 const names = (page: Page) => page.locator("#piece-list .piece-name").allTextContents();
 const template = (page: Page, id: string) => page.locator(`#transform-menu [data-template="${id}"]`);
+
+/** Gives the street a speed limit above a school zone's, which the Plateau's streets may not have, and goes back to
+ *  the Piece tab; the Undo it leaves is the first of the street's history. */
+async function fasterThanSchool(page: Page) {
+  await page.locator("#t-street").click();
+  await page.locator("#speed-limit").selectOption("50");
+  await page.locator("#t-piece").click();
+}
 
 // Street templates (#65): ready-made cross-sections in the Transform menu. Applying one lays out ordinary pieces in
 // one undoable edit; one that does not suit the street stays listed, disabled, with its reason.
@@ -46,6 +54,53 @@ test.describe("street templates", () => {
     await template(page, "greenway").click();
     await page.locator("#reset").click();
     expect(await names(page)).toEqual(before);
+  });
+
+  test("the School street on a street too short for a separate zone makes the whole street one and says so", async ({
+    page,
+  }) => {
+    await openStreet(page);
+    await fasterThanSchool(page);
+    await page.locator("#transform-btn").click();
+    await template(page, "school").click();
+    await expect(live(page)).toContainText("The speed limit there is 30 km/h.");
+    await expect(live(page)).toContainText("No separate school zone was made");
+    await expect(page.locator("#undo")).toBeEnabled();
+  });
+
+  test.describe("the School street's school zone", () => {
+    test.describe.configure({ timeout: 120_000 });
+
+    test("is a zone with a lower speed and a raised table, made in one step that Undo takes back", async ({ page }) => {
+      await openAnchoredStreet(page, 80);
+      const zones = page.locator('#zone-strip [role="option"]');
+      const table = page.locator("#calming-strip").locator('[role="option"]');
+      await expect(zones).toHaveCount(1);
+      await fasterThanSchool(page);
+      await page.locator("#transform-btn").click();
+      await template(page, "school").click();
+
+      await expect(zones).toHaveCount(3);
+      await expect(page.locator("#zone-1")).toHaveAttribute("aria-selected", "true");
+      await expect(table).toHaveCount(3);
+      await expect(table.nth(1)).toHaveAttribute("aria-label", /Raised table/);
+      await expect(live(page)).toContainText("The school zone runs from");
+      await expect(live(page)).toContainText("The speed limit there is 30 km/h.");
+      await expect(live(page)).toContainText("A raised table is at");
+
+      // The zone's speed is the Street tab's, for the selected zone; the other zones follow the street.
+      await page.locator("#t-street").click();
+      await expect(page.locator("#speed-limit")).toHaveValue("30");
+      await page.locator("#zone-0").click();
+      await expect(page.locator("#speed-limit")).toHaveValue("street");
+
+      // One step: a single Undo takes the zones, the speed and the table back.
+      await page.locator("#undo").click();
+      await expect(zones).toHaveCount(1);
+      await expect(table).toHaveCount(1);
+      await page.locator("#t-street").click();
+      await expect(page.locator("#speed-limit")).toHaveValue("50");
+    });
   });
 
   test.describe("on a street too narrow for one", () => {

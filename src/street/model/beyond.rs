@@ -82,7 +82,7 @@ impl Street {
         let out = |lo: i32, hi: i32| if anchored { (lo, hi) } else { (frame.length_mm - hi, frame.length_mm - lo) };
         let boundary_mm = out(at, at).0;
         let mirrored = !first_end;
-        let taper = transition(sections[b], sections[b + 1], self.speed.kmh(), self.from_end).map(|t| {
+        let taper = transition(sections[b], sections[b + 1], self.taper_speed_kmh(b), self.from_end).map(|t| {
             let (host, interval) = match t.host {
                 Host::Near => (b, ((at - t.length_mm).max(self.zones[b].from_mm), at)),
                 Host::Far => (b + 1, (at, (at + t.length_mm).min(self.zones.get(b + 2).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm)))),

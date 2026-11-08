@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::stop_end::stop_gap_mm;
+use super::zone_speed::{max_kmh, speed_in};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
 use crate::shared::catalogue::{Side, is_roadway};
 
@@ -439,7 +440,7 @@ impl Editor {
                     Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(f.named.clone().unwrap_or_else(|| element.named())) }
                 }
                 None => {
-                    let detail = match (rule, content.speed.kmh()) {
+                    let detail = match (rule, max_kmh(content.speed, &content.zones)) {
                         (1, Some(kmh)) => Said::new("check-detail-calming-speed-ok").with("kmh", Arg::Num(i64::from(kmh))),
                         _ => Said::new(ok_detail).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH))),
                     };
@@ -489,12 +490,21 @@ impl Editor {
                     }
                 }
             }
-            if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH)) {
-                fail(
-                    1,
-                    Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH))),
-                    None,
-                );
+            // The speed of the zone the element lies in, in every zone it overlaps: the zone that is too fast is named.
+            let too_fast =
+                |kmh: u16| Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH)));
+            if content.zone_count() < 2 {
+                if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH)) {
+                    fail(1, too_fast(kmh), None);
+                }
+            } else {
+                for z in 0..content.zone_count() {
+                    let (from, to) = content.span(z, length_mm);
+                    let kmh = speed_in(content.speed, &content.zones, z).kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH));
+                    if let Some(kmh) = kmh.filter(|_| from < c.to_mm() && c.from_mm < to) {
+                        fail(1, too_fast(kmh), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                    }
+                }
             }
             // A stop's boarding area is along the stop, on either side: the element spans the whole roadway. The stop
             // the detail names is the one with the smallest gap (an overlap is a negative one), the first of equals.

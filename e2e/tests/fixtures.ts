@@ -201,6 +201,20 @@ export async function splitInto(page: Page, count: number) {
   }
 }
 
+/** Opens the first street of the city with a real end to measure from (it has a raised-tables strip, which needs the
+ *  zones' anchor) that is at least `minM` metres long. */
+export async function openAnchoredStreet(page: Page, minM: number) {
+  await page.goto("/map.html");
+  const streets = (await placesOnMap(page)).streets;
+  for (const href of streets) {
+    await page.goto("/" + href);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    if ((await page.locator("#calming-strip").count()) === 0) continue;
+    if ((await streetLengthM(page)) >= minM) return href;
+  }
+  throw new Error(`no street of ${minM} m or more with a real end`);
+}
+
 /** Opens the first street of the city that is at least `minM` metres long (the first is about 40 m, too short for
  *  many zones of 5 m). */
 export async function openLongStreet(page: Page, minM: number) {

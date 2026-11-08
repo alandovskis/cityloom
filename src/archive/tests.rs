@@ -370,9 +370,10 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (9, json!({"street": {"stops": [{"side": "right"}]}}), 9),
         (11, json!({"street": {"green": [{"kind": "tree"}]}}), 11),
         (12, json!({"street": {"calming": [{"from_mm": 0, "length_mm": 7000, "kind": "table"}]}}), 12),
+        (13, json!({"street": {"zones": [{"from_mm": 0}, {"from_mm": 20000, "speed_kmh": 30}]}}), 13),
         (NEWEST.into(), plain.clone(), 5),
     ];
-    assert_eq!(NEWEST, 12, "a new edits version needs a row here");
+    assert_eq!(NEWEST, 13, "a new edits version needs a row here");
     for (version, record, written) in cases {
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
         let archive = model::parse_and_validate(&text).unwrap_or_else(|e| panic!("version {version}: {e:?}"));

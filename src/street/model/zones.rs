@@ -4,7 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::transition::{Host, Transition, transition};
-use super::{Arg, Editor, Said, Segment, Street, flip, named_said, snap};
+use super::zone_speed::{speed_in, taper_kmh};
+use super::{Arg, Editor, Said, Segment, Speed, Street, flip, named_said, snap};
 
 /// Why a transition fails its check.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +29,9 @@ pub struct Zone {
     pub segments: Option<Vec<Segment>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// The zone's own speed limit, kept as `speed_kmh` like the street's: `Undecided` (left out) is the street's.
+    #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
+    pub speed: Speed,
 }
 
 /// Which end of the street the zone positions are measured from.
@@ -64,9 +68,16 @@ pub(super) fn same_pieces(a: &[Segment], b: &[Segment]) -> bool {
 }
 
 /// Brings the zoning to its canonical form: zones sorted by start with the first at 0; a section equal to the
-/// base (ignoring uids) kept as `None`; one zone left is no zoning (its own section becomes the base); no zones
-/// left, and no curbside use to measure, leaves no end and no length.
-pub(super) fn settle_zones(segments: &mut Vec<Segment>, zones: &mut Vec<Zone>, from_end: &mut ZoneEnd, length_mm: &mut Option<i32>, keep_anchor: bool) {
+/// base (ignoring uids) kept as `None`, a speed equal to the street's as the street's; one zone left is no zoning
+/// (its own section and speed become the base); no zones left, and no curbside use to measure, leaves no end and no length.
+pub(super) fn settle_zones(
+    segments: &mut Vec<Segment>,
+    zones: &mut Vec<Zone>,
+    speed: &mut Speed,
+    from_end: &mut ZoneEnd,
+    length_mm: &mut Option<i32>,
+    keep_anchor: bool,
+) {
     zones.sort_by_key(|z| z.from_mm);
     if let Some(first) = zones.first_mut() {
         first.from_mm = 0;
@@ -75,10 +86,17 @@ pub(super) fn settle_zones(segments: &mut Vec<Segment>, zones: &mut Vec<Zone>, f
         if z.segments.as_deref().is_some_and(|s| same_pieces(s, segments)) {
             z.segments = None;
         }
+        if z.speed == *speed {
+            z.speed = Speed::Undecided;
+        }
     }
     if zones.len() == 1 {
-        if let Some(own) = zones.remove(0).segments {
+        let only = zones.remove(0);
+        if let Some(own) = only.segments {
             *segments = own;
+        }
+        if !only.speed.is_undecided() {
+            *speed = only.speed;
         }
     }
     if zones.is_empty() && !keep_anchor {
@@ -101,6 +119,7 @@ impl Street {
         settle_zones(
             &mut self.segments,
             &mut self.zones,
+            &mut self.speed,
             &mut self.from_end,
             &mut self.length_mm,
             !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty(),
@@ -126,6 +145,8 @@ impl Street {
         if let Some(own) = zone.and_then(|z| z.segments.clone()) {
             s.segments = own;
         }
+        let end_zone = if nearest_is_first_zone { 0 } else { self.zones.len() - 1 };
+        s.speed = self.zone_speed(end_zone);
         s.zones = Vec::new();
         s.curb = Vec::new();
         s.stops = Vec::new();
@@ -274,7 +295,7 @@ impl super::Content {
 impl Editor {
     /// Whether the zones can be rearranged: the street has an end to measure from, and a zoning it already has
     /// was drawn on this road.
-    fn structure_frame(&self, allow_drag: bool) -> Result<ZoneFrame, ZoneRefusal> {
+    pub(super) fn structure_frame(&self, allow_drag: bool) -> Result<ZoneFrame, ZoneRefusal> {
         if self.gesture.is_some() && !allow_drag {
             return Err(ZoneRefusal::Dragging);
         }
@@ -355,9 +376,13 @@ impl Editor {
         if content.zones.len() < 2 || self.elsewhere().is_some() {
             return Vec::new();
         }
-        let speed = content.speed.kmh();
         // The pieces' own kinds, never a time-of-day variant's: a transition does not change with the clock.
-        (0..content.zones.len() - 1).filter_map(|b| transition(content.section(b), content.section(b + 1), speed, content.from_end).map(|t| (b, t))).collect()
+        (0..content.zones.len() - 1)
+            .filter_map(|b| {
+                let speed = taper_kmh(content.speed, &content.zones, b);
+                transition(content.section(b), content.section(b + 1), speed, content.from_end).map(|t| (b, t))
+            })
+            .collect()
     }
 
     /// The transitions that fail a check: `(boundary, host zone, which)`.
@@ -379,7 +404,7 @@ impl Editor {
     }
 
     /// The label of zone `z` of the current content, numbered from 1, as it reads in the middle of a sentence.
-    fn label_of(&self, z: usize) -> Said {
+    pub(super) fn label_of(&self, z: usize) -> Said {
         match self.states[self.cursor].content.zones.get(z) {
             Some(zone) => zone_label_mid(zone, z + 1),
             None => Said::new("zone-unnamed-mid").with("n", Arg::Num(1)),
@@ -401,10 +426,10 @@ impl Editor {
         }
         self.edit_content(Said::new("rev-zone-split").with("at", Arg::Length(at)), |c| {
             if c.zones.is_empty() {
-                c.zones.push(Zone { from_mm: 0, segments: None, name: None });
+                c.zones.push(Zone { from_mm: 0, segments: None, name: None, speed: Speed::Undecided });
             }
             let section = c.zones[z].segments.clone();
-            c.zones.insert(z + 1, Zone { from_mm: at, segments: section, name: None });
+            c.zones.insert(z + 1, Zone { from_mm: at, segments: section, name: None, speed: c.zones[z].speed });
             c.from_end = frame.from_end;
             c.length_mm = Some(frame.length_mm);
             true
@@ -424,7 +449,10 @@ impl Editor {
     /// Whether merging with the next (or previous) zone must ask which section to keep: the two differ.
     pub fn merge_needs_choice(&self, next: bool) -> bool {
         let content = &self.states[self.cursor].content;
-        self.merge_neighbour(next).is_some_and(|n| !same_pieces(content.section(self.zone), content.section(n)))
+        self.merge_neighbour(next).is_some_and(|n| {
+            !same_pieces(content.section(self.zone), content.section(n))
+                || speed_in(content.speed, &content.zones, self.zone) != speed_in(content.speed, &content.zones, n)
+        })
     }
 
     /// Why the zones cannot be rearranged now (no anchor, another road, a drag under way), if they cannot.
@@ -510,7 +538,7 @@ impl Editor {
             return false;
         }
         let label = Said::new(if name.is_some() { "rev-zone-name" } else { "rev-zone-unname" })
-            .with("zone", Arg::Said(Box::new(zone_label_mid(&Zone { from_mm: 0, segments: None, name: name.clone() }, z + 1))));
+            .with("zone", Arg::Said(Box::new(zone_label_mid(&Zone { from_mm: 0, segments: None, name: name.clone(), speed: Speed::Undecided }, z + 1))));
         self.edit_content(label, |c| {
             c.zones[z].name = name;
             true
@@ -618,7 +646,7 @@ mod tests {
         let mut s = zoned(sample(), &[0], 60_000);
         let next_uid = s.next_uid;
         let own = other(&s.segments);
-        s.zones = vec![Zone { from_mm: 7_000, segments: Some(own.clone()), name: Some("Lone".into()) }];
+        s.zones = vec![Zone { from_mm: 7_000, segments: Some(own.clone()), name: Some("Lone".into()), speed: Speed::Undecided }];
         s.from_end = ZoneEnd::Last;
         s.length_mm = Some(60_000);
         s.settle_zones();
@@ -631,7 +659,7 @@ mod tests {
         // a one-zone result of an equal section keeps the base and drops the name
         let mut t = sample();
         let base = t.segments.clone();
-        t.zones = vec![Zone { from_mm: 0, segments: Some(with_uids_shifted(&base)), name: Some("Lone".into()) }];
+        t.zones = vec![Zone { from_mm: 0, segments: Some(with_uids_shifted(&base)), name: Some("Lone".into()), speed: Speed::Undecided }];
         t.length_mm = Some(10_000);
         t.settle_zones();
         assert_eq!(t.segments, base);
@@ -639,7 +667,10 @@ mod tests {
 
         // sorted, first forced to 0
         let mut u = sample();
-        u.zones = vec![Zone { from_mm: 30_000, segments: None, name: Some("b".into()) }, Zone { from_mm: 4_000, segments: None, name: Some("a".into()) }];
+        u.zones = vec![
+            Zone { from_mm: 30_000, segments: None, name: Some("b".into()), speed: Speed::Undecided },
+            Zone { from_mm: 4_000, segments: None, name: Some("a".into()), speed: Speed::Undecided },
+        ];
         u.length_mm = Some(60_000);
         u.settle_zones();
         assert_eq!(u.zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 30_000]);
@@ -1099,8 +1130,8 @@ mod tests {
 
     #[test]
     fn an_unnamed_zone_is_called_by_its_number_and_a_named_one_by_its_name() {
-        let named = Zone { from_mm: 0, segments: None, name: Some("Terrace".into()) };
-        let unnamed = Zone { from_mm: 0, segments: None, name: None };
+        let named = Zone { from_mm: 0, segments: None, name: Some("Terrace".into()), speed: Speed::Undecided };
+        let unnamed = Zone { from_mm: 0, segments: None, name: None, speed: Speed::Undecided };
         assert_eq!(zone_label(&named, 1), Said::new("city-name").with("name", Arg::Text("Terrace".into())));
         assert_eq!(zone_label(&unnamed, 3), Said::new("zone-unnamed").with("n", Arg::Num(3)));
     }
