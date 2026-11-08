@@ -91,7 +91,7 @@ class Selection:
         return self.runs("integration")
 
     @property
-    def archive(self) -> bool:
+    def e2e(self) -> bool:
         return self.runs("e2e")
 
     @property
@@ -216,7 +216,7 @@ def main() -> int:
         "ui_specs": s.spec_args("ui"),
         "integration": str(s.integration).lower(),
         "integration_specs": s.spec_args("integration"),
-        "e2e": str(s.archive).lower(),
+        "e2e": str(s.e2e).lower(),
         "e2e_specs": s.spec_args("e2e"),
     }
     print(json.dumps(out))

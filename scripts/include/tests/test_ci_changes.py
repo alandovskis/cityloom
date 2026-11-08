@@ -52,18 +52,18 @@ class Selection(unittest.TestCase):
                 s = pick(f)
                 self.assertTrue(s.ui)
                 self.assertFalse(s.integration)
-                self.assertFalse(s.archive)
+                self.assertFalse(s.e2e)
 
     def test_the_server_and_the_sync_run_the_integration_tier(self):
         self.assertTrue(pick("cityloom_server/src/app.rs").integration)
         s = pick("src/sync/vm.rs")
         self.assertTrue(s.integration)
-        self.assertFalse(s.archive)
+        self.assertFalse(s.e2e)
         self.assertTrue(pick("src/account/vm.rs").integration)
 
     def test_the_archive_code_runs_the_e2e_tier_alone(self):
         s = pick("cityloom_prepare/src/archive.rs")
-        self.assertTrue(s.archive)
+        self.assertTrue(s.e2e)
         self.assertFalse(s.integration)
         self.assertFalse(s.ui)
 
@@ -106,15 +106,15 @@ class Selection(unittest.TestCase):
 
     def test_shared_code_and_main_run_every_tier(self):
         s = pick("web/app.css")
-        self.assertTrue(s.ui and s.integration and s.archive)
-        self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).archive)
+        self.assertTrue(s.ui and s.integration and s.e2e)
+        self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).e2e)
 
     def test_a_changed_spec_runs_its_own_tier_alone(self):
         s = pick("e2e/tests/sync.spec.ts")
         self.assertTrue(s.integration)
-        self.assertFalse(s.ui or s.archive)
+        self.assertFalse(s.ui or s.e2e)
         s = pick("e2e/tests/serve.spec.ts")
-        self.assertTrue(s.archive)
+        self.assertTrue(s.e2e)
         self.assertFalse(s.ui or s.integration)
 
     def test_no_files_runs_all(self):
