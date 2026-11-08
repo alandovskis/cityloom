@@ -185,7 +185,9 @@ jobs:
       - run: npx playwright install-deps chromium
         working-directory: e2e
       # A pull request runs the specs its files can affect (`specs`, empty for every one); main runs them all.
-      - run: just e2e $SPECS
+      - run: |
+          # shellcheck disable=SC2086 # the specs are words; none is the same as every one
+          just e2e $SPECS
         env:
           SPECS: ${{ needs.changes.outputs.specs }}
       # The archive specs are three of those; they run when one of the three does.
