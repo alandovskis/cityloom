@@ -24,7 +24,10 @@ just build    # the WebAssembly module, into web/pkg
 just serve    # http://127.0.0.1:8137/ (cargo run -p cityloom_server)
 just db       # a throwaway Postgres in Docker, for the server's tests and the account spec
 just test     # cargo test, and a type-check of the wasm-only code
-just e2e      # browser tests after a fresh build; arguments go to Playwright, e.g. `just e2e tests/street.spec.ts`
+just e2e      # all three tiers of browser tests after a fresh build; arguments run just those specs, e.g. `just e2e tests/street.spec.ts`
+just e2e-ui           # one tier alone: UI (no database, no archive)
+just e2e-integration  # the real server and a Postgres (`DATABASE_URL`)
+just e2e-archive      # the unpacked archive and the delivery specs
 just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
@@ -35,7 +38,7 @@ The server's tests and the account spec need a Postgres: `just db`, then `export
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (and the basemap's range requests), with the fake sign-in provider and a Postgres for the account spec; `E2E_PORT` moves it off port 8137 when something else holds that.
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (and the basemap's range requests), with the fake sign-in provider and, for the integration tier, a Postgres; the specs are in three tiers (`e2e/tiers.json`), each its own CI job; `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 
