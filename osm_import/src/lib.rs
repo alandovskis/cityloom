@@ -8,7 +8,7 @@
 
 use abstutil::{Tags, Timer};
 pub use cityloom_model::*;
-use osm2streets::{Direction, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
+use osm2streets::{Direction as StreetsDirection, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
 use std::collections::BTreeMap;
 
 use osm2streets::osm::WayID;
@@ -368,7 +368,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                     .map(|l| Lane {
                         kind: lane_kind(l.lt),
                         buffer_type: buffer_type(l.lt),
-                        way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
+                        way: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
                         width_m: l.width.inner_meters(),
                         hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
                     })
@@ -395,9 +395,9 @@ fn join_two_way_bike_lanes(lanes: Vec<Lane>) -> Vec<Lane> {
             Some(last)
                 if last.kind == LaneKind::Bike
                     && lane.kind == LaneKind::Bike
-                    && matches!((last.way, lane.way), (Way::Forward, Way::Backward) | (Way::Backward, Way::Forward)) =>
+                    && matches!((last.way, lane.way), (Direction::Forward, Direction::Backward) | (Direction::Backward, Direction::Forward)) =>
             {
-                last.way = Way::Both;
+                last.way = Direction::Both;
                 last.width_m += lane.width_m;
             }
             _ => joined.push(lane),
@@ -550,24 +550,24 @@ mod tests {
         assert!(!is_track(&tags(&[("highway", "path"), ("bicycle", "yes")])));
     }
 
-    fn bike(way: Way, width_m: f64) -> Lane {
+    fn bike(way: Direction, width_m: f64) -> Lane {
         Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, hours: None }
     }
 
     #[test]
     fn two_bike_lanes_side_by_side_that_run_against_each_other_are_one_two_way_lane() {
-        let lanes = join_two_way_bike_lanes(vec![bike(Way::Backward, 1.5), bike(Way::Forward, 1.5)]);
-        assert_eq!(lanes, [bike(Way::Both, 3.0)]);
-        let lanes = join_two_way_bike_lanes(vec![bike(Way::Forward, 1.5), bike(Way::Backward, 1.2)]);
-        assert_eq!(lanes, [bike(Way::Both, 2.7)]);
+        let lanes = join_two_way_bike_lanes(vec![bike(Direction::Backward, 1.5), bike(Direction::Forward, 1.5)]);
+        assert_eq!(lanes, [bike(Direction::Both, 3.0)]);
+        let lanes = join_two_way_bike_lanes(vec![bike(Direction::Forward, 1.5), bike(Direction::Backward, 1.2)]);
+        assert_eq!(lanes, [bike(Direction::Both, 2.7)]);
     }
 
     #[test]
     fn bike_lanes_that_run_the_same_way_or_are_apart_stay_as_they_are() {
-        let same = vec![bike(Way::Forward, 1.5), bike(Way::Forward, 1.5)];
+        let same = vec![bike(Direction::Forward, 1.5), bike(Direction::Forward, 1.5)];
         assert_eq!(join_two_way_bike_lanes(same.clone()), same);
-        let driving = Lane { kind: LaneKind::Driving, ..bike(Way::Forward, 3.0) };
-        let apart = vec![bike(Way::Backward, 1.5), driving, bike(Way::Forward, 1.5)];
+        let driving = Lane { kind: LaneKind::Driving, ..bike(Direction::Forward, 3.0) };
+        let apart = vec![bike(Direction::Backward, 1.5), driving, bike(Direction::Forward, 1.5)];
         assert_eq!(join_two_way_bike_lanes(apart.clone()), apart);
     }
 

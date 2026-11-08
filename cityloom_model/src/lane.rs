@@ -35,7 +35,7 @@ pub enum BufferType {
 /// a network kept before `Both` existed has none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Way {
+pub enum Direction {
     Forward,
     Backward,
     Both,
@@ -44,7 +44,7 @@ pub enum Way {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Lane {
     pub kind: LaneKind,
-    pub way: Way,
+    pub way: Direction,
     pub width_m: f64,
     /// What a `Buffer` lane is made of, when it is known.
     #[serde(default, skip_serializing_if = "Option::is_none")]

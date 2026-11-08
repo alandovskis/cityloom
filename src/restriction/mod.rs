@@ -17,7 +17,7 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 pub(crate) mod fixtures {
     use std::rc::Rc;
 
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef, Zone};
+    use cityloom_model::{Control, Direction, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, WayRef, Zone};
 
     use crate::city::projection::{self, Projection};
     use crate::city::store::CityStore;
@@ -47,7 +47,7 @@ pub(crate) mod fixtures {
                 road_type: RoadType::Local,
                 from: 1,
                 to: 2,
-                zones: vec![Zone::whole(vec![lane(Way::Forward), lane(Way::Backward)])],
+                zones: vec![Zone::whole(vec![lane(Direction::Forward), lane(Direction::Backward)])],
                 speed_kmh: None,
                 points: vec![Point::new(0.0, 0.0), Point::new(80.0, 0.0), Point::new(100.0, 50.0)],
             }],

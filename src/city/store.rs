@@ -534,7 +534,7 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Lane, LaneKind, Node, NodeRef, Point, Road, RoadType, Way, WayRef, Zone};
+        use cityloom_model::{Control, Direction, Lane, LaneKind, Node, NodeRef, Point, Road, RoadType, WayRef, Zone};
         let node = |id, x_m, junction| Node {
             id,
             osm_nodes: vec![NodeRef(id as i64)],
@@ -555,7 +555,7 @@ mod tests {
                 road_type: RoadType::Local,
                 from: 1,
                 to: 2,
-                zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)])],
+                zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Direction::Forward), lane(LaneKind::Driving, Direction::Backward)])],
                 speed_kmh: None,
                 points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
             }],
@@ -565,16 +565,16 @@ mod tests {
     /// `tiny_network` with a sidewalk and a 0.1 m curb on each side. `legacy` makes the curb as importer version 4 did:
     /// a lane of its own that the catalogue makes a 600 mm median.
     fn curbed_network(legacy: bool) -> Network {
-        use cityloom_model::{BufferType, Lane, LaneKind, Way};
+        use cityloom_model::{BufferType, Direction, Lane, LaneKind};
         let mut network = tiny_network();
         let curb = Lane {
             kind: if legacy { LaneKind::Other } else { LaneKind::Buffer },
-            way: Way::Forward,
+            way: Direction::Forward,
             width_m: 0.1,
             buffer_type: (!legacy).then_some(BufferType::Curb),
             hours: None,
         };
-        let walk = Lane { kind: LaneKind::Sidewalk, way: Way::Forward, width_m: 2.0, buffer_type: None, hours: None };
+        let walk = Lane { kind: LaneKind::Sidewalk, way: Direction::Forward, width_m: 2.0, buffer_type: None, hours: None };
         let road = network.roads[0].base_lanes().to_vec();
         *network.roads[0].base_lanes_mut() = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
         network
@@ -598,11 +598,11 @@ mod tests {
     /// `tiny_network` with a bike lane beside the road: one-way, 1.5 m, as a track mapped as ways of its own was
     /// read before those ways were fetched, or two-way, 3 m, as it is read now.
     fn network_with_bike_lane(two_way: bool) -> Network {
-        use cityloom_model::{Lane, LaneKind, Way};
+        use cityloom_model::{Direction, Lane, LaneKind};
         let mut network = tiny_network();
         let bike = Lane {
             kind: LaneKind::Bike,
-            way: if two_way { Way::Both } else { Way::Forward },
+            way: if two_way { Direction::Both } else { Direction::Forward },
             width_m: if two_way { 3.0 } else { 1.5 },
             buffer_type: None,
             hours: None,

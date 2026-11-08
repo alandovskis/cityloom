@@ -155,7 +155,7 @@ mod tests {
     }
 
     fn lane(width_m: f64) -> Lane {
-        Lane { kind: crate::LaneKind::Driving, way: crate::Way::Forward, width_m, buffer_type: None, hours: None }
+        Lane { kind: crate::LaneKind::Driving, way: crate::Direction::Forward, width_m, buffer_type: None, hours: None }
     }
 
     #[test]

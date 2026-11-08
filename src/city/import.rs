@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Point, RoadType, Way, WayRef};
+use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Network, Point, RoadType, WayRef};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -67,7 +67,13 @@ fn legacy_pieces(lanes: &[Lane]) -> Vec<Piece> {
 fn one_way_bike_lanes(lanes: &[Lane]) -> Vec<Lane> {
     lanes
         .iter()
-        .map(|l| if l.kind == LaneKind::Bike && l.way == Way::Both { Lane { way: Way::Forward, width_m: l.width_m / 2.0, ..l.clone() } } else { l.clone() })
+        .map(|l| {
+            if l.kind == LaneKind::Bike && l.way == Direction::Both {
+                Lane { way: Direction::Forward, width_m: l.width_m / 2.0, ..l.clone() }
+            } else {
+                l.clone()
+            }
+        })
         .collect()
 }
 
@@ -128,7 +134,7 @@ fn piece(lane: &Lane) -> Piece {
     Piece {
         kind: base,
         width_mm: (lane.width_m * 1000.0).round() as i32,
-        direction: (lane.way != Way::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Way::Backward)),
+        direction: (lane.way != Direction::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Direction::Backward)),
         variants,
     }
 }
@@ -304,7 +310,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, NodeRef, Point, Road, Way, WayRef, Zone};
+    use cityloom_model::{BufferType, Control, Direction, Lane, LaneKind, Node, NodeRef, Point, Road, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -313,12 +319,12 @@ mod tests {
     use crate::shared::said::{Arg, Said};
     use crate::shared::testing::en;
 
-    fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
+    fn lane(kind: LaneKind, way: Direction, width_m: f64) -> Lane {
         Lane { kind, way, width_m, buffer_type: None, hours: None }
     }
 
     fn bus_lane(hours: Option<&str>) -> Lane {
-        Lane { hours: hours.map(str::to_string), ..lane(LaneKind::Bus, Way::Forward, 3.2) }
+        Lane { hours: hours.map(str::to_string), ..lane(LaneKind::Bus, Direction::Forward, 3.2) }
     }
 
     fn windows(p: &Piece) -> Vec<(&'static str, i32, i32)> {
@@ -326,7 +332,7 @@ mod tests {
     }
 
     fn buffer(buffer_type: Option<BufferType>) -> Lane {
-        Lane { buffer_type, ..lane(LaneKind::Buffer, Way::Forward, 0.6) }
+        Lane { buffer_type, ..lane(LaneKind::Buffer, Direction::Forward, 0.6) }
     }
 
     fn kind_id(lane: &Lane) -> &'static str {
@@ -335,11 +341,11 @@ mod tests {
 
     #[test]
     fn a_two_way_bike_lane_has_no_direction_and_a_one_way_one_keeps_it() {
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Both, 3.0)).direction, None);
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Forward, 1.5)).direction, Some(0));
-        assert_eq!(piece(&lane(LaneKind::Bike, Way::Backward, 1.5)).direction, Some(1));
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Both, 3.0)).direction, None);
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Forward, 1.5)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Bike, Direction::Backward, 1.5)).direction, Some(1));
         // only a bike lane can run both ways: a driving lane always has a direction
-        assert_eq!(piece(&lane(LaneKind::Driving, Way::Both, 3.0)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Driving, Direction::Both, 3.0)).direction, Some(0));
     }
 
     #[test]
@@ -380,11 +386,11 @@ mod tests {
     }
 
     fn bike() -> Lane {
-        lane(LaneKind::Bike, Way::Forward, 1.8)
+        lane(LaneKind::Bike, Direction::Forward, 1.8)
     }
 
     fn driving() -> Lane {
-        lane(LaneKind::Driving, Way::Forward, 3.3)
+        lane(LaneKind::Driving, Direction::Forward, 3.3)
     }
 
     /// The edges of the piece `i` that carry a curb in the street the lanes make, each true for its right edge.
@@ -407,7 +413,7 @@ mod tests {
         assert_eq!(curb_sides(&right, 1), [false]);
         // beside parking and a transit lane too: they are road pieces
         for road in [LaneKind::Parking, LaneKind::Bus] {
-            let lanes = [bike(), curb(), lane(road, Way::Forward, 2.4)];
+            let lanes = [bike(), curb(), lane(road, Direction::Forward, 2.4)];
             assert_eq!(ids(&lanes).len(), 2, "{road:?}");
             assert_eq!(widths(&lanes)[0], 2400, "{road:?}");
             assert_eq!(curb_sides(&lanes, 0), [true], "{road:?}");
@@ -426,7 +432,7 @@ mod tests {
 
     #[test]
     fn a_curb_buffer_between_a_sidewalk_and_a_road_lane_is_the_sidewalks_own_curb() {
-        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        let sidewalk = || lane(LaneKind::Sidewalk, Direction::Forward, 2.0);
         let left = [sidewalk(), curb(), driving()];
         assert_eq!(ids(&left), ["sidewalk", "travel"]);
         assert_eq!(widths(&left), [2600, 3300]);
@@ -435,23 +441,23 @@ mod tests {
         assert_eq!(ids(&right), ["travel", "sidewalk"]);
         assert_eq!(widths(&right), [3300, 2600]);
         assert_eq!(curb_sides(&right, 1), [false]);
-        let parked = [sidewalk(), curb(), lane(LaneKind::Parking, Way::Forward, 2.4)];
+        let parked = [sidewalk(), curb(), lane(LaneKind::Parking, Direction::Forward, 2.4)];
         assert_eq!(ids(&parked), ["sidewalk", "parking"]);
         assert_eq!(widths(&parked), [2600, 2400]);
         // the sidewalk's own maximum holds
-        let wide = [lane(LaneKind::Sidewalk, Way::Forward, 7.8), curb(), driving()];
+        let wide = [lane(LaneKind::Sidewalk, Direction::Forward, 7.8), curb(), driving()];
         assert_eq!(widths(&wide), [8000, 400, 3300]);
     }
 
     #[test]
     fn what_a_curb_adds_past_the_maximum_of_the_piece_it_joins_stays_as_a_buffer_so_no_width_is_lost() {
-        let wide_bike = [lane(LaneKind::Bike, Way::Forward, 2.8), Lane { width_m: 0.5, ..curb() }, driving()];
+        let wide_bike = [lane(LaneKind::Bike, Direction::Forward, 2.8), Lane { width_m: 0.5, ..curb() }, driving()];
         assert_eq!(ids(&wide_bike), ["bike", "buffer", "travel"]);
         assert_eq!(widths(&wide_bike), [3000, 300, 3300]);
         let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&wide_bike));
         assert_eq!(street.row_mm, 6600, "the street is as wide as its lanes");
         // a curb on each side of a lane with room for part of one: the lanes' widths are all kept
-        let both = [driving(), curb(), lane(LaneKind::Bike, Way::Forward, 2.5), curb(), driving()];
+        let both = [driving(), curb(), lane(LaneKind::Bike, Direction::Forward, 2.5), curb(), driving()];
         let w = widths(&both);
         assert_eq!(w.iter().sum::<i32>(), 3300 + 600 + 2500 + 600 + 3300);
         assert!(w.contains(&3000), "the lane is at its maximum: {w:?}");
@@ -460,23 +466,23 @@ mod tests {
     #[test]
     fn a_remainder_under_the_buffers_minimum_goes_to_the_road_lane_beside_the_curb_and_the_street_keeps_its_width() {
         // 2.95 m of bike lane and a 0.1 m curb: 50 mm too much for the lane, too little for a buffer
-        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.1), driving()];
+        let lanes = [lane(LaneKind::Bike, Direction::Forward, 2.95), curb().with_width(0.1), driving()];
         assert_eq!(ids(&lanes), ["bike", "travel"]);
         assert_eq!(widths(&lanes), [3000, 3350]);
         let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&lanes));
         assert_eq!(street.row_mm, 6350, "exactly the lanes' width");
         // the other order: the road lane is before the curb
-        let lanes = [driving(), curb().with_width(0.1), lane(LaneKind::Bike, Way::Forward, 2.95)];
+        let lanes = [driving(), curb().with_width(0.1), lane(LaneKind::Bike, Direction::Forward, 2.95)];
         assert_eq!(widths(&lanes), [3350, 3000]);
         // 150 mm and more stays a buffer
-        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.2), driving()];
+        let lanes = [lane(LaneKind::Bike, Direction::Forward, 2.95), curb().with_width(0.2), driving()];
         assert_eq!(widths(&lanes), [3000, 150, 3300]);
     }
 
     #[test]
     fn a_curb_buffer_with_no_bike_lane_or_sidewalk_to_belong_to_is_the_neutral_buffer() {
         // beside a driving lane only, at the edge, between two sidewalks, two bike lanes, or a bike lane and a sidewalk
-        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        let sidewalk = || lane(LaneKind::Sidewalk, Direction::Forward, 2.0);
         assert_eq!(ids(&[driving(), curb(), driving()]), ["travel", "buffer", "travel"]);
         assert_eq!(ids(&[curb(), driving()]), ["buffer", "travel"]);
         assert_eq!(ids(&[sidewalk(), curb(), sidewalk()]), ["sidewalk", "buffer", "sidewalk"]);
@@ -493,7 +499,7 @@ mod tests {
             assert_eq!(ids(&lanes), ["bike", "buffer", "travel"], "{t:?}");
             assert_eq!(widths(&lanes), [1800, 600, 3300], "{t:?}");
         }
-        let shoulder = lane(LaneKind::Buffer, Way::Forward, 1.0);
+        let shoulder = lane(LaneKind::Buffer, Direction::Forward, 1.0);
         assert_eq!(ids(&[shoulder, driving()]), ["buffer", "travel"]);
     }
 
@@ -508,7 +514,7 @@ mod tests {
             (LaneKind::Other, "median"),
         ];
         for (kind, id) in kinds {
-            assert_eq!(kind_id(&lane(kind, Way::Forward, 3.0)), id, "{kind:?}");
+            assert_eq!(kind_id(&lane(kind, Direction::Forward, 3.0)), id, "{kind:?}");
         }
     }
 
@@ -585,10 +591,10 @@ mod tests {
             from: 1,
             to,
             zones: vec![Zone::whole(vec![
-                lane(LaneKind::Sidewalk, Way::Forward, 2.0),
-                lane(LaneKind::Driving, Way::Backward, 3.0),
-                lane(LaneKind::Driving, Way::Forward, 3.0),
-                lane(LaneKind::Sidewalk, Way::Forward, 2.0),
+                lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
+                lane(LaneKind::Driving, Direction::Backward, 3.0),
+                lane(LaneKind::Driving, Direction::Forward, 3.0),
+                lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
             ])],
             speed_kmh: None,
             points,
@@ -774,7 +780,7 @@ mod tests {
 
     fn bare_street() -> Network {
         let mut net = star(&[(100.0, 0.0)]);
-        *net.roads[0].base_lanes_mut() = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
+        *net.roads[0].base_lanes_mut() = vec![lane(LaneKind::Driving, Direction::Backward, 3.0), lane(LaneKind::Driving, Direction::Forward, 3.0)];
         net
     }
 

@@ -49,7 +49,7 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     }
     // only a bike lane runs both ways. (The extract holds the roads only, no `highway=cycleway` ways and no
     // `oneway=no` on a side, so it has no two-way track to count; `tests/import.rs` pins them on fixtures.)
-    assert!(net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.way == osm_import::Way::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
+    assert!(net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.way == osm_import::Direction::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
     // the streets with a median in them
     assert!(net.roads.iter().any(|r| r.base_lanes().iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
 }
@@ -476,7 +476,7 @@ mod two_way_track {
         let view = city.view(0);
         let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();
         let bike = now.roads[index].base_lanes().iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
-        assert_eq!((bike.way, bike.width_m), (osm_import::Way::Both, 3.0), "the street is two-way now");
+        assert_eq!((bike.way, bike.width_m), (osm_import::Direction::Both, 3.0), "the street is two-way now");
         assert_eq!(view.edges[index].row_mm, one_way_mm, "and is shown as it was saved");
         assert!(view.edges[index].edited, "and the record made at {one_way_mm} mm still applies");
         assert_eq!(city.street_editor(view.edges[index].uid, 0).unwrap().snapshot(), edited);

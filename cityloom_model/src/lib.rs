@@ -13,7 +13,7 @@ mod road;
 mod road_type;
 mod zone;
 
-pub use lane::{BufferType, Lane, LaneKind, Way};
+pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
 pub use node::{Control, Node};
 pub use osm::{NodeRef, OsmRef, WayRef};
