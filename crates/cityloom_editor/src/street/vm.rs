@@ -3328,7 +3328,7 @@ mod calming_tests {
         assert!(r.vm.remove_calming());
         assert_eq!(cells(&r), [(None, 0, LENGTH)]);
         assert!(!r.vm.remove_calming(), "a free stretch is chosen now");
-        assert_eq!(r.said.take().last().unwrap(), "Choose a raised table, crossing or chicane first.");
+        assert_eq!(r.said.take().last().unwrap(), "Choose a raised table, crossing, chicane or modal filter first.");
     }
 
     #[test]
@@ -3367,6 +3367,19 @@ mod calming_tests {
     fn the_default_length_follows_the_kind() {
         assert_eq!(CalmingKind::Table.default_mm(), 7_000);
         assert!(CalmingKind::Chicane.default_mm() >= CalmingKind::Chicane.min_mm());
+        assert_eq!(CalmingKind::ModalFilter.default_mm(), 2_000);
+        assert!(CalmingKind::ModalFilter.default_mm() >= CalmingKind::ModalFilter.min_mm());
+    }
+
+    #[test]
+    fn a_modal_filter_is_added_with_its_own_default_length_and_takes_no_side() {
+        let r = rig();
+        r.vm.select_calming(0);
+        r.vm.pick_calming_kind(CalmingKind::ModalFilter);
+        assert!(r.vm.add_calming(CalmingKind::ModalFilter, CalmingKind::ModalFilter.default_mm()));
+        let c = &r.vm.view_now().calming[0];
+        assert_eq!((c.kind, c.length_mm, c.first), (CalmingKind::ModalFilter, 2_000, None));
+        assert_eq!(r.vm.view_now().revisions.last().unwrap().label.key, "rev-calming-add");
     }
 
     #[test]
@@ -3461,7 +3474,7 @@ mod calming_tests {
         let said = r.said.take().join(" ").replace(['\u{a0}', '\u{202f}'], " ");
         assert!(said.starts_with("Libre, de 0,0 m à 60,0 m, 60,0 m de long, 1 sur 1"), "{said}");
         assert!(!r.vm.remove_calming());
-        assert_eq!(r.said.take().last().unwrap(), "Choisissez d’abord un plateau, un passage surélevé ou une chicane.");
+        assert_eq!(r.said.take().last().unwrap(), "Choisissez d’abord un plateau, un passage surélevé, une chicane ou un filtre modal.");
     }
 }
 

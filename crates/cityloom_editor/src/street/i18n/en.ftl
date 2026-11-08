@@ -374,6 +374,10 @@ svg-iso-chicane = { $count ->
         [one] One chicane is shown.
        *[other] { $count } chicanes are shown.
     }
+svg-iso-filter = { $count ->
+        [one] One modal filter is shown.
+       *[other] { $count } modal filters are shown.
+    }
 svg-iso-green = Trees and plantings shown: { $count }.
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
@@ -587,6 +591,7 @@ st-green-remove = Remove
 calming-kind-table = Raised table
 calming-kind-crossing = Raised crossing
 calming-kind-chicane = Chicane
+calming-kind-modal-filter = Modal filter
 calming-refused-no-anchor = Both ends of this street are cut by the edge of the map, so raised tables cannot be placed along it.
 calming-refused-elsewhere = The raised tables of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
 calming-refused-dragging = Finish the drag before changing the raised tables.
@@ -681,15 +686,22 @@ check-detail-chicane-length = A chicane of { $length } is too short: it needs tw
 check-label-calming-lane = Chicanes clear of bus and bike lanes
 check-detail-calming-lane = A chicane narrows the roadway to one path, so a bus lane or a bike lane cannot go through it.
 check-detail-calming-lane-ok = No chicane crosses a bus lane or a bike lane.
+check-detail-filter-length = A modal filter of { $length } is too short: it needs { $min } or more.
+check-label-calming-filter-bus = Modal filters clear of bus lanes
+check-detail-filter-bus = A modal filter stops motor traffic, so a bus lane cannot go through it.
+check-detail-filter-bus-ok = No modal filter crosses a bus lane.
+check-label-calming-passage = Modal filters passable on foot and by bike
+check-detail-filter-passage = A modal filter needs a sidewalk or a bike lane beside it so that people on foot or on bikes can get past it.
+check-detail-filter-passage-ok = Every modal filter has a sidewalk or a bike lane to get past it.
 # The raised elements' strip, tools and the words said on choosing one (src/street/calming_strip.rs, calming_tools.rs).
 calming-gap = Free
 calming-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
 calming-cell-failing = Fails a check. See the checks.
 calming-choose-gap = Choose a free stretch of the street first.
-calming-choose-element = Choose a raised table, crossing or chicane first.
-st-calming-heading = Raised tables, crossings and chicanes along the street
-st-calming-caption = Raised tables, crossings and chicanes
-st-calming-strip-label = Raised tables, crossings and chicanes along the street
+calming-choose-element = Choose a raised table, crossing, chicane or modal filter first.
+st-calming-heading = Raised tables, crossings, chicanes and modal filters along the street
+st-calming-caption = Raised tables, crossings, chicanes and modal filters
+st-calming-strip-label = Raised tables, crossings, chicanes and modal filters along the street
 st-calming-tools = Raised table commands
 st-calming-kind = Kind
 st-calming-length = Length ({ $unit })

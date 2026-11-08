@@ -1,5 +1,6 @@
 //! Traffic calming: raised tables and raised crossings along a street, each an extent of the roadway lifted to a
-//! plateau with a ramp at either end, and chicanes, staggered build-outs from alternate curbs that make the road bend.
+//! plateau with a ramp at either end, chicanes, staggered build-outs from alternate curbs that make the road bend, and
+//! modal filters, a barrier across the roadway that stops motor traffic and lets people on foot and on bikes through.
 //!
 //! They belong to the street, not to a section: a position is measured along the whole street from its anchored end
 //! (`Street::from_end`), as a zone boundary and a curbside use are, and a table spans the whole width of the roadway,
@@ -48,6 +49,13 @@ pub const DEFAULT_CHICANE_MM: i32 = 3 * CHICANE_BUILDOUT_MM + 2 * CHICANE_GAP_MM
 /// The highest speed limit a chicane is meant for, in km/h: lower than a table's, since it bends the path. A
 /// placeholder, UNVERIFIED.
 pub const MAX_CHICANE_SPEED_KMH: u8 = 40;
+/// The shortest a modal filter should be along the street, in millimetres. A placeholder, UNVERIFIED; a shorter one
+/// is refused.
+pub const MIN_FILTER_MM: i32 = 1_000;
+/// The length a new modal filter is given when none is typed, in millimetres. A placeholder, UNVERIFIED.
+pub const DEFAULT_FILTER_MM: i32 = 2_000;
+/// How high a modal filter's barrier stands above the roadway, in millimetres. A placeholder, UNVERIFIED.
+pub const FILTER_HEIGHT_MM: i32 = 600;
 
 /// What a raised element is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -60,11 +68,14 @@ pub enum Kind {
     /// A chicane: build-outs from alternate curbs, which make the road bend. Appended last so the values a choice
     /// saved for the others keep their place.
     Chicane,
+    /// A modal filter: a barrier or planter across the roadway that stops motor traffic and leaves a way through for
+    /// people on foot and on bikes. Appended last, as the chicane was.
+    ModalFilter,
 }
 
 impl Kind {
     /// Every kind, in the order a choice lists them.
-    pub const ALL: [Kind; 3] = [Kind::Table, Kind::Crossing, Kind::Chicane];
+    pub const ALL: [Kind; 4] = [Kind::Table, Kind::Crossing, Kind::Chicane, Kind::ModalFilter];
 
     /// The kind's stable name, as saved and as the choice's value.
     pub fn id(self) -> &'static str {
@@ -72,6 +83,7 @@ impl Kind {
             Kind::Table => "table",
             Kind::Crossing => "crossing",
             Kind::Chicane => "chicane",
+            Kind::ModalFilter => "modal_filter",
         }
     }
 
@@ -81,6 +93,7 @@ impl Kind {
             Kind::Table => "calming-kind-table",
             Kind::Crossing => "calming-kind-crossing",
             Kind::Chicane => "calming-kind-chicane",
+            Kind::ModalFilter => "calming-kind-modal-filter",
         }
     }
 
@@ -88,6 +101,7 @@ impl Kind {
     pub fn min_mm(self) -> i32 {
         match self {
             Kind::Chicane => MIN_CHICANE_MM,
+            Kind::ModalFilter => MIN_FILTER_MM,
             Kind::Table | Kind::Crossing => MIN_TABLE_MM,
         }
     }
@@ -96,15 +110,18 @@ impl Kind {
     pub fn default_mm(self) -> i32 {
         match self {
             Kind::Chicane => DEFAULT_CHICANE_MM,
+            Kind::ModalFilter => DEFAULT_FILTER_MM,
             Kind::Table | Kind::Crossing => DEFAULT_TABLE_MM,
         }
     }
 
-    /// The highest speed limit it is meant for, in km/h.
-    pub fn max_kmh(self) -> u8 {
+    /// The highest speed limit it is meant for, in km/h; none for a modal filter, which leaves no through traffic to
+    /// be too fast.
+    pub fn max_kmh(self) -> Option<u8> {
         match self {
-            Kind::Chicane => MAX_CHICANE_SPEED_KMH,
-            Kind::Table | Kind::Crossing => MAX_TABLE_SPEED_KMH,
+            Kind::Chicane => Some(MAX_CHICANE_SPEED_KMH),
+            Kind::Table | Kind::Crossing => Some(MAX_TABLE_SPEED_KMH),
+            Kind::ModalFilter => None,
         }
     }
 }
@@ -530,8 +547,12 @@ impl Editor {
         if content.calming.iter().any(|c| c.kind == Kind::Chicane) {
             rows.push((4, "calming-lane", "check-label-calming-lane", "check-detail-calming-lane-ok"));
         }
+        if content.calming.iter().any(|c| c.kind == Kind::ModalFilter) {
+            rows.push((5, "calming-filter-bus", "check-label-calming-filter-bus", "check-detail-filter-bus-ok"));
+            rows.push((6, "calming-passage", "check-label-calming-passage", "check-detail-filter-passage-ok"));
+        }
         // The lowest ceiling of the kinds present, for the note when the speed is not known.
-        let ceiling = content.calming.iter().map(|c| c.kind.max_kmh()).min().unwrap_or(MAX_TABLE_SPEED_KMH);
+        let ceiling = content.calming.iter().filter_map(|c| c.kind.max_kmh()).min().unwrap_or(MAX_TABLE_SPEED_KMH);
         rows.iter()
             .map(|&(rule, id, label, ok_detail)| match fails.iter().find(|f| f.rule == rule) {
                 Some(f) => {
@@ -566,7 +587,11 @@ impl Editor {
                     out.push(Fail { element: k, rule, detail, named });
                 }
             };
-            if c.kind == Kind::Chicane {
+            if c.kind == Kind::ModalFilter {
+                if c.length_mm < MIN_FILTER_MM {
+                    fail(0, Said::new("check-detail-filter-length").with("length", Arg::Length(c.length_mm)).with("min", Arg::Length(MIN_FILTER_MM)), None);
+                }
+            } else if c.kind == Kind::Chicane {
                 if c.length_mm < MIN_CHICANE_MM {
                     fail(0, Said::new("check-detail-chicane-length").with("length", Arg::Length(c.length_mm)).with("min", Arg::Length(MIN_CHICANE_MM)), None);
                 }
@@ -594,9 +619,11 @@ impl Editor {
                 }
             }
             // The speed of the zone the element lies in, in every zone it overlaps: the zone that is too fast is named.
-            let max = c.kind.max_kmh();
+            let max = c.kind.max_kmh().unwrap_or(u8::MAX);
             let too_fast = |kmh: u16| Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(max)));
-            if content.zone_count() < 2 {
+            if c.kind == Kind::ModalFilter {
+                // No speed ceiling: nothing to judge.
+            } else if content.zone_count() < 2 {
                 if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(max)) {
                     fail(1, too_fast(kmh), None);
                 }
@@ -622,6 +649,34 @@ impl Editor {
                         let (from, to) = content.span(z, length_mm);
                         if from < c.to_mm() && c.from_mm < to && lane(content.section(z)) {
                             fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                        }
+                    }
+                }
+            }
+            // A modal filter stops motor traffic, so a bus lane cannot go through it (a bike lane passes through the gap),
+            // and it is only worth having where people on foot or on bikes have a way past it: a sidewalk or a bike lane.
+            // Each is judged in every zone the filter overlaps, and the zone that fails is named.
+            if c.kind == Kind::ModalFilter {
+                let bus = |section: &[super::Segment]| section.iter().any(|g| KINDS[g.kind].id == "bus");
+                let way = |section: &[super::Segment]| section.iter().any(|g| matches!(KINDS[g.kind].id, "sidewalk" | "bike"));
+                if content.zone_count() < 2 {
+                    if bus(&content.segments) {
+                        fail(5, Said::new("check-detail-filter-bus"), None);
+                    }
+                    if !way(&content.segments) {
+                        fail(6, Said::new("check-detail-filter-passage"), None);
+                    }
+                } else {
+                    for z in 0..content.zone_count() {
+                        let (from, to) = content.span(z, length_mm);
+                        if from < c.to_mm() && c.from_mm < to {
+                            let named = || Some(c.named_in(zone_label_mid(&content.zones[z], z + 1)));
+                            if bus(content.section(z)) {
+                                fail(5, Said::new("check-detail-filter-bus"), named());
+                            }
+                            if !way(content.section(z)) {
+                                fail(6, Said::new("check-detail-filter-passage"), named());
+                            }
                         }
                     }
                 }
@@ -685,7 +740,7 @@ mod tests {
 
     #[test]
     fn kind_ids_are_stable() {
-        assert_eq!(Kind::ALL, [Kind::Table, Kind::Crossing, Kind::Chicane]);
+        assert_eq!(Kind::ALL, [Kind::Table, Kind::Crossing, Kind::Chicane, Kind::ModalFilter]);
         assert_eq!(Kind::Table.id(), "table");
         assert_eq!(Kind::Crossing.id(), "crossing");
         assert_eq!(Kind::Chicane.id(), "chicane");
@@ -1501,6 +1556,114 @@ mod tests {
     fn a_chicane_near_a_stop_or_a_junction_fails_those_rows_like_a_table() {
         let mut e = editor().with_ends([reach(true, 9_000), EndInfo::default()]);
         e.add_calming(Kind::Chicane, 14_000, DEFAULT_CHICANE_MM).unwrap();
+        assert!(check(&e, "calming-junction").ok);
+        e.move_calming(0, 13_900).unwrap();
+        assert!(!check(&e, "calming-junction").ok);
+    }
+    // ---- modal filters ----
+
+    fn piece(id: &str, w: i32) -> crate::street::model::Piece {
+        crate::street::model::Piece { kind: crate::shared::catalogue::kind_index(id).unwrap(), width_mm: w, direction: None, variants: vec![] }
+    }
+
+    fn filter_on(pieces: Vec<crate::street::model::Piece>, speed: Speed) -> Editor {
+        let mut s = Street::imported(StreetClass::Local, Side::Right, &pieces);
+        s.speed = speed;
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(frame());
+        e.add_calming(Kind::ModalFilter, 20_000, DEFAULT_FILTER_MM).unwrap();
+        e
+    }
+
+    fn walkable() -> Vec<crate::street::model::Piece> {
+        vec![piece("sidewalk", 2_000), piece("travel", 3_500), piece("travel", 3_500), piece("sidewalk", 2_000)]
+    }
+
+    #[test]
+    fn a_modal_filter_has_its_own_id_and_minimum_and_no_speed_ceiling() {
+        assert_eq!(Kind::ALL, [Kind::Table, Kind::Crossing, Kind::Chicane, Kind::ModalFilter]);
+        assert_eq!(Kind::ModalFilter.id(), "modal_filter");
+        assert_eq!(Kind::ModalFilter.name_key(), "calming-kind-modal-filter");
+        assert_eq!(serde_json::to_string(&Kind::ModalFilter).unwrap(), r#""modal_filter""#);
+        assert_eq!((Kind::ModalFilter.min_mm(), Kind::ModalFilter.default_mm()), (MIN_FILTER_MM, DEFAULT_FILTER_MM));
+        assert!(DEFAULT_FILTER_MM >= MIN_FILTER_MM);
+        assert_eq!(Kind::ModalFilter.max_kmh(), None);
+        assert_eq!(Kind::Chicane.max_kmh(), Some(MAX_CHICANE_SPEED_KMH));
+        assert_eq!(Kind::Table.max_kmh(), Some(MAX_TABLE_SPEED_KMH));
+    }
+
+    #[test]
+    fn a_modal_filter_is_refused_below_its_minimum_and_saves_with_no_side() {
+        let mut e = editor();
+        assert_eq!(e.add_calming(Kind::ModalFilter, 10_000, MIN_FILTER_MM - 100), Err(CalmingRefusal::TooShort { min_mm: MIN_FILTER_MM }));
+        e.add_calming_first(Kind::ModalFilter, 10_000, MIN_FILTER_MM, Some(Side::Left)).unwrap();
+        assert_eq!(e.snapshot().calming[0].first, None, "only a chicane has a side");
+        assert_eq!(
+            serde_json::to_string(&e.snapshot().calming).unwrap(),
+            format!(r#"[{{"from_mm":10000,"length_mm":{MIN_FILTER_MM},"kind":"modal_filter"}}]"#)
+        );
+    }
+
+    #[test]
+    fn a_filter_is_refused_on_a_street_with_no_roadway() {
+        let s = Street::imported(StreetClass::Local, Side::Right, &[piece("sidewalk", 3_000), piece("planting", 2_000)]);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(frame());
+        assert_eq!(e.add_calming(Kind::ModalFilter, 10_000, DEFAULT_FILTER_MM), Err(CalmingRefusal::NoRoadway));
+    }
+
+    #[test]
+    fn a_modal_filter_has_no_speed_ceiling() {
+        let e = filter_on(walkable(), Speed::Kmh(70));
+        let c = check(&e, "calming-speed");
+        assert!(c.ok, "a filter has no through traffic to be too fast");
+    }
+
+    #[test]
+    fn a_filter_too_short_after_a_kind_change_fails_its_length() {
+        let mut e = editor();
+        e.add_calming(Kind::ModalFilter, 10_000, MIN_FILTER_MM).unwrap();
+        assert!(check(&e, "calming-length").ok);
+        // Saved before the minimum went up, say: a record shorter than it fails with its own wording.
+        let mut s = e.snapshot();
+        s.calming[0].length_mm = MIN_FILTER_MM - 100;
+        let e = Editor::from_street(&s, &s, 0).with_frame(frame());
+        let c = check(&e, "calming-length");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-filter-length");
+    }
+
+    #[test]
+    fn the_filter_rows_exist_only_with_a_filter() {
+        let ids = |e: &Editor| e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("calming-")).collect::<Vec<_>>();
+        assert_eq!(ids(&with_table(20_000, 7_000)), ["calming-length", "calming-speed", "calming-stop"]);
+        assert_eq!(ids(&filter_on(walkable(), Speed::Kmh(30))), ["calming-length", "calming-speed", "calming-stop", "calming-filter-bus", "calming-passage"]);
+    }
+
+    #[test]
+    fn a_filter_across_a_bus_lane_fails_and_a_bike_lane_may_pass() {
+        let bus = filter_on(vec![piece("sidewalk", 2_000), piece("bus", 3_500), piece("travel", 3_500), piece("sidewalk", 2_000)], Speed::Kmh(30));
+        let c = check(&bus, "calming-filter-bus");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-filter-bus");
+        let bike = filter_on(vec![piece("sidewalk", 2_000), piece("bike", 1_800), piece("travel", 3_500), piece("sidewalk", 2_000)], Speed::Kmh(30));
+        assert!(check(&bike, "calming-filter-bus").ok, "a bike lane goes through the gap");
+        assert_eq!(check(&filter_on(walkable(), Speed::Kmh(30)), "calming-filter-bus").detail.key, "check-detail-filter-bus-ok");
+    }
+
+    #[test]
+    fn a_filter_needs_a_way_through_for_people_on_foot_or_on_bikes() {
+        let none = filter_on(vec![piece("travel", 3_500), piece("travel", 3_500)], Speed::Kmh(30));
+        let c = check(&none, "calming-passage");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-filter-passage");
+        assert!(check(&filter_on(walkable(), Speed::Kmh(30)), "calming-passage").ok);
+        let bike = filter_on(vec![piece("bike", 1_800), piece("travel", 3_500), piece("travel", 3_500)], Speed::Kmh(30));
+        assert!(check(&bike, "calming-passage").ok, "a bike lane is a way through");
+    }
+
+    #[test]
+    fn a_filter_near_a_stop_or_a_junction_fails_those_rows_like_a_table() {
+        let mut e = editor().with_ends([reach(true, 9_000), EndInfo::default()]);
+        e.add_calming(Kind::ModalFilter, 14_000, DEFAULT_FILTER_MM).unwrap();
         assert!(check(&e, "calming-junction").ok);
         e.move_calming(0, 13_900).unwrap();
         assert!(!check(&e, "calming-junction").ok);

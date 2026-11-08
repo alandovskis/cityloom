@@ -374,6 +374,10 @@ svg-iso-chicane = { $count ->
         [one] Une chicane est montrée.
        *[other] { $count } chicanes sont montrées.
     }
+svg-iso-filter = { $count ->
+        [one] Un filtre modal est montré.
+       *[other] { $count } filtres modaux sont montrés.
+    }
 svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
@@ -587,6 +591,7 @@ st-green-remove = Retirer
 calming-kind-table = Plateau surélevé
 calming-kind-crossing = Passage piéton surélevé
 calming-kind-chicane = Chicane
+calming-kind-modal-filter = Filtre modal
 calming-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de plateaux surélevés.
 calming-refused-elsewhere = Les plateaux surélevés de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
 calming-refused-dragging = Terminez le glissement avant de modifier les plateaux surélevés.
@@ -682,14 +687,21 @@ check-label-calming-lane = Chicanes sans voie d’autobus ni piste cyclable
 check-detail-calming-lane = Une chicane rétrécit la chaussée à un seul passage : une voie d’autobus ou une piste cyclable ne peut pas la traverser.
 check-detail-calming-lane-ok = Aucune chicane ne traverse une voie d’autobus ou une piste cyclable.
 # La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
+check-detail-filter-length = Un filtre modal de { $length } est trop court : il lui faut { $min } ou plus.
+check-label-calming-filter-bus = Filtres modaux sans voie d’autobus
+check-detail-filter-bus = Un filtre modal bloque la circulation motorisée : une voie d’autobus ne peut pas le traverser.
+check-detail-filter-bus-ok = Aucun filtre modal ne traverse une voie d’autobus.
+check-label-calming-passage = Filtres modaux franchissables à pied et à vélo
+check-detail-filter-passage = Un filtre modal doit avoir un trottoir ou une piste cyclable à côté pour que les piétons et les cyclistes puissent le contourner.
+check-detail-filter-passage-ok = Chaque filtre modal a un trottoir ou une piste cyclable pour le contourner.
 calming-gap = Libre
 calming-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
 calming-cell-failing = Ne passe pas une vérification. Voir les vérifications.
 calming-choose-gap = Choisissez d’abord un tronçon libre de la rue.
-calming-choose-element = Choisissez d’abord un plateau, un passage surélevé ou une chicane.
-st-calming-heading = Plateaux, passages surélevés et chicanes le long de la rue
-st-calming-caption = Plateaux, passages surélevés et chicanes
-st-calming-strip-label = Plateaux, passages surélevés et chicanes le long de la rue
+calming-choose-element = Choisissez d’abord un plateau, un passage surélevé, une chicane ou un filtre modal.
+st-calming-heading = Plateaux, passages surélevés, chicanes et filtres modaux le long de la rue
+st-calming-caption = Plateaux, passages surélevés, chicanes et filtres modaux
+st-calming-strip-label = Plateaux, passages surélevés, chicanes et filtres modaux le long de la rue
 st-calming-tools = Commandes des éléments surélevés
 st-calming-kind = Type
 st-calming-length = Longueur ({ $unit })

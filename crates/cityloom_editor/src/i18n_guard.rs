@@ -502,6 +502,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("calming-speed", "the id of a check, not a message"),
     ("calming-stop", "the id of a check, not a message"),
     ("calming-lane", "the id of a check, not a message"),
+    ("calming-filter-bus", "the id of a check, not a message"),
+    ("calming-passage", "the id of a check, not a message"),
     ("calming-junction", "the id of a check, not a message"),
     ("stop-clear", "the id of a check, not a message"),
     ("green-host", "the id of a check, not a message"),

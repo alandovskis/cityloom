@@ -403,6 +403,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Raised crossing | `Passage piéton surélevé` | `Traverse surélevée`, `Passage pour piétons surélevé` |
 | Raised element (a table or a crossing, in the checks) | `Élément surélevé` | The common word for either kind in the checks' rows (`Éléments surélevés dégagés des arrêts…`) |
 | Chicane (street element) | `Chicane` | The usual Québec road-safety word; to confirm |
+| Modal filter (street element) | `Filtre modal` | The term used in Québec and France for a barrier that stops motor traffic and lets people on foot and bikes through; to confirm |
 | build-out (of a chicane) | `avancée` | `saillie`, `avancée de trottoir` (a curb extension; to confirm) |
 | ramp (of a raised table) | `rampe` | `pente` (the slope, not the thing) |
 | boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is the app's lengthways zone) |
