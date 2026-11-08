@@ -213,15 +213,15 @@ impl Layout {
     /// Roads that start and end at one node, that have no lanes, that have no name, or that start or end at a node the
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
-        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.base_lanes().is_empty()).collect();
+        let roads: Vec<_> = network.roads.iter().filter(|r| r.edge.from != r.edge.to && !r.base_lanes().is_empty()).collect();
         let mut degree: BTreeMap<NodeId, usize> = BTreeMap::new();
         for r in &roads {
-            *degree.entry(r.from).or_default() += 1;
-            *degree.entry(r.to).or_default() += 1;
+            *degree.entry(r.edge.from).or_default() += 1;
+            *degree.entry(r.edge.to).or_default() += 1;
         }
         let nodes: Vec<_> = network.junctions.iter().filter(|n| degree.contains_key(&n.id)).collect();
         let index: BTreeMap<NodeId, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
-        let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
+        let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.edge.from) && index.contains_key(&r.edge.to)).collect();
         let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.position.x_m()), y.max(n.position.y_m())));
         let origin_m = (!nodes.is_empty()).then_some((min_x, max_y));
         let mm_of = |x_m: f64, y_m: f64| (((x_m - min_x) * 1000.0).round() as i32, ((max_y - y_m) * 1000.0).round() as i32);
@@ -238,7 +238,7 @@ impl Layout {
                 let section = Street {
                     name: Some(r.name.clone()),
                     source: refs(&r.provenance),
-                    speed: Speed::from_kmh(r.speed_kmh),
+                    speed: Speed::from_kmh(r.base_speed_kmh()),
                     ..Street::imported(class, side, &pieces)
                 };
                 let row_of = |pieces: &[Piece]| Street::imported(class, side, pieces).row_mm;
@@ -249,12 +249,12 @@ impl Layout {
                 legacy_rows_mm.dedup();
                 legacy_rows_mm.retain(|&row| row != section.row_mm);
                 EdgeDef {
-                    a: index[&r.from],
-                    b: index[&r.to],
+                    a: index[&r.edge.from],
+                    b: index[&r.edge.to],
                     class,
                     name: Some(r.name.clone()),
                     headings: headings(&r.points),
-                    shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
+                    shape: shape_mm(&r.points, node_mm(r.edge.from), node_mm(r.edge.to), &mm_of),
                     legacy_rows_mm,
                     section,
                 }
@@ -281,7 +281,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Direction, Junction, Lane, LaneKind, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
+    use cityloom_model::{BufferType, Control, Direction, Edge, Junction, Lane, LaneKind, NodeId, NodeRef, Point, Provenance, Road, RoadId, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -543,19 +543,16 @@ mod tests {
             control,
         };
         let road = |id: u32, name: &str, to: u32, points| Road {
-            id: RoadId(id),
+            edge: Edge { id: RoadId(id), from: NodeId(1), to: NodeId(to) },
             provenance: Provenance::of_ways([WayRef::new(id as i64 * 100)]),
             name: name.to_string(),
             road_type: RoadType::Local,
-            from: NodeId(1),
-            to: NodeId(to),
             zones: vec![Zone::whole(vec![
                 lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
                 lane(LaneKind::Driving, Direction::Backward, 3.0),
                 lane(LaneKind::Driving, Direction::Forward, 3.0),
                 lane(LaneKind::Sidewalk, Direction::Forward, 2.0),
             ])],
-            speed_kmh: None,
             points,
         };
         Network {
@@ -582,7 +579,7 @@ mod tests {
         use crate::street::model::Speed;
         for (road_speed, speed, kmh) in [(Some(40), Speed::Kmh(40), Some(40)), (None, Speed::NotSet, None)] {
             let mut network = crossing();
-            network.roads[0].speed_kmh = road_speed;
+            network.roads[0].zones[0].speed_kmh = road_speed;
             let layout = Layout::from_network(&network, "x");
             let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].provenance)).unwrap().section;
             assert_eq!((street.speed, street.speed_kmh()), (speed, kmh));
@@ -604,7 +601,7 @@ mod tests {
     #[test]
     fn a_junction_with_priority_roads_is_run_with_priority() {
         let mut net = crossing();
-        net.junctions[0].control = Control::Priority(vec![net.roads[0].id, net.roads[2].id]);
+        net.junctions[0].control = Control::Priority(vec![net.roads[0].edge.id, net.roads[2].edge.id]);
         let city = City::from_network(&net, "Testville");
         let v = city.view(0);
         let junction = v.nodes.iter().find(|n| n.junction).unwrap();
@@ -658,8 +655,8 @@ mod tests {
                 control: Control::None,
             });
             let mut road = crossing().roads[0].clone();
-            road.id = RoadId(id);
-            road.to = NodeId(id);
+            road.edge.id = RoadId(id);
+            road.edge.to = NodeId(id);
             road.points = vec![Point::new(0.0, 0.0), Point::new(x, y)];
             net.roads.push(road);
         }

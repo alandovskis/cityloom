@@ -8,6 +8,9 @@ use crate::{Coordinate, Lane, Street};
 pub struct Zone {
     /// Where the zone starts along the road from its `from` end; 0 for the first zone.
     pub from: Coordinate<Street>,
+    /// OSM's `maxspeed` for the stretch in km/h; none when it gives none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed_kmh: Option<u16>,
     /// Left to right when facing from the road's `from` end to its `to` end.
     pub lanes: Vec<Lane>,
 }
@@ -15,6 +18,6 @@ pub struct Zone {
 impl Zone {
     /// A zone that is the whole road, which is what a road made from one OSM way is.
     pub fn whole(lanes: Vec<Lane>) -> Zone {
-        Zone { from: Coordinate::new(0.0), lanes }
+        Zone { from: Coordinate::new(0.0), speed_kmh: None, lanes }
     }
 }

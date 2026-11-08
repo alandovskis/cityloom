@@ -1,30 +1,21 @@
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
-use crate::{Lane, NodeId, Point, Provenance, RoadId, RoadType, Street, WayRef, Zone};
+use crate::{Edge, Lane, Point, Provenance, RoadType, Street, Zone};
 
-/// A street between two nodes, made from one or more OpenStreetMap ways.
-///
-/// Kept as a road always was: the ways as bare ids in `osm_ways` and their versions in `osm_versions`, only for
-/// the ways whose version is known, so a network kept by an earlier build still reads. A road has a name: one
-/// without, or with a blank one, is not a road (`Road::try_from` refuses it, and so does reading one by itself).
+/// A street between two nodes, made from one or more OpenStreetMap ways. A road has a name: the importer leaves out
+/// one without, or with a blank one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(try_from = "RoadWire", into = "RoadWire")]
 pub struct Road {
-    pub id: RoadId,
+    /// Its id and the nodes it joins, from the first to the last.
+    pub edge: Edge,
     /// The OSM ways it was made from, each with its version when known; the key an edit is kept under.
     pub provenance: Provenance,
     pub name: String,
     /// How the road ranks, from OSM's `highway` value.
     pub road_type: RoadType,
-    pub from: NodeId,
-    pub to: NodeId,
-    /// The road divided lengthways, in order from `from`: at least one, the first starting at 0 and each one after
-    /// further along than the one before. A road made from one OSM way has one.
+    /// The road divided lengthways, in order from `edge.from`: at least one, the first starting at 0 and each one
+    /// after further along than the one before. A road made from one OSM way has one.
     pub zones: Vec<Zone>,
-    /// OSM's `maxspeed` in km/h; none when the way gives none.
-    pub speed_kmh: Option<u16>,
     /// The road's centre line.
     pub points: Vec<Point>,
 }
@@ -75,117 +66,29 @@ impl Road {
         }
     }
 
+    /// The speed limit of the first zone, which is the whole road's for a road of one zone.
+    pub fn base_speed_kmh(&self) -> Option<u16> {
+        self.zones.first().and_then(|z| z.speed_kmh)
+    }
+
     pub fn has_way(&self, id: i64) -> bool {
         self.provenance.has_way(id)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(crate) struct RoadWire {
-    id: RoadId,
-    osm_ways: Vec<i64>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    osm_versions: BTreeMap<i64, i32>,
-    name: Option<String>,
-    #[serde(alias = "highway")]
-    road_type: RoadType,
-    from: NodeId,
-    to: NodeId,
-    /// Written for a road of one zone, as `lanes` always was.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    lanes: Vec<Lane>,
-    /// Written only for a road of more than one zone.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    zones: Vec<Zone>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    speed_kmh: Option<u16>,
-    points: Vec<Point>,
-}
-
-impl TryFrom<RoadWire> for Road {
-    type Error = &'static str;
-
-    fn try_from(w: RoadWire) -> Result<Road, Self::Error> {
-        if !Road::is_name(w.name.as_deref()) {
-            return Err("a road needs a name");
-        }
-        let name = w.name.unwrap_or_default();
-        let zones = if w.zones.is_empty() { vec![Zone::whole(w.lanes)] } else { w.zones };
-        if !Road::is_zoned(&zones) {
-            return Err("a road's zones start at 0 and run on in order");
-        }
-        let ways = w.osm_ways.iter().map(|&id| WayRef { id, version: w.osm_versions.get(&id).copied() });
-        Ok(Road {
-            id: w.id,
-            provenance: Provenance::of_ways(ways),
-            name,
-            road_type: w.road_type,
-            from: w.from,
-            to: w.to,
-            zones,
-            speed_kmh: w.speed_kmh,
-            points: w.points,
-        })
-    }
-}
-
-impl From<Road> for RoadWire {
-    fn from(r: Road) -> RoadWire {
-        let (lanes, zones) = match <[Zone; 1]>::try_from(r.zones) {
-            Ok([whole]) => (whole.lanes, Vec::new()),
-            Err(zones) => (Vec::new(), zones),
-        };
-        let osm_versions = r.provenance.ways().filter_map(|w| Some((w.id, w.version?))).collect();
-        RoadWire {
-            id: r.id,
-            osm_ways: r.provenance.ways().map(|w| w.id).collect(),
-            osm_versions,
-            name: Some(r.name),
-            road_type: r.road_type,
-            from: r.from,
-            to: r.to,
-            lanes,
-            zones,
-            speed_kmh: r.speed_kmh,
-            points: r.points,
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Coordinate;
-
-    #[test]
-    fn a_road_is_kept_with_its_ways_and_their_versions_apart_as_it_always_was() {
-        let road = Road {
-            id: RoadId(1),
-            provenance: Provenance::of_ways([WayRef::with_version(5, 49), WayRef::new(7)]),
-            name: "Main".into(),
-            road_type: RoadType::Local,
-            from: NodeId(1),
-            to: NodeId(2),
-            zones: vec![Zone::whole(vec![])],
-            speed_kmh: None,
-            points: vec![Point::new(0.0, 1.0)],
-        };
-        let json = serde_json::to_string(&road).unwrap();
-        assert!(json.contains(r#""osm_ways":[5,7]"#) && json.contains(r#""osm_versions":{"5":49}"#), "{json}");
-        assert_eq!(serde_json::from_str::<Road>(&json).unwrap(), road);
-    }
+    use crate::{Coordinate, NodeId, RoadId, WayRef};
 
     fn road_of(zones: Vec<Zone>) -> Road {
         Road {
-            id: RoadId(1),
-            provenance: Provenance::of_ways([WayRef::new(5)]),
+            edge: Edge { id: RoadId(1), from: NodeId(1), to: NodeId(2) },
+            provenance: Provenance::of_ways([WayRef::with_version(5, 49), WayRef::new(7)]),
             name: "Main".into(),
             road_type: RoadType::Local,
-            from: NodeId(1),
-            to: NodeId(2),
             zones,
-            speed_kmh: None,
-            points: vec![],
+            points: vec![Point::new(0.0, 1.0)],
         }
     }
 
@@ -194,36 +97,45 @@ mod tests {
     }
 
     #[test]
-    fn a_road_of_one_zone_is_kept_as_lanes_and_one_of_several_as_zones() {
-        let one = road_of(vec![Zone::whole(vec![lane(3.0)])]);
-        let json = serde_json::to_string(&one).unwrap();
-        assert!(json.contains(r#""lanes":[{"#) && !json.contains("zones"), "{json}");
-        assert_eq!(serde_json::from_str::<Road>(&json).unwrap(), one);
-
-        let several = road_of(vec![Zone::whole(vec![lane(3.0)]), Zone { from: Coordinate::new(40.0), lanes: vec![lane(3.0), lane(3.0)] }]);
-        let json = serde_json::to_string(&several).unwrap();
-        let kept: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert!(kept.get("zones").is_some() && kept.get("lanes").is_none(), "{json}");
-        assert_eq!(serde_json::from_str::<Road>(&json).unwrap(), several);
+    fn a_road_is_kept_with_its_edge_provenance_and_zones() {
+        let mut road = road_of(vec![Zone::whole(vec![lane(3.0)]), Zone { from: Coordinate::new(40.0), speed_kmh: Some(30), lanes: vec![lane(3.0)] }]);
+        road.zones[0].speed_kmh = Some(50);
+        let json = serde_json::to_value(&road).unwrap();
+        assert_eq!(json["edge"], serde_json::json!({"id": 1, "from": 1, "to": 2}));
+        assert_eq!(json["provenance"], serde_json::json!([{"way": {"id": 5, "version": 49}}, {"way": {"id": 7}}]));
+        assert_eq!(json["zones"][0]["speed_kmh"], 50);
+        assert_eq!(serde_json::from_value::<Road>(json).unwrap(), road);
     }
 
     #[test]
-    fn a_road_whose_zones_do_not_start_at_0_and_run_on_in_order_is_refused() {
+    fn a_zone_with_no_speed_limit_says_none() {
+        let json = serde_json::to_value(Zone::whole(vec![])).unwrap();
+        assert!(json.get("speed_kmh").is_none(), "{json}");
+    }
+
+    #[test]
+    fn the_speed_limit_of_a_road_is_its_first_zones() {
+        let mut road = road_of(vec![Zone::whole(vec![]), Zone { from: Coordinate::new(10.0), speed_kmh: Some(30), lanes: vec![] }]);
+        assert_eq!(road.base_speed_kmh(), None);
+        road.zones[0].speed_kmh = Some(50);
+        assert_eq!(road.base_speed_kmh(), Some(50));
+    }
+
+    #[test]
+    fn a_road_whose_zones_do_not_start_at_0_and_run_on_in_order_is_not_zoned() {
         for zones in [
             vec![],
-            vec![Zone { from: Coordinate::new(5.0), lanes: vec![] }],
-            vec![Zone::whole(vec![]), Zone { from: Coordinate::new(0.0), lanes: vec![] }],
-            vec![Zone::whole(vec![]), Zone { from: Coordinate::new(f64::NAN), lanes: vec![] }],
+            vec![Zone { from: Coordinate::new(5.0), speed_kmh: None, lanes: vec![] }],
+            vec![Zone::whole(vec![]), Zone { from: Coordinate::new(0.0), speed_kmh: None, lanes: vec![] }],
+            vec![Zone::whole(vec![]), Zone { from: Coordinate::new(f64::NAN), speed_kmh: None, lanes: vec![] }],
         ] {
             assert!(!Road::is_zoned(&zones), "{zones:?}");
         }
-        let bad = r#"{"id":1,"osm_ways":[5],"name":"Main","road_type":"local","from":1,"to":2,"zones":[{"from":5.0,"lanes":[]}],"points":[]}"#;
-        assert!(serde_json::from_str::<Road>(bad).is_err());
     }
 
     #[test]
     fn lanes_are_laid_out_side_by_side_along_their_zone() {
-        let mut road = road_of(vec![Zone::whole(vec![lane(3.0), lane(1.0)]), Zone { from: Coordinate::new(60.0), lanes: vec![lane(2.0)] }]);
+        let mut road = road_of(vec![Zone::whole(vec![lane(3.0), lane(1.0)]), Zone { from: Coordinate::new(60.0), speed_kmh: None, lanes: vec![lane(2.0)] }]);
         road.points = vec![Point::new(0.0, 0.0), Point::new(0.0, 100.0)];
         road.lay_out_lanes();
         let shapes: Vec<Vec<(f64, f64)>> = road.zones.iter().flat_map(|z| &z.lanes).map(|l| l.shape.iter().map(|p| (p.x_m(), p.y_m())).collect()).collect();
@@ -232,16 +144,9 @@ mod tests {
     }
 
     #[test]
-    fn a_road_with_no_name_or_a_blank_one_is_refused() {
-        let json = |name: &str| format!(r#"{{"id":1,"osm_ways":[5],"name":{name},"highway":"x","from":1,"to":2,"lanes":[],"points":[]}}"#);
-        assert!(serde_json::from_str::<Road>(&json("null")).is_err());
-        assert!(serde_json::from_str::<Road>(&json(r#""  ""#)).is_err());
-        assert!(serde_json::from_str::<Road>(&json(r#""Main""#)).is_ok());
-    }
-
-    #[test]
-    fn a_road_kept_before_versions_existed_reads_with_none() {
-        let json = r#"{"id":1,"osm_ways":[5],"name":"Main","highway":"x","from":1,"to":2,"lanes":[],"points":[]}"#;
-        assert_eq!(serde_json::from_str::<Road>(json).unwrap().provenance, Provenance::of_ways([WayRef::new(5)]));
+    fn a_name_is_there_and_not_blank() {
+        assert!(!Road::is_name(None));
+        assert!(!Road::is_name(Some("  ")));
+        assert!(Road::is_name(Some("Main")));
     }
 }

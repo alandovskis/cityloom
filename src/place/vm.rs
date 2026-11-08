@@ -227,8 +227,8 @@ mod tests {
 
     const NETWORK: &str = r#"{"left_hand":false,"junctions":[{"id":1,"provenance":[{"node":{"id":1}}],"position":[0.0,0.0],"junction":false,"control":"none"},
         {"id":2,"provenance":[{"node":{"id":2}}],"position":[90.0,0.0],"junction":false,"control":"none"}],
-        "roads":[{"id":1,"osm_ways":[5],"name":"Only Street","highway":"residential","from":1,"to":2,
-        "lanes":[{"kind":"driving","direction":"forward","width_m":3.0}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
+        "roads":[{"edge":{"id":1,"from":1,"to":2},"provenance":[{"way":{"id":5}}],"name":"Only Street","road_type":"local",
+        "zones":[{"from":0.0,"lanes":[{"kind":"driving","direction":"forward","width_m":3.0}]}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
 
     struct Fixture {
         vm: Rc<AreaVm>,

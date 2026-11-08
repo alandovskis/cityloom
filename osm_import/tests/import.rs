@@ -39,7 +39,7 @@ fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions
     let net = import(BOULEVARD).expect("the boulevard reads");
     let between: Vec<_> =
         net.roads.iter().filter(|r| r.name == "Boulevard" && r.provenance.ways().count() <= 2 && (r.has_way(100) || r.has_way(101))).collect();
-    assert_eq!(between.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.provenance, r.from, r.to)).collect::<Vec<_>>());
+    assert_eq!(between.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.provenance, r.edge.from, r.edge.to)).collect::<Vec<_>>());
     let b = between[0];
     assert!(b.has_way(100) && b.has_way(101));
     use osm_import::{Direction, LaneKind};
@@ -342,14 +342,14 @@ fn a_road_carries_its_maxspeed_in_kmh() {
     // Avenue Laurier Ouest, tagged maxspeed=30
     let net = import(PLATEAU).unwrap();
     let road = net.roads.iter().find(|r| r.has_way(4889437)).expect("the way is a road");
-    assert_eq!(road.speed_kmh, Some(30));
+    assert_eq!(road.base_speed_kmh(), Some(30));
 }
 
 #[test]
 fn a_road_without_maxspeed_has_none() {
     let net = import(PLATEAU).unwrap();
     let road = net.roads.iter().find(|r| r.has_way(17587428)).expect("the way is a road");
-    assert_eq!(road.speed_kmh, None);
+    assert_eq!(road.base_speed_kmh(), None);
 }
 
 #[test]
@@ -373,7 +373,7 @@ fn an_imported_network_has_corridors_for_the_users_its_lanes_serve() {
     let net = import(RENE_LEVESQUE).unwrap();
     assert!(net.corridors_of(UserClass::Driver).count() >= 1 && net.corridors_of(UserClass::Pedestrian).count() >= 1);
     for corridor in &net.corridors {
-        assert!(corridor.roads.iter().all(|id| net.roads.iter().any(|r| r.id == *id)), "{corridor:?} names a road the network lacks");
+        assert!(corridor.roads.iter().all(|id| net.roads.iter().any(|r| r.edge.id == *id)), "{corridor:?} names a road the network lacks");
     }
     // the boulevard's bus lane is a timed one, so the boulevard is a transit corridor
     assert!(net.corridors_of(UserClass::Transit).next().is_some());

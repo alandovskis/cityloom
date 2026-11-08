@@ -357,34 +357,34 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         let Some(name) = r.name.clone().filter(|n| Road::is_name(Some(n))) else { continue };
         let hours = r.osm_ids.iter().find_map(|w| doc.ways.get(w).and_then(|w| bus_hours(&w.tags)));
         net.roads.push(Road {
-            id: RoadId(id.0 as u32),
+            edge: Edge { id: RoadId(id.0 as u32), from: NodeId(r.src_i.0 as u32), to: NodeId(r.dst_i.0 as u32) },
             provenance: Provenance::of_ways(r.osm_ids.iter().map(|w| WayRef { id: w.0, version: doc.ways.get(w).and_then(|way| way.version) })),
             name,
             road_type: RoadType::from_osm(&r.highway_type),
-            from: NodeId(r.src_i.0 as u32),
-            to: NodeId(r.dst_i.0 as u32),
-            speed_kmh: speed_kmh(r.speed_limit),
-            zones: vec![Zone::whole(join_two_way_bike_lanes(
-                r.lane_specs_ltr
-                    .iter()
-                    .map(|l| {
-                        let mut lane = Lane {
-                            kind: lane_kind(l.lt),
-                            buffer_type: buffer_type(l.lt),
-                            direction: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
-                            width_m: l.width.inner_meters(),
-                            windows: Vec::new(),
-                            shape: Vec::new(),
-                        };
-                        // a bus lane that is one only at certain hours is parking the rest of the time; hours that
-                        // cannot be read leave it a bus lane all day
-                        if let (LaneType::Bus, Some(hours)) = (l.lt, &hours) {
-                            lane.only_during(hours, LaneKind::Parking);
-                        }
-                        lane
-                    })
-                    .collect(),
-            ))],
+            zones: vec![Zone {
+                speed_kmh: speed_kmh(r.speed_limit),
+                ..Zone::whole(join_two_way_bike_lanes(
+                    r.lane_specs_ltr
+                        .iter()
+                        .map(|l| {
+                            let mut lane = Lane {
+                                kind: lane_kind(l.lt),
+                                buffer_type: buffer_type(l.lt),
+                                direction: if l.dir == StreetsDirection::Forward { Direction::Forward } else { Direction::Backward },
+                                width_m: l.width.inner_meters(),
+                                windows: Vec::new(),
+                                shape: Vec::new(),
+                            };
+                            // a bus lane that is one only at certain hours is parking the rest of the time; hours that
+                            // cannot be read leave it a bus lane all day
+                            if let (LaneType::Bus, Some(hours)) = (l.lt, &hours) {
+                                lane.only_during(hours, LaneKind::Parking);
+                            }
+                            lane
+                        })
+                        .collect(),
+                ))
+            }],
             points: r.center_line.points().iter().map(|p| Point::new(p.x(), height - p.y())).collect(),
         });
     }

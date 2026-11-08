@@ -49,7 +49,7 @@ impl Network {
         let mut corridors = Vec::new();
         for user in UserClass::ALL {
             let serving: Vec<&crate::Road> = self.roads.iter().filter(|r| r.zones.iter().flat_map(|z| &z.lanes).any(|l| user.serves(l))).collect();
-            let edges: Vec<crate::Edge> = serving.iter().map(|r| r.edge()).collect();
+            let edges: Vec<crate::Edge> = serving.iter().map(|r| r.edge).collect();
             let found = crate::connected(&edges).into_iter().map(|roads| Corridor { user, roads });
             corridors.extend(found);
         }
@@ -65,7 +65,7 @@ impl Network {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Direction, Junction, NodeId, Point, Provenance, Road, RoadType, Zone};
+    use crate::{Control, Direction, Edge, Junction, NodeId, Point, Provenance, Road, RoadType, Zone};
 
     fn lane(kind: LaneKind) -> Lane {
         Lane { kind, direction: Direction::Forward, width_m: 2.0, buffer_type: None, windows: vec![], shape: vec![] }
@@ -73,14 +73,11 @@ mod tests {
 
     fn road(id: u32, from: u32, to: u32, lanes: &[LaneKind]) -> Road {
         Road {
-            id: RoadId(id),
+            edge: Edge { id: RoadId(id), from: NodeId(from), to: NodeId(to) },
             provenance: Provenance::default(),
             name: "Street".into(),
             road_type: RoadType::Local,
-            from: NodeId(from),
-            to: NodeId(to),
             zones: vec![Zone::whole(lanes.iter().map(|&k| lane(k)).collect())],
-            speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)],
         }
     }

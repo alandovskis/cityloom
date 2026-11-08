@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Network, Road, RoadId};
+use crate::{Network, RoadId};
 
 /// A node of the network's graph, by its id in it. Not an OSM node: see `NodeRef`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -16,17 +16,11 @@ pub struct Node {
 }
 
 /// A road as a link between two nodes, apart from what it is made of: see `Road` for that. Its id is the road's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Edge {
     pub id: RoadId,
     pub from: NodeId,
     pub to: NodeId,
-}
-
-impl Road {
-    pub fn edge(&self) -> Edge {
-        Edge { id: self.id, from: self.from, to: self.to }
-    }
 }
 
 impl Network {
@@ -37,7 +31,7 @@ impl Network {
 
     /// The graph's edges, one for each road, in order.
     pub fn edges(&self) -> Vec<Edge> {
-        self.roads.iter().map(Road::edge).collect()
+        self.roads.iter().map(|r| r.edge).collect()
     }
 }
 
@@ -117,18 +111,15 @@ mod tests {
 
     #[test]
     fn a_network_has_a_node_for_each_junction_and_an_edge_for_each_road() {
-        use crate::{Control, Junction, Point, Provenance, RoadType, Zone};
+        use crate::{Control, Junction, Point, Provenance, Road, RoadType, Zone};
         let junction =
             |id: u32| Junction { id: NodeId(id), provenance: Provenance::default(), position: Point::new(0.0, 0.0), junction: false, control: Control::None };
         let road = Road {
-            id: RoadId(7),
+            edge: Edge { id: RoadId(7), from: NodeId(1), to: NodeId(2) },
             provenance: Provenance::default(),
             name: "Main".into(),
             road_type: RoadType::Local,
-            from: NodeId(1),
-            to: NodeId(2),
             zones: vec![Zone::whole(vec![])],
-            speed_kmh: None,
             points: vec![],
         };
         let net = Network { left_hand: false, junctions: vec![junction(1), junction(2)], roads: vec![road], corridors: vec![] };

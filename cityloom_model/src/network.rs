@@ -21,7 +21,7 @@ impl Network {
         let roads = &self.roads;
         for j in &mut self.junctions {
             if let Control::Priority(ids) = &mut j.control {
-                ids.retain(|id| roads.iter().any(|r| r.id == *id));
+                ids.retain(|id| roads.iter().any(|r| r.edge.id == *id));
             }
         }
     }
