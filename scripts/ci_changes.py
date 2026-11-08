@@ -133,7 +133,7 @@ def changed_files(base: str, head: str) -> list[str] | None:
     if not base or set(base) == {"0"}:
         return None
     try:
-        files = [f for f in git("diff", "--name-only", base, head).splitlines() if f]
+        files = [f for f in git("diff", "--name-only", "--no-renames", base, head).splitlines() if f]
         for name, norm in (("Cargo.toml", normalize_toml), ("Cargo.lock", normalize_lock)):
             if name in files and norm(git("show", f"{base}:{name}")) == norm(git("show", f"{head}:{name}")):
                 files.remove(name)
