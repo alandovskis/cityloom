@@ -370,6 +370,10 @@ svg-iso-calming = { $count ->
         [one] Un plateau surélevé est montré.
        *[other] { $count } plateaux surélevés sont montrés.
     }
+svg-iso-chicane = { $count ->
+        [one] Une chicane est montrée.
+       *[other] { $count } chicanes sont montrées.
+    }
 svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
@@ -582,12 +586,13 @@ st-green-remove = Retirer
 # Noms et refus d’un plateau surélevé ou d’un passage surélevé (src/street/model/calming.rs).
 calming-kind-table = Plateau surélevé
 calming-kind-crossing = Passage piéton surélevé
+calming-kind-chicane = Chicane
 calming-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de plateaux surélevés.
 calming-refused-elsewhere = Les plateaux surélevés de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
 calming-refused-dragging = Terminez le glissement avant de modifier les plateaux surélevés.
 calming-refused-outside = Cela dépasserait une extrémité de la rue.
 calming-refused-overlap = Cela chevaucherait un autre plateau surélevé.
-calming-refused-too-short = Un plateau surélevé doit mesurer au moins { $min }.
+calming-refused-too-short = Cet élément doit mesurer au moins { $min }.
 calming-refused-freeway = On ne peut pas placer de plateau surélevé sur une autoroute.
 calming-refused-no-roadway = Cette rue n’a pas de chaussée à surélever.
 calming-refused-time-windows = On ne peut pas placer de plateau surélevé là où la chaussée change selon l’heure de la journée.
@@ -596,7 +601,7 @@ rev-calming-kind = Élément surélevé à { $at } changé en { $kind }
 rev-calming-resize = Longueur modifiée à { $at } : { $kind }
 rev-calming-move = Déplacement : { $kind } à { $at }
 rev-calming-remove = Retrait : { $kind } à { $at }
-
+rev-chicane-first = Côté de départ modifié : { $kind } à { $at }
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification
 st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
@@ -672,18 +677,24 @@ check-detail-calming-junction-crossing = L’élément surélevé se trouverait 
 check-detail-calming-junction-mouth = L’élément surélevé se trouverait à { $gap } du début de l’intersection; il en faut { $need } ou plus.
 check-detail-calming-junction-inside = L’élément surélevé empiète sur l’intersection.
 check-detail-calming-junction-ok = Chaque élément surélevé est dégagé de l’intersection.
-
+check-detail-chicane-length = Une chicane de { $length } est trop courte : il lui faut deux avancées et l’espace entre elles, soit { $min } ou plus.
+check-label-calming-lane = Chicanes sans voie d’autobus ni piste cyclable
+check-detail-calming-lane = Une chicane rétrécit la chaussée à un seul passage : une voie d’autobus ou une piste cyclable ne peut pas la traverser.
+check-detail-calming-lane-ok = Aucune chicane ne traverse une voie d’autobus ou une piste cyclable.
 # La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
 calming-gap = Libre
 calming-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
 calming-cell-failing = Ne passe pas une vérification. Voir les vérifications.
 calming-choose-gap = Choisissez d’abord un tronçon libre de la rue.
-calming-choose-element = Choisissez d’abord un plateau ou un passage surélevé.
-st-calming-heading = Plateaux et passages surélevés le long de la rue
-st-calming-caption = Plateaux et passages surélevés
-st-calming-strip-label = Plateaux et passages surélevés le long de la rue
+calming-choose-element = Choisissez d’abord un plateau, un passage surélevé ou une chicane.
+st-calming-heading = Plateaux, passages surélevés et chicanes le long de la rue
+st-calming-caption = Plateaux, passages surélevés et chicanes
+st-calming-strip-label = Plateaux, passages surélevés et chicanes le long de la rue
 st-calming-tools = Commandes des éléments surélevés
 st-calming-kind = Type
 st-calming-length = Longueur ({ $unit })
+st-calming-first = Commence à
+st-calming-first-left = Gauche
+st-calming-first-right = Droite
 st-calming-add = Ajouter un élément surélevé
 st-calming-remove = Retirer un élément surélevé

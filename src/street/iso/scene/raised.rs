@@ -9,7 +9,7 @@ use crate::street::model::SegView;
 
 use super::surface::top;
 use super::tables;
-use crate::street::iso::calming::Laid;
+use crate::street::iso::calming::{Buildout, Laid};
 use crate::street::iso::curbside::{self, Lift};
 use crate::street::iso::green::{PLANTING, Patch};
 use crate::street::iso::order::{self, Bx};
@@ -147,6 +147,24 @@ fn patch(p: &Projection, i18n: &I18n, g: &Patch) -> Shape {
     group("iso-green", None, name, shapes)
 }
 
+/// A chicane's build-out as a group of its own, hovered by the chicane's name: a block of planting reaching into the roadway
+/// from its curb, drawn as a bed is (front, the side the eye sees, top).
+fn buildout(p: &Projection, segs: &[SegView], i18n: &I18n, laid: &Laid, b: &Buildout) -> Shape {
+    let name = i18n.tr("calming-kind-chicane", &Args::new());
+    let (x0, x1) = laid.buildout_across(segs, b);
+    let (n, l) = b.along;
+    let sub = p.over(Reach { near: n, far: l });
+    let top_y = Buildout::height();
+    let hatch = format!("h-{PLANTING}");
+    let mut shapes = vec![plane([(x0, 0.0, n), (x1, 0.0, n), (x1, top_y, n), (x0, top_y, n)], Some(PLANTING), Face::Front, &hatch)];
+    if let Some(right) = inner_face(&sub, x0, x1) {
+        let x = if right { x1 } else { x0 };
+        shapes.push(plane([(x, 0.0, n), (x, 0.0, l), (x, top_y, l), (x, top_y, n)], Some(PLANTING), Face::Side, &hatch));
+    }
+    shapes.extend(top(&sub, PLANTING, "planted", top_y, &|_| (x0, x1), true));
+    group("iso-chicane", None, name, shapes)
+}
+
 /// The strips `standing` above the roadway, the curbside uses `lifted` into strips and the green patches, in the order
 /// they are painted in among themselves (`order::paint_order`): a strip nearer the middle of the street covers the one
 /// beyond it. The raised tables `laid` are each a group of their own ordered among the strips as a box over the roadway.
@@ -168,16 +186,19 @@ pub(in crate::street::iso) fn raised(
         .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, p, taper), false)))
         .chain(patches.iter().map(|g| (g.bounds(), false)))
         .chain(laid.tables.iter().map(|t| (laid.bx(segs, t), false)))
+        .chain(laid.buildouts.iter().map(|b| (laid.buildout_bx(segs, b), false)))
         .collect();
     let lifts = standing.len() + lifted.len();
     let greens = lifts + patches.len();
+    let tables_end = greens + laid.tables.len();
     let shapes = order::paint_order(&boxes, p.centre_mm)
         .into_iter()
         .map(|k| match standing.get(k) {
             Some(&s) => strip(p, segs, i18n, s, across),
             None if k < lifts => lift(p, segs, i18n, &lifted[k - standing.len()], taper),
             None if k < greens => patch(p, i18n, &patches[k - lifts]),
-            None => tables::table(p, segs, i18n, laid, &laid.tables[k - greens]),
+            None if k < tables_end => tables::table(p, segs, i18n, laid, &laid.tables[k - greens]),
+            None => buildout(p, segs, i18n, laid, &laid.buildouts[k - tables_end]),
         })
         .collect();
     Layer { kind: LayerKind::Raised, shapes }

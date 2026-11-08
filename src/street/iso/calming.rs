@@ -7,7 +7,8 @@
 //! (`ShownCalming::drawn`), and a ramp that crosses the stretch's edge is cut there at the height it has reached.
 //! A transition's taper is not followed: the table lies across the pieces as the section has them.
 
-use crate::street::model::{CalmingKind, SegView, ShownCalming, TABLE_HEIGHT_MM};
+use crate::shared::catalogue::Side;
+use crate::street::model::{CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingKind, SegView, ShownCalming, TABLE_HEIGHT_MM};
 
 use super::order::Bx;
 use super::projection::drawn_mm;
@@ -49,10 +50,25 @@ impl Table {
     }
 }
 
+/// One build-out of a chicane to draw: a block that reaches into the roadway from the curb on `side`.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Buildout {
+    pub along: (f64, f64),
+    pub side: Side,
+}
+
+impl Buildout {
+    /// How high it is drawn.
+    pub fn height() -> f64 {
+        drawn_mm(CHICANE_HEIGHT_MM)
+    }
+}
+
 /// What the run lays the elements over: the elements drawn and the roadway pieces they lift.
 #[derive(Clone, Debug, Default)]
 pub(super) struct Laid {
     pub tables: Vec<Table>,
+    pub buildouts: Vec<Buildout>,
     /// The pieces lifted, indices into the section's pieces: those drawn flat on the roadway, left to right.
     pub pieces: Vec<usize>,
 }
@@ -65,8 +81,17 @@ impl Laid {
         if pieces.is_empty() {
             return Laid::default();
         }
-        let tables = shown.iter().filter(|s| s.drawn()).map(|s| Table { along: s.along, full: s.full, plateau: s.plateau, kind: s.kind }).collect();
-        Laid { tables, pieces }
+        let tables = shown
+            .iter()
+            .filter(|s| s.kind != CalmingKind::Chicane && s.drawn())
+            .map(|s| Table { along: s.along, full: s.full, plateau: s.plateau, kind: s.kind })
+            .collect();
+        let buildouts = shown
+            .iter()
+            .filter(|s| s.kind == CalmingKind::Chicane)
+            .flat_map(|s| s.buildouts.iter().map(|&(n, l, side)| Buildout { along: (n, l), side }))
+            .collect();
+        Laid { tables, buildouts, pieces }
     }
 
     /// The stretches of the street the markings are kept off: each element, ramp to ramp.
@@ -78,6 +103,19 @@ impl Laid {
     pub fn bx(&self, segs: &[SegView], t: &Table) -> Bx {
         let (lo, hi) = self.across(segs);
         Bx { x: (lo, hi), y: (0.0, Table::height()), z: t.along }
+    }
+
+    /// Where a build-out stands across: `CHICANE_WIDTH_MM` in from the roadway's edge on its side, no more than half the
+    /// roadway.
+    pub fn buildout_across(&self, segs: &[SegView], b: &Buildout) -> (f64, f64) {
+        let (lo, hi) = self.across(segs);
+        let w = f64::from(CHICANE_WIDTH_MM).min((hi - lo) / 2.0);
+        if b.side == Side::Left { (lo, lo + w) } else { (hi - w, hi) }
+    }
+
+    /// The box a build-out fills, for ordering.
+    pub fn buildout_bx(&self, segs: &[SegView], b: &Buildout) -> Bx {
+        Bx { x: self.buildout_across(segs, b), y: (0.0, Buildout::height()), z: b.along }
     }
 
     /// The span across of the lifted pieces.
@@ -239,5 +277,59 @@ mod drawing {
         assert!(!iso_label(&Editor::new(0).view(), &en(), Units::Metres).contains("raised table"));
         let e = editor(CalmingKind::Table, 37_000, 7_000);
         assert!(!iso_label(&e.view(), &en(), Units::Metres).contains("raised table"));
+    }
+
+    fn chicane_of(from_mm: i32, length_mm: i32, first: Option<Side>) -> Editor {
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add_calming_first(CalmingKind::Chicane, from_mm, length_mm, first).unwrap();
+        e
+    }
+
+    fn chicane(from_mm: i32, first: Option<Side>) -> Editor {
+        chicane_of(from_mm, 24_000, first)
+    }
+
+    #[test]
+    fn a_chicane_is_a_titled_group_per_build_out_with_no_ramp_and_no_uid() {
+        let m = drawn(&chicane(5_000, None));
+        assert_eq!(count(&m, "<g class=\"iso-chicane\""), 3, "three build-outs stand in the stretch");
+        let g = &m[m.find("<g class=\"iso-chicane\"").unwrap()..];
+        let g = &g[..g.find("</g>").unwrap()];
+        assert!(g.contains("<title>Chicane</title>"), "named for a screen reader: {g}");
+        assert!(!g.contains("data-uid"), "the strip selects it, the drawing does not");
+        assert_eq!(count(&m, "iso-ramp"), 0, "a chicane has no ramps");
+        assert_eq!(count(&m, "<g class=\"iso-table\""), 0);
+        assert!(!m.contains("iso-shade-ramp"), "the ramps' shade is for tables");
+    }
+
+    #[test]
+    fn the_build_outs_alternate_sides_from_the_first_and_a_build_out_past_the_stretch_is_not_drawn() {
+        let m = drawn(&chicane(25_000, None));
+        assert_eq!(count(&m, "<g class=\"iso-chicane\""), 2, "the third lies past the 40 m");
+        assert_eq!(count(&drawn(&chicane_of(37_000, 14_000, None)), "<g class=\"iso-chicane\""), 0);
+        // The side moves the first build-out across the street: the drawing differs and has as many.
+        let right = drawn(&chicane(5_000, Some(Side::Right)));
+        let left = drawn(&chicane(5_000, Some(Side::Left)));
+        assert_ne!(right, left);
+        assert_eq!(count(&left, "<g class=\"iso-chicane\""), 3);
+    }
+
+    #[test]
+    fn the_label_counts_the_chicanes_apart_from_the_tables() {
+        let e = chicane(5_000, None);
+        let label = iso_label(&e.view(), &en(), Units::Metres);
+        assert!(label.contains("One chicane is shown."), "{label}");
+        assert!(!label.contains("raised table"), "{label}");
+        let none = iso_label(&chicane_of(37_000, 14_000, None).view(), &en(), Units::Metres);
+        assert!(!none.contains("chicane is shown") && !none.contains("chicanes are shown"), "{none}");
+    }
+
+    #[test]
+    fn a_table_and_a_chicane_together_draw_both() {
+        let mut e = chicane(25_000, None);
+        e.add_calming(CalmingKind::Table, 5_000, 7_000).unwrap();
+        let m = drawn(&e);
+        assert_eq!((count(&m, "<g class=\"iso-table\""), count(&m, "<g class=\"iso-chicane\"")), (1, 2));
     }
 }
