@@ -11,7 +11,7 @@ use crate::download::download;
 use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c};
 use crate::tiles::{self, TilesJob};
 
-const ARCHIVE_NAME: &str = "montreal.cityloom";
+const ARCHIVE_NAME: &str = "montreal.citymodel";
 pub use crate::progress::megabytes;
 pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf";
 

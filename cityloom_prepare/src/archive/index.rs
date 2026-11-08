@@ -1,4 +1,4 @@
-//! The binary index of a `.cityloom` archive (its first member, `cityloom.idx`).
+//! The binary index of a `.citymodel` archive (its first member, `cityloom.idx`).
 use std::collections::HashSet;
 use std::path::PathBuf;
 

@@ -1,4 +1,4 @@
-//! Verifies a `.cityloom` archive whole and unpacks it: the index first, then every member hashed as it is written
+//! Verifies a `.citymodel` archive whole and unpacks it: the index first, then every member hashed as it is written
 //! into a staging directory, renamed into place only when everything checks out. An archive is untrusted input:
 //! no path of a member is ever used, only the one the verified index gives for it. `tar` ignores bytes after its
 //! end-of-archive marker, so a file with trailing junk still unpacks (every byte served was verified).
@@ -182,12 +182,12 @@ fn install(staged: &Path, target: &Path, data_root: &Path) -> Result<(), Archive
     Ok(())
 }
 
-/// Unpacks the one `.cityloom` file of `folder`.
+/// Unpacks the one `.citymodel` file of `folder`.
 pub fn unpack_folder(folder: &Path, data_root: &Path) -> Result<Unpacked, ArchiveError> {
     let mut found = Vec::new();
     for entry in fs::read_dir(folder).map_err(io_err(format!("cannot read {}", folder.display())))? {
         let path = entry.map_err(io_err(format!("cannot read {}", folder.display())))?.path();
-        if path.extension().is_some_and(|e| e == "cityloom") && path.is_file() {
+        if path.extension().is_some_and(|e| e == "citymodel") && path.is_file() {
             found.push(path);
         }
     }

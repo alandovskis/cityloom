@@ -123,7 +123,7 @@ fichier. Le format est décrit dans `src/archive/model.rs`; il porte un `format_
 contrôle de la tuile, version de l’importeur), le document `cityloom-edits` (lu à partir de la version 4 et écrit à la
 version que son contenu exige) et le document `cityloom-restrictions`. Il ne contient ni le document de
 synchronisation, ni rien du compte, ni la langue et le thème, ni les réseaux de rues téléchargés. Le fichier se nomme
-`*.cityloom-design.json`, jamais un simple `.cityloom`, qui est l’archive de zone que construit `cityloom_prepare`.
+`*.cityloom-design.json`, jamais un simple `.citymodel`, qui est l’archive de zone que construit `cityloom_prepare`.
 
 Une importation vérifie tout le fichier avant d’écrire quoi que ce soit. Un fichier qui n’est pas du JSON, qui n’est pas
 une archive de conception CityLoom, qui est endommagé, qui dépasse 10 Mo, qui vient d’un format plus récent ou qui

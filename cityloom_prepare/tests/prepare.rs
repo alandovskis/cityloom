@@ -27,7 +27,7 @@ fn the_steps_are_the_scripts_and_pack_is_last() {
             ("tiles", "index"),
             ("basemap", "planetiler.jar"),
             ("basemap", "montreal.pmtiles"),
-            ("archive", "montreal.cityloom"),
+            ("archive", "montreal.citymodel"),
         ]
     );
 }
@@ -122,7 +122,7 @@ fi"#,
         tools,
         root: root.to_path_buf(),
         jar_url: "http://127.0.0.1:1/never".into(),
-        archive: out.join("montreal.cityloom"),
+        archive: out.join("montreal.citymodel"),
     };
     let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
     prepare::run_job(&progress, &job).unwrap();
@@ -150,7 +150,7 @@ fi"#,
     assert_eq!(passes, groups, "{text}");
     let subjects: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(2).unwrap().to_string()).collect();
     assert_eq!(subjects.first().map(String::as_str), Some("quebec-latest.osm.pbf"));
-    assert!(subjects.last().unwrap().starts_with("montreal.cityloom"), "{text}");
+    assert!(subjects.last().unwrap().starts_with("montreal.citymodel"), "{text}");
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
         tools,
         root: root.to_path_buf(),
         jar_url: "http://127.0.0.1:1/never".into(),
-        archive: out.join("montreal.cityloom"),
+        archive: out.join("montreal.citymodel"),
     };
     let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
     let result = prepare::run_job(&progress, &job);

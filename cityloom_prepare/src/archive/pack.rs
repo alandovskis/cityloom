@@ -1,4 +1,4 @@
-//! Writes a `.cityloom` archive: a deterministic ustar tar (mtime 0, owner 0, mode 0644) whose first member is the index.
+//! Writes a `.citymodel` archive: a deterministic ustar tar (mtime 0, owner 0, mode 0644) whose first member is the index.
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Read};
 use std::path::{Path, PathBuf};

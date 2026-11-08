@@ -16,7 +16,7 @@ use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, megabytes};
 use crate::tiles::{self, TilesJob};
 
 #[derive(Parser, Debug)]
-#[command(name = "cityloom_prepare", about = "Prepares CityLoom's area data: tiles, basemap and the .cityloom archive")]
+#[command(name = "cityloom_prepare", about = "Prepares CityLoom's area data: tiles, basemap and the .citymodel archive")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -56,7 +56,7 @@ pub enum Command {
         #[arg(long, value_parser = memory)]
         memory: Option<String>,
     },
-    /// Pack the tiles and the basemap into a .cityloom archive.
+    /// Pack the tiles and the basemap into a .citymodel archive.
     Pack {
         #[arg(long, default_value = "montreal")]
         area: String,
@@ -284,7 +284,7 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
         Command::Pack { area, out, metro, basemap, source, source_time, created } => {
             let root = repo_root();
             let job = PackJob {
-                out: absolute(&out.unwrap_or_else(|| root.join("data/montreal.cityloom"))),
+                out: absolute(&out.unwrap_or_else(|| root.join("data/montreal.citymodel"))),
                 area,
                 metro: absolute(&metro.unwrap_or_else(|| root.join("web/data/metro"))),
                 basemap: absolute(&basemap.unwrap_or_else(|| root.join("web/data/basemap"))),

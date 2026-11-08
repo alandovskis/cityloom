@@ -56,7 +56,7 @@ e2e *args: build
     ./scripts/pin-server.sh
     cd e2e && npx playwright test {{args}}
 
-# The map, street and archive specs with the road tiles and the basemap served from an unpacked .cityloom archive (`cityloom_prepare pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
+# The map, street and archive specs with the road tiles and the basemap served from an unpacked .citymodel archive (`cityloom_prepare pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
 e2e-archive *args: build
     cargo build -p cityloom_server --features test-provider
     ./scripts/pin-server.sh
@@ -89,7 +89,7 @@ sonar-reports:
 prepare *args:
     cargo run --release -q -p cityloom_prepare -- prepare {{args}}
 
-# Pack web/data/metro and web/data/basemap into data/montreal.cityloom (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
+# Pack web/data/metro and web/data/basemap into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
 pack *args:
     cargo run --release -q -p cityloom_prepare -- pack {{args}}
 

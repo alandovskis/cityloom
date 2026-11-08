@@ -113,7 +113,7 @@ in `src/archive/model.rs`; it carries an integer `format_version` (1) and a `kin
 version, the time, what the design was made on (area, tile checksum, importer version), the `cityloom-edits` document
 (read from version 4 and written at the version its content needs) and the `cityloom-restrictions` document. It does
 not carry the sync document, anything of the account, the language and theme, or the downloaded street networks. The
-file is named `*.cityloom-design.json`, never a bare `.cityloom`, which is the area archive that `cityloom_prepare`
+file is named `*.cityloom-design.json`, never a bare `.citymodel`, which is the area archive that `cityloom_prepare`
 builds.
 
 An import checks the whole file before it writes anything. A file that is not JSON, not a CityLoom design archive,
