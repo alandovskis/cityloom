@@ -329,7 +329,7 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
 mod tests {
     use std::collections::BTreeSet;
 
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef, Zone};
     use serde_json::Value;
 
     use super::*;
@@ -360,7 +360,7 @@ mod tests {
                 road_type: RoadType::Local,
                 from: 1,
                 to: 2,
-                lanes: vec![lane(Way::Forward), lane(Way::Backward)],
+                zones: vec![Zone::whole(vec![lane(Way::Forward), lane(Way::Backward)])],
                 speed_kmh: None,
                 points: vec![Point::new(0.0, 0.0), Point::new(80.0, 0.0), Point::new(100.0, 50.0)],
             }],
@@ -531,7 +531,7 @@ mod tests {
         n.nodes[1].x_m = 100.0;
         n.nodes[1].y_m = 0.0;
         n.roads[0].points = vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
-        n.roads[0].lanes.iter_mut().for_each(|l| l.width_m = 4.0);
+        n.roads[0].base_lanes_mut().iter_mut().for_each(|l| l.width_m = 4.0);
         n
     }
 

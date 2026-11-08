@@ -236,7 +236,7 @@ impl Layout {
     /// Roads that start and end at one node, that have no lanes, that have no name, or that start or end at a node the
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
-        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.lanes.is_empty()).collect();
+        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.base_lanes().is_empty()).collect();
         let mut degree: BTreeMap<u32, usize> = BTreeMap::new();
         for r in &roads {
             *degree.entry(r.from).or_default() += 1;
@@ -256,7 +256,7 @@ impl Layout {
             .iter()
             .map(|r| {
                 let class = class_of(r.road_type);
-                let pieces = pieces(&r.lanes);
+                let pieces = pieces(r.base_lanes());
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street {
                     name: Some(r.name.clone()),
@@ -265,8 +265,9 @@ impl Layout {
                     ..Street::imported(class, side, &pieces)
                 };
                 let row_of = |pieces: &[Piece]| Street::imported(class, side, pieces).row_mm;
-                let one_way = one_way_bike_lanes(&r.lanes);
-                let mut legacy_rows_mm: Vec<i32> = [row_of(&legacy_pieces(&r.lanes)), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
+                let one_way = one_way_bike_lanes(r.base_lanes());
+                let mut legacy_rows_mm: Vec<i32> =
+                    [row_of(&legacy_pieces(r.base_lanes())), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
                 legacy_rows_mm.sort_unstable();
                 legacy_rows_mm.dedup();
                 legacy_rows_mm.retain(|&row| row != section.row_mm);
@@ -303,7 +304,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, NodeRef, Point, Road, Way, WayRef};
+    use cityloom_model::{BufferType, Control, Lane, LaneKind, Node, NodeRef, Point, Road, Way, WayRef, Zone};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -583,12 +584,12 @@ mod tests {
             road_type: RoadType::Local,
             from: 1,
             to,
-            lanes: vec![
+            zones: vec![Zone::whole(vec![
                 lane(LaneKind::Sidewalk, Way::Forward, 2.0),
                 lane(LaneKind::Driving, Way::Backward, 3.0),
                 lane(LaneKind::Driving, Way::Forward, 3.0),
                 lane(LaneKind::Sidewalk, Way::Forward, 2.0),
-            ],
+            ])],
             speed_kmh: None,
             points,
         };
@@ -758,7 +759,7 @@ mod tests {
     #[test]
     fn a_road_with_no_lanes_is_not_a_street() {
         let mut net = crossing();
-        net.roads[0].lanes.clear();
+        net.roads[0].base_lanes_mut().clear();
         let v = City::from_network(&net, "Bare").view(0);
         assert_eq!(v.edges.len(), 3, "the lane-less road is left out");
     }
@@ -773,7 +774,7 @@ mod tests {
 
     fn bare_street() -> Network {
         let mut net = star(&[(100.0, 0.0)]);
-        net.roads[0].lanes = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
+        *net.roads[0].base_lanes_mut() = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
         net
     }
 

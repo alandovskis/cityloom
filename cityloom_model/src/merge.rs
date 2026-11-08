@@ -1,7 +1,7 @@
 //! Roads divided by a median: two one-way carriageways of one street, running side by side
 //! in opposite directions, are one street with a median between its two halves.
 
-use crate::{Lane, LaneKind, Network, Point, Road, Way};
+use crate::{Lane, LaneKind, Network, Point, Road, Way, Zone};
 
 /// The widest a median can be, from centre line to centre line of the carriageways, for them to be one street.
 const MAX_APART_M: f64 = 60.0;
@@ -30,9 +30,13 @@ fn nearest(line: &[Point], p: Point) -> Point {
 }
 
 /// The road turned round (its lanes seen from the other end) if its driving lanes run against it, so
-/// that they run along it; None where it is not one-way, or has no driving lane.
+/// that they run along it; None where it is not one-way, has no driving lane, or is divided into zones (turning a
+/// zoned road round would move its zones' starts, and a dual carriageway is one cross-section).
 fn along(road: &Road) -> Option<Road> {
-    let driving: Vec<Way> = road.lanes.iter().filter(|l| l.kind == LaneKind::Driving).map(|l| l.way).collect();
+    if road.zones.len() != 1 {
+        return None;
+    }
+    let driving: Vec<Way> = road.base_lanes().iter().filter(|l| l.kind == LaneKind::Driving).map(|l| l.way).collect();
     let first = *driving.first()?;
     if driving.iter().any(|w| *w != first) {
         return None;
@@ -44,8 +48,8 @@ fn reversed(road: &Road) -> Road {
     let mut r = road.clone();
     std::mem::swap(&mut r.from, &mut r.to);
     r.points.reverse();
-    r.lanes.reverse();
-    for l in &mut r.lanes {
+    r.base_lanes_mut().reverse();
+    for l in r.base_lanes_mut() {
         l.way = match l.way {
             Way::Forward => Way::Backward,
             Way::Backward => Way::Forward,
@@ -56,7 +60,7 @@ fn reversed(road: &Road) -> Road {
 }
 
 fn width(road: &Road) -> f64 {
-    road.lanes.iter().map(|l| l.width_m).sum()
+    road.base_lanes().iter().map(|l| l.width_m).sum()
 }
 
 fn length(line: &[Point]) -> f64 {
@@ -137,9 +141,9 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         let gap = Lane { kind: LaneKind::Other, way: Way::Forward, width_m: median, buffer_type: None, hours: None };
         let b_on_left = side_of(&a.points, &b.points) > 0.0;
         let lanes: Vec<Lane> = if b_on_left {
-            b_here.lanes.iter().cloned().chain([gap]).chain(a.lanes.iter().cloned()).collect()
+            b_here.base_lanes().iter().cloned().chain([gap]).chain(a.base_lanes().iter().cloned()).collect()
         } else {
-            a.lanes.iter().cloned().chain([gap]).chain(b_here.lanes.iter().cloned()).collect()
+            a.base_lanes().iter().cloned().chain([gap]).chain(b_here.base_lanes().iter().cloned()).collect()
         };
         let points: Vec<Point> = a
             .points
@@ -160,7 +164,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
             road_type: a.road_type,
             from: a.from,
             to: a.to,
-            lanes,
+            zones: vec![Zone::whole(lanes)],
             speed_kmh: lower(a.speed_kmh, b.speed_kmh),
             points,
         });
@@ -262,7 +266,11 @@ mod tests {
             road_type: RoadType::Arterial,
             from,
             to,
-            lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Sidewalk, Way::Forward, 2.0)],
+            zones: vec![Zone::whole(vec![
+                lane(LaneKind::Driving, Way::Forward, 3.0),
+                lane(LaneKind::Driving, Way::Forward, 3.0),
+                lane(LaneKind::Sidewalk, Way::Forward, 2.0),
+            ])],
             speed_kmh: None,
             points,
         }
@@ -281,7 +289,7 @@ mod tests {
             road_type: RoadType::Local,
             from,
             to,
-            lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
+            zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)])],
             speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(0.0, y)],
         };
@@ -298,6 +306,17 @@ mod tests {
         merge_dual_carriageways(&mut net);
         let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
         assert_eq!(b.osm_ways, [WayRef::with_version(10, 51), WayRef::with_version(20, 52)]);
+    }
+
+    #[test]
+    fn a_road_divided_into_zones_is_not_merged() {
+        let mut net = shared_ends();
+        let east = net.roads.iter_mut().find(|r| r.id == 1).unwrap();
+        let lanes = east.base_lanes().to_vec();
+        east.zones.push(Zone { from: Coordinate::new(100.0), lanes });
+        let before = net.clone();
+        merge_dual_carriageways(&mut net);
+        assert_eq!(net, before);
     }
 
     #[test]
@@ -318,7 +337,7 @@ mod tests {
         merge_dual_carriageways(&mut net);
         let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
         // Along the merged road (west to east): the westbound half is on the left (north), the eastbound on the right (south).
-        let kinds: Vec<(LaneKind, Way)> = b.lanes.iter().map(|l| (l.kind, l.way)).collect();
+        let kinds: Vec<(LaneKind, Way)> = b.base_lanes().iter().map(|l| (l.kind, l.way)).collect();
         use LaneKind::*;
         use Way::*;
         assert_eq!(
@@ -326,7 +345,7 @@ mod tests {
             vec![(Sidewalk, Backward), (Driving, Backward), (Driving, Backward), (Other, Forward), (Driving, Forward), (Driving, Forward), (Sidewalk, Forward)]
         );
         // centre lines 20 m apart at the middle; carriageways 8 m wide each: 20 - 4 - 4 = 12 m of median
-        let median = b.lanes.iter().find(|l| l.kind == LaneKind::Other).unwrap();
+        let median = b.base_lanes().iter().find(|l| l.kind == LaneKind::Other).unwrap();
         assert!((median.width_m - 12.0).abs() < 1.5, "{}", median.width_m);
         // the centre line runs between the two carriageways
         assert!(b.points.iter().all(|p| p.y_m().abs() < 10.5));
@@ -339,12 +358,12 @@ mod tests {
         let mut net = shared_ends();
         for r in &mut net.roads {
             for p in &mut r.points {
-                p.y = Coordinate::local_metres(-p.y_m());
+                p.y = Coordinate::new(-p.y_m());
             }
         }
         merge_dual_carriageways(&mut net);
         let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
-        let first_driving = b.lanes.iter().find(|l| l.kind == LaneKind::Driving).unwrap();
+        let first_driving = b.base_lanes().iter().find(|l| l.kind == LaneKind::Driving).unwrap();
         assert_eq!(first_driving.way, Way::Forward, "traffic going east is now on the left");
     }
 
@@ -367,7 +386,7 @@ mod tests {
             road_type: RoadType::Local,
             from: 1,
             to: 5,
-            lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
+            zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)])],
             speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(0.0, 20.0)],
         });
@@ -395,7 +414,7 @@ mod tests {
         // another name
         same(&|n| n.roads[1].name = "Other".into());
         // one of them two-way
-        same(&|n| n.roads[1].lanes = vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)]);
+        same(&|n| *n.roads[1].base_lanes_mut() = vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)]);
         // both the same way
         same(&|n| {
             n.roads[1].from = 1;

@@ -11,11 +11,13 @@ mod osm;
 mod point;
 mod road;
 mod road_type;
+mod zone;
 
 pub use lane::{BufferType, Lane, LaneKind, Way};
 pub use network::Network;
 pub use node::{Control, Node};
 pub use osm::{NodeRef, OsmRef, WayRef};
-pub use point::{Coordinate, Point};
+pub use point::{Coordinate, Local, Point, Street};
 pub use road::Road;
 pub use road_type::RoadType;
+pub use zone::Zone;

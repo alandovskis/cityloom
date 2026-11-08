@@ -723,7 +723,7 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
 /// The home page is built before the area's roads are read, so that its search does not wait for them.
 #[test]
 fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef, Zone};
     let (ports, _, storage) = crate::shared::ports::test_ports();
     let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     assert!(vm.view().edges.is_empty(), "no roads are kept yet");
@@ -740,7 +740,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
             road_type: RoadType::Local,
             from: 1,
             to: 2,
-            lanes: vec![lane(Way::Forward), lane(Way::Backward)],
+            zones: vec![Zone::whole(vec![lane(Way::Forward), lane(Way::Backward)])],
             speed_kmh: None,
             points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
         }],

@@ -534,7 +534,7 @@ mod tests {
     }
 
     fn tiny_network() -> Network {
-        use cityloom_model::{Control, Lane, LaneKind, Node, NodeRef, Point, Road, RoadType, Way, WayRef};
+        use cityloom_model::{Control, Lane, LaneKind, Node, NodeRef, Point, Road, RoadType, Way, WayRef, Zone};
         let node = |id, x_m, junction| Node {
             id,
             osm_nodes: vec![NodeRef(id as i64)],
@@ -555,7 +555,7 @@ mod tests {
                 road_type: RoadType::Local,
                 from: 1,
                 to: 2,
-                lanes: vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)],
+                zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)])],
                 speed_kmh: None,
                 points: vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)],
             }],
@@ -575,8 +575,8 @@ mod tests {
             hours: None,
         };
         let walk = Lane { kind: LaneKind::Sidewalk, way: Way::Forward, width_m: 2.0, buffer_type: None, hours: None };
-        let road = network.roads[0].lanes.clone();
-        network.roads[0].lanes = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
+        let road = network.roads[0].base_lanes().to_vec();
+        *network.roads[0].base_lanes_mut() = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
         network
     }
 
@@ -607,7 +607,7 @@ mod tests {
             buffer_type: None,
             hours: None,
         };
-        network.roads[0].lanes.insert(0, bike);
+        network.roads[0].base_lanes_mut().insert(0, bike);
         network
     }
 
@@ -663,7 +663,7 @@ mod tests {
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let curbed_one_way = |legacy: bool, two_way: bool| {
             let mut n = curbed_network(legacy);
-            n.roads[0].lanes.insert(0, network_with_bike_lane(two_way).roads[0].lanes[0].clone());
+            n.roads[0].base_lanes_mut().insert(0, network_with_bike_lane(two_way).roads[0].base_lanes()[0].clone());
             n
         };
         assert!(area.keep_network(&curbed_one_way(true, false)));

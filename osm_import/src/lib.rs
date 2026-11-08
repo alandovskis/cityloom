@@ -362,7 +362,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
             from: r.src_i.0 as u32,
             to: r.dst_i.0 as u32,
             speed_kmh: speed_kmh(r.speed_limit),
-            lanes: join_two_way_bike_lanes(
+            zones: vec![Zone::whole(join_two_way_bike_lanes(
                 r.lane_specs_ltr
                     .iter()
                     .map(|l| Lane {
@@ -373,7 +373,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                         hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
                     })
                     .collect(),
-            ),
+            ))],
             points: r.center_line.points().iter().map(|p| Point::new(p.x(), height - p.y())).collect(),
         });
     }

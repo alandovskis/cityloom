@@ -22,8 +22,8 @@ fn a_road_keeps_its_lanes_and_the_osm_way_it_came_from() {
     let main = net.roads.iter().find(|r| r.name == "Main Street").unwrap();
     assert!(main.has_way(10) && main.osm_ways.len() == 1);
     assert_eq!(main.road_type, RoadType::Collector);
-    assert!(main.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Driving).count() >= 2);
-    assert!(main.lanes.iter().all(|l| l.width_m > 0.0));
+    assert!(main.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Driving).count() >= 2);
+    assert!(main.base_lanes().iter().all(|l| l.width_m > 0.0));
     assert!(main.points.len() >= 2);
 }
 
@@ -42,8 +42,8 @@ fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions
     let b = between[0];
     assert!(b.has_way(100) && b.has_way(101));
     use osm_import::{LaneKind, Way};
-    let driving = |way| b.lanes.iter().filter(|l| l.kind == LaneKind::Driving && l.way == way).count();
-    assert!(driving(Way::Forward) >= 2 && driving(Way::Backward) >= 2, "{:?}", b.lanes);
+    let driving = |way| b.base_lanes().iter().filter(|l| l.kind == LaneKind::Driving && l.way == way).count();
+    assert!(driving(Way::Forward) >= 2 && driving(Way::Backward) >= 2, "{:?}", b.base_lanes());
 }
 
 const PLATEAU: &[u8] = include_bytes!("data/plateau.osm");
@@ -69,8 +69,8 @@ fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
     use osm_import::{LaneKind, Way};
     let net = import(CROSSING).unwrap();
     let side = net.roads.iter().find(|r| r.name == "Side Road").unwrap();
-    let sidewalks = |way| side.lanes.iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
-    assert_eq!((sidewalks(Way::Forward), sidewalks(Way::Backward)), (1, 1), "{:?}", side.lanes);
+    let sidewalks = |way| side.base_lanes().iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
+    assert_eq!((sidewalks(Way::Forward), sidewalks(Way::Backward)), (1, 1), "{:?}", side.base_lanes());
 }
 
 const RENE_LEVESQUE: &[u8] = include_bytes!("rene_levesque.osm");
@@ -81,10 +81,10 @@ fn a_bus_lane_tagged_with_hours_keeps_them() {
     let net = import(RENE_LEVESQUE).expect("the boulevard reads");
     assert!(!net.roads.is_empty());
     for road in &net.roads {
-        let bus: Vec<_> = road.lanes.iter().filter(|l| l.kind == LaneKind::Bus).collect();
-        assert_eq!(bus.len(), 1, "{:?}", road.lanes);
+        let bus: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == LaneKind::Bus).collect();
+        assert_eq!(bus.len(), 1, "{:?}", road.base_lanes());
         assert_eq!(bus[0].hours.as_deref(), Some("Mo-Fr 06:00-10:00,14:30-19:00"), "{:?}", road.osm_ways);
-        assert!(road.lanes.iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
+        assert!(road.base_lanes().iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
     }
 }
 
@@ -108,7 +108,7 @@ fn sidewalks_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
     use osm_import::LaneKind;
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
     let walk = |l: Option<&osm_import::Lane>| l.is_some_and(|l| l.kind == LaneKind::Sidewalk);
-    (walk(road.lanes.first()), walk(road.lanes.last()))
+    (walk(road.base_lanes().first()), walk(road.base_lanes().last()))
 }
 
 #[test]
@@ -140,7 +140,7 @@ const TRACKS: &[u8] = include_bytes!("tracks.osm");
 fn bike_sides_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
     use osm_import::LaneKind;
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
-    let lanes: Vec<_> = road.lanes.iter().filter(|l| l.kind != LaneKind::Sidewalk).collect();
+    let lanes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind != LaneKind::Sidewalk).collect();
     (lanes.first().is_some_and(|l| l.kind == LaneKind::Bike), lanes.last().is_some_and(|l| l.kind == LaneKind::Bike))
 }
 
@@ -163,7 +163,7 @@ fn a_road_with_separate_sidewalks_and_a_separate_track_has_both_on_both_sides_in
     use osm_import::LaneKind::{Bike, Buffer, Driving, Sidewalk};
     let net = import(TRACKS).unwrap();
     let road = net.roads.iter().find(|r| r.name == "both separate").unwrap();
-    let kinds: Vec<_> = road.lanes.iter().map(|l| l.kind).collect();
+    let kinds: Vec<_> = road.base_lanes().iter().map(|l| l.kind).collect();
     assert_eq!(kinds, [Sidewalk, Bike, Buffer, Driving, Driving, Buffer, Bike, Sidewalk]);
 }
 
@@ -187,7 +187,7 @@ const TWO_WAY_TRACKS: &[u8] = include_bytes!("two_way_tracks.osm");
 /// The ways of the bike lanes of the road of that name, left to right.
 fn bike_ways(net: &osm_import::Network, name: &str) -> Vec<osm_import::Way> {
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
-    road.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect()
+    road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect()
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn de_maisonneuve_ouest_has_a_two_way_bike_lane_from_the_cycleways_mapped_beside
     assert!(!roads.is_empty());
     assert_eq!(roads.len(), net.roads.len(), "only the boulevard is a road");
     for road in roads {
-        let bikes: Vec<_> = road.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect();
+        let bikes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect();
         assert_eq!(bikes, [osm_import::Way::Both], "{:?}", road.osm_ways);
     }
 }
