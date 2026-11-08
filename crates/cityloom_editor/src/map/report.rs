@@ -53,14 +53,41 @@ fn lines_of(block: &Block) -> usize {
     }
 }
 
-/// Lays groups of blocks (a rule's heading and paragraphs, kept together) on pages of at most `PAGE_LINES`, the first
-/// page opened by `first` and the later ones by `later`, the last page closed by `last`. A group is never split; one
-/// longer than a page gets a page of its own, and the writer cuts what does not fit, so groups are kept short.
+/// Cuts a group taller than a page into parts that each fit one, at paragraph boundaries; every part after the first
+/// repeats the group's heading, so a rule's sources are never left on a page that does not say whose they are.
+fn split_group(group: Vec<Block>) -> Vec<Vec<Block>> {
+    let cost = |blocks: &[Block]| blocks.iter().map(lines_of).sum::<usize>();
+    if cost(&group) <= PAGE_LINES {
+        return vec![group];
+    }
+    // The room a later page keeps for its continuation heading comes off the budget.
+    let room = PAGE_LINES.saturating_sub(lines_of(&Block::Heading { level: 2, text: String::new() }));
+    let heading = group.first().filter(|b| matches!(b, Block::Heading { .. })).cloned();
+    let mut parts: Vec<Vec<Block>> = vec![];
+    for block in group {
+        let fits = parts.last().is_some_and(|part| cost(part) + lines_of(&block) <= room);
+        if fits || parts.last().is_some_and(|part| part.len() == 1 && matches!(part[0], Block::Heading { .. })) {
+            parts.last_mut().map(|part| part.push(block));
+        } else if parts.is_empty() {
+            parts.push(vec![block]);
+        } else {
+            let mut part = heading.clone().into_iter().collect::<Vec<_>>();
+            part.push(block);
+            parts.push(part);
+        }
+    }
+    parts
+}
+
+/// Lays groups of blocks (a rule's heading and paragraphs, kept together where they fit) on pages of at most
+/// `PAGE_LINES`, the first page opened by `first` and the later ones by `later`, the last page closed by `last`. A
+/// group longer than a page is cut by `split_group`. The estimate leaves slack against the writer, which cuts what does
+/// not fit, and `the_real_sources_pages_fit_their_budget_in_both_languages` holds the registry to it.
 fn paginate(first: Vec<Block>, later: &dyn Fn() -> Block, groups: Vec<Vec<Block>>, last: Block) -> Vec<Vec<Block>> {
     let mut pages = vec![first];
     let mut used: usize = pages[0].iter().map(lines_of).sum();
     let mut on_page = 0;
-    for group in groups {
+    for group in groups.into_iter().flat_map(split_group) {
         let cost: usize = group.iter().map(lines_of).sum();
         if used + cost > PAGE_LINES && on_page > 0 {
             let head = later();
@@ -70,8 +97,8 @@ fn paginate(first: Vec<Block>, later: &dyn Fn() -> Block, groups: Vec<Vec<Block>
         }
         used += cost;
         on_page += 1;
-        let last = pages.len() - 1;
-        pages[last].extend(group);
+        let at = pages.len() - 1;
+        pages[at].extend(group);
     }
     if used + lines_of(&last) > PAGE_LINES {
         pages.push(vec![later()]);
@@ -233,5 +260,48 @@ mod tests {
         assert!((0..120).all(|i| headings.contains(&format!("Rule {i}"))));
         assert!(matches!(pages.last().unwrap().last(), Some(Block::Paragraph { text }) if text == "closing"));
         assert!(matches!(&pages[1][0], Block::Heading { level: 2, text } if text == "Sources (continued)"));
+    }
+
+    #[test]
+    fn the_real_sources_pages_fit_their_budget_in_both_languages_and_name_every_cited_rule() {
+        for locale in [Locale::En, Locale::FrCa] {
+            let i18n = crate::i18n_for(locale);
+            let pages = sources(&i18n);
+            for page in &pages {
+                assert!(page.iter().map(lines_of).sum::<usize>() <= PAGE_LINES, "a Sources page is over the budget in {locale:?}: {page:?}");
+            }
+            let headings: Vec<_> =
+                pages.iter().flatten().filter_map(|b| if let Block::Heading { level: 3, text } = b { Some(text.clone()) } else { None }).collect();
+            assert_eq!(headings.len(), crate::shared::sources::cited().count());
+        }
+    }
+
+    #[test]
+    fn a_rule_longer_than_a_page_is_cut_between_paragraphs_and_keeps_its_heading_and_every_source() {
+        let long = vec![
+            Block::Heading { level: 3, text: "Long rule".into() },
+            Block::Paragraph { text: "status ".repeat(30) },
+            Block::Paragraph { text: "source-a ".repeat(100) },
+            Block::Paragraph { text: "source-b ".repeat(100) },
+            Block::Paragraph { text: "source-c ".repeat(100) },
+        ];
+        let pages = paginate(
+            vec![Block::Heading { level: 2, text: "Sources".into() }],
+            &|| Block::Heading { level: 2, text: "Sources (continued)".into() },
+            vec![long],
+            Block::Paragraph { text: "closing".into() },
+        );
+        for page in &pages {
+            assert!(page.iter().map(lines_of).sum::<usize>() <= PAGE_LINES, "{page:?}");
+        }
+        let all: Vec<&Block> = pages.iter().flatten().collect();
+        for word in ["source-a", "source-b", "source-c", "status"] {
+            assert!(all.iter().any(|b| matches!(b, Block::Paragraph { text } if text.contains(word))), "{word} was lost");
+        }
+        for page in &pages[1..] {
+            let first_rule = page.iter().find(|b| matches!(b, Block::Heading { level: 3, .. }));
+            let has_text = page.iter().any(|b| matches!(b, Block::Paragraph { text } if text.contains("source-")));
+            assert!(!has_text || first_rule.is_some(), "a page of sources does not say whose: {page:?}");
+        }
     }
 }

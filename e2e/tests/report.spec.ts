@@ -44,6 +44,9 @@ test("the Share menu downloads the report as a PDF", async ({ page }) => {
   expect(text).toContain("Plateau");
   expect(text).toContain("Room for the transition");
   expect(text).toContain("Federal Highway Administration");
+  // The last cited rule and its source: a page cut short would lose them before the closing notice.
+  expect(text).toContain("Planting clear of the corners at junctions");
+  expect(text).toContain("Distance de visibilité");
   expect(text).toContain("Every other rule and recommendation");
   expect(text).toContain(VERSION);
   expect(text).toMatch(/\bPass\b/);
