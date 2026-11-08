@@ -6,7 +6,7 @@ import type { Page } from "@playwright/test";
 import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
-const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
+const EXTRACT = fileURLToPath(new URL("../../crates/osm_import/tests/data/kreuzberg.osm", import.meta.url));
 const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 
 /** The two services a place is found and read from, answered without a network: Nominatim with two
