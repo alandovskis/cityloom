@@ -1,16 +1,17 @@
 //! Traffic calming: raised tables and raised crossings along a street, each an extent of the roadway lifted to a
-//! plateau with a ramp at either end.
+//! plateau with a ramp at either end, and chicanes, staggered build-outs from alternate curbs that make the road bend.
 //!
 //! They belong to the street, not to a section: a position is measured along the whole street from its anchored end
 //! (`Street::from_end`), as a zone boundary and a curbside use are, and a table spans the whole width of the roadway,
-//! so it has no side. A street with none is written, drawn and checked exactly as before.
+//! so it has no side; a chicane's build-outs alternate from side to side, starting on the side it says. A street with
+//! none is written, drawn and checked exactly as before.
 
 use serde::{Deserialize, Serialize};
 
 use super::stop_end::stop_gap_mm;
 use super::zone_speed::{max_kmh, speed_in};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
-use crate::shared::catalogue::{Side, is_roadway};
+use crate::shared::catalogue::{KINDS, Side, is_roadway};
 
 /// How high the plateau of a raised table stands above the roadway, in millimetres. A placeholder, UNVERIFIED
 /// (a speed table is commonly 75 to 100 mm; TAC and the MTQ guides are not checked).
@@ -30,6 +31,23 @@ pub const CALMING_STOP_CLEAR_MM: i32 = 5_000;
 pub const CALMING_JUNCTION_CLEAR_MM: i32 = 5_000;
 /// The length a new element is given when none is typed, in millimetres. A placeholder, UNVERIFIED.
 pub const DEFAULT_TABLE_MM: i32 = 7_000;
+/// How long one build-out of a chicane is along the street, in millimetres. A placeholder, UNVERIFIED.
+pub const CHICANE_BUILDOUT_MM: i32 = 4_000;
+/// How far apart two build-outs of a chicane stand, one on each side, from the end of one to the start of the next,
+/// in millimetres. A placeholder, UNVERIFIED.
+pub const CHICANE_GAP_MM: i32 = 6_000;
+/// How far a build-out reaches into the roadway from its curb, in millimetres. A placeholder, UNVERIFIED.
+pub const CHICANE_WIDTH_MM: i32 = 2_000;
+/// How high a build-out stands above the roadway, in millimetres. A placeholder, UNVERIFIED.
+pub const CHICANE_HEIGHT_MM: i32 = 150;
+/// The shortest a chicane should be: two build-outs and the gap between them, in millimetres. A placeholder,
+/// UNVERIFIED; a shorter one is refused.
+pub const MIN_CHICANE_MM: i32 = 2 * CHICANE_BUILDOUT_MM + CHICANE_GAP_MM;
+/// The length a new chicane is given when none is typed (three build-outs), in millimetres. A placeholder, UNVERIFIED.
+pub const DEFAULT_CHICANE_MM: i32 = 3 * CHICANE_BUILDOUT_MM + 2 * CHICANE_GAP_MM;
+/// The highest speed limit a chicane is meant for, in km/h: lower than a table's, since it bends the path. A
+/// placeholder, UNVERIFIED.
+pub const MAX_CHICANE_SPEED_KMH: u8 = 40;
 
 /// What a raised element is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -39,17 +57,21 @@ pub enum Kind {
     Table,
     /// A raised pedestrian crossing: the plateau is the crossing.
     Crossing,
+    /// A chicane: build-outs from alternate curbs, which make the road bend. Appended last so the values a choice
+    /// saved for the others keep their place.
+    Chicane,
 }
 
 impl Kind {
     /// Every kind, in the order a choice lists them.
-    pub const ALL: [Kind; 2] = [Kind::Table, Kind::Crossing];
+    pub const ALL: [Kind; 3] = [Kind::Table, Kind::Crossing, Kind::Chicane];
 
     /// The kind's stable name, as saved and as the choice's value.
     pub fn id(self) -> &'static str {
         match self {
             Kind::Table => "table",
             Kind::Crossing => "crossing",
+            Kind::Chicane => "chicane",
         }
     }
 
@@ -58,6 +80,31 @@ impl Kind {
         match self {
             Kind::Table => "calming-kind-table",
             Kind::Crossing => "calming-kind-crossing",
+            Kind::Chicane => "calming-kind-chicane",
+        }
+    }
+
+    /// The shortest the kind may be, in millimetres.
+    pub fn min_mm(self) -> i32 {
+        match self {
+            Kind::Chicane => MIN_CHICANE_MM,
+            Kind::Table | Kind::Crossing => MIN_TABLE_MM,
+        }
+    }
+
+    /// The length a new one is given when none is typed, in millimetres.
+    pub fn default_mm(self) -> i32 {
+        match self {
+            Kind::Chicane => DEFAULT_CHICANE_MM,
+            Kind::Table | Kind::Crossing => DEFAULT_TABLE_MM,
+        }
+    }
+
+    /// The highest speed limit it is meant for, in km/h.
+    pub fn max_kmh(self) -> u8 {
+        match self {
+            Kind::Chicane => MAX_CHICANE_SPEED_KMH,
+            Kind::Table | Kind::Crossing => MAX_TABLE_SPEED_KMH,
         }
     }
 }
@@ -69,11 +116,40 @@ pub struct Calming {
     pub from_mm: i32,
     pub length_mm: i32,
     pub kind: Kind,
+    /// For a chicane, the side its first build-out is on (the section's side, Left being the first piece); `None`
+    /// means the right. Saved only when set, and only a chicane has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first: Option<Side>,
 }
 
 impl Calming {
     pub fn to_mm(&self) -> i32 {
         self.from_mm + self.length_mm
+    }
+
+    /// The side a chicane's first build-out is on.
+    pub fn first_side(&self) -> Side {
+        self.first.unwrap_or(Side::Right)
+    }
+
+    /// A chicane's build-outs as (from, to, side) in millimetres from the anchored end, alternating from side to side
+    /// and filling the length from its start. Empty for anything else.
+    pub fn buildouts(&self) -> Vec<(i32, i32, Side)> {
+        if self.kind != Kind::Chicane {
+            return Vec::new();
+        }
+        let pitch = CHICANE_BUILDOUT_MM + CHICANE_GAP_MM;
+        let n = (self.length_mm + CHICANE_GAP_MM) / pitch;
+        let other = |side: Side| if side == Side::Left { Side::Right } else { Side::Left };
+        let mut side = self.first_side();
+        (0..n)
+            .map(|k| {
+                let from = self.from_mm + k * pitch;
+                let out = (from, from + CHICANE_BUILDOUT_MM, side);
+                side = other(side);
+                out
+            })
+            .collect()
     }
 }
 
@@ -142,6 +218,8 @@ pub struct CalmingView {
     pub from_mm: i32,
     pub length_mm: i32,
     pub kind: Kind,
+    /// A chicane's first side (`None` for anything else).
+    pub first: Option<Side>,
     /// The kind's name.
     pub name: Said,
     /// Whether it is the chosen one.
@@ -200,8 +278,9 @@ impl Editor {
         if candidate.from_mm < 0 || candidate.to_mm() > frame.length_mm {
             return Err(CalmingRefusal::Outside);
         }
-        if candidate.length_mm < MIN_TABLE_MM {
-            return Err(CalmingRefusal::TooShort { min_mm: MIN_TABLE_MM });
+        let min_mm = candidate.kind.min_mm();
+        if candidate.length_mm < min_mm {
+            return Err(CalmingRefusal::TooShort { min_mm });
         }
         let overlaps = content.calming.iter().enumerate().any(|(k, o)| Some(k) != own && o.from_mm < candidate.to_mm() && candidate.from_mm < o.to_mm());
         if overlaps {
@@ -248,8 +327,14 @@ impl Editor {
     /// Adds an element from `from_mm` (snapped to `SNAP_MM`) for `length_mm` (snapped), as one revision, and chooses
     /// it. Returns its index.
     pub fn add_calming(&mut self, kind: Kind, from_mm: i32, length_mm: i32) -> Result<usize, CalmingRefusal> {
+        self.add_calming_first(kind, from_mm, length_mm, None)
+    }
+
+    /// The same, giving a chicane the side its first build-out is on (ignored for any other kind).
+    pub fn add_calming_first(&mut self, kind: Kind, from_mm: i32, length_mm: i32, first: Option<Side>) -> Result<usize, CalmingRefusal> {
         let frame = self.curb_frame(false).map_err(refusal)?;
-        let c = Calming { from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind };
+        let first = first.filter(|_| kind == Kind::Chicane);
+        let c = Calming { from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, first };
         self.calming_fits(&c, None, frame)?;
         self.calming_choice.pick(Side::Left, c.from_mm);
         self.calming_change(Self::calming_label("rev-calming-add", &c), frame, |list| list.push(c));
@@ -258,7 +343,15 @@ impl Editor {
 
     /// Changes what element `i` is.
     pub fn set_calming_kind(&mut self, i: usize, kind: Kind) -> Result<(), CalmingRefusal> {
-        self.calming_replace(i, "rev-calming-kind", |old| Calming { kind, ..*old })
+        self.calming_replace(i, "rev-calming-kind", |old| Calming { kind, first: old.first.filter(|_| kind == Kind::Chicane), ..*old })
+    }
+
+    /// Gives chicane `i` the side its first build-out is on. Nothing happens for an element that is not a chicane.
+    pub fn set_chicane_first(&mut self, i: usize, side: Side) -> Result<(), CalmingRefusal> {
+        if self.states[self.cursor].content.calming.get(i).is_some_and(|c| c.kind != Kind::Chicane) {
+            return Ok(());
+        }
+        self.calming_replace(i, "rev-chicane-first", |old| Calming { first: Some(side), ..*old })
     }
 
     /// Gives element `i` a new length (snapped), from where it starts.
@@ -376,6 +469,7 @@ impl Editor {
                 from_mm: c.from_mm,
                 length_mm: c.length_mm,
                 kind: c.kind,
+                first: (c.kind == Kind::Chicane).then(|| c.first_side()),
                 name: Said::new(c.kind.name_key()),
                 selected: selected == Some(k),
                 elsewhere,
@@ -399,7 +493,7 @@ impl Calming {
     }
 }
 
-/// The length at least which an element's ramps leave a plateau: the shorter of the two requirements is no help.
+/// The length at least which a table's ramps leave a plateau: the shorter of the two requirements is no help.
 const fn needed_mm() -> i32 {
     let by_plateau = MIN_PLATEAU_MM + 2 * RAMP_MM;
     if by_plateau > MIN_TABLE_MM { by_plateau } else { MIN_TABLE_MM }
@@ -424,17 +518,22 @@ impl Editor {
     pub(super) fn calming_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
         let fails = self.calming_failures();
+        // The rule is the row's place in `calming_failures`, which a row left out does not change.
         let mut rows = vec![
-            ("calming-length", "check-label-calming-length", "check-detail-calming-length-ok"),
-            ("calming-speed", "check-label-calming-speed", "check-detail-calming-speed-unknown"),
-            ("calming-stop", "check-label-calming-stop", "check-detail-calming-stop-ok"),
+            (0, "calming-length", "check-label-calming-length", "check-detail-calming-length-ok"),
+            (1, "calming-speed", "check-label-calming-speed", "check-detail-calming-speed-unknown"),
+            (2, "calming-stop", "check-label-calming-stop", "check-detail-calming-stop-ok"),
         ];
         if self.stops_see_a_junction() {
-            rows.push(("calming-junction", "check-label-calming-junction", "check-detail-calming-junction-ok"));
+            rows.push((3, "calming-junction", "check-label-calming-junction", "check-detail-calming-junction-ok"));
         }
+        if content.calming.iter().any(|c| c.kind == Kind::Chicane) {
+            rows.push((4, "calming-lane", "check-label-calming-lane", "check-detail-calming-lane-ok"));
+        }
+        // The lowest ceiling of the kinds present, for the note when the speed is not known.
+        let ceiling = content.calming.iter().map(|c| c.kind.max_kmh()).min().unwrap_or(MAX_TABLE_SPEED_KMH);
         rows.iter()
-            .enumerate()
-            .map(|(rule, &(id, label, ok_detail))| match fails.iter().find(|f| f.rule == rule) {
+            .map(|&(rule, id, label, ok_detail)| match fails.iter().find(|f| f.rule == rule) {
                 Some(f) => {
                     let element = &content.calming[f.element];
                     Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(f.named.clone().unwrap_or_else(|| element.named())) }
@@ -442,7 +541,7 @@ impl Editor {
                 None => {
                     let detail = match (rule, max_kmh(content.speed, &content.zones)) {
                         (1, Some(kmh)) => Said::new("check-detail-calming-speed-ok").with("kmh", Arg::Num(i64::from(kmh))),
-                        _ => Said::new(ok_detail).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH))),
+                        _ => Said::new(ok_detail).with("max", Arg::Num(i64::from(ceiling))),
                     };
                     Check { id, ok: true, label: Said::new(label), detail, zone: None }
                 }
@@ -467,7 +566,11 @@ impl Editor {
                     out.push(Fail { element: k, rule, detail, named });
                 }
             };
-            if c.length_mm < MIN_TABLE_MM || c.length_mm - 2 * RAMP_MM < MIN_PLATEAU_MM {
+            if c.kind == Kind::Chicane {
+                if c.length_mm < MIN_CHICANE_MM {
+                    fail(0, Said::new("check-detail-chicane-length").with("length", Arg::Length(c.length_mm)).with("min", Arg::Length(MIN_CHICANE_MM)), None);
+                }
+            } else if c.length_mm < MIN_TABLE_MM || c.length_mm - 2 * RAMP_MM < MIN_PLATEAU_MM {
                 fail(
                     0,
                     Said::new("check-detail-calming-length")
@@ -491,18 +594,35 @@ impl Editor {
                 }
             }
             // The speed of the zone the element lies in, in every zone it overlaps: the zone that is too fast is named.
-            let too_fast =
-                |kmh: u16| Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(MAX_TABLE_SPEED_KMH)));
+            let max = c.kind.max_kmh();
+            let too_fast = |kmh: u16| Said::new("check-detail-calming-speed").with("kmh", Arg::Num(i64::from(kmh))).with("max", Arg::Num(i64::from(max)));
             if content.zone_count() < 2 {
-                if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH)) {
+                if let Some(kmh) = content.speed.kmh().filter(|&n| n > u16::from(max)) {
                     fail(1, too_fast(kmh), None);
                 }
             } else {
                 for z in 0..content.zone_count() {
                     let (from, to) = content.span(z, length_mm);
-                    let kmh = speed_in(content.speed, &content.zones, z).kmh().filter(|&n| n > u16::from(MAX_TABLE_SPEED_KMH));
+                    let kmh = speed_in(content.speed, &content.zones, z).kmh().filter(|&n| n > u16::from(max));
                     if let Some(kmh) = kmh.filter(|_| from < c.to_mm() && c.from_mm < to) {
                         fail(1, too_fast(kmh), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                    }
+                }
+            }
+            // A chicane narrows the roadway, so a bus or a bike lane cannot go through it: in every zone it overlaps, the
+            // zone that has one is named.
+            if c.kind == Kind::Chicane {
+                let lane = |section: &[super::Segment]| section.iter().any(|g| matches!(KINDS[g.kind].id, "bus" | "bike"));
+                if content.zone_count() < 2 {
+                    if lane(&content.segments) {
+                        fail(4, Said::new("check-detail-calming-lane"), None);
+                    }
+                } else {
+                    for z in 0..content.zone_count() {
+                        let (from, to) = content.span(z, length_mm);
+                        if from < c.to_mm() && c.from_mm < to && lane(content.section(z)) {
+                            fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                        }
                     }
                 }
             }
@@ -560,14 +680,16 @@ mod tests {
     use crate::street::model::Street;
 
     fn table(from_mm: i32) -> Calming {
-        Calming { from_mm, length_mm: 7_000, kind: Kind::Table }
+        Calming { from_mm, length_mm: 7_000, kind: Kind::Table, first: None }
     }
 
     #[test]
     fn kind_ids_are_stable() {
-        assert_eq!(Kind::ALL, [Kind::Table, Kind::Crossing]);
+        assert_eq!(Kind::ALL, [Kind::Table, Kind::Crossing, Kind::Chicane]);
         assert_eq!(Kind::Table.id(), "table");
         assert_eq!(Kind::Crossing.id(), "crossing");
+        assert_eq!(Kind::Chicane.id(), "chicane");
+        assert_eq!(serde_json::to_string(&Kind::Chicane).unwrap(), r#""chicane""#);
         assert_eq!(serde_json::to_string(&Kind::Table).unwrap(), r#""table""#);
         assert_eq!(serde_json::to_string(&Kind::Crossing).unwrap(), r#""crossing""#);
     }
@@ -584,7 +706,7 @@ mod tests {
     #[test]
     fn a_street_with_calming_round_trips_in_a_pinned_shape() {
         let mut s = Street::sample(0, Side::Right);
-        s.calming = vec![table(10_000), Calming { from_mm: 30_000, length_mm: 6_000, kind: Kind::Crossing }];
+        s.calming = vec![table(10_000), Calming { from_mm: 30_000, length_mm: 6_000, kind: Kind::Crossing, first: None }];
         assert_eq!(
             serde_json::to_string(&s.calming).unwrap(),
             r#"[{"from_mm":10000,"length_mm":7000,"kind":"table"},{"from_mm":30000,"length_mm":6000,"kind":"crossing"}]"#
@@ -637,7 +759,10 @@ mod tests {
         let s = e.snapshot();
         assert_eq!(
             s.calming,
-            vec![Calming { from_mm: 10_100, length_mm: 6_000, kind: Kind::Crossing }, Calming { from_mm: 30_000, length_mm: 7_000, kind: Kind::Table }]
+            vec![
+                Calming { from_mm: 10_100, length_mm: 6_000, kind: Kind::Crossing, first: None },
+                Calming { from_mm: 30_000, length_mm: 7_000, kind: Kind::Table, first: None }
+            ]
         );
         assert_eq!((s.from_end, s.length_mm), (ZoneEnd::First, Some(LEN)), "the length is written with the elements");
         assert_eq!(keys(&e), ["rev-calming-add", "rev-calming-add"]);
@@ -742,7 +867,7 @@ mod tests {
         e.set_calming_length(0, 8_000).unwrap();
         e.move_calming(0, 25_000).unwrap();
         assert_eq!(keys(&e), ["rev-calming-add", "rev-calming-kind", "rev-calming-resize", "rev-calming-move"]);
-        assert_eq!(e.snapshot().calming, vec![Calming { from_mm: 25_000, length_mm: 8_000, kind: Kind::Crossing }]);
+        assert_eq!(e.snapshot().calming, vec![Calming { from_mm: 25_000, length_mm: 8_000, kind: Kind::Crossing, first: None }]);
         // Nothing changed, nothing recorded.
         e.set_calming_kind(0, Kind::Crossing).unwrap();
         e.set_calming_length(0, 8_040).unwrap();
@@ -1254,4 +1379,130 @@ mod tests {
             "L’élément surélevé est à 4,9\u{a0}m de l’arrêt de transport en commun le plus proche; il en faut 5,0\u{a0}m ou plus. Arrêt en cause\u{a0}: îlot d’embarquement à 31,9\u{a0}m, à droite.",
         ),
     ];
+
+    // ---- chicanes ----
+
+    fn chicane_at(speed: Speed, segs: Option<Vec<crate::street::model::Piece>>) -> Editor {
+        let mut s = match segs {
+            Some(p) => Street::imported(StreetClass::Local, Side::Right, &p),
+            None => Street::sample(0, Side::Right),
+        };
+        s.speed = speed;
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(frame());
+        e.add_calming(Kind::Chicane, 20_000, DEFAULT_CHICANE_MM).unwrap();
+        e
+    }
+
+    #[test]
+    fn a_chicanes_build_outs_alternate_from_the_first_side_and_fill_the_length() {
+        let c = Calming { from_mm: 10_000, length_mm: DEFAULT_CHICANE_MM, kind: Kind::Chicane, first: None };
+        assert_eq!(
+            c.buildouts(),
+            vec![(10_000, 14_000, Side::Right), (20_000, 24_000, Side::Left), (30_000, 34_000, Side::Right)],
+            "the first is on the right unless it says"
+        );
+        let left = Calming { first: Some(Side::Left), ..c };
+        assert_eq!(left.buildouts()[0].2, Side::Left);
+        assert_eq!(left.buildouts()[1].2, Side::Right);
+        let least = Calming { length_mm: MIN_CHICANE_MM, ..c };
+        assert_eq!(least.buildouts().len(), 2, "the shortest chicane has two");
+        assert!(Calming { kind: Kind::Table, ..c }.buildouts().is_empty());
+    }
+
+    #[test]
+    fn a_chicane_is_refused_below_its_own_minimum_and_a_table_keeps_its_minimum() {
+        let mut e = editor();
+        assert_eq!(e.add_calming(Kind::Chicane, 10_000, MIN_CHICANE_MM - 100), Err(CalmingRefusal::TooShort { min_mm: MIN_CHICANE_MM }));
+        assert!(e.add_calming(Kind::Chicane, 10_000, MIN_CHICANE_MM).is_ok());
+        assert!(e.add_calming(Kind::Table, 30_000, MIN_TABLE_MM).is_ok());
+        assert_eq!(e.add_calming(Kind::Chicane, 32_000, 8_000), Err(CalmingRefusal::Overlap).or(Err(CalmingRefusal::TooShort { min_mm: MIN_CHICANE_MM })));
+    }
+
+    #[test]
+    fn the_first_side_is_kept_only_for_a_chicane_and_changes_as_one_revision() {
+        let mut e = editor();
+        e.add_calming_first(Kind::Chicane, 10_000, DEFAULT_CHICANE_MM, Some(Side::Left)).unwrap();
+        assert_eq!(e.snapshot().calming[0].first, Some(Side::Left));
+        assert_eq!(e.view().calming[0].first, Some(Side::Left));
+        e.set_chicane_first(0, Side::Right).unwrap();
+        assert_eq!(e.snapshot().calming[0].first, Some(Side::Right));
+        assert_eq!(keys(&e).last(), Some(&"rev-chicane-first"));
+        e.undo();
+        assert_eq!(e.snapshot().calming[0].first, Some(Side::Left));
+        // A table has none, and asking for one changes nothing.
+        e.add_calming_first(Kind::Table, 45_000, 7_000, Some(Side::Left)).unwrap();
+        assert_eq!(e.snapshot().calming[1].first, None);
+        let revisions = e.view().revisions.len();
+        e.set_chicane_first(1, Side::Left).unwrap();
+        assert_eq!(e.view().revisions.len(), revisions);
+        // Becoming another kind drops it.
+        let mut e = editor();
+        e.add_calming_first(Kind::Chicane, 10_000, DEFAULT_CHICANE_MM, Some(Side::Left)).unwrap();
+        e.set_calming_kind(0, Kind::Crossing).unwrap();
+        assert_eq!(e.snapshot().calming[0].first, None);
+    }
+
+    #[test]
+    fn a_chicane_saves_its_kind_and_side_and_a_table_saves_as_before() {
+        let c = Calming { from_mm: 10_000, length_mm: DEFAULT_CHICANE_MM, kind: Kind::Chicane, first: Some(Side::Left) };
+        assert_eq!(serde_json::to_string(&c).unwrap(), r#"{"from_mm":10000,"length_mm":24000,"kind":"chicane","first":"left"}"#);
+        let back: Calming = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back, c);
+        let plain = Calming { from_mm: 10_000, length_mm: 24_000, kind: Kind::Chicane, first: None };
+        assert_eq!(serde_json::to_string(&plain).unwrap(), r#"{"from_mm":10000,"length_mm":24000,"kind":"chicane"}"#);
+    }
+
+    #[test]
+    fn a_chicane_has_a_lower_speed_ceiling_than_a_table() {
+        let ok = check(&chicane_at(Speed::Kmh(40), None), "calming-speed");
+        assert!(ok.ok);
+        let fail = check(&chicane_at(Speed::Kmh(50), None), "calming-speed");
+        assert!(!fail.ok, "50 km/h is fine for a table and too fast for a chicane");
+        assert_eq!(fail.detail.key, "check-detail-calming-speed");
+        assert_eq!(fail.detail.args.iter().find_map(|(n, a)| (*n == "max").then(|| a.clone())), Some(Arg::Num(i64::from(MAX_CHICANE_SPEED_KMH))));
+        assert!(check(&at_speed(Speed::Kmh(50), ZoneEnd::First), "calming-speed").ok, "a table at 50 passes");
+    }
+
+    #[test]
+    fn a_chicane_across_a_bus_or_bike_lane_fails_naming_nothing_extra_without_zones() {
+        let sample = chicane_at(Speed::Kmh(30), None);
+        let lane_ok = check(&sample, "calming-lane");
+        let has_lane = sample.view().segments.iter().any(|g| matches!(KINDS[g.kind].id, "bus" | "bike"));
+        assert_eq!(lane_ok.ok, !has_lane);
+        let piece = |id: &str, w: i32| crate::street::model::Piece {
+            kind: crate::shared::catalogue::kind_index(id).unwrap(),
+            width_mm: w,
+            direction: None,
+            variants: vec![],
+        };
+        let plain = chicane_at(Speed::Kmh(30), Some(vec![piece("sidewalk", 2_000), piece("travel", 3_500), piece("travel", 3_500), piece("sidewalk", 2_000)]));
+        let c = check(&plain, "calming-lane");
+        assert!(c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-lane-ok");
+        let bus = chicane_at(Speed::Kmh(30), Some(vec![piece("sidewalk", 2_000), piece("bus", 3_500), piece("travel", 3_500), piece("sidewalk", 2_000)]));
+        let c = check(&bus, "calming-lane");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-calming-lane");
+        let bike = chicane_at(Speed::Kmh(30), Some(vec![piece("sidewalk", 2_000), piece("bike", 1_800), piece("travel", 3_500), piece("sidewalk", 2_000)]));
+        assert!(!check(&bike, "calming-lane").ok);
+    }
+
+    #[test]
+    fn the_lane_row_exists_only_with_a_chicane_and_a_chicane_too_short_after_a_kind_change_fails_its_length() {
+        let ids = |e: &Editor| e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("calming-")).collect::<Vec<_>>();
+        assert_eq!(ids(&with_table(20_000, 7_000)), ["calming-length", "calming-speed", "calming-stop"]);
+        let e = chicane_at(Speed::Kmh(30), None);
+        assert_eq!(ids(&e), ["calming-length", "calming-speed", "calming-stop", "calming-lane"]);
+        let e = chicane_at(Speed::Kmh(30), None).with_ends([reach(false, 9_000), EndInfo::default()]);
+        assert_eq!(ids(&e), ["calming-length", "calming-speed", "calming-stop", "calming-junction", "calming-lane"]);
+    }
+
+    #[test]
+    fn a_chicane_near_a_stop_or_a_junction_fails_those_rows_like_a_table() {
+        let mut e = editor().with_ends([reach(true, 9_000), EndInfo::default()]);
+        e.add_calming(Kind::Chicane, 14_000, DEFAULT_CHICANE_MM).unwrap();
+        assert!(check(&e, "calming-junction").ok);
+        e.move_calming(0, 13_900).unwrap();
+        assert!(!check(&e, "calming-junction").ok);
+    }
 }

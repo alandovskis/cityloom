@@ -207,6 +207,14 @@ impl SheetWatch {
         self.vm.with_value(|v| v.pick_calming_kind(kind));
     }
 
+    pub fn calming_first_shown(&self) -> crate::shared::catalogue::Side {
+        self.vm.with_value(|v| v.calming_first_shown())
+    }
+
+    pub fn pick_calming_first(&self, side: crate::shared::catalogue::Side) {
+        self.vm.with_value(|v| v.pick_calming_first(side));
+    }
+
     pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
         self.vm.with_value(|v| v.add_calming(kind, length_mm))
     }

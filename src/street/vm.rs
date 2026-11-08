@@ -87,6 +87,7 @@ pub struct StreetVm {
     stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
     /// The kind the raised element about to be added starts as.
     calming_pick: ArcRwSignal<CalmingKind>,
+    calming_first_pick: ArcRwSignal<Side>,
     /// Whether the drag under way is a drag of a raised element (any gesture is under way, but only this one moves it).
     calming_drag: Cell<bool>,
     /// The shelter ticked for the chosen free stretch, which the stop added there starts with.
@@ -172,6 +173,7 @@ impl StreetVm {
                 merge: ArcRwSignal::new(None),
                 stop_pick: ArcRwSignal::new(None),
                 calming_pick: ArcRwSignal::new(CalmingKind::Table),
+                calming_first_pick: ArcRwSignal::new(Side::Right),
                 calming_drag: Cell::new(false),
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
@@ -779,11 +781,38 @@ impl StreetVm {
         }
     }
 
+    /// The side the tools show for a chicane's first build-out: the chosen chicane's own, else the one picked for the
+    /// next. Watched.
+    pub fn calming_first_shown(&self) -> Side {
+        let v = self.view();
+        v.calming_strip
+            .selected
+            .and_then(|n| v.calming_strip.cells.get(n))
+            .and_then(|c| c.element)
+            .and_then(|k| v.calming.get(k))
+            .and_then(|c| c.first)
+            .unwrap_or_else(|| self.calming_first_pick.get())
+    }
+
+    /// The person picks the side of a chicane's first build-out: it changes the chosen chicane, or is kept for the next
+    /// one added.
+    pub fn pick_calming_first(&self, side: Side) {
+        match self.calming_chosen() {
+            Some((Some(_), _)) => {
+                self.on_chosen_calming(|e, i, _| e.set_chicane_first(i, side));
+            }
+            _ => self.calming_first_pick.set(side),
+        }
+    }
+
     /// Adds an element of `kind` and `length_mm` at the start of the chosen free stretch. False, with the reason
-    /// said, when no free stretch is chosen or it was refused.
+    /// said, when no free stretch is chosen or it was refused. A chicane starts on the side picked.
     pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
         match self.calming_chosen() {
-            Some((None, from_mm)) => self.calming_edit(|e| e.add_calming(kind, from_mm, length_mm).map(|_| ())),
+            Some((None, from_mm)) => {
+                let first = Some(self.calming_first_pick.get_untracked());
+                self.calming_edit(|e| e.add_calming_first(kind, from_mm, length_mm, first).map(|_| ()))
+            }
             _ => {
                 self.say_now_key("calming-choose-gap");
                 false
@@ -3295,11 +3324,11 @@ mod calming_tests {
         assert!(r.vm.set_calming_length(8_000));
         assert_eq!(cells(&r)[0], (Some(0), 0, 8_000));
         assert!(!r.vm.set_calming_length(5_000), "too short");
-        assert_eq!(r.said.take().last().unwrap(), "A raised table must be at least 6.0 m long.");
+        assert_eq!(r.said.take().last().unwrap(), "This element must be at least 6.0 m long.");
         assert!(r.vm.remove_calming());
         assert_eq!(cells(&r), [(None, 0, LENGTH)]);
         assert!(!r.vm.remove_calming(), "a free stretch is chosen now");
-        assert_eq!(r.said.take().last().unwrap(), "Choose a raised table or crossing first.");
+        assert_eq!(r.said.take().last().unwrap(), "Choose a raised table, crossing or chicane first.");
     }
 
     #[test]
@@ -3313,6 +3342,31 @@ mod calming_tests {
         assert_eq!(r.vm.view_now().calming_strip.cells[0].kind, Some(CalmingKind::Crossing));
         r.vm.pick_calming_kind(CalmingKind::Table);
         assert_eq!(r.vm.view_now().calming_strip.cells[0].kind, Some(CalmingKind::Table), "the chosen element changed");
+    }
+
+    #[test]
+    fn a_chicane_is_added_on_the_side_picked_and_the_side_of_a_chosen_one_changes() {
+        let r = rig();
+        r.vm.select_calming(0);
+        r.vm.pick_calming_kind(CalmingKind::Chicane);
+        assert_eq!(r.vm.calming_first_shown(), Side::Right, "the right unless picked");
+        r.vm.pick_calming_first(Side::Left);
+        assert_eq!(r.vm.calming_first_shown(), Side::Left);
+        assert!(r.vm.add_calming(CalmingKind::Chicane, CalmingKind::Chicane.default_mm()));
+        assert_eq!(r.vm.view_now().calming[0].first, Some(Side::Left));
+        // The element is chosen: the side shown is its own, and picking changes it as one revision.
+        r.vm.pick_calming_first(Side::Right);
+        assert_eq!(r.vm.view_now().calming[0].first, Some(Side::Right));
+        assert_eq!(r.vm.view_now().revisions.last().unwrap().label.key, "rev-chicane-first");
+        // A table has no side: the pick is ignored for it.
+        r.vm.pick_calming_kind(CalmingKind::Table);
+        assert_eq!(r.vm.view_now().calming[0].first, None);
+    }
+
+    #[test]
+    fn the_default_length_follows_the_kind() {
+        assert_eq!(CalmingKind::Table.default_mm(), 7_000);
+        assert!(CalmingKind::Chicane.default_mm() >= CalmingKind::Chicane.min_mm());
     }
 
     #[test]
@@ -3407,7 +3461,7 @@ mod calming_tests {
         let said = r.said.take().join(" ").replace(['\u{a0}', '\u{202f}'], " ");
         assert!(said.starts_with("Libre, de 0,0 m à 60,0 m, 60,0 m de long, 1 sur 1"), "{said}");
         assert!(!r.vm.remove_calming());
-        assert_eq!(r.said.take().last().unwrap(), "Choisissez d’abord un plateau ou un passage surélevé.");
+        assert_eq!(r.said.take().last().unwrap(), "Choisissez d’abord un plateau, un passage surélevé ou une chicane.");
     }
 }
 

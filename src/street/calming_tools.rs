@@ -9,11 +9,12 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use super::curb_tools::typed_length;
-use super::model::{CalmingKind, DEFAULT_TABLE_MM};
+use super::model::CalmingKind;
 use super::row::CalmingRow;
 use super::vm::StreetVm;
 use super::watch::SheetWatch;
 use super::zone_tools::focus_later;
+use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
 
 /// The kind the select shows as a value, and reads back.
@@ -23,6 +24,14 @@ fn kind_value(k: CalmingKind) -> String {
 
 fn kind_of(value: &str) -> CalmingKind {
     value.parse::<usize>().ok().and_then(|n| CalmingKind::ALL.get(n).copied()).unwrap_or(CalmingKind::Table)
+}
+
+fn side_value(side: Side) -> &'static str {
+    if side == Side::Left { "left" } else { "right" }
+}
+
+fn side_of(value: &str) -> Side {
+    if value == "left" { Side::Left } else { Side::Right }
 }
 
 /// The chosen cell: where it starts and ends and whether it is an element (else a free stretch).
@@ -35,7 +44,7 @@ fn chosen(w: SheetWatch) -> Option<(i32, i32, bool)> {
 /// Adds an element of `kind` into the chosen free stretch: the length typed, else the default. False when the length
 /// is not a number (said) or the add was refused (said by the view-model).
 pub fn commit_add(w: SheetWatch, kind: CalmingKind, typed: &str) -> bool {
-    typed_length(w, typed, Some(DEFAULT_TABLE_MM)).is_some_and(|mm| w.add_calming(kind, mm))
+    typed_length(w, typed, Some(kind.default_mm())).is_some_and(|mm| w.add_calming(kind, mm))
 }
 
 /// Gives the chosen element the length that was typed.
@@ -54,7 +63,8 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
         Some((from, to, true)) => w.units().number_in(to - from, w.i18n().locale()),
         _ => String::new(),
     };
-    let placeholder = move || w.units().number_in(DEFAULT_TABLE_MM, w.i18n().locale());
+    let placeholder = move || w.units().number_in(w.calming_kind_shown().default_mm(), w.i18n().locale());
+    let is_chicane = move || w.calming_kind_shown() == CalmingKind::Chicane;
     let any = move || !w.view().calming_strip.cells.is_empty();
     let options = move || {
         CalmingKind::ALL
@@ -84,6 +94,19 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
                             {options}
                         </select>
                     </div>
+                    <Show when=is_chicane>
+                        <div class="zone-tool">
+                            <label for="calming-first">{move || text("st-calming-first")}</label>
+                            <select
+                                id="calming-first"
+                                prop:value=move || side_value(w.calming_first_shown())
+                                on:change=move |e| w.pick_calming_first(side_of(&event_target::<HtmlSelectElement>(&e).value()))
+                            >
+                                <option value="left">{move || text("st-calming-first-left")}</option>
+                                <option value="right">{move || text("st-calming-first-right")}</option>
+                            </select>
+                        </div>
+                    </Show>
                     <div class="zone-tool">
                         <label for="calming-length">{move || unit_text("st-calming-length")}</label>
                         <input

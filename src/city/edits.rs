@@ -654,7 +654,7 @@ mod tests {
 
     fn calming_record() -> StreetRecord {
         let mut r = street_record();
-        r.street.calming.push(crate::street::model::Calming { from_mm: 10_000, length_mm: 7_000, kind: crate::street::model::CalmingKind::Table });
+        r.street.calming.push(crate::street::model::Calming { from_mm: 10_000, length_mm: 7_000, kind: crate::street::model::CalmingKind::Table, first: None });
         r
     }
 
@@ -1159,7 +1159,12 @@ mod tests {
             shelter: true,
             name: Some("Mont-Royal".into()),
         });
-        pedestrian.street.calming.push(crate::street::model::Calming { from_mm: 20_000, length_mm: 7_000, kind: crate::street::model::CalmingKind::Crossing });
+        pedestrian.street.calming.push(crate::street::model::Calming {
+            from_mm: 20_000,
+            length_mm: 7_000,
+            kind: crate::street::model::CalmingKind::Crossing,
+            first: None,
+        });
         e.streets.insert("w8~n1~n2".into(), pedestrian);
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
