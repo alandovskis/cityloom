@@ -8,9 +8,12 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
     docs_only  true when every file is documentation: the Rust and browser jobs and the Railway deploy are skipped
     unit       true unless docs_only: the unit tests run in full
-    e2e        true when some browser spec runs
-    specs      the Playwright arguments ("" runs every spec)
-    archive    true when `just e2e-archive` runs (its specs: archive, map, street)
+    browser    true when some browser tier runs (the shared build of the wasm and the server)
+    ui         true when the UI tier runs (e2e/tiers.json: no database, no archive)
+    ui_specs   its Playwright arguments ("" runs every spec of the tier)
+    integration, integration_specs   the same for the integration tier (the server and a Postgres)
+    e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
+    e2e_specs  its Playwright arguments
 
 Only a pull request is narrowed. A push to main and a manual run run every spec (a push may still be docs_only),
 and so does anything doubtful: no files, a base that is not there, a file no rule names. A version bump alone
@@ -31,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ARCHIVE_SPECS = {"archive", "map", "street"}  # what scripts/e2e-archive.sh runs
+TIERS = ("ui", "integration", "e2e")  # the tiers of e2e/tiers.json, and the CI job of each
 
 
 def glob(pattern: str, path: str) -> bool:
@@ -69,21 +72,40 @@ class Selection:
     docs_only: bool = False
     all: bool = False
     specs: list[str] = field(default_factory=list)
+    tiers: dict = field(default_factory=dict)  # e2e/tiers.json
 
     @property
     def unit(self) -> bool:
         return not self.docs_only
 
+    def runs(self, tier: str) -> bool:
+        """Whether the tier has a spec to run (every one on main and for a change nobody can narrow)."""
+        return not self.docs_only and (self.all or bool(set(self.tiers[tier]) & set(self.specs)))
+
     @property
-    def e2e(self) -> bool:
-        return not self.docs_only and (self.all or bool(self.specs))
+    def ui(self) -> bool:
+        return self.runs("ui")
+
+    @property
+    def integration(self) -> bool:
+        return self.runs("integration")
 
     @property
     def archive(self) -> bool:
-        return self.e2e and (self.all or bool(ARCHIVE_SPECS & set(self.specs)))
+        return self.runs("e2e")
 
-    def spec_args(self) -> str:
-        return "" if self.all else " ".join(f"tests/{s}.spec.ts" for s in sorted(self.specs))
+    @property
+    def browser(self) -> bool:
+        return any(self.runs(t) for t in TIERS)
+
+    def spec_args(self, tier: str) -> str:
+        """The Playwright arguments for one tier: "" runs all of it, else the changed specs it owns."""
+        if self.all:
+            return ""
+        chosen = set(self.tiers[tier]) & set(self.specs)
+        if tier == "e2e" and "archive" in chosen:
+            chosen |= set(self.tiers["archive_also"])  # the archive spec's change is judged by what the pages do over it
+        return " ".join(f"tests/{s}.spec.ts" for s in sorted(chosen))
 
 
 def specs_for(rules: dict, every_spec: list[str], f: str) -> set[str] | None:
@@ -101,9 +123,9 @@ def specs_for(rules: dict, every_spec: list[str], f: str) -> set[str] | None:
     return chosen
 
 
-def select(rules: dict, every_spec: list[str], files: list[str], empty_means_none: bool = False) -> Selection:
+def select(rules: dict, every_spec: list[str], files: list[str], tiers: dict, empty_means_none: bool = False) -> Selection:
     if not files:
-        return Selection(all=not empty_means_none)
+        return Selection(all=not empty_means_none, tiers=tiers)
     docs = 0
     chosen: set[str] = set()
     everything = False
@@ -123,6 +145,7 @@ def select(rules: dict, every_spec: list[str], files: list[str], empty_means_non
         docs_only=docs == len(files),
         all=everything,
         specs=sorted(every_spec if everything else chosen),
+        tiers=tiers,
     )
 
 
@@ -172,24 +195,29 @@ def main() -> int:
     a = ap.parse_args()
 
     rules = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
+    tiers = json.loads((ROOT / "e2e" / "tiers.json").read_text(encoding="utf-8"))
     every = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
     files = a.files or changed_files(a.base, a.head)
     if files is None:
         print("The change is not known: everything runs.")
-        s = Selection(all=True)
+        s = Selection(all=True, tiers=tiers)
     else:
         # A change of a version number alone leaves nothing to test but the unit tests.
-        s = select(rules, every, files, empty_means_none=True)
+        s = select(rules, every, files, tiers, empty_means_none=True)
         for f in files:
             print(f"  {f}: {describe(rule_for(rules, f))}")
     if a.event != "pull_request" and not s.docs_only:
-        s = Selection(all=True)
+        s = Selection(all=True, tiers=tiers)
     out = {
         "docs_only": str(s.docs_only).lower(),
         "unit": str(s.unit).lower(),
-        "e2e": str(s.e2e).lower(),
-        "specs": s.spec_args(),
-        "archive": str(s.archive).lower(),
+        "browser": str(s.browser).lower(),
+        "ui": str(s.ui).lower(),
+        "ui_specs": s.spec_args("ui"),
+        "integration": str(s.integration).lower(),
+        "integration_specs": s.spec_args("integration"),
+        "e2e": str(s.archive).lower(),
+        "e2e_specs": s.spec_args("e2e"),
     }
     print(json.dumps(out))
     if os.environ.get("GITHUB_OUTPUT"):

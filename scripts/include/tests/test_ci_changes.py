@@ -18,11 +18,12 @@ sys.path.insert(0, str(ROOT / "scripts" / "ci"))
 import ci_changes  # noqa: E402
 
 MAP = json.loads((ROOT / "scripts" / "ci" / "spec-map.json").read_text(encoding="utf-8"))
+TIERS = json.loads((ROOT / "e2e" / "tiers.json").read_text(encoding="utf-8"))
 SPECS = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
 
 
 def pick(*files: str) -> ci_changes.Selection:
-    return ci_changes.select(MAP, SPECS, list(files))
+    return ci_changes.select(MAP, SPECS, list(files), tiers=TIERS)
 
 
 class Selection(unittest.TestCase):
@@ -30,12 +31,12 @@ class Selection(unittest.TestCase):
         s = pick("website/docs/intro.md", "README.md", "website/i18n/fr-CA/x.md", "docs/superpowers/plans/a.md")
         self.assertTrue(s.docs_only)
         self.assertEqual(s.specs, [])
-        self.assertFalse(s.e2e)
+        self.assertFalse(s.browser)
 
     def test_documentation_with_code_is_code(self):
         s = pick("README.md", "src/junction/model.rs")
         self.assertFalse(s.docs_only)
-        self.assertTrue(s.e2e)
+        self.assertTrue(s.ui)
 
     def test_one_slice_runs_its_specs_and_the_cross_ones(self):
         s = pick("src/junction/vm.rs")
@@ -45,11 +46,32 @@ class Selection(unittest.TestCase):
         self.assertNotIn("sync", s.specs)
         self.assertFalse(s.all)
 
+    def test_editor_code_starts_neither_a_database_nor_the_archive(self):
+        for f in ("src/street/vm.rs", "src/junction/vm.rs", "src/map/vm.rs", "src/restriction/model.rs"):
+            with self.subTest(f):
+                s = pick(f)
+                self.assertTrue(s.ui)
+                self.assertFalse(s.integration)
+                self.assertFalse(s.archive)
+
+    def test_the_server_and_the_sync_run_the_integration_tier(self):
+        self.assertTrue(pick("cityloom_server/src/app.rs").integration)
+        s = pick("src/sync/vm.rs")
+        self.assertTrue(s.integration)
+        self.assertFalse(s.archive)
+        self.assertTrue(pick("src/account/vm.rs").integration)
+
+    def test_the_archive_code_runs_the_e2e_tier_alone(self):
+        s = pick("cityloom_prepare/src/archive.rs")
+        self.assertTrue(s.archive)
+        self.assertFalse(s.integration)
+        self.assertFalse(s.ui)
+
     def test_a_unit_test_file_runs_no_browser_test(self):
         s = pick("src/street/tests.rs", "src/map/tests.rs")
         self.assertFalse(s.docs_only)
         self.assertEqual(s.specs, [])
-        self.assertFalse(s.e2e)
+        self.assertFalse(s.browser)
         self.assertTrue(s.unit)
 
     def test_a_changed_spec_runs_itself_alone(self):
@@ -82,19 +104,34 @@ class Selection(unittest.TestCase):
         s = pick("src/junction/vm.rs", "web/app.css")
         self.assertTrue(s.all)
 
-    def test_the_archive_run_follows_its_specs(self):
-        self.assertTrue(pick("src/street/vm.rs").archive)  # the street spec is one of its three
-        self.assertFalse(pick("src/account/vm.rs").archive)
-        self.assertTrue(pick("web/app.css").archive)
-        self.assertFalse(pick("src/street/tests.rs").archive)
+    def test_shared_code_and_main_run_every_tier(self):
+        s = pick("web/app.css")
+        self.assertTrue(s.ui and s.integration and s.archive)
+        self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).archive)
+
+    def test_a_changed_spec_runs_its_own_tier_alone(self):
+        s = pick("e2e/tests/sync.spec.ts")
+        self.assertTrue(s.integration)
+        self.assertFalse(s.ui or s.archive)
+        s = pick("e2e/tests/serve.spec.ts")
+        self.assertTrue(s.archive)
+        self.assertFalse(s.ui or s.integration)
 
     def test_no_files_runs_all(self):
         s = pick()
         self.assertTrue(s.all)
 
-    def test_arguments_for_just(self):
-        self.assertEqual(pick("web/app.css").spec_args(), "")
-        self.assertEqual(pick("e2e/tests/speed.spec.ts", "e2e/tests/curb.spec.ts").spec_args(), "tests/curb.spec.ts tests/speed.spec.ts")
+    def test_arguments_for_each_tier(self):
+        s = pick("web/app.css")
+        self.assertEqual((s.spec_args("ui"), s.spec_args("integration"), s.spec_args("e2e")), ("", "", ""))
+        s = pick("e2e/tests/speed.spec.ts", "e2e/tests/curb.spec.ts", "e2e/tests/sync.spec.ts")
+        self.assertEqual(s.spec_args("ui"), "tests/curb.spec.ts tests/speed.spec.ts")
+        self.assertEqual(s.spec_args("integration"), "tests/sync.spec.ts")
+
+    def test_the_archive_code_repeats_the_pages_over_the_archive(self):
+        s = pick("cityloom_prepare/src/archive.rs")
+        self.assertEqual(s.spec_args("e2e"), "tests/archive.spec.ts tests/map.spec.ts tests/street.spec.ts")
+        self.assertEqual(pick("e2e/tests/serve.spec.ts").spec_args("e2e"), "tests/serve.spec.ts")
 
 
 class Globs(unittest.TestCase):
@@ -129,6 +166,22 @@ class Coverage(unittest.TestCase):
         self.assertEqual([s for s in SPECS if s not in grouped], [], "a spec in no group of scripts/ci/spec-map.json")
         self.assertEqual(sorted(grouped - set(SPECS)), [], "a group names a spec that is not there")
 
+    def test_every_spec_is_in_exactly_one_tier(self):
+        tiers = {name: specs for name, specs in TIERS.items() if name in ("ui", "integration", "e2e")}
+        self.assertEqual(sorted(tiers), ["e2e", "integration", "ui"])
+        for spec in SPECS:
+            with self.subTest(spec):
+                in_tiers = [name for name, specs in tiers.items() if spec in specs]
+                self.assertEqual(len(in_tiers), 1, f"{spec} is in {in_tiers or 'no tier'} of e2e/tiers.json, not exactly one")
+        named = {s for specs in tiers.values() for s in specs}
+        self.assertEqual(sorted(named - set(SPECS)), [], "a tier names a spec that is not there")
+        for name, specs in tiers.items():
+            self.assertEqual(len(specs), len(set(specs)), f"{name} lists a spec twice")
+
+    def test_the_archive_run_repeats_ui_specs_only(self):
+        for spec in TIERS["archive_also"]:
+            self.assertIn(spec, TIERS["ui"], f"{spec} is repeated in archive mode but is not a UI spec")
+
     def test_every_source_folder_has_a_rule(self):
         for entry in sorted((ROOT / "src").iterdir()):
             path = f"src/{entry.name}/mod.rs" if entry.is_dir() else f"src/{entry.name}"
@@ -140,7 +193,7 @@ class Coverage(unittest.TestCase):
             if entry.name.startswith(".git") and entry.name not in (".github", ".gitignore"):
                 continue
             # src is checked folder by folder above; the rest is not in git or is the assistant's.
-            if entry.name in ("target", "node_modules", ".claude", ".impeccable", ".tools", ".env", "src"):
+            if entry.name in ("target", "node_modules", ".claude", ".impeccable", ".tools", ".env", "src", "data"):
                 continue
             path = f"{entry.name}/x" if entry.is_dir() else entry.name
             with self.subTest(path):
