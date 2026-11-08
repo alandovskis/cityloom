@@ -87,7 +87,7 @@ test("the Share menu downloads the report as a PDF", async ({ page }) => {
   expect(file.suggestedFilename()).toMatch(/^cityloom-.*\.pdf$/);
   expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
   const { pages, text } = await read(bytes);
-  expect(pages).toBe(2);
+  expect(pages).toBeGreaterThanOrEqual(5);
   expect(text).toContain("Plateau");
   expect(text).toContain(VERSION);
   expect(text).toMatch(/\bPass\b/);
@@ -105,7 +105,7 @@ test("the report downloads in French when the page is French", async ({ page }) 
   await page.locator("#report").click();
   const file = await pending;
   const { pages, text } = await read(readFileSync(await file.path()));
-  expect(pages).toBe(2);
+  expect(pages).toBeGreaterThanOrEqual(5);
   expect(text).toContain("Réussite");
   expect(text).toContain("Échec");
   expect(text).toContain(VERSION);
@@ -138,11 +138,22 @@ test("the editors' Share menu still prints", async ({ page }) => {
   await expect(page.locator("#report")).toHaveCount(0);
 });
 
-test("with no edits the report has two pages", async ({ page }) => {
+test("with no edits the report has the review pages and the appendix but no place pages", async ({ page }) => {
   const { bytes } = await download(page);
   const { pages, text } = await read(bytes);
-  expect(pages).toBe(2);
-  expect(text).not.toContain("Before");
+  // The cover, the summary, the network effects and area rules, the limits of the data and the appendix.
+  expect(pages).toBeGreaterThanOrEqual(5);
+  for (const heading of [
+    "Network effects",
+    "Area rules",
+    "Limits of the OpenStreetMap data",
+    "Appendix",
+    "Glossary",
+    "Credits",
+  ]) {
+    expect(text).toContain(heading);
+  }
+  // The glossary names Before and After, but no place page draws them.
   expect(await figureAlts(bytes)).toEqual([]);
 });
 
@@ -151,10 +162,12 @@ test("an edited street and an edited junction each get a page in the report", as
   await page.goto("/map.html");
   const { file, bytes } = await downloadHere(page);
   const { pages, text } = await read(bytes);
-  expect(pages).toBe(4);
+  // Five pages without edits, and two places changed.
+  expect(pages).toBeGreaterThanOrEqual(7);
   expect(text).toContain("Before");
   expect(text).toContain("After");
   expect(text).toContain(name);
+  expect(text.indexOf("Before")).toBeLessThan(text.indexOf("Network effects"));
   const alts = await figureAlts(bytes);
   expect(alts.length).toBe(4);
   for (const alt of alts) expect(alt.length).toBeGreaterThan(20);
@@ -167,9 +180,20 @@ test("the place pages follow the language", async ({ page }) => {
   await page.goto("/map.html");
   const { bytes } = await downloadHere(page);
   const { pages, text } = await read(bytes);
-  expect(pages).toBe(4);
+  expect(pages).toBeGreaterThanOrEqual(7);
   expect(text).toContain("Avant");
   expect(text).toContain("Après");
+  for (const heading of [
+    "Effets sur le réseau",
+    "Règles de zone",
+    "Limites des données OpenStreetMap",
+    "Annexe",
+    "Glossaire",
+    "Crédits",
+  ]) {
+    expect(text).toContain(heading);
+  }
+  expect(text).not.toContain("Network effects");
   expect(text).not.toMatch(/\bBefore\b/);
   const alts = await figureAlts(bytes);
   expect(alts.length).toBe(4);
