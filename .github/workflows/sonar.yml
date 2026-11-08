@@ -1,9 +1,19 @@
 name: SonarCloud
 
+# A change to documentation alone is not analysed (the unit tests and the coverage it would report are unchanged).
+# Unlike ci.yml, this workflow's check is not required by branch protection or by the `CI` job, so a path filter is safe.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "website/**"
+      - "docs/**"
+      - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "website/**"
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 # A newer push to the same pull request supersedes the run in progress; runs on main always finish.
