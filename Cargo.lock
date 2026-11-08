@@ -678,15 +678,15 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.53.0"
+version = "0.53.1"
 dependencies = [
  "any_spawner",
+ "cityloom_model",
  "cityloom_report",
  "fluent-bundle",
  "fluent-syntax",
  "js-sys",
  "leptos",
- "osm_network",
  "proc-macro2",
  "serde",
  "serde_json",
@@ -694,6 +694,13 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "cityloom_model"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -3917,20 +3924,13 @@ version = "0.1.0"
 dependencies = [
  "abstutil",
  "cityloom_editor",
+ "cityloom_model",
  "geom",
  "instant",
  "osm2streets",
- "osm_network",
  "serde_json",
  "streets_reader",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "osm_network"
-version = "0.1.0"
-dependencies = [
- "serde",
 ]
 
 [[package]]

@@ -104,7 +104,7 @@ mod tests {
         let area = Area::new("Testville", 45.5, -73.6);
         let store = CityStore::for_area(ports.storage.clone(), area.clone());
         assert_eq!(for_store(&store, Some([0.0, 0.0])), None, "no roads kept: nowhere");
-        assert!(store.keep_network(&osm_network::Network::default()));
+        assert!(store.keep_network(&cityloom_model::Network::default()));
         assert_eq!(for_store(&store, None), None, "a layout that does not say where its origin is");
         assert_eq!(for_store(&store, Some([1.0, 2.0])), Some(Projection::new(area.bounds(), [1.0, 2.0])));
     }

@@ -7,7 +7,7 @@
 //! WebAssembly module, loaded when a place is opened.
 
 use abstutil::{Tags, Timer};
-pub use osm_network::*;
+pub use cityloom_model::*;
 use osm2streets::{Direction, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
 use std::collections::BTreeMap;
 
@@ -33,7 +33,7 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     let (mut streets, doc) = read_streets(osm, clip, config, &mut timer)?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
-    osm_network::merge::merge_dual_carriageways(&mut network);
+    cityloom_model::merge::merge_dual_carriageways(&mut network);
     Ok(network)
 }
 

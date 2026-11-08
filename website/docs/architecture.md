@@ -58,7 +58,7 @@ renders, so a history follows a language switch. Each slice that owns messages h
 The workspace has four crates:
 
 - `cityloom_editor` (the root crate) is the editor, built to WebAssembly and driven by `wasm-bindgen`.
-- `osm_network` is the plain network type (serde only).
+- `cityloom_model` is the plain network type (serde only).
 - `osm_import` runs [osm2streets](https://github.com/a-b-street/osm2streets) and fills the network. It is built as its
   own WebAssembly module, `web/pkg/osm_import*`, which `web/city.js` loads when a place is first opened. This keeps
   osm2streets out of the editor's module.
