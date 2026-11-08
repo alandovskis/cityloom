@@ -1,6 +1,13 @@
 use std::collections::BTreeMap;
 
-use crate::{Network, NodeId, Road, RoadId};
+use serde::{Deserialize, Serialize};
+
+use crate::{Network, Road, RoadId};
+
+/// A node of the network's graph, by its id in it. Not an OSM node: see `NodeRef`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct NodeId(pub u32);
 
 /// A place in the network's graph, apart from what stands there: see `Junction` for that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -83,6 +90,12 @@ mod tests {
 
     fn ids(groups: Vec<Vec<RoadId>>) -> Vec<Vec<u32>> {
         groups.into_iter().map(|g| g.into_iter().map(|r| r.0).collect()).collect()
+    }
+
+    #[test]
+    fn a_node_id_is_kept_as_the_bare_number() {
+        assert_eq!(serde_json::to_string(&NodeId(3)).unwrap(), "3");
+        assert_eq!(serde_json::from_str::<NodeId>("3").unwrap(), NodeId(3));
     }
 
     #[test]

@@ -19,9 +19,9 @@ mod road_type;
 mod zone;
 
 pub use corridor::{Corridor, UserClass};
-pub use graph::{Edge, Node, connected};
+pub use graph::{Edge, Node, NodeId, connected};
 pub use hours::{Hours, Window};
-pub use ids::{NodeId, RoadId};
+pub use ids::RoadId;
 pub use junction::{Control, Junction};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
