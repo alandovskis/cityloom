@@ -104,6 +104,7 @@ test("an edit is kept under the street's OSM key", async ({ page }) => {
 
 test("a speed the designer changed is kept with the record: version 7", async ({ page }) => {
   const href = await openStreet(page, 0);
+  await page.locator("#t-street").click();
   const speed = page.locator("#speed-limit");
   const chosen = (await speed.inputValue()) === "10" ? "20" : "10";
   await speed.selectOption(chosen);

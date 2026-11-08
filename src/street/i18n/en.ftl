@@ -350,13 +350,13 @@ st-zone-keep-cancel = Cancel the merge
 st-zone-name = Zone name
 st-zone-reset = Reset to the street's section
 st-zone-use = Use this section for the whole street
+st-panel-tabs-label = Details sections
+st-panel-tab-piece = Piece
+st-panel-tab-street = Street
 st-speed-label = Speed limit
 st-speed-not-set = Not set
 st-speed-kmh = { $kmh } km/h
-# The speed limit sign in the 2.5D: its heading, the same word on a Canadian sign in both languages.
-iso-sign-maximum = MAXIMUM
 svg-iso-transition = A transition of { $length } leads into { $zone }.
-svg-iso-speed = Speed limit { $kmh } km/h.
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.

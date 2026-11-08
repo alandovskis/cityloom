@@ -47,6 +47,19 @@ pub fn piece_target(key: &str, current: Option<usize>, len: usize) -> Option<usi
     }
 }
 
+/// Which tab of a tab list of `len` the key pressed on the tab at `current` shows, by the WAI-ARIA tabs pattern: the
+/// arrows go to the next or the previous and wrap, Home to the first, End to the last. `None` for any other key.
+pub fn panel_tab_target(key: &str, current: usize, len: usize) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    match key {
+        "ArrowRight" | "ArrowDown" => Some(if current >= last { 0 } else { current + 1 }),
+        "ArrowLeft" | "ArrowUp" => Some(if current == 0 { last } else { current - 1 }),
+        "Home" => Some(0),
+        "End" => Some(last),
+        _ => None,
+    }
+}
+
 /// What a key does on the zone strip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZoneAction {
@@ -77,6 +90,18 @@ pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_panel_tabs_follow_the_tabs_pattern() {
+        assert_eq!(panel_tab_target("ArrowRight", 0, 2), Some(1));
+        assert_eq!(panel_tab_target("ArrowRight", 1, 2), Some(0), "wraps");
+        assert_eq!(panel_tab_target("ArrowLeft", 0, 2), Some(1), "wraps");
+        assert_eq!(panel_tab_target("ArrowLeft", 1, 2), Some(0));
+        assert_eq!(panel_tab_target("Home", 1, 2), Some(0));
+        assert_eq!(panel_tab_target("End", 0, 2), Some(1));
+        assert_eq!(panel_tab_target("a", 0, 2), None);
+        assert_eq!(panel_tab_target("Home", 0, 0), None);
+    }
 
     #[test]
     fn the_arrows_select_and_shift_with_an_arrow_moves_the_piece() {
