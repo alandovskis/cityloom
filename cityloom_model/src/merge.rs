@@ -94,7 +94,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         let mut best: Option<(f64, usize)> = None;
         for j in 0..net.roads.len() {
             let Some(b) = &oriented[j] else { continue };
-            if i == j || taken[j] || a.name != b.name || a.highway != b.highway {
+            if i == j || taken[j] || a.name != b.name || a.road_type != b.road_type {
                 continue;
             }
             let (Some(a0), Some(a1), Some(b0), Some(b1)) = (at(net, a.from), at(net, a.to), at(net, b.from), at(net, b.to)) else { continue };
@@ -157,7 +157,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
             id: a.id,
             osm_ways,
             name: a.name.clone(),
-            highway: a.highway.clone(),
+            road_type: a.road_type,
             from: a.from,
             to: a.to,
             lanes,
@@ -227,7 +227,7 @@ fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Coordinate, Node, NodeRef, WayRef};
+    use crate::{Control, Coordinate, Node, NodeRef, RoadType, WayRef};
 
     fn node(id: u32, x_m: f64, y_m: f64) -> Node {
         Node {
@@ -259,7 +259,7 @@ mod tests {
             id,
             osm_ways: vec![WayRef::with_version(id as i64 * 10, id as i32 + 50)],
             name: name.into(),
-            highway: "primary".into(),
+            road_type: RoadType::Arterial,
             from,
             to,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Sidewalk, Way::Forward, 2.0)],
@@ -278,7 +278,7 @@ mod tests {
             id,
             osm_ways: vec![WayRef::new(id as i64)],
             name: "Cross".into(),
-            highway: "residential".into(),
+            road_type: RoadType::Local,
             from,
             to,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
@@ -364,7 +364,7 @@ mod tests {
             id: 9,
             osm_ways: vec![WayRef::new(9)],
             name: "Cross".into(),
-            highway: "residential".into(),
+            road_type: RoadType::Local,
             from: 1,
             to: 5,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],

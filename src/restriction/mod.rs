@@ -17,7 +17,7 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 pub(crate) mod fixtures {
     use std::rc::Rc;
 
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, Way, WayRef};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef};
 
     use crate::city::projection::{self, Projection};
     use crate::city::store::CityStore;
@@ -44,7 +44,7 @@ pub(crate) mod fixtures {
                 id: 1,
                 osm_ways: vec![WayRef::new(7)],
                 name: "Bend Street".into(),
-                highway: "residential".into(),
+                road_type: RoadType::Local,
                 from: 1,
                 to: 2,
                 lanes: vec![lane(Way::Forward), lane(Way::Backward)],

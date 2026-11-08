@@ -358,7 +358,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
             id: id.0 as u32,
             osm_ways: r.osm_ids.iter().map(|w| WayRef { id: w.0, version: doc.ways.get(w).and_then(|way| way.version) }).collect(),
             name,
-            highway: r.highway_type.clone(),
+            road_type: RoadType::from_osm(&r.highway_type),
             from: r.src_i.0 as u32,
             to: r.dst_i.0 as u32,
             speed_kmh: speed_kmh(r.speed_limit),

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{Lane, Point, WayRef};
+use crate::{Lane, Point, RoadType, WayRef};
 
 /// A street between two nodes, made from one or more OpenStreetMap ways.
 ///
@@ -16,8 +16,8 @@ pub struct Road {
     /// The OSM ways it was made from, each with its version when known; the key an edit is kept under.
     pub osm_ways: Vec<WayRef>,
     pub name: String,
-    /// OSM's `highway` value.
-    pub highway: String,
+    /// How the road ranks, from OSM's `highway` value.
+    pub road_type: RoadType,
     pub from: u32,
     pub to: u32,
     /// Left to right when facing from `from` to `to`.
@@ -47,7 +47,8 @@ pub(crate) struct RoadWire {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     osm_versions: BTreeMap<i64, i32>,
     name: Option<String>,
-    highway: String,
+    #[serde(alias = "highway")]
+    road_type: RoadType,
     from: u32,
     to: u32,
     lanes: Vec<Lane>,
@@ -72,7 +73,7 @@ impl TryFrom<RoadWire> for Road {
         }
         let name = w.name.unwrap_or_default();
         let osm_ways = w.osm_ways.iter().map(|&id| WayRef { id, version: w.osm_versions.get(&id).copied() }).collect();
-        Ok(Road { id: w.id, osm_ways, name, highway: w.highway, from: w.from, to: w.to, lanes: w.lanes, speed_kmh: w.speed_kmh, points: w.points })
+        Ok(Road { id: w.id, osm_ways, name, road_type: w.road_type, from: w.from, to: w.to, lanes: w.lanes, speed_kmh: w.speed_kmh, points: w.points })
     }
 }
 
@@ -84,7 +85,7 @@ impl From<Road> for RoadWire {
             osm_ways: r.osm_ways.iter().map(|w| w.id).collect(),
             osm_versions,
             name: Some(r.name),
-            highway: r.highway,
+            road_type: r.road_type,
             from: r.from,
             to: r.to,
             lanes: r.lanes,
@@ -104,7 +105,7 @@ mod tests {
             id: 1,
             osm_ways: vec![WayRef::with_version(5, 49), WayRef::new(7)],
             name: "Main".into(),
-            highway: "residential".into(),
+            road_type: RoadType::Local,
             from: 1,
             to: 2,
             lanes: vec![],

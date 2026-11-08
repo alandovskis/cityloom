@@ -1352,7 +1352,7 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
     use crate::shared::said::say_now;
-    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, Way, WayRef};
+    use cityloom_model::{Control, Lane, LaneKind, Network, Node, NodeRef, Point, Road, RoadType, Way, WayRef};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         vm_in(Locale::En)
@@ -1886,7 +1886,7 @@ mod tests {
                 id: 1,
                 osm_ways: vec![WayRef::new(7)],
                 name: "Bend Street".into(),
-                highway: "residential".into(),
+                road_type: RoadType::Local,
                 from: 1,
                 to: 2,
                 lanes: vec![lane(Way::Forward), lane(Way::Backward)],

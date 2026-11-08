@@ -1,4 +1,4 @@
-use osm_import::{Control, NodeRef, import};
+use osm_import::{Control, NodeRef, RoadType, import};
 
 const CROSSING: &[u8] = include_bytes!("crossing.osm");
 
@@ -21,7 +21,7 @@ fn a_road_keeps_its_lanes_and_the_osm_way_it_came_from() {
     let net = import(CROSSING).unwrap();
     let main = net.roads.iter().find(|r| r.name == "Main Street").unwrap();
     assert!(main.has_way(10) && main.osm_ways.len() == 1);
-    assert_eq!(main.highway, "secondary");
+    assert_eq!(main.road_type, RoadType::Collector);
     assert!(main.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Driving).count() >= 2);
     assert!(main.lanes.iter().all(|l| l.width_m > 0.0));
     assert!(main.points.len() >= 2);

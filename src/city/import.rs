@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Point, Way, WayRef};
+use cityloom_model::{BufferType, Control, Lane, LaneKind, Network, Point, RoadType, Way, WayRef};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -13,13 +13,13 @@ use crate::street::model::{Piece, Speed, Street, Window};
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
 
-/// The class of a road, by OpenStreetMap's `highway`.
-fn class_of(highway: &str) -> StreetClass {
-    match highway {
-        "motorway" | "motorway_link" => StreetClass::Motorway,
-        "trunk" | "trunk_link" | "primary" | "primary_link" => StreetClass::Arterial,
-        "secondary" | "secondary_link" | "tertiary" | "tertiary_link" => StreetClass::Collector,
-        _ => StreetClass::Local,
+/// The class of a road, by its type.
+fn class_of(road_type: RoadType) -> StreetClass {
+    match road_type {
+        RoadType::Motorway => StreetClass::Motorway,
+        RoadType::Highway | RoadType::Arterial => StreetClass::Arterial,
+        RoadType::Collector => StreetClass::Collector,
+        RoadType::Local => StreetClass::Local,
     }
 }
 
@@ -255,7 +255,7 @@ impl Layout {
         let edges: Vec<EdgeDef> = roads
             .iter()
             .map(|r| {
-                let class = class_of(&r.highway);
+                let class = class_of(r.road_type);
                 let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street {
@@ -580,7 +580,7 @@ mod tests {
             id,
             osm_ways: vec![WayRef::new(id as i64 * 100)],
             name: name.to_string(),
-            highway: "residential".into(),
+            road_type: RoadType::Local,
             from: 1,
             to,
             lanes: vec![
@@ -742,20 +742,16 @@ mod tests {
     }
 
     #[test]
-    fn a_road_is_classed_by_its_highway() {
+    fn a_road_is_classed_by_its_type() {
         use crate::shared::catalogue::StreetClass::*;
-        for (highway, class) in [
-            ("motorway", Motorway),
-            ("motorway_link", Motorway),
-            ("trunk", Arterial),
-            ("primary_link", Arterial),
-            ("secondary", Collector),
-            ("tertiary_link", Collector),
-            ("residential", Local),
-            ("service", Local),
-            ("footway", Local),
+        for (road_type, class) in [
+            (RoadType::Motorway, Motorway),
+            (RoadType::Highway, Arterial),
+            (RoadType::Arterial, Arterial),
+            (RoadType::Collector, Collector),
+            (RoadType::Local, Local),
         ] {
-            assert_eq!(class_of(highway), class, "{highway}");
+            assert_eq!(class_of(road_type), class, "{road_type:?}");
         }
     }
 
@@ -770,7 +766,7 @@ mod tests {
     #[test]
     fn a_motorway_is_a_freeway_and_a_residential_street_is_not() {
         let mut net = crossing();
-        net.roads[1].highway = "motorway".into();
+        net.roads[1].road_type = RoadType::Motorway;
         let v = City::from_network(&net, "Fast").view(0);
         assert_eq!(v.edges.iter().filter(|e| e.freeway).count(), 1);
     }
