@@ -25,18 +25,28 @@ mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod templates;
 pub use templates::{Template, TemplateRefusal, TemplateView};
+mod calming;
+mod calming_shown;
 mod curb;
 mod curb_end;
 mod curb_shown;
+mod green;
 mod map_uses;
 mod stop;
 mod stop_end;
+pub use calming::{
+    CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, Kind as CalmingKind, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM,
+    MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
+};
+pub use calming::{CalmingCell, CalmingStripView, CalmingView};
+pub use calming_shown::ShownCalming;
 use curb::Choice;
 pub use curb::{
     CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
 };
 pub use curb_end::EndUse;
-pub use curb_shown::{ShownInstance, ShownStop};
+pub use curb_shown::{ShownGreen, ShownInstance, ShownStop};
+pub use green::{Green, GreenCell, GreenForm, GreenKind, GreenRefusal, GreenRowView, TreeSize, fills, host_at};
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
@@ -255,6 +265,14 @@ pub struct Street {
     /// any, `from_end` and `length_mm` are written as they are with zones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stops: Vec<Stop>,
+    /// The raised tables and crossings along the street, by `from_mm`. Empty for a street with none; with any,
+    /// `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub calming: Vec<Calming>,
+    /// The trees and green infrastructure along the street, by `from_mm`. Empty for a street with none; with any,
+    /// `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub green: Vec<Green>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -362,6 +380,8 @@ impl Street {
             speed: Speed::Undecided,
             curb: Vec::new(),
             stops: Vec::new(),
+            calming: Vec::new(),
+            green: Vec::new(),
         };
         street.settle_class();
         street
@@ -427,13 +447,21 @@ impl Street {
         s.reverse_zones();
         s.reverse_curb();
         s.reverse_stops();
+        // a raised element spans the roadway: no side to swap, and its place stays measured from the same end
+        s.reverse_green();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
-        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound() && self.stops_are_sound()
+        self.row_mm > 0
+            && self.section_is_sound(&self.segments)
+            && self.zones_are_sound()
+            && self.curb_is_sound()
+            && self.stops_are_sound()
+            && self.green_is_sound()
+            && self.calming_is_sound()
     }
 
     /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
@@ -484,6 +512,10 @@ struct Content {
     curb: Vec<Instance>,
     /// The transit stops, which lie along the street whatever its zones.
     stops: Vec<Stop>,
+    /// The raised elements, which lie along the street whatever its zones.
+    calming: Vec<Calming>,
+    /// The trees and green infrastructure, which lie along the street whatever its zones.
+    green: Vec<Green>,
 }
 
 impl Content {
@@ -496,6 +528,8 @@ impl Content {
             speed: street.speed,
             curb: street.curb.clone(),
             stops: street.stops.clone(),
+            calming: street.calming.clone(),
+            green: street.green.clone(),
         }
     }
 
@@ -528,7 +562,9 @@ impl Content {
     fn settle(&mut self) {
         self.sort_curb();
         self.sort_stops();
-        let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty();
+        self.sort_calming();
+        green::sort_green(&mut self.green);
+        let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty();
         zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, keep_anchor);
     }
 }
@@ -548,6 +584,10 @@ struct State {
     /// that undo and redo carry the chosen one with it.
     curb_move: Option<(Side, i32, i32)>,
     stop_move: Option<(Side, i32, i32)>,
+    /// The same for a raised element (its side is always `Left`: an element has none).
+    calming_move: Option<(Side, i32, i32)>,
+    /// The same for the trees and green infrastructure (see `State.stop_move`).
+    green_move: Option<((i32, i32), (i32, i32))>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -578,6 +618,10 @@ pub struct Editor {
     curb_choice: Choice,
     /// The same for the stops' strips (see `State.stop_move`).
     stop_choice: Choice,
+    /// The same for the raised elements: the chosen one is found by its place (the side is always `Left`).
+    calming_choice: Choice,
+    /// The same for the green elements (see `State.green_move`).
+    green_choice: green::GreenChoice,
     pending_label: Option<Said>,
 }
 
@@ -641,6 +685,8 @@ impl Editor {
             speed: content.speed,
             curb: content.curb.clone(),
             stops: content.stops.clone(),
+            calming: content.calming.clone(),
+            green: content.green.clone(),
         }
     }
 
@@ -664,6 +710,8 @@ impl Editor {
                 row_mm: today.row_mm,
                 curb_move: None,
                 stop_move: None,
+                calming_move: None,
+                green_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -674,6 +722,8 @@ impl Editor {
             gesture: None,
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
+            calming_choice: Choice::default(),
+            green_choice: green::GreenChoice::default(),
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -773,8 +823,9 @@ impl Editor {
         content.settle();
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        let (curb_move, stop_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved());
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move });
+        let (curb_move, stop_move, green_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved(), self.green_choice.take_moved());
+        let calming_move = self.calming_choice.take_moved();
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move });
         self.clamp_zone();
     }
 
@@ -798,6 +849,8 @@ impl Editor {
             self.pending_label = None;
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
+            self.green_choice.forget_moved();
         }
     }
 
@@ -812,12 +865,16 @@ impl Editor {
         if now == baseline {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
+            self.green_choice.forget_moved();
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.calming_choice.forget_moved();
+            self.green_choice.forget_moved();
             return false;
         };
         self.push(label, now);
@@ -830,6 +887,8 @@ impl Editor {
             // The use or stop is back where it started: so is the choice.
             self.curb_choice.cancel();
             self.stop_choice.cancel();
+            self.calming_choice.cancel();
+            self.green_choice.cancel();
         }
     }
 
@@ -1321,6 +1380,8 @@ impl Editor {
         }
         self.curb_choice.undo(self.states[self.cursor].curb_move);
         self.stop_choice.undo(self.states[self.cursor].stop_move);
+        self.calming_choice.undo(self.states[self.cursor].calming_move);
+        self.green_choice.undo(self.states[self.cursor].green_move);
         self.cursor -= 1;
         self.reselect();
         true
@@ -1334,6 +1395,8 @@ impl Editor {
         self.cursor += 1;
         self.curb_choice.redo(self.states[self.cursor].curb_move);
         self.stop_choice.redo(self.states[self.cursor].stop_move);
+        self.calming_choice.redo(self.states[self.cursor].calming_move);
+        self.green_choice.redo(self.states[self.cursor].green_move);
         self.reselect();
         true
     }
@@ -1444,8 +1507,13 @@ impl Editor {
             zones: self.zones_view(),
             curb: self.curb_view(),
             stops: self.stops_view(),
+            calming: self.calming_view(),
+            calming_strip: self.calming_strip_view(),
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
+            calming_shown: self.calming_shown(),
+            green_shown: self.green_shown(),
+            green: self.green_row(),
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
                 .into_iter()
@@ -1480,6 +1548,12 @@ impl Editor {
         }
         if !self.states[self.cursor].content.stops.is_empty() {
             street.extend(self.stop_checks());
+        }
+        if !self.states[self.cursor].content.calming.is_empty() {
+            street.extend(self.calming_checks());
+        }
+        if !self.states[self.cursor].content.green.is_empty() {
+            street.extend(self.green_checks());
         }
         street
     }
@@ -1826,10 +1900,19 @@ pub struct View {
     pub curb: CurbView,
     /// The strips of the transit stops, a row under each side's curbside strip.
     pub stops: StopsView,
+    /// The raised elements along the street, by position.
+    pub calming: Vec<CalmingView>,
+    pub calming_strip: CalmingStripView,
     /// The curbside uses the 2.5D shows, on the selected zone's pieces.
     pub curb_shown: Vec<ShownInstance>,
     /// The transit stops the 2.5D shows, on the selected zone's pieces.
     pub stops_shown: Vec<ShownStop>,
+    /// The raised tables and crossings the 2.5D shows, on the selected zone's roadway.
+    pub calming_shown: Vec<ShownCalming>,
+    /// The green elements the 2.5D shows, on the selected zone's pieces.
+    pub green_shown: Vec<ShownGreen>,
+    /// The Green row: every tree and planting along the street.
+    pub green: GreenRowView,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.

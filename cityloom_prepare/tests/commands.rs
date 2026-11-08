@@ -61,7 +61,7 @@ fn folders(root: &Path, grid: (f64, f64, f64, f64), on_disk: &[&str], listed: &[
 
 fn job(root: &Path, metro: PathBuf, basemap: PathBuf, grid: Option<Grid>) -> PackJob {
     PackJob {
-        out: root.join("out.cityloom"),
+        out: root.join("out.citymodel"),
         area: "montreal".into(),
         metro,
         basemap,
@@ -127,7 +127,7 @@ fn a_tile_in_only_one_place_is_named() {
         let error = commands::run_pack(&progress, &job).unwrap_err();
         assert!(error.lines.iter().any(|l| l.contains(named)), "{:?}", error.lines);
         assert!(!job.out.exists());
-        assert!(!dir.path().join("out.cityloom.part").exists());
+        assert!(!dir.path().join("out.citymodel.part").exists());
     }
 }
 

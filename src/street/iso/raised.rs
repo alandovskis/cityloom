@@ -2,7 +2,7 @@
 //! with their front and side faces.
 
 use crate::shared::catalogue::KINDS;
-use crate::shared::iso::ground::fine_patterns;
+use crate::shared::iso::ground::{fine_patterns, fine_patterns_laid};
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::SegView;
 use crate::street::pieces::{curb_edges, curb_width_mm};
@@ -70,8 +70,11 @@ pub(super) fn shades() -> String {
 /// The surface materials' fine patterns for the drawing's `<defs>`: the grain, and not the regular joints of the
 /// materials that have them, which are geometry (`joints`). They are drawn in millimetres of ground with no transform
 /// of their own: a textured top is laid by the matrix of the polygon that fills with one (`top`), band by band.
-pub(super) fn materials() -> String {
-    fine_patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+/// The materials only a laid thing is drawn in (a rain garden's) come with them when `laid`, which a drawing says it
+/// needs, so that one that draws none is what it always was.
+pub(super) fn materials(laid: bool) -> String {
+    let ground = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    if laid { fine_patterns_laid("iso-m", ground) } else { fine_patterns("iso-m", ground) }
 }
 
 /// How high the piece next to `i` on its right (`right`) or its left is drawn, or the ground when there is none.
@@ -165,7 +168,20 @@ mod tests {
         let s = &v.segments[i];
         let (x0, h) = (s.x_mm as f64, drawn_mm(height_mm("sidewalk")));
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach { near: 20_000.0, far: 40_000.0 });
-        let out = layer_markup(&crate::street::iso::scene::raised(&p, &v.segments, &crate::street::iso::testing::en(), &[(h, i, None)], &[], false, None), &p);
+        let out = layer_markup(
+            &crate::street::iso::scene::raised(
+                &p,
+                &v.segments,
+                &crate::street::iso::testing::en(),
+                &[(h, i, None)],
+                &[],
+                &[],
+                false,
+                None,
+                &crate::street::iso::calming::Laid::default(),
+            ),
+            &p,
+        );
         let cut = r(p.at(x0, 0.0, 20_000.0).1);
         let ys: Vec<f64> = xs_ys(&out).into_iter().map(|(_, y)| y).collect();
         let front =

@@ -9,7 +9,7 @@ use crate::shared::catalogue::Side;
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::street::keys::Action;
-use crate::street::model::{Editor, SegView, StopKind, Use, View};
+use crate::street::model::{CalmingKind, Editor, GreenForm, SegView, StopKind, Use, View};
 use crate::street::row::Row;
 use crate::street::vm::StreetVm;
 
@@ -187,6 +187,54 @@ impl SheetWatch {
         self.vm.with_value(|v| v.remove_curb())
     }
 
+    pub fn select_calming(&self, cell: usize) {
+        self.vm.with_value(|v| v.select_calming(cell));
+    }
+
+    pub fn select_calming_relative(&self, delta: i32) {
+        self.vm.with_value(|v| v.select_calming_relative(delta));
+    }
+
+    pub fn select_calming_edge(&self, last: bool) {
+        self.vm.with_value(|v| v.select_calming_edge(last));
+    }
+
+    pub fn calming_kind_shown(&self) -> CalmingKind {
+        self.vm.with_value(|v| v.calming_kind_shown())
+    }
+
+    pub fn pick_calming_kind(&self, kind: CalmingKind) {
+        self.vm.with_value(|v| v.pick_calming_kind(kind));
+    }
+
+    pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.add_calming(kind, length_mm))
+    }
+
+    pub fn set_calming_length(&self, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.set_calming_length(length_mm))
+    }
+
+    pub fn remove_calming(&self) -> bool {
+        self.vm.with_value(|v| v.remove_calming())
+    }
+
+    pub fn nudge_calming(&self, delta_mm: i32) -> bool {
+        self.vm.with_value(|v| v.nudge_calming(delta_mm))
+    }
+
+    pub fn begin_calming_drag(&self) -> bool {
+        self.vm.with_value(|v| v.begin_calming_drag())
+    }
+
+    pub fn drag_calming_to(&self, from_mm: i32) {
+        self.vm.with_value(|v| v.drag_calming_to(from_mm));
+    }
+
+    pub fn end_calming_drag(&self, keep: bool) {
+        self.vm.with_value(|v| v.end_calming_drag(keep));
+    }
+
     pub fn stop_kind_shown(&self) -> StopKind {
         self.vm.with_value(|v| v.stop_kind_shown())
     }
@@ -229,6 +277,52 @@ impl SheetWatch {
 
     pub fn remove_stop(&self) -> bool {
         self.vm.with_value(|v| v.remove_stop())
+    }
+
+    pub fn select_green(&self, i: usize) {
+        self.vm.with_value(|v| v.select_green(i));
+    }
+
+    pub fn select_green_relative(&self, delta: i32) {
+        self.vm.with_value(|v| v.select_green_relative(delta));
+    }
+
+    pub fn select_green_edge(&self, last: bool) {
+        self.vm.with_value(|v| v.select_green_edge(last));
+    }
+
+    pub fn nudge_green(&self, delta_mm: i32) -> bool {
+        self.vm.with_value(|v| v.nudge_green(delta_mm))
+    }
+
+    pub fn begin_green_drag(&self) -> bool {
+        self.vm.with_value(|v| v.begin_green_drag())
+    }
+
+    pub fn drag_green_to(&self, from_mm: i32) {
+        self.vm.with_value(|v| v.drag_green_to(from_mm));
+    }
+
+    pub fn end_green_drag(&self, keep: bool) {
+        self.vm.with_value(|v| v.end_green_drag(keep));
+    }
+
+    pub fn add_green(&self, form: GreenForm) -> bool {
+        self.vm.with_value(|v| v.add_green(form))
+    }
+
+    pub fn change_green(&self, form: &GreenForm) -> bool {
+        self.vm.with_value(|v| v.change_green(form))
+    }
+
+    pub fn remove_green(&self) -> bool {
+        self.vm.with_value(|v| v.remove_green())
+    }
+
+    /// The pieces a new element starting at `at_mm` can stand on, drawing again when the street is edited.
+    pub fn hosts_at(&self, at_mm: i32) -> Vec<(usize, crate::shared::said::Said)> {
+        let _ = self.view();
+        self.vm.with_value(|v| v.hosts_at(at_mm))
     }
 
     pub fn say_bad_number(&self) {

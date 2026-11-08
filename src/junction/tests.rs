@@ -3224,3 +3224,17 @@ fn the_selected_arm_names_its_curbside_uses() {
     let text = crate::junction::text::selection_text(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres).unwrap();
     assert!(text.contains("Patio") && text.contains("25.0 m from the centre"), "{text}");
 }
+
+#[test]
+fn a_curbside_rain_garden_on_an_arm_brings_its_pattern_and_no_other_drawing_does() {
+    use crate::street::model::Use;
+    let draw = |j: &Junction| {
+        crate::junction::iso::iso_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, crate::shared::units::Units::Metres).markup
+    };
+    let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::RainGarden, p)]);
+    let with = draw(&j);
+    assert!(with.contains("mat-rain_garden") && with.contains("id=\"iso-m-rain_garden\""), "the rain garden is filled with its own texture");
+    let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::Tree, p)]);
+    assert!(!draw(&j).contains("iso-m-rain_garden"));
+    assert!(!draw(&Junction::new(0)).contains("iso-m-rain_garden"));
+}

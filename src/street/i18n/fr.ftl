@@ -192,6 +192,7 @@ material-grass = Gazon
 material-planted = Plate-bande
 material-gravel = Gravier
 material-trees = Arbres de rue
+material-rain_garden = Jardin de pluie
 curb-granite = Granit
 curb-concrete = Béton
 curb-asphalt = Asphalte
@@ -360,6 +361,11 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-calming = { $count ->
+        [one] Un plateau surélevé est montré.
+       *[other] { $count } plateaux surélevés sont montrés.
+    }
+svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
@@ -499,6 +505,93 @@ stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
 stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
 stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.
 
+green-kind-tree = Arbre
+green-kind-bed = Plate-bande
+green-kind-rain-garden = Jardin de pluie
+green-kind-bioswale = Noue végétalisée
+green-refused-elsewhere = Les arbres et plantations de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+green-refused-dragging = Terminez le glissement avant de modifier les arbres et plantations.
+green-refused-off-street = Cela dépasserait l’extrémité de la rue ou le bord de sa coupe.
+green-refused-on-roadway = Cela ne peut pas se trouver sur la chaussée.
+green-refused-overlap = Cela chevaucherait un autre arbre ou une autre plantation.
+rev-green-add = Ajout à { $at } : { $kind }
+rev-green-size = Taille modifiée à { $at } : { $kind }
+rev-green-resize = Dimensions modifiées à { $at } : { $kind }
+rev-green-move = Déplacement à { $at } : { $kind }
+rev-green-remove = Retrait à { $at } : { $kind }
+green-instance = { $kind } à { $at }, sur l’élément { $across }
+green-instance-off = { $kind } à { $at }
+check-green-in = { $check } : { $instance }
+check-label-green-host = Plantations sur un élément qui peut les accueillir
+check-label-green-clear-path = Trottoirs avec un dégagement pour circuler
+check-label-green-spacing = Arbres espacés selon leur couronne
+check-label-green-soil = Fosses d’arbre avec assez de terre
+check-label-green-sightline = Plantations à l’écart des coins aux intersections
+check-label-green-continuity = Noues végétalisées continues
+check-label-green-stop = Arbres et plantations à l’écart des quais d’arrêt
+check-detail-green-host-roadway = On ne peut pas planter sur la chaussée ({ $host }).
+check-detail-green-host-wide = Sa largeur, { $width }, dépasse celle de l’élément en dessous ({ $host }, { $have }).
+check-detail-green-host-overhang = Son bord dépasse de { $over } l’élément en dessous ({ $host }).
+check-detail-green-host-off = Son centre se trouve au-delà du bord de la coupe à cet endroit.
+check-detail-green-host-ok = Chaque arbre et chaque plantation reposent sur un élément qui peut les accueillir.
+check-detail-green-clear-path = Il ne reste que { $have } de trottoir à côté; il en faut { $need } ou plus.
+check-detail-green-clear-path-ok = Chaque trottoir garde un dégagement à côté de ses arbres et de ses plantations.
+check-detail-green-spacing = { $tree } est à { $gap } de { $other }; la plus grande des deux couronnes demande { $need } entre leurs centres.
+check-detail-green-spacing-ok = Chaque arbre a la place que sa couronne demande.
+check-detail-green-soil = La fosse mesure { $length } sur { $width }, trop petite pour { $tree }.
+green-tree-s = un petit arbre
+green-tree-m = un arbre moyen
+green-tree-l = un grand arbre
+check-detail-green-soil-ok = Chaque fosse d’arbre a assez de terre.
+check-detail-green-sightline = Il se trouve à { $gap } d’une intersection au bout de la rue; il en faut { $need } ou plus pour garder la vue dégagée.
+check-detail-green-sightline-ok = Aucun arbre ni aucune plate-bande ne bloque la vue aux intersections.
+check-detail-green-continuity-short = La noue végétalisée fait { $length } de long; il en faut { $min } ou plus pour qu’elle achemine l’eau.
+check-detail-green-continuity-host = La noue végétalisée passe au-dessus d’un changement d’élément, ce qui interrompt le canal.
+check-detail-green-continuity-ok = Chaque noue végétalisée est continue.
+check-detail-green-stop = Il se trouve sur le quai de cet arrêt : { $stop }. Les arbres et les plantations restent à l’écart de l’endroit où l’on embarque.
+check-detail-green-stop-ok = Aucun arbre ni aucune plate-bande ne se trouve sur le quai d’un arrêt.
+
+# La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/green_strip.rs, src/street/green_tools.rs).
+green-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+green-choose-element = Choisissez d’abord un arbre ou une plantation.
+green-host-choice = { $kind }, { $width }
+green-size-s = Petit
+green-size-m = Moyen
+green-size-l = Grand
+rev-green-change = Modification à { $at } : { $kind }
+st-green-heading = Arbres et plantations le long de la rue
+st-green-caption = Arbres et plantations
+st-green-strip-label = Arbres et plantations le long de la rue. Les flèches en choisissent un; Alt avec une flèche le déplace de 1 m le long de la rue, avec Maj de 10 m.
+st-green-tools = Commandes des arbres et plantations
+st-green-kind = Type
+st-green-size = Taille
+st-green-at = Le long de la rue, depuis le début ({ $unit })
+st-green-host = Dans la coupe, sur
+st-green-fine = Dans la coupe, depuis le milieu de cet élément (cm)
+st-green-length = Longueur ({ $unit })
+st-green-width = Largeur ({ $unit })
+st-green-add = Ajouter
+st-green-change = Modifier
+st-green-remove = Retirer
+
+# Noms et refus d’un plateau surélevé ou d’un passage surélevé (src/street/model/calming.rs).
+calming-kind-table = Plateau surélevé
+calming-kind-crossing = Passage piéton surélevé
+calming-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de plateaux surélevés.
+calming-refused-elsewhere = Les plateaux surélevés de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+calming-refused-dragging = Terminez le glissement avant de modifier les plateaux surélevés.
+calming-refused-outside = Cela dépasserait une extrémité de la rue.
+calming-refused-overlap = Cela chevaucherait un autre plateau surélevé.
+calming-refused-too-short = Un plateau surélevé doit mesurer au moins { $min }.
+calming-refused-freeway = On ne peut pas placer de plateau surélevé sur une autoroute.
+calming-refused-no-roadway = Cette rue n’a pas de chaussée à surélever.
+calming-refused-time-windows = On ne peut pas placer de plateau surélevé là où la chaussée change selon l’heure de la journée.
+rev-calming-add = Ajout : { $kind } à { $at }
+rev-calming-kind = Élément surélevé à { $at } changé en { $kind }
+rev-calming-resize = Longueur modifiée à { $at } : { $kind }
+rev-calming-move = Déplacement : { $kind } à { $at }
+rev-calming-remove = Retrait : { $kind } à { $at }
+
 # Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification
 st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
@@ -544,3 +637,40 @@ transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les é
 template-refused-freeway = Le modèle « { $name } » ne peut pas s’appliquer à une autoroute.
 template-refused-narrow = Le modèle « { $name } » demande une rue d’au moins { $min } de largeur. Cette rue mesure { $row } de largeur.
 template-refused-wide = Le modèle « { $name } » ne peut pas servir une rue de plus de { $max } de largeur. Cette rue mesure { $row } de largeur.
+
+# Les vérifications des éléments surélevés (src/street/model/calming.rs).
+calming-instance = { $kind } à { $at }
+calming-instance-zone = { $kind } à { $at }, dans { $zone }
+check-calming-in = { $check } : { $instance }
+check-label-calming-length = Éléments surélevés assez longs, sur une chaussée
+check-detail-calming-length = Un élément surélevé de { $length } est trop court : avec des rampes de { $ramp }, il en faut { $min } ou plus.
+check-detail-calming-roadway = Il n’y a pas de chaussée à surélever ici.
+check-detail-calming-length-ok = Chaque élément surélevé est assez long et repose sur une chaussée.
+check-label-calming-speed = Limite de vitesse adaptée aux éléments surélevés
+check-detail-calming-speed = La limite de { $kmh }{" "}km/h dépasse les { $max }{" "}km/h prévus pour un élément surélevé.
+check-detail-calming-speed-ok = La limite de { $kmh }{" "}km/h convient aux éléments surélevés.
+check-detail-calming-speed-unknown = Aucune limite de vitesse n’est indiquée : on ne peut pas la juger par rapport aux { $max }{" "}km/h prévus pour un élément surélevé.
+check-label-calming-stop = Éléments surélevés dégagés des arrêts de transport en commun
+check-detail-calming-stop-overlap = L’élément surélevé chevauche l’aire d’embarquement d’un arrêt de transport en commun. Arrêt en cause : { $stop }.
+check-detail-calming-stop-near = L’élément surélevé est à { $gap } de l’arrêt de transport en commun le plus proche; il en faut { $need } ou plus. Arrêt en cause : { $stop }.
+check-detail-calming-stop-ok = Chaque élément surélevé est dégagé des arrêts de transport en commun.
+check-label-calming-junction = Éléments surélevés dégagés de l’intersection
+check-detail-calming-junction-crossing = L’élément surélevé se trouverait à { $gap } du passage pour piétons; il en faut { $need } ou plus.
+check-detail-calming-junction-mouth = L’élément surélevé se trouverait à { $gap } du début de l’intersection; il en faut { $need } ou plus.
+check-detail-calming-junction-inside = L’élément surélevé empiète sur l’intersection.
+check-detail-calming-junction-ok = Chaque élément surélevé est dégagé de l’intersection.
+
+# La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
+calming-gap = Libre
+calming-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+calming-cell-failing = Ne passe pas une vérification. Voir les vérifications.
+calming-choose-gap = Choisissez d’abord un tronçon libre de la rue.
+calming-choose-element = Choisissez d’abord un plateau ou un passage surélevé.
+st-calming-heading = Plateaux et passages surélevés le long de la rue
+st-calming-caption = Plateaux et passages surélevés
+st-calming-strip-label = Plateaux et passages surélevés le long de la rue
+st-calming-tools = Commandes des éléments surélevés
+st-calming-kind = Type
+st-calming-length = Longueur ({ $unit })
+st-calming-add = Ajouter un élément surélevé
+st-calming-remove = Retirer un élément surélevé

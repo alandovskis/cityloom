@@ -8,9 +8,12 @@ mod outline;
 mod raised;
 mod signs;
 mod surface;
+mod tables;
 
 pub(super) use hits::hits;
+#[cfg(test)]
 pub(super) use markings::markings;
+pub(super) use markings::markings_cut;
 pub(super) use objects::{block, objects};
 pub(super) use outline::outline;
 pub(super) use raised::raised;

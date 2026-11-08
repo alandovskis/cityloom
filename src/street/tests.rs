@@ -1561,9 +1561,17 @@ fn the_curb_cells_share_the_zone_cells_minimum_width_and_scrolling() {
         let i = editor.find(head).unwrap_or_else(|| panic!("{head}"));
         &editor[i..i + editor[i..].find('}').unwrap()]
     };
-    assert!(rule(".curb-cell,\n.stop-cell,\n.zone-cell {").contains("min-width: 24px;"));
-    assert!(rule(".curb-strip,\n.stop-strip,\n.zone-strip {").contains("overflow-x: auto;"));
-    assert!(rule(".curb-cell.failing,\n.stop-cell.failing {").contains("border-bottom-width: 5px;"), "a failing use differs by more than colour");
+    assert!(rule(".curb-cell,\n.stop-cell,\n.calming-cell,\n.zone-cell {").contains("min-width: 24px;"));
+    assert!(
+        rule(".curb-strip,\n.stop-strip,\n.calming-strip,\n.green-strip,\n.zone-strip {").contains("overflow-x: auto;"),
+        "the Green row has the same strip box"
+    );
+    assert!(
+        rule(".curb-cell.failing,\n.stop-cell.failing,\n.calming-cell.failing {").contains("border-bottom-width: 5px;"),
+        "a failing use differs by more than colour"
+    );
+    assert!(rule(".green-cell {").contains("height: 24px;") && rule(".green-cell {").contains("min-width: 24px;"), "a cell is a target of 24 px");
+    assert!(rule(".green-cell.failing {").contains("border-bottom-width: 5px;"), "a failing element differs by more than colour");
 }
 
 // ---- the stops rows and their commands ----------------------------------------------
@@ -1702,6 +1710,137 @@ fn the_stop_tools_follow_the_language() {
     for name in ["Arrêt au trottoir", "Avancée de trottoir", "Îlot d’embarquement"] {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
+}
+
+// ---- the green row and its commands -------------------------------------------------
+
+fn green_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::green_strip::GreenStrip vm=s.clone()/> })
+}
+
+fn green_tools_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::green_tools::GreenTools vm=s.clone()/> })
+}
+
+/// Two trees and a rain garden on a street of two sidewalks and a roadway, the rain garden chosen.
+fn green_street(locale: Locale) -> Rc<StreetVm> {
+    use crate::street::model::{GreenForm, GreenKind};
+    let s = stop_street(&AT_THE_CURB, locale);
+    let at = |kind, at_mm, host| GreenForm { at_mm: Some(at_mm), host: Some(host), ..GreenForm::new(kind) };
+    assert!(s.add_green(at(GreenKind::Tree, 10_000, 0)));
+    assert!(s.add_green(at(GreenKind::Tree, 10_000, 3)));
+    assert!(s.add_green(at(GreenKind::RainGarden, 20_000, 0)));
+    s
+}
+
+#[test]
+fn the_green_row_is_a_listbox_with_one_tab_stop() {
+    let s = green_street(Locale::En);
+    let h = green_html(&s);
+    assert_eq!(count(&h, "role=\"listbox\""), 1, "{h}");
+    assert!(h.contains("id=\"green-strip\"") && h.contains("aria-orientation=\"horizontal\""), "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 1, "one tab stop: {h}");
+    assert_eq!(count(&h, "role=\"option\""), 3, "{h}");
+    assert!(h.contains("id=\"green-0\"") && h.contains("id=\"green-1\"") && h.contains("id=\"green-2\""), "{h}");
+    assert!(h.contains("aria-activedescendant=\"green-2\""), "the last one added is chosen: {h}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert!(h.contains(">Trees and planting along the street</h2>") && h.contains("aria-label=\"Trees and planting along the street. "), "{h}");
+    assert!(h.contains("aria-label=\"Tree at 10.0 m, on sidewalk, 10.0 m to 13.0 m, 3.0 m long, 1 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Rain garden at 20.0 m, on sidewalk, 20.0 m to 26.0 m, 6.0 m long, 3 of 3\""), "{h}");
+    // two elements side by side across lie on two tracks, which the row's height follows
+    assert!(h.contains("--tracks: 2"), "{h}");
+}
+
+#[test]
+fn a_green_cell_that_fails_a_check_says_so() {
+    use crate::street::model::{GreenForm, GreenKind};
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let tree = |at_mm| GreenForm { at_mm: Some(at_mm), host: Some(0), ..GreenForm::new(GreenKind::Tree) };
+    assert!(s.add_green(tree(10_000)));
+    let h = green_html(&s);
+    assert!(!h.contains("Fails a check") && !h.contains("failing"), "one tree on a 3 m sidewalk passes every check: {h}");
+    // A second one 4 m on stands closer than their crowns allow (8 m between centres); the pair is recorded against
+    // the first.
+    assert!(s.add_green(tree(14_000)));
+    let h = green_html(&s);
+    assert_eq!(count(&h, "Fails a check. See the checks."), 1, "{h}");
+    assert_eq!(count(&h, "failing"), 1, "{h}");
+}
+
+#[test]
+fn the_green_row_follows_the_language() {
+    let h = green_html(&green_street(Locale::FrCa)).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains(">Arbres et plantations le long de la rue</h2>"), "{h}");
+    assert!(h.contains("aria-label=\"Arbre à 10,0 m, sur l’élément trottoir, de 10,0 m à 13,0 m, 3,0 m de long, 1 sur 3\""), "{h}");
+}
+
+#[test]
+fn a_street_without_green_has_no_green_row() {
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let h = green_html(&s);
+    assert_eq!((count(&h, "role=\"listbox\""), count(&h, "tabindex"), count(&h, "green")), (0, 0, 0), "{h}");
+}
+
+#[test]
+fn the_green_tools_are_offered_where_green_can_be_added_and_not_elsewhere() {
+    // a street with sidewalks and a known length can take green before it has any
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    assert!(green_tools_html(&s).contains("id=\"green-add\""));
+    // one with no length cannot, and nothing is drawn
+    let street = crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right);
+    let unknown =
+        StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0).with_frame(None), None);
+    let h = green_tools_html(&unknown);
+    assert_eq!(count(&h, "green"), 0, "{h}");
+}
+
+#[test]
+fn the_green_tools_render_labelled_controls() {
+    let s = green_street(Locale::En);
+    let h = green_tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Tree and planting commands\"") && !h.contains("toolbar"), "{h}");
+    for (id, label) in [
+        ("green-kind", "Kind"),
+        ("green-at", "Along the street, from the start (m)"),
+        ("green-host", "Across, on"),
+        ("green-fine", "Across, from the middle of that piece (cm)"),
+        ("green-length", "Length (m)"),
+        ("green-width", "Width (m)"),
+    ] {
+        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert_eq!(count(&h, "id=\"green-size\""), 0, "the rain garden chosen has no size: {h}");
+    assert_eq!(count(&h, "<option"), 4 + 2, "four kinds and the two sidewalks: {h}");
+    for name in ["Tree", "Planting bed", "Rain garden", "Bioswale", "Sidewalk, 3.0 m"] {
+        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
+    }
+    for (id, label) in [("green-add", "Add"), ("green-change", "Change"), ("green-remove", "Remove")] {
+        assert!(h.contains(&format!("id=\"{id}\"")) && h.contains(&format!(">{label}</button>")), "{id}: {h}");
+    }
+    // the chosen rain garden's own values are in the fields
+    assert!(h.contains("id=\"green-at\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" value=\"20.0\"") && h.contains("value=\"6.0\""), "{h}");
+    assert!(!h.contains("id=\"green-change\" aria-disabled") && !h.contains("id=\"green-remove\" aria-disabled"), "{h}");
+    // choosing a tree shows its size
+    s.select_green(0);
+    let t = green_tools_html(&s);
+    assert!(t.contains("<label for=\"green-size\"") && t.contains(">Medium</option>"), "{t}");
+}
+
+#[test]
+fn the_green_tools_without_a_chosen_element_cannot_change_or_remove() {
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let h = green_tools_html(&s);
+    assert!(h.contains("id=\"green-change\" aria-disabled=\"true\"") && h.contains("id=\"green-remove\" aria-disabled=\"true\""), "{h}");
+    assert!(!h.contains("id=\"green-add\" aria-disabled"), "{h}");
+}
+
+#[test]
+fn the_green_tools_follow_the_language() {
+    let h = green_tools_html(&green_street(Locale::FrCa)).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("aria-label=\"Commandes des arbres et plantations\"") && h.contains(">Type</label>") && h.contains(">Longueur (m)</label>"), "{h}");
+    assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && h.contains(">Noue végétalisée</option>"), "{h}");
+    assert!(h.contains(">Ajouter</button>") && h.contains(">Modifier</button>") && h.contains(">Retirer</button>"), "{h}");
 }
 
 // ---- the piece list ----------------------------------------------------------------
@@ -1868,4 +2007,116 @@ fn the_card_is_a_polite_live_region_in_the_page_and_the_first_tab_is_called_impa
     let fr = crate::i18n_for(Locale::FrCa);
     let say = |i: &crate::shared::i18n::I18n| i.tr_now("ui-tab-impact", &crate::shared::i18n::Args::new());
     assert_eq!((say(&en).as_str(), say(&fr).as_str()), ("Impact", "Incidence"));
+}
+
+// ---- the raised elements' strip and tools -------------------------------------------
+
+fn calming_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::calming_strip::CalmingStrip vm=s.clone()/> })
+}
+
+fn calming_tools_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::calming_tools::CalmingTools vm=s.clone()/> })
+}
+
+/// A street of 40 m with a 7 m table at 0, chosen.
+fn calming_street(locale: Locale) -> Rc<StreetVm> {
+    use crate::street::model::CalmingKind;
+    let s = zoned_street(&[0], Some(40_000), locale);
+    s.select_calming(0);
+    assert!(s.add_calming(CalmingKind::Table, 7_000));
+    s
+}
+
+#[test]
+fn the_calming_strip_has_a_cell_per_element_and_stretch_one_tab_stop_and_the_chosen_cell_active() {
+    let s = calming_street(Locale::En);
+    let h = calming_html(&s);
+    assert!(h.contains("id=\"calming-strip\"") && h.contains("class=\"calming-strip\"") && h.contains("role=\"listbox\""), "{h}");
+    assert!(h.contains("aria-orientation=\"horizontal\""), "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 1, "{h}");
+    assert_eq!(count(&h, "role=\"option\""), 2, "an element and the free stretch after it: {h}");
+    assert!(h.contains("id=\"calming-0\"") && h.contains("id=\"calming-1\""), "{h}");
+    assert!(h.contains("aria-activedescendant=\"calming-0\""), "{h}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert!(h.contains("aria-label=\"Raised table, 0.0 m to 7.0 m, 7.0 m long, 1 of 2\""), "{h}");
+    assert!(h.contains("aria-label=\"Free, 7.0 m to 40.0 m, 33.0 m long, 2 of 2\""), "{h}");
+    assert!(h.contains(">Raised tables and crossings along the street</h2>") && h.contains("class=\"sr-only\""), "{h}");
+    assert!(h.contains("class=\"calming-cell gap\"") || h.contains("calming-cell gap"), "the free stretch is marked: {h}");
+}
+
+#[test]
+fn the_calming_strip_shows_a_free_stretch_chosen_and_nothing_without_a_length() {
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    let h = calming_html(&s);
+    assert_eq!(count(&h, "role=\"option\""), 1, "{h}");
+    assert!(h.contains("aria-activedescendant") == false || !h.contains("aria-activedescendant=\"calming-0\""), "nothing chosen: {h}");
+    s.select_calming(0);
+    assert!(calming_html(&s).contains("aria-activedescendant=\"calming-0\""));
+    let bare = zoned_street(&[0], None, Locale::En);
+    assert!(!calming_html(&bare).contains("calming-strip"), "no anchor, no strip");
+}
+
+#[test]
+fn the_calming_strip_follows_the_language() {
+    let s = calming_street(Locale::FrCa);
+    let h = calming_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains(">Plateaux et passages surélevés le long de la rue</h2>"), "{h}");
+    assert!(h.contains("aria-label=\"Plateau surélevé, de 0,0 m à 7,0 m, 7,0 m de long, 1 sur 2\""), "{h}");
+}
+
+#[test]
+fn a_failing_element_is_marked_and_described_on_its_cell() {
+    use crate::street::model::CalmingKind;
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    s.select_calming(0);
+    assert!(s.add_calming(CalmingKind::Table, 7_000));
+    assert!(s.set_speed(Some(60)));
+    let h = calming_html(&s);
+    assert!(h.contains("failing") && h.contains("aria-description=\"Fails a check. See the checks.\""), "{h}");
+}
+
+#[test]
+fn the_calming_tools_render_labelled_controls_with_the_kinds_in_order_and_the_default_length() {
+    let s = calming_street(Locale::En);
+    s.select_calming(1);
+    let h = calming_tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Raised table commands\"") && !h.contains("toolbar"), "{h}");
+    for (id, label) in [("calming-kind", "Kind"), ("calming-length", "Length (m)")] {
+        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(h.contains("<select id=\"calming-kind\""), "{h}");
+    assert_eq!(count(&h, "<option"), 2, "{h}");
+    let table = h.find("value=\"0\"").unwrap();
+    let crossing = h.find("value=\"1\"").unwrap();
+    assert!(table < crossing && h.contains(">Raised table</option>") && h.contains(">Raised crossing</option>"), "{h}");
+    assert!(h.contains("placeholder=\"7.0\""), "the default length, in the locale's units: {h}");
+    for id in ["calming-add", "calming-remove"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(h.contains(">Add raised element</button>") && h.contains(">Remove raised element</button>"), "{h}");
+    assert!(
+        h.contains("id=\"calming-remove\" aria-disabled=\"true\"") && !h.contains("id=\"calming-add\" aria-disabled"),
+        "a free stretch is chosen: add is on, remove is off: {h}"
+    );
+}
+
+#[test]
+fn the_calming_tools_disable_add_on_an_element() {
+    let s = calming_street(Locale::En);
+    let h = calming_tools_html(&s);
+    assert!(
+        h.contains("id=\"calming-add\" aria-disabled=\"true\"") && !h.contains("id=\"calming-remove\" aria-disabled"),
+        "an element is chosen: add is off, remove is on: {h}"
+    );
+}
+
+#[test]
+fn the_calming_tools_follow_the_language_and_the_units() {
+    let s = calming_street(Locale::FrCa);
+    s.select_calming(1);
+    let h = calming_tools_html(&s);
+    assert!(h.contains("aria-label=\"Commandes des éléments surélevés\"") && h.contains(">Plateau surélevé</option>"), "{h}");
+    assert!(h.contains("placeholder=\"7,0\""), "{h}");
 }

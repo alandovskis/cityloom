@@ -63,6 +63,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Transit platform | Quai de transport en commun | `Transit` is `transport en commun` everywhere; not `transport collectif`. |
 | Street page | Patio (a use) | Terrasse | The catalogue's `Café terrace` is `Terrasse de café`. |
 | Street page | Planting (a use) | Plantation | As the piece panel's `Planting`. |
+| Street page | Tree (street) | `Arbre` |  |
+| Street page | Tree pit | `Fosse d’arbre` | To confirm |
+| Street page | Planting bed | `Plate-bande` | To confirm |
+| Street page | Rain garden | `Jardin de pluie` | To confirm |
+| Street page | Bioswale | `Noue végétalisée` | To confirm |
+| Street page | Clearance (a path’s, a sightline’s) | `Dégagement` | To confirm |
 | Modes and groups | Walking | Marche |  |
 | Modes and groups | Biking / Cycling | Vélo |  |
 | Modes and groups | Transit | Transport en commun |  |
@@ -392,3 +398,8 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |
 | unlink (a sign-in from an account) | `dissocier` | `délier`, `détacher` (suggestion) |
+| Raised table (street element) | `Plateau surélevé` | `Dos d’âne allongé` (the road-safety term for a speed table; `plateau` is the common Québec municipal word) |
+| Raised crossing | `Passage piéton surélevé` | `Traverse surélevée`, `Passage pour piétons surélevé` |
+| Raised element (a table or a crossing, in the checks) | `Élément surélevé` | The common word for either kind in the checks' rows (`Éléments surélevés dégagés des arrêts…`) |
+| ramp (of a raised table) | `rampe` | `pente` (the slope, not the thing) |
+| boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is the app's lengthways zone) |

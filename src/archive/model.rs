@@ -50,7 +50,7 @@ use crate::sync::model::{Kind, mark, valid_key};
 pub const MAGIC: &str = "cityloom-design";
 /// The only format this build writes, and the newest it reads.
 pub const FORMAT_VERSION: u32 = 1;
-/// The suffix of an archive's file name. Not a bare `.cityloom`: that is the area archive `cityloom_prepare` builds.
+/// The suffix of an archive's file name. Not a bare `.citymodel`: that is the area archive `cityloom_prepare` builds.
 pub const FILE_SUFFIX: &str = ".cityloom-design.json";
 /// The most text an archive may hold, in bytes (UNVERIFIED): the browser's storage cannot hold more than this of work,
 /// so a larger file is not an archive of ours.

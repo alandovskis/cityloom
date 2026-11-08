@@ -132,7 +132,7 @@ fn an_export_holds_the_design_and_what_made_it_and_nothing_of_the_account_or_the
 #[test]
 fn the_file_is_named_by_the_day_and_is_never_a_bare_dot_cityloom() {
     assert_eq!(model::file_name(1_000_000_000_000), "cityloom-2001-09-09.cityloom-design.json");
-    assert!(!model::file_name(0).ends_with(".cityloom"));
+    assert!(!model::file_name(0).ends_with(".citymodel"));
 }
 
 // ---- nothing is overwritten without a choice ----
@@ -368,9 +368,11 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (7, json!({"street": {"speed_kmh": null}}), 7),
         (8, json!({"street": {"curb": [{"side": "right"}]}}), 8),
         (9, json!({"street": {"stops": [{"side": "right"}]}}), 9),
+        (11, json!({"street": {"green": [{"kind": "tree"}]}}), 11),
+        (12, json!({"street": {"calming": [{"from_mm": 0, "length_mm": 7000, "kind": "table"}]}}), 12),
         (NEWEST.into(), plain.clone(), 5),
     ];
-    assert_eq!(NEWEST, 10, "a new edits version needs a row here");
+    assert_eq!(NEWEST, 12, "a new edits version needs a row here");
     for (version, record, written) in cases {
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
         let archive = model::parse_and_validate(&text).unwrap_or_else(|e| panic!("version {version}: {e:?}"));
@@ -378,13 +380,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1, "version {version}");
         assert_eq!(stored(&b.storage, EDITS_KEY)["version"], written, "version {version}");
     }
-    // a signal plan needs the newest
+    // a signal plan needs version 10
     let signal = json!({"state": {"signal_plan": {"phases": []}}});
     let doc = json!({"version": 5, "streets": {}, "junctions": {"n7": signal}});
     let b = device();
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
-    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], NEWEST);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], crate::city::edits::SIGNAL_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }

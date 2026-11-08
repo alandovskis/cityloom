@@ -26,6 +26,9 @@ pub struct EndInfo {
     /// How far from the end the junction reaches along this street: to the crossing's far edge, or to the mouth
     /// where there is no crossing. 0 when unknown.
     pub reach_mm: i32,
+    /// The end's node is a junction (whatever the street has on it), so its corner must be kept clear of sight
+    /// obstructions.
+    pub junction: bool,
 }
 
 /// What a stretch of curbside is used for. Each is drawn as an existing catalogue kind.
@@ -62,7 +65,7 @@ impl Use {
     pub fn material(self) -> Option<&'static str> {
         match self {
             Use::Tree => Some("trees"),
-            Use::RainGarden => Some("planted"),
+            Use::RainGarden => Some("rain_garden"),
             _ => None,
         }
     }
@@ -978,7 +981,7 @@ mod tests {
             }
         }
         assert_eq!((Use::Tree.kind_id(), Use::Tree.material()), ("planting", Some("trees")));
-        assert_eq!((Use::RainGarden.kind_id(), Use::RainGarden.material()), ("planting", Some("planted")));
+        assert_eq!((Use::RainGarden.kind_id(), Use::RainGarden.material()), ("planting", Some("rain_garden")));
         assert_eq!((Use::Patio.kind_id(), Use::BikeParking.kind_id(), Use::Platform.kind_id()), ("terrace", "bikerack", "sidewalk"));
         assert!(!Use::Parking.raised() && !Use::Loading.raised() && Use::Tree.raised() && Use::Platform.raised());
         assert_eq!([Use::Parking.min_mm(), Use::Loading.min_mm(), Use::Tree.min_mm(), Use::Planting.min_mm()], [5_500, 9_000, 2_000, 2_000]);

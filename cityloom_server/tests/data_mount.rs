@@ -154,7 +154,7 @@ async fn the_app_router_serves_the_unpacked_area() {
     let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
     let maps = vec![work.join("montreal.pmtiles")];
     let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads, basemaps: &maps };
-    archive::pack(&inputs, &tmp.path().join("areas/montreal.cityloom"), &mut |_, _| {}).unwrap();
+    archive::pack(&inputs, &tmp.path().join("areas/montreal.citymodel"), &mut |_, _| {}).unwrap();
 
     let vars = [
         ("CITYLOOM_AREAS", tmp.path().join("areas").display().to_string()),
