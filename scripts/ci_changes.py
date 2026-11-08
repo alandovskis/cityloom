@@ -86,6 +86,21 @@ class Selection:
         return "" if self.all else " ".join(f"tests/{s}.spec.ts" for s in sorted(self.specs))
 
 
+def specs_for(rules: dict, every_spec: list[str], f: str) -> set[str] | None:
+    """The specs one changed file asks for; None when it asks for every spec."""
+    specs = rule_for(rules, f)["specs"]
+    if specs == "all":
+        return None
+    if specs == "self":
+        name = Path(f).name[: -len(".spec.ts")]
+        return {name} if name in every_spec else set()
+    chosen: set[str] = set()
+    if specs != "none":
+        for s in specs:
+            chosen.update(rules["groups"][s[1:]] if s.startswith("@") else [s])
+    return chosen
+
+
 def select(rules: dict, every_spec: list[str], files: list[str], empty_means_none: bool = False) -> Selection:
     if not files:
         return Selection(all=not empty_means_none)
@@ -99,16 +114,11 @@ def select(rules: dict, every_spec: list[str], files: list[str], empty_means_non
         elif rule.get("docs"):
             docs += 1
         else:
-            specs = rule["specs"]
-            if specs == "all":
+            asked = specs_for(rules, every_spec, f)
+            if asked is None:
                 everything = True
-            elif specs == "self":
-                name = Path(f).name[: -len(".spec.ts")]
-                if name in every_spec:
-                    chosen.add(name)
-            elif specs != "none":
-                for s in specs:
-                    chosen.update(rules["groups"][s[1:]] if s.startswith("@") else [s])
+            else:
+                chosen |= asked
     return Selection(
         docs_only=docs == len(files),
         all=everything,
@@ -124,6 +134,9 @@ def normalize_lock(text: str) -> str:
     return re.sub(r'(name = "cityloom_editor"\nversion = ")[^"]*', r"\1-", text)
 
 
+REVISION = re.compile(r"[0-9a-fA-F]{7,64}|HEAD")
+
+
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
 
@@ -132,14 +145,22 @@ def changed_files(base: str, head: str) -> list[str] | None:
     """The files that differ, a bare version bump left out; None when the base is not known."""
     if not base or set(base) == {"0"}:
         return None
+    if not (REVISION.fullmatch(base) and REVISION.fullmatch(head)):
+        return None  # only a commit id or HEAD goes to git
     try:
-        files = [f for f in git("diff", "--name-only", "--no-renames", base, head).splitlines() if f]
+        files = [f for f in git("diff", "--name-only", "--no-renames", base, head, "--").splitlines() if f]
         for name, norm in (("Cargo.toml", normalize_toml), ("Cargo.lock", normalize_lock)):
             if name in files and norm(git("show", f"{base}:{name}")) == norm(git("show", f"{head}:{name}")):
                 files.remove(name)
         return files
     except subprocess.CalledProcessError:
         return None
+
+
+def describe(rule: dict | None) -> str:
+    if rule is None:
+        return "no rule: all"
+    return "docs" if rule.get("docs") else str(rule["specs"])
 
 
 def main() -> int:
@@ -160,8 +181,7 @@ def main() -> int:
         # A change of a version number alone leaves nothing to test but the unit tests.
         s = select(rules, every, files, empty_means_none=True)
         for f in files:
-            r = rule_for(rules, f)
-            print(f"  {f}: {'docs' if r and r.get('docs') else (r['specs'] if r else 'no rule: all')}")
+            print(f"  {f}: {describe(rule_for(rules, f))}")
     if a.event != "pull_request" and not s.docs_only:
         s = Selection(all=True)
     out = {

@@ -158,5 +158,16 @@ class Coverage(unittest.TestCase):
                 self.assertIn(specs, ("all", "none", "self"))
 
 
+class Revisions(unittest.TestCase):
+    def test_only_a_commit_id_or_head_reaches_git(self):
+        for bad in ("--output=/tmp/x", "main; rm -rf /", "-p", "a b", "../x", ""):
+            self.assertIsNone(ci_changes.changed_files(bad, "HEAD"), bad)
+            self.assertIsNone(ci_changes.changed_files("abcdef1234", bad), bad)
+
+    def test_the_pattern_takes_ids_and_head(self):
+        for good in ("abcdef1", "A" * 40, "HEAD"):
+            self.assertTrue(ci_changes.REVISION.fullmatch(good), good)
+
+
 if __name__ == "__main__":
     unittest.main()
