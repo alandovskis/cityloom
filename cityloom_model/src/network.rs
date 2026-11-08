@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Corridor, Junction, Road};
+use crate::{Control, Corridor, Junction, Road};
 
 /// The street network.
 ///
@@ -41,6 +41,35 @@ impl From<NetworkWire> for Network {
             })
             .filter(|c| !c.roads.is_empty())
             .collect();
-        Network { left_hand: w.left_hand, junctions: w.nodes, roads: w.roads, corridors }
+        let mut net = Network { left_hand: w.left_hand, junctions: w.nodes, roads: w.roads, corridors };
+        net.drop_unknown_priority();
+        net
+    }
+}
+
+impl Network {
+    /// Takes from every priority control the roads the network does not have, so it never names one that is gone.
+    pub(crate) fn drop_unknown_priority(&mut self) {
+        let roads = &self.roads;
+        for j in &mut self.junctions {
+            if let Control::Priority(ids) = &mut j.control {
+                ids.retain(|id| roads.iter().any(|r| r.id == *id));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RoadId;
+
+    #[test]
+    fn reading_a_network_drops_priority_roads_it_does_not_have() {
+        let json = r#"{"left_hand":false,"nodes":[{"id":1,"osm_nodes":[],"x_m":0.0,"y_m":0.0,"junction":true,"control":{"priority":[7,99]}},
+            {"id":2,"osm_nodes":[],"x_m":9.0,"y_m":0.0,"junction":false,"control":"none"}],
+            "roads":[{"id":7,"osm_ways":[],"name":"Main","highway":"x","from":1,"to":2,"lanes":[],"points":[]}]}"#;
+        let net: Network = serde_json::from_str(json).unwrap();
+        assert_eq!(net.junctions[0].control, Control::Priority(vec![RoadId(7)]));
     }
 }

@@ -156,11 +156,11 @@ fn refs(p: &Provenance) -> Vec<OsmRef> {
         .collect()
 }
 
-fn control_of(c: Control) -> usize {
+fn control_of(c: &Control) -> usize {
     match c {
         Control::Signals => SIGNAL,
         Control::Signs => ALL_WAY_STOP,
-        Control::None => PRIORITY,
+        Control::None | Control::Priority(_) => PRIORITY,
     }
 }
 
@@ -269,7 +269,7 @@ impl Layout {
                     x_mm: ((n.position.x_m() - min_x) * 1000.0).round() as i32,
                     y_mm: ((max_y - n.position.y_m()) * 1000.0).round() as i32,
                     junction,
-                    control: if junction { control_of(n.control) } else { 0 },
+                    control: if junction { control_of(&n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
                     source: refs(&n.provenance),
                 }
@@ -599,6 +599,16 @@ mod tests {
         assert_eq!(junctions.len(), 1);
         assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].key)));
         assert!(city.junction_editor(junctions[0].uid, 0).is_some());
+    }
+
+    #[test]
+    fn a_junction_with_priority_roads_is_run_with_priority() {
+        let mut net = crossing();
+        net.junctions[0].control = Control::Priority(vec![net.roads[0].id, net.roads[2].id]);
+        let city = City::from_network(&net, "Testville");
+        let v = city.view(0);
+        let junction = v.nodes.iter().find(|n| n.junction).unwrap();
+        assert_eq!(junction.control, Some(CONTROLS[PRIORITY].key));
     }
 
     #[test]

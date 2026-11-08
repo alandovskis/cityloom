@@ -2,14 +2,18 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{NodeId, NodeRef, Point, Provenance};
+use crate::{NodeId, NodeRef, Point, Provenance, RoadId};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// How traffic is run where roads meet.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Control {
+    /// Nothing is recorded: no signs, no signals.
     None,
     Signs,
     Signals,
+    /// The roads that have priority; traffic on the others gives way.
+    Priority(Vec<RoadId>),
 }
 
 /// A junction or street end of the network.
@@ -77,6 +81,14 @@ mod tests {
         assert_eq!(json["osm_nodes"], serde_json::json!([3, 5]));
         assert_eq!(json["osm_versions"], serde_json::json!({"3": 9}));
         assert_eq!(serde_json::from_value::<Junction>(json).unwrap(), n);
+    }
+
+    #[test]
+    fn a_priority_control_names_the_roads_that_have_priority_and_the_old_controls_still_read() {
+        assert_eq!(serde_json::to_string(&Control::Priority(vec![RoadId(2), RoadId(5)])).unwrap(), r#"{"priority":[2,5]}"#);
+        assert_eq!(serde_json::from_str::<Control>(r#"{"priority":[2,5]}"#).unwrap(), Control::Priority(vec![RoadId(2), RoadId(5)]));
+        assert_eq!(serde_json::from_str::<Control>(r#""signs""#).unwrap(), Control::Signs);
+        assert_eq!(serde_json::from_str::<Control>(r#""none""#).unwrap(), Control::None);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Roads divided by a median: two one-way carriageways of one street, running side by side
 //! in opposite directions, are one street with a median between its two halves.
 
-use crate::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, Zone};
+use crate::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, RoadId, Zone};
 
 /// The widest a median can be, from centre line to centre line of the carriageways, for them to be one street.
 const MAX_APART_M: f64 = 60.0;
@@ -129,11 +129,13 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     }
 
     let mut moved: Vec<(NodeId, NodeId)> = Vec::new(); // (node, the node it is merged into)
+    let mut kept_as: Vec<(RoadId, RoadId)> = Vec::new(); // (a road that is gone, the road it became)
     let mut merged: Vec<Road> = Vec::new();
     let mut gone = vec![false; net.roads.len()];
     for (i, j) in pairs {
         let (a, b) = (oriented[i].clone().unwrap(), oriented[j].clone().unwrap());
         // `b` seen along `a`: driving lanes run against it
+        kept_as.push((b.id, a.id));
         let b_here = reversed(&b);
         // where the halves are furthest apart, which is their spacing; at the ends they meet
         let d = a.points.iter().map(|&p| dist(p, nearest(&b.points, p))).fold(0.0, f64::max);
@@ -217,6 +219,19 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     roads.retain(|r| r.from != r.to);
     roads.sort_by_key(|r| r.id);
     net.roads = roads;
+    // a priority road that was merged is the road it became; one that is gone is dropped
+    for j in &mut net.junctions {
+        if let crate::Control::Priority(ids) = &mut j.control {
+            let mut kept: Vec<RoadId> = Vec::new();
+            for id in ids.iter().map(|id| kept_as.iter().find(|(gone, _)| gone == id).map_or(*id, |(_, now)| *now)) {
+                if !kept.contains(&id) {
+                    kept.push(id);
+                }
+            }
+            *ids = kept;
+        }
+    }
+    net.drop_unknown_priority();
 }
 
 /// The lower of two known speeds, else the one known, else none.
@@ -230,7 +245,7 @@ fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Coordinate, Junction, NodeRef, Provenance, RoadId, RoadType, WayRef};
+    use crate::{Control, Coordinate, Junction, NodeRef, Provenance, RoadType, WayRef};
 
     fn node(id: u32, x_m: f64, y_m: f64) -> Junction {
         Junction {
@@ -304,6 +319,15 @@ mod tests {
         merge_dual_carriageways(&mut net);
         let b = net.roads.iter().find(|r| r.name == "Boulevard").unwrap();
         assert_eq!(b.provenance.ways().collect::<Vec<_>>(), [WayRef::with_version(10, 51), WayRef::with_version(20, 52)]);
+    }
+
+    #[test]
+    fn a_priority_road_that_was_merged_is_the_road_it_became() {
+        let mut net = shared_ends();
+        net.junctions[2].control = Control::Priority(vec![RoadId(2), RoadId(1), RoadId(3), RoadId(99)]);
+        merge_dual_carriageways(&mut net);
+        let merged = net.roads.iter().find(|r| r.name == "Boulevard").unwrap().id;
+        assert_eq!(net.junctions[2].control, Control::Priority(vec![merged, RoadId(3)]), "the halves are one road, and one that is not there is dropped");
     }
 
     #[test]
