@@ -51,6 +51,19 @@ const QC: &str = "src-jurisdiction-qc";
 const MTL: &str = "src-jurisdiction-mtl";
 const VILLE: &str = "Ville de Montréal";
 
+/// A sheet of the Ville de Montréal's Répertoire des pratiques d'aménagement de la rue, by its name and its path on the portal.
+macro_rules! mtl {
+    ($id:literal, $sheet:literal, $path:literal) => {
+        doc(
+            $id,
+            concat!("Répertoire des pratiques d'aménagement de la rue, ", $sheet),
+            VILLE,
+            MTL,
+            Some(concat!("https://montreal-amenagement-rues.powerappsportals.com", $path)),
+        )
+    };
+}
+
 pub const SOURCES: &[Source] = &[
     doc(
         "york-ds-100",
@@ -71,76 +84,16 @@ pub const SOURCES: &[Source] = &[
         None,
     ),
     doc("mtl-repertoire", "Répertoire des pratiques d'aménagement de la rue", VILLE, MTL, Some("https://montreal-amenagement-rues.powerappsportals.com/")),
-    doc(
-        "mtl-velorue",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Vélorue",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Types/Velorue/"),
-    ),
-    doc(
-        "mtl-arret-bus",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Arrêt d'autobus en bordure d'une voie cyclable",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Arr%C3%AAt-bus-voie-cyclable/"),
-    ),
-    doc(
-        "mtl-avancee",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Avancées de trottoir",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Avanc%C3%A9es-de-trottoir/"),
-    ),
-    doc(
-        "mtl-cafe",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Café-terrasse et placottoir",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Caf%C3%A9-terrasse-et-placottoir/"),
-    ),
-    doc(
-        "mtl-ilot",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Îlot refuge",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/ilot-refuge/"),
-    ),
-    doc(
-        "mtl-traversant",
-        "Répertoire des pratiques d'aménagement de la rue, fiche Trottoir et piste cyclable traversants",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Trottoir-traversant/"),
-    ),
-    doc(
-        "mtl-corridor",
-        "Répertoire des pratiques d'aménagement de la rue, outil de conception Largeur des corridors piétons",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Corridor-pi%C3%A9ton/"),
-    ),
-    doc(
-        "mtl-degagement",
-        "Répertoire des pratiques d'aménagement de la rue, outil de conception Dégagement visuel minimal aux intersections",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/D%C3%A9gagement-visuel-minimal-aux-intersections/"),
-    ),
-    doc(
-        "mtl-plantations",
-        "Répertoire des pratiques d'aménagement de la rue, outil de conception Hauteur des plantations",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Hauteur-des-plantations/"),
-    ),
-    doc(
-        "mtl-voies",
-        "Répertoire des pratiques d'aménagement de la rue, outil de conception Largeur de voies",
-        VILLE,
-        MTL,
-        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Conception---Largeur-de-voies/"),
-    ),
+    mtl!("mtl-velorue", "fiche Vélorue", "/Types/Velorue/"),
+    mtl!("mtl-arret-bus", "fiche Arrêt d'autobus en bordure d'une voie cyclable", "/Composantes/Arr%C3%AAt-bus-voie-cyclable/"),
+    mtl!("mtl-avancee", "fiche Avancées de trottoir", "/Composantes/Avanc%C3%A9es-de-trottoir/"),
+    mtl!("mtl-cafe", "fiche Café-terrasse et placottoir", "/Composantes/Caf%C3%A9-terrasse-et-placottoir/"),
+    mtl!("mtl-ilot", "fiche Îlot refuge", "/Composantes/ilot-refuge/"),
+    mtl!("mtl-traversant", "fiche Trottoir et piste cyclable traversants", "/Composantes/Trottoir-traversant/"),
+    mtl!("mtl-corridor", "outil de conception Largeur des corridors piétons", "/Outils/Corridor-pi%C3%A9ton/"),
+    mtl!("mtl-degagement", "outil de conception Dégagement visuel minimal aux intersections", "/Outils/D%C3%A9gagement-visuel-minimal-aux-intersections/"),
+    mtl!("mtl-plantations", "outil de conception Hauteur des plantations", "/Outils/Hauteur-des-plantations/"),
+    mtl!("mtl-voies", "outil de conception Largeur de voies", "/Outils/Conception---Largeur-de-voies/"),
     doc("mtq-t1-c15", "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)", MTQ, QC, None),
 ];
 
