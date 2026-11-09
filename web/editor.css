@@ -2745,6 +2745,3 @@ dl.prov dd:last-child {
 .corridor-row.bad {
   color: var(--ink);
 }
-#corridor-result:focus {
-  outline: none;
-}

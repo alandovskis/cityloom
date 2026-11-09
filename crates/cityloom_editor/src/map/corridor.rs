@@ -97,17 +97,21 @@ impl Plan {
     }
 }
 
+/// The street's editor with the change made on it, or why not: nothing is kept.
+fn try_street(city: &City, region: usize, op: Op, street: u32) -> Result<Editor, Said> {
+    let mut editor = city.street_editor(street, region).ok_or_else(|| Said::new("corridor-refused-gone"))?;
+    op.make(&mut editor)?;
+    Ok(editor)
+}
+
 /// Tries the change on every street in `streets`, on copies: nothing is changed.
 pub fn plan(city: &City, region: usize, op: Op, streets: &[u32]) -> Plan {
     let rows = streets
         .iter()
         .map(|&street| {
-            let outcome = match city.street_editor(street, region) {
-                None => Outcome::Refused(Said::new("corridor-refused-gone")),
-                Some(mut editor) => match op.make(&mut editor) {
-                    Ok(()) => Outcome::Ready,
-                    Err(why) => Outcome::Refused(why),
-                },
+            let outcome = match try_street(city, region, op, street) {
+                Ok(_) => Outcome::Ready,
+                Err(why) => Outcome::Refused(why),
             };
             Row { street, outcome }
         })
@@ -130,10 +134,13 @@ pub struct Report {
 impl Report {
     /// The report as a sentence a screen reader hears, as `Said` data.
     pub fn said(&self) -> Said {
-        Said::new("corridor-done")
-            .with("changed", Arg::Num(self.changed.len() as i64))
-            .with("left", Arg::Num((self.refused.len() + self.not_kept.len()) as i64))
-            .with("name", Arg::Said(Box::new(self.op.name())))
+        let said = |key: &'static str| {
+            Said::new(key)
+                .with("changed", Arg::Num(self.changed.len() as i64))
+                .with("left", Arg::Num(self.refused.len() as i64))
+                .with("name", Arg::Said(Box::new(self.op.name())))
+        };
+        if self.not_kept.is_empty() { said("corridor-done") } else { said("corridor-done-failed").with("failed", Arg::Num(self.not_kept.len() as i64)) }
     }
 }
 
@@ -144,14 +151,10 @@ pub fn apply(store: &CityStore, op: Op, streets: &[u32]) -> Report {
     let city = store.open();
     let (mut changed, mut refused, mut not_kept) = (Vec::new(), Vec::new(), Vec::new());
     for &street in streets {
-        let Some(mut editor) = city.street_editor(street, region) else {
-            refused.push((street, Said::new("corridor-refused-gone")));
-            continue;
-        };
-        match op.make(&mut editor) {
+        match try_street(&city, region, op, street) {
             Err(why) => refused.push((street, why)),
-            Ok(()) if store.write_street(street, editor.snapshot()) => changed.push(street),
-            Ok(()) => not_kept.push(street),
+            Ok(editor) if store.write_street(street, editor.snapshot()) => changed.push(street),
+            Ok(_) => not_kept.push(street),
         }
     }
     Report { op, changed, refused, not_kept }

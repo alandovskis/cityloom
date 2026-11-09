@@ -1663,7 +1663,7 @@ mod selection {
         vm.review_corridor();
         vm.apply_corridor();
         let h = panel(&vm);
-        assert!(h.contains("aria-label=\"What was changed, street by street\"") && h.contains("Changed.") && h.contains("Done"), "{h}");
+        assert!(h.contains("aria-label=\"What was changed, street by street\"") && h.contains("Changed.") && h.contains(">Close<"), "{h}");
     }
 
     #[test]
@@ -1672,8 +1672,25 @@ mod selection {
         vm.toggle_selected(Some("s-1"));
         vm.review_corridor();
         let h = panel(&vm);
-        assert!(h.contains("Modifier les rues sélectionnées") && h.contains("Les transformer en"), "{h}");
+        assert!(h.contains("Modifier les rues sélectionnées") && h.contains("Changement à apporter"), "{h}");
         assert!(h.contains(">Voie verte de quartier<") && h.contains(">Rendre piétonne<"), "{h}");
         assert!(h.contains("Annuler"), "{h}");
+    }
+}
+
+mod corridor_words {
+    use super::*;
+
+    /// French counts 0 as one, so a message must say the number, not a literal "1".
+    #[test]
+    fn the_french_review_and_apply_say_zero_when_nothing_can_be_changed() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.toggle_selected(Some("s-23"));
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("Modifier 0 rue"), "{h}");
+        let said = vm.i18n().tr_now("corridor-review", &Args::new().str("name", "X").num("ready", 0).num("refused", 1));
+        assert!(said.contains("0 rue peut être modifiée"), "{said}");
     }
 }

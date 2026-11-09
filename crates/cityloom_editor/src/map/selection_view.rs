@@ -144,7 +144,10 @@ fn change(vm: Vm) -> impl IntoView {
                         let ready = move || vm.with(|v| v.corridor_ready());
                         view! {
                             {rows("corridor-review-list")}
-                            <button type="button" class="btn" id="corridor-apply" disabled=move || ready() == 0 on:click=move |_| {
+                            <button type="button" class="btn" id="corridor-apply" aria-disabled=move || (ready() == 0).to_string() on:click=move |_| {
+                                if ready() == 0 {
+                                    return;
+                                }
                                 vm.with(|v| v.apply_corridor());
                                 focus("corridor-result");
                             }>

@@ -1324,8 +1324,9 @@ impl MapVm {
     /// the result. Only from a review.
     pub fn apply_corridor(&self) {
         let Stage::Reviewing(plan) = self.corridor.get_untracked() else { return };
-        let streets: Vec<u32> = plan.rows.iter().map(|r| r.street).collect();
-        let report = corridor::apply(&self.store, plan.op, &streets);
+        // Only what was reviewed as ready is made; what the review refused stays in the report as it was said.
+        let mut report = corridor::apply(&self.store, plan.op, &plan.ready());
+        report.refused.splice(0..0, plan.refused());
         self.reload();
         self.sync_places();
         self.ports.announcer.say(&self.say_now(&report.said()));

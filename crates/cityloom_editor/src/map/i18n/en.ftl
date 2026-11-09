@@ -439,12 +439,12 @@ corridor-done = { $name }: { $changed ->
     [one] 1 street changed.
    *[other] { $changed } streets changed.
 } { $left ->
-    [0] None was left out.
+    [0] Every street was changed.
     [one] 1 was left as it was.
    *[other] { $left } were left as they were.
 }
 corridor-heading = Change the selected streets
-corridor-op-label = Change them to
+corridor-op-label = Change to
 corridor-review-button = Review the change
 corridor-review = { $name }: { $ready ->
     [one] 1 street can be changed.
@@ -459,9 +459,16 @@ corridor-apply = { $count ->
    *[other] Change { $count } streets
 }
 corridor-cancel = Cancel
-corridor-close = Done
+corridor-close = Close
 corridor-row-ready = Can be changed.
 corridor-row-changed = Changed.
 corridor-row-not-kept = Could not be kept, so it is as it was.
 corridor-review-list = Review of the change, street by street
 corridor-report-list = What was changed, street by street
+corridor-done-failed = { $name }: { $changed ->
+    [one] 1 street changed.
+   *[other] { $changed } streets changed.
+} { $failed ->
+    [one] 1 street could not be kept and is as it was.
+   *[other] { $failed } streets could not be kept and are as they were.
+} Try again.
