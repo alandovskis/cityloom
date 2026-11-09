@@ -146,7 +146,7 @@ export async function createBasemap(container) {
   let selected = new Set();
   const showSelected = () => {
     if (!styled || !map.getSource("places")) return;
-    for (const id of idsOf.places) map.setFeatureState({ source: "places", id }, { selected: selected.has(id) });
+    for (const id of selected) map.setFeatureState({ source: "places", id }, { selected: true });
   };
   const showHot = () => {
     if (!styled || !hot) return;
@@ -321,7 +321,7 @@ export async function createBasemap(container) {
     }
     // A press with Shift held picks a street for the selection instead of opening it.
     if (e.originalEvent?.shiftKey) {
-      emit({ kind: "toggle", hot: hotAt(e.point) });
+      emit({ kind: "toggle", at: [e.lngLat.lng, e.lngLat.lat], hot: hotAt(e.point), vertex: draftCornerAt(e.point) });
       return;
     }
     emit({
@@ -431,8 +431,12 @@ export async function createBasemap(container) {
       showCursor();
     },
     setSelected(hot) {
+      const before = selected;
       selected = new Set(hot);
-      showSelected();
+      if (!styled || !map.getSource("places")) return;
+      for (const id of before)
+        if (!selected.has(id)) map.setFeatureState({ source: "places", id }, { selected: false });
+      for (const id of selected) if (!before.has(id)) map.setFeatureState({ source: "places", id }, { selected: true });
     },
     zoomBy(factor) {
       map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: ms(200) });

@@ -665,6 +665,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("checks-lead", "the id of an element of the map page"),
     ("changes-lead", "the id of an element of the map page"),
     ("areas-slot", "the id of the element of the map page the Area rules panel mounts into"),
+    ("h-selection", "the id of the heading of the map page's Selected streets panel"),
     ("selection-slot", "the id of the element of the map page the Selected streets panel mounts into"),
     ("network-lead", "the id of the element of the map page the Network checks lead mounts into"),
     ("network-slot", "the id of the element of the map page the Network checks mount into"),

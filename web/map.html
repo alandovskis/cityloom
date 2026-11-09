@@ -39,6 +39,7 @@
             <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <span data-i18n="map-key-move">move the map</span></span>
             <span><kbd>0</kbd> <span data-i18n="map-key-whole">whole city</span></span>
             <span><kbd>⇧</kbd> <span data-i18n="map-key-select">click to select a street</span></span>
+            <span><kbd>⇧</kbd> <kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-select-found">select a place found</span></span>
             <span><kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span></span>
             <span><kbd>]</kbd> <span data-i18n="map-key-panels">notes</span></span>
           </p>
@@ -113,7 +114,7 @@
     </div>
     <div class="panel-body">
       <section aria-labelledby="h-selection" id="selection-panel">
-        <h2 id="h-selection" class="note-h" data-i18n="sel-heading">Selected streets</h2>
+        <h2 id="h-selection" class="note-h" tabindex="-1" data-i18n="sel-heading">Selected streets</h2>
         <div id="selection-slot"></div>
       </section>
       <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">

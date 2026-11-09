@@ -18,6 +18,7 @@ map-key-zoom = zoom
 map-key-move = déplacer la carte
 map-key-whole = toute la ville
 map-key-select = cliquer pour sélectionner une rue
+map-key-select-found = sélectionner un lieu trouvé
 map-key-areas = règles de zone
 map-key-panels = notes
 

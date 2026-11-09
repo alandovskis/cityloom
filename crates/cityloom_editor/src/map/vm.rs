@@ -605,23 +605,22 @@ impl MapVm {
         })
     }
 
-    /// Where pressing Enter goes: the result the arrow keys are on, else the first.
+    /// The result Enter acts on: the one the arrow keys are on, else the first.
+    fn chosen(&self) -> Option<PlaceRow> {
+        let at = self.active.get_untracked().unwrap_or(0).min(Self::SHOWN - 1);
+        self.results().into_iter().nth(at)
+    }
+
+    /// Where pressing Enter goes.
     pub fn chosen_href(&self) -> Option<String> {
-        let results = self.results();
-        let at = self.active.get_untracked().unwrap_or(0).min(Self::SHOWN - 1);
-        results.into_iter().nth(at).map(|r| r.href)
+        self.chosen().map(|r| r.href)
     }
 
-    /// The place the result Enter would open is: the one the arrow keys are on, else the first.
-    pub fn chosen_hot(&self) -> Option<String> {
-        let at = self.active.get_untracked().unwrap_or(0).min(Self::SHOWN - 1);
-        self.results().into_iter().nth(at).map(|r| r.hot)
-    }
-
-    /// Shift+Enter in the search: the chosen result joins the selection instead of opening.
+    /// Shift+Enter in the search: the chosen result joins the selection instead of opening. Nothing found, nothing done.
     pub fn toggle_chosen(&self) {
-        let hot = self.chosen_hot();
-        self.toggle_selected(hot.as_deref());
+        if let Some(row) = self.chosen() {
+            self.toggle_selected(Some(&row.hot));
+        }
     }
 
     /// How a junction is told on the map.
@@ -1116,7 +1115,12 @@ impl MapVm {
                 }
             },
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
-            MapEvent::Toggle { hot } => self.toggle_selected(hot.as_deref()),
+            // A press with Shift held is a press all the same while an outline is drawn.
+            MapEvent::Toggle { at, hot, vertex } => match self.areas.draw_now() {
+                Draw::Drawing(_) => self.areas.on_press(at, vertex),
+                Draw::Naming(_) => {}
+                Draw::Idle => self.toggle_selected(hot.as_deref()),
+            },
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
             MapEvent::View { bounds } => {
@@ -1229,11 +1233,12 @@ impl MapVm {
         &self.selection
     }
 
-    /// Adds the street `hot` names to the selection, or drops it when it is selected. A junction or nothing is
+    /// Adds the street `hot` names to the selection, or drops it when it is selected. A junction is
     /// refused, and so is a street not wholly in view (as it is not opened), each saying why; a street already
     /// selected can always be dropped.
     pub fn toggle_selected(&self, hot: Option<&str>) {
-        let Some(uid) = hot.and_then(|h| h.strip_prefix("s-")).and_then(|u| u.parse::<u32>().ok()) else {
+        let Some(hot) = hot else { return };
+        let Some(uid) = hot.strip_prefix("s-").and_then(|u| u.parse::<u32>().ok()) else {
             return self.ports.announcer.say(&self.i18n.tr_now("sel-not-a-street", &Args::new()));
         };
         if !self.selection.contains(uid) && !self.can_edit(&format!("s-{uid}")) {
@@ -2205,11 +2210,11 @@ mod tests {
     #[test]
     fn a_shift_press_adds_the_street_to_the_selection_and_another_drops_it_and_the_map_is_told() {
         let (vm, mapper, navigator, said) = area_vm_said();
-        mapper.say(MapEvent::Toggle { hot: Some("s-1".into()) });
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
         assert_eq!(vm.selection().streets(), vec![1]);
         assert_eq!(mapper.take().into_iter().filter(|c| matches!(c, MapCall::Selected(_))).collect::<Vec<_>>(), vec![MapCall::Selected(vec!["s-1".into()])]);
         assert!(said.take().iter().any(|s| s.contains("added to the selection. One street selected.")));
-        mapper.say(MapEvent::Toggle { hot: Some("s-1".into()) });
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
         assert!(vm.selection().streets().is_empty());
         assert_eq!(mapper.take(), vec![MapCall::Selected(vec![])]);
         assert!(navigator.take().is_empty(), "a shift press opens nothing");
@@ -2221,17 +2226,28 @@ mod tests {
         mapper.say(COVERING);
         mapper.take();
         said.take();
-        mapper.say(MapEvent::Toggle { hot: Some("j-3".into()) });
-        mapper.say(MapEvent::Toggle { hot: None });
-        assert_eq!(said.take(), vec!["Only streets can be selected.".to_string(); 2]);
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("j-3".into()), vertex: None });
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: None, vertex: None });
+        assert_eq!(said.take(), vec!["Only streets can be selected.".to_string()], "a junction is refused, nothing at all is not worth saying");
         // a street the open view does not hold is muted: it is no more selected than opened
         mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
         mapper.take();
         said.take();
-        mapper.say(MapEvent::Toggle { hot: Some("s-1".into()) });
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
         assert!(vm.selection().streets().is_empty());
         assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
         assert!(mapper.take().is_empty());
+    }
+
+    #[test]
+    fn a_shift_press_while_an_outline_is_drawn_is_still_a_corner_and_selects_nothing() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        assert!(vm.areas().start());
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
+        assert!(vm.selection().streets().is_empty());
+        assert!(matches!(vm.areas().draw_now(), Draw::Drawing(corners) if corners.len() == 1), "the press went to the outline as its first corner");
     }
 
     #[test]

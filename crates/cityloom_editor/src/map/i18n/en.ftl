@@ -18,6 +18,7 @@ map-key-zoom = zoom
 map-key-move = move the map
 map-key-whole = whole city
 map-key-select = click to select a street
+map-key-select-found = select a place found
 map-key-areas = area rules
 map-key-panels = notes
 

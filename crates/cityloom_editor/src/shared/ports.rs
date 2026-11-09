@@ -359,8 +359,14 @@ pub enum MapEvent {
     Vertex { area: String, index: usize, at: [f64; 2], done: bool },
     /// The pointer is over a place, or is no longer.
     Hover { hot: Option<String> },
-    /// A place was pressed with the key held that adds to a selection (Shift): `hot` is the place there, if any.
-    Toggle { hot: Option<String> },
+    /// The map was pressed with the key held that adds to a selection (Shift): `at`, `hot` and `vertex` are as in
+    /// `Press`. Over a street it joins or leaves the selection; while an outline is drawn it is a corner.
+    Toggle {
+        at: [f64; 2],
+        hot: Option<String>,
+        #[serde(default)]
+        vertex: Option<usize>,
+    },
     /// The person moved the map themselves, with the pointer or the wheel.
     Moved,
     /// The part of the map the panels leave open, after every move, resize and change of insets: west, south,
@@ -1449,8 +1455,8 @@ mod map_tests {
         assert_eq!(read(r#"{"kind":"hover","hot":"j-3"}"#), MapEvent::Hover { hot: Some("j-3".into()) });
         assert_eq!(read(r#"{"kind":"hover","hot":null}"#), MapEvent::Hover { hot: None });
         assert_eq!(read(r#"{"kind":"moved"}"#), MapEvent::Moved);
-        assert_eq!(read(r#"{"kind":"toggle","hot":"s-4"}"#), MapEvent::Toggle { hot: Some("s-4".into()) });
-        assert_eq!(read(r#"{"kind":"toggle","hot":null}"#), MapEvent::Toggle { hot: None });
+        assert_eq!(read(r#"{"kind":"toggle","at":[1,2],"hot":"s-4"}"#), MapEvent::Toggle { at: [1.0, 2.0], hot: Some("s-4".into()), vertex: None });
+        assert_eq!(read(r#"{"kind":"toggle","at":[1,2],"hot":null,"vertex":0}"#), MapEvent::Toggle { at: [1.0, 2.0], hot: None, vertex: Some(0) });
     }
 
     #[test]

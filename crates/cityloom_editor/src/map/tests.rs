@@ -1584,34 +1584,37 @@ mod report {
     }
 }
 
-#[test]
-fn the_selected_streets_panel_says_none_are_selected_and_how_to_select() {
-    let (vm, _) = map_vm();
-    let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
-    assert!(h.contains("No streets selected. Shift-click a street on the map, or press Shift+Enter on a search result."), "{h}");
-    assert!(!h.contains("<button"), "nothing to remove or clear: {h}");
-}
+mod selection {
+    use super::*;
+    #[test]
+    fn the_selected_streets_panel_says_none_are_selected_and_how_to_select() {
+        let (vm, _) = map_vm();
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("No streets selected. Shift-click a street on the map, or press Shift+Enter on a search result."), "{h}");
+        assert!(!h.contains("<button"), "nothing to remove or clear: {h}");
+    }
 
-#[test]
-fn the_selected_streets_panel_lists_each_street_with_a_button_to_remove_it_and_one_to_clear() {
-    let (vm, _) = map_vm();
-    vm.toggle_selected(Some("s-1"));
-    vm.toggle_selected(Some("s-2"));
-    let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
-    assert!(h.contains("2 streets selected."), "{h}");
-    assert_eq!(count(&h, "<li"), 2, "{h}");
-    assert!(h.contains(&format!("aria-label=\"Remove {}\"", vm.street_label(1))), "{h}");
-    assert!(h.contains(&format!(">{}</span>", vm.street_label(2))), "{h}");
-    assert!(h.contains("Clear the selection"), "{h}");
-    vm.deselect(1);
-    let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
-    assert!(h.contains("1 street selected.") && count(&h, "<li") == 1, "{h}");
-}
+    #[test]
+    fn the_selected_streets_panel_lists_each_street_with_a_button_to_remove_it_and_one_to_clear() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        vm.toggle_selected(Some("s-2"));
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("2 streets selected."), "{h}");
+        assert_eq!(count(&h, "<li"), 2, "{h}");
+        assert!(h.contains(&format!("aria-label=\"Remove {}\"", vm.street_label(1))), "{h}");
+        assert!(h.contains(&format!(">{}</span>", vm.street_label(2))), "{h}");
+        assert!(h.contains("Clear the selection"), "{h}");
+        vm.deselect(1);
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("1 street selected.") && count(&h, "<li") == 1, "{h}");
+    }
 
-#[test]
-fn the_selected_streets_panel_follows_the_language() {
-    let (vm, _) = map_vm_in(Locale::FrCa);
-    vm.toggle_selected(Some("s-1"));
-    let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
-    assert!(h.contains("1 rue sélectionnée.") && h.contains("Effacer la sélection") && h.contains("aria-label=\"Retirer "), "{h}");
+    #[test]
+    fn the_selected_streets_panel_follows_the_language() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.toggle_selected(Some("s-1"));
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("1 rue sélectionnée.") && h.contains("Effacer la sélection") && h.contains("aria-label=\"Retirer "), "{h}");
+    }
 }

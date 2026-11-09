@@ -11,6 +11,19 @@ use crate::shared::bind::Bound;
 
 type Vm = Bound<MapVm>;
 
+/// Puts the keyboard's focus on the panel's heading: the button that was pressed is gone (the street left the
+/// list, or the list is empty), and focus must not fall to the page.
+fn focus_heading() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use leptos::wasm_bindgen::JsCast;
+
+        if let Some(h) = leptos::prelude::document().get_element_by_id("h-selection") {
+            let _ = h.unchecked_into::<leptos::web_sys::HtmlElement>().focus();
+        }
+    }
+}
+
 /// A message of the page, for a view: it follows a switch of language.
 fn word(vm: Vm, key: &'static str) -> impl Fn() -> String + Copy + 'static {
     move || vm.with(|v| v.word(key))
@@ -36,7 +49,10 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
                         view! {
                             <li class="selection-item">
                                 <span>{name}</span>
-                                <button type="button" class="btn quiet" aria-label=label on:click=move |_| vm.with(|v| v.deselect(uid))>
+                                <button type="button" class="btn quiet" aria-label=label on:click=move |_| {
+                                    vm.with(|v| v.deselect(uid));
+                                    focus_heading();
+                                }>
                                     {word(vm, "sel-remove-short")}
                                 </button>
                             </li>
@@ -49,7 +65,10 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
             (!streets().is_empty())
                 .then(|| {
                     view! {
-                        <button type="button" class="btn quiet" id="selection-clear" on:click=move |_| vm.with(|v| v.clear_selection())>
+                        <button type="button" class="btn quiet" id="selection-clear" on:click=move |_| {
+                                vm.with(|v| v.clear_selection());
+                                focus_heading();
+                            }>
                             {word(vm, "sel-clear")}
                         </button>
                     }
