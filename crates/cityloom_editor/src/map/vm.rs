@@ -13,6 +13,7 @@ use crate::city::projection::Projection;
 use crate::city::store::CityStore;
 use crate::map::areas::AreasVm;
 use crate::map::camera::{Camera, Insets, World};
+use crate::map::corridor::{self, Op, Outcome, Plan, Report};
 use crate::map::editable;
 use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
 use crate::map::overlay;
@@ -195,6 +196,24 @@ pub struct PlaceRow {
     pub tag: Option<StateTag>,
 }
 
+/// How far a change to the selected streets has got: nothing asked, a review of it shown, or it made.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Stage {
+    Idle,
+    Reviewing(Plan),
+    Done(Report),
+}
+
+/// One street of a review or a report, as the panel shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CorridorRow {
+    pub street: u32,
+    pub name: String,
+    pub ready: bool,
+    /// What the panel says of it: that it can be changed, or why not.
+    pub text: String,
+}
+
 /// How a place stands, where it needs saying: the key of the words, and whether it is bad news.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StateTag {
@@ -339,6 +358,9 @@ pub struct MapVm {
     areas: Rc<AreasVm>,
     /// The streets selected on the map, and in the Selected streets panel.
     selection: Rc<SelectionVm>,
+    /// The change picked for the selected streets, and how far it has got.
+    corridor_op: ArcRwSignal<Op>,
+    corridor: ArcRwSignal<Stage>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// The source-data findings, likewise; they are read from the city as the importer laid it out.
@@ -394,6 +416,8 @@ impl MapVm {
             worded: RefCell::new(None),
             areas,
             selection,
+            corridor_op: ArcRwSignal::new(Op::ALL[0]),
+            corridor: ArcRwSignal::new(Stage::Idle),
             network: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
@@ -1249,17 +1273,119 @@ impl MapVm {
         }
         self.selection.toggle(uid, &self.street_label(uid));
         self.show_selection();
+        self.corridor.set(Stage::Idle);
     }
 
     /// Drops one street from the selection (the panel's button).
     pub fn deselect(&self, uid: u32) {
         self.selection.remove(uid, &self.street_label(uid));
         self.show_selection();
+        self.corridor.set(Stage::Idle);
     }
 
     pub fn clear_selection(&self) {
         self.selection.clear();
         self.show_selection();
+        self.corridor.set(Stage::Idle);
+    }
+
+    // ---- changing the selected streets ----
+
+    pub fn corridor_op(&self) -> Op {
+        self.corridor_op.get()
+    }
+
+    /// Picks the change by its id; a review made for another change goes.
+    pub fn set_corridor_op(&self, id: &str) {
+        if let Some(op) = Op::from_id(id) {
+            self.corridor_op.set(op);
+            self.corridor.set(Stage::Idle);
+        }
+    }
+
+    pub fn corridor_stage(&self) -> Stage {
+        self.corridor.get()
+    }
+
+    /// Tries the picked change on every selected street, on copies, and shows which can take it and which cannot,
+    /// with the reason. Nothing is changed. Nothing is selected, nothing to review.
+    pub fn review_corridor(&self) {
+        let streets = self.selection.streets_now();
+        if streets.is_empty() {
+            return;
+        }
+        let plan = corridor::plan(&self.store.open(), self.store.region(), self.corridor_op.get_untracked(), &streets);
+        let said = self.i18n.tr_now(
+            "corridor-review",
+            &Args::new().str("name", self.say_now(&plan.op.name())).num("ready", plan.ready().len() as i64).num("refused", plan.refused().len() as i64),
+        );
+        self.corridor.set(Stage::Reviewing(plan));
+        self.ports.announcer.say(&said);
+    }
+
+    /// Makes the reviewed change on the streets that can take it; the others are left as they are. The map shows
+    /// the result. Only from a review.
+    pub fn apply_corridor(&self) {
+        let Stage::Reviewing(plan) = self.corridor.get_untracked() else { return };
+        // Only what was reviewed as ready is made; what the review refused stays in the report as it was said.
+        let mut report = corridor::apply(&self.store, plan.op, &plan.ready());
+        report.refused.splice(0..0, plan.refused());
+        self.reload();
+        self.sync_places();
+        self.ports.announcer.say(&self.say_now(&report.said()));
+        self.corridor.set(Stage::Done(report));
+    }
+
+    /// Leaves the review or the report.
+    pub fn cancel_corridor(&self) {
+        self.corridor.set(Stage::Idle);
+    }
+
+    /// The streets of a review or report, each with what to say of it, in the language of the page.
+    pub fn corridor_rows(&self) -> Vec<CorridorRow> {
+        let units = self.units();
+        let say = |s: &Said| said::say(&self.i18n, units, s);
+        let row = |street: u32, ready: bool, text: String| CorridorRow { street, name: self.street_label(street), ready, text };
+        match self.corridor.get() {
+            Stage::Idle => Vec::new(),
+            Stage::Reviewing(plan) => plan
+                .rows
+                .iter()
+                .map(|r| match &r.outcome {
+                    Outcome::Ready => row(r.street, true, self.word("corridor-row-ready")),
+                    Outcome::Refused(why) => row(r.street, false, say(why)),
+                })
+                .collect(),
+            Stage::Done(report) => report
+                .changed
+                .iter()
+                .map(|&s| row(s, true, self.word("corridor-row-changed")))
+                .chain(report.refused.iter().map(|(s, why)| row(*s, false, say(why))))
+                .chain(report.not_kept.iter().map(|&s| row(s, false, self.word("corridor-row-not-kept"))))
+                .collect(),
+        }
+    }
+
+    /// How many streets of the review can be changed.
+    pub fn corridor_ready(&self) -> usize {
+        match self.corridor.get() {
+            Stage::Reviewing(plan) => plan.ready().len(),
+            _ => 0,
+        }
+    }
+
+    /// An operation's name, in the language of the page (tracked).
+    pub fn say_op(&self, op: Op) -> String {
+        said::say(&self.i18n, self.units(), &op.name())
+    }
+
+    /// The button that makes the reviewed change: how many streets it will change.
+    pub fn corridor_apply_label(&self, count: usize) -> String {
+        self.i18n.tr("corridor-apply", &Args::new().num("count", count as i64))
+    }
+
+    fn say_now(&self, said: &Said) -> String {
+        said::say_now(&self.i18n, self.units(), said)
     }
 
     /// The Selected streets panel's lead for `count` streets.
@@ -2251,6 +2377,83 @@ mod tests {
         mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
         assert!(vm.selection().streets().is_empty());
         assert!(matches!(vm.areas().draw_now(), Draw::Drawing(corners) if corners.len() == 1), "the press went to the outline as its first corner");
+    }
+
+    // ---- changing the selected streets ----
+
+    fn sample_vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>) {
+        let (ports, said, _) = test_ports();
+        (MapVm::on_sample(ports, crate::i18n_for(Locale::En)), said)
+    }
+
+    /// A street of the sample city that takes the Greenway; the freeway (23) takes no template.
+    fn greenway_street(vm: &MapVm) -> u32 {
+        let city = vm.store.open();
+        (1..=22u32).find(|&s| corridor::plan(&city, 0, Op::Template(crate::street::model::Template::Greenway), &[s]).ready() == vec![s]).unwrap()
+    }
+
+    #[test]
+    fn nothing_selected_has_nothing_to_review() {
+        let (vm, said) = sample_vm();
+        vm.review_corridor();
+        assert_eq!(vm.corridor_stage(), Stage::Idle);
+        assert!(said.take().is_empty());
+    }
+
+    #[test]
+    fn a_review_says_which_selected_streets_can_take_the_change_and_changes_none() {
+        let (vm, said) = sample_vm();
+        let ok = greenway_street(&vm);
+        let before = vm.store.open().street_editor(ok, 0).unwrap().snapshot();
+        vm.toggle_selected(Some(&format!("s-{ok}")));
+        vm.toggle_selected(Some("s-23"));
+        said.take();
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        assert_eq!(said.take(), vec!["Neighbourhood greenway: 1 street can be changed. 1 street cannot, and will be left as it is.".to_string()]);
+        let rows = vm.corridor_rows();
+        assert_eq!((rows[0].ready, rows[0].text.as_str()), (true, "Can be changed."));
+        assert!(!rows[1].ready && rows[1].text.contains("freeway"), "{:?}", rows[1]);
+        assert_eq!(vm.corridor_ready(), 1);
+        assert_eq!(vm.store.open().street_editor(ok, 0).unwrap().snapshot(), before, "a review writes nothing");
+    }
+
+    #[test]
+    fn applying_changes_the_reviewed_streets_says_what_was_done_and_leaves_the_refused_alone() {
+        let (vm, said) = sample_vm();
+        let ok = greenway_street(&vm);
+        let before = vm.store.open().street_editor(ok, 0).unwrap().snapshot();
+        let free = vm.store.open().street_editor(23, 0).unwrap().snapshot();
+        vm.toggle_selected(Some(&format!("s-{ok}")));
+        vm.toggle_selected(Some("s-23"));
+        vm.set_corridor_op("greenway");
+        vm.apply_corridor();
+        assert_eq!(vm.corridor_stage(), Stage::Idle, "nothing is made that was not reviewed");
+        vm.review_corridor();
+        said.take();
+        vm.apply_corridor();
+        assert_eq!(said.take(), vec!["Neighbourhood greenway: 1 street changed. 1 was left as it was.".to_string()]);
+        assert!(matches!(vm.corridor_stage(), Stage::Done(r) if r.changed == vec![ok]));
+        assert_ne!(vm.store.open().street_editor(ok, 0).unwrap().snapshot(), before);
+        assert_eq!(vm.store.open().street_editor(23, 0).unwrap().snapshot(), free);
+        assert_eq!(vm.selection().streets(), vec![ok, 23], "the selection stays");
+    }
+
+    #[test]
+    fn a_review_goes_when_the_selection_or_the_change_does() {
+        let (vm, _) = sample_vm();
+        let ok = greenway_street(&vm);
+        vm.toggle_selected(Some(&format!("s-{ok}")));
+        vm.review_corridor();
+        assert!(matches!(vm.corridor_stage(), Stage::Reviewing(_)));
+        vm.toggle_selected(Some("s-23"));
+        assert_eq!(vm.corridor_stage(), Stage::Idle);
+        vm.review_corridor();
+        vm.set_corridor_op("pedestrian");
+        assert_eq!(vm.corridor_stage(), Stage::Idle);
+        vm.review_corridor();
+        vm.clear_selection();
+        assert_eq!(vm.corridor_stage(), Stage::Idle);
     }
 
     #[test]

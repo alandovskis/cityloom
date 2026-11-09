@@ -1625,4 +1625,80 @@ mod selection {
         let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("1 rue sélectionnée.") && h.contains("Effacer la sélection") && h.contains("aria-label=\"Retirer "), "{h}");
     }
+
+    fn panel(vm: &Rc<MapVm>) -> String {
+        map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> })
+    }
+
+    #[test]
+    fn the_change_group_is_offered_only_when_streets_are_selected_and_lists_the_operations() {
+        let (vm, _) = map_vm();
+        assert!(!panel(&vm).contains("corridor-op"), "no selection, no change to ask for");
+        vm.toggle_selected(Some("s-1"));
+        let h = panel(&vm);
+        assert!(h.contains("Change the selected streets") && h.contains("id=\"corridor-op\""), "{h}");
+        assert!(h.contains(">Neighbourhood greenway<") && h.contains(">Make pedestrian<") && h.contains(">Bus corridor<"), "{h}");
+        assert!(h.contains("Review the change") && !h.contains("Cancel"), "{h}");
+    }
+
+    #[test]
+    fn a_review_lists_each_street_with_what_it_can_take_and_offers_to_make_the_change_on_those_that_can() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        vm.toggle_selected(Some("s-23"));
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        let h = panel(&vm);
+        assert!(h.contains("aria-label=\"Review of the change, street by street\""), "{h}");
+        assert_eq!(count(&h, "corridor-row"), count(&h, "class=\"corridor-row"), "{h}");
+        assert!(h.contains("Can be changed.") && h.contains("freeway"), "{h}");
+        assert!(h.contains("Change 1 street") && h.contains("Cancel"), "{h}");
+        assert!(!h.contains("Review the change"), "{h}");
+    }
+
+    #[test]
+    fn nothing_can_be_made_when_no_street_can_take_the_change_and_a_report_follows_the_change() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-23"));
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        let h = panel(&vm);
+        assert!(h.contains("Change 0 streets") && h.contains("disabled"), "{h}");
+        vm.cancel_corridor();
+        vm.toggle_selected(Some("s-23"));
+        vm.toggle_selected(Some("s-1"));
+        vm.set_corridor_op("pedestrian");
+        vm.review_corridor();
+        vm.apply_corridor();
+        let h = panel(&vm);
+        assert!(h.contains("aria-label=\"What was changed, street by street\"") && h.contains("Changed.") && h.contains(">Close<"), "{h}");
+    }
+
+    #[test]
+    fn the_change_group_speaks_french() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.toggle_selected(Some("s-1"));
+        vm.review_corridor();
+        let h = panel(&vm);
+        assert!(h.contains("Modifier les rues sélectionnées") && h.contains("Changement à apporter"), "{h}");
+        assert!(h.contains(">Voie verte de quartier<") && h.contains(">Rendre piétonne<"), "{h}");
+        assert!(h.contains("Annuler"), "{h}");
+    }
+}
+
+mod corridor_words {
+    use super::*;
+
+    /// French counts 0 as one, so a message must say the number, not a literal "1".
+    #[test]
+    fn the_french_review_and_apply_say_zero_when_nothing_can_be_changed() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.toggle_selected(Some("s-23"));
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("Modifier 0 rue"), "{h}");
+        let said = vm.i18n().tr_now("corridor-review", &Args::new().str("name", "X").num("ready", 0).num("refused", 1));
+        assert!(said.contains("0 rue peut être modifiée"), "{said}");
+    }
 }

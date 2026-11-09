@@ -2722,3 +2722,26 @@ dl.prov dd:last-child {
 #selection-clear {
   margin-top: 8px;
 }
+.corridor {
+  margin-top: 16px;
+}
+.corridor select {
+  display: block;
+  margin: 4px 0 8px;
+  max-width: 100%;
+}
+.corridor-rows {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.corridor-row {
+  padding: 4px 0;
+  border-top: 1px solid var(--rule);
+}
+.corridor-street {
+  font-weight: 600;
+}
+.corridor-row.bad {
+  color: var(--ink);
+}

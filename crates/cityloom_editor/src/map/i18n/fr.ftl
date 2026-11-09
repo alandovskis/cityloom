@@ -431,3 +431,44 @@ sel-remove = Retirer { $name }
 sel-remove-short = Retirer
 sel-clear = Effacer la sélection
 sel-list-label = Rues de la sélection
+
+## Changing the selected streets
+corridor-refused-no-motor = Le changement ne convient pas : aucun élément de cette rue ne reçoit de circulation motorisée.
+corridor-refused-gone = Cette rue ne fait plus partie de la ville.
+corridor-done = { $name } : { $changed ->
+    [one] { $changed } rue modifiée.
+   *[other] { $changed } rues modifiées.
+} { $left ->
+    [0] Toutes les rues ont été modifiées.
+    [one] { $left } a été laissée telle quelle.
+   *[other] { $left } ont été laissées telles quelles.
+}
+corridor-heading = Modifier les rues sélectionnées
+corridor-op-label = Changement à apporter
+corridor-review-button = Examiner le changement
+corridor-review = { $name } : { $ready ->
+    [one] { $ready } rue peut être modifiée.
+   *[other] { $ready } rues peuvent être modifiées.
+} { $refused ->
+    [0] Chaque rue sélectionnée peut le recevoir.
+    [one] { $refused } rue ne le peut pas et sera laissée telle quelle.
+   *[other] { $refused } rues ne le peuvent pas et seront laissées telles quelles.
+}
+corridor-apply = { $count ->
+    [one] Modifier { $count } rue
+   *[other] Modifier { $count } rues
+}
+corridor-cancel = Annuler
+corridor-close = Fermer
+corridor-row-ready = Peut être modifiée.
+corridor-row-changed = Modifiée.
+corridor-row-not-kept = N’a pas pu être conservée : elle est restée telle quelle.
+corridor-review-list = Examen du changement, rue par rue
+corridor-report-list = Ce qui a été modifié, rue par rue
+corridor-done-failed = { $name } : { $changed ->
+    [one] { $changed } rue modifiée.
+   *[other] { $changed } rues modifiées.
+} { $failed ->
+    [one] { $failed } rue n’a pas pu être conservée et est restée telle quelle.
+   *[other] { $failed } rues n’ont pas pu être conservées et sont restées telles quelles.
+} Réessayez.
