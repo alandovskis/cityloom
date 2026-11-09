@@ -346,3 +346,58 @@ map-report-place-left-out = Le rapport montre les { $shown } premiers lieux modi
     [one] { $left } autre lieu modifié n’est pas montré.
    *[other] { $left } autres lieux modifiés ne sont pas montrés.
 }
+
+## Les pages d’examen et l’annexe du rapport (src/map/report_review.rs)
+map-report-network = Effets sur le réseau
+map-report-network-caption = Les vérifications du réseau et leurs résultats
+map-report-col-check = Vérification
+map-report-col-findings = Constats
+map-report-col-severity = Gravité
+map-report-col-finding = Constat
+map-report-col-places = Lieux
+map-report-places-and-more = { $names } { $n ->
+    [one] et 1 autre lieu
+   *[other] et { $n } autres lieux
+}
+map-report-areas = Règles de zone
+map-report-areas-none = Aucune règle de zone n’a été déclarée pour cette ville.
+map-report-areas-intro = Une règle de zone est une règle de circulation tracée sur une partie de la ville. Chaque rue située dans une zone est vérifiée selon sa règle.
+map-report-areas-caption = Les règles de zone et les rues qui s’y trouvent
+map-report-col-area = Zone
+map-report-col-rule = Règle
+map-report-col-inside = Rues dans la zone
+map-report-col-conflicts = En conflit
+map-report-areas-streets-caption = Rues qui ne respectent pas la règle de leur zone
+map-report-col-street = Rue
+map-report-col-why = Raison
+map-report-areas-more = { $n ->
+    [one] 1 autre rue n’est pas listée.
+   *[other] { $n } autres rues ne sont pas listées.
+}
+map-report-labelled = { $label } { $text }
+map-report-limits = Limites des données OpenStreetMap
+map-report-col-source = Source
+map-report-col-impact = Effet sur la conception
+map-report-appendix = Annexe
+map-report-appendix-thresholds = Seuils et leur statut
+map-report-appendix-thresholds-status = Aucun seuil de ce rapport n’a été vérifié selon la norme d’une ville ou d’un pays. Une réussite ou un échec indique où en est la conception par rapport à un chiffre provisoire, pas si elle respecte quoi que ce soit.
+map-report-appendix-glossary = Glossaire
+map-report-appendix-glossary-caption = Les termes employés dans ce rapport
+map-report-col-term = Terme
+map-report-col-meaning = Sens
+map-report-term-before-after = Avant et Après
+map-report-term-network = Vérification du réseau
+map-report-term-area = Règle de zone
+map-report-term-placeholder = Provisoire
+map-report-def-pass = La conception satisfait à la vérification.
+map-report-def-fail = La conception ne satisfait pas à la vérification.
+map-report-def-problem = Le réseau enfreint une règle qui porte sur plusieurs rues.
+map-report-def-notice = Mérite un coup d’œil : la règle peut être respectée autrement, ou les données sont trop minces pour trancher.
+map-report-def-before-after = Avant est l’aménagement tel qu’importé d’OpenStreetMap; Après est l’aménagement modifié.
+map-report-def-network = Une vérification qui porte sur l’ensemble du réseau de rues et de jonctions, et non sur un seul lieu.
+map-report-def-area = Une règle de circulation tracée sur une partie de la ville, comme la zone sans voitures ou une limite de vitesse.
+map-report-def-placeholder = Un chiffre qui tient lieu du chiffre réel jusqu’à ce qu’une source faisant autorité le remplace.
+map-report-appendix-credits = Crédits
+map-report-credits-osm = Les rues, les voies et les jonctions viennent d’OpenStreetMap, © les contributeurs d’OpenStreetMap, disponible sous la licence Open Database Licence (opendatacommons.org/licenses/odbl). osm2streets (licence Apache 2.0) transforme les données cartographiques en rues et en jonctions.
+map-report-credits-atlas = Les mesures de priorité au transport en commun suivent la boîte à outils du Transit Priority Atlas, publié par le Marron Institute. CityLoom n’est ni affilié ni approuvé par l’Atlas ou le Marron Institute.
+map-report-credits-software = Ce rapport est produit avec krilla (licences MIT et Apache 2.0) et composé en Noto Sans, © The Noto Project Authors, sous la licence SIL Open Font License 1.1. Les crédits complets se trouvent sur la page Crédits de l’application.

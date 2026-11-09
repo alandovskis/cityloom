@@ -5,6 +5,7 @@
 use cityloom_report::{Block, Captioned, ReportData};
 
 use crate::city::model::{City, CityView, street_note};
+use crate::map::report_review;
 use crate::shared::catalogue::{Mode, class_key, mode_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say_now;
@@ -26,6 +27,8 @@ pub struct Facts {
     pub place_pages: Vec<Vec<Block>>,
     /// How many changed places `place_pages` left out, said at the end of the summary.
     pub left_out: usize,
+    /// The network effects, the area rules and the limits of the data (`report_review`), after the changed places.
+    pub review_pages: Vec<Vec<Block>>,
 }
 
 /// The most changed places that get a page: a report stays a size a person reads.
@@ -51,7 +54,11 @@ pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportD
     ReportData {
         lang: i18n.locale_now().tag().to_string(),
         title: i18n.tr_now("map-report-title", &Args::new().str("area", facts.area.clone())),
-        pages: [vec![cover, summary(facts, i18n)], facts.place_pages.clone()].concat(),
+        pages: if facts.places == 0 {
+            vec![cover, summary(facts, i18n)]
+        } else {
+            [vec![cover, summary(facts, i18n)], facts.place_pages.clone(), facts.review_pages.clone(), vec![report_review::appendix(i18n)]].concat()
+        },
     }
 }
 

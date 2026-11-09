@@ -12,6 +12,7 @@ pub mod network;
 pub mod network_view;
 pub mod overlay;
 mod report;
+mod report_review;
 pub mod source_quality;
 pub mod source_view;
 pub mod style;
