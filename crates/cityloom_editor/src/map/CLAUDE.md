@@ -14,6 +14,11 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - No kept roads for the area: no places, no map, page says so (`NO_ROADS`).
 - The city is read on open, on `pageshow` and when another tab writes edits; edits made on a street/junction page show on next load (known limit).
 
+## Selected streets (`map/selection.rs`, `selection_view.rs`; #66)
+- `SelectionVm` (held by `MapVm::selection()`) is a page-long list of street uids in the order added, not kept. A Shift-click on the map (`web/basemap.js` emits `MapEvent::Toggle`, not `Press`) or Shift+Enter on a search result (`MapVm::toggle_chosen`) adds a street or drops it; a junction or blank map says `sel-not-a-street`, a street not wholly in view says `map-not-editable` (a selected one can always be dropped).
+- `Mapper::set_selected` sends the `s-<uid>` ids; the adapter sets feature-state `selected` on the `places` source (re-applied with the places) and `style.rs`'s `places-selected` draws a dashed dark-blue line down those streets (a pattern, not colour alone).
+- The Selected streets panel (`#selection-panel`, above the tabs of the notes) lists them with a remove button each (`aria-label` names the street) and a clear button; every change is announced with the count (`sel-*`). A selection changes nothing yet.
+
 ## Curbside uses and transit stops on the map
 - `Street::map_uses` (`street/model/map_uses.rs`) turns `Street.curb` / `Street.stops` into `MapUse` / `MapStop` (side, along range in mm from node `a` along `shape_mm`, lateral `lo_mm`/`hi_mm`). `city::model` puts them in `EdgeView.curb_mm` / `.stops_mm` under the same gate as `zone_bands` (frame is the street's own end, length within `LENGTH_TOLERANCE_MM`). A street with neither draws and counts as before.
 - Lateral offset is positive to the right looking from `a` to `b` (layout mm, x east, y south; right normal of `(tx, ty)` is `(-ty, tx)`), `Side::Left` negative, measured from `-row_mm/2` like `PieceView.offset_mm`, so a use sits on the drawn pavement, also in a zone narrower than the row.

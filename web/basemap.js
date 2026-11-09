@@ -77,6 +77,7 @@ export async function createBasemap(container) {
       maxZoom: 19,
       attributionControl: false,
       dragRotate: false,
+      boxZoom: false, // Shift is the page's: a Shift-press picks a street, and the box zoom would take it
       pitchWithRotate: false,
       touchPitch: false,
       keyboard: false, // the shortcuts are the page's
@@ -94,6 +95,7 @@ export async function createBasemap(container) {
       fit: nothing,
       setInsets: nothing,
       setEditable: nothing,
+      setSelected: nothing,
       zoomBy: nothing,
       panBy: nothing,
       highlight: nothing,
@@ -141,6 +143,12 @@ export async function createBasemap(container) {
       for (const id of idsOf[name]) map.setFeatureState({ source: name, id }, { editable: editable.has(id) });
     }
   };
+  // The streets selected, as the module last said, put back whenever the places are drawn again.
+  let selected = new Set();
+  const showSelected = () => {
+    if (!styled || !map.getSource("places")) return;
+    for (const id of selected) map.setFeatureState({ source: "places", id }, { selected: true });
+  };
   const showHot = () => {
     if (!styled || !hot) return;
     for (const name of idSources)
@@ -166,6 +174,7 @@ export async function createBasemap(container) {
         for (const layer of JSON.parse(kept.layers)) map.moveLayer(layer.id, "places-junction");
     showHot();
     showEditable();
+    showSelected();
   };
   // The restrictions and the outline being drawn: kept like the places, so a new style can have them put back.
   // The restrictions go under the places, the outline over everything.
@@ -195,6 +204,7 @@ export async function createBasemap(container) {
     idsOf[name] = [...new Set(JSON.parse(kept.data).features.map((f) => f.properties.hot))];
     showHot();
     showEditable();
+    showSelected();
   };
   const showCurbside = () => showBesides(curbside, "curbside");
   const showStops = () => showBesides(stops, "stops");
@@ -310,6 +320,11 @@ export async function createBasemap(container) {
       pressedCorner = false;
       return;
     }
+    // A press with Shift held picks a street for the selection instead of opening it.
+    if (e.originalEvent?.shiftKey) {
+      emit({ kind: "toggle", at: [e.lngLat.lng, e.lngLat.lat], hot: hotAt(e.point), vertex: draftCornerAt(e.point) });
+      return;
+    }
     emit({
       kind: "press",
       at: [e.lngLat.lng, e.lngLat.lat],
@@ -415,6 +430,14 @@ export async function createBasemap(container) {
       editable = new Set(hot);
       showEditable();
       showCursor();
+    },
+    setSelected(hot) {
+      const before = selected;
+      selected = new Set(hot);
+      if (!styled || !map.getSource("places")) return;
+      for (const id of before)
+        if (!selected.has(id)) map.setFeatureState({ source: "places", id }, { selected: false });
+      for (const id of selected) if (!before.has(id)) map.setFeatureState({ source: "places", id }, { selected: true });
     },
     zoomBy(factor) {
       map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: ms(200) });

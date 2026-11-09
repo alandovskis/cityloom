@@ -13,6 +13,8 @@ pub mod network_view;
 pub mod overlay;
 mod report;
 mod report_review;
+pub mod selection;
+pub mod selection_view;
 pub mod source_quality;
 pub mod source_view;
 pub mod style;
@@ -99,6 +101,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
+    mount("selection-slot", view! { <selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
     mount("areas-slot", view! { <areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <network_view::NetworkLead vm=vm.clone()/> }.into_any());
     mount("network-slot", view! { <network_view::NetworkChecks vm=vm.clone()/> }.into_any());

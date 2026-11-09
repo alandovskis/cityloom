@@ -18,6 +18,7 @@ use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, Pla
 use crate::map::overlay;
 use crate::map::report;
 use crate::map::report_review;
+use crate::map::selection::SelectionVm;
 use crate::map::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -334,6 +335,8 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Area rules panel, and what the map shows of them.
     areas: Rc<AreasVm>,
+    /// The streets selected on the map, and in the Selected streets panel.
+    selection: Rc<SelectionVm>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// The source-data findings, likewise; they are read from the city as the importer laid it out.
@@ -369,6 +372,7 @@ impl MapVm {
         let world = World::round(core.view_now().bounds_mm);
         let basemap = if has_roads { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
         let areas = AreasVm::new(ports.clone(), i18n.clone());
+        let selection = SelectionVm::new(ports.clone(), i18n.clone());
         Rc::new_cyclic(|me| MapVm {
             me: me.clone(),
             core,
@@ -387,6 +391,7 @@ impl MapVm {
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
             areas,
+            selection,
             network: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
@@ -600,11 +605,22 @@ impl MapVm {
         })
     }
 
-    /// Where pressing Enter goes: the result the arrow keys are on, else the first.
-    pub fn chosen_href(&self) -> Option<String> {
-        let results = self.results();
+    /// The result Enter acts on: the one the arrow keys are on, else the first.
+    fn chosen(&self) -> Option<PlaceRow> {
         let at = self.active.get_untracked().unwrap_or(0).min(Self::SHOWN - 1);
-        results.into_iter().nth(at).map(|r| r.href)
+        self.results().into_iter().nth(at)
+    }
+
+    /// Where pressing Enter goes.
+    pub fn chosen_href(&self) -> Option<String> {
+        self.chosen().map(|r| r.href)
+    }
+
+    /// Shift+Enter in the search: the chosen result joins the selection instead of opening. Nothing found, nothing done.
+    pub fn toggle_chosen(&self) {
+        if let Some(row) = self.chosen() {
+            self.toggle_selected(Some(&row.hot));
+        }
     }
 
     /// How a junction is told on the map.
@@ -1099,6 +1115,12 @@ impl MapVm {
                 }
             },
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
+            // A press with Shift held is a press all the same while an outline is drawn.
+            MapEvent::Toggle { at, hot, vertex } => match self.areas.draw_now() {
+                Draw::Drawing(_) => self.areas.on_press(at, vertex),
+                Draw::Naming(_) => {}
+                Draw::Idle => self.toggle_selected(hot.as_deref()),
+            },
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
             MapEvent::View { bounds } => {
@@ -1202,6 +1224,54 @@ impl MapVm {
             .into_iter()
             .map(|(id, key)| (id, self.word(key)))
             .collect()
+    }
+
+    // ---- the selected streets ----
+
+    /// The selected streets' view-model.
+    pub fn selection(&self) -> &Rc<SelectionVm> {
+        &self.selection
+    }
+
+    /// Adds the street `hot` names to the selection, or drops it when it is selected. A junction is
+    /// refused, and so is a street not wholly in view (as it is not opened), each saying why; a street already
+    /// selected can always be dropped.
+    pub fn toggle_selected(&self, hot: Option<&str>) {
+        let Some(hot) = hot else { return };
+        let Some(uid) = hot.strip_prefix("s-").and_then(|u| u.parse::<u32>().ok()) else {
+            return self.ports.announcer.say(&self.i18n.tr_now("sel-not-a-street", &Args::new()));
+        };
+        if !self.selection.contains(uid) && !self.can_edit(&format!("s-{uid}")) {
+            return self.say_not_editable();
+        }
+        self.selection.toggle(uid, &self.street_label(uid));
+        self.show_selection();
+    }
+
+    /// Drops one street from the selection (the panel's button).
+    pub fn deselect(&self, uid: u32) {
+        self.selection.remove(uid, &self.street_label(uid));
+        self.show_selection();
+    }
+
+    pub fn clear_selection(&self) {
+        self.selection.clear();
+        self.show_selection();
+    }
+
+    /// The Selected streets panel's lead for `count` streets.
+    pub fn selection_lead(&self, count: usize) -> String {
+        self.i18n.tr("sel-lead", &Args::new().num("count", count as i64))
+    }
+
+    /// What a street's button in the panel is called, for a screen reader.
+    pub fn selection_remove_label(&self, name: &str) -> String {
+        self.i18n.tr("sel-remove", &Args::new().str("name", name))
+    }
+
+    /// Tells the map which streets are selected.
+    fn show_selection(&self) {
+        self.ports.mapper.set_selected(&self.selection.hot());
     }
 
     // ---- area restrictions ----
@@ -2135,6 +2205,49 @@ mod tests {
         assert_eq!(vm.hot().as_deref(), Some("s-1"));
         mapper.say(MapEvent::Hover { hot: None });
         assert_eq!(vm.hot(), None);
+    }
+
+    #[test]
+    fn a_shift_press_adds_the_street_to_the_selection_and_another_drops_it_and_the_map_is_told() {
+        let (vm, mapper, navigator, said) = area_vm_said();
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
+        assert_eq!(vm.selection().streets(), vec![1]);
+        assert_eq!(mapper.take().into_iter().filter(|c| matches!(c, MapCall::Selected(_))).collect::<Vec<_>>(), vec![MapCall::Selected(vec!["s-1".into()])]);
+        assert!(said.take().iter().any(|s| s.contains("added to the selection. One street selected.")));
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
+        assert!(vm.selection().streets().is_empty());
+        assert_eq!(mapper.take(), vec![MapCall::Selected(vec![])]);
+        assert!(navigator.take().is_empty(), "a shift press opens nothing");
+    }
+
+    #[test]
+    fn only_a_street_that_can_be_edited_is_selected_and_anything_else_says_why() {
+        let (vm, mapper, _, said) = area_vm_said();
+        mapper.say(COVERING);
+        mapper.take();
+        said.take();
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("j-3".into()), vertex: None });
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: None, vertex: None });
+        assert_eq!(said.take(), vec!["Only streets can be selected.".to_string()], "a junction is refused, nothing at all is not worth saying");
+        // a street the open view does not hold is muted: it is no more selected than opened
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        mapper.take();
+        said.take();
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
+        assert!(vm.selection().streets().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+        assert!(mapper.take().is_empty());
+    }
+
+    #[test]
+    fn a_shift_press_while_an_outline_is_drawn_is_still_a_corner_and_selects_nothing() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        assert!(vm.areas().start());
+        mapper.say(MapEvent::Toggle { at: [-73.6, 45.5], hot: Some("s-1".into()), vertex: None });
+        assert!(vm.selection().streets().is_empty());
+        assert!(matches!(vm.areas().draw_now(), Draw::Drawing(corners) if corners.len() == 1), "the press went to the outline as its first corner");
     }
 
     #[test]

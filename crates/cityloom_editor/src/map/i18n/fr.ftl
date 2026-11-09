@@ -17,6 +17,8 @@ map-key-open = ouvrir un lieu trouvé
 map-key-zoom = zoom
 map-key-move = déplacer la carte
 map-key-whole = toute la ville
+map-key-select = cliquer pour sélectionner une rue
+map-key-select-found = sélectionner un lieu trouvé
 map-key-areas = règles de zone
 map-key-panels = notes
 
@@ -406,3 +408,26 @@ map-report-appendix-credits = Crédits
 map-report-credits-osm = Les rues, les voies et les jonctions viennent d’OpenStreetMap, © les contributeurs d’OpenStreetMap, disponible sous la licence Open Database Licence (opendatacommons.org/licenses/odbl). osm2streets (licence Apache 2.0) transforme les données cartographiques en rues et en jonctions.
 map-report-credits-atlas = Les mesures de priorité au transport en commun suivent la boîte à outils du Transit Priority Atlas, publié par le Marron Institute. CityLoom n’est ni affilié ni approuvé par l’Atlas ou le Marron Institute.
 map-report-credits-software = Ce rapport est produit avec krilla (licences MIT et Apache 2.0) et composé en Noto Sans, © The Noto Project Authors, sous la licence SIL Open Font License 1.1. Les crédits complets se trouvent sur la page Crédits de l’application.
+
+## Rues sélectionnées
+sel-heading = Rues sélectionnées
+sel-empty = Aucune rue sélectionnée. Cliquez sur une rue de la carte en maintenant Maj, ou appuyez sur Maj+Entrée sur un résultat de recherche.
+sel-lead = { $count ->
+    [one] 1 rue sélectionnée.
+   *[other] { $count } rues sélectionnées.
+}
+sel-added = Ajout à la sélection : { $name }. { $count ->
+    [one] Une rue sélectionnée.
+   *[other] { $count } rues sélectionnées.
+}
+sel-removed = Retrait de la sélection : { $name }. { $count ->
+    [0] Aucune rue sélectionnée.
+    [one] Une rue sélectionnée.
+   *[other] { $count } rues sélectionnées.
+}
+sel-cleared = Sélection effacée.
+sel-not-a-street = Seules les rues peuvent être sélectionnées.
+sel-remove = Retirer { $name }
+sel-remove-short = Retirer
+sel-clear = Effacer la sélection
+sel-list-label = Rues de la sélection

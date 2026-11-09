@@ -2710,3 +2710,15 @@ dl.prov dd:last-child {
   gap: 4px;
   margin-block: 4px;
 }
+.places-list[hidden] {
+  display: none;
+}
+.selection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#selection-clear {
+  margin-top: 8px;
+}
