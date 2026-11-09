@@ -376,8 +376,8 @@ map-report-areas-more = { $n ->
 }
 map-report-labelled = { $label } { $text }
 map-report-limits = Limites des données OpenStreetMap
-map-report-col-source = Origine
-map-report-col-impact = Incidence sur la conception
+map-report-col-source = Source
+map-report-col-impact = Effet sur la conception
 map-report-appendix = Annexe
 map-report-appendix-thresholds = Seuils et leur statut
 map-report-appendix-thresholds-status = Aucun seuil de ce rapport n’a été vérifié selon la norme d’une ville ou d’un pays. Une réussite ou un échec indique où en est la conception par rapport à un chiffre provisoire, pas si elle respecte quoi que ce soit.
