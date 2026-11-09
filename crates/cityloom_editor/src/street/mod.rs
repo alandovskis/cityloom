@@ -5,6 +5,7 @@ pub mod calming_strip;
 pub mod calming_tools;
 pub mod curb_strip;
 pub mod curb_tools;
+pub mod drawing;
 pub mod green_strip;
 pub mod green_tools;
 pub mod impact;

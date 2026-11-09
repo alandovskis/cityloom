@@ -27,7 +27,7 @@ wasm-bindgen --target web --no-typescript --remove-name-section --remove-produce
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   "$wasm_dir/cityloom_report_pdf.wasm"
 # The editor must not carry the PDF writer (krilla): a crate that depends on `cityloom_report_pdf` would pull it in.
-# `cargo tree -p cityloom_editor | grep -c krilla` must print 0.
+# `cargo tree -p cityloom_editor -e normal | grep -c krilla` must print 0.
 if grep -q report_pdf web/pkg/cityloom_editor.js; then
   echo "web/pkg/cityloom_editor.js exports report_pdf: the editor links the PDF writer (cityloom_report_pdf)" >&2
   exit 1

@@ -2,9 +2,13 @@
 //! view-model gathers the `Facts` from the city and the network checks, and `build` words them. The writer of the
 //! PDF is another module (`cityloom_report_pdf`) behind the `PdfWriter` port.
 
-use cityloom_report::{Block, ReportData};
+use cityloom_report::{Block, Captioned, ReportData};
 
+use crate::city::model::{City, CityView, street_note};
+use crate::shared::catalogue::{Mode, class_key, mode_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::say_now;
+use crate::shared::units::Units;
 
 /// What the report says about the city, counted by the view-model from the city view and the cached checks.
 #[derive(Clone, Debug, Default)]
@@ -18,7 +22,19 @@ pub struct Facts {
     pub failing: usize,
     pub problems: usize,
     pub notices: usize,
+    /// The pages of the changed places (`place_pages`), after the summary.
+    pub place_pages: Vec<Vec<Block>>,
+    /// How many changed places `place_pages` left out, said at the end of the summary.
+    pub left_out: usize,
 }
+
+/// The most changed places that get a page: a report stays a size a person reads.
+pub const MAX_PLACES: usize = 40;
+/// The most failing checks listed on a page; the rest are counted.
+pub const MAX_FAILING_ROWS: usize = 8;
+/// The box each figure is fitted into, in points (two sit side by side in the text width).
+const FIGURE_W: f32 = 246.0;
+const FIGURE_H: f32 = 190.0;
 
 /// Words the report. `when_ms` is the time of the export, in milliseconds since 1970.
 pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportData {
@@ -35,7 +51,7 @@ pub fn build(facts: &Facts, version: &str, when_ms: u64, i18n: &I18n) -> ReportD
     ReportData {
         lang: i18n.locale_now().tag().to_string(),
         title: i18n.tr_now("map-report-title", &Args::new().str("area", facts.area.clone())),
-        pages: vec![cover, summary(facts, i18n)],
+        pages: [vec![cover, summary(facts, i18n)], facts.place_pages.clone()].concat(),
     }
 }
 
@@ -65,7 +81,209 @@ fn summary(facts: &Facts, i18n: &I18n) -> Vec<Block> {
     if facts.problems == 0 && facts.notices == 0 {
         page.push(Block::Paragraph { text: i18n.tr_now("map-report-none-found", &Args::new().str("result", pass)) });
     }
+    if facts.left_out > 0 {
+        let args = Args::new().num("shown", MAX_PLACES as i64).num("left", facts.left_out as i64);
+        page.push(Block::Paragraph { text: i18n.tr_now("map-report-place-left-out", &args) });
+    }
     page
+}
+
+/// One page for each changed place, in the order of the Changes list (junctions, then streets), at most `MAX_PLACES`.
+/// Returns the pages and how many changed places there were beyond them. Only the changed places' editors are read.
+pub fn place_pages(city: &City, view: &CityView, region: usize, i18n: &I18n, units: Units) -> (Vec<Vec<Block>>, usize) {
+    place_pages_up_to(MAX_PLACES, city, view, region, i18n, units)
+}
+
+/// `place_pages` with the cap given, so a test need not make 41 changes.
+pub(crate) fn place_pages_up_to(max: usize, city: &City, view: &CityView, region: usize, i18n: &I18n, units: Units) -> (Vec<Vec<Block>>, usize) {
+    let mut junctions: Vec<_> = view.nodes.iter().filter(|n| n.junction && n.edited).collect();
+    junctions.sort_by_key(|n| n.number);
+    let streets = view.edges.iter().filter(|e| e.edited);
+    let mut pages = Vec::new();
+    let total = junctions.len() + streets.clone().count();
+    for n in junctions.into_iter().take(max) {
+        pages.push(junction_page(city, n.uid, &say_now(i18n, units, &n.name), &n.failing, region, i18n, units));
+    }
+    for e in streets.take(max.saturating_sub(pages.len())) {
+        let name = say_now(i18n, units, &street_note(e.called.clone(), e.ends.clone()));
+        pages.push(street_page(city, e.uid, e.zones, name, region, i18n, units));
+    }
+    (pages, total.saturating_sub(max))
+}
+
+fn street_page(city: &City, uid: u32, zones: usize, name: String, region: usize, i18n: &I18n, units: Units) -> Vec<Block> {
+    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
+    let mut page = vec![Block::Heading { level: 2, text: name }];
+    let (Some(before), Some(after)) = (city.street_editor_today(uid, region), city.street_editor(uid, region)) else {
+        page.push(Block::Paragraph { text: tr("map-report-place-street-missing", &Args::new()) });
+        return page;
+    };
+    let (before, after) = (before.view(), after.view());
+    let locale = i18n.locale_now();
+    if zones > 1 {
+        page.push(Block::Paragraph { text: tr("map-report-place-zones", &Args::new().num("zones", zones as i64)) });
+    }
+    let length = |mm: i32| units.length_fine_in(mm, locale);
+    let mut lines = Vec::new();
+    let widths = Args::new().str("before", length(before.total_mm)).str("after", length(after.total_mm));
+    if before.total_mm != after.total_mm {
+        lines.push(tr("map-report-place-width", &widths));
+    }
+    if before.class != after.class {
+        let class = |c| tr(class_key(c), &Args::new());
+        lines.push(tr("map-report-place-class", &Args::new().str("before", class(before.class)).str("after", class(after.class))));
+    }
+    if before.speed_kmh != after.speed_kmh {
+        let speed = |s: Option<u16>| match s {
+            Some(k) => tr("st-speed-kmh", &Args::new().num("kmh", i64::from(k))),
+            None => tr("st-speed-not-set", &Args::new()),
+        };
+        lines.push(tr("map-report-place-speed", &Args::new().str("before", speed(before.speed_kmh)).str("after", speed(after.speed_kmh))));
+    }
+    let added = after.segments.iter().filter(|a| !before.segments.iter().any(|b| b.uid == a.uid)).count();
+    let removed = before.segments.iter().filter(|b| !after.segments.iter().any(|a| a.uid == b.uid)).count();
+    if added + removed > 0 {
+        lines.push(tr("map-report-place-pieces", &Args::new().num("added", added as i64).num("removed", removed as i64)));
+    }
+    if lines.is_empty() {
+        lines.push(tr("map-report-place-other", &Args::new()));
+    }
+    page.extend(lines.into_iter().map(|text| Block::Paragraph { text }));
+    let (figure_before, figure_after) = crate::street::drawing::figures(&before, &after, i18n, FIGURE_W, FIGURE_H);
+    let items = [
+        captioned("map-report-place-before", crate::street::drawing::alt(&before, i18n, units), figure_before, i18n),
+        captioned("map-report-place-after", crate::street::drawing::alt(&after, i18n, units), figure_after, i18n),
+    ];
+    page.push(Block::Figures { items: items.to_vec() });
+    let share = |shares: &[crate::street::model::Share], mode: Mode| {
+        let s = shares.iter().find(|s| s.mode == mode);
+        tr("map-report-place-share", &Args::new().str("length", length(s.map_or(0, |s| s.mm))).num("pct", i64::from(s.map_or(0, |s| s.pct))))
+    };
+    page.push(Block::Table {
+        caption: tr("map-report-place-width-caption", &Args::new()),
+        head: vec![tr("map-report-place-col-mode", &Args::new()), tr("map-report-place-before", &Args::new()), tr("map-report-place-after", &Args::new())],
+        rows: Mode::ALL.iter().map(|&m| vec![tr(mode_key(m), &Args::new()), share(&before.outcomes.share, m), share(&after.outcomes.share, m)]).collect(),
+    });
+    fn read(c: &crate::street::model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
+        (c.id, c.ok, &c.label, &c.detail)
+    }
+    page.extend(checks_block(&pair_checks(&before.checks, &after.checks, read), i18n, units));
+    page
+}
+
+fn junction_page(city: &City, uid: u32, name: &str, failing: &[crate::shared::said::Said], region: usize, i18n: &I18n, units: Units) -> Vec<Block> {
+    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
+    let mut page = vec![Block::Heading { level: 2, text: name.to_string() }];
+    let (Some(before), Some(after)) = (city.junction_editor_today(uid, region), city.junction_editor(uid, region)) else {
+        page.push(Block::Paragraph { text: tr("map-report-place-junction-undrawn", &Args::new()) });
+        if !failing.is_empty() {
+            let list = failing.iter().map(|s| say_now(i18n, units, s)).collect::<Vec<_>>().join("; ");
+            page.push(Block::Paragraph { text: tr("map-report-place-junction-failing", &Args::new().str("failing", list)) });
+        }
+        return page;
+    };
+    let (before, after) = (before.view(), after.view());
+    let control = |v: &crate::junction::read_model::JView| tr(crate::junction::model::control_key(v.control_index), &Args::new());
+    let key = if before.control_index == after.control_index { "map-report-place-control-same" } else { "map-report-place-control" };
+    page.push(Block::Paragraph { text: tr(key, &Args::new().str("before", control(&before)).str("after", control(&after))) });
+    let (figure_before, figure_after) = crate::junction::figure::figures(&before, &after, i18n, units, FIGURE_W, FIGURE_H);
+    let items = [
+        captioned("map-report-place-before", crate::junction::figure::alt(&before, i18n), figure_before, i18n),
+        captioned("map-report-place-after", crate::junction::figure::alt(&after, i18n), figure_after, i18n),
+    ];
+    page.push(Block::Figures { items: items.to_vec() });
+    fn read(c: &crate::junction::read_model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
+        (c.id, c.ok, &c.label, &c.detail)
+    }
+    page.extend(checks_block(&pair_checks(&before.checks, &after.checks, read), i18n, units));
+    page
+}
+
+/// A figure with its caption (Before or After, in words), its text alternative and, when shapes were left out of it, the
+/// note that says so.
+fn captioned(caption: &str, what: String, figure: cityloom_report::Figure, i18n: &I18n) -> Captioned {
+    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
+    let caption = tr(caption, &Args::new());
+    let note = if figure.omitted > 0 { tr("map-report-place-omitted", &Args::new()) } else { String::new() };
+    let alt = tr("map-report-place-alt", &Args::new().str("which", caption.clone()).str("what", what));
+    Captioned { caption, alt, note, figure }
+}
+
+/// One check of a place as it was imported and as it is now; `None` where the check does not exist in that state.
+pub(crate) struct CheckPair<'a> {
+    pub id: &'a str,
+    pub before: Option<bool>,
+    pub after: Option<bool>,
+    pub label: &'a crate::shared::said::Said,
+    pub detail: &'a crate::shared::said::Said,
+}
+
+/// Pairs the checks of the imported state with those of the current one by id: the current ones first, then those only the
+/// imported state has.
+pub(crate) fn pair_checks<'a, T>(
+    before: &'a [T],
+    after: &'a [T],
+    read: impl Fn(&'a T) -> (&'a str, bool, &'a crate::shared::said::Said, &'a crate::shared::said::Said),
+) -> Vec<CheckPair<'a>> {
+    let mut pairs: Vec<CheckPair> = after
+        .iter()
+        .map(|c| {
+            let (id, ok, label, detail) = read(c);
+            let was = before.iter().map(&read).find(|b| b.0 == id).map(|b| b.1);
+            CheckPair { id, before: was, after: Some(ok), label, detail }
+        })
+        .collect();
+    for c in before {
+        let (id, ok, label, detail) = read(c);
+        if !pairs.iter().any(|p| p.id == id) {
+            pairs.push(CheckPair { id, before: Some(ok), after: None, label, detail });
+        }
+    }
+    pairs
+}
+
+/// The checks of a place, imported state beside the current one: a table of those that fail in either (the current
+/// failures first, at most `MAX_FAILING_ROWS`, then a count of the rest), or one sentence that all pass. A short sentence
+/// first says what Before is.
+pub(crate) fn checks_block(checks: &[CheckPair], i18n: &I18n, units: Units) -> Vec<Block> {
+    let tr = |key: &str, args: &Args| i18n.tr_now(key, args);
+    let mut blocks = vec![Block::Paragraph { text: tr("map-report-place-checks-intro", &Args::new()) }];
+    let fails = |c: &&CheckPair| c.after == Some(false) || c.before == Some(false);
+    let mut failing: Vec<&CheckPair> = checks.iter().filter(fails).collect();
+    failing.sort_by_key(|c| c.after != Some(false));
+    if failing.is_empty() {
+        let args = Args::new().num("n", checks.iter().filter(|c| c.after.is_some()).count() as i64).str("result", tr("map-report-pass", &Args::new()));
+        blocks.push(Block::Paragraph { text: tr("map-report-place-all-pass", &args) });
+        return blocks;
+    }
+    let word = |state: Option<bool>| match state {
+        Some(true) => tr("map-report-pass", &Args::new()),
+        Some(false) => tr("map-report-fail", &Args::new()),
+        None => tr("map-report-place-na", &Args::new()),
+    };
+    let mut rows: Vec<Vec<String>> = failing
+        .iter()
+        .take(MAX_FAILING_ROWS)
+        .map(|c| {
+            let detail = if c.after == Some(false) { say_now(i18n, units, c.detail) } else { String::new() };
+            vec![say_now(i18n, units, c.label), word(c.before), word(c.after), detail]
+        })
+        .collect();
+    if failing.len() > MAX_FAILING_ROWS {
+        let more = tr("map-report-place-more", &Args::new().num("n", (failing.len() - MAX_FAILING_ROWS) as i64));
+        rows.push(vec![more, String::new(), String::new(), String::new()]);
+    }
+    blocks.push(Block::Table {
+        caption: tr("map-report-place-checks-caption", &Args::new()),
+        head: vec![
+            tr("map-report-place-col-check", &Args::new()),
+            tr("map-report-place-before", &Args::new()),
+            tr("map-report-place-after", &Args::new()),
+            tr("map-report-place-col-detail", &Args::new()),
+        ],
+        rows,
+    });
+    blocks
 }
 
 /// A time in milliseconds since 1970 as UTC (the civil-from-days algorithm, so no date crate): the ISO date and the

@@ -135,6 +135,12 @@ impl Projection for IsoFrame {
     }
 }
 
+/// The diagram and frame of a drawing `width` wide in a window `window_height` high, for a flat figure
+/// (`junction::figure`).
+pub(crate) fn build_diagram(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoFrame, crate::shared::diagram::Diagram) {
+    build::build(v, i18n, width, window_height, units)
+}
+
 /// What the page needs to put the 2.5D picture in its `<svg>`.
 pub struct IsoSvg {
     pub frame: IsoFrame,
