@@ -494,6 +494,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("area-bus-and-bike", "the id of an area rule in the sources registry, not a message"),
     ("area-speed-limit", "the id of an area rule in the sources registry, not a message"),
     ("area-no-parking", "the id of an area rule in the sources registry, not a message"),
+    ("atlas-junction", "the id of the junction's Atlas measures in the sources registry, not a message"),
     ("atlas-measure", "the id of the Atlas measures in the sources registry, not a message"),
     ("atlas-source", "the id of the street page slot the Atlas measures' source mounts into, not a message"),
     ("net-cycling", "the id of a network check in the sources registry, not a message"),

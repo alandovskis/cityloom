@@ -91,6 +91,7 @@ pub fn mount_page(editor: &Editor) {
     mount("conflicts", view! { <notes::Conflicts vm=vm.clone()/> }.into_any());
     mount("conflict-note", view! { <notes::ConflictNote vm=vm.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
+    mount("atlas-source", view! { <notes::AtlasSource vm=vm.clone()/> }.into_any());
     mount("provenance", view! { <page::Provenance vm=vm.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
 }

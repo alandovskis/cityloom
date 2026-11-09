@@ -130,6 +130,7 @@ const ENTRIES: &[Entry] = &[
     entry("access", "check-label-access", "src-applies-pedestrian-access", &["mtl-corridor"]),
     entry("calming-length", "check-label-calming-length", "src-applies-raised-crossing", &["mtl-traversant"]),
     entry("atlas-measure", "st-transit-heading", "src-applies-atlas", &["tpa-toolbox"]),
+    entry("atlas-junction", "src-atlas-junction-label", "src-applies-atlas-junction", &["tpa-toolbox"]),
 ];
 
 /// The rule's source as a view reads it.
