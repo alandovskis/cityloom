@@ -83,6 +83,19 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
                 })
         }}
         {move || (!streets().is_empty()).then(|| change(vm))}
+        {move || {
+            vm.with(|v| v.corridor_undo_label())
+                .map(|label| {
+                    view! {
+                        <button type="button" class="btn quiet" id="corridor-undo" on:click=move |_| {
+                            vm.with(|v| v.undo_corridor());
+                            focus_heading();
+                        }>
+                            {label}
+                        </button>
+                    }
+                })
+        }}
     }
 }
 

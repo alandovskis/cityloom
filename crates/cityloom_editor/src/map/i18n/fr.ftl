@@ -472,3 +472,19 @@ corridor-done-failed = { $name } : { $changed ->
     [one] { $failed } rue n’a pas pu être conservée et est restée telle quelle.
    *[other] { $failed } rues n’ont pas pu être conservées et sont restées telles quelles.
 } Réessayez.
+corridor-undo-button = Annuler : { $name } sur { $count ->
+    [one] { $count } rue
+   *[other] { $count } rues
+}
+corridor-undone = Annulation : { $name }. { $count ->
+    [one] { $count } rue est revenue à son état antérieur.
+   *[other] { $count } rues sont revenues à leur état antérieur.
+}
+corridor-undo-refused = Rien n’a été annulé : { $count ->
+    [one] { $count } rue a été modifiée depuis le changement.
+   *[other] { $count } rues ont été modifiées depuis le changement.
+}
+corridor-undo-failed = { $count ->
+    [one] { $count } rue n’a pas pu être rétablie; les autres l’ont été.
+   *[other] { $count } rues n’ont pas pu être rétablies; les autres l’ont été.
+}

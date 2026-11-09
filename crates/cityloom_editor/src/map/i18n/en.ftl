@@ -472,3 +472,19 @@ corridor-done-failed = { $name }: { $changed ->
     [one] 1 street could not be kept and is as it was.
    *[other] { $failed } streets could not be kept and are as they were.
 } Try again.
+corridor-undo-button = Undo: { $name } on { $count ->
+    [one] 1 street
+   *[other] { $count } streets
+}
+corridor-undone = Undone: { $name }. { $count ->
+    [one] 1 street is as it was.
+   *[other] { $count } streets are as they were.
+}
+corridor-undo-refused = Nothing was undone: { $count ->
+    [one] 1 street has been edited since the change.
+   *[other] { $count } streets have been edited since the change.
+}
+corridor-undo-failed = { $count ->
+    [one] 1 street could not be written back; the others were restored.
+   *[other] { $count } streets could not be written back; the others were restored.
+}
