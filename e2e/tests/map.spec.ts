@@ -417,6 +417,44 @@ test.describe("the city map", () => {
   });
 });
 
+test.describe("a map drawn without a basemap (#175 prototype, /map.html?basemap=none)", () => {
+  test("shows the city's streets and junctions on a plain ground, and asks for no tiles", async ({ page }) => {
+    const tileRequests: string[] = [];
+    page.on("request", (r) => /\.pmtiles|\/basemap\//.test(r.url()) && tileRequests.push(r.url()));
+    await page.goto("/map.html?basemap=none");
+    await mapReady(page);
+    await mapStill(page);
+    await expect(page.locator("#basemap canvas")).toBeVisible();
+    await expect(page.locator(".basemap-note")).toBeHidden();
+    // what the map is made of: the ground, and nothing from a tile source
+    const style = await page.evaluate(() => {
+      const s = (window as any).cityloomMap.getStyle();
+      return {
+        ground: s.layers[0].id,
+        vector: Object.values(s.sources).filter((x: any) => x.type === "vector").length,
+      };
+    });
+    expect(style).toEqual({ ground: "background", vector: 0 });
+    // the city is there to be pressed: streets and junctions are drawn and found under the pointer
+    const places = await placesOnMap(page);
+    expect(places.junctions.length).toBeGreaterThan(0);
+    expect(places.streets.length).toBeGreaterThan(0);
+    expect((await streetSpots(page)).length).toBeGreaterThan(0);
+    await page.screenshot({ path: test.info().outputPath("no-basemap.png") });
+    expect(tileRequests).toEqual([]);
+  });
+
+  test("the ground follows the theme and keeps the places", async ({ page }) => {
+    await page.goto("/map.html?basemap=none");
+    await mapReady(page);
+    const ground = () => land(page);
+    const light = await ground();
+    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+    await restyled(page, light);
+    expect(await ground()).not.toBe(light);
+  });
+});
+
 test.describe("when there is no basemap", () => {
   test("tiles that cannot be had are said, and the page and its notes still work", async ({
     page,
