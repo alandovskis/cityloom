@@ -1,0 +1,3 @@
+Before zoom:  {"zoom":15.22,"lng":-73.59764,"lat":45.52657}
+After two presses of the zoom-in button: {"zoom":15.99,"lng":-73.59764,"lat":45.52657}
+After dragging the map 150 px left and 90 px up: {"zoom":15.99,"lng":-73.59574,"lat":45.52577}

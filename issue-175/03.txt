@@ -1,0 +1,6 @@
+Requests for tiles or the basemap archive, /map.html: 21
+Requests for tiles or the basemap archive, /map.html?basemap=none: 0
+
+Style of /map.html?basemap=none
+sources: restrictions: geojson, places: geojson, curbside: geojson, stops: geojson, zone-ticks: geojson, draft: geojson
+layers: background (background), areas-fill (fill), areas-line-car_free (line), areas-line-bus_and_bike_only (line), areas-line-speed_limit (line), areas-line-no_parking_or_loading (line), areas-vertex (circle), places-casing (line), places-street (line), places-pedestrian (line), places-conflict (line), curbside-casing (line), curbside-fill (fill), curbside-line (line), stops-platform (fill), stops-dot (circle), stops-name (symbol), places-junction (circle), places-changed (line), places-bad (line), places-changed-dot (circle), places-bad-dot (circle), zone-ticks-casing (line), zone-ticks (line), draft-fill (fill), draft-line (line), draft-vertex (circle)

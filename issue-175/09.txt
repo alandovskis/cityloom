@@ -1,0 +1,3 @@
+  ✓  1 [ui] › tests/map.spec.ts:447:3 › a map drawn without a basemap (#175 prototype, /map.html?basemap=none) › the ground follows the theme and keeps the places (1.3s)
+  ✓  2 [ui] › tests/map.spec.ts:421:3 › a map drawn without a basemap (#175 prototype, /map.html?basemap=none) › shows the city's streets and junctions on a plain ground, and asks for no tiles (1.4s)
+  2 passed (2.1s)

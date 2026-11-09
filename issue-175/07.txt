@@ -1,0 +1,1 @@
+Pointer at (795, 303) px on the map. The place under it: s-77, whose feature state is hot: true (the street drawn orange in 07.png, cropped to 400 x 300 px around the pointer).
