@@ -409,6 +409,16 @@ jobs:
             web/data/metro
             web/data/basemap/montreal.pmtiles
           key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/basemap.rs', 'crates/citymodel_builder/src/metro_index.rs') }}
+      # Planetiler's downloads (Natural Earth, lake centerlines, water polygons; about 1 GB, in data/sources) are kept
+      # apart from the finished tiles and saved even when the build fails, so one unreachable host (#170) costs one
+      # download, not a rebuild from scratch on every deploy. A new key each run, restored by prefix.
+      - id: sources
+        if: steps.tiles.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: data/sources
+          key: sources-${{ github.run_id }}
+          restore-keys: sources-
       - if: steps.tiles.outputs.cache-hit != 'true'
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
@@ -420,6 +430,11 @@ jobs:
           sudo apt-get install --yes --no-install-recommends osmium-tool
           # osmium needs a gigabyte for each tile it cuts at once, and the runner has 16 GB.
           just prepare --batch 2
+      - if: always() && steps.tiles.outputs.cache-hit != 'true' && steps.sources.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: data/sources
+          key: sources-${{ github.run_id }}
 
       - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
       - run: just deploy
