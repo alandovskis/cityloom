@@ -47,6 +47,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | School street | Rue scolaire | Template. |
 | Street page | Neighbourhood greenway | Voie verte de quartier | Template. To confirm: `voie partagée de quartier` is the form some boroughs use. |
 | Street page | Bus corridor | Corridor d’autobus | Template; the Atlas's measures say `transport en commun`, this one is the street's use. To confirm. |
+| Street page | Previous street / Next street (arrows to the street that carries on from each end) | Rue précédente / Rue suivante | `vers la limite de la carte`; not `segment` (a piece) or `tronçon` (the 2.5D’s stretch). |
 | Street page | Industrial access street | Rue d’accès industriel | Template. |
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |

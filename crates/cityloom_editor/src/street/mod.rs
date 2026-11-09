@@ -81,13 +81,15 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = sheet.0.clone();
-    let ends = edge.map(|edge| CityStore::current(browser_ports().storage).open().street_ends(edge));
+    let city = edge.map(|edge| (edge, CityStore::current(browser_ports().storage).open()));
+    let ends = city.as_ref().map(|(edge, city)| city.street_ends(*edge));
+    let neighbours = city.as_ref().map(|(edge, city)| city.street_neighbours(*edge));
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
     mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
-    mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone() neighbours=neighbours/> }.into_any());
     mount("pieces-slot", view! { <piece_list::PieceList vm=vm.clone()/> }.into_any());
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());

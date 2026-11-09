@@ -217,6 +217,31 @@ fn a_city_street_s_heading_links_back_and_to_the_junctions_it_runs_between() {
 }
 
 #[test]
+fn a_city_street_has_arrows_to_the_streets_that_carry_on_from_its_ends() {
+    let s = street_shared(1);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([None, Some(3)])/> });
+    assert!(h.contains("aria-label=\"Along the street\""), "{h}");
+    // The end with a street to go on to is a link that says which way it leads; the other says why it is not.
+    assert!(h.contains("href=\"street.html?street=3\"") && h.contains("Next street") && h.contains("toward Junction 4"), "{h}");
+    assert_eq!(count(&h, "href=\"street.html"), 1, "{h}");
+    assert!(h.contains("Previous street") && h.contains("aria-disabled=\"true\"") && h.contains("No street carries on from this end."), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([Some(7), None])/> });
+    assert!(h.contains("aria-label=\"Le long de la rue\"") && h.contains("href=\"street.html?street=7\"") && h.contains("Rue précédente"), "{h}");
+    assert!(
+        h.contains("vers la limite de la carte") && h.contains("Rue suivante") && h.contains("Aucune rue ne se poursuit à partir de cette extrémité."),
+        "{h}"
+    );
+}
+
+#[test]
+fn a_street_not_of_the_city_has_no_arrows() {
+    let s = street_shared(1);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(!h.contains("Along the street") && !h.contains("street.html"), "{h}");
+}
+
+#[test]
 fn the_street_s_title_block_gives_its_name_width_and_changes() {
     let s = street_shared(0);
     let u = segment(&s, 0);
