@@ -5,14 +5,62 @@ import type { Download, Page } from "@playwright/test";
 // @ts-expect-error pdfjs-dist ships its Node build without declarations for this path
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import { expect, forgive, live, mapReady, openStreet, test } from "./fixtures";
+import { expect, forgive, live, mapReady, openJunction, openStreet, test } from "./fixtures";
 
-// The design review report: the map page's Share menu writes a PDF in the browser (a cover, a summary and the sources pages) (the `cityloom_report`
+// The design review report: the map page's Share menu writes a PDF in the browser (a cover, a summary, a page per changed
+// place and the sources pages; the `cityloom_report`
 // module, loaded on first use by `web/report.js`) and saves it. The file is read back with pdf.js.
 
 const VERSION = readFileSync(new URL("../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
   /^version = "(.+)"$/m,
 )![1];
+
+/** Downloads from the map page that is open already. */
+async function downloadHere(page: Page): Promise<{ file: Download; bytes: Buffer }> {
+  await mapReady(page);
+  await page.locator("#share-btn").click();
+  const pending = page.waitForEvent("download");
+  await page.locator("#report").click();
+  const file = await pending;
+  return { file, bytes: readFileSync(await file.path()) };
+}
+
+/** The alternative texts of the figures, from the tagged structure of every page. */
+async function figureAlts(bytes: Buffer): Promise<string[]> {
+  const doc = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }).promise;
+  const alts: string[] = [];
+  const walk = (node: any) => {
+    if (node.role === "Figure" && node.alt) alts.push(node.alt);
+    for (const child of node.children ?? []) walk(child);
+  };
+  for (let n = 1; n <= doc.numPages; n++) {
+    const tree = await (await doc.getPage(n)).getStructTree();
+    if (tree) walk(tree);
+  }
+  return alts;
+}
+
+/** Changes the first piece's width on the street page, then the control of a junction on its page. Says the
+ *  street's name as its page shows it. */
+async function editAStreetAndAJunction(page: Page, roundabout = "Roundabout"): Promise<string> {
+  await openStreet(page);
+  await page.locator("#wrap").focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  const width = page.locator("#inspector input").first();
+  await expect(width).toBeFocused();
+  const shown = await width.inputValue();
+  const was = Number(shown.replace(",", "."));
+  // The field reads the decimal mark of the page's language.
+  await width.fill(String(Math.round((was - 0.3) * 10) / 10).replace(".", shown.includes(",") ? "," : "."));
+  await width.press("Enter");
+  await expect(page.locator("#undo")).toBeEnabled();
+  const name = (await page.locator("#tb-street").innerText()).trim();
+  await openJunction(page);
+  await page.locator("#inspector select").first().selectOption({ label: roundabout });
+  await expect(page.locator("#undo")).toBeEnabled();
+  return name;
+}
 
 async function download(page: Page): Promise<{ file: Download; bytes: Buffer }> {
   await page.goto("/map.html");
@@ -25,14 +73,16 @@ async function download(page: Page): Promise<{ file: Download; bytes: Buffer }> 
   return { file, bytes: readFileSync(path) };
 }
 
-async function read(bytes: Buffer): Promise<{ pages: number; text: string }> {
+/** The pages and the text of a report; `placePages` counts the pages before the Sources pages that close it. */
+async function read(bytes: Buffer): Promise<{ pages: number; placePages: number; text: string }> {
   const doc = await getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }).promise;
-  let text = "";
+  const texts: string[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
     const content = await (await doc.getPage(n)).getTextContent();
-    text += content.items.map((i: any) => i.str).join(" ") + "\n";
+    texts.push(content.items.map((i: any) => i.str).join(" "));
   }
-  return { pages: doc.numPages, text };
+  const sources = texts.findIndex((t) => /^\s*Sources\b/.test(t));
+  return { pages: doc.numPages, placePages: sources === -1 ? doc.numPages : sources, text: texts.join("\n") + "\n" };
 }
 
 test("the Share menu downloads the report as a PDF", async ({ page }) => {
@@ -98,4 +148,41 @@ test("the editors' Share menu still prints", async ({ page }) => {
   await page.locator("#share-btn").click();
   await expect(page.locator("#share-menu #print")).toBeVisible();
   await expect(page.locator("#report")).toHaveCount(0);
+});
+
+test("with no edits the report has a cover and a summary, then the sources", async ({ page }) => {
+  const { bytes } = await download(page);
+  const { placePages, text } = await read(bytes);
+  expect(placePages).toBe(2);
+  expect(text).not.toContain("Before");
+  expect(await figureAlts(bytes)).toEqual([]);
+});
+
+test("an edited street and an edited junction each get a page in the report", async ({ page }) => {
+  const name = await editAStreetAndAJunction(page);
+  await page.goto("/map.html");
+  const { file, bytes } = await downloadHere(page);
+  const { placePages, text } = await read(bytes);
+  expect(placePages).toBe(4);
+  expect(text).toContain("Before");
+  expect(text).toContain("After");
+  expect(text).toContain(name);
+  const alts = await figureAlts(bytes);
+  expect(alts.length).toBe(4);
+  for (const alt of alts) expect(alt.length).toBeGreaterThan(20);
+  await file.saveAs(process.env.REPORT_SAMPLE_PLACES ?? test.info().outputPath("report-places.pdf"));
+});
+
+test("the place pages follow the language", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+  await editAStreetAndAJunction(page, "Carrefour giratoire");
+  await page.goto("/map.html");
+  const { bytes } = await downloadHere(page);
+  const { placePages, text } = await read(bytes);
+  expect(placePages).toBe(4);
+  expect(text).toContain("Avant");
+  expect(text).toContain("Après");
+  expect(text).not.toMatch(/\bBefore\b/);
+  const alts = await figureAlts(bytes);
+  expect(alts.length).toBe(4);
 });

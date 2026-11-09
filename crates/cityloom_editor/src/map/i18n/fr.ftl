@@ -290,10 +290,10 @@ map-report-row-failing = Lieux dont les vérifications de conception échouent
 map-report-row-problems = Problèmes du réseau
 map-report-row-notices = Avis du réseau
 map-report-figure-city = { $streets ->
-    [one] 1 rue
+    [one] { $streets } rue
    *[other] { $streets } rues
 }, { $junctions ->
-    [one] 1 jonction
+    [one] { $junctions } jonction
    *[other] { $junctions } jonctions
 }
 map-report-pass = Réussite
@@ -303,6 +303,49 @@ map-report-none-found = Aucun problème ni aucun avis du réseau n’a été rel
 map-report-nothing = Il n’y a rien à rapporter : cette ville n’a ni rue ni jonction.
 map-report-failed = Le rapport n’a pas pu être produit. Réessayez.
 map-report-dismiss = Fermer
+
+# Les pages des lieux modifiés dans le rapport
+map-report-place-before = Avant
+map-report-place-after = Après
+map-report-place-alt = { $which } : { $what }
+map-report-place-omitted = Quelques petites marques ne sont pas dessinées dans cette figure.
+map-report-place-zones = Cette rue compte { $zones } zones. Les figures la montrent dessinée à sa première zone.
+map-report-place-street-missing = Cette rue n’a pas pu être lue; il n’y a donc rien de plus à montrer ici.
+map-report-place-width = Largeur : { $before } avant, { $after } après.
+map-report-place-class = Classe : { $before } avant, { $after } après.
+map-report-place-speed = Limite de vitesse : { $before } avant, { $after } après.
+map-report-place-pieces = Éléments : { $added ->
+    [one] { $added } ajouté
+   *[other] { $added } ajoutés
+}, { $removed ->
+    [one] { $removed } retiré
+   *[other] { $removed } retirés
+}.
+map-report-place-other = Le changement touche des détails que cette page ne résume pas, comme les zones, les usages en bordure de rue ou les arrêts. Les figures et les vérifications montrent le résultat.
+map-report-place-width-caption = Largeur par mode, avant et après
+map-report-place-col-mode = Mode
+map-report-place-share = { $length } ({ $pct } %)
+map-report-place-checks-intro = « Avant » est la disposition importée d’OpenStreetMap; « Après » est la disposition modifiée.
+map-report-place-na = s. o.
+map-report-place-checks-caption = Vérifications de conception en échec avant ou après le changement
+map-report-place-col-check = Vérification
+map-report-place-col-detail = Détail
+map-report-place-all-pass = { $n ->
+    [one] { $n } vérification réussie
+   *[other] { $n } vérifications réussies
+} : { $result }.
+map-report-place-more = { $n ->
+    [one] { $n } autre vérification en échec
+   *[other] { $n } autres vérifications en échec
+}
+map-report-place-control = Signalisation : { $before } avant, { $after } après.
+map-report-place-control-same = Signalisation : { $after } (inchangée).
+map-report-place-junction-undrawn = Cette jonction n’a pas pu être dessinée, avant ou après le changement; cette page n’a donc pas de figure.
+map-report-place-junction-failing = Vérifications en échec : { $failing }.
+map-report-place-left-out = Le rapport montre les { $shown } premiers lieux modifiés. { $left ->
+    [one] { $left } autre lieu modifié n’est pas montré.
+   *[other] { $left } autres lieux modifiés ne sont pas montrés.
+}
 map-report-sources = Sources
 map-report-sources-intro = Voici les règles qui citent une source. Citer une source indique d’où une formule a été tirée; les chiffres n’ont pas été vérifiés auprès d’elle.
 map-report-sources-placeholders = Toutes les autres règles et recommandations de CityLoom sont des valeurs provisoires qui lui sont propres, sans source, jusqu’à ce qu’une source faisant autorité les remplace.

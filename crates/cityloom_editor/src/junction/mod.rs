@@ -4,6 +4,7 @@
 pub mod beyond;
 pub mod curbside;
 pub mod drawing;
+pub mod figure;
 pub mod frame;
 pub mod geometry;
 pub mod inspector;

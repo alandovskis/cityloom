@@ -87,6 +87,11 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     IsoSvg { markup: render(&diagram(v, i18n, width), &p), width: p.width, height: p.height }
 }
 
+/// The diagram `iso_svg` draws and the projection it is drawn through, for a flat figure (`street::drawing`).
+pub(crate) fn diagram_and_projection(v: &View, i18n: &I18n, width: f64) -> (Diagram, Projection) {
+    (diagram(v, i18n, width), Projection::fit(width, span_mm(v)))
+}
+
 /// One section's layers, bottom to top, over `run`'s half of the stretch.
 fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&str>) -> Section {
     let p = base.over(run.reach);

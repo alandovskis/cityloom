@@ -1,21 +1,24 @@
 //! The PDF writer: Letter pages, Noto Sans, greedy word wrapping, and a structure tree (Document > H / P / Table).
 
+use std::collections::VecDeque;
 use std::num::NonZeroU16;
 use std::sync::Arc;
 
+use krilla::color::rgb;
 use krilla::configure::{Accessibility, ConfigurationBuilder};
 use krilla::destination::XyzDestination;
-use krilla::geom::Point;
+use krilla::geom::{PathBuilder, Point, Rect};
 use krilla::metadata::Metadata;
 use krilla::outline::{Outline, OutlineNode};
 use krilla::page::PageSettings;
+use krilla::paint::{Fill, Stroke};
 use krilla::surface::Surface;
 use krilla::tagging::{ContentTag, Node, SpanTag, TableHeaderScope, Tag, TagGroup, TagTree};
 use krilla::text::{Font, TextDirection};
 use krilla::{Document, SerializeSettings};
 use wasm_bindgen::prelude::*;
 
-use cityloom_report::{Block, ReportData};
+use cityloom_report::{Block, Captioned, Item, ReportData, Rgb};
 
 const PAGE_W: f32 = 612.0;
 const PAGE_H: f32 = 792.0;
@@ -24,6 +27,12 @@ const BODY: f32 = 11.0;
 const LEADING: f32 = 1.35;
 const GAP: f32 = 8.0;
 const CELL_PAD: f32 = 4.0;
+const HALF: f32 = (PAGE_W - 2.0 * MARGIN - FIGURE_GAP) / 2.0;
+const FIGURE_GAP: f32 = 12.0;
+const CAPTION: f32 = 10.0;
+const NOTE: f32 = 8.0;
+/// The thinnest stroke a figure is drawn with, in points.
+const HAIRLINE: f32 = 0.25;
 
 /// A font with the bytes needed to wrap text.
 struct Face {
@@ -92,6 +101,8 @@ struct Pen<'a, 'b> {
     regular: &'a Face,
     bold: &'a Face,
     y: f32,
+    /// Set when a line was dropped for want of room; the writer then fails rather than hand over a cut report.
+    cut: bool,
 }
 
 impl Pen<'_, '_> {
@@ -99,14 +110,21 @@ impl Pen<'_, '_> {
         PAGE_H - MARGIN
     }
 
+    /// Whether nothing has been put on the page yet.
+    fn fresh(&self) -> bool {
+        self.y <= MARGIN + 0.01
+    }
+
     /// Draws the lines as tagged text from `x`, one under the other, and returns the tagged pieces; a line that would
-    /// cross the bottom margin is dropped (a page that overflows is cut).
+    /// cross the bottom margin is dropped and `cut` is set (`write_pdf` then fails: blocks that can continue on another
+    /// page, paragraphs and tables, check the room first).
     fn lines(&mut self, lines: &[String], x: f32, size: f32, bold: bool) -> Vec<Node> {
         let face = if bold { self.bold } else { self.regular };
         let mut nodes = vec![];
         for line in lines {
             let baseline = self.y + size;
             if baseline > self.bottom() {
+                self.cut = true;
                 break;
             }
             let id = self.surface.start_tagged(ContentTag::Span(SpanTag::empty()));
@@ -126,35 +144,163 @@ impl Pen<'_, '_> {
         (!nodes.is_empty()).then(|| Node::Group(TagGroup::with_children(tag, nodes)))
     }
 
-    fn table(&mut self, caption: &str, head: &[String], rows: &[Vec<String>]) -> Option<Node> {
+    /// A paragraph that continues on the next page when it does not fit: the node for the lines drawn and the lines left
+    /// (as a paragraph's text), if any.
+    fn paragraph(&mut self, text: &str) -> (Option<Node>, Option<String>) {
+        let lines = wrap(self.regular, text, BODY, PAGE_W - 2.0 * MARGIN);
+        let step = BODY * LEADING;
+        let room = ((self.bottom() - self.y - BODY) / step).floor() + 1.0;
+        let fit = if room < 1.0 { 0 } else { (room as usize).min(lines.len()) };
+        if fit == 0 && !self.fresh() {
+            return (None, Some(lines.join("\n")));
+        }
+        let drawn = self.lines(&lines[..fit], MARGIN, BODY, false);
+        self.y += GAP;
+        let rest = (fit < lines.len() && fit > 0).then(|| lines[fit..].join("\n"));
+        ((!drawn.is_empty()).then(|| Node::Group(TagGroup::with_children(Tag::P, drawn))), rest)
+    }
+
+    /// One or two figures side by side, each in half the text width with its caption above and its note below.
+    /// The block is scaled down if it would not fit what is left of the page.
+    fn figures(&mut self, items: &[Captioned]) -> Vec<Node> {
+        let top = self.y;
+        let mut end = top;
+        let mut nodes = vec![];
+        for (slot, item) in items.iter().take(2).enumerate() {
+            let x = MARGIN + slot as f32 * (HALF + FIGURE_GAP);
+            self.y = top;
+            let caption = wrap(self.bold, &item.caption, CAPTION, HALF);
+            let note = wrap(self.regular, &item.note, NOTE, HALF);
+            let lines_h = |n: usize, size: f32| n as f32 * size * LEADING;
+            let room = self.bottom() - top - lines_h(caption.len(), CAPTION) - lines_h(note.len(), NOTE) - 2.0 * GAP;
+            let (fw, fh) = (item.figure.width.max(f32::EPSILON), item.figure.height.max(f32::EPSILON));
+            let scale = (HALF / fw).min(room.max(1.0) / fh);
+            let nodes_caption = self.lines(&caption, x, CAPTION, true);
+            if !nodes_caption.is_empty() {
+                nodes.push(Node::Group(TagGroup::with_children(Tag::P, nodes_caption)));
+            }
+            self.y += GAP / 2.0;
+            let (box_w, box_h) = (fw * scale, fh * scale);
+            if !item.figure.items.is_empty() {
+                let id = self.surface.start_tagged(ContentTag::Other);
+                self.draw_figure(item, x, self.y, scale, box_w, box_h);
+                self.surface.end_tagged();
+                nodes.push(Node::Group(TagGroup::with_children(Tag::Figure(Some(item.alt.clone())), vec![Node::from(id)])));
+            }
+            self.y += box_h + GAP / 2.0;
+            let nodes_note = self.lines(&note, x, NOTE, false);
+            if !nodes_note.is_empty() {
+                nodes.push(Node::Group(TagGroup::with_children(Tag::P, nodes_note)));
+            }
+            end = end.max(self.y);
+        }
+        self.y = end + GAP;
+        nodes
+    }
+
+    /// Draws a figure's items with its box's corner at (`x`, `y`), clipped to the box; lengths scale by `scale`.
+    fn draw_figure(&mut self, item: &Captioned, x: f32, y: f32, scale: f32, box_w: f32, box_h: f32) {
+        let colour = |c: Rgb| rgb::Color::new(c.0, c.1, c.2);
+        let at = |p: &(f32, f32)| (x + p.0 * scale, y + p.1 * scale);
+        let path = |pts: &[(f32, f32)], close: bool| {
+            let mut b = PathBuilder::new();
+            for (i, p) in pts.iter().enumerate() {
+                let (px, py) = at(p);
+                if i == 0 { b.move_to(px, py) } else { b.line_to(px, py) }
+            }
+            if close {
+                b.close();
+            }
+            b.finish()
+        };
+        if let Some(clip) = Rect::from_xywh(x, y, box_w, box_h).and_then(|r| {
+            let mut b = PathBuilder::new();
+            b.push_rect(r);
+            b.finish()
+        }) {
+            self.surface.push_clip_path(&clip, &krilla::paint::FillRule::default());
+        }
+        let stroke = |c: Rgb, w: f32| Stroke { paint: colour(c).into(), width: (w * scale).max(HAIRLINE), ..Stroke::default() };
+        for it in &item.figure.items {
+            match it {
+                Item::Poly { pts, fill, stroke: outline } => {
+                    if let Some(p) = path(pts, true) {
+                        self.surface.set_fill(Some(Fill { paint: colour(*fill).into(), ..Fill::default() }));
+                        self.surface.set_stroke(outline.map(|(c, w)| stroke(c, w)));
+                        self.surface.draw_path(&p);
+                    }
+                }
+                Item::Line { pts, color, width } => {
+                    if let Some(p) = path(pts, false) {
+                        self.surface.set_fill(None);
+                        self.surface.set_stroke(Some(stroke(*color, *width)));
+                        self.surface.draw_path(&p);
+                    }
+                }
+                Item::Text { at: pos, size, color, text } => {
+                    let text = self.regular.drawable(text);
+                    let (px, py) = at(pos);
+                    self.surface.set_stroke(None);
+                    self.surface.set_fill(Some(Fill { paint: colour(*color).into(), ..Fill::default() }));
+                    self.surface.draw_text(Point::from_xy(px, py), self.regular.font.clone(), size * scale, &text, false, TextDirection::Auto);
+                }
+            }
+        }
+        self.surface.set_stroke(None);
+        self.surface.set_fill(None);
+        self.surface.pop();
+    }
+
+    /// A table, its rows as far as the page holds them; the rows left (with the caption if none was drawn, so the table
+    /// moves whole when not even its first row fits) come back as a table to continue on the next page, its head repeated.
+    fn table(&mut self, caption: &str, head: &[String], rows: &[Vec<String>]) -> (Option<Node>, Option<Block>) {
+        let width = PAGE_W - 2.0 * MARGIN;
+        let columns = head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0)).max(1);
+        let cell_w = width / columns as f32;
+        let caption_lines = if caption.is_empty() { vec![] } else { wrap(self.bold, caption, BODY, width) };
+        // A row's cells wrapped, and its height; an empty cell still is a cell: it holds one space, since an element with
+        // no content is dropped.
+        let lay = |cells: &[String], bold: bool| -> (Vec<Vec<String>>, f32) {
+            let face = if bold { self.bold } else { self.regular };
+            let wrapped: Vec<Vec<String>> = cells
+                .iter()
+                .map(|cell| {
+                    let lines = wrap(face, cell, BODY, cell_w - CELL_PAD);
+                    if lines.is_empty() { vec![" ".to_string()] } else { lines }
+                })
+                .collect();
+            let lines = wrapped.iter().map(Vec::len).max().unwrap_or(0);
+            (wrapped, lines as f32 * BODY * LEADING)
+        };
+        let head_row = lay(head, true);
+        let body: Vec<(Vec<Vec<String>>, f32)> = rows.iter().map(|r| lay(r, false)).collect();
+        let caption_h = caption_lines.len() as f32 * BODY * LEADING;
+        let first_h = body.first().map_or(0.0, |r| r.1);
+        if !self.fresh() && self.y + caption_h + head_row.1 + first_h > self.bottom() && !rows.is_empty() {
+            let whole = Block::Table { caption: caption.to_string(), head: head.to_vec(), rows: rows.to_vec() };
+            return (None, Some(whole));
+        }
         let mut children = vec![];
-        if !caption.is_empty() {
-            let lines = wrap(self.bold, caption, BODY, PAGE_W - 2.0 * MARGIN);
-            let nodes = self.lines(&lines, MARGIN, BODY, true);
+        if !caption_lines.is_empty() {
+            let nodes = self.lines(&caption_lines, MARGIN, BODY, true);
             if !nodes.is_empty() {
                 children.push(Node::Group(TagGroup::with_children(Tag::Caption, nodes)));
             }
         }
-        let columns = head.len().max(rows.iter().map(Vec::len).max().unwrap_or(0)).max(1);
-        let cell_w = (PAGE_W - 2.0 * MARGIN) / columns as f32;
-        let all = std::iter::once((head, true)).chain(rows.iter().map(|r| (r.as_slice(), false)));
-        for (cells, is_head) in all {
+        let mut drawn = 0;
+        let all = std::iter::once((head_row, true)).chain(body.into_iter().map(|r| (r, false)));
+        for (n, ((cells, height), is_head)) in all.enumerate() {
             if cells.is_empty() {
                 continue;
             }
+            if !is_head && drawn > 0 && self.y + height > self.bottom() {
+                break;
+            }
             let top = self.y;
-            let mut height: f32 = 0.0;
             let mut tr = vec![];
-            for (i, cell) in cells.iter().enumerate() {
+            for (i, lines) in cells.iter().enumerate() {
                 self.y = top;
-                let face = if is_head { self.bold } else { self.regular };
-                let mut lines = wrap(face, cell, BODY, cell_w - CELL_PAD);
-                if lines.is_empty() {
-                    // An empty cell still is a cell: it holds one space, since an element with no content is dropped.
-                    lines.push(" ".to_string());
-                }
-                let nodes = self.lines(&lines, MARGIN + i as f32 * cell_w, BODY, is_head);
-                height = height.max(self.y - top);
+                let nodes = self.lines(lines, MARGIN + i as f32 * cell_w, BODY, is_head);
                 if !nodes.is_empty() {
                     let group =
                         if is_head { TagGroup::with_children(Tag::TH(TableHeaderScope::Column), nodes) } else { TagGroup::with_children(Tag::TD, nodes) };
@@ -165,9 +311,13 @@ impl Pen<'_, '_> {
             if !tr.is_empty() {
                 children.push(Node::Group(TagGroup::with_children(Tag::TR, tr)));
             }
+            if !is_head {
+                drawn = n;
+            }
         }
         self.y += GAP;
-        (!children.is_empty()).then(|| Node::Group(TagGroup::with_children(Tag::Table, children)))
+        let rest = (drawn < rows.len()).then(|| Block::Table { caption: String::new(), head: head.to_vec(), rows: rows[drawn..].to_vec() });
+        ((!children.is_empty()).then(|| Node::Group(TagGroup::with_children(Tag::Table, children))), rest)
     }
 }
 
@@ -195,42 +345,78 @@ pub fn write_pdf(data: &ReportData, regular: &[u8], bold: &[u8]) -> Result<Vec<u
                         head: head.iter().map(|c| clean(c)).collect(),
                         rows: rows.iter().map(|r| r.iter().map(|c| clean(c)).collect()).collect(),
                     },
+                    Block::Figures { items } => Block::Figures {
+                        items: items
+                            .iter()
+                            .map(|c| Captioned { caption: clean(&c.caption), alt: c.alt.clone(), note: clean(&c.note), figure: c.figure.clone() })
+                            .collect(),
+                    },
                 })
                 .collect()
         })
         .collect();
     let mut outline = Outline::new();
-    for (index, blocks) in pages.iter().enumerate() {
-        let mut page = document.start_page_with(size.clone());
-        let mut surface = page.surface();
-        let mut pen = Pen { surface: &mut surface, regular: &regular, bold: &bold, y: MARGIN };
-        for block in blocks {
-            let node = match block {
-                Block::Heading { level, text } => {
-                    let level = NonZeroU16::new(u16::from((*level).clamp(1, 6))).expect("at least 1");
-                    let size = match level.get() {
-                        1 => 18.0,
-                        2 => 14.0,
-                        _ => 12.0,
-                    };
-                    let top = pen.y;
-                    let node = pen.text(Tag::Hn(level, Some(text.clone())), text, size, true);
-                    if node.is_some() {
-                        // PDF/UA-1 wants every heading titled and a bookmark for the document.
-                        let destination = XyzDestination::new(index, Point::from_xy(MARGIN, top));
-                        outline.push_child(OutlineNode::new(text.clone(), destination));
+    let mut index = 0;
+    for blocks in &pages {
+        // A logical page that does not fit goes on to further pages: paragraphs and tables continue, so nothing is cut.
+        let mut queue: VecDeque<Block> = blocks.iter().cloned().collect();
+        let mut first = true;
+        while first || !queue.is_empty() {
+            first = false;
+            let mut page = document.start_page_with(size.clone());
+            let mut surface = page.surface();
+            let mut pen = Pen { surface: &mut surface, regular: &regular, bold: &bold, y: MARGIN, cut: false };
+            while let Some(block) = queue.pop_front() {
+                let mut rest = None;
+                let node = match &block {
+                    Block::Heading { level, text } => {
+                        let level = NonZeroU16::new(u16::from((*level).clamp(1, 6))).expect("at least 1");
+                        let size = match level.get() {
+                            1 => 18.0,
+                            2 => 14.0,
+                            _ => 12.0,
+                        };
+                        let top = pen.y;
+                        let node = pen.text(Tag::Hn(level, Some(text.clone())), text, size, true);
+                        if node.is_some() {
+                            // PDF/UA-1 wants every heading titled and a bookmark for the document.
+                            let destination = XyzDestination::new(index, Point::from_xy(MARGIN, top));
+                            outline.push_child(OutlineNode::new(text.clone(), destination));
+                        }
+                        node
                     }
-                    node
+                    Block::Paragraph { text } => {
+                        let (node, left) = pen.paragraph(text);
+                        rest = left.map(|text| Block::Paragraph { text });
+                        node
+                    }
+                    Block::Table { caption, head, rows } => {
+                        let (node, left) = pen.table(caption, head, rows);
+                        rest = left;
+                        node
+                    }
+                    Block::Figures { items } => {
+                        for node in pen.figures(items) {
+                            tree.push(node);
+                        }
+                        None
+                    }
+                };
+                if let Some(node) = node {
+                    tree.push(node);
                 }
-                Block::Paragraph { text } => pen.text(Tag::P, text, BODY, false),
-                Block::Table { caption, head, rows } => pen.table(caption, head, rows),
-            };
-            if let Some(node) = node {
-                tree.push(node);
+                if pen.cut {
+                    return Err("the report does not fit its pages: a line was cut".to_string());
+                }
+                if let Some(rest) = rest {
+                    queue.push_front(rest);
+                    break;
+                }
             }
+            surface.finish();
+            page.finish();
+            index += 1;
         }
-        surface.finish();
-        page.finish();
     }
     document.set_outline(outline);
     document.set_tag_tree(tree);

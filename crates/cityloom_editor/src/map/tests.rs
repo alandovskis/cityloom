@@ -892,6 +892,7 @@ mod report {
                     v.extend(rows.iter().flatten().cloned());
                     v
                 }
+                Block::Figures { items } => items.iter().flat_map(|c| [c.caption.clone(), c.note.clone()]).collect(),
             })
             .collect()
     }
@@ -1002,6 +1003,310 @@ mod report {
         let built =
             crate::map::report::build(&crate::map::report::Facts { area: name.to_string(), ..Default::default() }, "1.0.0", 0, &crate::i18n_for(Locale::En));
         assert!(matches!(&built.pages[0][0], Block::Heading { level: 1, text } if text == name));
+    }
+
+    // ---- the pages of the changed places ----
+
+    /// A street of the sample city with its first piece made `by` wider, written as another page would.
+    fn widen_street(storage: &Rc<MemoryStorage>, uid: u32, by: i32) {
+        let store = CityStore::sample(storage.clone());
+        let mut e = store.open().street_editor(uid, 0).unwrap();
+        let u = e.view().segments[0].uid;
+        e.set_width(u, e.view().segments[0].width_mm + by);
+        assert!(store.write_street(uid, e.snapshot()));
+    }
+
+    fn change_junction(storage: &Rc<MemoryStorage>, uid: u32) {
+        let store = CityStore::sample(storage.clone());
+        let mut j = store.open().junction_editor(uid, 0).unwrap();
+        let next = (j.snapshot().control + 1) % crate::junction::model::CONTROLS.len();
+        assert!(j.set_control(next));
+        assert!(store.write_junction(uid, j.snapshot()));
+    }
+
+    fn a_street(vm: &MapVm) -> u32 {
+        vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid
+    }
+
+    /// The pages before the Sources pages that close the report: the cover, the summary and the place pages.
+    fn before_sources(data: &ReportData) -> &[Vec<Block>] {
+        let at = data.pages.iter().position(|p| matches!(p.first(), Some(Block::Heading { level: 2, text }) if text == "Sources")).unwrap_or(data.pages.len());
+        &data.pages[..at]
+    }
+
+    fn pages(vm: &MapVm) -> Vec<Vec<Block>> {
+        before_sources(&vm.report_data()).iter().skip(2).cloned().collect()
+    }
+
+    fn figures(page: &[Block]) -> Vec<&cityloom_report::Captioned> {
+        page.iter().flat_map(|b| if let Block::Figures { items } = b { items.iter().collect() } else { Vec::new() }).collect()
+    }
+
+    fn tables(page: &[Block]) -> Vec<(&Vec<String>, &Vec<Vec<String>>)> {
+        page.iter().filter_map(|b| if let Block::Table { head, rows, .. } = b { Some((head, rows)) } else { None }).collect()
+    }
+
+    #[test]
+    fn one_page_per_edited_place_and_none_for_unedited() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        assert!(pages(&vm).is_empty());
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        vm.reload();
+        assert_eq!(pages(&vm).len(), 1);
+        let junction = vm.view().nodes.iter().find(|n| n.junction).unwrap().uid;
+        change_junction(&storage, junction);
+        vm.reload();
+        let p = pages(&vm);
+        assert_eq!(p.len(), vm.view().edited);
+        assert_eq!(p.len(), 2);
+    }
+
+    #[test]
+    fn no_edit_gives_no_place_pages() {
+        let (vm, ..) = sample_in(Locale::En);
+        assert_eq!(before_sources(&vm.report_data()).len(), 2);
+    }
+
+    #[test]
+    fn the_street_page_has_before_and_after_figures_with_captions() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        widen_street(&storage, a_street(&vm), 300);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        assert!(matches!(&page[0], Block::Heading { .. }));
+        let f = figures(page);
+        assert_eq!(f.len(), 2);
+        assert_eq!((f[0].caption.as_str(), f[1].caption.as_str()), ("Before", "After"));
+        assert!(f.iter().all(|c| !c.alt.is_empty() && !c.figure.items.is_empty()));
+        assert_ne!(f[0].figure, f[1].figure);
+        assert!(texts(page).join("\n").contains("Width:"), "{:?}", texts(page));
+    }
+
+    #[test]
+    fn the_width_table_gives_before_and_after_shares() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        widen_street(&storage, a_street(&vm), 300);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        let (head, rows) = tables(page)[0];
+        assert_eq!(head.as_slice(), ["Mode", "Before", "After"]);
+        assert_eq!(rows.len(), 5);
+        assert_eq!(rows[0][0], "Walking");
+        assert!(rows.iter().all(|r| r[1].contains('%') && r[2].contains('%')));
+        assert!(rows.iter().any(|r| r[1] != r[2]), "{rows:?}");
+    }
+
+    #[test]
+    fn a_failing_check_is_a_fail_row_and_a_passing_place_says_all_pass() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 8000);
+        vm.reload();
+        assert!(vm.view().failing > 0);
+        let page = &pages(&vm)[0];
+        let (head, fails) = tables(page).into_iter().find(|(h, _)| h[0] == "Check").expect("a checks table");
+        assert_eq!(head.as_slice(), ["Check", "Before", "After", "Detail"]);
+        assert!(fails.iter().any(|r| r[1] == "Pass" && r[2] == "Fail" && !r[3].is_empty()), "an edit that breaks a check: {fails:?}");
+        assert!(fails.iter().all(|r| r[1] == "Fail" || r[2] == "Fail"), "{fails:?}");
+        assert!(texts(page).join("\n").contains("Before is the layout as imported"));
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let store = CityStore::sample(storage.clone());
+        let street = a_street(&vm);
+        let mut e = store.open().street_editor(street, 0).unwrap();
+        assert!(e.set_speed(Some(30)));
+        assert!(store.write_street(street, e.snapshot()));
+        vm.reload();
+        assert_eq!(vm.view().failing, 0);
+        let page = &pages(&vm)[0];
+        assert!(!tables(page).iter().any(|(h, _)| h[0] == "Check"));
+        assert!(texts(page).join("\n").contains("pass: Pass."), "{:?}", texts(page));
+    }
+
+    fn pairs<'a>(said: &'a crate::shared::said::Said, states: &[(Option<bool>, Option<bool>)]) -> Vec<crate::map::report::CheckPair<'a>> {
+        states.iter().map(|&(before, after)| crate::map::report::CheckPair { id: "x", before, after, label: said, detail: said }).collect()
+    }
+
+    #[test]
+    fn more_than_eight_failing_checks_are_cut_with_a_count() {
+        let said = crate::shared::said::Said::new("map-report-pass");
+        let checks = pairs(&said, &[(Some(true), Some(false)); 11]);
+        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let (_, rows) = tables(&blocks)[0];
+        assert_eq!(rows.len(), 9);
+        assert_eq!(rows[8][0], "3 more failing checks");
+        assert_eq!(rows[..8].iter().filter(|r| r[1] == "Pass" && r[2] == "Fail").count(), 8);
+    }
+
+    #[test]
+    fn the_checks_table_puts_before_beside_after_and_lists_a_check_failing_in_either() {
+        let said = crate::shared::said::Said::new("map-report-pass");
+        let checks =
+            pairs(&said, &[(Some(false), Some(true)), (Some(true), Some(false)), (Some(false), Some(false)), (Some(true), Some(true)), (Some(false), None)]);
+        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let (_, rows) = tables(&blocks)[0];
+        let states: Vec<(&str, &str)> = rows.iter().map(|r| (r[1].as_str(), r[2].as_str())).collect();
+        // those failing now first, then those that only failed before; the passing one is not listed
+        assert_eq!(states, [("Pass", "Fail"), ("Fail", "Fail"), ("Fail", "Pass"), ("Fail", "n/a")]);
+        assert!(!rows[0][3].is_empty() && !rows[1][3].is_empty(), "a failing After result has its detail");
+        assert!(rows[2][3].is_empty() && rows[3][3].is_empty());
+    }
+
+    #[test]
+    fn the_plural_messages_read_right_in_french_for_zero_one_and_many() {
+        let fr = crate::i18n_for(Locale::FrCa);
+        let line =
+            |added: i64, removed: i64| fr.tr_now("map-report-place-pieces", &crate::shared::i18n::Args::new().num("added", added).num("removed", removed));
+        assert_eq!(line(2, 0), "Éléments\u{a0}: 2 ajoutés, 0 retiré.");
+        assert_eq!(line(0, 1), "Éléments\u{a0}: 0 ajouté, 1 retiré.");
+        assert_eq!(line(1, 1), "Éléments\u{a0}: 1 ajouté, 1 retiré.");
+        let pass = |n: i64| fr.tr_now("map-report-place-all-pass", &crate::shared::i18n::Args::new().num("n", n).str("result", "Réussite"));
+        assert_eq!(pass(0), "0 vérification réussie\u{a0}: Réussite.");
+        assert_eq!(pass(1), "1 vérification réussie\u{a0}: Réussite.");
+        assert_eq!(pass(5), "5 vérifications réussies\u{a0}: Réussite.");
+    }
+
+    #[test]
+    fn a_junction_that_cannot_be_drawn_gets_a_text_page() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let junction = vm.view().nodes.iter().find(|n| n.junction).unwrap().uid;
+        change_junction(&storage, junction);
+        let store = CityStore::sample(storage.clone());
+        let city = store.open();
+        let mut view = city.view(0);
+        let plain = view.nodes.iter().position(|n| !n.junction).expect("a node that is no junction");
+        view.nodes[plain].junction = true;
+        view.nodes[plain].edited = true;
+        let (pages, left) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!(left, 0);
+        let undrawn = pages.iter().find(|p| texts(p).join("\n").contains("could not be drawn")).expect("a text page");
+        assert!(matches!(&undrawn[0], Block::Heading { .. }));
+        assert!(figures(undrawn).is_empty() && tables(undrawn).is_empty());
+        assert!(pages.iter().any(|p| !figures(p).is_empty()), "the junction that can be drawn has figures");
+    }
+
+    #[test]
+    fn a_junction_page_says_the_control_before_and_after() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        vm.reload();
+        let page = &pages(&vm)[0];
+        assert_eq!(figures(page).len(), 2);
+        assert!(texts(page).join("\n").contains("Control:"), "{:?}", texts(page));
+    }
+
+    /// The page with its checks replaced by the worst case: `MAX_FAILING_ROWS` plus three failing checks, each with a long
+    /// detail, so that the table is as long as a page's table gets.
+    fn with_worst_checks(mut page: Vec<Block>, i18n: &crate::shared::i18n::I18n) -> Vec<Block> {
+        use crate::shared::said::{Arg, Said};
+        let keep = page.iter().rposition(|b| matches!(b, Block::Figures { .. }) || matches!(b, Block::Table { head, .. } if head.len() == 3)).unwrap();
+        page.truncate(keep + 1);
+        let long = |n: usize| {
+            Said::new("city-name").with("name", Arg::Text(format!("Détail {n}\u{a0}: ").to_string() + &"un texte très long qui continue ".repeat(8)))
+        };
+        let (label, detail): (Vec<Said>, Vec<Said>) = (0..crate::map::report::MAX_FAILING_ROWS + 3).map(|n| (long(n), long(n))).unzip();
+        let checks: Vec<_> = label
+            .iter()
+            .zip(&detail)
+            .map(|(l, d)| crate::map::report::CheckPair { id: "x", before: Some(true), after: Some(false), label: l, detail: d })
+            .collect();
+        page.extend(crate::map::report::checks_block(&checks, i18n, crate::shared::units::Units::Metres));
+        page
+    }
+
+    fn written_text(pages: Vec<Vec<Block>>, lang: &str) -> String {
+        let data = ReportData { lang: lang.to_string(), title: "Rapport".to_string(), pages };
+        let bytes = cityloom_report_pdf::write_pdf(
+            &data,
+            include_bytes!("../../../../web/fonts/NotoSans-Regular.ttf"),
+            include_bytes!("../../../../web/fonts/NotoSans-Bold.ttf"),
+        )
+        .expect("a place page is written whole: the writer fails on a line it would cut");
+        let doc = lopdf::Document::load_mem(&bytes).unwrap();
+        let numbers: Vec<u32> = doc.get_pages().keys().copied().collect();
+        doc.extract_text(&numbers).unwrap()
+    }
+
+    #[test]
+    fn the_worst_street_page_and_junction_page_are_written_whole_in_fr_ca() {
+        let (vm, _, _, storage) = sample_in(Locale::FrCa);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 8000);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!(pages.len(), 2);
+        let i18n = vm.i18n();
+        let worst: Vec<Vec<Block>> = pages.into_iter().map(|p| with_worst_checks(p, &i18n)).collect();
+        for page in worst {
+            let text = written_text(vec![page], "fr-CA");
+            assert!(text.contains("Détail 0"), "{text}");
+            assert!(text.contains("Détail 7"), "the eighth row is kept");
+            assert!(text.contains("3 autres vérifications"), "the count of the rest is kept: {text}");
+        }
+    }
+
+    #[test]
+    fn more_than_forty_edited_places_give_forty_pages_and_a_note() {
+        assert_eq!(crate::map::report::MAX_PLACES, 40);
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let streets: Vec<u32> = vm.view().edges.iter().take(3).map(|e| e.uid).collect();
+        for s in &streets {
+            widen_street(&storage, *s, 100);
+        }
+        vm.reload();
+        let city = CityStore::sample(storage.clone()).open();
+        let view = city.view(0);
+        let (pages, left) = crate::map::report::place_pages_up_to(2, &city, &view, 0, &vm.i18n(), vm.units());
+        assert_eq!((pages.len(), left), (2, view.edited - 2));
+        let facts = crate::map::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
+        let data = crate::map::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
+        assert_eq!(before_sources(&data).len(), 4);
+        assert!(texts(&data.pages[1]).join("\n").contains("not shown"), "{:?}", texts(&data.pages[1]));
+    }
+
+    #[test]
+    fn a_zoned_street_says_it_is_drawn_at_its_first_zone() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert!(texts(&pages[0]).join("\n").contains("drawn at its first zone"));
+        let (pages, _) = crate::map::report::place_pages(&city, &city.view(0), 0, &vm.i18n(), vm.units());
+        assert!(!texts(&pages[0]).join("\n").contains("first zone"));
+    }
+
+    #[test]
+    fn a_long_street_name_is_kept_whole_in_the_heading() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = a_street(&vm);
+        widen_street(&storage, street, 300);
+        let city = CityStore::sample(storage.clone()).open();
+        let mut view = city.view(0);
+        let long = "Avenue du Très Long Nom de Rue Qui Continue Encore et Encore Jusqu’à Dépasser La Largeur De La Page";
+        view.edges.iter_mut().find(|e| e.uid == street).unwrap().called =
+            crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text(long.to_string()));
+        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        assert!(matches!(&pages[0][0], Block::Heading { text, .. } if text.contains(long)), "{:?}", pages[0][0]);
+    }
+
+    #[test]
+    fn the_pages_are_in_fr_ca_when_the_page_is_french() {
+        let (vm, _, _, storage) = sample_in(Locale::FrCa);
+        widen_street(&storage, a_street(&vm), 300);
+        change_junction(&storage, vm.view().nodes.iter().find(|n| n.junction).unwrap().uid);
+        vm.reload();
+        let p = pages(&vm);
+        let all: String = p.iter().flat_map(|pg| texts(pg)).collect::<Vec<_>>().join("\n");
+        assert!(all.contains("Avant") && all.contains("Après") && all.contains("Largeur") && all.contains("Signalisation"), "{all}");
+        assert!(!all.contains("Before") && !all.contains("Width"), "{all}");
+        let f = figures(&p[1]);
+        assert!(f.iter().all(|c| c.alt.contains("Avant") || c.alt.contains("Après")));
     }
 
     #[test]

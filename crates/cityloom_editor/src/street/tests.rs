@@ -2155,3 +2155,77 @@ fn the_calming_tools_follow_the_language_and_the_units() {
     assert!(h.contains("aria-label=\"Commandes des éléments surélevés\"") && h.contains(">Plateau surélevé</option>"), "{h}");
     assert!(h.contains("placeholder=\"7,0\""), "{h}");
 }
+
+// ---- the flat figure of the 2.5D --------------------------------------------------------
+
+fn en() -> std::rc::Rc<crate::shared::i18n::I18n> {
+    crate::i18n_for(Locale::En)
+}
+
+fn in_box(f: &cityloom_report::Figure, w: f32, h: f32) -> bool {
+    use cityloom_report::Item;
+    let eps = 0.01;
+    f.items.iter().all(|i| match i {
+        Item::Poly { pts, .. } | Item::Line { pts, .. } => pts.iter().all(|p| p.0 >= -eps && p.0 <= w + eps && p.1 >= -eps && p.1 <= h + eps),
+        Item::Text { .. } => true,
+    })
+}
+
+#[test]
+fn the_street_figure_has_polygons_inside_its_box() {
+    use cityloom_report::Item;
+    let f = crate::street::drawing::figure(&Editor::new(0).view(), &en(), 252.0, 200.0);
+    assert!(f.items.iter().any(|i| matches!(i, Item::Poly { .. })));
+    assert!(in_box(&f, 252.0, 200.0), "{f:?}");
+    assert!(f.width <= 252.01 && f.height <= 200.01);
+}
+
+#[test]
+fn the_street_figure_has_no_selection_outline() {
+    let mut e = Editor::new(0);
+    let plain = crate::street::drawing::figure(&e.view(), &en(), 252.0, 200.0);
+    let uid = e.view().segments[0].uid;
+    e.select(Some(uid));
+    assert_eq!(crate::street::drawing::figure(&e.view(), &en(), 252.0, 200.0), plain);
+}
+
+#[test]
+fn two_streets_with_different_widths_give_different_figures() {
+    let (a, b) = (Editor::new(0), Editor::new(1));
+    assert_ne!(a.view().total_mm, b.view().total_mm);
+    assert_ne!(crate::street::drawing::figure(&a.view(), &en(), 252.0, 200.0), crate::street::drawing::figure(&b.view(), &en(), 252.0, 200.0));
+}
+
+#[test]
+fn the_street_alt_text_names_what_is_drawn() {
+    let v = Editor::new(0).view();
+    let (en, fr) = (
+        crate::street::drawing::alt(&v, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres),
+        crate::street::drawing::alt(&v, &crate::i18n_for(Locale::FrCa), crate::shared::units::Units::Metres),
+    );
+    assert!(!en.is_empty() && !fr.is_empty() && en != fr, "{en} / {fr}");
+}
+
+#[test]
+fn the_neighbouring_zone_is_not_drawn_in_the_figure() {
+    use crate::street::model::two_zones;
+    // Two zones, the boundary near: the page draws two sections, the figure the shown one.
+    let z = two_zones(true);
+    let v = z.view();
+    assert!(v.zones.joint.is_some(), "the fixture's boundary is near");
+    let (all, p) = crate::street::iso::diagram_and_projection(&v, &en(), 252.0);
+    assert_eq!(all.sections.len(), 2);
+    let both = crate::shared::flat::flatten(&all, &p, 252.0, 200.0);
+    let one = crate::street::drawing::figure(&v, &en(), 252.0, 200.0);
+    assert!(one.items.len() < both.items.len(), "{} {}", one.items.len(), both.items.len());
+}
+
+#[test]
+fn a_fitted_street_figure_leaves_out_the_speed_signs_words() {
+    use cityloom_report::Item;
+    let mut e = Editor::new(0);
+    e.set_speed(Some(50));
+    let f = crate::street::drawing::figure(&e.view(), &en(), 252.0, 200.0);
+    // Only street names are kept in a fitted figure, so the sign's number and word are not drawn.
+    assert!(!f.items.iter().any(|i| matches!(i, Item::Text { .. })), "{:?}", f.items.iter().filter(|i| matches!(i, Item::Text { .. })).collect::<Vec<_>>());
+}

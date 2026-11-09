@@ -3238,3 +3238,88 @@ fn a_curbside_rain_garden_on_an_arm_brings_its_pattern_and_no_other_drawing_does
     assert!(!draw(&j).contains("iso-m-rain_garden"));
     assert!(!draw(&Junction::new(0)).contains("iso-m-rain_garden"));
 }
+
+// ---- the flat figure of the 2.5D --------------------------------------------------------
+
+fn figure_in_box(f: &cityloom_report::Figure, w: f32, h: f32) -> bool {
+    use cityloom_report::Item;
+    let eps = 0.01;
+    f.items.iter().all(|i| match i {
+        Item::Poly { pts, .. } | Item::Line { pts, .. } => pts.iter().all(|p| p.0 >= -eps && p.0 <= w + eps && p.1 >= -eps && p.1 <= h + eps),
+        Item::Text { .. } => true,
+    })
+}
+
+#[test]
+fn the_junction_figure_has_polygons_inside_its_box() {
+    use cityloom_report::Item;
+    let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
+    assert!(f.items.iter().any(|i| matches!(i, Item::Poly { .. })), "{} {} {}", f.items.len(), f.omitted, f.width);
+    // Nothing is the grey of a class the figure does not know (a press target or a casing would be): a junction with
+    // arms and lanes, a lane selected.
+    let mut j = Junction::new(0);
+    let a = j.view().arms[0].uid;
+    j.select(Target::Lane(a, 0));
+    let f = crate::junction::figure::figure(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
+    let grey = cityloom_report::Rgb(0x9a, 0xa4, 0xb0);
+    assert!(f.items.len() > 20);
+    assert!(f.items.iter().all(|i| !matches!(i, Item::Poly { fill, .. } if *fill == grey)), "a grey polygon");
+    assert!(figure_in_box(&f, 252.0, 200.0), "{f:?}");
+}
+
+#[test]
+fn a_pedestrian_arm_junction_draws() {
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let f = crate::junction::figure::figure(&walk.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, 252.0, 200.0);
+    assert!(!f.items.is_empty() && figure_in_box(&f, 252.0, 200.0));
+}
+
+#[test]
+fn the_junction_alt_text_names_what_is_drawn() {
+    use crate::shared::i18n::Locale;
+    let v = Junction::new(0).view();
+    let (en, fr) = (crate::junction::figure::alt(&v, &crate::i18n_for(Locale::En)), crate::junction::figure::alt(&v, &crate::i18n_for(Locale::FrCa)));
+    assert!(!en.is_empty() && en != fr, "{en} / {fr}");
+}
+
+#[test]
+fn the_junction_figure_keeps_street_names_only_each_on_a_white_label() {
+    use crate::shared::i18n::Locale;
+    use cityloom_report::Item;
+    let f = crate::junction::figure::figure(&Junction::new(0).view(), &crate::i18n_for(Locale::FrCa), Units::Metres, 246.0, 190.0);
+    let words: Vec<&String> = f.items.iter().filter_map(|i| if let Item::Text { text, .. } = i { Some(text) } else { None }).collect();
+    assert!(!words.is_empty() && words.iter().all(|w| w.starts_with("Sample")), "{words:?}");
+    let labels = f.items.iter().filter(|i| matches!(i, Item::Poly { fill, .. } if *fill == crate::shared::flat::LABEL_BACKGROUND)).count();
+    assert_eq!(labels, words.len());
+}
+
+#[test]
+fn the_junction_figure_is_fitted_to_what_is_drawn_and_its_words_are_whole_and_apart() {
+    use crate::shared::i18n::Locale;
+    use cityloom_report::Item;
+    let (bw, bh) = (246.0_f32, 190.0_f32);
+    let j = Junction::new(0);
+    for locale in [Locale::En, Locale::FrCa] {
+        let f = crate::junction::figure::figure(&j.view(), &crate::i18n_for(locale), Units::Metres, bw, bh);
+        // It uses the box: the larger dimension, relative to the box's, is at least 60%.
+        assert!((f.width / bw).max(f.height / bh) >= 0.6, "{} x {}", f.width, f.height);
+        assert!(f.width <= bw + 0.01 && f.height <= bh + 0.01, "{} x {}", f.width, f.height);
+        let boxes: Vec<(f32, f32, f32, f32)> = f
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Text { at, size, text, .. } => Some((at.0, at.1 - size * 0.8, at.0 + text.chars().count() as f32 * size * 0.6, at.1 + size * 0.25)),
+                _ => None,
+            })
+            .collect();
+        assert!(!boxes.is_empty());
+        for b in &boxes {
+            assert!(b.0 >= -0.01 && b.1 >= -0.01 && b.2 <= f.width + 0.01 && b.3 <= f.height + 0.01, "{b:?} leaves {} x {}", f.width, f.height);
+        }
+        for (i, a) in boxes.iter().enumerate() {
+            for b in &boxes[i + 1..] {
+                assert!(!(a.0 < b.2 && b.0 < a.2 && a.1 < b.3 && b.1 < a.3), "{a:?} overprints {b:?}");
+            }
+        }
+    }
+}
