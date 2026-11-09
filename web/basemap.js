@@ -77,6 +77,7 @@ export async function createBasemap(container) {
       maxZoom: 19,
       attributionControl: false,
       dragRotate: false,
+      boxZoom: false, // Shift is the page's: a Shift-press picks a street, and the box zoom would take it
       pitchWithRotate: false,
       touchPitch: false,
       keyboard: false, // the shortcuts are the page's
