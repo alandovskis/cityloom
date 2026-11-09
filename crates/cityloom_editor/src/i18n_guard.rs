@@ -152,6 +152,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/city/import.rs", include_str!("city/import.rs")),
     ("src/city/keys.rs", include_str!("city/keys.rs")),
     ("src/city/model.rs", include_str!("city/model.rs")),
+    ("src/city/model/neighbours.rs", include_str!("city/model/neighbours.rs")),
     ("src/city/model/network_read.rs", include_str!("city/model/network_read.rs")),
     ("src/city/model/source_read.rs", include_str!("city/model/source_read.rs")),
     ("src/city/edits.rs", include_str!("city/edits.rs")),

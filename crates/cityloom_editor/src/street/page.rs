@@ -158,11 +158,41 @@ fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
     if e.junction { view! { <a href=format!("intersection.html?junction={}", e.uid)>{words}</a> }.into_any() } else { words.into_any() }
 }
 
+/// One arrow along the street, toward the street that carries on from `end`: a link naming where it leads, or
+/// the reason there is none.
+fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> impl IntoView {
+    let toward = move || w.i18n().tr("header-toward", &Args::new().str("place", said::say(&w.i18n(), w.units(), &place)));
+    let (label, arrow) = if previous { ("header-prev", "M12 7H2M6 3 2 7l4 4") } else { ("header-next", "M2 7h10M8 3l4 4-4 4") };
+    let icon = view! { <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
+    match to {
+        Some(street) => view! {
+            <a class="street-step" href=format!("street.html?street={street}")>
+                {icon}
+                {say(w, label)}
+                <span class="sr-only">", " {toward}</span>
+            </a>
+        }
+        .into_any(),
+        None => view! {
+            <span class="street-step street-step-none" aria-disabled="true">
+                {icon}
+                {say(w, label)}
+                <span class="sr-only">". " {say(w, "header-step-none")}</span>
+            </span>
+        }
+        .into_any(),
+    }
+}
+
 /// The street's name and how wide it is; for a street of a city, the way back to
 /// the map and the two places it runs between.
 #[component]
-pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView {
+pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>, #[prop(optional_no_strip)] neighbours: Option<[Option<u32>; 2]>) -> impl IntoView {
     let w = SheetWatch::new(vm);
+    let steps = ends.clone().zip(neighbours).and_then(|(ends, to)| match ends.as_slice() {
+        [a, b] => Some(view! { <nav class="street-steps" aria-label=say(w, "header-steps")>{step(w, true, a.name.clone(), to[0])}{step(w, false, b.name.clone(), to[1])}</nav> }),
+        _ => None,
+    });
     // This page owns the window's title; it is written again when the street or the language changes.
     #[cfg(target_arch = "wasm32")]
     {
@@ -199,6 +229,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoVi
             <span><b id="row-dim" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
             {between}
         </p>
+        {steps}
     }
 }
 
