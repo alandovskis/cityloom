@@ -16,7 +16,7 @@ const counts = (page: Page) =>
     Object.fromEntries(
       [...document.querySelectorAll<HTMLElement>("#network-slot .net-rule")].map((s) => [
         s.dataset.rule!,
-        Number(s.querySelector("ul")!.getAttribute("data-count")),
+        Number(s.querySelector("ul.places-list")!.getAttribute("data-count")),
       ]),
     ),
   );

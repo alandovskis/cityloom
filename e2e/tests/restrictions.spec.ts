@@ -199,7 +199,10 @@ async function declareByKeyboard(page: Page, name: string) {
   await threeCornersByKeyboard(page);
   await page.keyboard.press("Shift+Enter");
   await formShown(page);
-  await page.keyboard.press("Tab"); // from the rule to the name
+  // The rule's sources are a disclosure between the rule and the name: the next Tab stops on its summary.
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#area-rule ~ details.src > summary")).toBeFocused();
+  await page.keyboard.press("Tab"); // on to the name
   await expect(page.locator("#area-name")).toBeFocused();
   await page.keyboard.type(name);
   await page.keyboard.press("Enter"); // submits the form
