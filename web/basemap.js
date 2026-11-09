@@ -19,7 +19,8 @@ const themeNow = () => {
 };
 
 // A prototype (#175): `/map.html?basemap=none` draws the city's places on a plain ground, with no tiles. The
-// ground's colours are the basemap's own land.
+// ground's colours are the basemap's own land: the `background` layer's `background-color` in
+// basemap-light.json and basemap-dark.json, copied below; change them together.
 const PLAIN = new URLSearchParams(location.search).get("basemap") === "none";
 const GROUND = { light: "#e2e7ec", dark: "#0f1317" };
 // What the places cover when there are no tiles to bound them: the whole map.
