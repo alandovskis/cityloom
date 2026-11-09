@@ -45,7 +45,7 @@ mod tests {
 
     #[test]
     fn a_placeholder_rule_is_marked_and_lists_no_reference() {
-        let h = html(|| source_note("calming-length", "Check", &crate::i18n_for(Locale::En), Units::Metres).into_any());
+        let h = html(|| source_note("green-spacing", "Check", &crate::i18n_for(Locale::En), Units::Metres).into_any());
         assert!(
             h.contains("class=\"src placeholder\"")
                 && h.contains("Source: placeholder, no source")

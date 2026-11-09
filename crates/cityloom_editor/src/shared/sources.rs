@@ -78,6 +78,69 @@ pub const SOURCES: &[Source] = &[
         MTL,
         Some("https://montreal-amenagement-rues.powerappsportals.com/Types/Velorue/"),
     ),
+    doc(
+        "mtl-arret-bus",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Arrêt d'autobus en bordure d'une voie cyclable",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Arr%C3%AAt-bus-voie-cyclable/"),
+    ),
+    doc(
+        "mtl-avancee",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Avancées de trottoir",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Avanc%C3%A9es-de-trottoir/"),
+    ),
+    doc(
+        "mtl-cafe",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Café-terrasse et placottoir",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Caf%C3%A9-terrasse-et-placottoir/"),
+    ),
+    doc(
+        "mtl-ilot",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Îlot refuge",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/ilot-refuge/"),
+    ),
+    doc(
+        "mtl-traversant",
+        "Répertoire des pratiques d'aménagement de la rue, fiche Trottoir et piste cyclable traversants",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Composantes/Trottoir-traversant/"),
+    ),
+    doc(
+        "mtl-corridor",
+        "Répertoire des pratiques d'aménagement de la rue, outil de conception Largeur des corridors piétons",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Corridor-pi%C3%A9ton/"),
+    ),
+    doc(
+        "mtl-degagement",
+        "Répertoire des pratiques d'aménagement de la rue, outil de conception Dégagement visuel minimal aux intersections",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/D%C3%A9gagement-visuel-minimal-aux-intersections/"),
+    ),
+    doc(
+        "mtl-plantations",
+        "Répertoire des pratiques d'aménagement de la rue, outil de conception Hauteur des plantations",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Hauteur-des-plantations/"),
+    ),
+    doc(
+        "mtl-voies",
+        "Répertoire des pratiques d'aménagement de la rue, outil de conception Largeur de voies",
+        VILLE,
+        MTL,
+        Some("https://montreal-amenagement-rues.powerappsportals.com/Outils/Conception---Largeur-de-voies/"),
+    ),
     doc("mtq-t1-c15", "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)", MTQ, QC, None),
 ];
 
@@ -100,11 +163,18 @@ const ENTRIES: &[Entry] = &[
     entry("lane-drop", "check-label-lane-drop", "src-applies-transition", &["york-ds-100"]),
     entry("curb-length", "check-label-curb-length", "src-applies-stall-length", &["mtq-t1-d14"]),
     entry("calming-passage", "check-label-calming-passage", "src-applies-diverter", &["mtl-velorue"]),
-    entry("curb-bike", "check-label-curb-bike", "src-applies-door-buffer", &["mtq-t1-c15", "mtl-velorue"]),
-    entry("curb-crossing", "check-label-curb-crossing", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
-    entry("curb-near", "jn-check-curb-near", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14"]),
-    entry("crossing", "jn-check-crossing", "src-applies-refuge", &["mtq-t1-c8"]),
-    entry("green-sightline", "check-label-green-sightline", "src-applies-sight-triangle", &["mtq-t1-c7"]),
+    entry("curb-bike", "check-label-curb-bike", "src-applies-door-buffer", &["mtq-t1-c15", "mtl-velorue", "mtl-voies"]),
+    entry("curb-crossing", "check-label-curb-crossing", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14", "mtl-degagement"]),
+    entry("curb-near", "jn-check-curb-near", "src-applies-parking-setback", &["mtq-t1-c14", "mtq-t1-d14", "mtl-degagement"]),
+    entry("crossing", "jn-check-crossing", "src-applies-refuge", &["mtq-t1-c8", "mtl-ilot"]),
+    entry("green-sightline", "check-label-green-sightline", "src-applies-sight-triangle", &["mtq-t1-c7", "mtl-degagement", "mtl-plantations", "mtl-avancee"]),
+    entry("curb-sidewalk", "check-label-curb-sidewalk", "src-applies-patio-sidewalk", &["mtl-cafe"]),
+    entry("stop-length", "check-label-stop-length", "src-applies-stop-length", &["mtl-arret-bus"]),
+    entry("stop-width", "check-label-stop-width", "src-applies-stop-width", &["mtl-arret-bus"]),
+    entry("stop-bike", "check-label-stop-bike", "src-applies-stop-bike", &["mtl-arret-bus"]),
+    entry("green-clear-path", "check-label-green-clear-path", "src-applies-clear-path", &["mtl-corridor"]),
+    entry("access", "check-label-access", "src-applies-pedestrian-access", &["mtl-corridor"]),
+    entry("calming-length", "check-label-calming-length", "src-applies-raised-crossing", &["mtl-traversant"]),
 ];
 
 /// The rule's source as a view reads it.
@@ -209,7 +279,7 @@ mod tests {
 
     #[test]
     fn a_rule_without_an_entry_is_a_placeholder_with_no_source() {
-        let c = citation("calming-length");
+        let c = citation("green-spacing");
         assert_eq!(c.confidence, Confidence::Placeholder);
         assert!(c.sources.is_empty());
         assert_eq!(c.applies, Said::new("src-applies-placeholder"));
@@ -249,7 +319,7 @@ mod tests {
     fn a_note_is_worded_in_both_languages_and_a_placeholder_says_so() {
         for locale in [crate::shared::i18n::Locale::En, crate::shared::i18n::Locale::FrCa] {
             let i18n = crate::i18n_for(locale);
-            let placeholder = note("calming-length", &i18n, Units::Metres);
+            let placeholder = note("green-spacing", &i18n, Units::Metres);
             assert!(placeholder.sources.is_empty() && !placeholder.summary.is_empty() && !placeholder.applies.is_empty());
             let cited = note("lane-drop", &i18n, Units::Metres);
             assert_eq!(cited.sources.len(), 1);
@@ -258,7 +328,7 @@ mod tests {
             assert!(i18n.missing().is_empty(), "{:?}", i18n.missing());
         }
         let en = crate::i18n_for(crate::shared::i18n::Locale::En);
-        assert_eq!(note("calming-length", &en, Units::Metres).summary, "Source: placeholder, no source");
+        assert_eq!(note("green-spacing", &en, Units::Metres).summary, "Source: placeholder, no source");
     }
 
     #[test]
@@ -285,5 +355,28 @@ mod tests {
         assert_eq!(c.sources[0].url, Some("https://montreal-amenagement-rues.powerappsportals.com/Types/Velorue/"));
         assert_eq!(c.sources[0].jurisdiction, Said::new("src-jurisdiction-mtl"));
         assert!(citation("curb-bike").sources.iter().any(|s| s.publisher == "Ville de Montréal"));
+    }
+
+    #[test]
+    fn the_checks_the_ville_de_montreal_speaks_to_cite_its_sheet_with_a_link() {
+        for (rule, sheet) in [
+            ("curb-crossing", "Dégagement visuel"),
+            ("curb-near", "Dégagement visuel"),
+            ("curb-bike", "Largeur de voies"),
+            ("curb-sidewalk", "Café-terrasse"),
+            ("green-sightline", "Hauteur des plantations"),
+            ("green-clear-path", "corridors piétons"),
+            ("access", "corridors piétons"),
+            ("crossing", "Îlot refuge"),
+            ("stop-length", "Arrêt d'autobus"),
+            ("stop-width", "Arrêt d'autobus"),
+            ("stop-bike", "Arrêt d'autobus"),
+            ("calming-length", "Trottoir et piste cyclable traversants"),
+        ] {
+            let c = citation(rule);
+            assert_eq!(c.confidence, Confidence::Unchecked, "{rule}");
+            let s = c.sources.iter().find(|s| s.title.contains(sheet)).unwrap_or_else(|| panic!("{rule} does not cite {sheet}"));
+            assert!(s.url.is_some_and(|u| u.starts_with("https://montreal-amenagement-rues.powerappsportals.com/")), "{rule}");
+        }
     }
 }
