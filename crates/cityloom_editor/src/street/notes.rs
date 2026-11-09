@@ -224,6 +224,7 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
                         <div>
                             <b>{say(&i18n, units, &crate::street::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
                             <span>{say(&i18n, units, &c.detail)}</span>
+                            {crate::shared::sources_view::source_note(c.id, &say(&i18n, units, &crate::street::text::check_label(c)), &i18n, units)}
                         </div>
                     </li>
                 }

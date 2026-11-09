@@ -129,6 +129,7 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                         <div>
                             <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span></b>
                             <span>{check_detail(k, &watch.i18n(), units)}</span>
+                            {crate::shared::sources_view::source_note(k.id, &watch.say(&k.label), &watch.i18n(), units)}
                         </div>
                     </li>
                 }

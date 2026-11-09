@@ -346,6 +346,11 @@ map-report-place-left-out = Le rapport montre les { $shown } premiers lieux modi
     [one] { $left } autre lieu modifié n’est pas montré.
    *[other] { $left } autres lieux modifiés ne sont pas montrés.
 }
+map-report-sources = Sources
+map-report-sources-intro = Voici les règles qui citent une source. Citer une source indique d’où une formule a été tirée; les chiffres n’ont pas été vérifiés auprès d’elle.
+map-report-sources-placeholders = Toutes les autres règles et recommandations de CityLoom sont des valeurs provisoires qui lui sont propres, sans source, jusqu’à ce qu’une source faisant autorité les remplace.
+map-report-sources-continued = Sources (suite)
+map-report-source-line = { $status }. { $applies }
 
 ## Les pages d’examen et l’annexe du rapport (src/map/report_review.rs)
 map-report-network = Effets sur le réseau

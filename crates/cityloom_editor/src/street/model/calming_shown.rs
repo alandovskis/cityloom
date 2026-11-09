@@ -98,10 +98,10 @@ mod tests {
         assert_eq!(s.len(), 2, "the third lies wholly past the stretch");
         assert_eq!(
             (s[0].along, s[0].full, s[0].plateau, s[0].kind, s[0].whole),
-            ((10_000.0, 17_000.0), (10_000.0, 17_000.0), (11_500.0, 15_500.0), Kind::Table, true)
+            ((10_000.0, 17_000.0), (10_000.0, 17_000.0), (11_200.0, 15_800.0), Kind::Table, true)
         );
         // The second runs past the 40 m: the part inside is clipped, the plateau is not, and it is not drawn.
-        assert_eq!((s[1].along, s[1].full, s[1].plateau, s[1].whole), ((38_000.0, 40_000.0), (38_000.0, 45_000.0), (39_500.0, 43_500.0), false));
+        assert_eq!((s[1].along, s[1].full, s[1].plateau, s[1].whole), ((38_000.0, 40_000.0), (38_000.0, 45_000.0), (39_200.0, 43_800.0), false));
         assert!(s[0].drawn() && !s[1].drawn());
     }
 
@@ -110,11 +110,11 @@ mod tests {
         let mut e = editor(ZoneEnd::First);
         e.add_calming(Kind::Table, 33_000, 7_000).unwrap();
         let s = e.view().calming_shown;
-        assert_eq!((s[0].along, s[0].plateau, s[0].whole, s[0].drawn()), ((33_000.0, 40_000.0), (34_500.0, 38_500.0), true, true));
+        assert_eq!((s[0].along, s[0].plateau, s[0].whole, s[0].drawn()), ((33_000.0, 40_000.0), (34_200.0, 38_800.0), true, true));
         let mut e = editor(ZoneEnd::First);
         e.add_calming(Kind::Table, 37_000, 7_000).unwrap();
         let s = e.view().calming_shown;
-        assert_eq!((s[0].whole, s[0].drawn()), (false, false), "the plateau reaches 41.5 m");
+        assert_eq!((s[0].whole, s[0].drawn()), (false, false), "the plateau reaches 42.8 m");
     }
 
     #[test]
@@ -123,7 +123,7 @@ mod tests {
         e.add_calming(Kind::Table, 10_000, 7_000).unwrap();
         let s = e.view().calming_shown;
         // 10 m to 17 m from the anchored end is 30 m to 23 m from the stretch's near end.
-        assert_eq!((s[0].along, s[0].plateau), ((23_000.0, 30_000.0), (24_500.0, 28_500.0)));
+        assert_eq!((s[0].along, s[0].plateau), ((23_000.0, 30_000.0), (24_200.0, 28_800.0)));
     }
 
     #[test]

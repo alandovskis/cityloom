@@ -1655,3 +1655,22 @@ a.btn {
   color: var(--ink-2);
   font-weight: 600;
 }
+/* The sources behind a rule, under its check (shared/sources_view.rs): a disclosure, so the list stays out of the way. */
+.checks details.src {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.checks details.src summary {
+  min-height: 24px;
+  cursor: pointer;
+}
+.checks details.src p,
+.checks details.src ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.checks li.bad details.src {
+  color: var(--ink-2);
+}

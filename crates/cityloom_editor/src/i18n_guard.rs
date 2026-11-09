@@ -62,6 +62,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/inspector.rs", include_str!("street/inspector.rs")),
     ("src/street/model.rs", include_str!("street/model.rs")),
     ("src/shared/said.rs", include_str!("shared/said.rs")),
+    ("src/shared/sources_view.rs", include_str!("shared/sources_view.rs")),
     ("src/street/vm.rs", include_str!("street/vm.rs")),
     ("src/street/keys.rs", include_str!("street/keys.rs")),
     ("src/street/strip.rs", include_str!("street/strip.rs")),

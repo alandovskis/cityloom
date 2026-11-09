@@ -21,8 +21,9 @@ pub const CLEAR_PATH_MM: i32 = 1_800;
 /// How far from a junction a tree or a bed keeps back, so that drivers and people crossing see each other, in
 /// millimetres.
 ///
-/// UNVERIFIED (placeholder): 10 000 mm.
-pub const SIGHTLINE_MM: i32 = 10_000;
+/// 5 000 mm, the Ville de Montréal's visual clearance from the end of the corner radius (its tool Dégagement visuel
+/// minimal aux intersections), which the Code de la sécurité routière's 5 m no-stopping zone (art. 386) matches.
+pub const SIGHTLINE_MM: i32 = 5_000;
 
 /// The shortest a bioswale can be and still carry water, in millimetres.
 ///
@@ -1805,22 +1806,22 @@ mod tests {
     #[test]
     fn sightline_keeps_planting_off_a_junction_end() {
         let mut e = editor().with_ends(junction_at(true, false));
-        e.add_green(small(5_000, 1_700)).unwrap();
+        e.add_green(small(3_000, 1_700)).unwrap();
         let c = row(&e, "green-sightline");
         assert!(!c.ok);
         assert_eq!(c.detail.key, "check-detail-green-sightline");
-        e.move_green(0, 10_000).unwrap();
-        assert!(passes(&e, "green-sightline"), "exactly 10 000 from the end");
+        e.move_green(0, 5_000).unwrap();
+        assert!(passes(&e, "green-sightline"), "exactly 5 000 from the end");
         let mut e = editor().with_ends(junction_at(false, true));
-        e.add_green(bed(50_000, 1_700)).unwrap();
-        assert!(!passes(&e, "green-sightline"), "a bed 6 000 from the far end");
+        e.add_green(bed(52_000, 1_700)).unwrap();
+        assert!(!passes(&e, "green-sightline"), "a bed 4 000 from the far end");
         e.move_green(0, 46_000).unwrap();
         assert!(passes(&e, "green-sightline"));
     }
 
     #[test]
     fn sightline_reads_the_end_the_elements_are_measured_from() {
-        let s = Street { green: vec![small(5_000, 1_700)], length_mm: Some(LEN), from_end: ZoneEnd::Last, ..Street::sample(0, Side::Right) };
+        let s = Street { green: vec![small(3_000, 1_700)], length_mm: Some(LEN), from_end: ZoneEnd::Last, ..Street::sample(0, Side::Right) };
         let at = |ends| Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last })).with_ends(ends);
         assert!(passes(&at(junction_at(true, false)), "green-sightline"), "the near end is node b");
         assert!(!passes(&at(junction_at(false, true)), "green-sightline"));

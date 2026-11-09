@@ -346,6 +346,11 @@ map-report-place-left-out = The report shows the first { $shown } changed places
     [one] 1 more changed place is not shown.
    *[other] { $left } more changed places are not shown.
 }
+map-report-sources = Sources
+map-report-sources-intro = These are the rules that name a source. Naming a source records where a formula was taken from; the figures have not been checked against it.
+map-report-sources-placeholders = Every other rule and recommendation in CityLoom is a placeholder of its own, with no source, until an authoritative one replaces it.
+map-report-sources-continued = Sources (continued)
+map-report-source-line = { $status }. { $applies }
 
 ## The report's review pages and appendix (src/map/report_review.rs)
 map-report-network = Network effects

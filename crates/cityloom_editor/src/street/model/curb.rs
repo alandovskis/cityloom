@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{ACCESS_LANE_MM, Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, Side};
 
 /// How near a pedestrian crossing parking or loading may stand, in millimetres. The Code de la sécurité routière of
@@ -15,8 +15,13 @@ use crate::shared::catalogue::{KINDS, Side};
 pub const CROSSING_CLEARANCE_MM: i32 = 5_000;
 
 /// The buffer a bike lane needs between it and the parking beside it, so that opening a door does not open it into
-/// the lane, in millimetres. UNVERIFIED.
-pub const DOOR_BUFFER_MM: i32 = 600;
+/// the lane, in millimetres: 500 mm, as the MTQ (Tome I, ch. 15, § 15.4.2.2) and the Ville de Montréal's lane-width
+/// tool have it (the vélorue sheet suggests 1 m ideally beside a contra-flow lane, which is not modelled).
+pub const DOOR_BUFFER_MM: i32 = 500;
+
+/// The walkway a patio leaves on its sidewalk, in millimetres: 1 800 mm, the Ville de Montréal's café-terrasse sheet
+/// for a local street (2 100 mm on a collector or an arterial, which is not modelled).
+pub const PATIO_WALK_MM: i32 = 1_800;
 
 /// What the city says of one end of a street.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -712,8 +717,8 @@ impl Editor {
                             Side::Right => &segs[c + 1..],
                         };
                         let have = widest_walkway_mm(between);
-                        if have < ACCESS_LANE_MM {
-                            fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(ACCESS_LANE_MM)));
+                        if have < PATIO_WALK_MM {
+                            fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(PATIO_WALK_MM)));
                         }
                     }
                     _ => {}
@@ -1111,8 +1116,8 @@ mod tests {
         e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
         assert!(!ok(&e, "curb-bike"));
         assert_eq!(check(&e, "curb-bike").detail.key, "check-detail-curb-bike-door");
-        // A buffer of 600 mm between them clears it; a narrower one does not.
-        for (w, clear) in [(600, true), (500, false)] {
+        // A buffer of 500 mm between them clears it; a narrower one does not.
+        for (w, clear) in [(500, true), (400, false)] {
             let s = street_of(&[("sidewalk", 2500), ("bike", 1800), ("buffer", w), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
             let mut e = editor_on(&s);
             e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
@@ -1135,15 +1140,15 @@ mod tests {
 
     #[test]
     fn curb_sidewalk_keeps_room_beside_a_patio() {
-        let narrow = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 2500)]);
+        let narrow = street_of(&[("sidewalk", 1500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 1500)]);
         let mut e = editor_on(&narrow);
         e.add_curb(Side::Right, 10_000, 4_000, Use::Patio).unwrap();
         assert!(!ok(&e, "curb-sidewalk"));
         assert_eq!(check(&e, "curb-sidewalk").detail.key, "check-detail-curb-sidewalk");
-        let wide = street_of(&[("sidewalk", 3000), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3000)]);
+        let wide = street_of(&[("sidewalk", 1800), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 1800)]);
         let mut e = editor_on(&wide);
         e.add_curb(Side::Right, 10_000, 4_000, Use::Patio).unwrap();
-        assert!(ok(&e, "curb-sidewalk"), "exactly 3 m is enough");
+        assert!(ok(&e, "curb-sidewalk"), "exactly 1.8 m is enough");
         // Only the patio's own side counts; a parking space there asks nothing of the sidewalk.
         let mut e = editor_on(&narrow);
         e.add_curb(Side::Right, 10_000, 5_500, Use::Parking).unwrap();
@@ -1199,8 +1204,8 @@ mod tests {
 
     #[test]
     fn a_narrow_sidewalk_in_the_second_zone_fails_the_patio_rule() {
-        let wide = street_of(&[("sidewalk", 3000), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3000)]);
-        let narrow = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 2500)]);
+        let wide = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 2500)]);
+        let narrow = street_of(&[("sidewalk", 1500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 1500)]);
         let mut s = crate::street::model::zoned(wide, &[0, 33_000], LEN);
         s.zones[1].segments = Some(narrow.segments.clone());
         let mut e = editor_on(&s);

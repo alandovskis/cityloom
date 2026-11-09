@@ -372,6 +372,14 @@ fn the_checks_each_say_whether_they_pass_in_words() {
 }
 
 #[test]
+fn every_check_carries_its_sources_or_says_it_is_a_placeholder() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert_eq!(count(&h, "<details class=\"src"), count(&h, "<li class="));
+    assert!(h.contains("Source: placeholder, no source"));
+}
+
+#[test]
 fn the_count_of_failing_checks_shows_under_the_drawing_and_on_the_tab_only_when_there_are_some() {
     let s = street_shared(0);
     let pill = street_html(|| view! { <notes::FitChecks vm=s.clone()/> });

@@ -14,11 +14,12 @@ use super::zone_speed::{max_kmh, speed_in};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
 use crate::shared::catalogue::{KINDS, Side, is_roadway};
 
-/// How high the plateau of a raised table stands above the roadway, in millimetres. A placeholder, UNVERIFIED
-/// (a speed table is commonly 75 to 100 mm; TAC and the MTQ guides are not checked).
-pub const TABLE_HEIGHT_MM: i32 = 100;
-/// How long each ramp is, in millimetres. A placeholder, UNVERIFIED.
-pub const RAMP_MM: i32 = 1_500;
+/// How high the plateau of a raised table stands above the roadway, in millimetres: 150 mm, the height of a sidewalk,
+/// as the Ville de Montréal's raised-crossing sheet has it ("typiquement de 150 mm").
+pub const TABLE_HEIGHT_MM: i32 = 150;
+/// How long each ramp is, in millimetres: 1 200 mm lifts `TABLE_HEIGHT_MM` at 12.5 %, the slope the same sheet
+/// recommends (8 % at the least).
+pub const RAMP_MM: i32 = 1_200;
 /// The shortest a raised table should be, ramps included, in millimetres. A placeholder, UNVERIFIED; a shorter one
 /// is allowed and fails its check.
 pub const MIN_TABLE_MM: i32 = 6_000;

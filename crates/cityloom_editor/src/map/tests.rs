@@ -897,12 +897,16 @@ mod report {
             .collect()
     }
 
+    fn texts_of(pages: &[Vec<Block>]) -> String {
+        pages.iter().flat_map(|p| texts(p)).collect::<Vec<_>>().join("\n")
+    }
+
     fn table(data: &ReportData) -> Vec<Vec<String>> {
         data.pages[1].iter().find_map(|b| if let Block::Table { rows, .. } = b { Some(rows.clone()) } else { None }).expect("the summary has a table")
     }
 
     #[test]
-    fn the_report_has_a_cover_and_a_summary_page() {
+    fn the_report_has_a_cover_a_summary_and_the_sources_pages() {
         let (vm, ..) = sample_in(Locale::En);
         let data = vm.report_data();
         assert_eq!(data.lang, "en");
@@ -943,7 +947,8 @@ mod report {
             (Locale::FrCa, ["Effets sur le réseau", "Règles de zone", "Limites des données OpenStreetMap", "Annexe"]),
         ] {
             let (vm, ..) = sample_in(locale);
-            let data = vm.report_data();
+            let mut data = vm.report_data();
+            data.pages = without_sources(data.pages);
             assert_eq!(data.pages.len(), 2 + REVIEW_PAGES);
             let heads = headings(&data);
             assert_eq!(&heads[heads.len() - 4..], &last.map(String::from), "{heads:?}");
@@ -956,7 +961,8 @@ mod report {
         let street = vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid;
         widen_street(&storage, street, 1000);
         vm.reload();
-        let data = vm.report_data();
+        let mut data = vm.report_data();
+        data.pages = without_sources(data.pages);
         assert_eq!(data.pages.len(), 3 + REVIEW_PAGES);
         assert!(matches!(&data.pages[2][0], Block::Heading { level: 2, text } if text != "Network effects"), "{:?}", data.pages[2][0]);
         assert_eq!(headings(&data).iter().filter(|h| h.as_str() == "Network effects").count(), 1);
@@ -1012,6 +1018,18 @@ mod report {
         assert!(vm.view().failing > 0, "the edit must break a check");
         let rows = table(&vm.report_data());
         assert_eq!((rows[1][1].as_str(), rows[2][1].as_str(), rows[2][2].as_str()), ("1", vm.view().failing.to_string().as_str(), "Fail"));
+    }
+
+    #[test]
+    fn the_sources_page_lists_each_cited_rule_with_its_references_and_says_the_rest_are_placeholders() {
+        let (vm, ..) = sample_in(Locale::En);
+        let page = texts_of(&vm.report_data().pages[2..]);
+        assert!(page.contains("Room for the transition") && page.contains("Lane drops"), "{page}");
+        assert!(page.contains("Regional Municipality of York") && page.contains("Ministère des Transports du Québec"), "{page}");
+        assert!(page.contains("placeholder"), "{page}");
+        let (fr, ..) = sample_in(Locale::FrCa);
+        let page = texts_of(&fr.report_data().pages[2..]);
+        assert!(page.contains("Place pour la transition") && page.contains("provisoire"), "{page}");
     }
 
     #[test]
@@ -1073,8 +1091,12 @@ mod report {
     }
 
     /// The pages of the changed places: after the cover and the summary, before the review pages and the appendix.
+    fn without_sources(pages: Vec<Vec<Block>>) -> Vec<Vec<Block>> {
+        pages.into_iter().filter(|p| !matches!(p.first(), Some(Block::Heading { level: 2, text }) if text.starts_with("Sources"))).collect()
+    }
+
     fn pages(vm: &MapVm) -> Vec<Vec<Block>> {
-        let all = vm.report_data().pages;
+        let all = without_sources(vm.report_data().pages);
         let end = all.len().saturating_sub(REVIEW_PAGES).max(2);
         all[2..end].to_vec()
     }
@@ -1106,7 +1128,7 @@ mod report {
     #[test]
     fn no_edit_gives_no_place_pages() {
         let (vm, ..) = sample_in(Locale::En);
-        assert_eq!(vm.report_data().pages.len(), 2 + REVIEW_PAGES);
+        assert_eq!(without_sources(vm.report_data().pages).len(), 2 + REVIEW_PAGES);
     }
 
     #[test]
@@ -1380,7 +1402,7 @@ mod report {
         let facts = crate::map::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
         let data = crate::map::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
         // The facts carry no review pages, so only the appendix follows the two changed places.
-        assert_eq!(data.pages.len(), 4 + 1);
+        assert_eq!(without_sources(data.pages.clone()).len(), 4 + 1);
         assert!(texts(&data.pages[1]).join("\n").contains("not shown"), "{:?}", texts(&data.pages[1]));
     }
 

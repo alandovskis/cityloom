@@ -225,8 +225,9 @@ impl Editor {
     }
 }
 
-/// The shortest stop: one standard bus. Unverified (TAC / STM to check).
-pub const MIN_STOP_MM: i32 = 9_000;
+/// The shortest stop: a boarding platform for one single-unit bus, 8 m in the Ville de Montréal's bus-stop sheet (an
+/// articulated bus needs 16 m, which is not modelled; the length is to be checked with the STM).
+pub const MIN_STOP_MM: i32 = 8_000;
 
 /// The boarding area a wheelchair ramp needs. Unverified (TAC / STM to check).
 const BOARDING_MM: i32 = 2_400;
@@ -1005,13 +1006,13 @@ mod tests {
     }
 
     #[test]
-    fn stop_length_wants_nine_metres() {
+    fn stop_length_wants_eight_metres() {
         let mut e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
-        e.add_stop(Side::Right, 10_000, 8_900, StopKind::Curb).unwrap();
+        e.add_stop(Side::Right, 10_000, 7_900, StopKind::Curb).unwrap();
         let c = check(&e, "stop-length");
         assert!(!c.ok);
         assert_eq!(c.detail.key, "check-detail-stop-length");
-        e.resize_stop(0, 9_000).unwrap();
+        e.resize_stop(0, 8_000).unwrap();
         assert!(ok(&e, "stop-length"));
     }
 

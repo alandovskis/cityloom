@@ -7,7 +7,8 @@ import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { expect, forgive, live, mapReady, openJunction, openStreet, test } from "./fixtures";
 
-// The design review report: the map page's Share menu writes a PDF in the browser (the `cityloom_report`
+// The design review report: the map page's Share menu writes a PDF in the browser (a cover, a summary, a page per changed
+// place and the sources pages; the `cityloom_report`
 // module, loaded on first use by `web/report.js`) and saves it. The file is read back with pdf.js.
 
 const VERSION = readFileSync(new URL("../../crates/cityloom_editor/Cargo.toml", import.meta.url), "utf8").match(
@@ -89,6 +90,14 @@ test("the Share menu downloads the report as a PDF", async ({ page }) => {
   const { pages, text } = await read(bytes);
   expect(pages).toBeGreaterThanOrEqual(5);
   expect(text).toContain("Plateau");
+  // A line break in the PDF is a run of spaces in the text, so these are read with whitespace collapsed.
+  const flat = text.replace(/\s+/g, " ");
+  expect(flat).toContain("Room for the transition");
+  expect(flat).toContain("Regional Municipality of York");
+  // The last cited rule and its source: a page cut short would lose them before the closing notice.
+  expect(flat).toContain("Planting clear of the corners at junctions");
+  expect(flat).toContain("Distance de visibilité");
+  expect(flat).toContain("Every other rule and recommendation");
   expect(text).toContain(VERSION);
   expect(text).toMatch(/\bPass\b/);
   expect(text).toMatch(/\bFail\b/);
@@ -106,6 +115,7 @@ test("the report downloads in French when the page is French", async ({ page }) 
   const file = await pending;
   const { pages, text } = await read(readFileSync(await file.path()));
   expect(pages).toBeGreaterThanOrEqual(5);
+  expect(text.replace(/\s+/g, " ")).toContain("Place pour la transition");
   expect(text).toContain("Réussite");
   expect(text).toContain("Échec");
   expect(text).toContain(VERSION);
