@@ -18,7 +18,22 @@ const themeNow = () => {
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 };
 
+// A prototype (#175): `/map.html?basemap=none` draws the city's places on a plain ground, with no tiles. The
+// ground's colours are the basemap's own land: the `background` layer's `background-color` in
+// basemap-light.json and basemap-dark.json, copied below; change them together.
+const PLAIN = new URLSearchParams(location.search).get("basemap") === "none";
+const GROUND = { light: "#e2e7ec", dark: "#0f1317" };
+// What the places cover when there are no tiles to bound them: the whole map.
+const WORLD = [-180, -85, 180, 85];
+
 async function styleFor(theme) {
+  if (PLAIN)
+    return {
+      version: 8,
+      glyphs: here("glyphs/") + "{fontstack}/{range}.pbf",
+      sources: {},
+      layers: [{ id: "background", type: "background", paint: { "background-color": GROUND[theme] } }],
+    };
   const style = await (await fetch(`basemap-${theme}.json`, { cache: "no-cache" })).json();
   style.glyphs = here("glyphs/") + "{fontstack}/{range}.pbf";
   style.sources.basemap.url = "pmtiles://" + here(TILES);
@@ -44,12 +59,16 @@ export async function createBasemap(container) {
   let theme = themeNow();
   let map, header;
   try {
-    const protocol = new pmtiles.Protocol();
-    addProtocol("pmtiles", protocol.tile);
-    const archive = new pmtiles.PMTiles(here(TILES));
-    protocol.add(archive);
-    header = archive.getHeader();
-    header.catch(() => {}); // answered below, once the map has started
+    if (PLAIN) {
+      header = Promise.resolve({ minLon: WORLD[0], minLat: WORLD[1], maxLon: WORLD[2], maxLat: WORLD[3] });
+    } else {
+      const protocol = new pmtiles.Protocol();
+      addProtocol("pmtiles", protocol.tile);
+      const archive = new pmtiles.PMTiles(here(TILES));
+      protocol.add(archive);
+      header = archive.getHeader();
+      header.catch(() => {}); // answered below, once the map has started
+    }
     map = new MapLibreMap({
       container,
       style: await styleFor(theme),
@@ -90,7 +109,15 @@ export async function createBasemap(container) {
   // inside it would be a second.
   map.getCanvas().setAttribute("tabindex", "-1");
   map.touchZoomRotate.disableRotation();
-  map.addControl(new AttributionControl({ compact: true }));
+  // The tiles' own attribution comes with their style; the streets are OpenStreetMap's in both.
+  map.addControl(
+    new AttributionControl({
+      compact: true,
+      customAttribution: PLAIN
+        ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+        : undefined,
+    }),
+  );
   let scale = new ScaleControl({ unit: "metric" });
   map.addControl(scale, "bottom-left");
   window.cityloomMap = map;
