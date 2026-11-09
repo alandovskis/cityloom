@@ -351,3 +351,58 @@ map-report-sources-intro = These are the rules that name a source. Naming a sour
 map-report-sources-placeholders = Every other rule and recommendation in CityLoom is a placeholder of its own, with no source, until an authoritative one replaces it.
 map-report-sources-continued = Sources (continued)
 map-report-source-line = { $status }. { $applies }
+
+## The report's review pages and appendix (src/map/report_review.rs)
+map-report-network = Network effects
+map-report-network-caption = The network checks and their results
+map-report-col-check = Check
+map-report-col-findings = Findings
+map-report-col-severity = Severity
+map-report-col-finding = Finding
+map-report-col-places = Places
+map-report-places-and-more = { $names } { $n ->
+    [one] and 1 more place
+   *[other] and { $n } more places
+}
+map-report-areas = Area rules
+map-report-areas-none = No area rules have been declared for this city.
+map-report-areas-intro = An area rule is a traffic rule drawn over part of the city. Each street inside an area is checked against its rule.
+map-report-areas-caption = Area rules and the streets inside them
+map-report-col-area = Area
+map-report-col-rule = Rule
+map-report-col-inside = Streets inside
+map-report-col-conflicts = In conflict
+map-report-areas-streets-caption = Streets that do not keep their area's rule
+map-report-col-street = Street
+map-report-col-why = Why
+map-report-areas-more = { $n ->
+    [one] 1 more street is not listed.
+   *[other] { $n } more streets are not listed.
+}
+map-report-labelled = { $label } { $text }
+map-report-limits = Limits of the OpenStreetMap data
+map-report-col-source = Source
+map-report-col-impact = Design impact
+map-report-appendix = Appendix
+map-report-appendix-thresholds = Thresholds and their status
+map-report-appendix-thresholds-status = No threshold in this report has been checked against the standard of any city or country. A Pass or a Fail says how the design stands against a stand-in figure, not whether it complies with anything.
+map-report-appendix-glossary = Glossary
+map-report-appendix-glossary-caption = The words this report uses
+map-report-col-term = Term
+map-report-col-meaning = Meaning
+map-report-term-before-after = Before and After
+map-report-term-network = Network check
+map-report-term-area = Area rule
+map-report-term-placeholder = Placeholder
+map-report-def-pass = The design meets the check.
+map-report-def-fail = The design does not meet the check.
+map-report-def-problem = The network breaks a rule that looks across many streets.
+map-report-def-notice = Worth a look: the rule may be met some other way, or there is too little data to say.
+map-report-def-before-after = Before is the layout as imported from OpenStreetMap; After is the layout as changed.
+map-report-def-network = A check that looks across the whole network of streets and junctions, not at one place.
+map-report-def-area = A traffic rule drawn over part of the city, such as car-free or a speed limit.
+map-report-def-placeholder = A figure that stands in for a real one until an authoritative source replaces it.
+map-report-appendix-credits = Credits
+map-report-credits-osm = The streets, lanes and junctions come from OpenStreetMap, © OpenStreetMap contributors, available under the Open Database Licence (opendatacommons.org/licenses/odbl). osm2streets (Apache License 2.0) turns the map data into streets and junctions.
+map-report-credits-atlas = The transit priority measures follow the toolbox of the Transit Priority Atlas, published by the Marron Institute. CityLoom is not affiliated with or endorsed by the Atlas or the Marron Institute.
+map-report-credits-software = This report is written with krilla (MIT and Apache 2.0 licences) and set in Noto Sans, © The Noto Project Authors, under the SIL Open Font License 1.1. The full credits are on the application's Credits page.

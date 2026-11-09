@@ -909,7 +909,6 @@ mod report {
     fn the_report_has_a_cover_a_summary_and_the_sources_pages() {
         let (vm, ..) = sample_in(Locale::En);
         let data = vm.report_data();
-        assert!(data.pages.len() >= 3);
         assert_eq!(data.lang, "en");
         let cover = texts(&data.pages[0]);
         assert!(matches!(&data.pages[0][0], Block::Heading { level: 1, text } if *text == vm.title()));
@@ -932,6 +931,69 @@ mod report {
         assert!(rows[0][1].contains(&v.edges.len().to_string()) && rows[0][1].contains(&junctions.to_string()), "{:?}", rows[0]);
         assert_eq!(rows[1][1], v.edited.to_string());
         assert_eq!(rows[2][1], v.failing.to_string());
+    }
+
+    /// The network effects with the area rules, the limits of the data and the appendix, after the changed places.
+    const REVIEW_PAGES: usize = 3;
+
+    fn headings(data: &ReportData) -> Vec<String> {
+        data.pages.iter().flatten().filter_map(|b| if let Block::Heading { level: 2, text } = b { Some(text.clone()) } else { None }).collect()
+    }
+
+    #[test]
+    fn the_report_ends_with_the_network_the_areas_the_data_limits_and_the_appendix() {
+        for (locale, last) in [
+            (Locale::En, ["Network effects", "Area rules", "Limits of the OpenStreetMap data", "Appendix"]),
+            (Locale::FrCa, ["Effets sur le réseau", "Règles de zone", "Limites des données OpenStreetMap", "Annexe"]),
+        ] {
+            let (vm, ..) = sample_in(locale);
+            let mut data = vm.report_data();
+            data.pages = without_sources(data.pages);
+            assert_eq!(data.pages.len(), 2 + REVIEW_PAGES);
+            let heads = headings(&data);
+            assert_eq!(&heads[heads.len() - 4..], &last.map(String::from), "{heads:?}");
+        }
+    }
+
+    #[test]
+    fn the_review_pages_come_after_the_changed_places() {
+        let (vm, _, _, storage) = sample_in(Locale::En);
+        let street = vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid;
+        widen_street(&storage, street, 1000);
+        vm.reload();
+        let mut data = vm.report_data();
+        data.pages = without_sources(data.pages);
+        assert_eq!(data.pages.len(), 3 + REVIEW_PAGES);
+        assert!(matches!(&data.pages[2][0], Block::Heading { level: 2, text } if text != "Network effects"), "{:?}", data.pages[2][0]);
+        assert_eq!(headings(&data).iter().filter(|h| h.as_str() == "Network effects").count(), 1);
+    }
+
+    #[test]
+    fn a_city_with_no_places_has_no_review_pages_and_no_appendix() {
+        let (ports, ..) = test_ports_with_pdf();
+        let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
+        assert_eq!(vm.report_data().pages.len(), 2);
+    }
+
+    #[test]
+    fn a_declared_area_and_its_streets_are_in_the_report() {
+        let vm = ready_areas_vm(Locale::En, &[("Old town", Rule::CarFree)]);
+        let data = vm.report_data();
+        let areas = data.pages.iter().find(|p| p.iter().any(|b| matches!(b, Block::Heading { text, .. } if text == "Area rules"))).expect("an Area rules page");
+        let all = texts(areas).join("\n");
+        assert!(all.contains("Old town"), "{all}");
+        assert!(!all.contains("No area rules"), "{all}");
+    }
+
+    #[test]
+    fn the_network_findings_of_the_city_are_in_the_report() {
+        let (vm, ..) = sample_in(Locale::En);
+        let found = vm.network_rules().iter().map(|r| r.count).sum::<usize>();
+        let page = vm.report_data().pages.into_iter().find(|p| matches!(&p[0], Block::Heading { text, .. } if text == "Network effects")).unwrap();
+        let (_, _, rows) = page.iter().find_map(|b| if let Block::Table { caption, head, rows } = b { Some((caption, head, rows)) } else { None }).unwrap();
+        assert_eq!(rows.len(), 6);
+        let listed: usize = rows.iter().map(|r| r[1].split(' ').next().unwrap().parse::<usize>().unwrap_or(0)).sum();
+        assert_eq!(listed, found, "{rows:?}");
     }
 
     #[test]
@@ -1028,14 +1090,15 @@ mod report {
         vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid
     }
 
-    /// The pages before the Sources pages that close the report: the cover, the summary and the place pages.
-    fn before_sources(data: &ReportData) -> &[Vec<Block>] {
-        let at = data.pages.iter().position(|p| matches!(p.first(), Some(Block::Heading { level: 2, text }) if text == "Sources")).unwrap_or(data.pages.len());
-        &data.pages[..at]
+    /// The pages of the changed places: after the cover and the summary, before the review pages and the appendix.
+    fn without_sources(pages: Vec<Vec<Block>>) -> Vec<Vec<Block>> {
+        pages.into_iter().filter(|p| !matches!(p.first(), Some(Block::Heading { level: 2, text }) if text.starts_with("Sources"))).collect()
     }
 
     fn pages(vm: &MapVm) -> Vec<Vec<Block>> {
-        before_sources(&vm.report_data()).iter().skip(2).cloned().collect()
+        let all = without_sources(vm.report_data().pages);
+        let end = all.len().saturating_sub(REVIEW_PAGES).max(2);
+        all[2..end].to_vec()
     }
 
     fn figures(page: &[Block]) -> Vec<&cityloom_report::Captioned> {
@@ -1065,7 +1128,7 @@ mod report {
     #[test]
     fn no_edit_gives_no_place_pages() {
         let (vm, ..) = sample_in(Locale::En);
-        assert_eq!(before_sources(&vm.report_data()).len(), 2);
+        assert_eq!(without_sources(vm.report_data().pages).len(), 2 + REVIEW_PAGES);
     }
 
     #[test]
@@ -1228,6 +1291,81 @@ mod report {
     }
 
     #[test]
+    fn the_whole_report_of_the_sample_city_is_written_in_both_languages() {
+        for (locale, tag, heading) in [(Locale::En, "en", "Appendix"), (Locale::FrCa, "fr-CA", "Annexe")] {
+            let (vm, ..) = sample_in(locale);
+            let text = written_text(vm.report_data().pages, tag);
+            assert!(text.contains(heading), "{text}");
+        }
+    }
+
+    #[test]
+    fn review_pages_full_of_findings_are_written_whole_in_both_languages() {
+        use crate::map::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
+        use crate::map::source_quality::{Kind, SourceFinding, SourceReport};
+        use crate::map::vm::AreaStreet;
+        use crate::restriction::model::{Conflict, Restriction};
+        use crate::shared::said::Said;
+        for (locale, tag) in [(Locale::En, "en"), (Locale::FrCa, "fr-CA")] {
+            let i18n = crate::i18n_for(locale);
+            let place = |uid| Place { kind: PlaceKind::Street, uid, name: Said::new("city-unnamed") };
+            let network = NetworkReport {
+                findings: Check::ALL
+                    .iter()
+                    .flat_map(|&rule| {
+                        (0..crate::map::report_review::MAX_ROWS + 3).map(move |_| NetworkFinding {
+                            rule,
+                            severity: Severity::Problem,
+                            said: Said::new("net-crossing-missing"),
+                            places: (0..6).map(place).collect(),
+                        })
+                    })
+                    .collect(),
+                unreadable: 7,
+            };
+            let source = SourceReport {
+                findings: Kind::ALL
+                    .iter()
+                    .flat_map(|&kind| {
+                        (0..crate::map::report_review::MAX_ROWS + 3).map(move |_| SourceFinding {
+                            kind,
+                            said: Said::new("prov-ends").with("street", crate::shared::said::Arg::Text("Rue Très Longue-Saint-Jean-Baptiste".into())),
+                            source: Said::new("prov-source-width"),
+                            impact: Said::new("prov-impact-width"),
+                            places: vec![place(1)],
+                        })
+                    })
+                    .collect(),
+            };
+            let rule = Rule::SpeedLimit { kmh: 30 };
+            let areas: Vec<_> = (0..5)
+                .map(|i| {
+                    let streets = (0..crate::map::report_review::MAX_AREA_STREETS as u32 + 4)
+                        .map(|u| AreaStreet {
+                            area: format!("r{i}"),
+                            uid: u,
+                            href: String::new(),
+                            name: Said::new("city-unnamed"),
+                            rule,
+                            conflicts: vec![Conflict::Speed { kmh: 60 }],
+                            speed_unknown: false,
+                        })
+                        .collect();
+                    (Restriction { id: format!("r{i}"), name: "Zone de la très longue rue Saint-Jean-Baptiste".into(), rule, ring: vec![] }, streets)
+                })
+                .collect();
+            let units = crate::shared::units::Units::Metres;
+            let pages = vec![
+                [crate::map::report_review::network_page(&network, &i18n, units), crate::map::report_review::area_page(&areas, &i18n, units)].concat(),
+                crate::map::report_review::limits_page(&source, &i18n, units),
+                crate::map::report_review::appendix(&i18n),
+            ];
+            let text = written_text(pages, tag);
+            assert!(!text.is_empty());
+        }
+    }
+
+    #[test]
     fn the_worst_street_page_and_junction_page_are_written_whole_in_fr_ca() {
         let (vm, _, _, storage) = sample_in(Locale::FrCa);
         let street = a_street(&vm);
@@ -1263,7 +1401,8 @@ mod report {
         assert_eq!((pages.len(), left), (2, view.edited - 2));
         let facts = crate::map::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
         let data = crate::map::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
-        assert_eq!(before_sources(&data).len(), 4);
+        // The facts carry no review pages, so only the appendix follows the two changed places.
+        assert_eq!(without_sources(data.pages.clone()).len(), 4 + 1);
         assert!(texts(&data.pages[1]).join("\n").contains("not shown"), "{:?}", texts(&data.pages[1]));
     }
 

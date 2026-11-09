@@ -17,6 +17,7 @@ use crate::map::editable;
 use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
 use crate::map::overlay;
 use crate::map::report;
+use crate::map::report_review;
 use crate::map::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -671,7 +672,12 @@ impl MapVm {
             ..Default::default()
         };
         let (place_pages, left_out) = self.core.read(|m| report::place_pages(&m.city, &v, m.region, &self.i18n, self.units()));
-        let facts = report::Facts { place_pages, left_out, ..facts };
+        let units = self.units();
+        let areas: Vec<_> = self.areas.list_now().into_iter().map(|r| (r.clone(), self.findings_in(&v, &[r]))).collect();
+        // The area rules follow the network checks on one page: a city with none declared would leave a page nearly empty.
+        let network_and_areas = [report_review::network_page(&network, &self.i18n, units), report_review::area_page(&areas, &self.i18n, units)].concat();
+        let review_pages = vec![network_and_areas, report_review::limits_page(&self.source_report_of(v.clone()), &self.i18n, units)];
+        let facts = report::Facts { place_pages, left_out, review_pages, ..facts };
         report::build(&facts, env!("CARGO_PKG_VERSION"), self.ports.storage.now_ms(), &self.i18n)
     }
 
@@ -833,7 +839,11 @@ impl MapVm {
     // from the network checks: nothing here reaches the status line, the checks lead or the area rules' counts.
 
     fn source_report(&self) -> Rc<SourceReport> {
-        let view = self.view();
+        self.source_report_of(self.view())
+    }
+
+    /// The same for a view already in hand (a command reads it untracked).
+    fn source_report_of(&self, view: Rc<CityView>) -> Rc<SourceReport> {
         if let Some((seen, found)) = &*self.source.borrow()
             && Rc::ptr_eq(seen, &view)
         {

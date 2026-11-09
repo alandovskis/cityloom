@@ -109,6 +109,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/map/editable.rs", include_str!("map/editable.rs")),
     ("src/map/network.rs", include_str!("map/network.rs")),
     ("src/map/report.rs", include_str!("map/report.rs")),
+    ("src/map/report_review.rs", include_str!("map/report_review.rs")),
     ("src/map/network_view.rs", include_str!("map/network_view.rs")),
     ("src/map/source_quality.rs", include_str!("map/source_quality.rs")),
     ("src/map/source_view.rs", include_str!("map/source_view.rs")),
