@@ -359,6 +359,8 @@ pub enum MapEvent {
     Vertex { area: String, index: usize, at: [f64; 2], done: bool },
     /// The pointer is over a place, or is no longer.
     Hover { hot: Option<String> },
+    /// A place was pressed with the key held that adds to a selection (Shift): `hot` is the place there, if any.
+    Toggle { hot: Option<String> },
     /// The person moved the map themselves, with the pointer or the wheel.
     Moved,
     /// The part of the map the panels leave open, after every move, resize and change of insets: west, south,
@@ -398,6 +400,9 @@ pub trait Mapper {
     /// Says which places can be edited: the ones named are drawn as they are, every other place is muted. Called
     /// again whenever the set changes; the map keeps it for places it is sent later, and for a new style.
     fn set_editable(&self, hot: &[String]);
+    /// Says which places are selected (`s-7`): they are drawn marked, every other place not. Called again whenever
+    /// the selection changes; the map keeps it for places it is sent later, and for a new style.
+    fn set_selected(&self, hot: &[String]);
     /// Zooms in by `factor` (more than 1), or out (less than 1).
     fn zoom_by(&self, factor: f64);
     /// Moves the view by pixels: a positive `dx` moves it east, a positive `dy` south.
@@ -426,6 +431,7 @@ impl Mapper for NoMapper {
     fn fit(&self, _: [f64; 4], _: [f64; 4]) {}
     fn set_insets(&self, _: [f64; 4]) {}
     fn set_editable(&self, _: &[String]) {}
+    fn set_selected(&self, _: &[String]) {}
     fn zoom_by(&self, _: f64) {}
     fn pan_by(&self, _: f64, _: f64) {}
     fn highlight(&self, _: Option<&str>) {}
@@ -1020,6 +1026,7 @@ pub enum MapCall {
     Fit { bounds: [f64; 4], insets: [f64; 4] },
     Insets([f64; 4]),
     Editable(Vec<String>),
+    Selected(Vec<String>),
     Zoom(f64),
     Pan(f64, f64),
     Highlight(Option<String>),
@@ -1116,6 +1123,9 @@ impl Mapper for FakeMapper {
     }
     fn set_editable(&self, hot: &[String]) {
         self.calls.borrow_mut().push(MapCall::Editable(hot.to_vec()));
+    }
+    fn set_selected(&self, hot: &[String]) {
+        self.calls.borrow_mut().push(MapCall::Selected(hot.to_vec()));
     }
     fn zoom_by(&self, factor: f64) {
         self.calls.borrow_mut().push(MapCall::Zoom(factor));
@@ -1439,6 +1449,15 @@ mod map_tests {
         assert_eq!(read(r#"{"kind":"hover","hot":"j-3"}"#), MapEvent::Hover { hot: Some("j-3".into()) });
         assert_eq!(read(r#"{"kind":"hover","hot":null}"#), MapEvent::Hover { hot: None });
         assert_eq!(read(r#"{"kind":"moved"}"#), MapEvent::Moved);
+        assert_eq!(read(r#"{"kind":"toggle","hot":"s-4"}"#), MapEvent::Toggle { hot: Some("s-4".into()) });
+        assert_eq!(read(r#"{"kind":"toggle","hot":null}"#), MapEvent::Toggle { hot: None });
+    }
+
+    #[test]
+    fn the_fake_map_keeps_the_selection_it_is_given() {
+        let fake = FakeMapper::default();
+        fake.set_selected(&["s-1".to_string(), "s-5".to_string()]);
+        assert_eq!(fake.take(), vec![MapCall::Selected(vec!["s-1".into(), "s-5".into()])]);
     }
 
     #[test]

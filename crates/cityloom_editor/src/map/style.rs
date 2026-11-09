@@ -15,6 +15,8 @@ pub const BAD: &str = "#dc2626";
 const MARK: &str = "#111827";
 /// The place the pointer or the focus is on.
 const HOT: &str = "#f59e0b";
+/// The line down a selected street: dark blue, on the street whatever its colour.
+const SELECTED: &str = "#1d4ed8";
 /// The edge of the place the pointer or the focus is on: dark where the road's own edge is white, so the highlight
 /// is not carried by its hue alone.
 const HOT_OUTLINE: &str = "#111827";
@@ -145,6 +147,13 @@ pub fn layers(lat: f64) -> String {
             "id": "places-bad-dot", "type": "circle", "source": SOURCE,
             "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "status"], "bad"]],
             "paint": { "circle-color": MARK, "circle-opacity": opacity(1.0), "circle-radius": 2.4 }
+        },
+        // A selected street: a dashed line down it, in a colour of its own (feature-state `selected`, set by the page).
+        {
+            "id": "places-selected", "type": "line", "source": SOURCE,
+            "filter": ["==", ["geometry-type"], "LineString"],
+            "layout": { "line-cap": "butt", "line-join": "round" },
+            "paint": { "line-color": SELECTED, "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], opacity(1.0), 0], "line-width": 3, "line-dasharray": [1.5, 1] }
         }
     ])
     .to_string()
@@ -298,6 +307,17 @@ mod tests {
 
     fn layers(lat: f64) -> Vec<Value> {
         serde_json::from_str(&super::layers(lat)).unwrap()
+    }
+
+    #[test]
+    fn a_selected_street_is_marked_by_a_dashed_line_that_only_it_shows() {
+        let l = layers(45.5);
+        let sel = l.iter().find(|l| l["id"] == "places-selected").expect("a layer for the selection");
+        assert_eq!(sel["type"], "line");
+        assert_eq!(sel["filter"], json!(["==", ["geometry-type"], "LineString"]));
+        let o = sel["paint"]["line-opacity"].to_string();
+        assert!(o.contains("\"selected\""), "drawn only where the feature is selected: {o}");
+        assert!(sel["paint"]["line-dasharray"].is_array(), "a pattern says it where colour cannot");
     }
 
     #[test]

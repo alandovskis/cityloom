@@ -17,6 +17,7 @@ map-key-open = open a place found
 map-key-zoom = zoom
 map-key-move = move the map
 map-key-whole = whole city
+map-key-select = click to select a street
 map-key-areas = area rules
 map-key-panels = notes
 
@@ -406,3 +407,26 @@ map-report-appendix-credits = Credits
 map-report-credits-osm = The streets, lanes and junctions come from OpenStreetMap, © OpenStreetMap contributors, available under the Open Database Licence (opendatacommons.org/licenses/odbl). osm2streets (Apache License 2.0) turns the map data into streets and junctions.
 map-report-credits-atlas = The transit priority measures follow the toolbox of the Transit Priority Atlas, published by the Marron Institute. CityLoom is not affiliated with or endorsed by the Atlas or the Marron Institute.
 map-report-credits-software = This report is written with krilla (MIT and Apache 2.0 licences) and set in Noto Sans, © The Noto Project Authors, under the SIL Open Font License 1.1. The full credits are on the application's Credits page.
+
+## Selected streets
+sel-heading = Selected streets
+sel-empty = No streets selected. Shift-click a street on the map, or press Shift+Enter on a search result.
+sel-lead = { $count ->
+    [one] 1 street selected.
+   *[other] { $count } streets selected.
+}
+sel-added = { $name } added to the selection. { $count ->
+    [one] One street selected.
+   *[other] { $count } streets selected.
+}
+sel-removed = { $name } removed from the selection. { $count ->
+    [0] No streets selected.
+    [one] One street selected.
+   *[other] { $count } streets selected.
+}
+sel-cleared = Selection cleared.
+sel-not-a-street = Only streets can be selected.
+sel-remove = Remove { $name }
+sel-remove-short = Remove
+sel-clear = Clear the selection
+sel-list-label = Streets in the selection

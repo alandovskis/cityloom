@@ -287,7 +287,7 @@ fn go(href: &str) {
 
 /// The search box in the header. What is typed finds junctions and streets by name
 /// and small print; the arrow keys move down the results, Enter opens the one they
-/// are on (or the first), Escape clears, and `/` goes to the box from anywhere.
+/// are on (or the first), Shift+Enter adds it to the selection, Escape clears, and `/` goes to the box from anywhere.
 #[component]
 pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
@@ -316,6 +316,11 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
         "ArrowUp" => {
             e.prevent_default();
             vm.with(|v| v.move_active(-1));
+        }
+        // Shift+Enter adds the result to the selection instead of opening it.
+        "Enter" if e.shift_key() => {
+            e.prevent_default();
+            vm.with(|v| v.toggle_chosen());
         }
         "Escape" => {
             if vm.with(|v| v.search_text()).is_empty() {

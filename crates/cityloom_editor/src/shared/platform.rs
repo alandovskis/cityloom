@@ -546,6 +546,8 @@ extern "C" {
     fn set_insets(this: &Basemap, insets: &[f64]);
     #[wasm_bindgen(method, js_name = setEditable)]
     fn set_editable(this: &Basemap, hot: Vec<String>);
+    #[wasm_bindgen(method, js_name = setSelected)]
+    fn set_selected(this: &Basemap, hot: Vec<String>);
     #[wasm_bindgen(method, js_name = zoomBy)]
     fn zoom_by(this: &Basemap, factor: f64);
     #[wasm_bindgen(method, js_name = panBy)]
@@ -598,6 +600,9 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     }
     fn set_editable(&self, hot: &[String]) {
         self.0.set_editable(hot.to_vec());
+    }
+    fn set_selected(&self, hot: &[String]) {
+        self.0.set_selected(hot.to_vec());
     }
     fn zoom_by(&self, factor: f64) {
         self.0.zoom_by(factor);

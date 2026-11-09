@@ -199,6 +199,27 @@ test.describe("the city map", () => {
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}$`));
   });
 
+  test("a shift-click picks a street for the selection without opening it, and the panel drops it again", async ({
+    page,
+  }) => {
+    await mapReady(page);
+    await expect.poll(async () => (await streetSpots(page)).some((s) => s.editable)).toBe(true);
+    const spot = (await streetSpots(page)).find((s) => s.editable)!;
+    const selected = (hot: string) =>
+      page.evaluate((id) => !!(window as any).cityloomMap.getFeatureState({ source: "places", id }).selected, hot);
+    await page.mouse.move(spot.x, spot.y);
+    await page.keyboard.down("Shift");
+    await page.mouse.click(spot.x, spot.y);
+    await page.keyboard.up("Shift");
+    await expect(page.locator("#selection-list li")).toHaveCount(1);
+    await expect(page.locator("#selection-lead")).toHaveText("1 street selected.");
+    await expect.poll(() => selected(spot.hot)).toBe(true);
+    await expect(page).toHaveURL(/map\.html$/);
+    await page.locator("#selection-list li button").click();
+    await expect(page.locator("#selection-list li")).toHaveCount(0);
+    await expect.poll(() => selected(spot.hot)).toBe(false);
+  });
+
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
     const fitted = await zoom(page);
     await page.locator("#zoom-in").click();
