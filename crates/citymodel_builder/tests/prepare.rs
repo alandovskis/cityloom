@@ -13,7 +13,7 @@ use support::{Reply, fake_tool, quiet_progress, serve};
 fn the_steps_are_the_scripts_and_pack_is_last() {
     let steps = prepare::steps(std::path::Path::new("/data/quebec-latest.osm.pbf"));
     let keys: Vec<_> = steps.iter().map(|s| s.key).collect();
-    assert_eq!(keys, ["extract", "area", "highways", "tracks", "merge", "tiles", "index", "planetiler", "basemap", "pack"]);
+    assert_eq!(keys, ["extract", "area", "highways", "tracks", "merge", "tiles", "index", "pack"]);
     let groups: Vec<_> = steps.iter().map(|s| (s.group, s.subject.as_str())).collect();
     assert_eq!(
         groups,
@@ -25,8 +25,6 @@ fn the_steps_are_the_scripts_and_pack_is_last() {
             ("roads", "merge"),
             ("tiles", "cutting 1,734 tiles"),
             ("tiles", "index"),
-            ("basemap", "planetiler.jar"),
-            ("basemap", "montreal.pmtiles"),
             ("archive", "montreal.citymodel"),
         ]
     );
@@ -92,9 +90,6 @@ fn a_missing_extract_is_downloaded_with_progress() {
 fn the_whole_pipeline_runs_in_order_against_fake_tools() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    let tools = root.join("tools");
-    fs::create_dir_all(&tools).unwrap();
-    fs::write(tools.join("planetiler.jar"), b"jar").unwrap();
     fs::create_dir_all(root.join("data")).unwrap();
     fs::write(root.join("data/quebec-latest.osm.pbf"), b"x").unwrap();
     let osmium = fake_tool(
@@ -105,23 +100,19 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
 fi"#,
     );
     let out = root.join("out");
-    let java = fake_tool(root, "java", &format!("mkdir -p '{0}/basemap' && head -c 1000 /dev/zero > '{0}/basemap/montreal.pmtiles'", out.display()));
-    // A file another run left in the basemap folder is not the basemap this run built.
+    // The basemap is not built by `prepare`; the one already in the folder is packed.
     fs::create_dir_all(out.join("basemap")).unwrap();
-    fs::write(out.join("basemap/other.pmtiles"), b"stray").unwrap();
+    fs::write(out.join("basemap/montreal.pmtiles"), vec![0u8; 1000]).unwrap();
     let job = PrepareJob {
         extract: root.join("data/quebec-latest.osm.pbf"),
         refresh: false,
         url: "http://127.0.0.1:1/never".into(),
         batch: 500,
         osmium: osmium.display().to_string(),
-        java: java.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),
         basemap: out.join("basemap/montreal.pmtiles"),
-        tools,
         root: root.to_path_buf(),
-        jar_url: "http://127.0.0.1:1/never".into(),
         archive: out.join("montreal.citymodel"),
     };
     let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
@@ -134,7 +125,6 @@ fi"#,
     assert_eq!(unpacked.tiles, 1);
     assert_eq!(fs::metadata(data.join("montreal/metro/0_0.osm.pbf")).unwrap().len(), 500);
     assert_eq!(fs::metadata(data.join("montreal/basemap/montreal.pmtiles")).unwrap().len(), 1000);
-    assert!(!data.join("montreal/basemap/other.pmtiles").exists(), "a stray basemap went into the archive");
     assert_eq!(fs::read(data.join("montreal/metro/index.json")).unwrap(), fs::read(job.metro.join("index.json")).unwrap());
     let mut tar = tar::Archive::new(fs::File::open(&job.archive).unwrap());
     let mut first = tar.entries().unwrap().next().unwrap().unwrap();
@@ -146,7 +136,7 @@ fi"#,
 
     let passes: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(1).unwrap().to_string()).collect();
     let groups: Vec<_> = prepare::steps(&job.extract).iter().map(|s| s.group.to_string()).collect();
-    assert_eq!(passes.len(), 10, "{text}");
+    assert_eq!(passes.len(), 8, "{text}");
     assert_eq!(passes, groups, "{text}");
     let subjects: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(2).unwrap().to_string()).collect();
     assert_eq!(subjects.first().map(String::as_str), Some("quebec-latest.osm.pbf"));
@@ -157,15 +147,10 @@ fi"#,
 fn a_failed_step_stops_the_pipeline_before_pack() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    let tools = root.join("tools");
-    fs::create_dir_all(&tools).unwrap();
-    fs::write(tools.join("planetiler.jar"), b"jar").unwrap();
     fs::create_dir_all(root.join("data")).unwrap();
     fs::write(root.join("data/quebec-latest.osm.pbf"), b"x").unwrap();
     // osmium fails, so the road tiles cannot be made.
     let osmium = fake_tool(root, "osmium", "echo boom >&2; exit 1");
-    let marker = root.join("java-ran");
-    let java = fake_tool(root, "java", &format!("touch '{}'", marker.display()));
     let out = root.join("out");
     let job = PrepareJob {
         extract: root.join("data/quebec-latest.osm.pbf"),
@@ -173,13 +158,10 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
         url: "http://127.0.0.1:1/never".into(),
         batch: 500,
         osmium: osmium.display().to_string(),
-        java: java.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),
         basemap: out.join("basemap/montreal.pmtiles"),
-        tools,
         root: root.to_path_buf(),
-        jar_url: "http://127.0.0.1:1/never".into(),
         archive: out.join("montreal.citymodel"),
     };
     let (progress, sink) = quiet_progress(prepare::steps(&job.extract), root);
@@ -188,6 +170,5 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
     let text = sink.text();
     assert!(result.is_err(), "{text}");
     assert!(!job.archive.exists(), "an archive was written after a failed step");
-    assert!(!marker.exists(), "a later step ran after the failure");
-    assert!(!text.contains("PASS pack") && !text.contains("PASS basemap"), "{text}");
+    assert!(!text.contains("PASS pack"), "{text}");
 }

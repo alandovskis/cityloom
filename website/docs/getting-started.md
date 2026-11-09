@@ -47,10 +47,12 @@ just prepare
 
 This runs `citymodel_builder`, the repository's Rust tool (`cargo run -p citymodel_builder -- prepare`; its arguments are
 the recipe's). It downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
-a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`) and builds
-the map page's basemap, `web/data/basemap/montreal.pmtiles`, with Planetiler (needs Java 21 or later). Last, it packs both into
-one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
+a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`). Last, it packs them and the map page's basemap, `web/data/basemap/montreal.pmtiles`,
+into one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
 basemap and the archive are ignored by git.
+
+`just prepare` does not build the basemap, and the archive needs one: build it first with
+`cargo run -p citymodel_builder --release -- basemap` (Planetiler; needs Java 21 or later).
 
 Nothing needs the road tiles: without them every place, the default one included, comes from Overpass. Without the
 basemap, the map page says so and shows no map.

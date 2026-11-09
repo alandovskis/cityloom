@@ -1,11 +1,10 @@
-//! The `prepare` command: the Quebec extract (downloaded if it is not kept), the road tiles, the basemap and the
-//! archive, in one display. It replaces the former Python `prepare`, with the pack step added last.
+//! The `prepare` command: the Quebec extract (downloaded if it is not kept), the road tiles and the
+//! archive (which packs the basemap already in the basemap folder; `basemap` builds one), in one display. It replaces the former Python `prepare`, with the pack step added last.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::basemap::{self, BasemapJob};
 use crate::commands::{self, PackJob};
 use crate::download::download;
 use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c};
@@ -29,17 +28,12 @@ pub struct PrepareJob {
     pub url: String,
     pub batch: usize,
     pub osmium: String,
-    pub java: String,
     /// osmium's intermediate files.
     pub work: PathBuf,
     /// The road tiles' folder.
     pub metro: PathBuf,
     pub basemap: PathBuf,
-    /// Where `planetiler.jar` is kept.
-    pub tools: PathBuf,
-    /// The working directory of Java.
     pub root: PathBuf,
-    pub jar_url: String,
     pub archive: PathBuf,
 }
 
@@ -48,7 +42,6 @@ pub fn steps(extract: &Path) -> Vec<Spec> {
     let name = extract.file_name().unwrap_or_default().to_string_lossy().into_owned();
     let mut all = vec![Spec { key: "extract", group: "extract", subject: name }];
     all.extend(tiles::steps());
-    all.extend(basemap::steps("planetiler.jar", "montreal.pmtiles"));
     all.extend(commands::pack_steps(Path::new(ARCHIVE_NAME)));
     all
 }
@@ -71,27 +64,12 @@ pub fn get_extract(ctx: &StepCtx, extract: &Path, refresh: bool, url: &str) -> R
 pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
     p.step("extract", |ctx| get_extract(ctx, &job.extract, job.refresh, &job.url))?;
     tiles::run(p, &TilesJob { source: &job.extract, work: &job.work, out: &job.metro, batch: job.batch, osmium: &job.osmium })?;
-    basemap::run(
-        p,
-        &BasemapJob {
-            extract: &job.extract,
-            output: &job.basemap,
-            bounds: basemap::METRO_BOUNDS,
-            minzoom: basemap::MINZOOM,
-            maxzoom: basemap::MAXZOOM,
-            memory: basemap::MEMORY,
-            tools: &job.tools,
-            root: &job.root,
-            java: &job.java,
-            jar_url: &job.jar_url,
-        },
-    )?;
     let pack = PackJob {
         out: job.archive.clone(),
         area: "montreal".into(),
         metro: job.metro.clone(),
         basemap: job.basemap.parent().unwrap_or(&job.root).to_path_buf(),
-        basemap_file: Some(job.basemap.clone()),
+        basemap_file: None,
         source: job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned(),
         source_time: commands::source_time(&job.extract, &job.osmium),
         created: commands::now(),
@@ -110,13 +88,10 @@ pub fn run(args: PrepareArgs) -> Result<(), i32> {
         url: URL.into(),
         batch: args.batch.unwrap_or(tiles::MAX_EXTRACTS),
         osmium: "osmium".into(),
-        java: "java".into(),
         work: root.join("data/metro-work"),
         metro: root.join("web/data/metro"),
         basemap: root.join("web/data/basemap/montreal.pmtiles"),
-        tools: root.join(".tools"),
         root: root.clone(),
-        jar_url: basemap::JAR_URL.into(),
         archive: root.join("data").join(ARCHIVE_NAME),
     };
     let progress = Arc::new(Progress::stderr(steps(&job.extract), root.join("data/logs"), root));

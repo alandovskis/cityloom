@@ -102,7 +102,7 @@ sonar-reports:
     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool), build the basemap in web/data/basemap (needs Java 21+) and pack both into data/montreal.cityloom. `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and pack them with the basemap already in web/data/basemap into data/montreal.citymodel. It does not build the basemap: `cargo run -p citymodel_builder --release -- basemap` does (needs Java 21+). `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
 prepare *args:
     cargo run --release -q -p citymodel_builder -- prepare {{args}}
 

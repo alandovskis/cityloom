@@ -15,7 +15,7 @@ cargo test shell::vm # one module; a full test name also works
 just check-no-fake   # release server must hold no fake provider (CI's server-release job)
 just build           # release wasm + wasm-bindgen into web/pkg (gitignored)
 just prepare         # downloads Geofabrik's Quebec extract (~1.2 GB) into data/, cuts roads into web/data/metro (needs osmium-tool),
-                     # builds the basemap web/data/basemap/montreal.pmtiles (Planetiler, Java 21+), packs data/montreal.citymodel;
+                     # packs data/montreal.citymodel with the basemap already in web/data/basemap (`cargo run -p citymodel_builder --release -- basemap` builds web/data/basemap/montreal.pmtiles: Planetiler, Java 21+);
                      # all gitignored; args pass through (--refresh). Without tiles places come from Overpass; without the basemap the map shows none
 just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|basemap|pack` runs one step
 just test-scripts    # scripts/include/tests (the issue system's consistency test and the CI selector's); CI's test job runs it

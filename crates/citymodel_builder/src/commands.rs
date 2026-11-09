@@ -24,7 +24,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Download the extract if needed, cut the road tiles, build the basemap and pack the archive.
+    /// Download the extract if needed, cut the road tiles and pack the archive with the basemap already built.
     Prepare {
         extract: Option<PathBuf>,
         /// Download a newer extract.
