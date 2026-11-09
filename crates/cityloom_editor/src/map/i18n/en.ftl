@@ -431,3 +431,37 @@ sel-remove = Remove { $name }
 sel-remove-short = Remove
 sel-clear = Clear the selection
 sel-list-label = Streets in the selection
+
+## Changing the selected streets
+corridor-refused-no-motor = The change does not fit: no piece of this street takes motor traffic.
+corridor-refused-gone = This street is no longer in the city.
+corridor-done = { $name }: { $changed ->
+    [one] 1 street changed.
+   *[other] { $changed } streets changed.
+} { $left ->
+    [0] None was left out.
+    [one] 1 was left as it was.
+   *[other] { $left } were left as they were.
+}
+corridor-heading = Change the selected streets
+corridor-op-label = Change them to
+corridor-review-button = Review the change
+corridor-review = { $name }: { $ready ->
+    [one] 1 street can be changed.
+   *[other] { $ready } streets can be changed.
+} { $refused ->
+    [0] Every selected street can take it.
+    [one] 1 street cannot, and will be left as it is.
+   *[other] { $refused } streets cannot, and will be left as they are.
+}
+corridor-apply = { $count ->
+    [one] Change 1 street
+   *[other] Change { $count } streets
+}
+corridor-cancel = Cancel
+corridor-close = Done
+corridor-row-ready = Can be changed.
+corridor-row-changed = Changed.
+corridor-row-not-kept = Could not be kept, so it is as it was.
+corridor-review-list = Review of the change, street by street
+corridor-report-list = What was changed, street by street

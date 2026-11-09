@@ -25,6 +25,11 @@ impl SelectionVm {
         self.streets.get()
     }
 
+    /// The same, untracked.
+    pub fn streets_now(&self) -> Vec<u32> {
+        self.streets.get_untracked()
+    }
+
     pub fn contains(&self, uid: u32) -> bool {
         self.streets.read_untracked().contains(&uid)
     }

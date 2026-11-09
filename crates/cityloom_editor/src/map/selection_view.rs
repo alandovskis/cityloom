@@ -6,7 +6,8 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::map::vm::MapVm;
+use crate::map::corridor::Op;
+use crate::map::vm::{MapVm, Stage};
 use crate::shared::bind::Bound;
 
 type Vm = Bound<MapVm>;
@@ -14,14 +15,21 @@ type Vm = Bound<MapVm>;
 /// Puts the keyboard's focus on the panel's heading: the button that was pressed is gone (the street left the
 /// list, or the list is empty), and focus must not fall to the page.
 fn focus_heading() {
+    focus("h-selection");
+}
+
+/// Puts the keyboard's focus on the element `id`, once the page has drawn what the press changed.
+fn focus(id: &'static str) {
     #[cfg(target_arch = "wasm32")]
-    {
+    request_animation_frame(move || {
         use leptos::wasm_bindgen::JsCast;
 
-        if let Some(h) = leptos::prelude::document().get_element_by_id("h-selection") {
+        if let Some(h) = leptos::prelude::document().get_element_by_id(id) {
             let _ = h.unchecked_into::<leptos::web_sys::HtmlElement>().focus();
         }
-    }
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = id;
 }
 
 /// A message of the page, for a view: it follows a switch of language.
@@ -74,5 +82,97 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
                     }
                 })
         }}
+        {move || (!streets().is_empty()).then(|| change(vm))}
+    }
+}
+
+/// The change to make on the selected streets: pick it, review it street by street, then make it on the streets
+/// that can take it; afterwards, what was done. The streets that cannot take it say why and are left as they are.
+fn change(vm: Vm) -> impl IntoView {
+    let stage = move || vm.with(|v| v.corridor_stage());
+    let picked = move || vm.with(|v| v.corridor_op().id());
+    let rows = move |label: &'static str| {
+        view! {
+            <ul class="corridor-rows" aria-label=word(vm, label)>
+                {move || {
+                    vm.with(|v| v.corridor_rows())
+                        .into_iter()
+                        .map(|r| {
+                            view! {
+                                <li class=if r.ready { "corridor-row ok" } else { "corridor-row bad" }>
+                                    <span class="corridor-street">{r.name}</span>
+                                    " "
+                                    <span>{r.text}</span>
+                                </li>
+                            }
+                        })
+                        .collect_view()
+                }}
+            </ul>
+        }
+    };
+    view! {
+        <section class="corridor" aria-labelledby="h-corridor">
+            <h3 id="h-corridor" class="note-h">{word(vm, "corridor-heading")}</h3>
+            <label for="corridor-op">{word(vm, "corridor-op-label")}</label>
+            <select id="corridor-op" on:change=move |e| vm.with(|v| v.set_corridor_op(&event_target_value(&e)))>
+                {Op::ALL
+                    .into_iter()
+                    .map(|op| {
+                        view! {
+                            <option value=op.id() selected=move || picked() == op.id()>
+                                {move || vm.with(|v| v.say_op(op))}
+                            </option>
+                        }
+                    })
+                    .collect_view()}
+            </select>
+            <div id="corridor-result" tabindex="-1">
+                {move || match stage() {
+                    Stage::Idle => {
+                        view! {
+                            <button type="button" class="btn" id="corridor-review" on:click=move |_| {
+                                vm.with(|v| v.review_corridor());
+                                focus("corridor-result");
+                            }>
+                                {word(vm, "corridor-review-button")}
+                            </button>
+                        }
+                            .into_any()
+                    }
+                    Stage::Reviewing(_) => {
+                        let ready = move || vm.with(|v| v.corridor_ready());
+                        view! {
+                            {rows("corridor-review-list")}
+                            <button type="button" class="btn" id="corridor-apply" disabled=move || ready() == 0 on:click=move |_| {
+                                vm.with(|v| v.apply_corridor());
+                                focus("corridor-result");
+                            }>
+                                {move || vm.with(|v| v.corridor_apply_label(ready()))}
+                            </button>
+                            <button type="button" class="btn quiet" id="corridor-cancel" on:click=move |_| {
+                                vm.with(|v| v.cancel_corridor());
+                                focus("corridor-review");
+                            }>
+                                {word(vm, "corridor-cancel")}
+                            </button>
+                        }
+                            .into_any()
+                    }
+                    Stage::Done(_) => {
+                        view! {
+                            {rows("corridor-report-list")}
+                            <button type="button" class="btn quiet" id="corridor-close" on:click=move |_| {
+                                vm.with(|v| v.cancel_corridor());
+                                focus("corridor-review");
+                            }>
+                                {word(vm, "corridor-close")}
+                            </button>
+                        }
+                            .into_any()
+                    }
+                }}
+            </div>
+        </section>
     }
 }
