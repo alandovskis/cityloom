@@ -1,5 +1,4 @@
-//! A resumable download, the port of `download` and `open_from` in the former Python `prepare` and of the jar download in
-//! the former Python `basemap_tiles`.
+//! A resumable download, the port of `download` and `open_from` in the former Python `prepare`.
 //!
 //! The file is written to `<target>.part` and renamed only once whole, so an interrupted download never leaves a
 //! file that looks complete. A `.part` left by an earlier attempt is continued (`Range`) when the server answers 206
@@ -20,8 +19,6 @@ pub struct Fetched {
     pub status: u16,
     pub content_length: Option<u64>,
     pub body: Box<dyn Read + Send>,
-    /// The last redirect that named a release (`.../releases/download/...`).
-    pub release: Option<String>,
 }
 
 fn fail(line: impl Into<String>) -> StepError {
@@ -81,13 +78,12 @@ fn resolve(base: &str, location: &str) -> String {
 }
 
 /// A GET for `url`, asking from byte `from` on when `from > 0`. Redirects are followed by hand (up to 10; a relative
-/// `Location` is resolved against the address that sent it, and `Range` goes with every request), and the last one
-/// that names a release is remembered. Any status is an answer, not an error; the body is not read.
+/// `Location` is resolved against the address that sent it, and `Range` goes with every request). Any status is an answer, not an error; the body is not read.
 pub fn get(url: &str, from: u64) -> Result<Fetched, StepError> {
     // identity: Range and Content-Length must mean bytes on disk, so the server is asked not to compress.
     let config = ureq::Agent::config_builder().max_redirects(0).http_status_as_error(false).accept_encoding("identity").build();
     let agent: ureq::Agent = config.into();
-    let (mut at, mut release) = (url.to_string(), None);
+    let mut at = url.to_string();
     for _ in 0..=MAX_REDIRECTS {
         let mut request = agent.get(&at);
         if from > 0 {
@@ -99,13 +95,10 @@ pub fn get(url: &str, from: u64) -> Result<Fetched, StepError> {
             let location =
                 response.headers().get("location").and_then(|v| v.to_str().ok()).ok_or_else(|| fail(format!("{at}: a redirect with no Location")))?;
             at = resolve(&at, location);
-            if at.contains("/releases/download/") {
-                release = Some(at.clone());
-            }
             continue;
         }
         let content_length = response.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse().ok());
-        return Ok(Fetched { status, content_length, body: Box::new(response.into_body().into_reader()), release });
+        return Ok(Fetched { status, content_length, body: Box::new(response.into_body().into_reader()) });
     }
     Err(fail(format!("{url}: more than {MAX_REDIRECTS} redirects")))
 }
@@ -142,13 +135,13 @@ fn copy_with_progress(
     Ok(done)
 }
 
-fn fetch_into(url: &str, target: &Path, part: &Path, resume: bool, say: &mut dyn FnMut(u64, Option<u64>)) -> Result<Option<String>, StepError> {
+fn fetch_into(url: &str, target: &Path, part: &Path, resume: bool, say: &mut dyn FnMut(u64, Option<u64>)) -> Result<(), StepError> {
     let have = if resume { fs::metadata(part).map_or(0, |m| m.len()) } else { 0 };
     let mut fetched = get(url, have)?;
     if fetched.status == 416 && have > 0 {
         // asked from beyond the end: the earlier attempt had the file whole
         fs::rename(part, target)?;
-        return Ok(fetched.release);
+        return Ok(());
     }
     if !(200..300).contains(&fetched.status) {
         return Err(fail(format!("{url}: HTTP {}", fetched.status)));
@@ -166,14 +159,14 @@ fn fetch_into(url: &str, target: &Path, part: &Path, resume: bool, say: &mut dyn
         return Err(fail(format!("{url}: got {done} bytes of {total}; run again to continue")));
     }
     fs::rename(part, target)?;
-    Ok(fetched.release)
+    Ok(())
 }
 
 /// Downloads `url` to `target`, renamed from `<target>.part` only once whole. With `resume`, a `.part` left by an
 /// earlier attempt is continued when the server answers 206 and started again on 200, a 416 with bytes in hand means
 /// that attempt had the file whole, and a failure keeps the part for the next run. Without `resume` the download
-/// starts from nothing and the part is removed on any failure. Returns the last release address the redirects named.
-pub fn download(url: &str, target: &Path, resume: bool, say: &mut dyn FnMut(u64, Option<u64>)) -> Result<Option<String>, StepError> {
+/// starts from nothing and the part is removed on any failure.
+pub fn download(url: &str, target: &Path, resume: bool, say: &mut dyn FnMut(u64, Option<u64>)) -> Result<(), StepError> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }

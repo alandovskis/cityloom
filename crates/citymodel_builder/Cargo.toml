@@ -38,10 +38,6 @@ name = "download"
 required-features = ["cli"]
 
 [[test]]
-name = "basemap"
-required-features = ["cli"]
-
-[[test]]
 name = "ctrl_c"
 required-features = ["cli"]
 

@@ -1,6 +1,6 @@
-//! The city map page: the whole city drawn over an OpenStreetMap basemap to pan,
+//! The city map page: the whole city drawn on a MapLibre map to pan,
 //! zoom and choose a street or junction from. MapLibre draws the map and takes the
-//! pointer (`web/basemap.js`, reached through the `Mapper` port); the view-model,
+//! pointer (`web/mapcanvas.js`, reached through the `Mapper` port); the view-model,
 //! the places it hands the map, and the views around the map live here.
 
 pub mod areas;
@@ -77,13 +77,13 @@ impl MapPage {
     }
 }
 
-/// Draws the city map page into the elements it keeps for it, over the basemap the script made, and hands
+/// Draws the city map page into the elements it keeps for it, on the map the script made, and hands
 /// back what the script needs to reach it.
 #[wasm_bindgen]
-pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
+pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
+    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(canvas)), ..browser_ports() };
     // One instance for the page: the shell switches it and the map's words follow.
     let i18n = crate::i18n_browser(&ports);
     let vm = vm::MapVm::new(ports, i18n.clone());

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use super::index::{INDEX_NAME, basemap_name, write_index};
+use super::index::{INDEX_NAME, write_index};
 use super::{Entry, Header, Kind};
 use crate::metro_index::Grid;
 
@@ -16,15 +16,12 @@ pub struct PackInputs<'a> {
     pub created: i64,
     pub grid: Grid,
     pub roads: &'a [(u16, u16, PathBuf)],
-    pub basemaps: &'a [PathBuf],
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
     #[error("the area name {0:?} is not allowed (lower-case letters, digits and hyphens, at most 64)")]
     Area(String),
-    #[error("{0:?} is not a basemap name (lower-case letters, digits and hyphens, then .pmtiles)")]
-    Name(String),
     #[error("road tile {0} is outside the grid")]
     OutsideGrid(String),
     #[error("{0}")]
@@ -126,22 +123,8 @@ pub fn pack(inputs: &PackInputs, out: &Path, progress: &mut dyn FnMut(u64, u64))
     if roads.is_empty() {
         return Err(PackError::Empty("no road tiles"));
     }
-    let mut maps = Vec::new();
-    for file in inputs.basemaps {
-        let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let path = format!("basemap/{name}");
-        if basemap_name(&path).is_none() {
-            return Err(PackError::Name(name.to_string()));
-        }
-        maps.push(Piece { entry: blank(Kind::Basemap, 0, 0, path), file: file.clone() });
-    }
-    if maps.is_empty() {
-        return Err(PackError::Empty("no basemap"));
-    }
     roads.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
-    maps.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
     let mut pieces = roads;
-    pieces.extend(maps);
 
     let mut total = 0;
     for piece in &pieces {

@@ -12,10 +12,8 @@ fn pack_area(archives: &Path, tile: &[u8]) {
     let work = archives.parent().unwrap().join("work");
     std::fs::create_dir_all(&work).unwrap();
     std::fs::write(work.join("0_0.osm.pbf"), tile).unwrap();
-    std::fs::write(work.join("montreal.pmtiles"), [7u8; 3000]).unwrap();
     let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
-    let maps = vec![work.join("montreal.pmtiles")];
-    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads, basemaps: &maps };
+    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads };
     archive::pack(&inputs, &archives.join("montreal.citymodel"), &mut |_, _| {}).unwrap();
 }
 
@@ -86,7 +84,6 @@ async fn start_up_sets_the_mount_the_router_will_use_and_reuses_it() {
     let mount = cfg.data_mount.clone().unwrap();
     assert_eq!(mount, tmp.path().join("data/montreal"));
     assert!(mount.join("metro/index.json").is_file());
-    assert!(mount.join("basemap/montreal.pmtiles").is_file());
     // A second start finds the same files (reused, not unpacked again) and sets the same mount.
     let mut again = config(tmp.path());
     cityloom_server::unpack_areas(&mut again).await.unwrap();

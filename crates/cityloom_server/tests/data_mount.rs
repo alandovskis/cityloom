@@ -1,4 +1,4 @@
-//! `/data/metro/*` and `/data/basemap/*` from an unpacked area, with the rules `static_files` gives every file.
+//! `/data/metro/*` from an unpacked area, with the rules `static_files` gives every file.
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
@@ -12,7 +12,7 @@ use tower::ServiceExt;
 fn site(cache_control: &str, mounted: bool) -> (tempfile::TempDir, Router) {
     let tmp = tempfile::tempdir().unwrap();
     let (root, area) = (tmp.path().join("web"), tmp.path().join("area"));
-    for dir in [root.join("data/metro"), root.join("data/basemap"), root.join("data/other"), area.join("metro"), area.join("basemap")] {
+    for dir in [root.join("data/metro"), root.join("data/other"), area.join("metro")] {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::write(root.join("index.html"), "home").unwrap();
@@ -21,7 +21,7 @@ fn site(cache_control: &str, mounted: bool) -> (tempfile::TempDir, Router) {
     std::fs::write(root.join("data/other/a.json"), r#"{"other":true}"#).unwrap();
     std::fs::write(area.join("metro/index.json"), r#"{"from":"area"}"#).unwrap();
     std::fs::write(area.join("metro/0_0.osm.pbf"), b"area tile 0_0").unwrap();
-    std::fs::write(area.join("basemap/montreal.pmtiles"), (0..=255u8).collect::<Vec<_>>()).unwrap();
+    std::fs::write(area.join("metro/1_1.osm.pbf"), (0..=255u8).collect::<Vec<_>>()).unwrap();
     std::fs::write(area.join(".index-sha256"), "secret-ish").unwrap();
     let router = cityloom_server::static_files::router_with_data(root, mounted.then_some(area), cache_control.to_string());
     (tmp, router)
@@ -49,7 +49,7 @@ async fn the_two_directories_come_from_the_area_and_not_from_web() {
     let (status, headers, body) = get(&router, "/data/metro/0_0.osm.pbf", None).await;
     assert_eq!((status, body), (StatusCode::OK, b"area tile 0_0".to_vec()));
     assert_eq!(header_of(&headers, "content-type"), "application/x-protobuf");
-    let (status, _, body) = get(&router, "/data/basemap/montreal.pmtiles", None).await;
+    let (status, _, body) = get(&router, "/data/metro/1_1.osm.pbf", None).await;
     assert_eq!((status, body.len()), (StatusCode::OK, 256));
 }
 
@@ -59,7 +59,7 @@ async fn index_json_keeps_its_cache_rule_and_a_tile_the_sites() {
     let (_, headers, _) = get(&router, "/data/metro/index.json", None).await;
     assert_eq!(header_of(&headers, "cache-control"), "public, max-age=300, stale-while-revalidate=600");
     assert_eq!(header_of(&headers, "content-type"), "application/json; charset=utf-8");
-    for path in ["/data/metro/index.json", "/data/metro/0_0.osm.pbf", "/data/basemap/montreal.pmtiles"] {
+    for path in ["/data/metro/index.json", "/data/metro/0_0.osm.pbf", "/data/metro/1_1.osm.pbf"] {
         let (_, headers, _) = get(&router, path, None).await;
         assert_eq!(header_of(&headers, "accept-ranges"), "bytes", "{path}");
         assert!(header_of(&headers, "vary").to_ascii_lowercase().contains("accept-encoding"), "{path}");
@@ -70,9 +70,9 @@ async fn index_json_keeps_its_cache_rule_and_a_tile_the_sites() {
 }
 
 #[tokio::test]
-async fn the_basemap_is_served_in_ranges() {
+async fn a_tile_is_served_in_ranges() {
     let (_tmp, router) = site("no-cache", true);
-    let path = "/data/basemap/montreal.pmtiles";
+    let path = "/data/metro/1_1.osm.pbf";
     let (status, headers, body) = get(&router, path, Some("bytes=10-29")).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(header_of(&headers, "content-range"), "bytes 10-29/256");
@@ -150,10 +150,8 @@ async fn the_app_router_serves_the_unpacked_area() {
     std::fs::create_dir_all(&work).unwrap();
     std::fs::create_dir_all(tmp.path().join("areas")).unwrap();
     std::fs::write(work.join("0_0.osm.pbf"), b"unpacked tile").unwrap();
-    std::fs::write(work.join("montreal.pmtiles"), [7u8; 3000]).unwrap();
     let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
-    let maps = vec![work.join("montreal.pmtiles")];
-    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads, basemaps: &maps };
+    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads };
     archive::pack(&inputs, &tmp.path().join("areas/montreal.citymodel"), &mut |_, _| {}).unwrap();
 
     let vars = [
@@ -173,8 +171,6 @@ async fn the_app_router_serves_the_unpacked_area() {
     assert_eq!(status, StatusCode::OK);
     assert!(String::from_utf8_lossy(&body).contains("0_0"));
     assert_eq!(header_of(&headers, "cache-control"), "public, max-age=300, stale-while-revalidate=600");
-    let (status, _, body) = get(&router, "/data/basemap/montreal.pmtiles", None).await;
-    assert_eq!((status, body.len()), (StatusCode::OK, 3000));
     for path in ["/data/metro/.index-sha256", "/data/metro/../.index-sha256", "/data/metro/%2e%2e/%2e%2e/%2e%2e/etc/passwd"] {
         let (status, _, _) = get(&router, path, None).await;
         assert!(!status.is_success(), "{path}");

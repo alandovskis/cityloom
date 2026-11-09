@@ -36,14 +36,13 @@ const ZOOM_STEP: f64 = 1.4;
 const PAN_PX: f64 = 80.0;
 
 /// What the map page says where it has no map to show: the keys of its messages.
-pub const MISSING: &str = "map-basemap-missing";
-pub const OUTSIDE: &str = "map-basemap-outside";
+pub const MISSING: &str = "map-canvas-missing";
 pub const NO_ROADS: &str = "map-no-roads";
 
-/// Whether the basemap is there to draw the places on.
+/// Whether the map is there to draw the places on.
 #[derive(Clone, Debug, PartialEq)]
-pub enum BasemapState {
-    /// Asked for; the tiles have not answered.
+pub enum CanvasState {
+    /// Asked for; the map has not said it is there.
     Waiting,
     Ready,
     /// There will be no map, for the reason the message with this key gives.
@@ -339,7 +338,7 @@ pub struct MapVm {
     ports: Ports,
     i18n: Rc<I18n>,
     camera: ArcRwSignal<Camera>,
-    basemap: ArcRwSignal<BasemapState>,
+    canvas: ArcRwSignal<CanvasState>,
     moved: Cell<bool>,
     /// The part of the map the panels leave open, once the map has said it.
     viewport: Cell<Option<[f64; 4]>>,
@@ -396,7 +395,7 @@ impl MapVm {
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
         let world = World::round(core.view_now().bounds_mm);
-        let basemap = if has_roads { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
+        let canvas = if has_roads { CanvasState::Waiting } else { CanvasState::Unavailable(NO_ROADS) };
         let areas = AreasVm::new(ports.clone(), i18n.clone());
         let selection = SelectionVm::new(ports.clone(), i18n.clone());
         Rc::new_cyclic(|me| MapVm {
@@ -406,7 +405,7 @@ impl MapVm {
             ports,
             i18n,
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
-            basemap: ArcRwSignal::new(basemap),
+            canvas: ArcRwSignal::new(canvas),
             moved: Cell::new(false),
             viewport: Cell::new(None),
             editable: RefCell::new(None),
@@ -1093,8 +1092,8 @@ impl MapVm {
 
     // ---- the map ----
 
-    pub fn basemap_state(&self) -> BasemapState {
-        self.basemap.get()
+    pub fn canvas_state(&self) -> CanvasState {
+        self.canvas.get()
     }
 
     /// Where the city lies on the earth: known once its area's roads are.
@@ -1119,7 +1118,7 @@ impl MapVm {
     /// areas'; the map tells of no press for the click that ends it.
     fn on_map_event(&self, event: MapEvent) {
         match event {
-            MapEvent::Ready { bounds } => self.tiles_ready(bounds),
+            MapEvent::Ready => self.canvas_ready(),
             MapEvent::Failed => self.give_up(MISSING),
             MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
                 Draw::Drawing(_) => self.areas.on_press(at, vertex),
@@ -1167,19 +1166,15 @@ impl MapVm {
     /// There will be no map, unless the page never had one to wait for (which has said why already).
     fn give_up(&self, key: &'static str) {
         if self.store.has_network() {
-            self.basemap.set(BasemapState::Unavailable(key));
+            self.canvas.set(CanvasState::Unavailable(key));
         }
     }
 
-    fn tiles_ready(&self, [west, south, east, north]: [f64; 4]) {
+    fn canvas_ready(&self) {
         if !self.store.has_network() {
             return;
         }
-        let area = self.store.area();
-        if !(west..=east).contains(&area.lon) || !(south..=north).contains(&area.lat) {
-            return self.give_up(OUTSIDE);
-        }
-        self.basemap.set(BasemapState::Ready);
+        self.canvas.set(CanvasState::Ready);
         self.sync_places();
         self.fit();
         self.sync_areas();
@@ -1190,7 +1185,7 @@ impl MapVm {
     pub fn sync_places(&self) {
         let Some(projection) = self.projection() else { return };
         let area = self.store.area();
-        if self.basemap.get_untracked() != BasemapState::Ready {
+        if self.canvas.get_untracked() != CanvasState::Ready {
             return;
         }
         let view = self.core.view_now();
@@ -1225,7 +1220,7 @@ impl MapVm {
     fn sync_editable(&self) {
         let Some(view) = self.viewport.get() else { return };
         let Some(projection) = self.projection() else { return };
-        if self.basemap.get_untracked() != BasemapState::Ready {
+        if self.canvas.get_untracked() != CanvasState::Ready {
             return;
         }
         let now = editable::editable(&overlay::place_boxes(&self.core.view_now(), &projection), view);
@@ -1240,7 +1235,7 @@ impl MapVm {
     pub fn fit(&self) {
         self.moved.set(false);
         let Some(projection) = self.projection() else { return };
-        if self.basemap.get_untracked() != BasemapState::Ready {
+        if self.canvas.get_untracked() != CanvasState::Ready {
             return;
         }
         let Some(bounds) = overlay::bounds(&self.core.view_now(), &projection) else { return };
@@ -1454,12 +1449,12 @@ impl MapVm {
 
     /// Whether an area can be drawn: there is a map to draw it on, and the document is not a newer build's.
     pub fn can_declare(&self) -> bool {
-        self.basemap.get() == BasemapState::Ready && !self.areas.is_future()
+        self.canvas.get() == CanvasState::Ready && !self.areas.is_future()
     }
 
     /// What the panel says first: why nothing can be drawn where there is no map, else the areas' own lead.
     pub fn areas_lead(&self) -> String {
-        if !self.areas.is_future() && matches!(self.basemap.get(), BasemapState::Unavailable(_)) {
+        if !self.areas.is_future() && matches!(self.canvas.get(), CanvasState::Unavailable(_)) {
             return self.word("restriction-lead-no-map");
         }
         self.areas.lead()
@@ -1467,7 +1462,7 @@ impl MapVm {
 
     /// Sends the areas and the outline being drawn to the map, once there is a map to show them on.
     pub fn sync_areas(&self) {
-        if self.basemap.get_untracked() == BasemapState::Ready {
+        if self.canvas.get_untracked() == CanvasState::Ready {
             self.areas.sync();
         }
     }
@@ -2158,8 +2153,8 @@ mod tests {
         (vm, mapper, navigator, said, storage)
     }
 
-    /// Tiles that cover the area `area_vm` opens.
-    const COVERING: MapEvent = MapEvent::Ready { bounds: [-74.0, 45.0, -73.0, 46.0] };
+    /// The map is there.
+    const COVERING: MapEvent = MapEvent::Ready;
 
     /// The box of the one street `area_vm` holds (`s-1`).
     fn street_box(vm: &MapVm) -> [f64; 4] {
@@ -2294,7 +2289,7 @@ mod tests {
         let (vm, mapper, _) = roadless_map_vm();
         let owner = Owner::new();
         owner.set();
-        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS));
+        assert_eq!(vm.canvas_state(), CanvasState::Unavailable(NO_ROADS));
         assert_eq!(vm.title(), crate::place::area::default_area().name, "the area that could not be loaded");
         assert!(vm.junction_rows().is_empty() && vm.street_rows().is_empty());
         assert_eq!((vm.places(), vm.changes()), (0, 0));
@@ -2314,7 +2309,7 @@ mod tests {
         assert!(matches!(mapper.take()[..], [MapCall::Insets(_)]), "the insets are told, and nothing is fitted");
         mapper.say(COVERING);
         mapper.say(MapEvent::Failed);
-        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS), "the reason stays the roads");
+        assert_eq!(vm.canvas_state(), CanvasState::Unavailable(NO_ROADS), "the reason stays the roads");
         assert!(mapper.take().is_empty(), "nothing is drawn");
     }
 
@@ -2334,12 +2329,12 @@ mod tests {
     }
 
     #[test]
-    fn the_map_waits_for_the_tiles_and_then_shows_the_places_and_fits_them() {
+    fn the_map_waits_until_it_is_there_and_then_shows_the_places_and_fits_them() {
         let (vm, mapper, ..) = area_vm();
-        assert_eq!(vm.basemap_state(), BasemapState::Waiting);
-        assert!(mapper.take().is_empty(), "nothing is shown before the tiles are there");
+        assert_eq!(vm.canvas_state(), CanvasState::Waiting);
+        assert!(mapper.take().is_empty(), "nothing is shown before the map is there");
         mapper.say(COVERING);
-        assert_eq!(vm.basemap_state(), BasemapState::Ready);
+        assert_eq!(vm.canvas_state(), CanvasState::Ready);
         let calls = mapper.take();
         assert!(matches!(&calls[0], MapCall::Places { layers, data } if layers.contains("places-street") && data.contains("\"s-1\"")), "{calls:?}");
         assert!(matches!(&calls[1], MapCall::Fit { bounds, insets } if bounds[0] < bounds[2] && bounds[1] < bounds[3] && *insets == [0.0; 4]), "{calls:?}");
@@ -2347,20 +2342,10 @@ mod tests {
     }
 
     #[test]
-    fn tiles_that_do_not_cover_the_area_say_so_and_show_nothing() {
-        let (vm, mapper, ..) = area_vm();
-        mapper.say(MapEvent::Ready { bounds: [10.0, 50.0, 11.0, 51.0] });
-        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(OUTSIDE));
-        assert!(mapper.take().is_empty());
-        vm.sync_places();
-        assert!(mapper.take().is_empty(), "still nothing, though asked");
-    }
-
-    #[test]
-    fn tiles_that_could_not_be_had_say_so() {
+    fn a_map_that_could_not_start_says_so() {
         let (vm, mapper, ..) = area_vm();
         mapper.say(MapEvent::Failed);
-        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(MISSING));
+        assert_eq!(vm.canvas_state(), CanvasState::Unavailable(MISSING));
     }
 
     #[test]
@@ -2784,7 +2769,7 @@ mod tests {
     fn the_areas_are_sent_only_to_a_ready_map_and_declaring_needs_one() {
         let (vm, mapper, ..) = area_vm();
         vm.sync_areas();
-        assert!(mapper.take().is_empty() && !vm.can_declare(), "the tiles have not answered");
+        assert!(mapper.take().is_empty() && !vm.can_declare(), "the map has not said it is there");
         mapper.say(COVERING);
         mapper.take();
         assert!(vm.can_declare());

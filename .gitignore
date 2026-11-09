@@ -26,12 +26,10 @@ e2e/playwright-report/
 # beside them is a placeholder that names none; it is overwritten, and that is not committed.
 /web/data/metro/*.osm.pbf
 
-# What scripts/build.sh copies from node_modules, and the basemap's tiles, which citymodel_builder makes.
+# What scripts/build.sh copies from node_modules.
 /node_modules/
 /web/vendor/
-/web/data/basemap/*.pmtiles
 
-# Planetiler's downloaded sources (Natural Earth, water polygons), fetched by citymodel_builder.
 /data/
 
 # Rendered from docs/erd.mmd (mmdc -i docs/erd.mmd -o docs/erd.svg; the .png with -s 2)

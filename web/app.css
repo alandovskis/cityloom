@@ -850,7 +850,7 @@ a.btn {
 }
 /* From the keyboard a corner is placed at the centre of the map: a cross marks it while an outline is drawn,
    in the ink of the page with a halo of its panel colour, so it shows on a light map and a dark one. */
-.basemap[data-drawing]::after {
+.map-canvas[data-drawing]::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -866,8 +866,8 @@ a.btn {
   filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
 }
 /* While drawing a press anywhere places a corner, over a street too: the cross beats the pointer hand
-   `web/basemap.js` sets on the canvas over a place. */
-.basemap[data-drawing] .maplibregl-canvas {
+   `web/mapcanvas.js` sets on the canvas over a place. */
+.map-canvas[data-drawing] .maplibregl-canvas {
   cursor: crosshair !important;
 }
 .title-block {
@@ -902,15 +902,15 @@ a.btn {
 /* The map is MapLibre's; a place that cannot be shown says why over it. MapLibre makes its container
    `position: relative` (`.maplibregl-map`, specificity 0,1,0); this selector (0,2,0) wins, so the map fills
    the drawing. */
-.drawing > .basemap {
+.drawing > .map-canvas {
   position: absolute;
   inset: 0;
 }
-.basemap:focus-visible {
+.map-canvas:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -3px;
 }
-.basemap-note {
+.map-canvas-note {
   position: absolute;
   inset: auto 50% 50% auto;
   transform: translate(50%, 50%);
@@ -924,7 +924,7 @@ a.btn {
   box-shadow: var(--shadow-soft);
   z-index: 2;
 }
-.basemap-note[hidden] {
+.map-canvas-note[hidden] {
   display: none;
 }
 /* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the left
@@ -1316,7 +1316,7 @@ a.btn {
 }
 /* On the map it is centred between the scale (bottom left, up to 110px with its margin) and the zoom
    buttons (bottom right), so each side keeps clear the wider of them. */
-.drawing:has(> .basemap) ~ .statusbar {
+.drawing:has(> .map-canvas) ~ .statusbar {
   max-width: calc(100% - var(--lw) - var(--rw) - 2 * 128px);
 }
 .fit {
@@ -1494,7 +1494,7 @@ a.btn {
   }
   /* The map is a box of its own here, with the status line across its foot: MapLibre's scale goes to its
      top left corner, where nothing floats, and the attribution stays on the zoom buttons. */
-  .drawing:has(> .basemap) ~ .statusbar {
+  .drawing:has(> .map-canvas) ~ .statusbar {
     max-width: calc(100% - 24px - 56px);
   }
   .drawing .maplibregl-ctrl-bottom-left {

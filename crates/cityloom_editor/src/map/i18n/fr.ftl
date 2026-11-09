@@ -6,7 +6,7 @@ map-page-description = Voyez toute la ville d’un coup d’œil et ouvrez n’i
 map-brand = CityLoom, la carte de la ville
 map-editors = Éditeurs
 map-nav-map = Carte
-map-basemap-label = Carte de la ville, nord en haut
+map-canvas-label = Carte de la ville, nord en haut
 map-does-it-work = Est-ce que ça fonctionne?
 map-your-changes = Vos modifications
 map-legend = Légende de la carte
@@ -172,8 +172,7 @@ map-svg-name-changed = { $name } · modifié
 map-svg-changed = modifié
 
 ## Là où il n’y a pas de carte
-map-basemap-missing = Le fond de carte n’a pas pu être chargé. Construisez-le avec `just prepare`, puis rechargez la page.
-map-basemap-outside = Il n’y a pas de fond de carte pour ce lieu. La carte couvre la région de Montréal.
+map-canvas-missing = La carte n’a pas pu être démarrée. Votre navigateur ne prend peut-être pas en charge WebGL. Rechargez la page pour réessayer.
 map-no-roads = Les rues de ce lieu n’ont pas pu être chargées, il n’y a donc pas de carte à afficher.
 
 ## Vérifications du réseau (src/map/network.rs, src/map/vm.rs)

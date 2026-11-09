@@ -15,9 +15,8 @@ cargo test shell::vm # one module; a full test name also works
 just check-no-fake   # release server must hold no fake provider (CI's server-release job)
 just build           # release wasm + wasm-bindgen into web/pkg (gitignored)
 just prepare         # downloads Geofabrik's Quebec extract (~1.2 GB) into data/, cuts roads into web/data/metro (needs osmium-tool),
-                     # builds the basemap web/data/basemap/montreal.pmtiles (Planetiler, Java 21+), packs data/montreal.citymodel;
-                     # all gitignored; args pass through (--refresh). Without tiles places come from Overpass; without the basemap the map shows none
-just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|basemap|pack` runs one step
+                     # packs them into data/montreal.citymodel; all gitignored; args pass through (--refresh). Without tiles places come from Overpass
+just pack            # citymodel_builder pack only; `cargo run -p citymodel_builder --release -- tiles|pack` runs one step
 just test-scripts    # scripts/include/tests (the issue system's consistency test and the CI selector's); CI's test job runs it
 just e2e-ui          # UI tier of the browser tests (e2e/tiers.json): one page, network stubbed, static server only; no database, no archive; builds first
 just e2e-integration # integration tier: the real server and a Postgres (needs DATABASE_URL): account-server and sync specs; builds first
@@ -43,8 +42,8 @@ Vertical slices, one folder per feature, MVVM inside each:
 - `street/`, `junction/`, `map/`, `shell/` each hold `model.rs` (street, junction: editing rules, no DOM, signals or I/O; edits return `bool`, a refusal carries a reason), `vm.rs`, `text.rs` (words for a screen reader), Leptos views and `tests.rs`. `junction/` also has `geometry.rs`, `read_model.rs`, `frame.rs`, `drawing.rs`, `iso/` (2.5D), `iso_marks.rs`, `stops.rs` and `signal.rs` (a signal's phases, one per street with entering lanes, each with a ready-made `Pattern` from `Junction::set_phase_pattern`, offered only where the lanes support it).
 - **Dependency rule:** a slice may use another slice's `model` (junction uses the street model; city uses both), `city::store` / `city::binding` / `city::projection`, `restriction::store`, `shell::Target` and `shared`; never another slice's `vm`, views or text. Stores and editors (`city/`, `restriction/`, `street/`, `junction/`) also use `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), which depends only on `shared`; the shell builds `sync::SyncVm`; every other slice reaches the sync only through `sync::hub` and `sync::model`. `shared` depends on no slice. New code goes in the slice that owns the feature, not in a layer folder.
 - **View-models** expose presentation-ready reactive getters and take commands. They reach the browser only through the ports, so they are tested natively against `test_ports()` / `test_ports_with_time()`.
-- **Views** bind to a view-model and forward events; they decide nothing. Rendering is by pure functions returning SVG strings (`junction/iso/`, `street/iso/`, `map/svg.rs` for the home hero only) set with `inner_html`; pointer and keyboard logic are pure state machines with tests. `shell/view.rs` binds the shared static markup to `ShellVm`. `map/` draws over a MapLibre basemap, no SVG.
-- **Entry points** are in each slice's `mod.rs` (wasm-bindgen exports: `Editor`/`open_junction`/`mount_page`, `Sheet`/`open_street`/`mount_street_page`, `mount_map(basemap)`) and `lib.rs`. A page script (`web/app.js`, `junction.js`, `map.js`) only loads the module, sets up the hatch `<defs>` (not `map.js`, which passes `createBasemap` from `web/basemap.js` to `mount_map`) and calls `mount_*` and `.mount_shell()`.
+- **Views** bind to a view-model and forward events; they decide nothing. Rendering is by pure functions returning SVG strings (`junction/iso/`, `street/iso/`, `map/svg.rs` for the home hero only) set with `inner_html`; pointer and keyboard logic are pure state machines with tests. `shell/view.rs` binds the shared static markup to `ShellVm`. `map/` draws with MapLibre, no SVG.
+- **Entry points** are in each slice's `mod.rs` (wasm-bindgen exports: `Editor`/`open_junction`/`mount_page`, `Sheet`/`open_street`/`mount_street_page`, `mount_map(canvas)`) and `lib.rs`. A page script (`web/app.js`, `junction.js`, `map.js`) only loads the module, sets up the hatch `<defs>` (not `map.js`, which passes `createMapCanvas` from `web/mapcanvas.js` to `mount_map`) and calls `mount_*` and `.mount_shell()`.
 
 Translation: English and fr-CA on all four pages and the shell.
 
@@ -56,10 +55,10 @@ Translation: English and fr-CA on all four pages and the shell.
 ## Conventions and gotchas
 
 - Test-driven: write the failing test first. Commit each change separately once the tests pass.
-- Logic belongs in Rust; JS in `web/` is start-up glue only. The exception is `web/basemap.js`, the adapter owning the MapLibre map (vendored MapLibre and PMTiles in `web/vendor`).
+- Logic belongs in Rust; JS in `web/` is start-up glue only. The exception is `web/mapcanvas.js`, the adapter owning the MapLibre map (vendored MapLibre in `web/vendor`).
 - Adding a string: add it to both `.ftl` files with the same id and variables (a parity test fails otherwise). Whole sentences with named placeables, never concatenated pieces; plurals use selectors (`[one]` / `*[other]`). Write an ordinary space before `:` in the `.ftl`. fr-CA follows the OQLF: no-break space before `:` and inside `« »`, none before `;` `!` `?`. Terms: `docs/glossary-fr-ca.md`. Lengths and typed numbers go through `Units::*_in(…, locale)` and `parse_number`, never `format!("{:.1}")`.
 - `src/i18n_guard.rs` fails on any wording in the files listed in `MIGRATED` (add a file when its slice migrates; `LEFT_OUT` names the few left out; a map, place, junction or city file in neither list fails). A literal that only looks like a word goes in `ALLOWED_LITERALS`, a kebab-case literal that is not a message (an element id, a CSS class) in `NOT_MESSAGE_IDS`, each with its reason; any other kebab-case literal must be a message in both languages, and a dead entry fails.
-- Still English: `web/credits.html`, OSM data, the basemap's labels, MapLibre's strings.
+- Still English: `web/credits.html`, OSM data, MapLibre's strings.
 - Accessibility (WCAG 2.2 AA): `shared/contrast.rs` (tests only) measures the colour tokens of `web/app.css` and `editor.css`; a new colour pair for text or a control goes there. `shell/header.rs` keeps `--bar-stuck` and `html` has that much `scroll-padding-top`, so focus is never hidden under the sticky bar. Editors open with a skip link to `#wrap`; an `h2` heads the details panel.
 - View-model behaviour gets a native test against the port fakes. Component tests render to HTML on the host (each slice's `tests.rs`, helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively.
 - Non-`Send` values inside reactive closures go in `StoredValue::new_local`; views take a `Copy` handle (`junction::watch::Watch`, `street::watch::SheetWatch`) over an `Rc<…Vm>`.

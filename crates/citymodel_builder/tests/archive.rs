@@ -11,31 +11,21 @@ fn tile_bytes(name: &str) -> Vec<u8> {
     format!("tile {name} ").repeat(40).into_bytes()
 }
 
-/// Files for the tiles named `x_y` and the basemaps, under `dir`; returns the road list and the basemap list.
-fn inputs_in(dir: &Path, tiles: &[(u16, u16)], basemaps: &[&str]) -> (Vec<(u16, u16, PathBuf)>, Vec<PathBuf>) {
+/// Files for the tiles named `x_y`, under `dir`; returns the road list.
+fn inputs_in(dir: &Path, tiles: &[(u16, u16)]) -> Vec<(u16, u16, PathBuf)> {
     fs::create_dir_all(dir).unwrap();
-    let roads = tiles
+    tiles
         .iter()
         .map(|&(x, y)| {
             let path = dir.join(format!("{x}_{y}.osm.pbf"));
             fs::write(&path, tile_bytes(&format!("{x}_{y}"))).unwrap();
             (x, y, path)
         })
-        .collect();
-    let maps = basemaps
-        .iter()
-        .map(|name| {
-            let path = dir.join(name);
-            fs::write(&path, b"PMTiles".repeat(1000)).unwrap();
-            path
-        })
-        .collect();
-    (roads, maps)
+        .collect()
 }
 
-fn pack_to(out: &Path, roads: &[(u16, u16, PathBuf)], maps: &[PathBuf]) -> Result<usize, PackError> {
-    let inputs =
-        PackInputs { area: "montreal", source: "quebec-latest.osm.pbf", source_time: 1_759_900_000, created: 1_760_000_000, grid: GRID, roads, basemaps: maps };
+fn pack_to(out: &Path, roads: &[(u16, u16, PathBuf)]) -> Result<usize, PackError> {
+    let inputs = PackInputs { area: "montreal", source: "quebec-latest.osm.pbf", source_time: 1_759_900_000, created: 1_760_000_000, grid: GRID, roads };
     archive::pack(&inputs, out, &mut |_, _| {})
 }
 
@@ -55,24 +45,19 @@ fn members(path: &Path) -> Vec<(tar::Header, String, Vec<u8>)> {
 #[test]
 fn members_are_in_the_stated_order_with_string_sorted_tiles() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(10, 3), (0, 0), (2, 0)], &["montreal.pmtiles"]);
+    let roads = inputs_in(dir.path(), &[(10, 3), (0, 0), (2, 0)]);
     let out = dir.path().join("a.citymodel");
-    assert_eq!(pack_to(&out, &roads, &maps).unwrap(), 4);
+    assert_eq!(pack_to(&out, &roads).unwrap(), 3);
     let names: Vec<String> = members(&out).into_iter().map(|m| m.1).collect();
-    assert_eq!(names, ["cityloom.idx", "roads/0_0.osm.pbf", "roads/10_3.osm.pbf", "roads/2_0.osm.pbf", "basemap/montreal.pmtiles"]);
-
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles", "b.pmtiles"]);
-    pack_to(&out, &roads, &maps).unwrap();
-    let names: Vec<String> = members(&out).into_iter().map(|m| m.1).collect();
-    assert_eq!(names, ["cityloom.idx", "roads/0_0.osm.pbf", "basemap/b.pmtiles", "basemap/montreal.pmtiles"]);
+    assert_eq!(names, ["cityloom.idx", "roads/0_0.osm.pbf", "roads/10_3.osm.pbf", "roads/2_0.osm.pbf"]);
 }
 
 #[test]
 fn headers_are_the_deterministic_ones() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0), (2, 0)], &["montreal.pmtiles"]);
+    let roads = inputs_in(dir.path(), &[(0, 0), (2, 0)]);
     let out = dir.path().join("a.citymodel");
-    pack_to(&out, &roads, &maps).unwrap();
+    pack_to(&out, &roads).unwrap();
     for (h, name, _) in members(&out) {
         assert_eq!(h.mtime().unwrap(), 0, "{name}");
         assert_eq!((h.uid().unwrap(), h.gid().unwrap(), h.mode().unwrap()), (0, 0, 0o644), "{name}");
@@ -87,27 +72,24 @@ fn headers_are_the_deterministic_ones() {
 #[test]
 fn the_same_inputs_give_the_same_bytes_whatever_the_file_times_or_places() {
     let dir = tempfile::tempdir().unwrap();
-    let (r1, m1) = inputs_in(&dir.path().join("one"), &[(0, 0), (2, 0)], &["montreal.pmtiles"]);
-    let (r2, m2) = inputs_in(&dir.path().join("two"), &[(2, 0), (0, 0)], &["montreal.pmtiles"]);
+    let r1 = inputs_in(&dir.path().join("one"), &[(0, 0), (2, 0)]);
+    let r2 = inputs_in(&dir.path().join("two"), &[(2, 0), (0, 0)]);
     let later = std::time::SystemTime::now() + std::time::Duration::from_secs(86_400);
     for (_, _, p) in &r2 {
         fs::File::options().write(true).open(p).unwrap().set_modified(later).unwrap();
     }
-    for p in &m2 {
-        fs::File::options().write(true).open(p).unwrap().set_modified(later).unwrap();
-    }
     let (a, b) = (dir.path().join("a.citymodel"), dir.path().join("b.citymodel"));
-    pack_to(&a, &r1, &m1).unwrap();
-    pack_to(&b, &r2, &m2).unwrap();
+    pack_to(&a, &r1).unwrap();
+    pack_to(&b, &r2).unwrap();
     assert_eq!(fs::read(&a).unwrap(), fs::read(&b).unwrap());
 }
 
 #[test]
 fn the_index_describes_the_members() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0), (2, 0), (10, 3)], &["montreal.pmtiles"]);
+    let roads = inputs_in(dir.path(), &[(0, 0), (2, 0), (10, 3)]);
     let out = dir.path().join("a.citymodel");
-    pack_to(&out, &roads, &maps).unwrap();
+    pack_to(&out, &roads).unwrap();
     let all = members(&out);
     let index = read_index(&all[0].2).unwrap();
     let h = &index.header;
@@ -121,7 +103,7 @@ fn the_index_describes_the_members() {
         assert_eq!(entry.sha256[..], Sha256::digest(&member.2)[..]);
     }
     let kinds: Vec<_> = index.entries.iter().map(|e| (e.kind, e.x, e.y)).collect();
-    assert_eq!(kinds, [(Kind::Road, 0, 0), (Kind::Road, 10, 3), (Kind::Road, 2, 0), (Kind::Basemap, 0, 0)]);
+    assert_eq!(kinds, [(Kind::Road, 0, 0), (Kind::Road, 10, 3), (Kind::Road, 2, 0)]);
     let full: String = Sha256::digest(tile_bytes("0_0")).iter().map(|b| format!("{b:02x}")).collect();
     assert_eq!(short_checksum(&index.entries[0].sha256), full[..16]);
 }
@@ -129,17 +111,17 @@ fn the_index_describes_the_members() {
 #[test]
 fn the_part_file_is_renamed_when_whole_and_removed_on_failure() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
+    let roads = inputs_in(dir.path(), &[(0, 0)]);
     let out = dir.path().join("a.citymodel");
     let part = dir.path().join("a.citymodel.part");
-    pack_to(&out, &roads, &maps).unwrap();
+    pack_to(&out, &roads).unwrap();
     assert!(out.exists() && !part.exists());
 
     let out = dir.path().join("b.citymodel");
     let part = dir.path().join("b.citymodel.part");
     let mut missing = roads.clone();
     missing.push((1, 0, dir.path().join("1_0.osm.pbf")));
-    assert!(matches!(pack_to(&out, &missing, &maps), Err(PackError::Io { .. })));
+    assert!(matches!(pack_to(&out, &missing), Err(PackError::Io { .. })));
     assert!(!out.exists() && !part.exists());
 }
 
@@ -147,19 +129,19 @@ fn the_part_file_is_renamed_when_whole_and_removed_on_failure() {
 fn a_file_that_changes_size_while_it_is_packed_is_an_error_and_leaves_nothing() {
     for grow in [true, false] {
         let dir = tempfile::tempdir().unwrap();
-        let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
+        let roads = inputs_in(dir.path(), &[(0, 0), (2, 0)]);
         let out = dir.path().join("a.citymodel");
-        let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
-        let target = maps[0].clone();
+        let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads };
+        let target = roads[1].2.clone();
         let mut changed = false;
-        // the basemap changes as soon as the copy begins, after the sizes were measured and the files hashed
+        // the last tile changes once the copy of the first is done, after the sizes were measured and the files hashed
         let result = archive::pack(&inputs, &out, &mut |done, total| {
             if done > total / 2 && !changed {
                 changed = true;
                 if grow {
-                    fs::write(&target, b"PMTiles".repeat(1001)).unwrap();
+                    fs::write(&target, b"tile".repeat(1001)).unwrap();
                 } else {
-                    fs::write(&target, b"PMTiles").unwrap();
+                    fs::write(&target, b"tile").unwrap();
                 }
             }
         });
@@ -171,31 +153,27 @@ fn a_file_that_changes_size_while_it_is_packed_is_an_error_and_leaves_nothing() 
 #[test]
 fn refuses_what_the_server_would_refuse() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0)], &["montreal.pmtiles"]);
+    let roads = inputs_in(dir.path(), &[(0, 0)]);
     let out = dir.path().join("a.citymodel");
     let with_area = |area: &str| {
-        let inputs = PackInputs { area, source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
+        let inputs = PackInputs { area, source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads };
         archive::pack(&inputs, &out, &mut |_, _| {})
     };
     assert!(matches!(with_area("../x"), Err(PackError::Area(_))));
 
-    let (_, bad_map) = inputs_in(&dir.path().join("m"), &[], &["Montreal.pmtiles"]);
-    assert!(matches!(pack_to(&out, &roads, &bad_map), Err(PackError::Name(_))));
-
     let outside = vec![(51u16, 0u16, roads[0].2.clone())];
-    assert!(matches!(pack_to(&out, &outside, &maps), Err(PackError::OutsideGrid(_))));
+    assert!(matches!(pack_to(&out, &outside), Err(PackError::OutsideGrid(_))));
 
-    assert!(matches!(pack_to(&out, &[], &maps), Err(PackError::Empty("no road tiles"))));
-    assert!(matches!(pack_to(&out, &roads, &[]), Err(PackError::Empty("no basemap"))));
+    assert!(matches!(pack_to(&out, &[]), Err(PackError::Empty("no road tiles"))));
     assert!(!out.exists());
 }
 
 #[test]
 fn reports_progress_up_to_the_total() {
     let dir = tempfile::tempdir().unwrap();
-    let (roads, maps) = inputs_in(dir.path(), &[(0, 0), (2, 0)], &["montreal.pmtiles"]);
-    let sizes: u64 = roads.iter().map(|r| fs::metadata(&r.2).unwrap().len()).sum::<u64>() + fs::metadata(&maps[0]).unwrap().len();
-    let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads, basemaps: &maps };
+    let roads = inputs_in(dir.path(), &[(0, 0), (2, 0)]);
+    let sizes: u64 = roads.iter().map(|r| fs::metadata(&r.2).unwrap().len()).sum::<u64>();
+    let inputs = PackInputs { area: "montreal", source: "s", source_time: 1, created: 2, grid: GRID, roads: &roads };
     let mut last = (0, 0);
     archive::pack(&inputs, &dir.path().join("a.citymodel"), &mut |done, total| last = (done, total)).unwrap();
     assert_eq!(last, (sizes * 2, sizes * 2));
@@ -225,10 +203,6 @@ fn road(x: u16, y: u16, data: &[u8]) -> (Entry, Vec<u8>) {
     (Entry { kind: Kind::Road, x, y, size: data.len() as u64, sha256: sha(data), path: format!("roads/{x}_{y}.osm.pbf") }, data.to_vec())
 }
 
-fn basemap(data: &[u8]) -> (Entry, Vec<u8>) {
-    (Entry { kind: Kind::Basemap, x: 0, y: 0, size: data.len() as u64, sha256: sha(data), path: "basemap/montreal.pmtiles".into() }, data.to_vec())
-}
-
 fn file_header(path: &str, size: u64) -> tar::Header {
     let mut h = tar::Header::new_ustar();
     h.set_path(path).unwrap();
@@ -239,7 +213,7 @@ fn file_header(path: &str, size: u64) -> tar::Header {
 }
 
 fn good() -> Vec<(Entry, Vec<u8>)> {
-    vec![road(0, 0, b"tile zero zero"), road(1, 2, b"tile one two, longer"), basemap(&[7u8; 5000])]
+    vec![road(0, 0, b"tile zero zero"), road(1, 2, b"tile one two, longer")]
 }
 
 /// An archive of the given index bytes, then the given members, each at its own path.
@@ -314,7 +288,6 @@ fn a_good_archive_unpacks_and_its_index_json_matches() {
     let dir = data.join("montreal");
     assert_eq!(fs::read(dir.join("metro/0_0.osm.pbf")).unwrap(), b"tile zero zero");
     assert_eq!(fs::read(dir.join("metro/1_2.osm.pbf")).unwrap(), b"tile one two, longer");
-    assert_eq!(fs::read(dir.join("basemap/montreal.pmtiles")).unwrap(), vec![7u8; 5000]);
     let index = read_index(&fs::read(&a).unwrap()[512..512 + archive::write_index(&h, &good().iter().map(|p| p.0.clone()).collect::<Vec<_>>()).len()]).unwrap();
     assert_eq!(fs::read_to_string(dir.join(".index-sha256")).unwrap(), hex(&index.trailer));
     let expected = citymodel_builder::metro_index::index_json(
@@ -331,16 +304,15 @@ fn a_good_archive_unpacks_and_its_index_json_matches() {
 fn an_archive_pack_writes_unpacks_to_the_same_files() {
     let (tmp, _archives, data) = roots();
     let src = tmp.path().join("src");
-    let (roads, maps) = inputs_in(&src, &[(10, 3), (0, 0)], &["montreal.pmtiles"]);
+    let roads = inputs_in(&src, &[(10, 3), (0, 0)]);
     let folder = tmp.path().join("folder");
     fs::create_dir_all(&folder).unwrap();
-    pack_to(&folder.join("a.citymodel"), &roads, &maps).unwrap();
+    pack_to(&folder.join("a.citymodel"), &roads).unwrap();
     let got = archive::unpack_folder(&folder, &data).unwrap();
     assert_eq!((got.area.as_str(), got.tiles), ("montreal", 2));
     for (x, y, path) in &roads {
         assert_eq!(fs::read(data.join(format!("montreal/metro/{x}_{y}.osm.pbf"))).unwrap(), fs::read(path).unwrap());
     }
-    assert_eq!(fs::read(data.join("montreal/basemap/montreal.pmtiles")).unwrap(), fs::read(&maps[0]).unwrap());
 }
 
 #[test]
@@ -377,10 +349,7 @@ fn refuses_a_missing_tile() {
     let pieces = good();
     let entries: Vec<Entry> = pieces.iter().map(|p| p.0.clone()).collect();
     let index = archive::write_index(&header("montreal"), &entries);
-    let members = vec![
-        (file_header("roads/0_0.osm.pbf", pieces[0].1.len() as u64), pieces[0].1.clone()),
-        (file_header("basemap/montreal.pmtiles", pieces[2].1.len() as u64), pieces[2].1.clone()),
-    ];
+    let members = vec![(file_header("roads/0_0.osm.pbf", pieces[0].1.len() as u64), pieces[0].1.clone())];
     let a = archive_of(&archives, "a.citymodel", &index, members);
     match archive::unpack(&a, &data).unwrap_err() {
         ArchiveError::Missing { path } => assert_eq!(path, "roads/1_2.osm.pbf"),
@@ -481,7 +450,7 @@ fn refuses_a_path_outside_the_two_patterns() {
 #[test]
 fn refuses_a_tile_outside_the_grid() {
     let (_tmp, archives, data) = roots();
-    let pieces = vec![road(9, 0, b"far away"), basemap(b"m")];
+    let pieces = vec![road(9, 0, b"far away")];
     let a = write_archive(&archives, "a.citymodel", &header("montreal"), &pieces);
     refused(archive::unpack(&a, &data), "outside the grid");
     assert!(names(&data).is_empty());
@@ -625,13 +594,12 @@ fn a_changed_archive_replaces_the_area() {
     let (_tmp, archives, data) = roots();
     let a1 = write_archive(&archives, "a1.citymodel", &header("montreal"), &good());
     archive::unpack(&a1, &data).unwrap();
-    let a2 = write_archive(&archives, "a2.citymodel", &header("montreal"), &[road(0, 0, b"a different tile"), basemap(&[9u8; 100])]);
+    let a2 = write_archive(&archives, "a2.citymodel", &header("montreal"), &[road(0, 0, b"a different tile")]);
     let got = archive::unpack(&a2, &data).unwrap();
     assert!(!got.reused);
     let dir = data.join("montreal");
     assert_eq!(fs::read(dir.join("metro/0_0.osm.pbf")).unwrap(), b"a different tile");
     assert!(!dir.join("metro/1_2.osm.pbf").exists());
-    assert_eq!(fs::read(dir.join("basemap/montreal.pmtiles")).unwrap(), vec![9u8; 100]);
     assert_eq!(names(&data), ["montreal"]);
 }
 

@@ -39,12 +39,10 @@ fn source_time_asks_osmium_for_the_replication_timestamp() {
 const MONTREAL: (f64, f64, f64, f64) = (-74.4, 45.2, 0.0257, 0.018);
 const FIXTURE: (f64, f64, f64, f64) = (-73.6078, 45.5161, 0.0257, 0.018);
 
-/// A metro folder with the tiles `names` on disk and `listed` in index.json, and a basemap folder with one file.
-fn folders(root: &Path, grid: (f64, f64, f64, f64), on_disk: &[&str], listed: &[&str]) -> (PathBuf, PathBuf) {
+/// A metro folder with the tiles `names` on disk and `listed` in index.json.
+fn folders(root: &Path, grid: (f64, f64, f64, f64), on_disk: &[&str], listed: &[&str]) -> PathBuf {
     let metro = root.join("metro");
-    let basemap = root.join("basemap");
     fs::create_dir_all(&metro).unwrap();
-    fs::create_dir_all(&basemap).unwrap();
     for name in on_disk {
         fs::write(metro.join(format!("{name}.osm.pbf")), format!("tile {name}").repeat(30)).unwrap();
     }
@@ -55,22 +53,11 @@ fn folders(root: &Path, grid: (f64, f64, f64, f64), on_disk: &[&str], listed: &[
         format!("{{\"lon0\":{lon0},\"lat0\":{lat0},\"dlon\":{dlon},\"dlat\":{dlat},\"tiles\":[{}],\"checksums\":{{}}}}", tiles.join(",")),
     )
     .unwrap();
-    fs::write(basemap.join("montreal.pmtiles"), b"PMTiles".repeat(500)).unwrap();
-    (metro, basemap)
+    metro
 }
 
-fn job(root: &Path, metro: PathBuf, basemap: PathBuf, grid: Option<Grid>) -> PackJob {
-    PackJob {
-        out: root.join("out.citymodel"),
-        area: "montreal".into(),
-        metro,
-        basemap,
-        basemap_file: None,
-        source: "quebec-latest.osm.pbf".into(),
-        source_time: 5,
-        created: 7,
-        grid,
-    }
+fn job(root: &Path, metro: PathBuf, grid: Option<Grid>) -> PackJob {
+    PackJob { out: root.join("out.citymodel"), area: "montreal".into(), metro, source: "quebec-latest.osm.pbf".into(), source_time: 5, created: 7, grid }
 }
 
 fn header_grid(archive_path: &Path) -> (u16, u16) {
@@ -85,8 +72,8 @@ fn header_grid(archive_path: &Path) -> (u16, u16) {
 #[test]
 fn pack_packs_the_folders_into_an_archive_the_server_reads() {
     let dir = tempfile::tempdir().unwrap();
-    let (metro, basemap) = folders(dir.path(), MONTREAL, &["0_0", "12_9"], &["0_0", "12_9"]);
-    let job = job(dir.path(), metro.clone(), basemap.clone(), None);
+    let metro = folders(dir.path(), MONTREAL, &["0_0", "12_9"], &["0_0", "12_9"]);
+    let job = job(dir.path(), metro.clone(), None);
     let (progress, out) = quiet_progress(commands::pack_steps(&job.out), dir.path());
     commands::run_pack(&progress, &job).unwrap();
     progress.close();
@@ -99,7 +86,6 @@ fn pack_packs_the_folders_into_an_archive_the_server_reads() {
         let file = format!("{name}.osm.pbf");
         assert_eq!(fs::read(data.join("montreal/metro").join(&file)).unwrap(), fs::read(metro.join(&file)).unwrap());
     }
-    assert_eq!(fs::read(data.join("montreal/basemap/montreal.pmtiles")).unwrap(), fs::read(basemap.join("montreal.pmtiles")).unwrap());
     let index: serde_json::Value = serde_json::from_slice(&fs::read(data.join("montreal/metro/index.json")).unwrap()).unwrap();
     assert_eq!(index["tiles"], serde_json::json!(["0_0", "12_9"]));
     assert_eq!(header_grid(&job.out), (51, 34));
@@ -109,8 +95,8 @@ fn pack_packs_the_folders_into_an_archive_the_server_reads() {
 fn a_grid_that_is_not_the_built_in_one_takes_its_size_from_the_tiles() {
     for (tiles, size) in [(&["0_0"][..], (1, 1)), (&["0_0", "10_3"][..], (11, 4))] {
         let dir = tempfile::tempdir().unwrap();
-        let (metro, basemap) = folders(dir.path(), FIXTURE, tiles, tiles);
-        let job = job(dir.path(), metro, basemap, None);
+        let metro = folders(dir.path(), FIXTURE, tiles, tiles);
+        let job = job(dir.path(), metro, None);
         let (progress, _) = quiet_progress(commands::pack_steps(&job.out), dir.path());
         commands::run_pack(&progress, &job).unwrap();
         assert_eq!(header_grid(&job.out), size);
@@ -121,8 +107,8 @@ fn a_grid_that_is_not_the_built_in_one_takes_its_size_from_the_tiles() {
 fn a_tile_in_only_one_place_is_named() {
     for (on_disk, listed, named) in [(&["0_0", "3_4"][..], &["0_0"][..], "3_4"), (&["0_0"][..], &["0_0", "5_6"][..], "5_6")] {
         let dir = tempfile::tempdir().unwrap();
-        let (metro, basemap) = folders(dir.path(), MONTREAL, on_disk, listed);
-        let job = job(dir.path(), metro, basemap, None);
+        let metro = folders(dir.path(), MONTREAL, on_disk, listed);
+        let job = job(dir.path(), metro, None);
         let (progress, _) = quiet_progress(commands::pack_steps(&job.out), dir.path());
         let error = commands::run_pack(&progress, &job).unwrap_err();
         assert!(error.lines.iter().any(|l| l.contains(named)), "{:?}", error.lines);
@@ -132,19 +118,7 @@ fn a_tile_in_only_one_place_is_named() {
 }
 
 #[test]
-fn a_missing_basemap_is_a_clear_error() {
-    let dir = tempfile::tempdir().unwrap();
-    let (metro, basemap) = folders(dir.path(), MONTREAL, &["0_0"], &["0_0"]);
-    fs::remove_file(basemap.join("montreal.pmtiles")).unwrap();
-    let job = job(dir.path(), metro, basemap, None);
-    let (progress, _) = quiet_progress(commands::pack_steps(&job.out), dir.path());
-    let error = commands::run_pack(&progress, &job).unwrap_err();
-    assert!(error.lines.iter().any(|l| l.contains("no basemap")), "{:?}", error.lines);
-    assert_eq!(progress.steps()[0].state, citymodel_builder::progress::State::Failed);
-}
-
-#[test]
-fn the_cli_parses_the_four_commands() {
+fn the_cli_parses_the_three_commands() {
     let parse = |args: &[&str]| Cli::try_parse_from(std::iter::once("citymodel_builder").chain(args.iter().copied()));
     assert!(parse(&["pack", "--area", "x", "--created", "0"]).is_ok());
     assert!(parse(&["pack"]).is_ok());
@@ -156,9 +130,5 @@ fn the_cli_parses_the_four_commands() {
         assert!(parse(&["prepare", "--batch", batch]).is_err(), "prepare {batch}");
         assert!(parse(&["tiles", "q.osm.pbf", "--batch", batch]).is_err(), "tiles {batch}");
     }
-    assert!(parse(&["basemap", "q.osm.pbf", "out", "--bounds", "-74.4,45.2,-73.09,45.81", "--minzoom", "0", "--maxzoom", "14", "--memory", "4g"]).is_ok());
-    assert!(parse(&["basemap", "q.osm.pbf", "--memory", "4G"]).is_ok());
-    assert!(parse(&["basemap", "q.osm.pbf", "--memory", "4gb"]).is_err());
-    assert!(parse(&["basemap", "q.osm.pbf", "--bounds", "1,2,3"]).is_err());
-    assert!(parse(&["basemap", "q.osm.pbf", "--bounds", "1,2,3,x"]).is_err());
+    assert!(parse(&["basemap", "q.osm.pbf"]).is_err());
 }

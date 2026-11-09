@@ -6,7 +6,7 @@ map-page-description = See the whole city at once and open any street or junctio
 map-brand = CityLoom, the city map
 map-editors = Editors
 map-nav-map = Map
-map-basemap-label = Map of the city, north up
+map-canvas-label = Map of the city, north up
 map-does-it-work = Does it work?
 map-your-changes = Your changes
 map-legend = Key to the map
@@ -172,8 +172,7 @@ map-svg-name-changed = { $name } · changed
 map-svg-changed = changed
 
 ## Where there is no map
-map-basemap-missing = The basemap could not be loaded. Build it with `just prepare`, then reload the page.
-map-basemap-outside = There is no basemap for this place. The map covers the Montréal area.
+map-canvas-missing = The map could not be started. Your browser may not support WebGL. Reload the page to try again.
 map-no-roads = The roads of this place could not be loaded, so there is no map to show.
 
 ## Network checks (src/map/network.rs, src/map/vm.rs)

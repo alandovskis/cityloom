@@ -15,7 +15,7 @@ qui possède la fonctionnalité.
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `street/`      | L’éditeur de rue.                                                                                                                 |
 | `junction/`    | L’éditeur de jonction.                                                                                                            |
-| `map/`         | La carte de la ville sur un fond de carte MapLibre, le panneau Règles de zone et les vérifications du réseau.                     |
+| `map/`         | La carte de la ville dessinée par MapLibre, le panneau Règles de zone et les vérifications du réseau.                             |
 | `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                                      |
 | `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                                    |
 | `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.                             |
@@ -41,8 +41,8 @@ Chaque tranche d’édition contient :
 - `tests.rs`.
 
 Le dessin est produit par des fonctions pures qui renvoient des chaînes SVG, placées avec `inner_html`. La logique du
-pointeur et du clavier est faite de machines à états pures et testées. La page Carte fait exception : elle dessine sur un
-fond de carte MapLibre, sans SVG.
+pointeur et du clavier est faite de machines à états pures et testées. La page Carte fait exception : elle dessine avec
+MapLibre, sans SVG.
 
 ## Ports
 
@@ -105,7 +105,7 @@ panneaux) restent propres à chaque appareil.
 La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `map.js`, `app.js` pour la page de la rue et
 `junction.js`) servent au démarrage : ils chargent le module, appellent `mount_*` et montent le shell. Les scripts de la
 rue et de la jonction préparent aussi les motifs de hachures et enregistrent les modifications de la page à `pagehide`,
-et `map.js` crée le fond de carte. La seule exception est `web/basemap.js`, l’adaptateur qui possède la carte MapLibre.
+et `map.js` crée la carte. La seule exception est `web/mapcanvas.js`, l’adaptateur qui possède la carte MapLibre.
 
 ## Persistance
 

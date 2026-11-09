@@ -33,12 +33,11 @@ if grep -q report_pdf web/pkg/cityloom_editor.js; then
   exit 1
 fi
 # The map's libraries, from npm (`npm ci` at the repository root) into web/vendor. MapLibre is ES modules that
-# find each other beside themselves; pmtiles.js defines a global `pmtiles`.
+# find each other beside themselves.
 [ -d node_modules/maplibre-gl ] || { echo "node_modules/maplibre-gl is missing: run 'just setup' first" >&2; exit 1; }
 mkdir -p web/vendor
 cp node_modules/maplibre-gl/dist/maplibre-gl.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs \
-  node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl.css \
-  node_modules/pmtiles/dist/pmtiles.js web/vendor/
+  node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl.css web/vendor/
 # Compressed copies of the built files, which the server sends as they are (see the script). If this script stops
 # before here (a missing tool), a copy from an earlier run is left beside a newer file; the server does not send a
 # copy older than its file (static_files.rs), and the next complete run writes them again.

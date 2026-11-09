@@ -473,6 +473,7 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("map-canvas", "the id of the element MapLibre draws the map into (web/map.html)"),
     ("iso-zebra", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
     ("iso-stopline", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
     ("iso-solid", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),

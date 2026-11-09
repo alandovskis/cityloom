@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import type { Page } from "@playwright/test";
 
 import {
@@ -10,9 +8,7 @@ import {
   mapStill,
   openLongStreet,
   openStreet,
-  PLATEAU_TILES,
   placesOnMap,
-  serveBasemap,
   streetLengthM,
   test,
 } from "./fixtures";
@@ -26,16 +22,16 @@ const centre = (page: Page) =>
     return { lng: c.lng, lat: c.lat };
   });
 
-/** The colour of the basemap's land: none while a new style is put in, when the map has no layers. */
+/** The colour of the ground the places are drawn on. */
 const land = (page: Page) =>
   page.evaluate(() => {
     const map = (window as any).cityloomMap;
-    return map.getLayer("background") ? map.getPaintProperty("background", "background-color") : null;
+    return map.getLayer("ground") ? map.getPaintProperty("ground", "background-color") : null;
   });
 
-/** Waits for a new style, whose land is not `before`, to be in and the places to be back on it. */
+/** Waits for the ground to have a colour other than `before`, with the places still on it. */
 async function restyled(page: Page, before: unknown) {
-  await expect.poll(async () => [null, before].includes(await land(page))).toBe(false);
+  await expect.poll(async () => land(page)).not.toBe(before);
   await mapReady(page);
 }
 
@@ -106,11 +102,11 @@ test.describe("the city map", () => {
     await mapStill(page); // the city is fitted: the view the tests start from
   });
 
-  test("shows the area over a basemap, with its streets and junctions as places", async ({ page }) => {
+  test("shows the area on the map, with its streets and junctions as places", async ({ page }) => {
     await expect(page.locator("#title-block")).toContainText("Plateau");
-    await expect(page.locator("#basemap canvas")).toBeVisible();
-    await expect(page.locator("#basemap")).toHaveAttribute("aria-label", "Map of the city, north up");
-    await expect(page.locator(".basemap-note")).toBeHidden();
+    await expect(page.locator("#map-canvas canvas")).toBeVisible();
+    await expect(page.locator("#map-canvas")).toHaveAttribute("aria-label", "Map of the city, north up");
+    await expect(page.locator(".map-canvas-note")).toBeHidden();
     await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
     const places = await placesOnMap(page);
     expect(places.streets.length).toBeGreaterThan(50);
@@ -127,7 +123,7 @@ test.describe("the city map", () => {
     await expect(page.locator("#places-panel")).toHaveCount(0);
     await expect(page.locator("#reset")).toHaveCount(0);
     await expect(page.locator("#areas-panel")).toBeVisible();
-    const map = (await page.locator("#basemap").boundingBox())!;
+    const map = (await page.locator("#map-canvas").boundingBox())!;
     expect(map.x).toBe(0);
   });
 
@@ -147,77 +143,11 @@ test.describe("the city map", () => {
     expect(shut.height).toBeGreaterThan(shut.width);
   });
 
-  test("the streets lie on the basemap's roads", async ({ page }) => {
-    // At a street's middle, the basemap draws a road within a few pixels: the overlay is where the earth is.
-    // `idle` comes once the new view's tiles are loaded and drawn, which the old view's being loaded does not say.
-    await page.evaluate(
-      () =>
-        new Promise((done) => {
-          const map = (window as any).cityloomMap;
-          map.once("idle", done);
-          map.jumpTo({ zoom: 16 });
-        }),
-    );
-    await mapStill(page);
-    await mapReady(page);
-    const result = await page.evaluate(() => {
-      const map = (window as any).cityloomMap;
-      const lines = map
-        .querySourceFeatures("places")
-        .filter((f: any) => f.geometry.type === "LineString" && f.properties.width_m >= 6);
-      // the basemap style's road layers (scripts/make_basemap_style.mjs)
-      const roads = ["road", "road-casing"];
-      let on = 0;
-      let seen = 0;
-      for (const f of lines.slice(0, 40)) {
-        const c = f.geometry.coordinates;
-        const mid = c[Math.floor(c.length / 2)];
-        const p = map.project(mid);
-        if (p.x < 0 || p.y < 0 || p.x > map.getCanvas().clientWidth || p.y > map.getCanvas().clientHeight) continue;
-        seen++;
-        if (
-          map.queryRenderedFeatures(
-            [
-              [p.x - 8, p.y - 8],
-              [p.x + 8, p.y + 8],
-            ],
-            { layers: roads },
-          ).length > 0
-        )
-          on++;
-      }
-      return { on, seen };
-    });
-    expect(result.seen).toBeGreaterThanOrEqual(10);
-    expect(result.on / result.seen).toBeGreaterThan(0.8);
-  });
-
   test("pressing a place on the map opens it", async ({ page }) => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
     await page.mouse.click(spot.x, spot.y);
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}$`));
-  });
-
-  test("a shift-click picks a street for the selection without opening it, and the panel drops it again", async ({
-    page,
-  }) => {
-    await mapReady(page);
-    await expect.poll(async () => (await streetSpots(page)).some((s) => s.editable)).toBe(true);
-    const spot = (await streetSpots(page)).find((s) => s.editable)!;
-    const selected = (hot: string) =>
-      page.evaluate((id) => !!(window as any).cityloomMap.getFeatureState({ source: "places", id }).selected, hot);
-    await page.mouse.move(spot.x, spot.y);
-    await page.keyboard.down("Shift");
-    await page.mouse.click(spot.x, spot.y);
-    await page.keyboard.up("Shift");
-    await expect(page.locator("#selection-list li")).toHaveCount(1);
-    await expect(page.locator("#selection-lead")).toHaveText("1 street selected.");
-    await expect.poll(() => selected(spot.hot)).toBe(true);
-    await expect(page).toHaveURL(/map\.html$/);
-    await page.locator("#selection-list li button").click();
-    await expect(page.locator("#selection-list li")).toHaveCount(0);
-    await expect.poll(() => selected(spot.hot)).toBe(false);
   });
 
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
@@ -233,7 +163,7 @@ test.describe("the city map", () => {
   test("the keys move the map when it has focus: zoom and the four directions", async ({ page }) => {
     const fitted = await zoom(page);
     const start = await centre(page);
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("+");
     await expect.poll(() => zoom(page)).toBeGreaterThan(fitted + 0.3);
     await page.keyboard.press("0");
@@ -261,21 +191,21 @@ test.describe("the city map", () => {
     await page.reload();
     await mapReady(page);
     const fitted = await zoom(page);
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("+");
     await expect.poll(() => zoom(page)).toBeGreaterThan(fitted + 0.3);
     expect(await page.evaluate(() => (window as any).cityloomMap.isMoving())).toBe(false);
   });
 
   test("the map is one stop for the keyboard: its canvas is not a second one", async ({ page }) => {
-    await expect(page.locator("#basemap canvas")).toHaveAttribute("tabindex", "-1");
-    await page.locator("#basemap").focus();
+    await expect(page.locator("#map-canvas canvas")).toHaveAttribute("tabindex", "-1");
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("Tab");
     const next = await page.evaluate(() => document.activeElement?.tagName);
     expect(next).not.toBe("CANVAS");
     // Shift+Tab from there comes back to the map itself
     await page.keyboard.press("Shift+Tab");
-    await expect(page.locator("#basemap")).toBeFocused();
+    await expect(page.locator("#map-canvas")).toBeFocused();
   });
 
   test("the units change the scale", async ({ page }) => {
@@ -292,7 +222,7 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-scale")).toBeVisible();
     // the attribution starts open, as a line of text
     await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
-    const map = await box("#basemap");
+    const map = await box("#map-canvas");
     const scale = await box(".maplibregl-ctrl-scale");
     const left = await box("#areas-panel");
     expect(scale.x - (left.x + left.width)).toBeLessThan(24);
@@ -313,7 +243,7 @@ test.describe("the city map", () => {
     const [scale, attribution, map] = [
       await box(".maplibregl-ctrl-scale"),
       await box(".maplibregl-ctrl-attrib"),
-      await box("#basemap"),
+      await box("#map-canvas"),
     ];
     for (const control of [scale, attribution]) {
       expect(control.x).toBeGreaterThanOrEqual(map.x);
@@ -325,7 +255,7 @@ test.describe("the city map", () => {
     expect(overlaps(scale, attribution)).toBe(false);
   });
 
-  test("a theme changes the basemap and keeps the places, and the pointer on one still lights it", async ({ page }) => {
+  test("a theme changes the ground and keeps the places, and the pointer on one still lights it", async ({ page }) => {
     const light = await land(page);
     expect(light).not.toBeNull();
     await page.locator("#account-btn").click();
@@ -389,7 +319,7 @@ test.describe("the city map", () => {
     await expect(page).toHaveURL(/street\.html\?street=\d+/);
   });
 
-  test("the muted places stay muted when the basemap changes style", async ({ page }) => {
+  test("the muted places stay muted when the theme changes", async ({ page }) => {
     await page.evaluate(() => (window as any).cityloomMap.jumpTo({ zoom: 16.8 }));
     await mapStill(page);
     await expect.poll(async () => (await streetSpots(page)).some((s) => !s.editable)).toBe(true);
@@ -438,64 +368,18 @@ test.describe("the city map", () => {
   });
 });
 
-test.describe("a map drawn without a basemap (#175 prototype, /map.html?basemap=none)", () => {
-  test("shows the city's streets and junctions on a plain ground, and asks for no tiles", async ({ page }) => {
-    const tileRequests: string[] = [];
-    page.on("request", (r) => /\.pmtiles|\/basemap\//.test(r.url()) && tileRequests.push(r.url()));
-    await page.goto("/map.html?basemap=none");
-    await mapReady(page);
-    await mapStill(page);
-    await expect(page.locator("#basemap canvas")).toBeVisible();
-    await expect(page.locator(".basemap-note")).toBeHidden();
-    // what the map is made of: the ground, and nothing from a tile source
-    const style = await page.evaluate(() => {
-      const s = (window as any).cityloomMap.getStyle();
-      return {
-        ground: s.layers[0].id,
-        vector: Object.values(s.sources).filter((x: any) => x.type === "vector").length,
-      };
+test.describe("when there is no map", () => {
+  test("a browser without WebGL is told, and the page and its notes still work", async ({ page }) => {
+    await page.addInitScript(() => {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, kind: string, ...rest: unknown[]) {
+        return /webgl/.test(kind) ? null : (getContext as any).call(this, kind, ...rest);
+      } as typeof getContext;
     });
-    expect(style).toEqual({ ground: "background", vector: 0 });
-    // the city is there to be pressed: streets and junctions are drawn and found under the pointer
-    const places = await placesOnMap(page);
-    expect(places.junctions.length).toBeGreaterThan(0);
-    expect(places.streets.length).toBeGreaterThan(0);
-    expect((await streetSpots(page)).length).toBeGreaterThan(0);
-    await page.screenshot({ path: test.info().outputPath("no-basemap.png") });
-    expect(tileRequests).toEqual([]);
-  });
-
-  test("the ground follows the theme and keeps the places", async ({ page }) => {
-    await page.goto("/map.html?basemap=none");
-    await mapReady(page);
-    const ground = () => land(page);
-    const light = await ground();
-    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
-    await restyled(page, light);
-    expect(await ground()).not.toBe(light);
-  });
-});
-
-test.describe("when there is no basemap", () => {
-  test("tiles that cannot be had are said, and the page and its notes still work", async ({
-    page,
-    context,
-    errors,
-  }) => {
-    await context.unroute("**/data/basemap/montreal.pmtiles");
-    await page.route("**/data/basemap/montreal.pmtiles", (route) => route.fulfill({ status: 404, body: "" }));
     await page.goto("/map.html");
-    await expect(page.locator(".basemap-note")).toContainText("The basemap could not be loaded");
-    await expect(page.locator(".basemap-note")).toContainText("just prepare");
+    await expect(page.locator(".map-canvas-note")).toContainText("The map could not be started");
     // the city is in the Notes, though there is no map to draw it on
     expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
-    // The failed request, and MapLibre's report of its source failing for it, are the point of the test;
-    // anything else still fails it.
-    forgive(
-      errors,
-      /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
-      /^Error: Bad response code: 404\n/,
-    );
   });
 
   test("an area whose roads could not be got says so", async ({ page, errors }) => {
@@ -504,35 +388,13 @@ test.describe("when there is no basemap", () => {
     );
     await page.route("https://overpass-api.de/**", (route) => route.abort());
     await page.goto("/map.html");
-    await expect(page.locator(".basemap-note")).toContainText("The roads of this place could not be loaded");
+    await expect(page.locator(".map-canvas-note")).toContainText("The roads of this place could not be loaded");
     // no places stand in for the area, and the page names the area it could not load
     await expect(page.locator("#fit")).toHaveText("No roads to show.");
     await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
     await expect(page.locator("#title-block")).not.toContainText("Sample city");
     // the refused request is the point of the test; anything else still fails it
     forgive(errors, /^Failed to load resource: net::ERR_FAILED$/);
-  });
-
-  test("a place beyond the basemap's coverage is said, and the page and its notes still work", async ({
-    page,
-    context,
-  }) => {
-    // The fixture's tiles, saying in their header that they cover Berlin: the Plateau is then outside them.
-    const tiles = Buffer.from(readFileSync(PLATEAU_TILES));
-    expect(tiles.subarray(0, 7).toString("latin1")).toBe("PMTiles");
-    expect(tiles[7]).toBe(3); // the header below is version 3's
-    // PMTiles v3 header: min lon, min lat, max lon, max lat, little-endian int32 of degrees * 1e7.
-    [13.0, 52.3, 13.8, 52.7].forEach((deg, i) => tiles.writeInt32LE(Math.round(deg * 1e7), 102 + 4 * i));
-    await context.unroute("**/data/basemap/montreal.pmtiles");
-    await serveBasemap(context, tiles);
-    await page.goto("/map.html");
-    await expect(page.locator(".basemap-note")).toHaveText(
-      "There is no basemap for this place. The map covers the Montréal area.",
-    );
-    // the city is in the Notes, though there is no map to draw it on
-    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
-    // nothing of the city is drawn on a map of somewhere else
-    expect(await page.evaluate(() => !(window as any).cityloomMap.getSource("places"))).toBe(true);
   });
 });
 

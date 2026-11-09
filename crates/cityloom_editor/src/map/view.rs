@@ -12,7 +12,7 @@ use leptos::web_sys::KeyboardEvent;
 
 #[cfg(target_arch = "wasm32")]
 use crate::map::camera::Insets;
-use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, StateTag};
+use crate::map::vm::{CanvasState, MapVm, NoteItem, PlaceRow, StateTag};
 use crate::shared::bind::Bound;
 use crate::shared::said::Said;
 use crate::shared::tick::Tick;
@@ -107,7 +107,7 @@ pub(crate) fn insets_of(map: &Element) -> Insets {
 }
 
 /// What binds the page to the map: the keyboard on the map, what floats over it, and keeping the map in step
-/// with the city. The map itself is drawn by MapLibre into `#basemap`, which the page holds; this shows only
+/// with the city. The map itself is drawn by MapLibre into `#map-canvas`, which the page holds; this shows only
 /// why there is none when there is none.
 #[component]
 pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
@@ -120,7 +120,7 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
         Effect::new(move |_| {
             vm.with(|v| {
                 v.view();
-                v.basemap_state();
+                v.canvas_state();
                 v.areas().list();
             });
             vm.with(|v| v.sync_places());
@@ -128,7 +128,7 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
         // The areas and the outline follow what is kept, the selection, a corner being dragged and the drawing.
         Effect::new(move |_| {
             vm.with(|v| {
-                v.basemap_state();
+                v.canvas_state();
                 let a = v.areas();
                 a.list();
                 a.selected_id();
@@ -140,7 +140,7 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
         // While an outline is drawn the map shows a cross at its centre, where Enter places a corner.
         Effect::new(move |_| {
             let drawing = vm.with(|v| matches!(v.areas().draw(), crate::restriction::draw::Draw::Drawing(_)));
-            if let Some(el) = leptos::prelude::document().get_element_by_id("basemap") {
+            if let Some(el) = leptos::prelude::document().get_element_by_id("map-canvas") {
                 let _ = if drawing { el.set_attribute("data-drawing", "") } else { el.remove_attribute("data-drawing") };
             }
         });
@@ -150,7 +150,7 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
         });
 
         Effect::new(move |_| {
-            let Some(el) = leptos::prelude::document().get_element_by_id("basemap") else { return };
+            let Some(el) = leptos::prelude::document().get_element_by_id("map-canvas") else { return };
             let key = Closure::<dyn FnMut(KeyboardEvent)>::new(move |e: KeyboardEvent| {
                 if e.meta_key() || e.ctrl_key() || e.alt_key() {
                     return;
@@ -204,12 +204,12 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
 
     view! {
         <p
-            class="basemap-note"
+            class="map-canvas-note"
             role="status"
-            hidden=move || !matches!(vm.with(|v| v.basemap_state()), BasemapState::Unavailable(_))
+            hidden=move || !matches!(vm.with(|v| v.canvas_state()), CanvasState::Unavailable(_))
         >
-            {move || match vm.with(|v| v.basemap_state()) {
-                BasemapState::Unavailable(key) => vm.with(|v| v.word(key)),
+            {move || match vm.with(|v| v.canvas_state()) {
+                CanvasState::Unavailable(key) => vm.with(|v| v.word(key)),
                 _ => String::new(),
             }}
         </p>

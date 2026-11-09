@@ -161,7 +161,7 @@ impl Throttle {
 }
 
 /// Splits like Python's `str.splitlines()` on `\n`, `\r\n` and a bare `\r` only (not on every separator Python knows:
-/// those are what tools write; osmium's and Planetiler's progress updates are separated by `\r`).
+/// those are what tools write; osmium's progress updates are separated by `\r`).
 pub fn splitlines(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     let mut start = 0;
@@ -277,11 +277,11 @@ mod tests {
         running.state = Running;
         running.detail = "batch 9 of 14".into();
         running.took = Some(5.0);
-        let mut failed = Step::new("basemap", "basemap", "planetiler");
+        let mut failed = Step::new("tiles", "tiles", "osmium");
         failed.state = Failed;
         failed.took = Some(5.0);
         assert_eq!(plain(vec![row(&running, true)]), [" RUNS  tiles  cutting 1,734 tiles  batch 9 of 14"]);
-        assert_eq!(plain(vec![row(&failed, true)]), [" FAIL  basemap  planetiler"]);
+        assert_eq!(plain(vec![row(&failed, true)]), [" FAIL  tiles  osmium"]);
     }
 
     #[test]
@@ -378,11 +378,8 @@ mod tests {
     #[test]
     fn finished_block_of_a_failure_has_its_lines_with_bullets_then_a_blank_line() {
         let mut step = steps(&[Failed]).remove(0);
-        step.lines = vec!["java: Planetiler needs Java 21, found 17".into(), "full log: data/logs/basemap.log".into()];
-        assert_eq!(
-            finished_block(&step, false),
-            [" FAIL  group  subject 0", " ‣ java: Planetiler needs Java 21, found 17", " ‣ full log: data/logs/basemap.log", ""]
-        );
+        step.lines = vec!["osmium: not found".into(), "full log: data/logs/tiles.log".into()];
+        assert_eq!(finished_block(&step, false), [" FAIL  group  subject 0", " ‣ osmium: not found", " ‣ full log: data/logs/tiles.log", ""]);
     }
 
     #[test]
@@ -401,10 +398,10 @@ mod tests {
 
     #[test]
     fn failure_lines_follow_a_failed_line() {
-        let mut step = Step::new("basemap", "basemap", "planetiler");
+        let mut step = Step::new("tiles", "tiles", "osmium");
         step.state = Failed;
         step.lines = vec!["boom".into()];
-        assert_eq!(plain_lines(&step), ["FAIL basemap planetiler", " ‣ boom"]);
+        assert_eq!(plain_lines(&step), ["FAIL tiles osmium", " ‣ boom"]);
     }
 
     #[test]
