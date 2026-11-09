@@ -141,6 +141,30 @@
   color: var(--ink);
   font-weight: 600;
 }
+.street-steps {
+  margin: 6px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  font-size: 14px;
+}
+.street-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  color: var(--ink-2);
+}
+.street-step-none {
+  color: var(--ink-3);
+}
+.street-step svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .back {
   display: inline-flex;
   align-items: center;
