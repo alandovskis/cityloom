@@ -361,6 +361,8 @@ pub struct MapVm {
     /// The change picked for the selected streets, and how far it has got.
     corridor_op: ArcRwSignal<Op>,
     corridor: ArcRwSignal<Stage>,
+    /// The last change made to the selected streets, which can be taken back as one step while this page is open.
+    undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// The source-data findings, likewise; they are read from the city as the importer laid it out.
@@ -418,6 +420,7 @@ impl MapVm {
             selection,
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
+            undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
@@ -1333,7 +1336,46 @@ impl MapVm {
         self.reload();
         self.sync_places();
         self.ports.announcer.say(&self.say_now(&report.said()));
+        if !report.changed.is_empty() {
+            self.undoable.set(Some((report.op, report.undo.clone())));
+        }
         self.corridor.set(Stage::Done(report));
+    }
+
+    /// What the button that takes the last change back says, while there is one to take back.
+    pub fn corridor_undo_label(&self) -> Option<String> {
+        self.undoable.with(|u| {
+            u.as_ref().map(|(op, undo)| self.i18n.tr("corridor-undo-button", &Args::new().str("name", self.say_op(*op)).num("count", undo.len() as i64)))
+        })
+    }
+
+    /// Takes the last change back, all of it or none: refused, and said so, when a street it changed was edited
+    /// since (here or on its own page, by sync or another tab).
+    pub fn undo_corridor(&self) {
+        let Some((op, undo)) = self.undoable.get_untracked() else { return };
+        let name = self.say_now(&op.name());
+        let said = match corridor::undo(&self.store, &undo) {
+            corridor::Undone::Restored(streets) => {
+                self.undoable.set(None);
+                self.corridor.set(Stage::Idle);
+                self.i18n.tr_now("corridor-undone", &Args::new().str("name", name).num("count", streets.len() as i64))
+            }
+            // A street edited since can never be put back as it was: the button goes, with the reason said.
+            corridor::Undone::Refused(streets) => {
+                self.undoable.set(None);
+                self.i18n.tr_now("corridor-undo-refused", &Args::new().num("count", streets.len() as i64))
+            }
+            // What was put back is no longer to be undone: only the streets that are still as the change left them.
+            corridor::Undone::NotKept(streets) => {
+                let mut left = undo.clone();
+                left.keep_only(&streets);
+                self.undoable.set(Some((op, left)));
+                self.i18n.tr_now("corridor-undo-failed", &Args::new().num("count", streets.len() as i64))
+            }
+        };
+        self.reload();
+        self.sync_places();
+        self.ports.announcer.say(&said);
     }
 
     /// Leaves the review or the report.
@@ -2454,6 +2496,66 @@ mod tests {
         vm.review_corridor();
         vm.clear_selection();
         assert_eq!(vm.corridor_stage(), Stage::Idle);
+    }
+
+    fn change_two_streets(vm: &MapVm) -> [u32; 2] {
+        let city = vm.store.open();
+        let ready: Vec<u32> = (1..=22u32)
+            .filter(|&s| corridor::plan(&city, 0, Op::Template(crate::street::model::Template::Greenway), &[s]).ready() == vec![s])
+            .take(2)
+            .collect();
+        for s in &ready {
+            vm.toggle_selected(Some(&format!("s-{s}")));
+        }
+        vm.set_corridor_op("greenway");
+        vm.review_corridor();
+        vm.apply_corridor();
+        [ready[0], ready[1]]
+    }
+
+    #[test]
+    fn a_change_can_be_undone_from_the_map_even_after_the_selection_is_cleared() {
+        let (vm, said) = sample_vm();
+        assert_eq!(vm.corridor_undo_label(), None, "nothing to undo before a change");
+        let [a, b] = change_two_streets(&vm);
+        let (changed_a, changed_b) = (vm.store.open().street_editor(a, 0).unwrap().snapshot(), vm.store.open().street_editor(b, 0).unwrap().snapshot());
+        assert_eq!(vm.corridor_undo_label().as_deref(), Some("Undo: Neighbourhood greenway on 2 streets"));
+        vm.clear_selection();
+        said.take();
+        vm.undo_corridor();
+        assert_eq!(said.take(), vec!["Undone: Neighbourhood greenway. 2 streets are as they were.".to_string()]);
+        assert_eq!(vm.corridor_undo_label(), None, "it is undone once");
+        assert_ne!(vm.store.open().street_editor(a, 0).unwrap().snapshot(), changed_a);
+        assert_ne!(vm.store.open().street_editor(b, 0).unwrap().snapshot(), changed_b);
+    }
+
+    #[test]
+    fn an_undo_is_refused_when_a_street_was_edited_since_and_nothing_is_restored() {
+        let (vm, said) = sample_vm();
+        let [a, b] = change_two_streets(&vm);
+        let mut e = vm.store.open().street_editor(b, 0).unwrap();
+        let u = e.view().segments[0].uid;
+        assert!(e.set_width(u, e.view().segments[0].width_mm + 100));
+        assert!(vm.store.write_street(b, e.snapshot()));
+        let (now_a, now_b) = (vm.store.open().street_editor(a, 0).unwrap().snapshot(), vm.store.open().street_editor(b, 0).unwrap().snapshot());
+        said.take();
+        vm.undo_corridor();
+        assert_eq!(said.take(), vec!["Nothing was undone: 1 street has been edited since the change.".to_string()]);
+        assert_eq!(vm.store.open().street_editor(a, 0).unwrap().snapshot(), now_a);
+        assert_eq!(vm.store.open().street_editor(b, 0).unwrap().snapshot(), now_b);
+        assert_eq!(vm.corridor_undo_label(), None, "it can never succeed now, so the button goes");
+    }
+
+    #[test]
+    fn a_new_change_replaces_the_one_that_can_be_undone() {
+        let (vm, _) = sample_vm();
+        change_two_streets(&vm);
+        vm.cancel_corridor();
+        vm.set_corridor_op("pedestrian");
+        vm.review_corridor();
+        vm.apply_corridor();
+        let label = vm.corridor_undo_label().unwrap();
+        assert!(label.starts_with("Undo: Make pedestrian"), "{label}");
     }
 
     #[test]

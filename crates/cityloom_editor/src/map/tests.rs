@@ -1686,6 +1686,39 @@ mod selection {
     }
 }
 
+mod corridor_undo {
+    use super::*;
+
+    fn panel(vm: &Rc<MapVm>) -> String {
+        map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> })
+    }
+
+    #[test]
+    fn the_undo_button_is_there_only_after_a_change_and_stays_when_the_selection_is_cleared() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        assert!(!panel(&vm).contains("corridor-undo"));
+        vm.set_corridor_op("pedestrian");
+        vm.review_corridor();
+        vm.apply_corridor();
+        assert!(panel(&vm).contains("id=\"corridor-undo\"") && panel(&vm).contains("Undo: Make pedestrian on 1 street"), "{}", panel(&vm));
+        vm.clear_selection();
+        assert!(panel(&vm).contains("Undo: Make pedestrian on 1 street"), "{}", panel(&vm));
+        vm.undo_corridor();
+        assert!(!panel(&vm).contains("corridor-undo"));
+    }
+
+    #[test]
+    fn the_undo_button_speaks_french() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.toggle_selected(Some("s-1"));
+        vm.set_corridor_op("pedestrian");
+        vm.review_corridor();
+        vm.apply_corridor();
+        assert!(panel(&vm).contains("Annuler\u{a0}: Rendre piétonne sur 1 rue"), "{}", panel(&vm));
+    }
+}
+
 mod corridor_words {
     use super::*;
 
