@@ -687,7 +687,7 @@ fn an_area_with_no_street_inside_shows_no_streets_heading() {
     vm.areas().select(Some("r1"));
     let h = areas_html(&vm);
     assert!(h.contains("No loaded street is inside.") && h.contains("id=\"area-delete\""), "{h}");
-    assert!(!h.contains("Streets inside") && count(&h, "<ul") == 1, "{h}");
+    assert!(!h.contains("Streets inside") && count(&h, "<ul") == 2, "the areas, and the rule's sources: {h}");
 }
 
 #[test]
@@ -772,6 +772,14 @@ fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
     assert!(j.set_crossing(arm, false));
     assert!(store.write_junction(2, j.snapshot()));
     vm.reload();
+}
+
+#[test]
+fn every_network_check_says_it_is_a_placeholder_and_the_name_of_its_summary_is_its_check() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert_eq!(count(&h, "<details class=\"src placeholder\""), 6, "{h}");
+    assert!(h.contains("aria-label=\"Source: placeholder, no source (Crossings)\""), "{h}");
 }
 
 #[test]

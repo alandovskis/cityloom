@@ -251,6 +251,16 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
+/// Where the Transform menu's transit measures come from: the Atlas toolbox, for their codes and names only.
+#[component]
+pub fn AtlasSource(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let (units, i18n) = (w.units(), w.i18n());
+        crate::shared::sources_view::source_note("atlas-measure", &plain(&i18n, "st-transit-heading"), &i18n, units)
+    }
+}
+
 fn failing(w: &SheetWatch) -> usize {
     w.view().checks.iter().filter(|c| !c.ok).count() + w.area_checks().iter().filter(|f| !f.ok()).count()
 }
