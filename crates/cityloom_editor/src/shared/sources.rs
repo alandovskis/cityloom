@@ -95,6 +95,7 @@ pub const SOURCES: &[Source] = &[
     mtl!("mtl-plantations", "outil de conception Hauteur des plantations", "/Outils/Hauteur-des-plantations/"),
     mtl!("mtl-voies", "outil de conception Largeur de voies", "/Outils/Conception---Largeur-de-voies/"),
     doc("mtq-t1-c15", "Conception routière, Tome I, chapitre 15, Voies cyclables (2026-06-15)", MTQ, QC, None),
+    doc("tpa-toolbox", "Transit Priority Atlas, toolbox", "Marron Institute", "src-jurisdiction-none", Some("https://tpa.transitcosts.com/atlas/toolbox")),
 ];
 
 /// What is known of one rule.
@@ -128,6 +129,8 @@ const ENTRIES: &[Entry] = &[
     entry("green-clear-path", "check-label-green-clear-path", "src-applies-clear-path", &["mtl-corridor"]),
     entry("access", "check-label-access", "src-applies-pedestrian-access", &["mtl-corridor"]),
     entry("calming-length", "check-label-calming-length", "src-applies-raised-crossing", &["mtl-traversant"]),
+    entry("atlas-measure", "st-transit-heading", "src-applies-atlas", &["tpa-toolbox"]),
+    entry("atlas-junction", "src-atlas-junction-label", "src-applies-atlas-junction", &["tpa-toolbox"]),
 ];
 
 /// The rule's source as a view reads it.
@@ -259,7 +262,7 @@ mod tests {
         for (i, s) in SOURCES.iter().enumerate() {
             assert!(SOURCES[..i].iter().all(|o| o.id != s.id), "{} is listed twice", s.id);
             assert!(
-                ["src-jurisdiction-ca", "src-jurisdiction-qc", "src-jurisdiction-mtl"].contains(&s.jurisdiction),
+                ["src-jurisdiction-ca", "src-jurisdiction-qc", "src-jurisdiction-mtl", "src-jurisdiction-none"].contains(&s.jurisdiction),
                 "{}: unknown jurisdiction {}",
                 s.id,
                 s.jurisdiction
@@ -297,6 +300,15 @@ mod tests {
             assert_eq!(c.confidence, Confidence::Unchecked, "{rule}");
             assert!(!c.sources.is_empty() && c.sources[0].title.contains(chapter) && c.sources[0].publisher.contains("Transports du Québec"), "{rule}");
         }
+    }
+
+    #[test]
+    fn the_atlas_measures_cite_the_toolbox_as_the_source_of_their_names_only() {
+        let c = citation("atlas-measure");
+        assert_eq!(c.confidence, Confidence::Unchecked);
+        assert_eq!(c.applies, Said::new("src-applies-atlas"));
+        assert_eq!(c.sources.len(), 1);
+        assert_eq!((c.sources[0].publisher, c.sources[0].url), ("Marron Institute", Some("https://tpa.transitcosts.com/atlas/toolbox")));
     }
 
     #[test]

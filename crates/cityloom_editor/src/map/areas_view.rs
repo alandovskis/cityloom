@@ -284,6 +284,10 @@ fn rule_picker(vm: Vm, id: Option<String>) -> impl IntoView {
                 set(rule);
             }
         }>{options}</select>
+        {move || {
+            let rule = current.get();
+            vm.with(|v| crate::shared::sources_view::source_note(rule.source_rule(), &v.areas().rule_choice(rule.id()), v.i18n(), v.units()))
+        }}
         {move || is_limit.get().then(|| view! {
             <label for="area-speed">{word(vm, "restriction-speed-label")}</label>
             <select id="area-speed" on:change=move |e| {

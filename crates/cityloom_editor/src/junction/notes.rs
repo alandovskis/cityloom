@@ -138,6 +138,17 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
     }
 }
 
+/// Where the codes and names of a junction's transit measures come from: the Atlas toolbox, for those only.
+#[component]
+pub fn AtlasSource(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
+    move || {
+        let (_, units) = watch.now();
+        let i18n = watch.i18n();
+        crate::shared::sources_view::source_note("atlas-junction", &watch.tr("src-atlas-junction-label"), &i18n, units)
+    }
+}
+
 #[component]
 pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);

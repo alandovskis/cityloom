@@ -163,6 +163,17 @@ impl Rule {
         }
     }
 
+    /// The rule's id in the sources registry (an area rule is a restriction a person declares, not a design rule, so
+    /// none names a source yet and each is shown as a placeholder).
+    pub fn source_rule(self) -> &'static str {
+        match self {
+            Rule::CarFree => "area-car-free",
+            Rule::BusAndBikeOnly => "area-bus-and-bike",
+            Rule::SpeedLimit { .. } => "area-speed-limit",
+            Rule::NoParkingOrLoading => "area-no-parking",
+        }
+    }
+
     /// The rule an id names; a speed limit is at `kmh`.
     pub fn from_id(id: &str, kmh: u8) -> Option<Rule> {
         match Rule::IDS.iter().position(|i| *i == id)? {
@@ -331,6 +342,15 @@ impl Finding {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_area_rule_has_its_own_registry_id_and_is_a_placeholder_for_now() {
+        use crate::shared::sources::{Confidence, citation};
+        let rules = [Rule::CarFree, Rule::BusAndBikeOnly, Rule::SpeedLimit { kmh: 30 }, Rule::NoParkingOrLoading];
+        let ids: Vec<_> = rules.iter().map(|r| r.source_rule()).collect();
+        assert!(ids.iter().enumerate().all(|(i, a)| ids[..i].iter().all(|b| a != b)), "{ids:?}");
+        assert!(ids.iter().all(|id| citation(id).confidence == Confidence::Placeholder));
+    }
+
     use super::*;
     use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
     use crate::shared::testing::{en, fr};

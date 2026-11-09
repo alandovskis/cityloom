@@ -372,6 +372,15 @@ fn the_checks_each_say_whether_they_pass_in_words() {
 }
 
 #[test]
+fn the_transit_measures_cite_the_atlas_toolbox_for_their_names_and_say_the_rest_is_a_placeholder() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <notes::AtlasSource vm=s.clone()/> });
+    assert!(h.contains("Source: named, figures not checked") && h.contains("Marron Institute"), "{h}");
+    assert!(h.contains("What each one does here") && h.contains("CityLoom's own placeholder"), "{h}");
+    assert!(h.contains("href=\"https://tpa.transitcosts.com/atlas/toolbox\"") && h.contains("target=\"_blank\""), "{h}");
+}
+
+#[test]
 fn every_check_carries_its_sources_or_says_it_is_a_placeholder() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });

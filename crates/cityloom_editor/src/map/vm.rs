@@ -256,6 +256,8 @@ pub struct NetworkItem {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NetworkCheck {
     pub id: &'static str,
+    /// The check's id in the sources registry.
+    pub source: &'static str,
     pub label: String,
     pub count: usize,
     /// `no findings`, `1 finding`, `3 findings`.
@@ -818,6 +820,7 @@ impl MapVm {
         let hidden = found.len().saturating_sub(NETWORK_SHOWN);
         NetworkCheck {
             id: rule.id(),
+            source: rule.rule(),
             label: self.word(&format!("net-rule-{}", rule.id())),
             count: found.len(),
             count_text: self.count_text(found.len()),

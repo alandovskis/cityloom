@@ -168,6 +168,15 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 }
 
 #[test]
+fn the_transit_measures_of_a_junction_cite_the_atlas_toolbox_for_their_names_and_say_the_rest_is_a_placeholder() {
+    let s = shared(0);
+    let h = html(|| view! { <notes::AtlasSource vm=s.clone()/> }.into_any());
+    assert!(h.contains("Source: named, figures not checked") && h.contains("Marron Institute"), "{h}");
+    assert!(h.contains("What each one does here is CityLoom's own placeholder"), "{h}");
+    assert!(h.contains("href=\"https://tpa.transitcosts.com/atlas/toolbox\"") && h.contains("target=\"_blank\""), "{h}");
+}
+
+#[test]
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());

@@ -33,6 +33,19 @@ pub enum Check {
 impl Check {
     pub const ALL: [Check; 6] = [Check::Cycling, Check::Access, Check::Crossings, Check::Lanes, Check::Transit, Check::Walking];
 
+    /// The rule's id in the sources registry. Prefixed, since the street and junction checks share one namespace and
+    /// `access` is a street check already.
+    pub fn rule(self) -> &'static str {
+        match self {
+            Check::Cycling => "net-cycling",
+            Check::Access => "net-access",
+            Check::Crossings => "net-crossings",
+            Check::Lanes => "net-lanes",
+            Check::Transit => "net-transit",
+            Check::Walking => "net-walking",
+        }
+    }
+
     /// The rule's name, for an element id; and the message `net-rule-<id>` that words it.
     pub fn id(self) -> &'static str {
         match self {
@@ -448,6 +461,14 @@ fn long_blocks(ctx: &Ctx) -> Vec<NetworkFinding> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_network_check_has_its_own_registry_id_that_no_street_check_uses_and_is_a_placeholder_for_now() {
+        use crate::shared::sources::{Confidence, citation};
+        let ids: Vec<_> = Check::ALL.iter().map(|c| c.rule()).collect();
+        assert!(ids.iter().enumerate().all(|(i, a)| ids[..i].iter().all(|b| a != b)), "{ids:?}");
+        assert!(ids.iter().all(|id| id.starts_with("net-") && citation(id).confidence == Confidence::Placeholder));
+    }
+
     use super::*;
     use crate::city::model::{ArmRead, EndRead, NodeRead, StreetRead};
 

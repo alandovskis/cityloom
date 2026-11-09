@@ -22,10 +22,11 @@ pub fn NetworkLead(vm: Rc<MapVm>) -> impl IntoView {
 #[component]
 pub fn NetworkChecks(vm: Rc<MapVm>) -> impl IntoView {
     let vm: Vm = Bound::new(vm);
-    move || vm.with(|v| v.network_rules()).into_iter().map(check).collect_view()
+    move || vm.with(|v| v.network_rules()).into_iter().map(|rule| check(vm, rule)).collect_view()
 }
 
-fn check(rule: NetworkCheck) -> impl IntoView {
+fn check(vm: Vm, rule: NetworkCheck) -> impl IntoView {
+    let source = vm.with(|v| crate::shared::sources_view::source_note(rule.source, &rule.label, v.i18n(), v.units()));
     let heading = format!("net-h-{}", rule.id);
     let items = rule.items.into_iter().map(finding).collect_view();
     // The name and the count are two spans with a hidden ": " between them, so a screen reader hears "Cycling links:
@@ -33,6 +34,7 @@ fn check(rule: NetworkCheck) -> impl IntoView {
     view! {
         <div class="net-rule" data-rule=rule.id>
             <h3 id=heading class="net-h"><span>{rule.label}</span><span class="sr-only">": "</span><span class="fig net-count">{rule.count_text}</span></h3>
+            {source}
             <ul class="checks places-list" data-count=rule.count>{items}</ul>
             {rule.more.map(|m| view! { <p class="hint net-more">{m}</p> })}
         </div>
