@@ -35,7 +35,7 @@ pub const ZONE_TICKS: &str = "zone-ticks";
 /// The curbside uses' source, and the transit stops'.
 pub const CURBSIDE: &str = "curbside";
 pub const STOPS: &str = "stops";
-/// The layers `web/basemap.js` asks what the pointer is on: keep these names in step with it.
+/// The layers `web/mapcanvas.js` asks what the pointer is on: keep these names in step with it.
 pub const AREAS_FILL: &str = "areas-fill";
 pub const AREAS_VERTEX: &str = "areas-vertex";
 pub const DRAFT_VERTEX: &str = "draft-vertex";

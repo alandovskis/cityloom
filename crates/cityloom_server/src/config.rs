@@ -17,7 +17,7 @@ pub struct Config {
     pub cache_control: String,
     pub account: AccountSide,
     pub areas: Option<Areas>,
-    /// Where `/data/metro/` and `/data/basemap/` are served from; set by `run` once an area is unpacked.
+    /// Where `/data/metro/` is served from; set by `run` once an area is unpacked.
     pub data_mount: Option<PathBuf>,
 }
 

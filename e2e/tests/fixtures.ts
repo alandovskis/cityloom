@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-/** `just e2e-archive`: the server serves the Plateau's tile and basemap from an unpacked `.citymodel` archive, so the
+/** `just e2e-archive`: the server serves the Plateau's tile from an unpacked `.citymodel` archive, so the
  *  fixtures do not route them (a route would answer before the server and the run would prove nothing). */
 const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;
 
@@ -12,9 +12,9 @@ const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;
  *
  *  The pages open the area of the world last chosen, the default one before any is: the Plateau
  *  Mont-Royal. There is no network in the tests, so its roads come from a metro tile served from
- *  `fixtures/plateau.osm.pbf` and its basemap from `fixtures/plateau.pmtiles`. A test that wants
+ *  `fixtures/plateau.osm.pbf`. A test that wants
  *  something else asks for it with its own `page.route`, which wins over these. With `E2E_ARCHIVE=1` the default
- *  tile, its index and the default basemap are not routed: the server answers them from the archive. */
+ *  tile and its index are not routed: the server answers them from the archive. */
 export const test = base.extend<{ errors: string[]; world: void }>({
   context: async ({ context }, use) => {
     await prepareContext(context);
@@ -59,25 +59,6 @@ export const live = (page: Page) => page.locator("#live");
 export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 export const TURBO_PBF = fileURLToPath(new URL("../fixtures/turbo.osm.pbf", import.meta.url));
 export const OPEN_ENDS_PBF = fileURLToPath(new URL("../fixtures/open-ends.osm.pbf", import.meta.url));
-export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles", import.meta.url));
-
-/** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces.
- *  `tiles` is a file to read them from, or the bytes themselves. */
-export async function serveBasemap(context: BrowserContext, tiles: string | Buffer = PLATEAU_TILES) {
-  if (FROM_ARCHIVE && tiles === PLATEAU_TILES) return; // the server serves the default basemap itself
-  const body = typeof tiles === "string" ? readFileSync(tiles) : tiles;
-  await context.route("**/data/basemap/montreal.pmtiles", async (route) => {
-    const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] ?? "");
-    if (!range) return route.fulfill({ body, headers: { "accept-ranges": "bytes" } });
-    const start = Number(range[1]);
-    const end = Math.min(range[2] ? Number(range[2]) : body.length - 1, body.length - 1);
-    await route.fulfill({
-      status: 206,
-      body: body.subarray(start, end + 1),
-      headers: { "content-range": `bytes ${start}-${end}/${body.length}`, "accept-ranges": "bytes" },
-    });
-  });
-}
 
 /** What the Plateau needs where there is no network: a metro tile of it, and no Overpass. */
 export async function serveWorld(page: Page) {
@@ -91,7 +72,7 @@ export async function serveWorld(page: Page) {
 }
 
 /** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads
- *  keeps it, because the choice is only stored when there is none), and the basemap's tiles, so there is no network. */
+ *  keeps it, because the choice is only stored when there is none), so there is no network. */
 export async function prepareContext(context: BrowserContext) {
   await context.addInitScript(() => {
     try {
@@ -100,7 +81,6 @@ export async function prepareContext(context: BrowserContext) {
       // storage is blocked: the page falls back to its own default
     }
   });
-  await serveBasemap(context);
 }
 
 /** A second browser with its own cookies and storage (another person, or the same one on another device), set up

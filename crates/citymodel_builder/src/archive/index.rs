@@ -16,7 +16,6 @@ const TRAILER: usize = 32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Road,
-    Basemap,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,7 +135,6 @@ pub fn read_index(bytes: &[u8]) -> Result<Index, IndexError> {
     for _ in 0..count {
         let kind = match c.take(1)?[0] {
             1 => Kind::Road,
-            2 => Kind::Basemap,
             other => return Err(IndexError::UnknownKind(other)),
         };
         let (x, y, size) = (c.u16()?, c.u16()?, c.u64()?);
@@ -174,7 +172,6 @@ pub fn write_index(header: &Header, entries: &[Entry]) -> Vec<u8> {
     for e in entries {
         out.push(match e.kind {
             Kind::Road => 1,
-            Kind::Basemap => 2,
         });
         out.extend(e.x.to_le_bytes());
         out.extend(e.y.to_le_bytes());
@@ -189,10 +186,6 @@ pub fn write_index(header: &Header, entries: &[Entry]) -> Vec<u8> {
 
 fn lower_name(name: &str) -> bool {
     !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-}
-
-pub(crate) fn basemap_name(path: &str) -> Option<&str> {
-    path.strip_prefix("basemap/").and_then(|rest| rest.strip_suffix(".pmtiles")).filter(|name| lower_name(name))
 }
 
 pub(crate) fn member(path: &str, problem: &'static str) -> ArchiveError {
@@ -219,14 +212,6 @@ pub fn check_entries(index: &Index) -> Result<(), ArchiveError> {
                     return Err(member(path, "is outside the grid"));
                 }
             }
-            Kind::Basemap => {
-                if basemap_name(path).is_none() {
-                    return Err(member(path, "has a path that is not basemap/<name>.pmtiles"));
-                }
-                if entry.x != 0 || entry.y != 0 {
-                    return Err(member(path, "is a basemap with a place in the grid"));
-                }
-            }
         }
         if !seen.insert(path) {
             return Err(member(path, "is listed twice"));
@@ -235,11 +220,10 @@ pub fn check_entries(index: &Index) -> Result<(), ArchiveError> {
     Ok(())
 }
 
-/// Where an entry is unpacked, under `DATA_ROOT/<area>/`: the tiles in `metro/` (the app's name for them), the basemap in `basemap/`.
+/// Where an entry is unpacked, under `DATA_ROOT/<area>/`: the tiles in `metro/` (the app's name for them).
 pub fn destination(entry: &Entry) -> PathBuf {
     match entry.kind {
         Kind::Road => PathBuf::from(format!("metro/{}_{}.osm.pbf", entry.x, entry.y)),
-        Kind::Basemap => PathBuf::from(format!("basemap/{}.pmtiles", basemap_name(&entry.path).unwrap_or("invalid"))),
     }
 }
 
@@ -264,7 +248,7 @@ mod tests {
         resign(bytes[..bytes.len() - 32].to_vec())
     }
 
-    /// The spec's layout for `area`, written by hand: two road tiles and a basemap. `kind0` is the first entry's
+    /// The spec's layout for `area`, written by hand: two road tiles. `kind0` is the first entry's
     /// kind byte and `count` the number the header claims.
     fn hand_made_with(area: &str, kind0: u8, count: u32) -> Vec<u8> {
         let mut b = b"CLOOMIDX".to_vec();
@@ -280,11 +264,7 @@ mod tests {
         b.extend(51u16.to_le_bytes());
         b.extend(34u16.to_le_bytes());
         b.extend(count.to_le_bytes());
-        for (kind, x, y, size, fill, path) in [
-            (kind0, 0u16, 0u16, 10u64, 0xAAu8, "roads/0_0.osm.pbf"),
-            (1, 12, 9, 20, 0xBB, "roads/12_9.osm.pbf"),
-            (2, 0, 0, 30, 0xCC, "basemap/montreal.pmtiles"),
-        ] {
+        for (kind, x, y, size, fill, path) in [(kind0, 0u16, 0u16, 10u64, 0xAAu8, "roads/0_0.osm.pbf"), (1, 12, 9, 20, 0xBB, "roads/12_9.osm.pbf")] {
             b.push(kind);
             b.extend(x.to_le_bytes());
             b.extend(y.to_le_bytes());
@@ -296,7 +276,7 @@ mod tests {
     }
 
     fn hand_made(area: &str) -> Vec<u8> {
-        hand_made_with(area, 1, 3)
+        hand_made_with(area, 1, 2)
     }
 
     #[test]
@@ -306,10 +286,9 @@ mod tests {
         let h = &index.header;
         assert_eq!((h.area.as_str(), h.created, h.source.as_str(), h.source_time), ("montreal", 1_760_000_000, "quebec-latest.osm.pbf", 1_759_900_000));
         assert_eq!((h.grid.lon0, h.grid.lat0, h.grid.dlon, h.grid.dlat, h.grid.nx, h.grid.ny), (-74.4, 45.2, 0.0257, 0.018, 51, 34));
-        assert_eq!(index.entries.len(), 3);
+        assert_eq!(index.entries.len(), 2);
         let e = &index.entries[1];
         assert_eq!((e.kind, e.x, e.y, e.size, e.sha256, e.path.as_str()), (Kind::Road, 12, 9, 20, [0xBB; 32], "roads/12_9.osm.pbf"));
-        assert_eq!(index.entries[2].kind, Kind::Basemap);
         assert_eq!(index.trailer[..], bytes[bytes.len() - 32..]);
     }
 
@@ -407,14 +386,6 @@ mod tests {
         ] {
             assert!(matches!(check_entries(&road(x, y, path)), Err(ArchiveError::Member { .. })), "{path:?}");
         }
-        for path in
-            ["basemap/Montreal.pmtiles", "basemap/a/b.pmtiles", "basemap/.pmtiles", "basemap/a.pmtiles.x", "basemap/../a.pmtiles", "roads/montreal.pmtiles"]
-        {
-            let index = index_with("montreal", vec![entry(Kind::Basemap, 0, 0, path)]);
-            assert!(matches!(check_entries(&index), Err(ArchiveError::Member { .. })), "{path:?}");
-        }
-        let placed = index_with("montreal", vec![entry(Kind::Basemap, 1, 0, "basemap/m.pmtiles")]);
-        assert!(check_entries(&placed).unwrap_err().to_string().contains("basemap/m.pmtiles"));
     }
 
     #[test]
@@ -426,6 +397,5 @@ mod tests {
     #[test]
     fn says_where_each_entry_is_unpacked() {
         assert_eq!(destination(&entry(Kind::Road, 12, 9, "roads/12_9.osm.pbf")), std::path::PathBuf::from("metro/12_9.osm.pbf"));
-        assert_eq!(destination(&entry(Kind::Basemap, 0, 0, "basemap/montreal.pmtiles")), std::path::PathBuf::from("basemap/montreal.pmtiles"));
     }
 }

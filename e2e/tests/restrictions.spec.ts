@@ -4,7 +4,7 @@ import { expect, live, mapReady, mapStill, test } from "./fixtures";
 
 // Area restrictions on the map page of the Plateau: declared by pointer and by keyboard, the street inside flagged
 // on the map and in the street editor, kept over a reload, deleted and brought back, and a corner dragged. What the
-// pointer does on the map (MapLibre in a WebGL canvas, `web/basemap.js`) is covered only here.
+// pointer does on the map (MapLibre in a WebGL canvas, `web/mapcanvas.js`) is covered only here.
 
 type Spot = { x: number; y: number };
 
@@ -167,8 +167,8 @@ async function startByKeyboard(page: Page) {
   await openPanel(page);
   await page.locator("#declare-area").focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#basemap")).toHaveAttribute("data-drawing", "");
-  await expect(page.locator("#basemap")).toBeFocused();
+  await expect(page.locator("#map-canvas")).toHaveAttribute("data-drawing", "");
+  await expect(page.locator("#map-canvas")).toBeFocused();
 }
 
 /** Places three corners from the keyboard: at the middle of the map, moved east, then south, between them. */
@@ -190,7 +190,7 @@ async function formShown(page: Page) {
   await expect(page.locator("#area-save")).toBeVisible();
   await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#area-rule")).toBeFocused();
-  await expect(page.locator("#basemap")).not.toHaveAttribute("data-drawing", "");
+  await expect(page.locator("#map-canvas")).not.toHaveAttribute("data-drawing", "");
 }
 
 /** Declares an area from the keyboard alone: three corners, Shift+Enter, then its name typed and Enter. */
@@ -238,7 +238,7 @@ test.describe("area restrictions", () => {
     await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
     expect(await anyConflict(page)).toBe(false);
     await page.locator("#declare-area").click();
-    await expect(page.locator("#basemap")).toHaveAttribute("data-drawing", "");
+    await expect(page.locator("#map-canvas")).toHaveAttribute("data-drawing", "");
     const spots: Spot[] = await squareAroundAStreet(page);
     for (const [n, s] of spots.entries()) {
       await page.mouse.click(s.x, s.y);
@@ -330,14 +330,14 @@ test.describe("area restrictions", () => {
     // Backspace and Escape while drawing
     await page.locator("#declare-area").focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#basemap")).toBeFocused();
+    await expect(page.locator("#map-canvas")).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText("Corner 1 placed.");
     await page.keyboard.press("Backspace");
     await expect(live(page)).toHaveText("Corner removed. 0 corners left.");
     await page.keyboard.press("Escape");
     await expect(live(page)).toHaveText("Drawing cancelled.");
-    await expect(page.locator("#basemap")).not.toHaveAttribute("data-drawing", "");
+    await expect(page.locator("#map-canvas")).not.toHaveAttribute("data-drawing", "");
     await expect(page.locator("#areas > li")).toHaveCount(1);
     await expect.poll(() => polygons(page)).toBe(1);
   });
@@ -348,7 +348,7 @@ test.describe("area restrictions", () => {
     await page.locator("#inspector-toggle").click();
     await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("#areas-panel")).toBeHidden();
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("Shift+Enter");
     // Showing the panel is the shell's own toggle, which says so over the outline's message; the map says it again.
     await expect(live(page)).toHaveText("The outline is closed. Choose its rule and name, then save it.");
@@ -419,7 +419,7 @@ test.describe("area restrictions", () => {
 
   test("at phone width the panel stacks below the map", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
-    const map = (await page.locator("#basemap").boundingBox())!;
+    const map = (await page.locator("#map-canvas").boundingBox())!;
     const panel = (await page.locator("#areas-panel").boundingBox())!;
     expect(panel.y).toBeGreaterThanOrEqual(map.y + map.height - 1);
     expect(map.height).toBeGreaterThan(200);
@@ -430,7 +430,7 @@ test.describe("area restrictions", () => {
   }) => {
     await openPanel(page);
     await page.locator("#declare-area").click();
-    await expect(page.locator("#basemap")).toBeFocused();
+    await expect(page.locator("#map-canvas")).toBeFocused();
     // The third corner goes at the middle of the map from the keyboard, 9 px from the first, so that a press on
     // the first finds both; the second is well away.
     const m = await middle(page);
@@ -442,7 +442,7 @@ test.describe("area restrictions", () => {
     await expect(live(page)).toHaveText("Corner 1 placed.");
     await page.mouse.click(second.x, second.y);
     await expect(live(page)).toHaveText("Corner 2 placed.");
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText("Corner 3 placed.");
     // both corners are under a press on the first
@@ -505,17 +505,17 @@ test.describe("area restrictions", () => {
     await expect(page.locator("#areas > li")).toHaveCount(0);
     // while drawing, Ctrl+Z leaves the deleted area where it is
     await page.locator("#declare-area").click();
-    await expect(page.locator("#basemap")).toBeFocused();
+    await expect(page.locator("#map-canvas")).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText("Corner 1 placed.");
     await page.keyboard.press("Control+z");
-    await expect(page.locator("#basemap")).toHaveAttribute("data-drawing", "");
+    await expect(page.locator("#map-canvas")).toHaveAttribute("data-drawing", "");
     await page.keyboard.press("Escape");
     await expect(live(page)).toHaveText("Drawing cancelled.");
     await expect(page.locator("#areas > li")).toHaveCount(0);
     expect(Object.keys(JSON.parse((await kept(page))!).restrictions)).toEqual([]);
     // back in the list it does
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("Control+z");
     await expect(live(page)).toHaveText("“Undone” restored.");
     await expect(page.locator("#areas > li")).toHaveCount(1);
@@ -574,7 +574,7 @@ test.describe("area restrictions", () => {
     expect(await kept(page)).toEqual(before);
     await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "true");
     // the same click, with no corner there once the area is let go, opens the junction
-    await page.locator("#basemap").focus();
+    await page.locator("#map-canvas").focus();
     await page.keyboard.press("Escape");
     await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "false");
     await expect.poll(() => drawnAt(page, "areas-vertex", j)).toBe(0);

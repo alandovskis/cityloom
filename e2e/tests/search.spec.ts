@@ -15,7 +15,7 @@ const firstJunctionName = async (page: Page) => {
 test.describe("the search box on the city map", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/map.html");
-    await expect(page.locator("#basemap canvas")).toBeVisible();
+    await expect(page.locator("#map-canvas canvas")).toBeVisible();
   });
 
   test("has no Search button in the header: Enter does it", async ({ page }) => {

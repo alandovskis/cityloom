@@ -12,9 +12,7 @@ command -v cargo-zigbuild >/dev/null || missing="$missing cargo-zigbuild"
 command -v zig >/dev/null || python3 -m ziglang version >/dev/null 2>&1 || missing="$missing zig"
 rustup target list --installed 2>/dev/null | grep -qx x86_64-unknown-linux-musl || missing="$missing x86_64-unknown-linux-musl-target"
 [ -z "$missing" ] || { echo "missing:$missing: run 'just setup-deploy' (it says how to get zig)" >&2; exit 1; }
-for tile in web/data/basemap/montreal.pmtiles web/data/metro/index.json; do
-  [ -f "$tile" ] || { echo "$tile is missing: run 'just prepare' first" >&2; exit 1; }
-done
+[ -f web/data/metro/index.json ] || { echo "web/data/metro/index.json is missing: run 'just prepare' first" >&2; exit 1; }
 ./scripts/build.sh
 target=x86_64-unknown-linux-musl
 cargo zigbuild --release --target "$target" -p cityloom_server

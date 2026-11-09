@@ -1,5 +1,5 @@
 //! The `prepare` command: the Quebec extract (downloaded if it is not kept), the road tiles and the
-//! archive (which packs the basemap already in the basemap folder; `basemap` builds one), in one display. It replaces the former Python `prepare`, with the pack step added last.
+//! archive, in one display. It replaces the former Python `prepare`, with the pack step added last.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -32,7 +32,6 @@ pub struct PrepareJob {
     pub work: PathBuf,
     /// The road tiles' folder.
     pub metro: PathBuf,
-    pub basemap: PathBuf,
     pub root: PathBuf,
     pub archive: PathBuf,
 }
@@ -68,8 +67,6 @@ pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
         out: job.archive.clone(),
         area: "montreal".into(),
         metro: job.metro.clone(),
-        basemap: job.basemap.parent().unwrap_or(&job.root).to_path_buf(),
-        basemap_file: None,
         source: job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned(),
         source_time: commands::source_time(&job.extract, &job.osmium),
         created: commands::now(),
@@ -90,7 +87,6 @@ pub fn run(args: PrepareArgs) -> Result<(), i32> {
         osmium: "osmium".into(),
         work: root.join("data/metro-work"),
         metro: root.join("web/data/metro"),
-        basemap: root.join("web/data/basemap/montreal.pmtiles"),
         root: root.clone(),
         archive: root.join("data").join(ARCHIVE_NAME),
     };

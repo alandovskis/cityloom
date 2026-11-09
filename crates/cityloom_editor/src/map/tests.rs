@@ -517,7 +517,7 @@ fn ready_areas_vm_off(locale: Locale, areas: &[(&str, Rule)], east: f64) -> Rc<M
     let mapper = Rc::new(FakeMapper::default());
     let vm = MapVm::new(Ports { mapper: mapper.clone(), ..ports }, crate::i18n_for(locale));
     vm.attach();
-    mapper.say(MapEvent::Ready { bounds: [-74.0, 45.0, -73.0, 46.0] });
+    mapper.say(MapEvent::Ready);
     vm
 }
 

@@ -151,18 +151,17 @@ fn without_resume_an_old_part_is_not_continued() {
 }
 
 #[test]
-fn redirects_are_followed_and_the_release_one_is_remembered() {
+fn redirects_are_followed() {
     let (url, _) = serve(|request| match request.path.as_str() {
-        "/latest" => Reply::Redirect("/x/releases/download/v1/p.jar".into()),
-        "/x/releases/download/v1/p.jar" => Reply::Redirect(format!("http://{}/signed?token=1", request.host)),
-        "/signed?token=1" => Reply::Body { status: 200, body: b"jar".to_vec(), content_length: Some(3) },
+        "/latest" => Reply::Redirect("/x/file".into()),
+        "/x/file" => Reply::Redirect(format!("http://{}/signed?token=1", request.host)),
+        "/signed?token=1" => Reply::Body { status: 200, body: b"ok!".to_vec(), content_length: Some(3) },
         _ => Reply::Status(404),
     });
     let dir = tempfile::tempdir().unwrap();
-    let target = dir.path().join("p.jar");
-    let release = download::download(&format!("{url}/latest"), &target, false, &mut |_, _| {}).unwrap();
-    assert_eq!(release, Some(format!("{url}/x/releases/download/v1/p.jar")));
-    assert_eq!(fs::read(&target).unwrap(), b"jar");
+    let target = dir.path().join("p");
+    download::download(&format!("{url}/latest"), &target, false, &mut |_, _| {}).unwrap();
+    assert_eq!(fs::read(&target).unwrap(), b"ok!");
 }
 
 #[test]
@@ -178,7 +177,7 @@ fn a_relative_location_is_resolved_against_the_address_that_sent_it() {
     let mut fetched = get(&format!("{url}/a/b/start?q=1#frag"), 0).unwrap();
     let mut text = String::new();
     std::io::Read::read_to_string(&mut fetched.body, &mut text).unwrap();
-    assert_eq!((fetched.status, fetched.content_length, text.as_str(), fetched.release), (200, Some(2), "ok", None));
+    assert_eq!((fetched.status, fetched.content_length, text.as_str()), (200, Some(2), "ok"));
 }
 
 #[test]

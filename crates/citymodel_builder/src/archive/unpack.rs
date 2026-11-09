@@ -134,9 +134,7 @@ pub fn unpack(archive: &Path, data_root: &Path) -> Result<Unpacked, ArchiveError
         return Ok(Unpacked { area, dir: target, reused: true, tiles });
     }
     let mut staging = Staging { dir: data_root.join(unique(".unpack-")), armed: true };
-    for sub in ["metro", "basemap"] {
-        fs::create_dir_all(staging.dir.join(sub)).map_err(io_err(format!("cannot create a directory in {}", data_root.display())))?;
-    }
+    fs::create_dir_all(staging.dir.join("metro")).map_err(io_err(format!("cannot create a directory in {}", data_root.display())))?;
     let mut seen = vec![false; index.entries.len()];
     for member_result in members {
         let mut in_tar = member_result.map_err(io_err("cannot read a member of the archive"))?;

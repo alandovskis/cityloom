@@ -84,7 +84,7 @@
   <main class="stage">
     <section class="drawing" aria-labelledby="h-drawing">
       <h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>
-      <div id="basemap" class="basemap" tabindex="0" role="group" data-i18n-aria-label="map-basemap-label" aria-label="Map of the city, north up" aria-describedby="keys"></div>
+      <div id="map-canvas" class="map-canvas" tabindex="0" role="group" data-i18n-aria-label="map-canvas-label" aria-label="Map of the city, north up" aria-describedby="keys"></div>
       <div id="map-slot" style="display: contents"></div>
     </section>
     <div class="zoom-dock" id="map-tools-slot"></div>
@@ -155,7 +155,6 @@
   </aside>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
-  <script src="v/{{build}}/vendor/pmtiles.js"></script>
   <script src="boot.js"></script>
   <script type="module" src="v/{{build}}/map.js" onerror="window.cityloomBootFailed&&cityloomBootFailed()"></script>
 </body>

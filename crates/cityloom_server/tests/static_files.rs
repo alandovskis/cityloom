@@ -16,7 +16,7 @@ fn site(cache_control: &str) -> (tempfile::TempDir, Router, Vec<u8>) {
     for (name, bytes) in [
         ("a.json", &b"{}"[..]),
         ("a.wasm", b"\0asm"),
-        ("a.pmtiles", b"PM"),
+        ("a.bin", b"PM"),
         ("a.pbf", b"pb"),
         ("a.mjs", b"x"),
         ("a.woff2", b"w"),
@@ -115,7 +115,7 @@ async fn serves_each_extension_with_its_content_type() {
         ("/map.html", "text/html; charset=utf-8"),
         ("/a.json", "application/json; charset=utf-8"),
         ("/a.wasm", "application/wasm"),
-        ("/a.pmtiles", "application/octet-stream"),
+        ("/a.bin", "application/octet-stream"),
         ("/a.pbf", "application/x-protobuf"),
         ("/a.mjs", "text/javascript; charset=utf-8"),
         ("/a.woff2", "font/woff2"),

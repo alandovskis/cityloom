@@ -100,9 +100,6 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
 fi"#,
     );
     let out = root.join("out");
-    // The basemap is not built by `prepare`; the one already in the folder is packed.
-    fs::create_dir_all(out.join("basemap")).unwrap();
-    fs::write(out.join("basemap/montreal.pmtiles"), vec![0u8; 1000]).unwrap();
     let job = PrepareJob {
         extract: root.join("data/quebec-latest.osm.pbf"),
         refresh: false,
@@ -111,7 +108,6 @@ fi"#,
         osmium: osmium.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),
-        basemap: out.join("basemap/montreal.pmtiles"),
         root: root.to_path_buf(),
         archive: out.join("montreal.citymodel"),
     };
@@ -124,7 +120,6 @@ fi"#,
     let unpacked = archive::unpack(&job.archive, &data).unwrap();
     assert_eq!(unpacked.tiles, 1);
     assert_eq!(fs::metadata(data.join("montreal/metro/0_0.osm.pbf")).unwrap().len(), 500);
-    assert_eq!(fs::metadata(data.join("montreal/basemap/montreal.pmtiles")).unwrap().len(), 1000);
     assert_eq!(fs::read(data.join("montreal/metro/index.json")).unwrap(), fs::read(job.metro.join("index.json")).unwrap());
     let mut tar = tar::Archive::new(fs::File::open(&job.archive).unwrap());
     let mut first = tar.entries().unwrap().next().unwrap().unwrap();
@@ -160,7 +155,6 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
         osmium: osmium.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),
-        basemap: out.join("basemap/montreal.pmtiles"),
         root: root.to_path_buf(),
         archive: out.join("montreal.citymodel"),
     };

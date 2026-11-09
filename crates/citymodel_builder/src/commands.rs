@@ -9,14 +9,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::{Parser, Subcommand};
 
 use crate::archive::{self, PackInputs};
-use crate::basemap::{self, BasemapJob};
 use crate::metro_index::Grid;
 use crate::prepare::{self, PrepareArgs};
 use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, megabytes};
 use crate::tiles::{self, TilesJob};
 
 #[derive(Parser, Debug)]
-#[command(name = "citymodel_builder", about = "Prepares CityLoom's area data: tiles, basemap and the .citymodel archive")]
+#[command(name = "citymodel_builder", about = "Prepares CityLoom's area data: tiles and the .citymodel archive")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -24,7 +23,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Download the extract if needed, cut the road tiles and pack the archive with the basemap already built.
+    /// Download the extract if needed, cut the road tiles and pack the archive.
     Prepare {
         extract: Option<PathBuf>,
         /// Download a newer extract.
@@ -41,22 +40,7 @@ pub enum Command {
         #[arg(long, value_parser = batch_size)]
         batch: Option<usize>,
     },
-    /// Build the basemap's PMTiles from an extract.
-    Basemap {
-        extract: PathBuf,
-        output: Option<PathBuf>,
-        /// West,South,East,North in degrees.
-        #[arg(long, value_parser = bounds, allow_hyphen_values = true)]
-        bounds: Option<String>,
-        #[arg(long)]
-        minzoom: Option<u8>,
-        #[arg(long)]
-        maxzoom: Option<u8>,
-        /// Planetiler's heap, such as 4g.
-        #[arg(long, value_parser = memory)]
-        memory: Option<String>,
-    },
-    /// Pack the tiles and the basemap into a .citymodel archive.
+    /// Pack the tiles into a .citymodel archive.
     Pack {
         #[arg(long, default_value = "montreal")]
         area: String,
@@ -64,8 +48,6 @@ pub enum Command {
         out: Option<PathBuf>,
         #[arg(long)]
         metro: Option<PathBuf>,
-        #[arg(long)]
-        basemap: Option<PathBuf>,
         #[arg(long, default_value = "quebec-latest.osm.pbf")]
         source: String,
         /// The extract's replication time, Unix seconds.
@@ -81,32 +63,6 @@ fn batch_size(text: &str) -> Result<usize, String> {
     match text.parse::<usize>() {
         Ok(n) if (1..=500).contains(&n) => Ok(n),
         _ => Err(format!("{text:?} is not a number from 1 to 500")),
-    }
-}
-
-fn is_decimal(text: &str) -> bool {
-    let digits = text.strip_prefix('-').unwrap_or(text);
-    let (whole, fraction) = match digits.split_once('.') {
-        Some((w, f)) => (w, Some(f)),
-        None => (digits, None),
-    };
-    let all = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    all(whole) && fraction.is_none_or(all)
-}
-
-fn bounds(text: &str) -> Result<String, String> {
-    let parts: Vec<&str> = text.split(',').collect();
-    if parts.len() == 4 && parts.iter().all(|p| is_decimal(p)) {
-        Ok(text.to_string())
-    } else {
-        Err(format!("{text:?} is not W,S,E,N (four numbers separated by commas)"))
-    }
-}
-
-fn memory(text: &str) -> Result<String, String> {
-    match text.char_indices().last() {
-        Some((at, unit)) if at > 0 && "kmgKMG".contains(unit) && text[..at].bytes().all(|b| b.is_ascii_digit()) => Ok(text.to_string()),
-        _ => Err(format!("{text:?} is not a size such as 4g")),
     }
 }
 
@@ -149,9 +105,6 @@ pub struct PackJob {
     pub out: PathBuf,
     pub area: String,
     pub metro: PathBuf,
-    pub basemap: PathBuf,
-    /// Pack only this file of `basemap` (what `prepare` just built); `None` packs every `.pmtiles` file there.
-    pub basemap_file: Option<PathBuf>,
     pub source: String,
     pub source_time: i64,
     pub created: i64,
@@ -176,8 +129,8 @@ fn same(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// The pieces of `run_pack` that read the folders: the grid, the road tiles and the basemaps.
-fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<PathBuf>), StepError> {
+/// The pieces of `run_pack` that read the folders: the grid, the road tiles.
+fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepError> {
     let index_path = job.metro.join("index.json");
     let text = fs::read_to_string(&index_path).map_err(|e| fail(format!("cannot read {}: {e}", index_path.display())))?;
     let index: serde_json::Value = serde_json::from_str(&text).map_err(|e| fail(format!("{} is not JSON: {e}", index_path.display())))?;
@@ -222,32 +175,13 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<Pat
         }
     };
 
-    let mut basemaps = Vec::new();
-    if let Some(file) = &job.basemap_file {
-        if !file.is_file() {
-            return Err(fail(format!("no basemap: {} is not there (run the basemap step first)", file.display())));
-        }
-        basemaps.push(file.clone());
-    } else if let Ok(dir) = fs::read_dir(&job.basemap) {
-        for entry in dir.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "pmtiles") && path.is_file() {
-                basemaps.push(path);
-            }
-        }
-    }
-    basemaps.sort();
-    if basemaps.is_empty() {
-        return Err(fail(format!("no basemap: there is no .pmtiles file in {} (run the basemap step first)", job.basemap.display())));
-    }
-    Ok((grid, roads, basemaps))
+    Ok((grid, roads))
 }
 
 pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
     p.step("pack", |ctx| {
-        let (grid, roads, basemaps) = read_inputs(job)?;
-        let inputs =
-            PackInputs { area: &job.area, source: &job.source, source_time: job.source_time, created: job.created, grid, roads: &roads, basemaps: &basemaps };
+        let (grid, roads) = read_inputs(job)?;
+        let inputs = PackInputs { area: &job.area, source: &job.source, source_time: job.source_time, created: job.created, grid, roads: &roads };
         let mut shown = u64::MAX;
         let mut report = |done: u64, total: u64| {
             let mb = done / 1_000_000;
@@ -281,14 +215,12 @@ pub(crate) fn now() -> i64 {
 /// Runs a command; the error is the exit code.
 pub fn dispatch(cli: Cli) -> Result<(), i32> {
     match cli.command {
-        Command::Pack { area, out, metro, basemap, source, source_time, created } => {
+        Command::Pack { area, out, metro, source, source_time, created } => {
             let root = repo_root();
             let job = PackJob {
                 out: absolute(&out.unwrap_or_else(|| root.join("data/montreal.citymodel"))),
                 area,
                 metro: absolute(&metro.unwrap_or_else(|| root.join("web/data/metro"))),
-                basemap: absolute(&basemap.unwrap_or_else(|| root.join("web/data/basemap"))),
-                basemap_file: None,
                 source,
                 source_time,
                 created: created.unwrap_or_else(now),
@@ -307,29 +239,6 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             let progress = Arc::new(Progress::stderr(tiles::steps(), root.join("data/logs"), root));
             exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
             let result = tiles::run(&progress, &job);
-            progress.close();
-            result.map_err(|_| 1)
-        }
-        Command::Basemap { extract, output, bounds, minzoom, maxzoom, memory } => {
-            let root = repo_root();
-            let (extract, output, tools) =
-                (absolute(&extract), absolute(&output.unwrap_or_else(|| root.join("web/data/basemap/montreal.pmtiles"))), root.join(".tools"));
-            let job = BasemapJob {
-                extract: &extract,
-                output: &output,
-                bounds: bounds.as_deref().unwrap_or(basemap::METRO_BOUNDS),
-                minzoom: minzoom.map_or(basemap::MINZOOM, u32::from),
-                maxzoom: maxzoom.map_or(basemap::MAXZOOM, u32::from),
-                memory: memory.as_deref().unwrap_or(basemap::MEMORY),
-                tools: &tools,
-                root: &root,
-                java: "java",
-                jar_url: basemap::JAR_URL,
-            };
-            let name = |path: &Path| path.file_name().unwrap_or_default().to_string_lossy().into_owned();
-            let progress = Arc::new(Progress::stderr(basemap::steps("planetiler.jar", &name(&output)), root.join("data/logs"), root.clone()));
-            exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
-            let result = basemap::run(&progress, &job);
             progress.close();
             result.map_err(|_| 1)
         }

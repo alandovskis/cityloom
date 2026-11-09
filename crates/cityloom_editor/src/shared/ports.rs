@@ -347,9 +347,9 @@ pub trait Page {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MapEvent {
-    /// The tiles are there. `bounds` is the area they cover: west, south, east, north, in degrees.
-    Ready { bounds: [f64; 4] },
-    /// The tiles could not be had.
+    /// The map is there to draw on.
+    Ready,
+    /// The map could not start (no WebGL).
     Failed,
     /// The map was pressed at `at` (longitude, latitude). `hot` is the place there (`s-7`, `j-3`), `area` the
     /// restriction whose outline holds it, `vertex` the corner of the outline being drawn there: the page decides
@@ -1438,7 +1438,7 @@ mod map_tests {
     #[test]
     fn the_adapters_events_are_read_from_json() {
         let read = |s: &str| serde_json::from_str::<MapEvent>(s).unwrap();
-        assert_eq!(read(r#"{"kind":"ready","bounds":[1,2,3,4]}"#), MapEvent::Ready { bounds: [1.0, 2.0, 3.0, 4.0] });
+        assert_eq!(read(r#"{"kind":"ready"}"#), MapEvent::Ready);
         assert_eq!(read(r#"{"kind":"failed"}"#), MapEvent::Failed);
         assert_eq!(
             read(r#"{"kind":"press","at":[1,2],"hot":"s-7","area":null,"vertex":null}"#),

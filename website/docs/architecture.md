@@ -14,7 +14,7 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | -------------- | ------------------------------------------------------------------------------------------------ |
 | `street/`      | The street editor.                                                                               |
 | `junction/`    | The junction editor.                                                                             |
-| `map/`         | The city map over a MapLibre basemap, the Area rules panel and the Network checks (in Notes).    |
+| `map/`         | The city map drawn by MapLibre, the Area rules panel and the Network checks (in Notes).          |
 | `shell/`       | The markup the pages share: menu, language switch, shortcuts, the Sign in menu.                  |
 | `account/`     | The Account page: linked sign-ins, where the work is kept, deleting the account.                 |
 | `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document.         |
@@ -38,7 +38,7 @@ Each editing slice holds:
 - `tests.rs`.
 
 Drawing is done by pure functions that return SVG strings, set with `inner_html`. Pointer and keyboard logic are pure
-state machines with tests. The map page is the exception: it draws over a MapLibre basemap and no SVG.
+state machines with tests. The map page is the exception: it draws with MapLibre and no SVG.
 
 ## Ports
 
@@ -96,8 +96,8 @@ panels) stay on each device.
 
 Logic belongs in Rust. The page scripts in `web/` (`home.js`, `map.js`, `app.js` for the street page and `junction.js`)
 are start-up glue: they load the module, call `mount_*` and mount the shell. The street and junction scripts also set up
-the hatch patterns and flush the page's edits on `pagehide`, and `map.js` creates the basemap. The one exception is
-`web/basemap.js`, the adapter that owns the MapLibre map.
+the hatch patterns and flush the page's edits on `pagehide`, and `map.js` creates the map. The one exception is
+`web/mapcanvas.js`, the adapter that owns the MapLibre map.
 
 ## Persistence
 

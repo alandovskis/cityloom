@@ -307,7 +307,7 @@ fn drawing(vm: Vm) -> impl IntoView {
     // Finish and Cancel are in the panel: it is shown. The keyboard places corners on the map: it goes there, where
     // Enter places one at the cross.
     reveal(vm);
-    focus_later("basemap".to_string(), false);
+    focus_later("map-canvas".to_string(), false);
     let few = move || vm.with(|v| v.areas().draw().corners().len()) < 3;
     view! {
         <p class="hint">{word(vm, "restriction-drawing-help")}</p>

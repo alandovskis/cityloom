@@ -7,7 +7,7 @@ This repository holds three surfaces: a city map (`map.html`), the street cross-
 
 - `crates/`: every crate. `crates/cityloom_editor/src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
   - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.
-  - `map/`: the city map (view-model, the overlay and its projection onto the basemap, views). `city/`: the city (made from OpenStreetMap), how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
+  - `map/`: the city map (view-model, the overlay and its projection onto the map, views). `city/`: the city (made from OpenStreetMap), how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
   - `shared/`: what every slice uses: the catalogue and units, the ports a view-model reaches the browser through (`ports.rs`, with test fakes) and their browser side (`platform.rs`), the reactive `core.rs`, the `keeper.rs` that debounces writes, and the helpers views bind with.
 - A view-model has no page in it: it owns the model, exposes properties that are ready to show (words, flags, lists) and takes commands, and reaches the browser only through the ports, so it is tested on the host with fakes. A view (Leptos, client-side rendered) binds to those properties and sends commands; it decides nothing. Components are drawn to HTML in tests; `shell/view.rs` binds the markup the pages share and is checked in the browser.
 - A slice reaches another only through that slice's model (or `city`'s store and binding, or `shell`'s `Target`), never its view-model or views; `shared` depends on no slice.
@@ -32,13 +32,13 @@ just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cargo build -p cityloom_server --features test-provider && ./scripts/pin-server.sh` then `cd e2e && npx playwright test` (the tests start the pinned copy of the server).
+Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server`, and `cargo build -p cityloom_server --features test-provider && ./scripts/pin-server.sh` then `cd e2e && npx playwright test` (the tests start the pinned copy of the server).
 
 The server's tests and the account spec need a Postgres: `just db`, then `export DATABASE_URL=...` as it prints.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (and the basemap's range requests), with the fake sign-in provider and, for the integration tier, a Postgres; the specs are in three tiers (`e2e/tiers.json`), each its own CI job; `E2E_PORT` moves it off port 8137 when something else holds that.
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (range requests included), with the fake sign-in provider and, for the integration tier, a Postgres; the specs are in three tiers (`e2e/tiers.json`), each its own CI job; `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 
@@ -46,14 +46,14 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 
 ## The Montréal data
 
-One command makes both the road tiles and the basemap below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
+One command makes the road tiles below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
 
 ```sh
-brew install osmium-tool openjdk   # osmium for the road tiles, Java 21 or later for Planetiler
+brew install osmium-tool   # osmium cuts the road tiles
 just prepare
 ```
 
-It also packs the tiles and the basemap into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
+It also packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
 
 ## Montréal metro tiles
 
@@ -62,9 +62,3 @@ a place there is read from a file of a few kilobytes instead of being asked of O
 
 The tiles are not kept in git; `web/data/metro/index.json` is a placeholder that names none, and the command above
 overwrites it. Deploy the folder with the pages. Without tiles every place, the default one (the Plateau Mont-Royal) too, comes from Overpass, so the app then needs a network.
-
-## The basemap
-
-The map page draws the city over a basemap of the Montréal metropolitan area, from a file of vector tiles, `web/data/basemap/montreal.pmtiles`, that is served with the pages and read with HTTP range requests (any host that serves static files with range support will do; `just serve` does). It is built from the same extract with Planetiler, which downloads about 1 GB of sources once.
-
-The tiles are not kept in git. Without them the map page says the basemap could not be loaded and shows no map, and a place outside the metropolitan area says there is no basemap for it; the street and junction editors work either way. The style is `web/basemap-light.json` and `web/basemap-dark.json`, written by `node scripts/make_basemap_style.mjs`.

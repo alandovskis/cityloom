@@ -523,49 +523,49 @@ impl Page for BrowserPage {
 
 #[wasm_bindgen]
 extern "C" {
-    /// The map of the page: the adapter `createBasemap` makes in `web/basemap.js`.
-    pub type Basemap;
+    /// The map of the page: the adapter `createMapCanvas` makes in `web/mapcanvas.js`.
+    pub type MapCanvas;
     #[wasm_bindgen(method, js_name = setPlaces)]
-    fn set_places(this: &Basemap, layers: &str, data: &str);
+    fn set_places(this: &MapCanvas, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setRestrictions)]
-    fn set_restrictions(this: &Basemap, layers: &str, data: &str);
+    fn set_restrictions(this: &MapCanvas, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setDraft)]
-    fn set_draft(this: &Basemap, layers: &str, data: &str);
+    fn set_draft(this: &MapCanvas, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setZoneTicks)]
-    fn set_zone_ticks(this: &Basemap, layers: &str, data: &str);
+    fn set_zone_ticks(this: &MapCanvas, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setCurbside)]
-    fn set_curbside(this: &Basemap, layers: &str, data: &str);
+    fn set_curbside(this: &MapCanvas, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setStops)]
-    fn set_stops(this: &Basemap, layers: &str, data: &str);
+    fn set_stops(this: &MapCanvas, layers: &str, data: &str);
     /// The middle of the view, as a `Float64Array` of longitude and latitude.
     #[wasm_bindgen(method)]
-    fn centre(this: &Basemap) -> Vec<f64>;
+    fn centre(this: &MapCanvas) -> Vec<f64>;
     #[wasm_bindgen(method)]
-    fn fit(this: &Basemap, bounds: &[f64], insets: &[f64]);
+    fn fit(this: &MapCanvas, bounds: &[f64], insets: &[f64]);
     #[wasm_bindgen(method, js_name = setInsets)]
-    fn set_insets(this: &Basemap, insets: &[f64]);
+    fn set_insets(this: &MapCanvas, insets: &[f64]);
     #[wasm_bindgen(method, js_name = setEditable)]
-    fn set_editable(this: &Basemap, hot: Vec<String>);
+    fn set_editable(this: &MapCanvas, hot: Vec<String>);
     #[wasm_bindgen(method, js_name = setSelected)]
-    fn set_selected(this: &Basemap, hot: Vec<String>);
+    fn set_selected(this: &MapCanvas, hot: Vec<String>);
     #[wasm_bindgen(method, js_name = zoomBy)]
-    fn zoom_by(this: &Basemap, factor: f64);
+    fn zoom_by(this: &MapCanvas, factor: f64);
     #[wasm_bindgen(method, js_name = panBy)]
-    fn pan_by(this: &Basemap, dx: f64, dy: f64);
+    fn pan_by(this: &MapCanvas, dx: f64, dy: f64);
     #[wasm_bindgen(method)]
-    fn highlight(this: &Basemap, hot: Option<String>);
+    fn highlight(this: &MapCanvas, hot: Option<String>);
     #[wasm_bindgen(method, js_name = setImperial)]
-    fn set_imperial(this: &Basemap, imperial: bool);
+    fn set_imperial(this: &MapCanvas, imperial: bool);
     #[wasm_bindgen(method)]
-    fn listen(this: &Basemap, on: &js_sys::Function);
+    fn listen(this: &MapCanvas, on: &js_sys::Function);
 }
 
 /// The map on the page, as a `Mapper`.
-pub struct BrowserMapper(Basemap);
+pub struct BrowserMapper(MapCanvas);
 
 impl BrowserMapper {
-    pub fn new(basemap: Basemap) -> BrowserMapper {
-        BrowserMapper(basemap)
+    pub fn new(canvas: MapCanvas) -> BrowserMapper {
+        BrowserMapper(canvas)
     }
 }
 

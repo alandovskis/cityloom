@@ -21,7 +21,7 @@ argument to list them.
 just setup
 ```
 
-It runs `npm ci` at the root (the map's runtime libraries, MapLibre and PMTiles) and in `e2e` (Playwright), installs
+It runs `npm ci` at the root (the map's runtime library, MapLibre) and in `e2e` (Playwright), installs
 `wasm-bindgen-cli` at the version pinned in `Cargo.toml` into `.tools`, and installs Playwright's Chromium.
 
 ## Build and serve
@@ -35,8 +35,7 @@ just serve   # http://127.0.0.1:8137/ (cargo run -p cityloom_server)
 turns them into JavaScript glue with `wasm-bindgen` in `web/pkg` (not kept in git), and copies the map's libraries into
 `web/vendor`.
 
-`just serve` runs `cargo run -p cityloom_server`, the Rust server. It serves `web/` and answers range requests, which
-the basemap's PMTiles need. Set `E2E_PORT` to use another port. Without `DATABASE_URL` the account routes answer 503 and
+`just serve` runs `cargo run -p cityloom_server`, the Rust server. It serves `web/` and answers range requests. Set `E2E_PORT` to use another port. Without `DATABASE_URL` the account routes answer 503 and
 the pages are signed out.
 
 ## Map data
@@ -47,15 +46,11 @@ just prepare
 
 This runs `citymodel_builder`, the repository's Rust tool (`cargo run -p citymodel_builder -- prepare`; its arguments are
 the recipe's). It downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
-a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`). Last, it packs them and the map page's basemap, `web/data/basemap/montreal.pmtiles`,
+a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`). Last, it packs them
 into one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
-basemap and the archive are ignored by git.
+archive are ignored by git.
 
-`just prepare` does not build the basemap, and the archive needs one: build it first with
-`cargo run -p citymodel_builder --release -- basemap` (Planetiler; needs Java 21 or later).
-
-Nothing needs the road tiles: without them every place, the default one included, comes from Overpass. Without the
-basemap, the map page says so and shows no map.
+Nothing needs the road tiles: without them every place, the default one included, comes from Overpass.
 
 ## Tests and formatting
 

@@ -160,7 +160,6 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Needs attention | À corriger | To confirm, see below. |
 | Map page | Every check passes | Toutes les vérifications réussissent | As `vérification` / `échouent` on the street page. |
 | Map page | Key to the map | Légende de la carte |  |
-| Map page | basemap | fond de carte |  |
 | Map page | Whole city | Toute la ville |  |
 | Map page | Zoom in / Zoom out | Zoom avant / Zoom arrière |  |
 | Map page | Search places | Rechercher des lieux |  |

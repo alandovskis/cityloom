@@ -1,10 +1,9 @@
-// The map on the city map page: MapLibre over the PMTiles basemap. What the page decides is decided in the
+// The map on the city map page: MapLibre drawing the places on a plain ground. What the page decides is decided in the
 // WebAssembly module. This turns what MapLibre does into the JSON events the module listens for, and what the
 // module asks into calls on MapLibre.
 
-import { AttributionControl, Map as MapLibreMap, ScaleControl, addProtocol } from "./vendor/maplibre-gl.mjs";
+import { AttributionControl, Map as MapLibreMap, ScaleControl } from "./vendor/maplibre-gl.mjs";
 
-const TILES = "data/basemap/montreal.pmtiles";
 // MapLibre needs absolute addresses for what a style names.
 const here = (path) => new URL(path, document.baseURI).href;
 
@@ -18,31 +17,21 @@ const themeNow = () => {
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 };
 
-// A prototype (#175): `/map.html?basemap=none` draws the city's places on a plain ground, with no tiles. The
-// ground's colours are the basemap's own land: the `background` layer's `background-color` in
-// basemap-light.json and basemap-dark.json, copied below; change them together.
-const PLAIN = new URLSearchParams(location.search).get("basemap") === "none";
+// The ground the places are drawn on, one plain colour per theme (web/app.css's surface tokens).
 const GROUND = { light: "#e2e7ec", dark: "#0f1317" };
-// What the places cover when there are no tiles to bound them: the whole map.
-const WORLD = [-180, -85, 180, 85];
 
-async function styleFor(theme) {
-  if (PLAIN)
-    return {
-      version: 8,
-      glyphs: here("glyphs/") + "{fontstack}/{range}.pbf",
-      sources: {},
-      layers: [{ id: "background", type: "background", paint: { "background-color": GROUND[theme] } }],
-    };
-  const style = await (await fetch(`basemap-${theme}.json`, { cache: "no-cache" })).json();
-  style.glyphs = here("glyphs/") + "{fontstack}/{range}.pbf";
-  style.sources.basemap.url = "pmtiles://" + here(TILES);
-  return style;
+function styleFor(theme) {
+  return {
+    version: 8,
+    name: `CityLoom ${theme}`,
+    glyphs: here("glyphs/") + "{fontstack}/{range}.pbf",
+    sources: {},
+    layers: [{ id: "ground", type: "background", paint: { "background-color": GROUND[theme] } }],
+  };
 }
 
-// Always an adapter: a map that cannot start (no style, no PMTiles reader, no WebGL) says `failed`, and the
-// module shows why, rather than the page never mounting.
-export async function createBasemap(container) {
+// Always an adapter: a map that cannot start (no WebGL) says `failed`, and the module shows why, rather than the page never mounting.
+export async function createMapCanvas(container) {
   // What is said before the module listens waits for it.
   let listener = null;
   const queue = [];
@@ -57,33 +46,22 @@ export async function createBasemap(container) {
   };
 
   let theme = themeNow();
-  let map, header;
+  let map;
   try {
-    if (PLAIN) {
-      header = Promise.resolve({ minLon: WORLD[0], minLat: WORLD[1], maxLon: WORLD[2], maxLat: WORLD[3] });
-    } else {
-      const protocol = new pmtiles.Protocol();
-      addProtocol("pmtiles", protocol.tile);
-      const archive = new pmtiles.PMTiles(here(TILES));
-      protocol.add(archive);
-      header = archive.getHeader();
-      header.catch(() => {}); // answered below, once the map has started
-    }
     map = new MapLibreMap({
       container,
-      style: await styleFor(theme),
+      style: styleFor(theme),
       center: [0, 0],
       zoom: 1,
       maxZoom: 19,
       attributionControl: false,
       dragRotate: false,
-      boxZoom: false, // Shift is the page's: a Shift-press picks a street, and the box zoom would take it
       pitchWithRotate: false,
       touchPitch: false,
       keyboard: false, // the shortcuts are the page's
     });
   } catch (error) {
-    console.warn("The basemap could not start:", error);
+    console.warn("The map could not start:", error);
     emit({ kind: "failed" });
     const nothing = () => {};
     return {
@@ -103,21 +81,16 @@ export async function createBasemap(container) {
       listen,
     };
   }
-  header.then(
-    (h) => emit({ kind: "ready", bounds: [h.minLon, h.minLat, h.maxLon, h.maxLat] }),
-    () => emit({ kind: "failed" }),
-  );
-  // The page's `#basemap` is the map's one stop for the keyboard, and holds its name: MapLibre's canvas
+  // The first style is ready as soon as it is loaded; the module has places to send from then on.
+  map.once("style.load", () => emit({ kind: "ready" }));
+  // The page's `#map-canvas` is the map's one stop for the keyboard, and holds its name: MapLibre's canvas
   // inside it would be a second.
   map.getCanvas().setAttribute("tabindex", "-1");
   map.touchZoomRotate.disableRotation();
-  // The tiles' own attribution comes with their style; the streets are OpenStreetMap's in both.
   map.addControl(
     new AttributionControl({
       compact: true,
-      customAttribution: PLAIN
-        ? '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
-        : undefined,
+      customAttribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
     }),
   );
   let scale = new ScaleControl({ unit: "metric" });
@@ -222,25 +195,12 @@ export async function createBasemap(container) {
     showDraft();
   });
 
-  // `theme` is the one asked for last, `shown` the one whose style the map has.
-  let shown = theme;
-  const retheme = async () => {
+  // A flip of the theme recolours the ground; what is drawn on it stays.
+  const retheme = () => {
     const next = themeNow();
     if (next === theme) return;
     theme = next;
-    let style;
-    try {
-      style = await styleFor(next);
-    } catch (error) {
-      // The map keeps the style it has; a later flip tries again.
-      console.warn("The basemap's style could not be had:", error);
-      if (theme === next) theme = shown;
-      return;
-    }
-    if (theme !== next) return; // a newer flip is in flight and applies its own style
-    shown = next;
-    styled = false;
-    map.setStyle(style, { diff: false });
+    map.setPaintProperty("ground", "background-color", GROUND[next]);
   };
   new MutationObserver(retheme).observe(document.documentElement, {
     attributes: true,

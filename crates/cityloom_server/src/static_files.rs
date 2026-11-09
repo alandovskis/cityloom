@@ -368,7 +368,7 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     res
 }
 
-/// What is worth compressing on the fly: text, the WebAssembly modules and the TrueType fonts (the report's, which are not compressed already). The tiles, the glyphs and the basemap are
+/// What is worth compressing on the fly: text, the WebAssembly modules and the TrueType fonts (the report's, which are not compressed already). The tiles and the glyphs are
 /// already compressed, or do not compress, and are read in ranges.
 fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
     if status != StatusCode::OK {
@@ -381,9 +381,9 @@ fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
 /// How often the build's name is looked for again, when the site is served from a directory that may change.
 const BUILD_CHECK: Duration = Duration::from_secs(2);
 
-/// The two directories an unpacked area holds (`DATA_ROOT/<area>/metro/` and `.../basemap/`); with an area mounted they
-/// are answered from it and never from `WEB_ROOT/data/`.
-const MOUNTED: [&str; 2] = ["/data/metro/", "/data/basemap/"];
+/// The directory an unpacked area holds (`DATA_ROOT/<area>/metro/`); with an area mounted it is answered from it and
+/// never from `WEB_ROOT/data/`.
+const MOUNTED: [&str; 1] = ["/data/metro/"];
 
 /// The path inside the area for a request path under a mounted directory (`/data/metro/x` is `/metro/x`).
 fn inside_area(path: &str) -> Option<&str> {
@@ -417,7 +417,7 @@ pub fn router(root: PathBuf, cache_control: String) -> Router {
     router_with_data(root, None, cache_control)
 }
 
-/// `router`, with `/data/metro/` and `/data/basemap/` served from `data` (an unpacked area) when there is one.
+/// `router`, with `/data/metro/` served from `data` (an unpacked area) when there is one.
 pub fn router_with_data(root: PathBuf, data: Option<PathBuf>, cache_control: String) -> Router {
     build_router(root, data, cache_control, BUILD_CHECK)
 }

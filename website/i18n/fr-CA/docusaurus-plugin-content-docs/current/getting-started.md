@@ -21,7 +21,7 @@ ses tâches; lancez `just` sans argument pour les lister.
 just setup
 ```
 
-La recette exécute `npm ci` à la racine (les bibliothèques d’exécution de la carte, MapLibre et PMTiles) et dans `e2e`
+La recette exécute `npm ci` à la racine (la bibliothèque d’exécution de la carte, MapLibre) et dans `e2e`
 (Playwright), installe `wasm-bindgen-cli` dans `.tools` à la version fixée dans `Cargo.toml` et installe Chromium pour
 Playwright.
 
@@ -36,8 +36,7 @@ just serve   # http://127.0.0.1:8137/ (cargo run -p cityloom_server)
 WebAssembly, les transforme en code d’accès JavaScript avec `wasm-bindgen` dans `web/pkg` (non versionné) et copie les
 bibliothèques de la carte dans `web/vendor`.
 
-`just serve` exécute `cargo run -p cityloom_server`, le serveur Rust. Il sert `web/` et répond aux requêtes de plage,
-dont les PMTiles du fond de carte ont besoin. Définissez `E2E_PORT` pour utiliser un autre port. Sans `DATABASE_URL`, les
+`just serve` exécute `cargo run -p cityloom_server`, le serveur Rust. Il sert `web/` et répond aux requêtes de plage. Définissez `E2E_PORT` pour utiliser un autre port. Sans `DATABASE_URL`, les
 routes de compte répondent 503 et les pages n’ont pas de session ouverte.
 
 ## Données cartographiques
@@ -49,15 +48,10 @@ just prepare
 La recette exécute `citymodel_builder`, l’outil Rust du dépôt (`cargo run -p citymodel_builder -- prepare`; ses arguments
 sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
 `just prepare --refresh` en prend un plus récent). Elle découpe ensuite les routes de la région métropolitaine en
-tuiles dans `web/data/metro` (nécessite `osmium-tool`). Enfin, il les réunit avec le fond de carte de la page Carte,
-`web/data/basemap/montreal.pmtiles`, dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
-Git ignore les tuiles, le fond de carte et l’archive.
+tuiles dans `web/data/metro` (nécessite `osmium-tool`). Enfin, il les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
+Git ignore les tuiles et l’archive.
 
-`just prepare` ne construit pas le fond de carte, et l’archive en exige un : construisez-le d’abord avec
-`cargo run -p citymodel_builder --release -- basemap` (Planetiler; nécessite Java 21 ou plus récent).
-
-Rien n’exige les tuiles de routes : sans elles, tous les lieux, y compris celui par défaut, viennent d’Overpass. Sans le
-fond de carte, la page Carte l’indique et n’affiche aucune carte.
+Rien n’exige les tuiles de routes : sans elles, tous les lieux, y compris celui par défaut, viennent d’Overpass.
 
 ## Tests et mise en forme
 
