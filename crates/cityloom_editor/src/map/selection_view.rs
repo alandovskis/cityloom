@@ -89,7 +89,10 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
                     view! {
                         <button type="button" class="btn quiet" id="corridor-undo" on:click=move |_| {
                             vm.with(|v| v.undo_corridor());
-                            focus_heading();
+                            // the button goes when the change is undone or can never be: focus must not fall with it
+                            if vm.with(|v| v.corridor_undo_label()).is_none() {
+                                focus_heading();
+                            }
                         }>
                             {label}
                         </button>

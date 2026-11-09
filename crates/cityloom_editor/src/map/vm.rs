@@ -1344,9 +1344,9 @@ impl MapVm {
 
     /// What the button that takes the last change back says, while there is one to take back.
     pub fn corridor_undo_label(&self) -> Option<String> {
-        self.undoable
-            .get()
-            .map(|(op, undo)| self.i18n.tr("corridor-undo-button", &Args::new().str("name", self.say_op(op)).num("count", undo.before.len() as i64)))
+        self.undoable.with(|u| {
+            u.as_ref().map(|(op, undo)| self.i18n.tr("corridor-undo-button", &Args::new().str("name", self.say_op(*op)).num("count", undo.len() as i64)))
+        })
     }
 
     /// Takes the last change back, all of it or none: refused, and said so, when a street it changed was edited
@@ -1360,8 +1360,18 @@ impl MapVm {
                 self.corridor.set(Stage::Idle);
                 self.i18n.tr_now("corridor-undone", &Args::new().str("name", name).num("count", streets.len() as i64))
             }
-            corridor::Undone::Refused(streets) => self.i18n.tr_now("corridor-undo-refused", &Args::new().num("count", streets.len() as i64)),
-            corridor::Undone::NotKept(streets) => self.i18n.tr_now("corridor-undo-failed", &Args::new().num("count", streets.len() as i64)),
+            // A street edited since can never be put back as it was: the button goes, with the reason said.
+            corridor::Undone::Refused(streets) => {
+                self.undoable.set(None);
+                self.i18n.tr_now("corridor-undo-refused", &Args::new().num("count", streets.len() as i64))
+            }
+            // What was put back is no longer to be undone: only the streets that are still as the change left them.
+            corridor::Undone::NotKept(streets) => {
+                let mut left = undo.clone();
+                left.keep_only(&streets);
+                self.undoable.set(Some((op, left)));
+                self.i18n.tr_now("corridor-undo-failed", &Args::new().num("count", streets.len() as i64))
+            }
         };
         self.reload();
         self.sync_places();
@@ -2533,7 +2543,7 @@ mod tests {
         assert_eq!(said.take(), vec!["Nothing was undone: 1 street has been edited since the change.".to_string()]);
         assert_eq!(vm.store.open().street_editor(a, 0).unwrap().snapshot(), now_a);
         assert_eq!(vm.store.open().street_editor(b, 0).unwrap().snapshot(), now_b);
-        assert!(vm.corridor_undo_label().is_some(), "the undo is kept: nothing was lost");
+        assert_eq!(vm.corridor_undo_label(), None, "it can never succeed now, so the button goes");
     }
 
     #[test]

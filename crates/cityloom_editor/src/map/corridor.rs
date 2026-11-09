@@ -137,8 +137,27 @@ pub struct Report {
 /// long as none has been edited since.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Undo {
-    pub before: Vec<(u32, Street)>,
-    pub after: Vec<(u32, Street)>,
+    pub steps: Vec<UndoStep>,
+}
+
+/// One street a change made.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UndoStep {
+    pub street: u32,
+    pub before: Street,
+    pub after: Street,
+}
+
+impl Undo {
+    /// How many streets it would put back.
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// Keeps only the steps for these streets: what is left to restore after some could not be.
+    pub fn keep_only(&mut self, streets: &[u32]) {
+        self.steps.retain(|step| streets.contains(&step.street));
+    }
 }
 
 /// What taking a change back did.
@@ -148,7 +167,7 @@ pub enum Undone {
     Restored(Vec<u32>),
     /// These streets were edited since the change; nothing was restored.
     Refused(Vec<u32>),
-    /// These streets could not be written back; the others were restored.
+    /// These streets could not be written back; the others were restored, and these still can be.
     NotKept(Vec<u32>),
 }
 
@@ -180,8 +199,7 @@ pub fn apply(store: &CityStore, op: Op, streets: &[u32]) -> Report {
                 match before {
                     Some(before) if store.write_street(street, after.clone()) => {
                         changed.push(street);
-                        undo.before.push((street, before));
-                        undo.after.push((street, after));
+                        undo.steps.push(UndoStep { street, before, after });
                     }
                     _ => not_kept.push(street),
                 }
@@ -197,20 +215,20 @@ pub fn undo(store: &CityStore, undo: &Undo) -> Undone {
     let region = store.region();
     let city = store.open();
     let edited: Vec<u32> = undo
-        .after
+        .steps
         .iter()
-        .filter(|(street, after)| city.street_editor(*street, region).map(|e| e.snapshot()).as_ref() != Some(after))
-        .map(|(street, _)| *street)
+        .filter(|step| city.street_editor(step.street, region).map(|e| e.snapshot()).as_ref() != Some(&step.after))
+        .map(|step| step.street)
         .collect();
     if !edited.is_empty() {
         return Undone::Refused(edited);
     }
     let (mut restored, mut stuck) = (Vec::new(), Vec::new());
-    for (street, before) in &undo.before {
-        if store.write_street(*street, before.clone()) {
-            restored.push(*street);
+    for step in &undo.steps {
+        if store.write_street(step.street, step.before.clone()) {
+            restored.push(step.street);
         } else {
-            stuck.push(*street);
+            stuck.push(step.street);
         }
     }
     if stuck.is_empty() { Undone::Restored(restored) } else { Undone::NotKept(stuck) }
@@ -317,7 +335,7 @@ mod tests {
         let (before_a, before_b) = (stored(&store, a), stored(&store, b));
         let report = apply(&store, Op::Template(Template::Greenway), &[a, FREEWAY, b]);
         assert_eq!(report.changed, vec![a, b]);
-        assert_eq!(report.undo.before.iter().map(|(s, _)| *s).collect::<Vec<_>>(), vec![a, b], "only the streets changed are remembered");
+        assert_eq!(report.undo.steps.iter().map(|s| s.street).collect::<Vec<_>>(), vec![a, b], "only the streets changed are remembered");
         assert_ne!(stored(&store, a), before_a);
         assert_eq!(undo(&store, &report.undo), Undone::Restored(vec![a, b]));
         assert_eq!((stored(&store, a), stored(&store, b)), (before_a, before_b));
@@ -336,5 +354,15 @@ mod tests {
         let (now_a, now_b) = (stored(&store, a), stored(&store, b));
         assert_eq!(undo(&store, &report.undo), Undone::Refused(vec![b]));
         assert_eq!((stored(&store, a), stored(&store, b)), (now_a, now_b), "not even the street left alone is restored: it is one step");
+    }
+
+    #[test]
+    fn keeping_only_the_streets_that_are_left_to_restore() {
+        let store = store();
+        let [a, b] = two_that_take_greenway(&store);
+        let mut undo = apply(&store, Op::Template(Template::Greenway), &[a, b]).undo;
+        undo.keep_only(&[b]);
+        assert_eq!(undo.len(), 1);
+        assert_eq!(undo.steps[0].street, b);
     }
 }

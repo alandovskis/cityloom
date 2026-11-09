@@ -485,6 +485,6 @@ corridor-undo-refused = Rien n’a été annulé : { $count ->
    *[other] { $count } rues ont été modifiées depuis le changement.
 }
 corridor-undo-failed = { $count ->
-    [one] { $count } rue n’a pas pu être rétablie; les autres l’ont été.
-   *[other] { $count } rues n’ont pas pu être rétablies; les autres l’ont été.
+    [one] { $count } rue n’a pas pu être rétablie; les autres ont été rétablies.
+   *[other] { $count } rues n’ont pas pu être rétablies; les autres ont été rétablies.
 }
