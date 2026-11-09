@@ -110,4 +110,18 @@ mod tests {
         assert_eq!(city.street_neighbours(2), [Some(1), Some(3)]);
         assert_eq!(city.street_neighbours(999), [None, None]);
     }
+
+    #[test]
+    fn the_neighbours_follow_the_order_of_the_ends() {
+        // Each neighbour meets the street at the end it is listed for, so the page's two arrows lead where they say.
+        let city = City::new();
+        for edge in 1..=23u32 {
+            let ends = [city.layout.edges[edge as usize - 1].a, city.layout.edges[edge as usize - 1].b];
+            for (end, found) in ends.into_iter().zip(city.street_neighbours(edge)) {
+                if let Some(other) = found {
+                    assert!(city.layout.edges_at(end).contains(&(other as usize - 1)), "street {edge}: {other} does not meet its end {end}");
+                }
+            }
+        }
+    }
 }
