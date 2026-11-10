@@ -132,15 +132,6 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
 
 // ---- the components ----------------------------------------------------------------------
 
-fn back_link(w: SheetWatch) -> impl IntoView {
-    view! {
-        <a class="back" href="map.html">
-            <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
-            {say(w, "header-city-map")}
-        </a>
-    }
-}
-
 /// A word of the page, asked again when the language is switched.
 fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
     move || w.i18n().tr(key, &Args::new())
@@ -202,12 +193,8 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>, #[prop(optiona
             document().set_title(&page_title(&w.i18n(), &street_title(w), &names));
         });
     }
-    let linked = ends.is_some();
     let between = ends.map(|ends| match ends.as_slice() {
         [a, b] => view! {
-            " "
-            <span aria-hidden="true">"\u{b7}"</span>
-            " "
             <span>
                 {move || format!("{} ", w.i18n().tr("header-between", &Args::new()))}
                 {end_link(w, a)}
@@ -221,12 +208,6 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>, #[prop(optiona
     view! {
         <h1 id="street-name">{move || street_title(w)}</h1>
         <p class="street-sub" id="street-sub">
-            {linked.then(|| view! { {back_link(w)} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
-            <span>{say(w, "header-section")}</span>
-            " "
-            <span aria-hidden="true">"\u{b7}"</span>
-            " "
-            <span><b id="row-dim" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
             {between}
         </p>
         {steps}

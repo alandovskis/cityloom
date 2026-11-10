@@ -111,7 +111,6 @@ test("nothing of the page is left in English once it is French, a piece selected
   await selectFirstPiece(page);
   await page.keyboard.press("Enter");
   await expect(page.locator("#add-btn")).toHaveText(/Ajouter/);
-  await expect(page.locator("#row-dim")).toHaveText(/^\d+,\d+/);
   await expect(page.locator("#tb-row")).toHaveText(/^\d+,\d+/);
   await expectNoEnglish(page, "with a piece selected");
 

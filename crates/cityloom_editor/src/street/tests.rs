@@ -183,11 +183,11 @@ fn the_2_5d_drawing_follows_the_language_the_shell_switches() {
 }
 
 #[test]
-fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
+fn the_street_heading_names_the_street_and_no_more() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
-    assert!(h.contains(">Sample Street 1</h1>") && h.contains("Street cross-section") && h.contains(">18.0 m</b>"));
-    assert!(!h.contains("City map") && !h.contains("between"));
+    assert!(h.contains(">Sample Street 1</h1>"));
+    assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains(" wide") && !h.contains("18.0 m") && !h.contains("between"), "{h}");
 }
 
 #[test]
@@ -208,10 +208,10 @@ fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() 
 }
 
 #[test]
-fn a_city_street_s_heading_links_back_and_to_the_junctions_it_runs_between() {
+fn a_city_street_s_heading_links_to_the_junctions_it_runs_between() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
-    assert!(h.contains("href=\"map.html\"") && h.contains("City map"));
+    assert!(!h.contains("href=\"map.html\"") && !h.contains("City map") && !h.contains("Street cross-section") && !h.contains(" wide"), "{h}");
     assert!(h.contains("between ") && h.contains("the edge of the map") && h.contains(" and <a href=\"intersection.html?junction=2\">Junction 4</a>"));
     assert_eq!(count(&h, "href=\"intersection.html"), 1, "the edge of the map is not a link");
 }
@@ -738,7 +738,7 @@ fn the_checks_are_said_in_french_and_follow_the_switch() {
 fn the_heading_and_the_title_block_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
-    assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
+    assert!(!h.contains("Carte de la ville") && !h.contains("Coupe transversale de la rue") && !h.contains("de large"), "{h}");
     assert!(h.contains("entre ") && h.contains("la limite de la carte") && h.contains(" et <a href=\"intersection.html?junction=2\">Jonction 4</a>"), "{h}");
     assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
@@ -899,8 +899,6 @@ fn the_lengths_around_the_section_follow_the_language() {
     let fr = Units::Metres.length_fine_in(row, Locale::FrCa);
     let en = Units::Metres.length_fine_in(row, Locale::En);
     assert!(fr.contains(',') && fr.contains('\u{a0}') && en.contains('.'), "{fr} {en}");
-    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
-    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });

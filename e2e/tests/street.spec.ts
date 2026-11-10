@@ -291,11 +291,11 @@ test.describe("the street editor on a street of the city", () => {
 });
 
 test.describe("what the street editor keeps in the city", () => {
-  test("is named for the street, says where it runs between, and links back to the map", async ({ page }) => {
+  test("is named for the street and says where it runs between", async ({ page }) => {
     await openStreet(page);
     await expect(page.locator("#street-name")).not.toHaveText("");
     await expect(page.locator("#street-sub")).not.toHaveText("");
-    await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
+    await expect(page.locator("a.back")).toHaveCount(0);
     await expect(page.locator('.surface[href="intersection.html"]')).toHaveCount(0);
   });
 
