@@ -133,7 +133,7 @@ Row/selection/drag/strip code is shared with stops and calming: `street/row.rs` 
 ## Left panel tabs (`street/panel_tabs.rs`, `PanelTabs` in `#panel-tabs-slot`; `PanelTab`, `StreetVm::panel_tab`/`show_panel_tab`; `keys::panel_tab_target`)
 
 - **Piece** (`#t-piece`: zone, curbside, stop, calming, green tools and the piece inspector; opens first) and **Street** (`#t-street`: the speed limit); panels `#p-piece`/`#p-street`. WAI-ARIA tab list, one tab stop; arrows (wrapping)/Home/End; choice kept under `cityloom-street-panel` (`PANEL_TAB_KEY`; a non-tab value ignored); static markup shown/hidden with `hidden`.
-- Pressing a piece (`StreetVm::select` with a piece, `select_relative`) shows the Piece tab without changing the kept choice. Reuses the notes' `.tabs`/`.tab` styles, not `ShellVm`'s tabs (`.notes .tab`). `e2e/tests/speed.spec.ts`.
+- Pressing a piece (`StreetVm::select` with a piece, `select_relative`) shows the Piece tab without changing the kept choice. Reuses the notes' `.tabs`/`.tab` styles, not `ShellVm`'s tabs (`.notes .tab`), and sits like them: `#panel-tabs-slot` is a header of the panel above its scrolling `.panel-body` (flush with the panel, not inset in the body), so both sidebars' tab strips look and stay alike. `e2e/tests/speed.spec.ts`.
 
 ## Speed limit on the street page
 
