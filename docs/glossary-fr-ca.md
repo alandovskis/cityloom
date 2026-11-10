@@ -346,7 +346,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | End of X (city names) | `Bout de X` | In a sentence: `le bout de X`. Alternatives: `extrémité de X`, `fin de X`. |
 | Zone (of a street) | `zone` | `section` (taken by the cross-section, `coupe`), `segment` (the model’s word for a piece), `secteur`; `tronçon` stays the 2.5D’s stretch |
 | Zone boundary | `limite` | `frontière`, `séparation` |
-| Connection on X (city names) | `Raccordement sur X` | In a sentence: `un raccordement sur X`. |
+| Connection on X (city names) | `Raccordement sur X` | In a sentence: `un raccordement sur X`; in a street's own heading, where X is that street, just `un raccordement`. |
 | An unnamed {class} street, in a sentence (city names) | `une rue { $class } sans nom` | For a place on an unnamed road: `Raccordement sur une rue locale sans nom`. A motorway: `une autoroute sans nom`. |
 | End of an unnamed street (city names) | `Bout d’une rue locale sans nom` | Its own message because `de` elides before `une`; in a sentence: `le bout d’une rue locale sans nom`. |
 | Cannot be drawn with the streets as they are (city names) | `Ne peut pas être dessinée avec les rues telles qu’elles sont` |  |

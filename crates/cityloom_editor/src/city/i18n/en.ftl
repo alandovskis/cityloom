@@ -26,6 +26,7 @@ city-connection-on = Connection on { $street }
 city-map-edge = Edge of the map
 city-the-end-of = the end of { $street }
 city-a-connection-on = a connection on { $street }
+city-a-connection = a connection
 city-the-edge-of-the-map = the edge of the map
 city-edge-between = { $from } to { $to }
 city-edge-through = through the city

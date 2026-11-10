@@ -418,12 +418,13 @@ impl Layout {
         order.iter().position(|&n| n == node).map_or(0, |p| p + 1)
     }
 
-    /// The distinct names of the streets meeting at `node`, in the order the edges are held.
-    fn street_names_at(&self, node: usize) -> Vec<String> {
+    /// The distinct names of the streets meeting at `node`, in the order the edges are held, without `skip`.
+    fn street_names_at(&self, node: usize, skip: Option<&str>) -> Vec<String> {
         let mut names: Vec<String> = Vec::new();
         for e in self.edges_at(node) {
             if let Some(n) = &self.edges[e].name
                 && !names.contains(n)
+                && skip != Some(n.as_str())
             {
                 names.push(n.clone());
             }
@@ -433,8 +434,8 @@ impl Layout {
 
     /// A junction, by the streets that meet there ("Main Street and Side Road"), or by its number where
     /// none of them has a name.
-    fn junction_title(&self, node: usize) -> Said {
-        let names = self.street_names_at(node);
+    fn junction_title(&self, node: usize, skip: Option<&str>) -> Said {
+        let names = self.street_names_at(node, skip);
         let name = |i: usize| Arg::Text(names[i].clone());
         match names.len() {
             0 => Said::new("city-junction-number").with("n", Arg::Num(self.junction_number(node) as i64)),
@@ -453,12 +454,17 @@ impl Layout {
     }
 
     /// A place that is not a junction, in the words of `forms`: the end of a street, a connection on one, or
-    /// the edge of the map where no road there has any name to lend it.
-    fn place_name(&self, node: usize, forms: &PlaceForms) -> Said {
+    /// the edge of the map where no road there has any name to lend it. A name in `skip` is not repeated: the
+    /// only street at a connection is then just a connection (the end of a street keeps its name).
+    fn place_name(&self, node: usize, forms: &PlaceForms, skip: Option<&str>) -> Said {
         let dead_end = self.edges_at(node).len() == 1;
-        if let Some(street) = self.street_names_at(node).first() {
+        let skip = skip.filter(|_| !dead_end);
+        if let Some(street) = self.street_names_at(node, skip).first() {
             let key = if dead_end { forms.end_of } else { forms.connection_on };
             return Said::new(key).with("street", Arg::Text(street.clone()));
+        }
+        if skip.is_some() && !self.street_names_at(node, None).is_empty() {
+            return Said::new("city-a-connection");
         }
         match self.unnamed_at(node) {
             Some(street) => {
@@ -471,12 +477,22 @@ impl Layout {
 
     /// A place as a title.
     pub(super) fn node_name(&self, node: usize) -> Said {
-        if self.nodes[node].junction { self.junction_title(node) } else { self.place_name(node, &TITLE) }
+        if self.nodes[node].junction { self.junction_title(node, None) } else { self.place_name(node, &TITLE, None) }
     }
 
     /// A place in a sentence.
     pub(super) fn end_name(&self, node: usize) -> Said {
-        if self.nodes[node].junction { self.junction_title(node) } else { self.place_name(node, &IN_SENTENCE) }
+        self.end_name_skipping(node, None)
+    }
+
+    /// An end of street `edge` in a sentence, as the street itself says it: without its own name, which the
+    /// reader already has.
+    pub(super) fn end_name_beside(&self, node: usize, edge: usize) -> Said {
+        self.end_name_skipping(node, self.edges[edge].name.as_deref())
+    }
+
+    fn end_name_skipping(&self, node: usize, skip: Option<&str>) -> Said {
+        if self.nodes[node].junction { self.junction_title(node, skip) } else { self.place_name(node, &IN_SENTENCE, skip) }
     }
 
     /// What a street is called: the name the network gives it, or else the title of `street`, the street as it stands.
@@ -868,7 +884,7 @@ impl City {
         let Some(e) = self.edge_index(edge) else { return Vec::new() };
         [self.layout.edges[e].a, self.layout.edges[e].b]
             .into_iter()
-            .map(|n| EndView { uid: node_uid(n), name: self.layout.end_name(n), junction: self.layout.nodes[n].junction })
+            .map(|n| EndView { uid: node_uid(n), name: self.layout.end_name_beside(n, e), junction: self.layout.nodes[n].junction })
             .collect()
     }
 
@@ -2190,6 +2206,24 @@ mod tests {
         assert_eq!(en(&layout.end_name(0)), "the edge of the map");
         assert_eq!(City::new().junction_name(node_uid(1)).map(|n| en(&n)), Some("Junction 4".to_string()));
         assert_eq!(City::new().junction_name(node_uid(0)), None, "an end of a street is not a junction");
+    }
+
+    #[test]
+    fn a_street_s_own_name_is_left_out_of_the_names_of_its_ends() {
+        // a junction is titled by the other streets that meet there
+        let cross = named(&[(5, "Main Street"), (16, "Side Road"), (19, "Lane X")]);
+        assert_eq!(en(&cross.end_name_beside(15, 5)), "Side Road and Lane X");
+        assert_eq!(en(&cross.end_name_beside(15, 16)), "Main Street and Lane X");
+        let two = named(&[(5, "Main Street"), (16, "Side Road")]);
+        assert_eq!((en(&two.end_name_beside(15, 5)), fr(&two.end_name_beside(15, 5))), ("Side Road junction".into(), "Jonction Side Road".into()));
+        // a street with no name of its own leaves nothing out
+        assert_eq!(en(&two.end_name_beside(15, 19)), en(&two.end_name(15)));
+        // a connection on the street itself is only a connection; the end of it keeps the street's name
+        let mut meeting = named(&[(0, "Avenue Y")]);
+        meeting.nodes[1].junction = false;
+        assert_eq!((en(&meeting.end_name_beside(1, 0)), fr(&meeting.end_name_beside(1, 0))), ("a connection".into(), "un raccordement".into()));
+        let lane = named(&[(19, "Lane X")]);
+        assert_eq!(en(&lane.end_name_beside(16, 19)), "the end of Lane X");
     }
 
     #[test]
