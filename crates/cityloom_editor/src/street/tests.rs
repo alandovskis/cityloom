@@ -1783,6 +1783,18 @@ fn the_stop_tools_render_labelled_controls() {
 }
 
 #[test]
+fn the_stop_tools_show_only_while_a_stop_is_chosen() {
+    use crate::shared::catalogue::Side;
+    let s = parked_with_a_stop(Locale::En);
+    // the free stretch after the stop is chosen: no commands, a stop is added from the Add a piece menu
+    s.select_stop(Side::Right, 1);
+    let h = stop_tools_html(&s);
+    assert!(!h.contains("stop-") && !h.contains("Stop commands"), "{h}");
+    s.select_stop(Side::Right, 0);
+    assert!(stop_tools_html(&s).contains("id=\"stop-name\""));
+}
+
+#[test]
 fn the_stop_tools_follow_the_language() {
     let s = parked_with_a_stop(Locale::FrCa);
     let h = stop_tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
