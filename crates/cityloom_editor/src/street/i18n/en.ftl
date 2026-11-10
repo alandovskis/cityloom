@@ -59,6 +59,8 @@ group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
 group-stops = Transit stops
+group-green = Green infrastructure
+group-calming = Traffic calming
 
 # How the pieces stand against the street's width, and what is said after an edit.
 fit-used = Every metre of the street is used
@@ -713,7 +715,6 @@ st-calming-length = Length ({ $unit })
 st-calming-first = Starts on
 st-calming-first-left = Left
 st-calming-first-right = Right
-st-calming-add = Add raised element
 st-calming-remove = Remove raised element
 
 # The sources behind a rule (src/shared/sources.rs, #78), shown under a check on the street and the junction pages and in the report.

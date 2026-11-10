@@ -316,7 +316,11 @@ fn the_add_menu_lists_the_transit_stops_where_a_stop_can_go() {
     let s = stop_street(&PARKED, Locale::En);
     s.select_stop(Side::Right, 0);
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert_eq!((count(&h, "role=\"group\""), count(&h, "class=\"add-item\"")), (8, 18), "{h}");
+    assert_eq!(
+        (count(&h, "role=\"group\""), count(&h, "class=\"add-item\"")),
+        (10, 18),
+        "the seven kinds, the bioswale, the traffic calming and the stops: {h}"
+    );
     assert!(h.contains(">Transit stops</p>"), "{h}");
     assert_eq!(count(&h, "class=\"add-item stop-add-item\""), 3, "{h}");
     for name in ["Curb stop", "Curb extension", "Boarding island"] {
@@ -331,6 +335,31 @@ fn the_add_menu_lists_the_transit_stops_where_a_stop_can_go() {
     let fr = stop_street(&PARKED, Locale::FrCa);
     let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
     assert!(h.contains(">Arrêts de transport en commun</p>") && h.contains("<b>Avancée de trottoir</b>"), "{h}");
+}
+
+#[test]
+fn the_add_menu_offers_a_bioswale_where_green_can_go() {
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    assert!(h.contains(">Green infrastructure</p>") && count(&h, "class=\"add-item green-add-item\"") == 1 && h.contains("<b>Bioswale</b>"), "{h}");
+    // a street with no piece to stand a bioswale on has none
+    let none = stop_street(&[("travel", 3300, Some(1)), ("travel", 3300, Some(0))], Locale::En);
+    let h = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
+    assert!(!h.contains("Bioswale") && count(&h, "green-add-item") == 0, "{h}");
+    let fr = stop_street(&AT_THE_CURB, Locale::FrCa);
+    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
+    assert!(h.contains(">Infrastructure verte</p>") && h.contains("<b>Noue végétalisée</b>"), "{h}");
+}
+
+#[test]
+fn a_bioswale_is_added_by_the_menu_only_so_the_kind_select_offers_it_only_for_a_bioswale() {
+    use crate::street::model::{GreenForm, GreenKind};
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let h = green_tools_html(&s);
+    assert!(h.contains(">Rain garden</option>") && !h.contains(">Bioswale</option>"), "{h}");
+    assert!(s.add_green(GreenForm { at_mm: Some(10_000), host: Some(0), ..GreenForm::new(GreenKind::Bioswale) }));
+    let h = green_tools_html(&s);
+    assert!(h.contains(">Bioswale</option>"), "the chosen bioswale shows its kind: {h}");
 }
 
 #[test]
@@ -1876,8 +1905,8 @@ fn the_green_tools_render_labelled_controls() {
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
     }
     assert_eq!(count(&h, "id=\"green-size\""), 0, "the rain garden chosen has no size: {h}");
-    assert_eq!(count(&h, "<option"), 4 + 2, "four kinds and the two sidewalks: {h}");
-    for name in ["Tree", "Planting bed", "Rain garden", "Bioswale", "Sidewalk, 3.0 m"] {
+    assert_eq!(count(&h, "<option"), 3 + 2, "three kinds (a bioswale is added from the menu) and the two sidewalks: {h}");
+    for name in ["Tree", "Planting bed", "Rain garden", "Sidewalk, 3.0 m"] {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
     for (id, label) in [("green-add", "Add"), ("green-change", "Change"), ("green-remove", "Remove")] {
@@ -1904,7 +1933,7 @@ fn the_green_tools_without_a_chosen_element_cannot_change_or_remove() {
 fn the_green_tools_follow_the_language() {
     let h = green_tools_html(&green_street(Locale::FrCa)).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains("aria-label=\"Commandes des arbres et plantations\"") && h.contains(">Type</label>") && h.contains(">Longueur (m)</label>"), "{h}");
-    assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && h.contains(">Noue végétalisée</option>"), "{h}");
+    assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && !h.contains(">Noue végétalisée</option>"), "{h}");
     assert!(h.contains(">Ajouter</button>") && h.contains(">Modifier</button>") && h.contains(">Retirer</button>"), "{h}");
 }
 
@@ -2167,14 +2196,9 @@ fn the_calming_tools_render_labelled_controls_with_the_kinds_in_order_and_the_de
     );
     assert!(!h.contains("calming-first"), "only a chicane has a side to start on: {h}");
     assert!(h.contains("placeholder=\"7.0\""), "the default length, in the locale's units: {h}");
-    for id in ["calming-add", "calming-remove"] {
-        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
-    }
-    assert!(h.contains(">Add raised element</button>") && h.contains(">Remove raised element</button>"), "{h}");
-    assert!(
-        h.contains("id=\"calming-remove\" aria-disabled=\"true\"") && !h.contains("id=\"calming-add\" aria-disabled"),
-        "a free stretch is chosen: add is on, remove is off: {h}"
-    );
+    assert!(h.contains("id=\"calming-remove\"") && h.contains(">Remove raised element</button>"), "{h}");
+    assert!(!h.contains("calming-add") && !h.contains("Add raised element"), "adding is in the Add a piece menu: {h}");
+    assert!(h.contains("id=\"calming-remove\" aria-disabled=\"true\""), "a free stretch is chosen: remove is off: {h}");
 }
 
 #[test]
@@ -2195,13 +2219,30 @@ fn the_calming_tools_offer_the_starting_side_for_a_chicane_only() {
 }
 
 #[test]
-fn the_calming_tools_disable_add_on_an_element() {
+fn the_calming_tools_can_remove_the_chosen_element() {
     let s = calming_street(Locale::En);
     let h = calming_tools_html(&s);
-    assert!(
-        h.contains("id=\"calming-add\" aria-disabled=\"true\"") && !h.contains("id=\"calming-remove\" aria-disabled"),
-        "an element is chosen: add is off, remove is on: {h}"
-    );
+    assert!(!h.contains("id=\"calming-remove\" aria-disabled"), "an element is chosen: remove is on: {h}");
+}
+
+#[test]
+fn the_add_menu_lists_traffic_calming_where_an_element_can_go() {
+    let s = calming_street(Locale::En);
+    s.select_calming(1);
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    assert!(h.contains(">Traffic calming</p>"), "{h}");
+    assert_eq!(count(&h, "class=\"add-item calming-add-item\""), 4, "{h}");
+    let at = |name: &str| h.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {h}"));
+    assert!(at("Raised table") < at("Raised crossing") && at("Raised crossing") < at("Chicane") && at("Chicane") < at("Modal filter"), "{h}");
+    assert!(h.contains("7.0 m") && h.contains("24.0 m") && h.contains("2.0 m"), "each kind's default length: {h}");
+    // a street with no stretch to anchor an element on has none
+    let none = street_shared(0);
+    let h = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
+    assert!(!h.contains("Traffic calming") && count(&h, "calming-add-item") == 0, "{h}");
+    let fr = calming_street(Locale::FrCa);
+    fr.select_calming(1);
+    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
+    assert!(h.contains(">Apaisement de la circulation</p>") && h.contains("<b>Plateau surélevé</b>"), "{h}");
 }
 
 #[test]

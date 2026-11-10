@@ -1,11 +1,10 @@
-//! The commands beside the raised elements' strip: the kind, the length of the chosen element, add an element into the
-//! chosen free stretch and remove the chosen one. One named group, like the curbside commands; every control is a tab
+//! The commands beside the raised elements' strip: the kind and the length of the chosen element, and remove it (an
+//! element is added from the Add a piece menu; on a free stretch the kind is the one the next add takes). One named group, like the curbside commands; every control is a tab
 //! stop.
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use super::curb_tools::typed_length;
@@ -41,12 +40,6 @@ fn chosen(w: SheetWatch) -> Option<(i32, i32, bool)> {
     Some((c.from_mm, c.to_mm, c.element.is_some()))
 }
 
-/// Adds an element of `kind` into the chosen free stretch: the length typed, else the default. False when the length
-/// is not a number (said) or the add was refused (said by the view-model).
-pub fn commit_add(w: SheetWatch, kind: CalmingKind, typed: &str) -> bool {
-    typed_length(w, typed, Some(kind.default_mm())).is_some_and(|mm| w.add_calming(kind, mm))
-}
-
 /// Gives the chosen element the length that was typed.
 pub fn commit_length(w: SheetWatch, typed: &str) -> bool {
     typed_length(w, typed, None).is_some_and(|mm| w.set_calming_length(mm))
@@ -77,8 +70,6 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view()
     };
-    let typed =
-        move || document().get_element_by_id("calming-length").and_then(|e| e.dyn_into::<HtmlInputElement>().ok()).map(|i| i.value()).unwrap_or_default();
     view! {
         <Show when=any>
             <section class="insp-sec" aria-labelledby="h-calming-tools">
@@ -120,30 +111,14 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
                                 if e.key() == "Enter" {
                                     e.prevent_default();
                                     let input = event_target::<HtmlInputElement>(&e);
-                                    if is_element() {
-                                        if !commit_length(w, &input.value()) {
-                                            input.set_value(&length_value());
-                                        }
-                                    } else if commit_add(w, w.calming_kind_shown(), &input.value()) {
-                                        input.set_value("");
+                                    if is_element() && !commit_length(w, &input.value()) {
+                                        input.set_value(&length_value());
                                     }
                                 }
                             }
                         />
                     </div>
                     <div class="zone-tool">
-                        <button
-                            type="button"
-                            id="calming-add"
-                            aria-disabled=move || is_element().then_some("true")
-                            on:click=move |_| {
-                                if commit_add(w, w.calming_kind_shown(), &typed()) {
-                                    focus_later(CalmingRow::STRIP_ID);
-                                }
-                            }
-                        >
-                            {move || text("st-calming-add")}
-                        </button>
                         <button
                             type="button"
                             id="calming-remove"

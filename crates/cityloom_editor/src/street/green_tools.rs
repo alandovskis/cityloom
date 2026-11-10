@@ -1,4 +1,4 @@
-//! The commands beside the Green row: add a tree or planting (its kind, a tree's size, where along the street, the
+//! The commands beside the Green row: add a tree or planting (a bioswale is added from the Add a piece menu; its kind, a tree's size, where along the street, the
 //! piece it stands on and how far from that piece's middle, its length and width), change or remove the chosen one.
 //! A field left blank takes its default when an element is added. With an element chosen the fields show it. One
 //! named group, like the stops' commands; every control is a tab stop.
@@ -192,10 +192,14 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
             f.fine.set(String::new());
         }
     });
+    // A bioswale is added from the Add a piece menu, so the kind select offers it only while it holds one (a chosen
+    // bioswale, to show or to change).
     let kind_options = move || {
+        let held = f.kind.get();
         GreenKind::ALL
             .iter()
             .enumerate()
+            .filter(|(n, k)| **k != GreenKind::Bioswale || *n == held)
             .map(|(n, k)| {
                 let k = *k;
                 view! { <option value=n.to_string()>{move || w.i18n().tr(k.name_key(), &Args::new())}</option> }

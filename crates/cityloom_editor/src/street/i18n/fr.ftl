@@ -59,6 +59,8 @@ group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
 group-stops = Arrêts de transport en commun
+group-green = Infrastructure verte
+group-calming = Apaisement de la circulation
 
 # Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
 fit-used = Chaque mètre de la rue est utilisé
@@ -713,7 +715,6 @@ st-calming-length = Longueur ({ $unit })
 st-calming-first = Commence à
 st-calming-first-left = Gauche
 st-calming-first-right = Droite
-st-calming-add = Ajouter un élément surélevé
 st-calming-remove = Retirer un élément surélevé
 
 # Les sources d’une règle (src/shared/sources.rs, #78), sous une vérification des pages de la rue et de l’intersection et dans le rapport.
