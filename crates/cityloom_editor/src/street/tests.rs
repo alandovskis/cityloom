@@ -1764,11 +1764,12 @@ fn the_stop_tools_render_labelled_controls() {
     let s = parked_with_a_stop(Locale::En);
     let h = stop_tools_html(&s);
     assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Stop commands\"") && !h.contains("toolbar"), "{h}");
-    for (id, label) in [("stop-name", "Name"), ("stop-length", "Length (m)"), ("stop-shelter", "Shelter")] {
+    for (id, label) in [("stop-name", "Name"), ("stop-length", "Length (m)")] {
         assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
     }
-    assert!(h.contains("id=\"stop-shelter\" type=\"checkbox\""), "{h}");
+    // the shelter is not set here
+    assert!(!h.contains("stop-shelter") && !h.contains("checkbox") && !h.contains("Shelter"), "{h}");
     // the kind is chosen in the Add a piece menu, when the stop is added: no kind control here
     assert!(!h.contains("stop-kind") && !h.contains("<select") && !h.contains("<option") && !h.contains("Curb extension"), "{h}");
     assert!(h.contains("id=\"stop-remove\"") && h.contains(">Remove stop</button>"), "{h}");
@@ -1786,7 +1787,7 @@ fn the_stop_tools_follow_the_language() {
     let s = parked_with_a_stop(Locale::FrCa);
     let h = stop_tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains("aria-label=\"Commandes des arrêts\"") && h.contains(">Nom</label>") && h.contains(">Longueur (m)</label>"), "{h}");
-    assert!(h.contains(">Abribus</label>") && h.contains(">Retirer un arrêt</button>"), "{h}");
+    assert!(!h.contains("Abribus") && h.contains(">Retirer un arrêt</button>"), "{h}");
     assert!(!h.contains(">Type</label>") && !h.contains("<option"), "{h}");
 }
 

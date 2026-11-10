@@ -515,7 +515,6 @@ st-stop-strip-label = Arrêts, { $side }
 st-stop-tools = Commandes des arrêts
 st-stop-name = Nom
 st-stop-length = Longueur ({ $unit })
-st-stop-shelter = Abribus
 st-stop-remove = Retirer un arrêt
 stop-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.
 stop-refused-elsewhere = Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.

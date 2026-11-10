@@ -515,7 +515,6 @@ st-stop-strip-label = Stops, { $side }
 st-stop-tools = Stop commands
 st-stop-name = Name
 st-stop-length = Length ({ $unit })
-st-stop-shelter = Shelter
 st-stop-remove = Remove stop
 stop-refused-no-anchor = Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.
 stop-refused-elsewhere = The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.

@@ -30,73 +30,60 @@ async function openStopStreet(page: Page, minM: number, curbside = true) {
 }
 
 /** Chooses cell `cell` of the right Stops row, adds a stop of `kind` there from the Add a piece menu (8 m), then
- *  gives it `metres` and, if asked, a shelter. */
-async function addStop(page: Page, cell: number, metres: number, shelter = false, kind = "Curb extension") {
+ *  gives it `metres`. */
+async function addStop(page: Page, cell: number, metres: number, kind = "Curb extension") {
   await page.locator("#stop-right-" + cell).click();
   await page.locator("#add-btn").click();
   await page.locator(".stop-add-item", { hasText: kind }).click();
   await page.locator("#stop-right-" + cell).click();
   await page.locator("#stop-length").fill(String(metres));
   await page.locator("#stop-length").press("Enter");
-  if (shelter) await page.locator("#stop-shelter").check();
 }
 
 const editsVersion = (page: Page) =>
   page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "{}").version);
 
 test.describe("the Stops row", () => {
-  test("a stop with a shelter is added, checked, drawn, kept over a reload and undone", async ({ page }) => {
+  test("a stop is added, checked, drawn, kept over a reload and undone", async ({ page }) => {
     await openStopStreet(page, 20);
     const cells = page.locator("#stop-strip-right").locator('[role="option"]');
     await expect(cells).toHaveCount(1);
     await expect(page.locator("#undo")).toBeDisabled();
 
-    await addStop(page, 0, 12, true);
+    await addStop(page, 0, 12);
     await expect(cells).toHaveCount(2);
     await expect(cells.nth(0)).toHaveClass(/stop-cell/);
     await expect(cells.nth(0)).toHaveAttribute("aria-label", /12\.0 m long/);
-    await expect(cells.nth(0)).toHaveAttribute("aria-label", /with a shelter/);
+    await expect(cells.nth(0)).not.toHaveAttribute("aria-label", /with a shelter/);
     await expect(page.locator("#undo")).toBeEnabled();
 
     // The Checks list the six stop rows. The curb extension (the parking lane) joins the sidewalk beyond it, which
-    // together give the 3.9 m a shelter needs on the Plateau, so all six pass.
+    // gives the room to board on the Plateau, so all six pass.
     await page.locator("#t-checks").click();
     for (const label of ROWS) {
       const row = page.locator("#checks li").filter({ hasText: label });
       await expect(row).toHaveCount(1);
       await expect(row).toHaveClass("ok");
     }
-    await expect(page.locator("#checks li").filter({ hasText: "Shelters have room" })).toContainText(
-      "Every shelter has room.",
-    );
 
-    // The 2.5D says how many stops it shows, and draws the sign and the shelter.
+    // The 2.5D says how many stops it shows, and draws the sign (no shelter: the page cannot give a stop one).
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
       /One transit stop is shown \(curb extension\)\./,
     );
     await expect(page.locator("#drawing .iso-stop-sign").first()).toBeAttached();
-    await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(0);
 
     // Kept: the document is version 9 and the stop is still there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(9);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
-    await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /with a shelter.*12\.0 m long/);
+    await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /12\.0 m long/);
 
     // Undo takes it away.
     await page.locator("#undo").click();
     await expect(page.locator("#stop-strip-right").locator('[role="option"]')).toHaveCount(1);
-  });
-
-  test("a stop without a shelter passes all six checks", async ({ page }) => {
-    await openStopStreet(page, 20);
-    await addStop(page, 0, 12);
-    await page.locator("#t-checks").click();
-    for (const label of ROWS) {
-      await expect(page.locator("#checks li").filter({ hasText: label })).toHaveClass("ok");
-    }
   });
 
   test("a name is kept, and removing the stop takes it away", async ({ page }) => {
@@ -181,7 +168,7 @@ test.describe("the Stops row", () => {
     // The row is there because a lane serves the bus; this street has no curbside strip of its own.
     await expect(page.locator(".curb-strip")).toHaveCount(0);
     await expect(page.locator("#stop-strip-right").locator('[role="option"]')).toHaveCount(1);
-    await addStop(page, 0, 12, false, "Curb stop");
+    await addStop(page, 0, 12, "Curb stop");
     await expect(page.locator("#stop-right-0")).toHaveClass(/failing/);
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: "Stops have room to board" });

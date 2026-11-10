@@ -1,5 +1,5 @@
-//! The commands beside the stops rows: the shelter, the name and the length of the chosen stop (on a free
-//! stretch, the shelter and name of the stop the Add a piece menu will add there), and remove the chosen stop. The kind is
+//! The commands beside the stops rows: the name and the length of the chosen stop (on a free stretch, the name of
+//! the stop the Add a piece menu will add there), and remove the chosen stop. The kind is
 //! chosen in that menu, when the stop is added. One named group, like the curbside commands; every control is a
 //! tab stop.
 
@@ -47,7 +47,6 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
     let is_stop = move || chosen(w).is_some_and(|c| c.is_stop);
-    let shelter_value = move || w.stop_shelter_shown();
     let name_value = move || w.stop_name_shown();
     let length_value = move || chosen(w).filter(|c| c.is_stop).map(|c| w.units().number_in(c.to_mm - c.from_mm, w.i18n().locale())).unwrap_or_default();
     let any = move || !w.view().stops.sides.is_empty();
@@ -89,20 +88,6 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
                                 }
                             }
                         />
-                    </div>
-                    <div class="zone-tool zone-check">
-                        <input
-                            id="stop-shelter"
-                            type="checkbox"
-                            prop:checked=shelter_value
-                            on:change=move |e| {
-                                let input = event_target::<HtmlInputElement>(&e);
-                                if !w.set_stop_shelter(input.checked()) {
-                                    input.set_checked(shelter_value());
-                                }
-                            }
-                        />
-                        <label for="stop-shelter">{move || text("st-stop-shelter")}</label>
                     </div>
                     <div class="zone-tool">
                         <button
