@@ -58,6 +58,7 @@ group-transit = Transit
 group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
+group-stops = Transit stops
 
 # How the pieces stand against the street's width, and what is said after an edit.
 fit-used = Every metre of the street is used
@@ -514,7 +515,6 @@ st-stop-kind = Kind
 st-stop-name = Name
 st-stop-length = Length ({ $unit })
 st-stop-shelter = Shelter
-st-stop-add = Add stop
 st-stop-remove = Remove stop
 stop-refused-no-anchor = Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.
 stop-refused-elsewhere = The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.

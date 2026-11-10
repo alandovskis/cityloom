@@ -58,6 +58,7 @@ group-transit = Transport en commun
 group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
+group-stops = Arrêts de transport en commun
 
 # Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
 fit-used = Chaque mètre de la rue est utilisé
@@ -514,7 +515,6 @@ st-stop-kind = Type
 st-stop-name = Nom
 st-stop-length = Longueur ({ $unit })
 st-stop-shelter = Abribus
-st-stop-add = Ajouter un arrêt
 st-stop-remove = Retirer un arrêt
 stop-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.
 stop-refused-elsewhere = Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.

@@ -117,8 +117,11 @@ test.describe("raised tables and crossings", () => {
     await openCalmingStreet(page, 40, true);
     // A stop at the start of the right side, then a table at the start of the street.
     await page.locator("#stop-right-0").click();
+    await page.locator("#add-btn").click();
+    await page.locator(".stop-add-item", { hasText: "Curb extension" }).click();
+    await page.locator("#stop-right-0").click();
     await page.locator("#stop-length").fill("12");
-    await page.locator("#stop-add").click();
+    await page.locator("#stop-length").press("Enter");
     await addElement(page, 0, 8);
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: "Raised elements clear of transit stops" });

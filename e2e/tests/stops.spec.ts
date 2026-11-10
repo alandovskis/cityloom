@@ -29,12 +29,16 @@ async function openStopStreet(page: Page, minM: number, curbside = true) {
   throw new Error(`no street of ${minM} m or more with a Stops row${curbside ? " and a curbside strip" : ""}`);
 }
 
-/** Chooses cell `cell` of the right Stops row and adds a stop of `metres` there. */
-async function addStop(page: Page, cell: number, metres: number, shelter = false) {
+/** Chooses cell `cell` of the right Stops row, adds a stop of `kind` there from the Add a piece menu (8 m), then
+ *  gives it `metres` and, if asked, a shelter. */
+async function addStop(page: Page, cell: number, metres: number, shelter = false, kind = "Curb extension") {
   await page.locator("#stop-right-" + cell).click();
-  if (shelter) await page.locator("#stop-shelter").check();
+  await page.locator("#add-btn").click();
+  await page.locator(".stop-add-item", { hasText: kind }).click();
+  await page.locator("#stop-right-" + cell).click();
   await page.locator("#stop-length").fill(String(metres));
-  await page.locator("#stop-add").click();
+  await page.locator("#stop-length").press("Enter");
+  if (shelter) await page.locator("#stop-shelter").check();
 }
 
 const editsVersion = (page: Page) =>
@@ -177,7 +181,7 @@ test.describe("the Stops row", () => {
     // The row is there because a lane serves the bus; this street has no curbside strip of its own.
     await expect(page.locator(".curb-strip")).toHaveCount(0);
     await expect(page.locator("#stop-strip-right").locator('[role="option"]')).toHaveCount(1);
-    await addStop(page, 0, 12);
+    await addStop(page, 0, 12, false, "Curb stop");
     await expect(page.locator("#stop-right-0")).toHaveClass(/failing/);
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: "Stops have room to board" });

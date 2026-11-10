@@ -1,15 +1,14 @@
-//! The commands beside the stops rows: the kind, the shelter, the name and the length of the chosen stop, add a stop into
-//! the chosen free stretch, and remove the chosen stop. One named group, like the curbside commands; every control is a
+//! The commands beside the stops rows: the kind, the shelter, the name and the length of the chosen stop (on a free
+//! stretch, the shelter and name of the stop the Add a piece menu will add there), and remove the chosen stop. One named group, like the curbside commands; every control is a
 //! tab stop.
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use super::curb_tools::typed_length;
-use super::model::{MIN_STOP_MM, StopKind};
+use super::model::StopKind;
 use super::vm::StreetVm;
 use super::watch::SheetWatch;
 use super::zone_tools::focus_later;
@@ -46,12 +45,6 @@ fn strip_to_focus(w: SheetWatch) -> Option<&'static str> {
     chosen(w).map(|c| if c.side == Side::Left { "stop-strip-left" } else { "stop-strip-right" })
 }
 
-/// Adds a stop of `kind` into the chosen free stretch: the length typed, else the shortest a bus needs. False when the
-/// length is not a number (said) or the add was refused (said by the view-model).
-pub fn commit_add(w: SheetWatch, kind: StopKind, typed: &str) -> bool {
-    typed_length(w, typed, Some(MIN_STOP_MM)).is_some_and(|mm| w.add_stop(kind, mm))
-}
-
 /// Gives the chosen stop the length that was typed.
 pub fn commit_length(w: SheetWatch, typed: &str) -> bool {
     typed_length(w, typed, None).is_some_and(|mm| w.resize_stop(mm))
@@ -81,7 +74,6 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view()
     };
-    let typed = move |id: &str| document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlInputElement>().ok()).map(|i| i.value()).unwrap_or_default();
     view! {
         <Show when=any>
             <section class="insp-sec" aria-labelledby="h-stop-tools">
@@ -126,12 +118,8 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
                                 if e.key() == "Enter" {
                                     e.prevent_default();
                                     let input = event_target::<HtmlInputElement>(&e);
-                                    if is_stop() {
-                                        if !commit_length(w, &input.value()) {
-                                            input.set_value(&length_value());
-                                        }
-                                    } else if commit_add(w, shown_kind(), &input.value()) {
-                                        input.set_value("");
+                                    if is_stop() && !commit_length(w, &input.value()) {
+                                        input.set_value(&length_value());
                                     }
                                 }
                             }
@@ -152,21 +140,6 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
                         <label for="stop-shelter">{move || text("st-stop-shelter")}</label>
                     </div>
                     <div class="zone-tool">
-                        <button
-                            type="button"
-                            id="stop-add"
-                            aria-disabled=move || chosen(w).is_none_or(|c| c.stop.is_some()).then_some("true")
-                            on:click=move |_| {
-                                let t = typed("stop-length");
-                                if commit_add(w, shown_kind(), &t) {
-                                    if let Some(id) = strip_to_focus(w) {
-                                        focus_later(id);
-                                    }
-                                }
-                            }
-                        >
-                            {move || text("st-stop-add")}
-                        </button>
                         <button
                             type="button"
                             id="stop-remove"

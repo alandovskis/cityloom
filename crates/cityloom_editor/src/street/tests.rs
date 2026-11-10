@@ -311,6 +311,29 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
 }
 
 #[test]
+fn the_add_menu_lists_the_transit_stops_where_a_stop_can_go() {
+    use crate::shared::catalogue::Side;
+    let s = stop_street(&PARKED, Locale::En);
+    s.select_stop(Side::Right, 0);
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    assert_eq!((count(&h, "role=\"group\""), count(&h, "class=\"add-item\"")), (8, 18), "{h}");
+    assert!(h.contains(">Transit stops</p>"), "{h}");
+    assert_eq!(count(&h, "class=\"add-item stop-add-item\""), 3, "{h}");
+    for name in ["Curb stop", "Curb extension", "Boarding island"] {
+        assert!(h.contains(&format!("<b>{name}</b>")), "{name}: {h}");
+    }
+    assert!(h.contains("8.0 m"), "the shortest a stop can be: {h}");
+    let h = street_html(|| view! { <page::AddMenu vm=street_shared(0)/> });
+    let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
+    let h2 = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
+    assert!(!h2.contains("Transit stops") && count(&h2, "stop-add-item") == 0, "{h2}");
+    drop(h);
+    let fr = stop_street(&PARKED, Locale::FrCa);
+    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
+    assert!(h.contains(">Arrêts de transport en commun</p>") && h.contains("<b>Avancée de trottoir</b>"), "{h}");
+}
+
+#[test]
 fn the_clock_is_hidden_until_a_piece_changes_through_the_day() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::Clock vm=s.clone()/> });
@@ -1730,11 +1753,11 @@ fn the_stop_tools_render_labelled_controls() {
     for name in ["Curb stop", "Curb extension", "Boarding island"] {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
-    for (id, label) in [("stop-add", "Add stop"), ("stop-remove", "Remove stop")] {
-        assert!(h.contains(&format!("id=\"{id}\"")) && h.contains(&format!(">{label}</button>")), "{id}: {h}");
-    }
-    // a stop is chosen: it can be removed, and a stop cannot be added into it
-    assert!(h.contains("id=\"stop-add\" aria-disabled=\"true\"") && !h.contains("id=\"stop-remove\" aria-disabled"), "{h}");
+    assert!(h.contains("id=\"stop-remove\"") && h.contains(">Remove stop</button>"), "{h}");
+    // adding is in the Add a piece menu, not here
+    assert!(!h.contains("stop-add") && !h.contains("Add stop"), "{h}");
+    // a stop is chosen: it can be removed
+    assert!(!h.contains("id=\"stop-remove\" aria-disabled"), "{h}");
     // a street without a lane for the bus or a curbside has no commands
     let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
     assert_eq!(count(&stop_tools_html(&none), "stop-kind"), 0);
@@ -1748,7 +1771,7 @@ fn the_stop_tools_follow_the_language() {
         h.contains("aria-label=\"Commandes des arrêts\"") && h.contains(">Type</label>") && h.contains(">Nom</label>") && h.contains(">Longueur (m)</label>"),
         "{h}"
     );
-    assert!(h.contains(">Abribus</label>") && h.contains(">Ajouter un arrêt</button>") && h.contains(">Retirer un arrêt</button>"), "{h}");
+    assert!(h.contains(">Abribus</label>") && h.contains(">Retirer un arrêt</button>"), "{h}");
     for name in ["Arrêt au trottoir", "Avancée de trottoir", "Îlot d’embarquement"] {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
