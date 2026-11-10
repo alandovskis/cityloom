@@ -2164,9 +2164,9 @@ fn a_failing_element_is_marked_and_described_on_its_cell() {
 }
 
 #[test]
-fn the_calming_tools_render_labelled_controls_with_the_kinds_in_order_and_the_default_length() {
+fn the_calming_tools_render_labelled_controls_for_the_chosen_element_with_the_kinds_in_order() {
     let s = calming_street(Locale::En);
-    s.select_calming(1);
+    s.select_calming(0);
     let h = calming_tools_html(&s);
     assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Raised table commands\"") && !h.contains("toolbar"), "{h}");
     for (id, label) in [("calming-kind", "Kind"), ("calming-length", "Length (m)")] {
@@ -2188,25 +2188,36 @@ fn the_calming_tools_render_labelled_controls_with_the_kinds_in_order_and_the_de
         "{h}"
     );
     assert!(!h.contains("calming-first"), "only a chicane has a side to start on: {h}");
-    assert!(h.contains("placeholder=\"7.0\""), "the default length, in the locale's units: {h}");
     assert!(h.contains("id=\"calming-remove\"") && h.contains(">Remove raised element</button>"), "{h}");
     assert!(!h.contains("calming-add") && !h.contains("Add raised element"), "adding is in the Add a piece menu: {h}");
-    assert!(h.contains("id=\"calming-remove\" aria-disabled=\"true\""), "a free stretch is chosen: remove is off: {h}");
+    assert!(!h.contains("aria-disabled"), "an element is chosen: remove is on: {h}");
+}
+
+#[test]
+fn the_calming_tools_show_only_while_an_element_is_chosen() {
+    let s = calming_street(Locale::En);
+    s.select_calming(1);
+    let h = calming_tools_html(&s);
+    assert!(!h.contains("calming-") && !h.contains("Raised table commands"), "a free stretch is chosen: {h}");
+    s.select_calming(0);
+    assert!(calming_tools_html(&s).contains("id=\"calming-length\""));
 }
 
 #[test]
 fn the_calming_tools_offer_the_starting_side_for_a_chicane_only() {
     use crate::street::model::CalmingKind;
-    let s = calming_street(Locale::En);
-    s.select_calming(1);
-    s.pick_calming_kind(CalmingKind::Chicane);
+    let chicane_street = |locale| {
+        let s = calming_street(locale);
+        s.select_calming(1);
+        assert!(s.add_calming(CalmingKind::Chicane, 24_000));
+        s.select_calming(1);
+        s
+    };
+    let s = chicane_street(Locale::En);
     let h = calming_tools_html(&s);
     assert!(h.contains("<label for=\"calming-first\"") && h.contains(">Starts on</label>"), "{h}");
     assert!(h.contains("<select id=\"calming-first\"") && h.contains(">Left</option>") && h.contains(">Right</option>"), "{h}");
-    assert!(h.contains("placeholder=\"24.0\""), "a chicane's default length: {h}");
-    let s = calming_street(Locale::FrCa);
-    s.select_calming(1);
-    s.pick_calming_kind(CalmingKind::Chicane);
+    let s = chicane_street(Locale::FrCa);
     let h = calming_tools_html(&s);
     assert!(h.contains(">Commence à</label>") && h.contains(">Gauche</option>") && h.contains(">Chicane</option>"), "{h}");
 }
@@ -2241,10 +2252,9 @@ fn the_add_menu_lists_traffic_calming_where_an_element_can_go() {
 #[test]
 fn the_calming_tools_follow_the_language_and_the_units() {
     let s = calming_street(Locale::FrCa);
-    s.select_calming(1);
+    s.select_calming(0);
     let h = calming_tools_html(&s);
     assert!(h.contains("aria-label=\"Commandes des éléments surélevés\"") && h.contains(">Plateau surélevé</option>"), "{h}");
-    assert!(h.contains("placeholder=\"7,0\""), "{h}");
 }
 
 // ---- the flat figure of the 2.5D --------------------------------------------------------

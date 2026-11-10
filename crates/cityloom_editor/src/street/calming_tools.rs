@@ -1,5 +1,5 @@
-//! The commands beside the raised elements' strip: the kind and the length of the chosen element, and remove it (an
-//! element is added from the Add a piece menu; on a free stretch the kind is the one the next add takes). One named group, like the curbside commands; every control is a tab
+//! The settings of the chosen raised element, shown only while one is chosen (like a piece's): its kind, its length
+//! and, for a chicane, the side it starts on, and remove it. An element is added from the Add a piece menu. One named group, like the curbside commands; every control is a tab
 //! stop.
 
 use std::rc::Rc;
@@ -51,14 +51,12 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
     let is_element = move || chosen(w).is_some_and(|c| c.2);
-    // The length shown: the chosen element's; else what an add would use (the default), as a hint to type over.
+    // The length shown: the chosen element's.
     let length_value = move || match chosen(w) {
         Some((from, to, true)) => w.units().number_in(to - from, w.i18n().locale()),
         _ => String::new(),
     };
-    let placeholder = move || w.units().number_in(w.calming_kind_shown().default_mm(), w.i18n().locale());
     let is_chicane = move || w.calming_kind_shown() == CalmingKind::Chicane;
-    let any = move || !w.view().calming_strip.cells.is_empty();
     let options = move || {
         CalmingKind::ALL
             .iter()
@@ -71,7 +69,7 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
             .collect_view()
     };
     view! {
-        <Show when=any>
+        <Show when=is_element>
             <section class="insp-sec" aria-labelledby="h-calming-tools">
                 <h3 class="note-h" id="h-calming-tools">{move || text("st-calming-tools")}</h3>
                 <div class="zone-tools calming-tools" role="group" aria-label=move || text("st-calming-tools")>
@@ -105,7 +103,6 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
-                            placeholder=placeholder
                             prop:value=length_value
                             on:keydown=move |e| {
                                 if e.key() == "Enter" {
@@ -122,7 +119,6 @@ pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
                         <button
                             type="button"
                             id="calming-remove"
-                            aria-disabled=move || (!is_element()).then_some("true")
                             on:click=move |_| {
                                 if w.remove_calming() {
                                     focus_later(CalmingRow::STRIP_ID);
