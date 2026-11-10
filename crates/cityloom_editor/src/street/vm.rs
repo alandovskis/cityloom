@@ -1165,6 +1165,11 @@ impl StreetVm {
         self.green_edit(|e| e.add_green_from(&form))
     }
 
+    /// Adds the element `form` asks for at the first place from its start where it overlaps no other.
+    pub fn add_green_clear(&self, form: GreenForm) -> bool {
+        self.green_edit(|e| e.add_green_clear(&form))
+    }
+
     /// Changes the chosen element as `form` says, what it leaves open staying as it is.
     pub fn change_green(&self, form: &GreenForm) -> bool {
         self.on_chosen_green(|e, i| e.change_green(i, form))

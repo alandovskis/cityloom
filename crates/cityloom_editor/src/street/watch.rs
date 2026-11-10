@@ -315,6 +315,10 @@ impl SheetWatch {
         self.vm.with_value(|v| v.end_green_drag(keep));
     }
 
+    pub fn add_green_clear(&self, form: GreenForm) -> bool {
+        self.vm.with_value(|v| v.add_green_clear(form))
+    }
+
     pub fn add_green(&self, form: GreenForm) -> bool {
         self.vm.with_value(|v| v.add_green(form))
     }

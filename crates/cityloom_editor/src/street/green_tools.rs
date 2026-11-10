@@ -1,7 +1,7 @@
-//! The commands beside the Green row: add a tree or planting (a bioswale is added from the Add a piece menu; its kind, a tree's size, where along the street, the
-//! piece it stands on and how far from that piece's middle, its length and width), change or remove the chosen one.
-//! A field left blank takes its default when an element is added. With an element chosen the fields show it. One
-//! named group, like the stops' commands; every control is a tab stop.
+//! The settings of the chosen tree or planting, shown only while one is chosen (like a piece's): its kind, a tree's
+//! size, where along the street, the piece it stands on and how far from that piece's middle, its length and width,
+//! to change, and remove it. An element is added from the Add a piece menu, with the kind's defaults. A field left
+//! blank keeps what the element has. One named group, like the stops' commands; every control is a tab stop.
 
 use std::rc::Rc;
 
@@ -38,9 +38,6 @@ struct Fields {
     fine: RwSignal<String>,
     length: RwSignal<String>,
     width: RwSignal<String>,
-    /// An element was just added: the fields are let go of the values of the new element (which is the chosen one) once,
-    /// so that the next add starts from the kind's defaults, not from this element's length and width.
-    added: RwSignal<bool>,
 }
 
 impl Fields {
@@ -53,26 +50,6 @@ impl Fields {
             fine: RwSignal::new(String::new()),
             length: RwSignal::new(String::new()),
             width: RwSignal::new(String::new()),
-            added: RwSignal::new(false),
-        }
-    }
-
-    /// The fields after an element was added: the length, width and place across blank, so the kind's defaults apply to
-    /// the next one. What the fields show of the chosen element follows it again when another is chosen.
-    fn after_add(self) {
-        self.length.set(String::new());
-        self.width.set(String::new());
-        self.fine.set(String::new());
-        self.added.set(true);
-    }
-
-    /// Shows element `c`, unless it is the one just added, which leaves the fields at the defaults (once).
-    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-    fn follow(self, w: SheetWatch, c: &GreenCell) {
-        if self.added.get_untracked() {
-            self.added.set(false);
-        } else {
-            self.show(w, c);
         }
     }
 
@@ -150,9 +127,9 @@ fn chosen(w: SheetWatch) -> Option<GreenCell> {
     v.green.selected.and_then(|i| v.green.cells.get(i).cloned())
 }
 
-/// The control to give the focus back to after a command: the row, or the Add button when the row is gone.
+/// The control to give the focus back to after a command: the row, or the Add a piece button when the row is gone.
 fn focus_after(w: SheetWatch) {
-    focus_later(if w.view_now().green.cells.is_empty() { "green-add" } else { "green-strip" });
+    focus_later(if w.view_now().green.cells.is_empty() { "add-btn" } else { "green-strip" });
 }
 
 #[component]
@@ -170,13 +147,12 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         let shown = Memo::new(move |_| chosen(w));
         Effect::new(move |_| {
             if let Some(c) = shown.get() {
-                f.follow(w, &c);
+                f.show(w, &c);
             }
         });
     }
-    let can_add = move || w.view().green.can_add;
+    let is_chosen = move || chosen(w).is_some();
     let is_tree = move || f.kind.get() == kind_index(GreenKind::Tree);
-    let none_chosen = move || chosen(w).is_none();
     let at_mm = move || {
         let typed = f.at.get();
         if typed.trim().is_empty() { 0 } else { crate::shared::units::parse_length_mm(&typed, w.units()).unwrap_or(0) }
@@ -192,14 +168,10 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
             f.fine.set(String::new());
         }
     });
-    // A bioswale is added from the Add a piece menu, so the kind select offers it only while it holds one (a chosen
-    // bioswale, to show or to change).
     let kind_options = move || {
-        let held = f.kind.get();
         GreenKind::ALL
             .iter()
             .enumerate()
-            .filter(|(n, k)| **k != GreenKind::Bioswale || *n == held)
             .map(|(n, k)| {
                 let k = *k;
                 view! { <option value=n.to_string()>{move || w.i18n().tr(k.name_key(), &Args::new())}</option> }
@@ -225,18 +197,8 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view()
     };
-    let add = move || {
-        if let Some(form) = f.form(w)
-            && w.add_green(form)
-        {
-            f.after_add();
-            focus_after(w);
-        }
-    };
     let change = move || {
-        if none_chosen() {
-            w.change_green(&GreenForm::new(GreenKind::Tree));
-        } else if let Some(form) = f.form(w)
+        if let Some(form) = f.form(w)
             && w.change_green(&form)
         {
             focus_after(w);
@@ -245,7 +207,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
     let on_enter = move |e: leptos::ev::KeyboardEvent| {
         if e.key() == "Enter" {
             e.prevent_default();
-            if none_chosen() { add() } else { change() }
+            change();
         }
     };
     let field = move |id: &'static str, key: &'static str, value: RwSignal<String>| {
@@ -266,7 +228,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         }
     };
     view! {
-        <Show when=can_add>
+        <Show when=is_chosen>
             <section class="insp-sec" aria-labelledby="h-green-tools">
                 <h3 class="note-h" id="h-green-tools">{move || text("st-green-tools")}</h3>
                 <div class="zone-tools curb-tools" role="group" aria-label=move || text("st-green-tools")>
@@ -311,16 +273,12 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
                     {field("green-length", "st-green-length", f.length)}
                     {field("green-width", "st-green-width", f.width)}
                     <div class="zone-tool">
-                        <button type="button" id="green-add" on:click=move |_| add()>
-                            {move || text("st-green-add")}
-                        </button>
-                        <button type="button" id="green-change" aria-disabled=move || none_chosen().then_some("true") on:click=move |_| change()>
+                        <button type="button" id="green-change" on:click=move |_| change()>
                             {move || text("st-green-change")}
                         </button>
                         <button
                             type="button"
                             id="green-remove"
-                            aria-disabled=move || none_chosen().then_some("true")
                             on:click=move |_| {
                                 if w.remove_green() {
                                     focus_after(w);
@@ -338,23 +296,8 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::{Fields, effective_host, fine_shown, fine_typed};
+    use super::{effective_host, fine_shown, fine_typed};
     use crate::street::model::{SNAP_MM, snap};
-    use leptos::prelude::*;
-
-    #[test]
-    fn after_an_add_the_next_add_starts_from_the_kinds_defaults() {
-        let f = Fields::new();
-        f.kind.set(2);
-        f.at.set("20.0".into());
-        f.length.set("6.0".into());
-        f.width.set("1.2".into());
-        f.fine.set("90".into());
-        f.after_add();
-        assert_eq!((f.length.get_untracked(), f.width.get_untracked(), f.fine.get_untracked()), (String::new(), String::new(), String::new()));
-        assert_eq!((f.kind.get_untracked(), f.at.get_untracked()), (2, "20.0".to_string()), "the kind and the place stay for the next one");
-        assert!(f.added.get_untracked(), "the fields skip showing the new element once");
-    }
 
     #[test]
     fn the_fine_field_is_in_whole_centimetres_and_the_value_shown_gives_the_same_offset_back() {

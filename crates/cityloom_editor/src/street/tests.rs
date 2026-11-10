@@ -338,28 +338,19 @@ fn the_add_menu_lists_the_transit_stops_where_a_stop_can_go() {
 }
 
 #[test]
-fn the_add_menu_offers_a_bioswale_where_green_can_go() {
+fn the_add_menu_offers_every_kind_of_green_where_green_can_go() {
     let s = stop_street(&AT_THE_CURB, Locale::En);
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains(">Green infrastructure</p>") && count(&h, "class=\"add-item green-add-item\"") == 1 && h.contains("<b>Bioswale</b>"), "{h}");
-    // a street with no piece to stand a bioswale on has none
+    assert!(h.contains(">Green infrastructure</p>") && count(&h, "class=\"add-item green-add-item\"") == 4, "{h}");
+    let at = |name: &str| h.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {h}"));
+    assert!(at("Tree") < at("Planting bed") && at("Planting bed") < at("Rain garden") && at("Rain garden") < at("Bioswale"), "{h}");
+    // a street with no piece to stand a green element on has none
     let none = stop_street(&[("travel", 3300, Some(1)), ("travel", 3300, Some(0))], Locale::En);
     let h = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
-    assert!(!h.contains("Bioswale") && count(&h, "green-add-item") == 0, "{h}");
+    assert!(!h.contains("Green infrastructure") && count(&h, "green-add-item") == 0, "{h}");
     let fr = stop_street(&AT_THE_CURB, Locale::FrCa);
     let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
-    assert!(h.contains(">Infrastructure verte</p>") && h.contains("<b>Noue végétalisée</b>"), "{h}");
-}
-
-#[test]
-fn a_bioswale_is_added_by_the_menu_only_so_the_kind_select_offers_it_only_for_a_bioswale() {
-    use crate::street::model::{GreenForm, GreenKind};
-    let s = stop_street(&AT_THE_CURB, Locale::En);
-    let h = green_tools_html(&s);
-    assert!(h.contains(">Rain garden</option>") && !h.contains(">Bioswale</option>"), "{h}");
-    assert!(s.add_green(GreenForm { at_mm: Some(10_000), host: Some(0), ..GreenForm::new(GreenKind::Bioswale) }));
-    let h = green_tools_html(&s);
-    assert!(h.contains(">Bioswale</option>"), "the chosen bioswale shows its kind: {h}");
+    assert!(h.contains(">Infrastructure verte</p>") && h.contains("<b>Arbre</b>") && h.contains("<b>Noue végétalisée</b>"), "{h}");
 }
 
 #[test]
@@ -1869,11 +1860,12 @@ fn a_street_without_green_has_no_green_row() {
 }
 
 #[test]
-fn the_green_tools_are_offered_where_green_can_be_added_and_not_elsewhere() {
-    // a street with sidewalks and a known length can take green before it has any
+fn the_green_tools_show_only_while_an_element_is_chosen() {
+    // a street that can take green but has none chosen has no tools: an element is added from the Add a piece menu
     let s = stop_street(&AT_THE_CURB, Locale::En);
-    assert!(green_tools_html(&s).contains("id=\"green-add\""));
-    // one with no length cannot, and nothing is drawn
+    let h = green_tools_html(&s);
+    assert!(!h.contains("green-") && !h.contains("Tree and planting commands"), "{h}");
+    // one with no length cannot take green, and nothing is drawn
     let street = crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right);
     let unknown =
         StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0).with_frame(None), None);
@@ -1898,13 +1890,14 @@ fn the_green_tools_render_labelled_controls() {
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
     }
     assert_eq!(count(&h, "id=\"green-size\""), 0, "the rain garden chosen has no size: {h}");
-    assert_eq!(count(&h, "<option"), 3 + 2, "three kinds (a bioswale is added from the menu) and the two sidewalks: {h}");
-    for name in ["Tree", "Planting bed", "Rain garden", "Sidewalk, 3.0 m"] {
+    assert_eq!(count(&h, "<option"), 4 + 2, "four kinds and the two sidewalks: {h}");
+    for name in ["Tree", "Planting bed", "Rain garden", "Bioswale", "Sidewalk, 3.0 m"] {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
-    for (id, label) in [("green-add", "Add"), ("green-change", "Change"), ("green-remove", "Remove")] {
+    for (id, label) in [("green-change", "Change"), ("green-remove", "Remove")] {
         assert!(h.contains(&format!("id=\"{id}\"")) && h.contains(&format!(">{label}</button>")), "{id}: {h}");
     }
+    assert!(!h.contains("green-add") && !h.contains(">Add</button>"), "adding is in the Add a piece menu: {h}");
     // the chosen rain garden's own values are in the fields
     assert!(h.contains("id=\"green-at\" type=\"text\" inputmode=\"decimal\" autocomplete=\"off\" value=\"20.0\"") && h.contains("value=\"6.0\""), "{h}");
     assert!(!h.contains("id=\"green-change\" aria-disabled") && !h.contains("id=\"green-remove\" aria-disabled"), "{h}");
@@ -1915,19 +1908,11 @@ fn the_green_tools_render_labelled_controls() {
 }
 
 #[test]
-fn the_green_tools_without_a_chosen_element_cannot_change_or_remove() {
-    let s = stop_street(&AT_THE_CURB, Locale::En);
-    let h = green_tools_html(&s);
-    assert!(h.contains("id=\"green-change\" aria-disabled=\"true\"") && h.contains("id=\"green-remove\" aria-disabled=\"true\""), "{h}");
-    assert!(!h.contains("id=\"green-add\" aria-disabled"), "{h}");
-}
-
-#[test]
 fn the_green_tools_follow_the_language() {
     let h = green_tools_html(&green_street(Locale::FrCa)).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains("aria-label=\"Commandes des arbres et plantations\"") && h.contains(">Type</label>") && h.contains(">Longueur (m)</label>"), "{h}");
-    assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && !h.contains(">Noue végétalisée</option>"), "{h}");
-    assert!(h.contains(">Ajouter</button>") && h.contains(">Modifier</button>") && h.contains(">Retirer</button>"), "{h}");
+    assert!(h.contains(">Jardin de pluie</option>") && h.contains(">Plate-bande</option>") && h.contains(">Noue végétalisée</option>"), "{h}");
+    assert!(!h.contains(">Ajouter</button>") && h.contains(">Modifier</button>") && h.contains(">Retirer</button>"), "{h}");
 }
 
 // ---- the piece list ----------------------------------------------------------------

@@ -589,7 +589,6 @@ st-green-host = Across, on
 st-green-fine = Across, from the middle of that piece (cm)
 st-green-length = Length ({ $unit })
 st-green-width = Width ({ $unit })
-st-green-add = Add
 st-green-change = Change
 st-green-remove = Remove
 

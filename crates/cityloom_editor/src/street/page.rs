@@ -530,26 +530,33 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             }
         })
         .collect_view();
-    // A bioswale: a green element, not a piece, added with its defaults where the street has a piece to stand it on.
+    // The green elements (a tree, a planting bed, a rain garden, a bioswale): not pieces but elements on a piece, added
+    // with the kind's defaults where the street has a piece to stand one on.
     let can_add_green = move || w.view().green.can_add;
+    let green_items = GreenKind::ALL
+        .iter()
+        .map(|&k| {
+            view! {
+                <li>
+                    <button
+                        type="button"
+                        class="add-item green-add-item"
+                        on:click=move |_| {
+                            close(true);
+                            w.add_green_clear(GreenForm::new(k));
+                        }
+                    >
+                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
+                    </button>
+                </li>
+            }
+        })
+        .collect_view();
     let green = view! {
         <Show when=can_add_green>
             <div class="add-group" role="group" aria-labelledby="add-g-green">
                 <p class="add-group-h" id="add-g-green">{say(w, "group-green")}</p>
-                <ul class="add-sub">
-                    <li>
-                        <button
-                            type="button"
-                            class="add-item green-add-item"
-                            on:click=move |_| {
-                                close(true);
-                                w.add_green(GreenForm::new(GreenKind::Bioswale));
-                            }
-                        >
-                            <b>{move || w.i18n().tr(GreenKind::Bioswale.name_key(), &Args::new())}</b>
-                        </button>
-                    </li>
-                </ul>
+                <ul class="add-sub">{green_items.clone()}</ul>
             </div>
         </Show>
     };

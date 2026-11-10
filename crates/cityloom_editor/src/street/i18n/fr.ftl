@@ -589,7 +589,6 @@ st-green-host = Dans la coupe, sur
 st-green-fine = Dans la coupe, depuis le milieu de cet élément (cm)
 st-green-length = Longueur ({ $unit })
 st-green-width = Largeur ({ $unit })
-st-green-add = Ajouter
 st-green-change = Modifier
 st-green-remove = Retirer
 
