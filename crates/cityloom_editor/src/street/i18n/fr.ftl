@@ -513,7 +513,6 @@ st-curb-stop-heading = Usages du bord de rue et arrêts le long de la rue
 st-stop-caption = Arrêts, { $side }
 st-stop-strip-label = Arrêts, { $side }
 st-stop-tools = Commandes des arrêts
-st-stop-kind = Type
 st-stop-name = Nom
 st-stop-length = Longueur ({ $unit })
 st-stop-shelter = Abribus

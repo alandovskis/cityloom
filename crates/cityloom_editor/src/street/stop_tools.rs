@@ -1,42 +1,33 @@
-//! The commands beside the stops rows: the kind, the shelter, the name and the length of the chosen stop (on a free
-//! stretch, the shelter and name of the stop the Add a piece menu will add there), and remove the chosen stop. One named group, like the curbside commands; every control is a
+//! The commands beside the stops rows: the shelter, the name and the length of the chosen stop (on a free
+//! stretch, the shelter and name of the stop the Add a piece menu will add there), and remove the chosen stop. The kind is
+//! chosen in that menu, when the stop is added. One named group, like the curbside commands; every control is a
 //! tab stop.
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
+use leptos::web_sys::HtmlInputElement;
 
 use super::curb_tools::typed_length;
-use super::model::StopKind;
 use super::vm::StreetVm;
 use super::watch::SheetWatch;
 use super::zone_tools::focus_later;
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
 
-/// The kind the select shows as a value, and reads back.
-fn kind_value(k: StopKind) -> String {
-    StopKind::ALL.iter().position(|x| *x == k).unwrap_or(0).to_string()
-}
-
-fn kind_of(value: &str) -> StopKind {
-    value.parse::<usize>().ok().and_then(|n| StopKind::ALL.get(n).copied()).unwrap_or(StopKind::Curb)
-}
-
-/// The cell of the stops rows that is chosen: its side, whether it is a stop (else a gap), and what the stop is.
+/// The cell of the stops rows that is chosen: its side and whether it is a stop (else a gap).
 struct Chosen {
     side: Side,
     from_mm: i32,
     to_mm: i32,
-    stop: Option<(StopKind, bool, Option<String>)>,
+    is_stop: bool,
 }
 
 fn chosen(w: SheetWatch) -> Option<Chosen> {
     let v = w.view();
     v.stops.sides.iter().find_map(|s| {
         let c = s.cells.get(s.selected?)?;
-        Some(Chosen { side: s.side, from_mm: c.from_mm, to_mm: c.to_mm, stop: c.kind.map(|k| (k, c.shelter, c.name.clone())) })
+        Some(Chosen { side: s.side, from_mm: c.from_mm, to_mm: c.to_mm, is_stop: c.kind.is_some() })
     })
 }
 
@@ -55,42 +46,16 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
-    let shown_kind = move || w.stop_kind_shown();
-    let is_stop = move || chosen(w).is_some_and(|c| c.stop.is_some());
+    let is_stop = move || chosen(w).is_some_and(|c| c.is_stop);
     let shelter_value = move || w.stop_shelter_shown();
     let name_value = move || w.stop_name_shown();
-    let length_value = move || chosen(w).filter(|c| c.stop.is_some()).map(|c| w.units().number_in(c.to_mm - c.from_mm, w.i18n().locale())).unwrap_or_default();
+    let length_value = move || chosen(w).filter(|c| c.is_stop).map(|c| w.units().number_in(c.to_mm - c.from_mm, w.i18n().locale())).unwrap_or_default();
     let any = move || !w.view().stops.sides.is_empty();
-    let options = move || {
-        StopKind::ALL
-            .iter()
-            .map(|k| {
-                let k = *k;
-                view! {
-                    <option value=kind_value(k)>
-                        {move || w.i18n().tr(k.name_key(), &Args::new())}
-                    </option>
-                }
-            })
-            .collect_view()
-    };
     view! {
         <Show when=any>
             <section class="insp-sec" aria-labelledby="h-stop-tools">
                 <h3 class="note-h" id="h-stop-tools">{move || text("st-stop-tools")}</h3>
                 <div class="zone-tools curb-tools" role="group" aria-label=move || text("st-stop-tools")>
-                    <div class="zone-tool">
-                        <label for="stop-kind">{move || text("st-stop-kind")}</label>
-                        <select
-                            id="stop-kind"
-                            prop:value=move || kind_value(shown_kind())
-                            on:change=move |e| {
-                                w.pick_stop_kind(kind_of(&event_target::<HtmlSelectElement>(&e).value()));
-                            }
-                        >
-                            {options}
-                        </select>
-                    </div>
                     <div class="zone-tool">
                         <label for="stop-name">{move || text("st-stop-name")}</label>
                         <input

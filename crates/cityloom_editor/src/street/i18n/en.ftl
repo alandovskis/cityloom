@@ -513,7 +513,6 @@ st-curb-stop-heading = Curbside uses and stops along the street
 st-stop-caption = Stops, { $side }
 st-stop-strip-label = Stops, { $side }
 st-stop-tools = Stop commands
-st-stop-kind = Kind
 st-stop-name = Name
 st-stop-length = Length ({ $unit })
 st-stop-shelter = Shelter

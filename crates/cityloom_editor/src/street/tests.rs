@@ -1773,15 +1773,13 @@ fn the_stop_tools_render_labelled_controls() {
     let s = parked_with_a_stop(Locale::En);
     let h = stop_tools_html(&s);
     assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Stop commands\"") && !h.contains("toolbar"), "{h}");
-    for (id, label) in [("stop-kind", "Kind"), ("stop-name", "Name"), ("stop-length", "Length (m)"), ("stop-shelter", "Shelter")] {
+    for (id, label) in [("stop-name", "Name"), ("stop-length", "Length (m)"), ("stop-shelter", "Shelter")] {
         assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
     }
-    assert!(h.contains("<select id=\"stop-kind\"") && h.contains("id=\"stop-shelter\" type=\"checkbox\""), "{h}");
-    assert_eq!(count(&h, "<option"), 3, "{h}");
-    for name in ["Curb stop", "Curb extension", "Boarding island"] {
-        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
-    }
+    assert!(h.contains("id=\"stop-shelter\" type=\"checkbox\""), "{h}");
+    // the kind is chosen in the Add a piece menu, when the stop is added: no kind control here
+    assert!(!h.contains("stop-kind") && !h.contains("<select") && !h.contains("<option") && !h.contains("Curb extension"), "{h}");
     assert!(h.contains("id=\"stop-remove\"") && h.contains(">Remove stop</button>"), "{h}");
     // adding is in the Add a piece menu, not here
     assert!(!h.contains("stop-add") && !h.contains("Add stop"), "{h}");
@@ -1789,21 +1787,16 @@ fn the_stop_tools_render_labelled_controls() {
     assert!(!h.contains("id=\"stop-remove\" aria-disabled"), "{h}");
     // a street without a lane for the bus or a curbside has no commands
     let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
-    assert_eq!(count(&stop_tools_html(&none), "stop-kind"), 0);
+    assert_eq!(count(&stop_tools_html(&none), "stop-name"), 0);
 }
 
 #[test]
 fn the_stop_tools_follow_the_language() {
     let s = parked_with_a_stop(Locale::FrCa);
     let h = stop_tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
-    assert!(
-        h.contains("aria-label=\"Commandes des arrêts\"") && h.contains(">Type</label>") && h.contains(">Nom</label>") && h.contains(">Longueur (m)</label>"),
-        "{h}"
-    );
+    assert!(h.contains("aria-label=\"Commandes des arrêts\"") && h.contains(">Nom</label>") && h.contains(">Longueur (m)</label>"), "{h}");
     assert!(h.contains(">Abribus</label>") && h.contains(">Retirer un arrêt</button>"), "{h}");
-    for name in ["Arrêt au trottoir", "Avancée de trottoir", "Îlot d’embarquement"] {
-        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
-    }
+    assert!(!h.contains(">Type</label>") && !h.contains("<option"), "{h}");
 }
 
 // ---- the green row and its commands -------------------------------------------------
