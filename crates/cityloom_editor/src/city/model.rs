@@ -463,14 +463,12 @@ impl Layout {
             let key = if dead_end { forms.end_of } else { forms.connection_on };
             return Said::new(key).with("street", Arg::Text(street.clone()));
         }
-        if skip.is_some() && !self.street_names_at(node, None).is_empty() {
-            return Said::new("city-a-connection");
-        }
         match self.unnamed_at(node) {
             Some(street) => {
                 let key = if dead_end { forms.end_of_unnamed } else { forms.connection_on };
                 Said::new(key).with("street", Arg::Said(Box::new(street)))
             }
+            None if skip.is_some() && !self.street_names_at(node, None).is_empty() => Said::new("city-a-connection"),
             None => Said::new(forms.map_edge),
         }
     }
@@ -2224,6 +2222,10 @@ mod tests {
         assert_eq!((en(&meeting.end_name_beside(1, 0)), fr(&meeting.end_name_beside(1, 0))), ("a connection".into(), "un raccordement".into()));
         let lane = named(&[(19, "Lane X")]);
         assert_eq!(en(&lane.end_name_beside(16, 19)), "the end of Lane X");
+        // an unnamed road that also meets there is what the connection is on, not left unsaid
+        meeting.edges[1].section.name = None;
+        let said = en(&meeting.end_name_beside(1, 0));
+        assert!(said.starts_with("a connection on ") && said.contains("unnamed"), "{said}");
     }
 
     #[test]
