@@ -142,28 +142,19 @@
   font-weight: 600;
 }
 .street-steps {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 20px;
-  font-size: 14px;
+  gap: 8px;
 }
-.street-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  color: var(--ink-2);
-}
-.street-step-none {
+/* The two arrows are the page's secondary buttons (.btn); the one with no street to go on to is drawn as a
+   disabled one, and stays in the reading order for a screen reader. */
+.street-steps .street-step-none,
+.street-steps .street-step-none:hover:not(:disabled) {
+  background: var(--panel);
   color: var(--ink-3);
-}
-.street-step svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  opacity: 0.6;
+  cursor: default;
 }
 .back {
   display: inline-flex;

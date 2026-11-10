@@ -224,6 +224,9 @@ fn a_city_street_has_arrows_to_the_streets_that_carry_on_from_its_ends() {
     // The end with a street to go on to is a link that says which way it leads; the other says why it is not.
     assert!(h.contains("href=\"street.html?street=3\"") && h.contains("Next street") && h.contains("toward Junction 4"), "{h}");
     assert_eq!(count(&h, "href=\"street.html"), 1, "{h}");
+    // Both are drawn as the page's secondary buttons, the one with nowhere to go as a disabled one.
+    assert_eq!(count(&h, "class=\"btn street-step"), 2, "{h}");
+    assert_eq!(count(&h, "class=\"btn-ico\""), 2, "{h}");
     assert!(h.contains("Previous street") && h.contains("aria-disabled=\"true\"") && h.contains("No street carries on from this end."), "{h}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([Some(7), None])/> });

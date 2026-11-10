@@ -153,11 +153,11 @@ fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
 /// the reason there is none.
 fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> impl IntoView {
     let toward = move || w.i18n().tr("header-toward", &Args::new().str("place", said::say(&w.i18n(), w.units(), &place)));
-    let (label, arrow) = if previous { ("header-prev", "M12 7H2M6 3 2 7l4 4") } else { ("header-next", "M2 7h10M8 3l4 4-4 4") };
-    let icon = view! { <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
+    let (label, arrow) = if previous { ("header-prev", "M13 8H3M7 4 3 8l4 4") } else { ("header-next", "M3 8h10M9 4l4 4-4 4") };
+    let icon = view! { <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
     match to {
         Some(street) => view! {
-            <a class="street-step" href=format!("street.html?street={street}")>
+            <a class="btn street-step" href=format!("street.html?street={street}")>
                 {icon}
                 {say(w, label)}
                 <span class="sr-only">", " {toward}</span>
@@ -165,7 +165,7 @@ fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> im
         }
         .into_any(),
         None => view! {
-            <span class="street-step street-step-none" aria-disabled="true">
+            <span class="btn street-step street-step-none" aria-disabled="true">
                 {icon}
                 {say(w, label)}
                 <span class="sr-only">". " {say(w, "header-step-none")}</span>
