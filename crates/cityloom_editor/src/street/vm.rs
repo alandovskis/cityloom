@@ -3547,6 +3547,20 @@ mod green_tests {
     }
 
     #[test]
+    fn adding_with_no_place_asked_goes_to_the_first_clear_one_and_selects_it() {
+        let r = rig();
+        let bed = GreenForm { host: Some(0), ..GreenForm::new(GreenKind::Bed) };
+        assert!(r.vm.add_green_clear(bed));
+        assert!(r.vm.add_green_clear(bed));
+        let v = r.vm.view_now();
+        assert_eq!(v.green.cells.len(), 2);
+        assert_eq!(v.green.cells[0].from_mm, 0);
+        assert_eq!(v.green.cells[1].from_mm, v.green.cells[0].to_mm, "the second starts where the first ends");
+        assert_eq!(v.green.selected, Some(1), "the new element is the chosen one");
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-green-add");
+    }
+
+    #[test]
     fn a_new_tree_has_a_pit_that_fits_its_sidewalk_against_the_road_side_edge_of_a_sidewalk() {
         let r = rig();
         let left = GreenForm { size: Some(TreeSize::M), ..form(GreenKind::Tree, 10_000, 0) };
