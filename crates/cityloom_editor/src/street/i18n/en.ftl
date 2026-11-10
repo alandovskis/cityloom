@@ -58,6 +58,9 @@ group-transit = Transit
 group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
+group-stops = Transit stops
+group-green = Green infrastructure
+group-calming = Traffic calming
 
 # How the pieces stand against the street's width, and what is said after an edit.
 fit-used = Every metre of the street is used
@@ -510,11 +513,8 @@ st-curb-stop-heading = Curbside uses and stops along the street
 st-stop-caption = Stops, { $side }
 st-stop-strip-label = Stops, { $side }
 st-stop-tools = Stop commands
-st-stop-kind = Kind
 st-stop-name = Name
 st-stop-length = Length ({ $unit })
-st-stop-shelter = Shelter
-st-stop-add = Add stop
 st-stop-remove = Remove stop
 stop-refused-no-anchor = Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.
 stop-refused-elsewhere = The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
@@ -588,7 +588,6 @@ st-green-host = Across, on
 st-green-fine = Across, from the middle of that piece (cm)
 st-green-length = Length ({ $unit })
 st-green-width = Width ({ $unit })
-st-green-add = Add
 st-green-change = Change
 st-green-remove = Remove
 
@@ -713,7 +712,6 @@ st-calming-length = Length ({ $unit })
 st-calming-first = Starts on
 st-calming-first-left = Left
 st-calming-first-right = Right
-st-calming-add = Add raised element
 st-calming-remove = Remove raised element
 
 # The sources behind a rule (src/shared/sources.rs, #78), shown under a check on the street and the junction pages and in the report.

@@ -566,7 +566,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("green-slot", "the id of the element the Green row is mounted in"),
     ("green-tools-slot", "the id of the element the tree and planting commands are mounted in"),
     ("green-strip", "the id of the Green row, a listbox"),
-    ("green-add", "the id of the Add button of the tree and planting commands"),
+    ("add-btn", "the id of the Add a piece button, where the focus goes when the Green row is gone"),
     ("green-at", "the id of a field of the tree and planting commands"),
     ("green-fine", "the id of a field of the tree and planting commands"),
     ("green-length", "the id of a field of the tree and planting commands"),

@@ -9,6 +9,19 @@ test.describe.configure({ timeout: 120_000 });
 
 const SIGHTLINE = "Planting clear of the corners at junctions";
 
+/** Adds an element of `kind` ("Tree", "Planting bed", "Rain garden", "Bioswale") from the Add a piece menu, with the
+ *  kind's defaults at the start of the street. It is the chosen element, so its settings are shown. */
+async function addFromMenu(page: Page, kind: string) {
+  await page.locator("#add-btn").click();
+  await page.locator(".green-add-item", { hasText: new RegExp(`^${kind}$`) }).click();
+  await expect(page.locator("#green-kind")).toBeVisible();
+}
+
+/** Takes back every green edit, one undo at a time. */
+async function undoGreen(page: Page) {
+  while ((await page.locator("#green-strip").count()) > 0) await page.locator("#undo").click();
+}
+
 /** Opens the first street of the city that is at least `minM` metres long and has a sidewalk to put a tree on. */
 async function openGreenStreet(page: Page, minM: number) {
   await page.goto("/map.html");
@@ -17,23 +30,32 @@ async function openGreenStreet(page: Page, minM: number) {
     await page.goto("/" + href);
     await expect(page.locator("#zone-0")).toBeVisible();
     if ((await streetLengthM(page)) < minM) continue;
-    if ((await page.locator("#green-add").count()) === 0) continue;
+    if ((await page.locator(".green-add-item").count()) === 0) continue;
+    // The hosts are listed with the settings of a chosen element: add a tree to see them, and take it back.
+    await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
+    await undoGreen(page);
     if (hosts.some((h) => /^Sidewalk/.test(h))) return;
   }
-  throw new Error(`no street of ${minM} m or more with a sidewalk and the tree tools`);
+  throw new Error(`no street of ${minM} m or more with a sidewalk and the tree menu`);
 }
 
-/** Puts a tree `metres` from the start of the street, on the sidewalk, with the form's defaults across. */
-async function addTree(page: Page, metres: number) {
-  await page.locator("#green-kind").selectOption({ label: "Tree" });
-  await page.locator("#green-at").fill(String(metres));
+/** Chooses the first sidewalk among the chosen element's hosts. */
+async function onTheSidewalk(page: Page) {
   const sidewalk = page
     .locator("#green-host option")
     .filter({ hasText: /^Sidewalk/ })
     .first();
   await page.locator("#green-host").selectOption((await sidewalk.getAttribute("value"))!);
-  await page.locator("#green-add").click();
+}
+
+/** Puts a tree `metres` from the start of the street, on the sidewalk, with the defaults across: added from the menu,
+ *  then moved with the tree's settings. */
+async function addTree(page: Page, metres: number) {
+  await addFromMenu(page, "Tree");
+  await page.locator("#green-at").fill(String(metres));
+  await onTheSidewalk(page);
+  await page.locator("#green-change").click();
 }
 
 /**
@@ -46,14 +68,20 @@ async function openStreetWithAJunctionAtItsStart(page: Page) {
   for (const href of (await placesOnMap(page)).streets) {
     await page.goto("/" + href);
     await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < 30 || (await page.locator("#green-add").count()) === 0) continue;
+    if ((await streetLengthM(page)) < 30 || (await page.locator(".green-add-item").count()) === 0) continue;
+    await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
-    if (!hosts.some((h) => /^Sidewalk/.test(h))) continue;
-    await addTree(page, 3);
+    if (!hosts.some((h) => /^Sidewalk/.test(h))) {
+      await undoGreen(page);
+      continue;
+    }
+    await page.locator("#green-at").fill("3");
+    await onTheSidewalk(page);
+    await page.locator("#green-change").click();
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: SIGHTLINE });
     if ((await row.count()) === 1 && !(await row.evaluate((li) => li.classList.contains("ok")))) return row;
-    if ((await page.locator("#green-strip").count()) > 0) await page.locator("#undo").click();
+    await undoGreen(page);
   }
   throw new Error("no street of 30 m or more with a sidewalk and a junction at its start");
 }
@@ -82,8 +110,24 @@ test.describe("street trees and green infrastructure", () => {
     await page.reload();
     await expect(page.locator("#green-strip").locator('[role="option"]')).toHaveCount(1);
 
-    await page.locator("#undo").click();
+    // The tree was added at the start of the street, then moved: two steps.
+    await undoGreen(page);
     await expect(page.locator("#green-strip")).toHaveCount(0);
+  });
+
+  test("a planting bed, a rain garden and a bioswale are added from the menu too", async ({ page }) => {
+    await openGreenStreet(page, 30);
+    const cells = page.locator("#green-strip").locator('[role="option"]');
+    const kinds: [string, RegExp][] = [
+      ["Planting bed", /^Planting bed at /],
+      ["Rain garden", /^Rain garden at /],
+      ["Bioswale", /^Bioswale at /],
+    ];
+    for (const [n, [kind, label]] of kinds.entries()) {
+      await addFromMenu(page, kind);
+      await expect(cells).toHaveCount(n + 1);
+      await expect(cells.nth(n)).toHaveAttribute("aria-label", label);
+    }
   });
 
   test("Alt with an arrow moves the tree by a metre", async ({ page }) => {
@@ -96,30 +140,31 @@ test.describe("street trees and green infrastructure", () => {
     await expect(cell).toHaveAttribute("aria-label", /16\.0 m to /);
   });
 
-  test("the roadway is not offered as a host and the form refuses a place on it", async ({ page }) => {
+  test("the roadway is not offered as a host and the settings refuse a place on it", async ({ page }) => {
     await openGreenStreet(page, 30);
+    await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
     expect(hosts.length).toBeGreaterThan(0);
     for (const h of hosts) expect(h, "a travel lane is not a host").not.toMatch(/^(Travel|Driving|Transit)/);
 
     // Four metres (400 cm) to either side of the middle of a sidewalk is on the road or off the section, whichever side the
-    // sidewalk is on: one of the two is the roadway, and the add refuses it with its sentence.
-    await page.locator("#green-kind").selectOption({ label: "Tree" });
+    // sidewalk is on: one of the two is the roadway, and the change refuses it with its sentence.
     await page.locator("#green-at").fill("15");
-    const sidewalk = page
-      .locator("#green-host option")
-      .filter({ hasText: /^Sidewalk/ })
-      .first();
-    await page.locator("#green-host").selectOption((await sidewalk.getAttribute("value"))!);
+    await onTheSidewalk(page);
     const refusals: string[] = [];
     for (const fine of ["-400", "400"]) {
       await page.locator("#green-fine").fill(fine);
-      await page.locator("#green-add").click();
+      await page.locator("#green-change").click();
       await expect(live(page)).toHaveText(/^That /);
       refusals.push((await live(page).textContent()) ?? "");
     }
     expect(refusals).toContain("That cannot stand on the roadway.");
-    await expect(page.locator("#green-strip")).toHaveCount(0);
+    // The tree stayed where it was added.
+    await expect(page.locator("#green-strip").locator('[role="option"]')).toHaveCount(1);
+    await expect(page.locator("#green-strip").locator('[role="option"]').first()).toHaveAttribute(
+      "aria-label",
+      /^Tree at 0\.0 m/,
+    );
   });
 
   test("a tree 3 m from a junction fails the sightline check, naming it", async ({ page }) => {
@@ -141,12 +186,12 @@ test.describe("street trees and green infrastructure", () => {
     );
   });
 
-  test("the tools and the row work from the keyboard alone, with one tab stop in the row", async ({ page }) => {
+  test("the settings and the row work from the keyboard alone, with one tab stop in the row", async ({ page }) => {
     await openGreenStreet(page, 30);
-    await page.locator("#green-at").focus();
-    await page.keyboard.type("15");
+    await addFromMenu(page, "Tree");
+    await page.locator("#green-at").fill("15");
     await page.locator("#green-host").selectOption({ index: 0 });
-    // Enter in a field adds the element (nothing is chosen yet).
+    // Enter in a field changes the chosen element.
     await page.locator("#green-at").press("Enter");
     const strip = page.locator("#green-strip");
     await expect(strip.locator('[role="option"]')).toHaveCount(1);
