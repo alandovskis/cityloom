@@ -73,7 +73,8 @@ impl Network {
     /// corridors derived, priorities pruned. `from` is this network's frame.
     ///
     /// A road that leaves the box and comes back is two pieces, never joined across the gap; a road that only
-    /// touches the box, or whose piece has fewer than two points, is left out. A priority naming a cut road names
+    /// touches the box, or whose piece has fewer than two points, is left out, and so is one none of whose ways has a
+    /// node in the box, which osm2streets does not read when it reads only the box. A priority naming a cut road names
     /// the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
     /// for its position and the pieces its priority names. The roads are taken in order of id, and the result's roads,
     /// junctions and priority lists are sorted by id, so the order the network holds them in makes no difference.
@@ -87,11 +88,17 @@ impl Network {
         let mut whole: BTreeSet<RoadId> = BTreeSet::new();
         // (the road cut, the junction of its own a piece reaches) -> the piece
         let mut pieces_at: BTreeMap<(RoadId, NodeId), RoadId> = BTreeMap::new();
+        let read = self.ways_with_a_node_in(&degrees, to);
         let mut in_order: Vec<&Road> = self.roads.iter().collect();
         in_order.sort_by_key(|r| r.edge.id);
         for road in in_order {
             let line = degrees.line(&road.points);
-            let pieces = clip_line(&line, to);
+            let mut pieces = clip_line(&line, to);
+            // osm2streets reads a box from the ways with a node in it: a road made of none of those is not read
+            let mut ways = road.provenance.ways().peekable();
+            if ways.peek().is_some() && !ways.any(|w| read.contains(&w.id)) {
+                pieces.clear();
+            }
             if let [piece] = pieces.as_slice()
                 && piece.from_start
                 && piece.to_end
@@ -167,6 +174,26 @@ impl Network {
         let mut place = Network { left_hand: self.left_hand, junctions, roads, corridors: Vec::new() };
         place.derive_corridors();
         place
+    }
+
+    /// The OpenStreetMap ways with a node in the box, as far as the network tells where their nodes lie: the points
+    /// of a road's centre line between its ends, and its end junctions that are OpenStreetMap nodes (a centre line's
+    /// own ends are where osm2streets trimmed it, not nodes).
+    fn ways_with_a_node_in(&self, degrees: &Degrees, r: &Frame) -> BTreeSet<i64> {
+        let inside = |p: Point| {
+            let [lon, lat] = degrees.of_point(p);
+            (r.west..=r.east).contains(&lon) && (r.south..=r.north).contains(&lat)
+        };
+        let nodes_in: BTreeSet<NodeId> = self.junctions.iter().filter(|j| !j.provenance.is_empty() && inside(j.position)).map(|j| j.id).collect();
+        self.roads
+            .iter()
+            .filter(|road| {
+                nodes_in.contains(&road.edge.from)
+                    || nodes_in.contains(&road.edge.to)
+                    || road.points.get(1..road.points.len().saturating_sub(1)).unwrap_or_default().iter().any(|&p| inside(p))
+            })
+            .flat_map(|road| road.provenance.ways().map(|w| w.id))
+            .collect()
     }
 }
 
@@ -615,6 +642,26 @@ mod tests {
         let edges: Vec<Edge> = place.roads.iter().map(|r| r.edge).collect();
         assert_eq!(edges, [net.roads[0].edge, net.roads[1].edge], "kept whole, with their ids and ends");
         assert_eq!(junction_ids(&place), [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn clip_to_leaves_out_a_road_none_of_whose_ways_has_a_node_in_the_box() {
+        // osm2streets reads a box from the ways with a node in it: a way that only crosses a corner is not read
+        let mut corner = road(1, 1, 2, &[(350.0, 500.0), (500.0, 350.0)]);
+        corner.provenance = Provenance::of_ways([WayRef::new(70)]);
+        // this way crosses the opposite corner, then goes on to a junction in the box, so it is read, its piece across
+        // the corner with it
+        let mut across = road(2, 3, 4, &[(500.0, 680.0), (680.0, 500.0)]);
+        across.provenance = Provenance::of_ways([WayRef::new(71)]);
+        let mut on = road(3, 4, 5, &[(680.0, 500.0), (550.0, 500.0)]);
+        on.provenance = Provenance::of_ways([WayRef::new(71)]);
+        // a node of its own in the box: the bend
+        let mut bend = road(4, 6, 7, &[(350.0, 520.0), (450.0, 520.0), (450.0, 650.0)]);
+        bend.provenance = Provenance::of_ways([WayRef::new(72)]);
+        let place = network(vec![corner, across, on, bend]).clip_to(&frame(), &middle());
+        let ways: BTreeSet<i64> = place.roads.iter().flat_map(|r| r.provenance.ways().map(|w| w.id)).collect();
+        assert_eq!(ways, BTreeSet::from([71, 72]), "{place:?}");
+        assert_eq!(place.roads.len(), 3, "{place:?}");
     }
 
     /// The network with the ids it made up for its cut pieces and ends (those not in `whole`) numbered in order,
