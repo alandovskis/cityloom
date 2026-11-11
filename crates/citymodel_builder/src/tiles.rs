@@ -1,17 +1,17 @@
-//! Cuts the roads of the Montréal metropolitan area out of a Quebec OSM extract into tiles: a port of
-//! the former Python `metro_tiles`.
+//! Makes the network tiles of the Montréal metropolitan area from a Quebec OSM extract: osmium keeps the roads (as
+//! the former Python `metro_tiles` did), the importer reads them once into the whole area's network, and that is cut
+//! along the grid (`network_tiles`).
 //!
 //! A tile is a rectangle (its core) holding every road that reaches into the core widened by a margin, whole, with
-//! the nodes it needs. The margin is wider than half an area (400 m), so a place whose centre is in a tile's core is
-//! read from that one tile. Writes `<out>/X_Y.osm.pbf` and `<out>/index.json`, which the app reads.
+//! the junctions it uses. The margin is wider than half an area (400 m), so a place whose centre is in a tile's core
+//! is read from that one tile. Writes `<out>/X_Y.json` and `<out>/index.json`, which the app reads.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use sha2::{Digest, Sha256};
-
-use crate::metro_index::{Grid, index_json, short_checksum};
+use crate::metro_index::{Grid, index_json};
+use crate::network_tiles;
 use crate::progress::{Progress, Spec, StepError, thousands};
 
 // The grid. The south-west corner of tile 0_0, and the size of a core: about 2 km square at this latitude.
@@ -33,13 +33,10 @@ tertiary,tertiary_link,unclassified,residential,living_street,service,pedestrian
 /// which osmium cannot say in one expression (its expressions are ORed).
 pub const TRACKS: &str = "cycleway";
 pub const OFF_ROAD: &str = "path,footway";
-/// Extracts per osmium run, which allows 500 at most. osmium keeps a set of ids for each extract it cuts at once, a
-/// gigabyte or more apiece for the dense tiles of the city, so a machine with less than about 32 GB needs a smaller batch.
-pub const MAX_EXTRACTS: usize = 500;
-/// An empty tile is a file with only a header.
-pub const EMPTY_BYTES: u64 = 400;
 
-const SUFFIX: &str = ".osm.pbf";
+const SUFFIX: &str = ".json";
+/// The tiles osmium cut before the importer made them; removed with the old tiles.
+const OLD_SUFFIX: &str = ".osm.pbf";
 
 pub fn grid() -> Grid {
     Grid { lon0: LON0, lat0: LAT0, dlon: DLON, dlat: DLAT, nx: NX, ny: NY }
@@ -52,31 +49,10 @@ pub fn steps() -> Vec<Spec> {
         spec("highways", "roads", "highways"),
         spec("tracks", "roads", "designated tracks"),
         spec("merge", "roads", "merge"),
+        spec("import", "network", "whole area"),
         spec("tiles", "tiles", &format!("cutting {} tiles", thousands(NX as u32 * NY as u32))),
         spec("index", "tiles", "index"),
     ]
-}
-
-pub struct Extract {
-    pub output: String,
-    /// West, south, east, north.
-    pub bbox: [f64; 4],
-}
-
-/// Every tile, `x` outer and `y` inner, each box computed with the operations the script used, so the same doubles.
-pub fn extracts() -> Vec<Extract> {
-    let mut all = Vec::with_capacity(NX as usize * NY as usize);
-    for x in 0..NX {
-        for y in 0..NY {
-            let output = format!("{x}_{y}{SUFFIX}");
-            let (x, y) = (f64::from(x), f64::from(y));
-            all.push(Extract {
-                output,
-                bbox: [LON0 + x * DLON - MARGIN_LON, LAT0 + y * DLAT - MARGIN_LAT, LON0 + (x + 1.0) * DLON + MARGIN_LON, LAT0 + (y + 1.0) * DLAT + MARGIN_LAT],
-            });
-        }
-    }
-    all
 }
 
 /// The box of the whole metro area, `W,S,E,N`, as osmium's `-b` reads it.
@@ -90,7 +66,6 @@ pub struct TilesJob<'a> {
     pub source: &'a Path,
     pub work: &'a Path,
     pub out: &'a Path,
-    pub batch: usize,
     pub osmium: &'a str,
 }
 
@@ -101,39 +76,23 @@ fn command(job: &TilesJob, args: &[&dyn AsRef<std::ffi::OsStr>]) -> Command {
     command
 }
 
-/// The tiles in `dir`, by file name.
+/// The tiles in `dir`: network tiles and the PBF tiles of before (not `index.json`, which is written again after).
 fn tile_files(dir: &Path) -> Result<Vec<PathBuf>, StepError> {
     let mut files = Vec::new();
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let path = entry?.path();
-            if path.file_name().is_some_and(|n| n.to_string_lossy().ends_with(SUFFIX)) {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            let tile = name.strip_suffix(SUFFIX).or_else(|| name.strip_suffix(OLD_SUFFIX));
+            if tile.is_some_and(|t| t != "index") {
                 files.push(path);
             }
         }
     }
-    files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
     Ok(files)
 }
 
-/// osmium has all of a run's extracts open at once.
-fn raise_open_files(wanted: usize) {
-    if let Ok((soft, hard)) = rlimit::Resource::NOFILE.get() {
-        let _ = rlimit::Resource::NOFILE.set(soft.max(wanted as u64).min(hard), hard);
-    }
-}
-
-fn config_json(out: &Path, chunk: &[Extract]) -> String {
-    let extracts: Vec<_> = chunk.iter().map(|e| serde_json::json!({"output": e.output, "output_format": "pbf", "bbox": e.bbox})).collect();
-    serde_json::json!({"directory": out.to_string_lossy(), "extracts": extracts}).to_string()
-}
-
-fn checksum(path: &Path) -> Result<String, StepError> {
-    let digest: [u8; 32] = Sha256::digest(fs::read(path)?).into();
-    Ok(short_checksum(&digest))
-}
-
-/// Cuts the tiles from `job.source`, step by step as `steps` says, with osmium's output in the steps' logs.
+/// Makes the tiles from `job.source`, step by step as `steps` says, with osmium's output in the steps' logs.
 pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
     let (metro, roads) = (job.work.join("metro.osm.pbf"), job.work.join("roads.osm.pbf"));
     let (designated, tracks) = (job.work.join("designated.osm.pbf"), job.work.join("designated-tracks.osm.pbf"));
@@ -162,40 +121,31 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
         s.run(command(job, &[&"merge", &streets, &tracks, &"-o", &roads, &overwrite]))
     })?;
 
-    let kept = p.step("tiles", |s| {
+    let (network, frame) = p.step("import", |s| {
+        // the importer takes the file's bytes; they go once it has read them
+        let osm = fs::read(&roads).map_err(|e| StepError::new([format!("cannot read {}: {e}", roads.display())]))?;
+        let (network, frame) = osm_import::import_whole(&osm).map_err(|e| StepError::new([format!("cannot import {}: {e}", roads.display())]))?;
+        let detail = format!("{} roads, {} junctions", thousands(network.roads.len()), thousands(network.junctions.len()));
+        s.update(None, Some(&detail), None);
+        Ok((network, frame))
+    })?;
+    let named = p.step("tiles", |s| {
         for old in tile_files(job.out)? {
             fs::remove_file(old)?;
         }
         fs::create_dir_all(job.out)?;
-        raise_open_files(job.batch + 64);
-        let all = extracts();
-        let batches: Vec<&[Extract]> = all.chunks(job.batch).collect();
-        let config = job.work.join("tiles.json");
-        for (n, chunk) in batches.iter().enumerate() {
-            s.update(None, Some(&format!("batch {} of {}", n + 1, batches.len())), Some(n as f64 / batches.len() as f64));
-            fs::write(&config, config_json(job.out, chunk))?;
-            s.run(command(job, &[&"extract", &"--config", &config, &roads, &overwrite]))?;
-        }
-        let mut kept = Vec::new();
+        let tiles = network_tiles::cut(&network, &frame, &grid());
+        // the tiles hold all of the network they need, so it goes before they are written
+        drop(network);
+        let named = network_tiles::write(job.out, &tiles)?;
         let mut total = 0;
-        for path in tile_files(job.out)? {
-            let size = fs::metadata(&path)?.len();
-            if size > EMPTY_BYTES {
-                total += size;
-                kept.push(path);
-            } else {
-                fs::remove_file(&path)?;
-            }
+        for (name, _) in &named {
+            total += fs::metadata(job.out.join(format!("{name}{SUFFIX}")))?.len();
         }
-        s.update(Some(&format!("{} tiles", thousands(kept.len()))), Some(&format!("{:.1} MB", total as f64 / 1e6)), None);
-        Ok(kept)
+        s.update(Some(&format!("{} tiles", thousands(named.len()))), Some(&format!("{:.1} MB", total as f64 / 1e6)), None);
+        Ok(named)
     })?;
     p.step("index", |_| {
-        let mut named = Vec::new();
-        for path in &kept {
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            named.push((name.strip_suffix(SUFFIX).unwrap_or(&name).to_string(), checksum(path)?));
-        }
         fs::write(job.out.join("index.json"), index_json(&grid(), &named))?;
         Ok(())
     })

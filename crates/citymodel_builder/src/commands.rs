@@ -6,6 +6,7 @@ use std::process::Command as Process;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use cityloom_model::NetworkTile;
 use clap::{Parser, Subcommand};
 
 use crate::archive::{self, PackInputs};
@@ -23,24 +24,22 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Download the extract if needed, cut the road tiles and pack the archive.
+    /// Download the extract if needed, make the network tiles and pack the archive.
     Prepare {
         extract: Option<PathBuf>,
         /// Download a newer extract.
         #[arg(long)]
         refresh: bool,
-        /// Tiles cut per osmium run (1 to 500).
-        #[arg(long, value_parser = batch_size)]
-        batch: Option<usize>,
     },
-    /// Cut an extract into road tiles.
+    /// Keep an extract's roads, import them and cut the network into tiles.
     Tiles {
         extract: PathBuf,
         workdir: Option<PathBuf>,
-        #[arg(long, value_parser = batch_size)]
-        batch: Option<usize>,
+        /// The tiles' folder (web/data/metro by default).
+        #[arg(long)]
+        out: Option<PathBuf>,
     },
-    /// Pack the tiles into a .citymodel archive.
+    /// Pack the network tiles into a .citymodel archive.
     Pack {
         #[arg(long, default_value = "montreal")]
         area: String,
@@ -57,13 +56,8 @@ pub enum Command {
         #[arg(long)]
         created: Option<i64>,
     },
-}
-
-fn batch_size(text: &str) -> Result<usize, String> {
-    match text.parse::<usize>() {
-        Ok(n) if (1..=500).contains(&n) => Ok(n),
-        _ => Err(format!("{text:?} is not a number from 1 to 500")),
-    }
+    /// Import a whole OSM file (XML or PBF) and write it as one network tile, in the data's own frame: a fixture.
+    Fixture { input: PathBuf, out: PathBuf },
 }
 
 /// `2026-10-16T20:21:15Z` as Unix seconds (osmium's replication timestamp), or None.
@@ -129,7 +123,7 @@ fn same(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// The pieces of `run_pack` that read the folders: the grid, the road tiles.
+/// The pieces of `run_pack` that read the folders: the grid, the network tiles.
 fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepError> {
     let index_path = job.metro.join("index.json");
     let text = fs::read_to_string(&index_path).map_err(|e| fail(format!("cannot read {}: {e}", index_path.display())))?;
@@ -143,12 +137,12 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepEr
     let mut on_disk = Vec::new();
     for entry in fs::read_dir(&job.metro).map_err(|e| fail(format!("cannot read {}: {e}", job.metro.display())))? {
         let name = entry.map_err(|e| fail(e.to_string()))?.file_name().to_string_lossy().into_owned();
-        if let Some(tile) = name.strip_suffix(".osm.pbf") {
+        if let Some(tile) = name.strip_suffix(".json").filter(|t| *t != "index") {
             on_disk.push(tile.to_string());
         }
     }
     if let Some(tile) = listed.iter().find(|t| !on_disk.contains(t)) {
-        return Err(fail(format!("tile {tile} is listed in index.json and {tile}.osm.pbf is not in {}", job.metro.display())));
+        return Err(fail(format!("tile {tile} is listed in index.json and {tile}.json is not in {}", job.metro.display())));
     }
     if let Some(tile) = on_disk.iter().find(|t| !listed.contains(t)) {
         return Err(fail(format!("tile {tile} is in {} and not listed in index.json", job.metro.display())));
@@ -156,11 +150,11 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepEr
     let mut roads = Vec::new();
     for name in &listed {
         let (x, y) = tile_name(name).ok_or_else(|| fail(format!("{name:?} is not a tile name (x_y)")))?;
-        roads.push((x, y, job.metro.join(format!("{name}.osm.pbf"))));
+        roads.push((x, y, job.metro.join(format!("{name}.json"))));
     }
     roads.sort();
     if roads.is_empty() {
-        return Err(fail(format!("no road tiles in {}", job.metro.display())));
+        return Err(fail(format!("no network tiles in {}", job.metro.display())));
     }
 
     let (lon0, lat0, dlon, dlat) = (number(&index, "lon0")?, number(&index, "lat0")?, number(&index, "dlon")?, number(&index, "dlat")?);
@@ -199,6 +193,19 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
     })
 }
 
+/// `citymodel_builder fixture`: the whole of `input`, imported, as one `NetworkTile` in compact JSON at `out`.
+pub fn fixture(input: &Path, out: &Path) -> Result<(), String> {
+    let osm = fs::read(input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let (network, frame) = osm_import::import_whole(&osm).map_err(|e| format!("cannot import {}: {e}", input.display()))?;
+    let json = serde_json::to_vec(&NetworkTile { frame, network }).map_err(|e| format!("cannot write {}: {e}", out.display()))?;
+    fs::write(out, json).map_err(|e| format!("cannot write {}: {e}", out.display()))
+}
+
+/// The folder `tiles` writes to: `out`, else the app's `web/data/metro`.
+pub fn tiles_out(out: Option<PathBuf>) -> PathBuf {
+    absolute(&out.unwrap_or_else(|| repo_root().join("web/data/metro")))
+}
+
 pub(crate) fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).expect("the crate lies in the repository's crates folder").to_path_buf()
 }
@@ -232,16 +239,20 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Tiles { extract, workdir, batch } => {
+        Command::Tiles { extract, workdir, out } => {
             let root = repo_root();
-            let (source, work, out) = (absolute(&extract), absolute(&workdir.unwrap_or_else(|| root.join("data/metro-work"))), root.join("web/data/metro"));
-            let job = TilesJob { source: &source, work: &work, out: &out, batch: batch.unwrap_or(tiles::MAX_EXTRACTS), osmium: "osmium" };
+            let (source, work, out) = (absolute(&extract), absolute(&workdir.unwrap_or_else(|| root.join("data/metro-work"))), tiles_out(out));
+            let job = TilesJob { source: &source, work: &work, out: &out, osmium: "osmium" };
             let progress = Arc::new(Progress::stderr(tiles::steps(), root.join("data/logs"), root));
             exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
             let result = tiles::run(&progress, &job);
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { extract, refresh, batch } => prepare::run(PrepareArgs { extract, refresh, batch }),
+        Command::Prepare { extract, refresh } => prepare::run(PrepareArgs { extract, refresh }),
+        Command::Fixture { input, out } => fixture(&input, &out).map_err(|error| {
+            eprintln!("{error}");
+            1
+        }),
     }
 }

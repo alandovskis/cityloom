@@ -1,4 +1,4 @@
-//! The `prepare` command: the Quebec extract (downloaded if it is not kept), the road tiles and the
+//! The `prepare` command: the Quebec extract (downloaded if it is not kept), the network tiles and the
 //! archive, in one display. It replaces the former Python `prepare`, with the pack step added last.
 
 use std::fs;
@@ -18,7 +18,6 @@ pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec
 pub struct PrepareArgs {
     pub extract: Option<PathBuf>,
     pub refresh: bool,
-    pub batch: Option<usize>,
 }
 
 /// Everything `run_job` touches, so a test points the tools and the folders at temporary ones.
@@ -26,11 +25,10 @@ pub struct PrepareJob {
     pub extract: PathBuf,
     pub refresh: bool,
     pub url: String,
-    pub batch: usize,
     pub osmium: String,
     /// osmium's intermediate files.
     pub work: PathBuf,
-    /// The road tiles' folder.
+    /// The network tiles' folder.
     pub metro: PathBuf,
     pub root: PathBuf,
     pub archive: PathBuf,
@@ -62,7 +60,7 @@ pub fn get_extract(ctx: &StepCtx, extract: &Path, refresh: bool, url: &str) -> R
 /// The whole pipeline through `p`, whose steps are `steps(&job.extract)`.
 pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
     p.step("extract", |ctx| get_extract(ctx, &job.extract, job.refresh, &job.url))?;
-    tiles::run(p, &TilesJob { source: &job.extract, work: &job.work, out: &job.metro, batch: job.batch, osmium: &job.osmium })?;
+    tiles::run(p, &TilesJob { source: &job.extract, work: &job.work, out: &job.metro, osmium: &job.osmium })?;
     let pack = PackJob {
         out: job.archive.clone(),
         area: "montreal".into(),
@@ -83,7 +81,6 @@ pub fn run(args: PrepareArgs) -> Result<(), i32> {
         extract: commands::absolute(&args.extract.unwrap_or_else(|| root.join("data/quebec-latest.osm.pbf"))),
         refresh: args.refresh,
         url: URL.into(),
-        batch: args.batch.unwrap_or(tiles::MAX_EXTRACTS),
         osmium: "osmium".into(),
         work: root.join("data/metro-work"),
         metro: root.join("web/data/metro"),

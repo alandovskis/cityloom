@@ -771,9 +771,10 @@ dependencies = [
 name = "citymodel_builder"
 version = "0.1.0"
 dependencies = [
+ "cityloom_model",
  "clap",
  "ctrlc",
- "rlimit",
+ "osm_import",
  "serde_json",
  "sha2 0.11.1",
  "tar",
@@ -4889,15 +4890,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rlimit"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f35ee2729c56bb610f6dba436bf78135f728b7373bdffae2ec815b2d3eb98cc3"
-dependencies = [
- "libc",
 ]
 
 [[package]]
