@@ -24,6 +24,6 @@
     { "paths": ["crates/cityloom_editor/src/archive/**"], "specs": ["@archive", "@cross"] },
     { "paths": ["crates/citymodel_builder/**"], "specs": "all" },
     { "paths": ["crates/cityloom_report/**", "crates/cityloom_report_pdf/**"], "specs": ["@map"] },
-    { "paths": ["crates/cityloom_editor/src/city/**", "crates/cityloom_editor/src/shared/**", "crates/cityloom_editor/src/shell/**", "crates/cityloom_editor/src/lib.rs", "crates/cityloom_editor/src/atlas_contract.rs", "crates/osm_import/**", "crates/cityloom_model/**", "crates/cityloom_server/**", "web/**", "e2e/**", "scripts/**", "deploy/**", "justfile", "Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock", ".github/**", "package.json", "package-lock.json", "rustfmt.toml", ".prettierrc.json", ".prettierignore", ".gitignore", ".env.example"], "specs": "all" }
+    { "paths": ["crates/cityloom_editor/src/city/**", "crates/cityloom_editor/src/shared/**", "crates/cityloom_editor/src/shell/**", "crates/cityloom_editor/src/lib.rs", "crates/cityloom_editor/src/atlas_contract.rs", "crates/cityloom_model/**", "crates/cityloom_server/**", "web/**", "e2e/**", "scripts/**", "deploy/**", "justfile", "Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock", ".github/**", "package.json", "package-lock.json", "rustfmt.toml", ".prettierrc.json", ".prettierignore", ".gitignore", ".env.example"], "specs": "all" }
   ]
 }

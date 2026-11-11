@@ -1,4 +1,5 @@
-//! The plain street network that `osm_import` produces and the editor reads.
+//! The plain street network that the importer of `citymodel_builder` (`citymodel_builder::importer`) produces and
+//! the editor reads.
 //! It stands between them so that the editor does not depend on osm2streets.
 //!
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.

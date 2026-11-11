@@ -2,7 +2,7 @@
 name = "cityloom_model"
 version = "0.1.0"
 edition = "2024"
-description = "The plain street network that osm_import produces and the editor reads."
+description = "The plain street network that citymodel_builder's importer produces and the editor reads."
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
