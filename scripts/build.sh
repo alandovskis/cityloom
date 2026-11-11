@@ -12,18 +12,15 @@ if [ "$(uname)" = Darwin ]; then
   DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
-cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder --exclude osm_import
 # The target directory may be shared with other checkouts, whose builds replace these files: take both at once.
 dir=$(./scripts/target-dir.sh)
 wasm_dir=$(mktemp -d)
 trap 'rm -rf "$wasm_dir"' EXIT
-cp "$dir/wasm32-unknown-unknown/release/cityloom_editor.wasm" "$dir/wasm32-unknown-unknown/release/osm_import.wasm" "$dir/wasm32-unknown-unknown/release/cityloom_report_pdf.wasm" "$wasm_dir/"
+cp "$dir/wasm32-unknown-unknown/release/cityloom_editor.wasm" "$dir/wasm32-unknown-unknown/release/cityloom_report_pdf.wasm" "$wasm_dir/"
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   "$wasm_dir/cityloom_editor.wasm"
-# The OpenStreetMap reader is its own module, loaded when a place is opened.
-wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
-  "$wasm_dir/osm_import.wasm"
-# The design-review PDF writer is its own module too, loaded when a report is made.
+# The design-review PDF writer is its own module, loaded when a report is made.
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   "$wasm_dir/cityloom_report_pdf.wasm"
 # The editor must not carry the PDF writer (krilla): a crate that depends on `cityloom_report_pdf` would pull it in.
