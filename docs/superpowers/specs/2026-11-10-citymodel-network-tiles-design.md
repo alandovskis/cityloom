@@ -115,7 +115,7 @@ is, as today.
 
 `crates/osm_import` moves into `crates/citymodel_builder` as an `importer` module, with its tests
 and test data (`kreuzberg.osm`, `plateau.osm`, `real_city.rs`). `osm2network` becomes a subcommand
-of the builder (`import`, reading OSM and writing Network JSON), and `just default-area` calls it.
+of the builder (`import`, reading OSM and writing Network JSON) in place of the old `osm2network` binary.
 The `cdylib` crate type and the `wasm_bindgen` export go. `cityloom_model` stays its own crate:
 the editor depends on it, and the builder is its producer.
 
