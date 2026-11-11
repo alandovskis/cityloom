@@ -4,19 +4,6 @@
 use crate::city::store::CityStore;
 use crate::place::Bounds;
 
-/// The earth's radius `geom` uses for distances, in metres.
-const EARTH_RADIUS_M: f64 = 6_371_000.0;
-
-/// The distance between two points on the earth, in metres, by the haversine formula, as `geom`
-/// computes it (its `Pt2D` then keeps a box's size to a tenth of a millimetre, so this does too).
-fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
-    let (p1, p2) = (lat1.to_radians(), lat2.to_radians());
-    let (dp, dl) = ((lat2 - lat1).to_radians(), (lon2 - lon1).to_radians());
-    let a = (dp / 2.0).sin().powi(2) + (dl / 2.0).sin().powi(2) * p1.cos() * p2.cos();
-    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-    (EARTH_RADIUS_M * c * 10_000.0).round() / 10_000.0
-}
-
 /// Where a layout lies on the earth.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Projection {
@@ -30,8 +17,8 @@ pub struct Projection {
 impl Projection {
     /// The projection of a layout whose origin is `origin_m` in a network read over `bounds`.
     pub fn new(bounds: Bounds, origin_m: [f64; 2]) -> Projection {
-        let width_m = haversine_m(bounds.south, bounds.west, bounds.south, bounds.east);
-        let height_m = haversine_m(bounds.south, bounds.west, bounds.north, bounds.west);
+        let frame = bounds.frame();
+        let (width_m, height_m) = (frame.width_m(), frame.height_m());
         Projection { bounds, width_m, height_m, origin_m: (origin_m[0], origin_m[1]) }
     }
 
@@ -46,8 +33,7 @@ impl Projection {
 
     /// `[lon, lat]` of a position in metres east and north of the box's south-west corner.
     pub fn network_lon_lat(&self, x_m: f64, y_m: f64) -> [f64; 2] {
-        let b = &self.bounds;
-        [b.west + x_m / self.width_m * (b.east - b.west), b.south + y_m / self.height_m * (b.north - b.south)]
+        self.bounds.frame().lon_lat(x_m, y_m)
     }
 
     /// `[lon, lat]` of a position of the layout, in millimetres (x east, y south).

@@ -36,6 +36,11 @@ pub struct Bounds {
 }
 
 impl Bounds {
+    /// The same box as a `cityloom_model::Frame`.
+    pub fn frame(&self) -> cityloom_model::Frame {
+        cityloom_model::Frame { south: self.south, west: self.west, north: self.north, east: self.east }
+    }
+
     /// The box `half_m` metres either way of a point.
     pub fn around(lat: f64, lon: f64, half_m: f64) -> Bounds {
         const M_PER_DEG_LAT: f64 = 111_320.0;

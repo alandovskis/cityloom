@@ -4,6 +4,7 @@
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.
 
 mod corridor;
+mod frame;
 mod graph;
 mod hours;
 mod importer;
@@ -18,6 +19,7 @@ mod road_type;
 mod zone;
 
 pub use corridor::{Corridor, UserClass};
+pub use frame::Frame;
 pub use graph::{Edge, Node, NodeId, connected};
 pub use hours::{Hours, Window};
 pub use importer::{IMPORTER_VERSION, with_importer};
