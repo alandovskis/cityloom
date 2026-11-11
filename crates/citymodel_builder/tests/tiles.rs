@@ -45,6 +45,14 @@ fn the_steps_are_the_scripts_then_the_import() {
     assert_eq!((grid.nx, grid.ny), (51, 34));
 }
 
+#[test]
+fn the_index_lists_the_tiles_as_the_archive_orders_them() {
+    // by name as text, as the archive's members are (`networks/10_0.json` before `networks/9_1.json`), so the
+    // index.json the server writes when it unpacks is the same bytes as this one
+    let named = |names: &[&str]| names.iter().map(|n| (n.to_string(), format!("sum{n}"))).collect::<Vec<_>>();
+    assert_eq!(tiles::index(named(&["0_0", "9_1", "9_10", "10_0"])), index_json(&tiles::grid(), &named(&["0_0", "10_0", "9_1", "9_10"])));
+}
+
 struct Setup {
     dir: tempfile::TempDir,
 }
@@ -128,11 +136,8 @@ fn the_roads_are_imported_and_cut_into_network_tiles_with_their_index() {
     }
     // every tile is in the whole area's frame
     assert!(frames.windows(2).all(|w| w[0] == w[1]));
-    // the index lists the tiles x outer, y inner, as the cut makes them
-    named.sort_by_key(|(name, _)| {
-        let (x, y) = name.split_once('_').unwrap();
-        (x.parse::<u16>().unwrap(), y.parse::<u16>().unwrap())
-    });
+    // the index lists the tiles by name as text (`names` is so sorted), the order of the archive's members, so the
+    // index.json the server writes when it unpacks is the same bytes
     assert_eq!(fs::read_to_string(out.join("index.json")).unwrap(), index_json(&tiles::grid(), &named));
 }
 

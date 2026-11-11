@@ -92,6 +92,13 @@ fn tile_files(dir: &Path) -> Result<Vec<PathBuf>, StepError> {
     Ok(files)
 }
 
+/// The `index.json` of the tiles `named` (name, short checksum), listed by name as text: the order of the archive's
+/// members, from which the server writes its `index.json` when it unpacks, so the two are the same bytes.
+pub fn index(mut named: Vec<(String, String)>) -> String {
+    named.sort();
+    index_json(&grid(), &named)
+}
+
 /// Makes the tiles from `job.source`, step by step as `steps` says, with osmium's output in the steps' logs.
 pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
     let (metro, roads) = (job.work.join("metro.osm.pbf"), job.work.join("roads.osm.pbf"));
@@ -146,7 +153,7 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
         Ok(named)
     })?;
     p.step("index", |_| {
-        fs::write(job.out.join("index.json"), index_json(&grid(), &named))?;
+        fs::write(job.out.join("index.json"), index(named))?;
         Ok(())
     })
 }
