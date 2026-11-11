@@ -236,3 +236,33 @@ before tiling, which stores a road in every tile it touches; the builder checks 
   built from `kreuzberg.osm` by the builder.
 - The names of the new messages and the wording of the "not covered" text, in both languages.
 - The name of the member kind and the subcommand.
+
+## As built
+
+Where the build settled what the spec left open or departed from it.
+
+- **One-pass import.** The merge fix (`importer/merge.rs`) made the one-pass import of the whole area
+  feasible: measured on the real Montreal data (a developer Mac, not a runner), import, tiles and pack
+  after the osmium steps take 52.8 s with 7.31 GB peak memory.
+- **`clip_to` as built.** Zones are re-based per cut piece. A road is cut from its junction's point where
+  its trimmed line lies outside the box, and at the box edge where its junction is outside but its trimmed
+  line inside. osm2streets' rule that a way with no node in the box is dropped is not reproduced: the
+  network keeps too few of a way's nodes to apply it. Pieces made by cutting that are shorter than 1.0 m
+  are dropped. The output is sorted by id.
+- **Acceptance** (`clip_agrees.rs`: the Plateau box and four boxes shifted 150 m). Of the places the importer
+  makes the same in both the clipped import and the cut, 98.6% (288 of 292) follow, and none takes another's
+  edit. Of all records, 92.6% follow (the floor asserted is 90%); exact-key agreement is informational. Road
+  counts in the cut are 100 to 107.7% of the clipped import's (the extra corner pieces carry no edit).
+  Known residue: 3 records lost to `merge.rs` pairing two pieces of one way in the clipped import, and
+  junction clusters within about 1 m of a box edge differ.
+- **Size.** 1,718 tiles, 570.1 MB of JSON at rest (largest tile 3.06 MB, about 337 KB gzipped); archive
+  571.5 MB. The server gzips full responses on the fly. Recommended follow-ups: compression at rest, and
+  dropping the lane shapes, which are recomputable and about 30% of a tile.
+- **Commands and CI.** `import <in> <out.json>` (the whole `Network`) and `fixture <in> <out.json>` (one
+  `NetworkTile` of the input's own frame) are new; `tiles` takes `--out`; `index.json` lists names sorted as
+  text. The e2e fixtures are generated (`just e2e-fixtures` into `e2e/fixtures/generated`, gitignored), not
+  committed. The deploy job's tile cache key hashes `tiles.rs`, `metro_index.rs`, `network_tiles.rs`,
+  `importer/**` and `cityloom_model/src/**`; the spec map sends `crates/citymodel_builder/**` to every spec.
+- **`web/city.js`** is kept, for `placeParam` only.
+- **Importer panic.** On OSM XML without `<bounds>` the importer panics inside osm2streets; the e2e
+  `open-ends.osm` fixture gained a `<bounds>` element for this.
