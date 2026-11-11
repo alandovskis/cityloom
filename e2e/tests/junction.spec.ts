@@ -949,9 +949,11 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
 test.describe("the approach of an arm whose street is divided", () => {
   const options = (page: Page) => page.locator('#zone-strip [role="option"]');
 
-  /** Finds a junction with a street of `minM` to `maxM` metres leaving it, by the first arm's "Open the cross-section"
-   *  link (and at most `maxM`, so that half of it is inside the 36 m an arm is drawn). Leaves the page on that street, and says the junction's address and the street's. */
-  const junctionWithStreet = async (page: Page, minM: number, maxM: number) => {
+  /** Opens, from the map, the junction whose first arm is the street `name` running to `toward`, and that street, by
+   *  the arm's "Open the cross-section" link. Leaves the page on the street, and says the junction's address and the
+   *  street's. The street is named, not found by its length: whether halving a street puts its end zone where this test
+   *  needs it depends on how far its stop line and its transition reach, which no length says. */
+  const junctionWithStreet = async (page: Page, name: string, toward: string) => {
     await page.goto("/map.html");
     for (const junction of (await placesOnMap(page)).junctions) {
       await page.goto("/" + junction);
@@ -963,10 +965,11 @@ test.describe("the approach of an arm whose street is divided", () => {
       const street = await link.getAttribute("href");
       await link.click();
       await expect(page.locator("#zone-0")).toBeVisible();
-      const length = await streetLengthM(page);
-      if (length >= minM && length <= maxM) return { junction, street: street! };
+      const named = (await page.locator("#street-name").innerText()).trim() === name;
+      if (named && (await page.locator("#street-sub").innerText()).includes(toward))
+        return { junction, street: street! };
     }
-    throw new Error(`no junction has a street of ${minM} to ${maxM} m`);
+    throw new Error(`no junction's first street is ${name} toward ${toward}`);
   };
 
   /** Zone 2 must differ from zone 1 in its section. Removing the first piece (a sidewalk) does that in one exact step:
@@ -987,11 +990,13 @@ test.describe("the approach of an arm whose street is divided", () => {
   test("draws the transition and its marks, passes the check, then fails it when the end zone is short", async ({
     page,
   }) => {
-    // It looks for a junction with a street of the right length, then goes between the street and the junction pages
-    // up to six times: about 30 s on CI's runner, the default timeout.
+    // It looks for the junction, then goes between the street and the junction pages up to six times: about 30 s on
+    // CI's runner, the default timeout.
     test.setTimeout(120_000);
-    // Halved, the street has an end zone of 25 to 33 m: the boundary lies inside the 36 m an arm is drawn to.
-    const { junction, street } = await junctionWithStreet(page, 50, 66);
+    // An interior street (both its ends OSM nodes: a junction and a connection, none where the area's box cuts it) of
+    // 41 m. Halved, its end zone reaches 20 m from the centre, past what its stop line and arrows need, and with its
+    // 9.3 m transition it ends inside the 36 m an arm is drawn to.
+    const { junction, street } = await junctionWithStreet(page, "Rue Saint-Viateur Ouest", "Rue Saint-Urbain");
     await splitInto(page, 2);
     // Zone 2 loses its first piece, so its section differs from zone 1's.
     await page.locator("#zone-1").click();
