@@ -21,7 +21,7 @@ const MIN_PIECE_M: f64 = 0.001;
 
 impl Network {
     /// Roads whose centre line reaches into `rect` (a Frame, as lon/lat), whole, with the junctions they use;
-    /// priority controls keep only roads present; corridors cleared. `from` is this network's frame.
+    /// priority controls keep only roads present, sorted by id; corridors cleared. `from` is this network's frame.
     pub fn reaching(&self, from: &Frame, rect: &Frame) -> Network {
         let degrees = Degrees::of(from);
         let roads: Vec<Road> = self.roads.iter().filter(|r| reaches(&degrees.line(&r.points), rect)).cloned().collect();
@@ -35,6 +35,7 @@ impl Network {
                 let mut j = j.clone();
                 if let Control::Priority(ids) = &mut j.control {
                     ids.retain(|id| present.contains(id));
+                    ids.sort_unstable();
                 }
                 j
             })
@@ -42,9 +43,11 @@ impl Network {
         Network { left_hand: self.left_hand, junctions, roads, corridors: Vec::new() }
     }
 
-    /// Union by id: roads and junctions of `other` this network lacks are added (same frame assumed). A junction both
-    /// have gains the priority roads that only `other`'s names, which a tile leaves out when it lacks the road. The
-    /// corridors are left as they are: they are derived once the network is cut (`clip_to`).
+    /// Union by id: roads and junctions of `other` this network lacks are added (same frame assumed). Where both hold
+    /// the same id with different content, this network's is kept, except that a junction both have gains the
+    /// priority roads only `other`'s names (a tile leaves out those it lacks), its list then sorted by id, the order
+    /// `reaching` and `clip_to` give, so that merged tiles cut as the whole network does. The corridors are left as
+    /// they are: they are derived once the network is cut (`clip_to`).
     pub fn absorb(&mut self, other: &Network) {
         let roads: BTreeSet<RoadId> = self.roads.iter().map(|r| r.edge.id).collect();
         self.roads.extend(other.roads.iter().filter(|r| !roads.contains(&r.edge.id)).cloned());
@@ -58,6 +61,7 @@ impl Network {
                                 ours.push(*id);
                             }
                         }
+                        ours.sort_unstable();
                     }
                 }
             }
@@ -71,7 +75,8 @@ impl Network {
     /// A road that leaves the box and comes back is two pieces, never joined across the gap; a road that only
     /// touches the box, or whose piece has fewer than two points, is left out. A priority naming a cut road names
     /// the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
-    /// for its position and the pieces its priority names.
+    /// for its position and the pieces its priority names. The roads are taken in order of id, and the result's roads,
+    /// junctions and priority lists are sorted by id, so the order the network holds them in makes no difference.
     pub fn clip_to(&self, from: &Frame, to: &Frame) -> Network {
         let degrees = Degrees::of(from);
         let metres = Metres::of(to);
@@ -82,7 +87,9 @@ impl Network {
         let mut whole: BTreeSet<RoadId> = BTreeSet::new();
         // (the road cut, the junction of its own a piece reaches) -> the piece
         let mut pieces_at: BTreeMap<(RoadId, NodeId), RoadId> = BTreeMap::new();
-        for road in &self.roads {
+        let mut in_order: Vec<&Road> = self.roads.iter().collect();
+        in_order.sort_by_key(|r| r.edge.id);
+        for road in in_order {
             let line = degrees.line(&road.points);
             let pieces = clip_line(&line, to);
             if let [piece] = pieces.as_slice()
@@ -148,12 +155,15 @@ impl Network {
                             named.push(now);
                         }
                     }
+                    named.sort_unstable();
                     *ids = named;
                 }
                 j
             })
             .collect();
         junctions.extend(ends);
+        junctions.sort_by_key(|j| j.id);
+        roads.sort_by_key(|r| r.edge.id);
         let mut place = Network { left_hand: self.left_hand, junctions, roads, corridors: Vec::new() };
         place.derive_corridors();
         place
@@ -268,6 +278,8 @@ fn clip_line(line: &[[f64; 2]], r: &Frame) -> Vec<Piece> {
     let mut pieces = Vec::new();
     // the run being followed; it always ends at the point the next stretch starts from
     let mut open: Option<Piece> = None;
+    // whether every stretch before this one has no length, so that this one starts at the line's first point
+    let mut at_first = true;
     for (i, w) in line.windows(2).enumerate() {
         let (a, b) = (w[0], w[1]);
         if a == b {
@@ -277,6 +289,7 @@ fn clip_line(line: &[[f64; 2]], r: &Frame) -> Vec<Piece> {
             }
             continue;
         }
+        let first = std::mem::replace(&mut at_first, false);
         match clip_segment(a, b, r) {
             Some((t0, t1)) if t1 > t0 => {
                 if t0 > 0.0 {
@@ -286,7 +299,7 @@ fn clip_line(line: &[[f64; 2]], r: &Frame) -> Vec<Piece> {
                     points: vec![lerp(a, b, t0)],
                     start: At(i, t0),
                     end: At(i, t0),
-                    from_start: i == 0 && t0 == 0.0,
+                    from_start: first && t0 == 0.0,
                     to_end: false,
                 });
                 piece.points.push(lerp(a, b, t1));
@@ -577,7 +590,7 @@ mod tests {
         net.junctions[0].control = Control::Priority(vec![RoadId(1), RoadId(2), RoadId(9)]);
         let place = net.clip_to(&frame(), &middle());
         let piece = place.roads.iter().find(|r| r.edge.id != RoadId(2)).unwrap().edge.id;
-        assert_eq!(junction_of(&place, NodeId(1)).control, Control::Priority(vec![piece, RoadId(2)]));
+        assert_eq!(junction_of(&place, NodeId(1)).control, Control::Priority(vec![RoadId(2), piece]), "sorted by id");
     }
 
     #[test]
@@ -592,6 +605,66 @@ mod tests {
         assert_eq!(starts[0], (0.0, Some(30)), "the zone the box starts in starts the piece");
         assert!((starts[1].0 - 50.0).abs() < 0.01 && starts[1].1 == Some(40), "{starts:?}");
         assert!(Road::is_zoned(zones));
+    }
+
+    #[test]
+    fn clip_to_keeps_whole_a_road_inside_that_starts_or_ends_with_a_repeated_point() {
+        let net =
+            network(vec![road(1, 1, 2, &[(450.0, 450.0), (450.0, 450.0), (550.0, 550.0)]), road(2, 3, 4, &[(450.0, 500.0), (550.0, 500.0), (550.0, 500.0)])]);
+        let place = net.clip_to(&frame(), &middle());
+        let edges: Vec<Edge> = place.roads.iter().map(|r| r.edge).collect();
+        assert_eq!(edges, [net.roads[0].edge, net.roads[1].edge], "kept whole, with their ids and ends");
+        assert_eq!(junction_ids(&place), [1, 2, 3, 4]);
+    }
+
+    /// The network with the ids it made up for its cut pieces and ends (those not in `whole`) numbered in order,
+    /// from 1000, so two cuts that differ only in where their new ids start compare equal.
+    fn renumbered(mut net: Network, whole: &Network) -> Network {
+        let new_roads: Vec<RoadId> = net.roads.iter().map(|r| r.edge.id).filter(|id| !whole.roads.iter().any(|r| r.edge.id == *id)).collect();
+        let new_nodes: Vec<NodeId> = net.junctions.iter().map(|j| j.id).filter(|id| !whole.junctions.iter().any(|j| j.id == *id)).collect();
+        let road = |id: RoadId| new_roads.iter().position(|n| *n == id).map_or(id, |k| RoadId(1000 + k as u32));
+        let node = |id: NodeId| new_nodes.iter().position(|n| *n == id).map_or(id, |k| NodeId(1000 + k as u32));
+        for r in &mut net.roads {
+            r.edge = Edge { id: road(r.edge.id), from: node(r.edge.from), to: node(r.edge.to) };
+        }
+        for j in &mut net.junctions {
+            j.id = node(j.id);
+            if let Control::Priority(ids) = &mut j.control {
+                ids.iter_mut().for_each(|id| *id = road(*id));
+            }
+        }
+        for c in &mut net.corridors {
+            c.roads.iter_mut().for_each(|id| *id = road(*id));
+        }
+        net
+    }
+
+    #[test]
+    fn a_place_across_the_line_between_two_tiles_is_cut_from_them_as_from_the_whole() {
+        let mut whole = network(vec![
+            road(1, 1, 2, &[(420.0, 520.0), (480.0, 560.0)]),
+            road(2, 3, 4, &[(300.0, 500.0), (580.0, 500.0)]),
+            road(3, 4, 5, &[(580.0, 500.0), (700.0, 500.0)]),
+            road(6, 4, 6, &[(580.0, 500.0), (580.0, 800.0)]),
+            road(8, 7, 8, &[(100.0, 100.0), (900.0, 900.0)]),
+            road(9, 9, 10, &[(450.0, 580.0), (650.0, 580.0), (650.0, 590.0), (450.0, 590.0)]),
+            // far from both tiles, with the largest ids, so the whole makes up its new ids from higher than the tiles do
+            road(99, 98, 99, &[(100.0, 950.0), (200.0, 950.0)]),
+        ]);
+        whole.junctions.iter_mut().find(|j| j.id == NodeId(4)).unwrap().control = Control::Priority(vec![RoadId(6), RoadId(2), RoadId(3)]);
+        let from = frame();
+        // two tiles split at x = 500 m, each widened by a 50 m margin; the place straddles the line
+        let (tile_a, tile_b) = (sub(&from, 0.0, 300.0, 550.0, 700.0), sub(&from, 450.0, 300.0, 1000.0, 700.0));
+        let place = middle();
+        let (a, b) = (whole.reaching(&from, &tile_a), whole.reaching(&from, &tile_b));
+        assert!(!road_ids(&a).contains(&3) && road_ids(&b).contains(&3), "the tiles differ: {:?} {:?}", road_ids(&a), road_ids(&b));
+        let expected = renumbered(whole.clip_to(&from, &place), &whole);
+        for (first, second) in [(&a, &b), (&b, &a)] {
+            let mut merged = first.clone();
+            merged.absorb(second);
+            assert_eq!(renumbered(merged.clip_to(&from, &place), &whole), expected);
+        }
+        assert_eq!(junction_of(&expected, NodeId(4)).control, Control::Priority(vec![RoadId(1000), RoadId(1001), RoadId(1002)]), "{expected:?}");
     }
 
     #[test]
