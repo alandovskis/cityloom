@@ -58,6 +58,8 @@ pub enum Command {
     },
     /// Import a whole OSM file (XML or PBF) and write it as one network tile, in the data's own frame: a fixture.
     Fixture { input: PathBuf, out: PathBuf },
+    /// Import an OSM file (XML or PBF) and write its street network as JSON, to look at what the importer makes of it.
+    Import { input: PathBuf, out: PathBuf },
 }
 
 /// `2026-10-16T20:21:15Z` as Unix seconds (osmium's replication timestamp), or None.
@@ -201,6 +203,15 @@ pub fn fixture(input: &Path, out: &Path) -> Result<(), String> {
     fs::write(out, json).map_err(|e| format!("cannot write {}: {e}", out.display()))
 }
 
+/// `citymodel_builder import`: `input` (OSM XML or PBF), imported, as one `Network` in compact JSON at `out`; nothing is
+/// written when it cannot be read or imported.
+pub fn import(input: &Path, out: &Path) -> Result<(), String> {
+    let osm = fs::read(input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
+    let network = crate::importer::import(&osm).map_err(|e| format!("cannot import {}: {e}", input.display()))?;
+    let json = serde_json::to_string(&network).map_err(|e| format!("cannot write {}: {e}", out.display()))?;
+    fs::write(out, json).map_err(|e| format!("cannot write {}: {e}", out.display()))
+}
+
 /// The folder `tiles` writes to: `out`, else the app's `web/data/metro`.
 pub fn tiles_out(out: Option<PathBuf>) -> PathBuf {
     absolute(&out.unwrap_or_else(|| repo_root().join("web/data/metro")))
@@ -251,6 +262,10 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
         }
         Command::Prepare { extract, refresh } => prepare::run(PrepareArgs { extract, refresh }),
         Command::Fixture { input, out } => fixture(&input, &out).map_err(|error| {
+            eprintln!("{error}");
+            1
+        }),
+        Command::Import { input, out } => import(&input, &out).map_err(|error| {
             eprintln!("{error}");
             1
         }),

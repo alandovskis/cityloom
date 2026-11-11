@@ -3,7 +3,7 @@ mod support;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use cityloom_model::NetworkTile;
+use cityloom_model::{Network, NetworkTile};
 use citymodel_builder::archive::{self, read_index};
 use citymodel_builder::commands::{self, Cli, Command, PackJob};
 use citymodel_builder::metro_index::Grid;
@@ -168,6 +168,50 @@ fn fixture_says_what_it_cannot_read() {
 }
 
 #[test]
+fn import_writes_the_network_of_the_input_as_compact_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/data/plateau.osm");
+    let out = dir.path().join("plateau.json");
+    commands::import(&input, &out).unwrap();
+    let bytes = fs::read(&out).unwrap();
+    let network: Network = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(network, citymodel_builder::importer::import(&fs::read(&input).unwrap()).unwrap());
+    assert!(!bytes.contains(&b'\n'), "compact JSON");
+}
+
+#[test]
+fn import_says_what_it_cannot_read_and_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.json");
+    let missing = dir.path().join("none.osm");
+    let error = commands::import(&missing, &out).unwrap_err();
+    assert!(error.starts_with(&format!("cannot read {}", missing.display())), "{error}");
+    assert!(!out.exists());
+    let junk = dir.path().join("junk.osm");
+    fs::write(&junk, "not OSM").unwrap();
+    let error = commands::import(&junk, &out).unwrap_err();
+    assert!(error.starts_with(&format!("cannot import {}", junk.display())), "{error}");
+    assert!(!out.exists());
+}
+
+#[test]
+fn the_import_command_fails_with_the_error_on_stderr_and_no_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let (missing, out) = (dir.path().join("none.osm"), dir.path().join("out.json"));
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_citymodel_builder")).arg("import").arg(&missing).arg(&out).output().unwrap();
+    assert!(!run.status.success());
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    assert!(stderr.contains(&format!("cannot read {}", missing.display())), "{stderr}");
+    assert!(!out.exists());
+
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/crossing.osm");
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_citymodel_builder")).arg("import").arg(&input).arg(&out).output().unwrap();
+    assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+    let network: Network = serde_json::from_slice(&fs::read(&out).unwrap()).unwrap();
+    assert_eq!(network, citymodel_builder::importer::import(&fs::read(&input).unwrap()).unwrap());
+}
+
+#[test]
 fn the_cli_parses_the_commands() {
     let parse = |args: &[&str]| Cli::try_parse_from(std::iter::once("citymodel_builder").chain(args.iter().copied()));
     assert!(parse(&["pack", "--area", "x", "--created", "0"]).is_ok());
@@ -181,6 +225,8 @@ fn the_cli_parses_the_commands() {
     assert!(parse(&["tiles", "q.osm.pbf", "--batch", "2"]).is_err());
     assert!(parse(&["fixture", "in.osm.pbf", "out.json"]).is_ok());
     assert!(parse(&["fixture", "in.osm.pbf"]).is_err());
+    assert!(parse(&["import", "in.osm", "out.json"]).is_ok());
+    assert!(parse(&["import", "in.osm"]).is_err());
     assert!(parse(&["basemap", "q.osm.pbf"]).is_err());
 }
 
