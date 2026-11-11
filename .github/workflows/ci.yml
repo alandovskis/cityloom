@@ -400,19 +400,23 @@ jobs:
 
       # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the
       # code that makes them change. Run the workflow again after clearing the cache to take a newer extract.
-      # The key hashes only the sources that decide the tiles (citymodel_builder's tiles and metro_index modules): a change to the progress display, the archive or a dependency must not make them again.
+      # The key hashes only the sources that decide the tiles: citymodel_builder's tiles, metro_index and network_tiles
+      # modules, and the importer that makes the network they are cut from (osm_import, and cityloom_model, which holds
+      # the network's shape and IMPORTER_VERSION). A change to any of them makes the tiles again; a change to the
+      # progress display, the archive or a dependency does not.
       - id: tiles
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             web/data/metro
-          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/metro_index.rs') }}
+          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/metro_index.rs', 'crates/citymodel_builder/src/network_tiles.rs', 'crates/osm_import/src/**', 'crates/cityloom_model/src/**') }}
       - if: steps.tiles.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends osmium-tool
-          # osmium needs a gigabyte for each tile it cuts at once, and the runner has 16 GB.
-          just prepare --batch 2
+          # osmium keeps the area's roads; the importer then reads them whole (several GB of the runner's 16 GB) and
+          # the network is cut into tiles.
+          just prepare
 
       - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
       - run: just deploy

@@ -102,11 +102,11 @@ sonar-reports:
     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and pack them into data/montreal.citymodel. `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, keep its roads (needs osmium-tool), import them once into the whole area's network, cut that into network tiles (`<x>_<y>.json`) in web/data/metro and pack them into data/montreal.citymodel. `just prepare --refresh` downloads a newer extract. Runs `citymodel_builder prepare`; arguments go to it.
 prepare *args:
     cargo run --release -q -p citymodel_builder -- prepare {{args}}
 
-# Pack web/data/metro into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `citymodel_builder pack`.
+# Pack the network tiles of web/data/metro into data/montreal.citymodel (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `citymodel_builder pack`.
 pack *args:
     cargo run --release -q -p citymodel_builder -- pack {{args}}
 
