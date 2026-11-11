@@ -181,7 +181,7 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>), StepEr
 pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
     p.step("pack", |ctx| {
         let (grid, roads) = read_inputs(job)?;
-        let inputs = PackInputs { area: &job.area, source: &job.source, source_time: job.source_time, created: job.created, grid, roads: &roads };
+        let inputs = PackInputs { area: &job.area, source: &job.source, source_time: job.source_time, created: job.created, grid, networks: &roads };
         let mut shown = u64::MAX;
         let mut report = |done: u64, total: u64| {
             let mb = done / 1_000_000;

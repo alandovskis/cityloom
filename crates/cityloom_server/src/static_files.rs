@@ -368,8 +368,8 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     res
 }
 
-/// What is worth compressing on the fly: text, the WebAssembly modules and the TrueType fonts (the report's, which are not compressed already). The tiles and the glyphs are
-/// already compressed, or do not compress, and are read in ranges.
+/// What is worth compressing on the fly: text, the WebAssembly modules and the TrueType fonts (the report's, which are not compressed already). The network tiles are JSON and so
+/// compressed; the glyphs are already compressed, or do not compress, and are read in ranges.
 fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
     if status != StatusCode::OK {
         return false;

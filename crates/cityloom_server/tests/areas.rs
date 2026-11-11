@@ -11,9 +11,9 @@ const GRID: Grid = Grid { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.0
 fn pack_area(archives: &Path, tile: &[u8]) {
     let work = archives.parent().unwrap().join("work");
     std::fs::create_dir_all(&work).unwrap();
-    std::fs::write(work.join("0_0.osm.pbf"), tile).unwrap();
-    let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
-    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads };
+    std::fs::write(work.join("0_0.json"), tile).unwrap();
+    let roads = vec![(0u16, 0u16, work.join("0_0.json"))];
+    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, networks: &roads };
     archive::pack(&inputs, &archives.join("montreal.citymodel"), &mut |_, _| {}).unwrap();
 }
 
@@ -48,7 +48,7 @@ async fn run_refuses_a_missing_archive_and_a_tampered_one_before_it_listens() {
     bytes[at] ^= 1;
     std::fs::write(&file, bytes).unwrap();
     let message = run_refused(config(tmp.path())).await;
-    assert!(message.contains("roads/0_0.osm.pbf") && message.contains("checksum"), "{message}");
+    assert!(message.contains("networks/0_0.json") && message.contains("checksum"), "{message}");
     assert!(!tmp.path().join("data/montreal").exists());
 }
 

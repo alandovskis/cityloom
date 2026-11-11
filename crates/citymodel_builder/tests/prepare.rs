@@ -119,7 +119,7 @@ fi"#,
     let data = root.join("unpacked");
     let unpacked = archive::unpack(&job.archive, &data).unwrap();
     assert_eq!(unpacked.tiles, 1);
-    assert_eq!(fs::metadata(data.join("montreal/metro/0_0.osm.pbf")).unwrap().len(), 500);
+    assert_eq!(fs::metadata(data.join("montreal/metro/0_0.json")).unwrap().len(), 500);
     assert_eq!(fs::read(data.join("montreal/metro/index.json")).unwrap(), fs::read(job.metro.join("index.json")).unwrap());
     let mut tar = tar::Archive::new(fs::File::open(&job.archive).unwrap());
     let mut first = tar.entries().unwrap().next().unwrap().unwrap();

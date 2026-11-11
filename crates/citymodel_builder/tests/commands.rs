@@ -84,7 +84,7 @@ fn pack_packs_the_folders_into_an_archive_the_server_reads() {
     assert_eq!(unpacked.tiles, 2);
     for name in ["0_0", "12_9"] {
         let file = format!("{name}.osm.pbf");
-        assert_eq!(fs::read(data.join("montreal/metro").join(&file)).unwrap(), fs::read(metro.join(&file)).unwrap());
+        assert_eq!(fs::read(data.join("montreal/metro").join(format!("{name}.json"))).unwrap(), fs::read(metro.join(&file)).unwrap());
     }
     let index: serde_json::Value = serde_json::from_slice(&fs::read(data.join("montreal/metro/index.json")).unwrap()).unwrap();
     assert_eq!(index["tiles"], serde_json::json!(["0_0", "12_9"]));

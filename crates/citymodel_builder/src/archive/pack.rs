@@ -15,14 +15,14 @@ pub struct PackInputs<'a> {
     pub source_time: i64,
     pub created: i64,
     pub grid: Grid,
-    pub roads: &'a [(u16, u16, PathBuf)],
+    pub networks: &'a [(u16, u16, PathBuf)],
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
     #[error("the area name {0:?} is not allowed (lower-case letters, digits and hyphens, at most 64)")]
     Area(String),
-    #[error("road tile {0} is outside the grid")]
+    #[error("network tile {0} is outside the grid")]
     OutsideGrid(String),
     #[error("{0}")]
     Empty(&'static str),
@@ -113,18 +113,18 @@ pub fn pack(inputs: &PackInputs, out: &Path, progress: &mut dyn FnMut(u64, u64))
         return Err(PackError::Area(inputs.area.to_string()));
     }
     let blank = |kind, x, y, path: String| Entry { kind, x, y, size: 0, sha256: [0; 32], path };
-    let mut roads = Vec::new();
-    for (x, y, file) in inputs.roads {
+    let mut networks = Vec::new();
+    for (x, y, file) in inputs.networks {
         if *x >= inputs.grid.nx || *y >= inputs.grid.ny {
             return Err(PackError::OutsideGrid(format!("{x}_{y}")));
         }
-        roads.push(Piece { entry: blank(Kind::Road, *x, *y, format!("roads/{x}_{y}.osm.pbf")), file: file.clone() });
+        networks.push(Piece { entry: blank(Kind::Network, *x, *y, format!("networks/{x}_{y}.json")), file: file.clone() });
     }
-    if roads.is_empty() {
-        return Err(PackError::Empty("no road tiles"));
+    if networks.is_empty() {
+        return Err(PackError::Empty("no network tiles"));
     }
-    roads.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
-    let mut pieces = roads;
+    networks.sort_by(|a, b| a.entry.path.cmp(&b.entry.path));
+    let mut pieces = networks;
 
     let mut total = 0;
     for piece in &pieces {

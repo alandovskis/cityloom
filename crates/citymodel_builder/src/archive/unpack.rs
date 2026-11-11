@@ -80,7 +80,7 @@ fn first_member<R: Read>(members: &mut tar::Entries<'_, R>) -> Result<Index, Arc
 /// The tile index the app reads, from the archive's index.
 fn metro_index(index: &Index) -> String {
     let tiles: Vec<(String, String)> =
-        index.entries.iter().filter(|e| e.kind == Kind::Road).map(|e| (format!("{}_{}", e.x, e.y), short_checksum(&e.sha256))).collect();
+        index.entries.iter().filter(|e| e.kind == Kind::Network).map(|e| (format!("{}_{}", e.x, e.y), short_checksum(&e.sha256))).collect();
     index_json(&index.header.grid, &tiles)
 }
 
@@ -126,7 +126,7 @@ pub fn unpack(archive: &Path, data_root: &Path) -> Result<Unpacked, ArchiveError
     let mut members = tar.entries().map_err(io_err("cannot read the archive"))?;
     let index = first_member(&mut members)?;
     let area = index.header.area.clone();
-    let tiles = index.entries.iter().filter(|e| e.kind == Kind::Road).count();
+    let tiles = index.entries.iter().filter(|e| e.kind == Kind::Network).count();
     fs::create_dir_all(data_root).map_err(io_err(format!("cannot create {}", data_root.display())))?;
     remove_leftovers(data_root);
     let target = data_root.join(&area);
