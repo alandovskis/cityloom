@@ -46,11 +46,12 @@ just prepare
 
 This runs `citymodel_builder`, the repository's Rust tool (`cargo run -p citymodel_builder -- prepare`; its arguments are
 the recipe's). It downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
-a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`). Last, it packs them
+a newer one). It then keeps the metropolitan area's roads (needs `osmium-tool`), imports them once with osm2streets and cuts the resulting
+street network into JSON tiles in `web/data/metro` (about 1,700 tiles, about 570 MB). Last, it packs them
 into one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
 archive are ignored by git.
 
-Nothing needs the road tiles: without them every place, the default one included, comes from Overpass.
+Opening a place needs the road tiles: without them no place opens, the default one included, and the home page says the place is not covered.
 
 ## Tests and formatting
 

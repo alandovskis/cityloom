@@ -43,7 +43,7 @@ state machines with tests. The map page is the exception: it draws with MapLibre
 ## Ports
 
 A view-model reaches the browser only through ports, defined in `shared/ports.rs` with fakes for tests:
-`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API), `WorkSync` (the work stored on the server), `ArchiveFiles` (a design archive handed over as a file, and a file chosen) and
+`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Account` (the sign-in state and the account API), `WorkSync` (the work stored on the server), `ArchiveFiles` (a design archive handed over as a file, and a file chosen) and
 `Navigator`. `shared/platform.rs` is their browser side. This is how view-models are tested natively, against
 `test_ports()`, without a browser.
 
@@ -59,9 +59,9 @@ The workspace has four crates:
 
 - `cityloom_editor` (the root crate) is the editor, built to WebAssembly and driven by `wasm-bindgen`.
 - `cityloom_model` is the plain network type (serde only).
-- `osm_import` runs [osm2streets](https://github.com/a-b-street/osm2streets) and fills the network. It is built as its
-  own WebAssembly module, `web/pkg/osm_import*`, which `web/city.js` loads when a place is first opened. This keeps
-  osm2streets out of the editor's module.
+- `citymodel_builder` prepares the map data. Its importer runs [osm2streets](https://github.com/a-b-street/osm2streets)
+  once over the whole metropolitan area and fills the network, which is cut into JSON tiles the editor fetches and cuts
+  a place out of. osm2streets therefore never reaches the browser.
 - `cityloom_server` is the server: it serves `web/`, signs people in with OpenStreetMap, Google, Microsoft or Apple, and
   keeps accounts in Postgres. It is not built to WebAssembly.
 

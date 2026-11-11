@@ -47,7 +47,7 @@ MapLibre, sans SVG.
 ## Ports
 
 Un modèle de vue n’atteint le navigateur que par des ports, définis dans `shared/ports.rs` avec des doublures pour les
-tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap), `Account` (l’état de connexion et l’API du compte), `WorkSync` (le travail stocké sur le serveur) et
+tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Account` (l’état de connexion et l’API du compte), `WorkSync` (le travail stocké sur le serveur) et
 `ArchiveFiles` (une archive de conception remise sous forme de fichier, et un fichier choisi) et `Navigator`. `shared/platform.rs` en est le côté navigateur. C’est ainsi que les modèles de vue sont testés en natif,
 avec `test_ports()`, sans navigateur.
 
@@ -64,9 +64,10 @@ L’espace de travail compte quatre caisses :
 
 - `cityloom_editor` (la caisse racine) est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
 - `cityloom_model` est le type de réseau simple (serde seulement).
-- `osm_import` exécute [osm2streets](https://github.com/a-b-street/osm2streets) et remplit le réseau. Il est construit
-  comme son propre module WebAssembly, `web/pkg/osm_import*`, que `web/city.js` charge à la première ouverture d’un
-  lieu. Cela garde osm2streets hors du module de l’éditeur.
+- `citymodel_builder` prépare les données cartographiques. Son importateur exécute
+  [osm2streets](https://github.com/a-b-street/osm2streets) une seule fois sur toute la région métropolitaine et remplit
+  le réseau, qui est découpé en tuiles JSON que l’éditeur télécharge et dans lesquelles il découpe un lieu.
+  osm2streets n’atteint donc jamais le navigateur.
 - `cityloom_server` est le serveur : il sert `web/`, connecte les gens avec OpenStreetMap, Google, Microsoft ou Apple, et
   conserve les comptes dans Postgres. Il n’est pas construit en WebAssembly.
 
