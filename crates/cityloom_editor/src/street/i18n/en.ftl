@@ -105,9 +105,6 @@ failing =
 measure-arrange-label = Arrange the street as { $code } { $name }
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/page.rs).
-header-city-map = City map
-header-section = Street cross-section
-header-wide = wide
 header-between = between
 header-and = and
 header-steps = Along the street

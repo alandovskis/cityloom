@@ -26,6 +26,7 @@ city-connection-on = Raccordement sur { $street }
 city-map-edge = Limite de la carte
 city-the-end-of = le bout de { $street }
 city-a-connection-on = un raccordement sur { $street }
+city-a-connection = un raccordement
 city-the-edge-of-the-map = la limite de la carte
 city-edge-between = entre { $from } et { $to }
 city-edge-through = à travers la ville

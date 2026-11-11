@@ -105,9 +105,6 @@ failing =
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/page.rs).
-header-city-map = Carte de la ville
-header-section = Coupe transversale de la rue
-header-wide = de large
 header-between = entre
 header-and = et
 header-steps = Le long de la rue

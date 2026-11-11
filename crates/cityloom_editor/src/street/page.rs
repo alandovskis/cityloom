@@ -132,15 +132,6 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
 
 // ---- the components ----------------------------------------------------------------------
 
-fn back_link(w: SheetWatch) -> impl IntoView {
-    view! {
-        <a class="back" href="map.html">
-            <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
-            {say(w, "header-city-map")}
-        </a>
-    }
-}
-
 /// A word of the page, asked again when the language is switched.
 fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
     move || w.i18n().tr(key, &Args::new())
@@ -162,11 +153,11 @@ fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
 /// the reason there is none.
 fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> impl IntoView {
     let toward = move || w.i18n().tr("header-toward", &Args::new().str("place", said::say(&w.i18n(), w.units(), &place)));
-    let (label, arrow) = if previous { ("header-prev", "M12 7H2M6 3 2 7l4 4") } else { ("header-next", "M2 7h10M8 3l4 4-4 4") };
-    let icon = view! { <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
+    let (label, arrow) = if previous { ("header-prev", "M13 8H3M7 4 3 8l4 4") } else { ("header-next", "M3 8h10M9 4l4 4-4 4") };
+    let icon = view! { <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
     match to {
         Some(street) => view! {
-            <a class="street-step" href=format!("street.html?street={street}")>
+            <a class="btn street-step" href=format!("street.html?street={street}")>
                 {icon}
                 {say(w, label)}
                 <span class="sr-only">", " {toward}</span>
@@ -174,7 +165,7 @@ fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> im
         }
         .into_any(),
         None => view! {
-            <span class="street-step street-step-none" aria-disabled="true">
+            <span class="btn street-step street-step-none" aria-disabled="true">
                 {icon}
                 {say(w, label)}
                 <span class="sr-only">". " {say(w, "header-step-none")}</span>
@@ -202,12 +193,8 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>, #[prop(optiona
             document().set_title(&page_title(&w.i18n(), &street_title(w), &names));
         });
     }
-    let linked = ends.is_some();
     let between = ends.map(|ends| match ends.as_slice() {
         [a, b] => view! {
-            " "
-            <span aria-hidden="true">"\u{b7}"</span>
-            " "
             <span>
                 {move || format!("{} ", w.i18n().tr("header-between", &Args::new()))}
                 {end_link(w, a)}
@@ -221,12 +208,6 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>, #[prop(optiona
     view! {
         <h1 id="street-name">{move || street_title(w)}</h1>
         <p class="street-sub" id="street-sub">
-            {linked.then(|| view! { {back_link(w)} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
-            <span>{say(w, "header-section")}</span>
-            " "
-            <span aria-hidden="true">"\u{b7}"</span>
-            " "
-            <span><b id="row-dim" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
             {between}
         </p>
         {steps}

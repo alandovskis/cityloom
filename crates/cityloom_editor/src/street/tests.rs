@@ -104,8 +104,13 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 fn street_ends() -> Vec<EndView> {
     use crate::shared::said::{Arg, Said};
     vec![
-        EndView { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
-        EndView { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
+        EndView { name: Said::new("city-the-edge-of-the-map"), title: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
+        EndView {
+            name: Said::new("city-junction-number").with("n", Arg::Num(4)),
+            title: Said::new("city-junction-number").with("n", Arg::Num(4)),
+            junction: true,
+            uid: 2,
+        },
     ]
 }
 
@@ -183,11 +188,11 @@ fn the_2_5d_drawing_follows_the_language_the_shell_switches() {
 }
 
 #[test]
-fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
+fn the_street_heading_names_the_street_and_no_more() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
-    assert!(h.contains(">Sample Street 1</h1>") && h.contains("Street cross-section") && h.contains(">18.0 m</b>"));
-    assert!(!h.contains("City map") && !h.contains("between"));
+    assert!(h.contains(">Sample Street 1</h1>"));
+    assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains(" wide") && !h.contains("18.0 m") && !h.contains("between"), "{h}");
 }
 
 #[test]
@@ -208,10 +213,10 @@ fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() 
 }
 
 #[test]
-fn a_city_street_s_heading_links_back_and_to_the_junctions_it_runs_between() {
+fn a_city_street_s_heading_links_to_the_junctions_it_runs_between() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
-    assert!(h.contains("href=\"map.html\"") && h.contains("City map"));
+    assert!(!h.contains("href=\"map.html\"") && !h.contains("City map") && !h.contains("Street cross-section") && !h.contains(" wide"), "{h}");
     assert!(h.contains("between ") && h.contains("the edge of the map") && h.contains(" and <a href=\"intersection.html?junction=2\">Junction 4</a>"));
     assert_eq!(count(&h, "href=\"intersection.html"), 1, "the edge of the map is not a link");
 }
@@ -224,6 +229,9 @@ fn a_city_street_has_arrows_to_the_streets_that_carry_on_from_its_ends() {
     // The end with a street to go on to is a link that says which way it leads; the other says why it is not.
     assert!(h.contains("href=\"street.html?street=3\"") && h.contains("Next street") && h.contains("toward Junction 4"), "{h}");
     assert_eq!(count(&h, "href=\"street.html"), 1, "{h}");
+    // Both are drawn as the page's secondary buttons, the one with nowhere to go as a disabled one.
+    assert_eq!(count(&h, "class=\"btn street-step"), 2, "{h}");
+    assert_eq!(count(&h, "class=\"btn-ico\""), 2, "{h}");
     assert!(h.contains("Previous street") && h.contains("aria-disabled=\"true\"") && h.contains("No street carries on from this end."), "{h}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([Some(7), None])/> });
@@ -781,7 +789,7 @@ fn the_checks_are_said_in_french_and_follow_the_switch() {
 fn the_heading_and_the_title_block_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
-    assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
+    assert!(!h.contains("Carte de la ville") && !h.contains("Coupe transversale de la rue") && !h.contains("de large"), "{h}");
     assert!(h.contains("entre ") && h.contains("la limite de la carte") && h.contains(" et <a href=\"intersection.html?junction=2\">Jonction 4</a>"), "{h}");
     assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
@@ -942,8 +950,6 @@ fn the_lengths_around_the_section_follow_the_language() {
     let fr = Units::Metres.length_fine_in(row, Locale::FrCa);
     let en = Units::Metres.length_fine_in(row, Locale::En);
     assert!(fr.contains(',') && fr.contains('\u{a0}') && en.contains('.'), "{fr} {en}");
-    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
-    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
@@ -1214,6 +1220,17 @@ fn zoned_street(starts: &[i32], frame_mm: Option<i32>, locale: Locale) -> Rc<Str
 
 fn strip_html(s: &Rc<StreetVm>) -> String {
     street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=None/> })
+}
+
+#[test]
+fn the_strip_measures_from_the_end_as_the_place_is_titled_in_full() {
+    use crate::shared::said::Said;
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    let end = |name: &'static str, title: &'static str| EndView { name: Said::new(name), title: Said::new(title), junction: false, uid: 1 };
+    let ends = vec![end("city-the-edge-of-the-map", "city-map-edge"), end("city-the-edge-of-the-map", "city-map-edge")];
+    let h = street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=Some(ends.clone())/> });
+    assert!(h.contains("Measured from Edge of the map"), "{h}");
+    assert!(!h.contains("Measured from the edge of the map"), "{h}");
 }
 
 #[test]
