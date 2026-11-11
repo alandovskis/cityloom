@@ -73,9 +73,9 @@ impl Network {
     /// corridors derived, priorities pruned. `from` is this network's frame.
     ///
     /// A road that leaves the box and comes back is two pieces, never joined across the gap; a road that only
-    /// touches the box, or whose piece has fewer than two points, is left out, and so is one none of whose ways has a
-    /// node in the box, which osm2streets does not read when it reads only the box. A priority naming a cut road names
-    /// the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
+    /// touches the box, or whose piece has fewer than two points, is left out. Where a road's junction is in the box
+    /// and the end of its trimmed centre line is not, the road is cut as if its line went on to the junction's point,
+    /// as the way it was made from does. A priority naming a cut road names the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
     /// for its position and the pieces its priority names. The roads are taken in order of id, and the result's roads,
     /// junctions and priority lists are sorted by id, so the order the network holds them in makes no difference.
     pub fn clip_to(&self, from: &Frame, to: &Frame) -> Network {
@@ -88,17 +88,20 @@ impl Network {
         let mut whole: BTreeSet<RoadId> = BTreeSet::new();
         // (the road cut, the junction of its own a piece reaches) -> the piece
         let mut pieces_at: BTreeMap<(RoadId, NodeId), RoadId> = BTreeMap::new();
-        let read = self.ways_with_a_node_in(&degrees, to);
         let mut in_order: Vec<&Road> = self.roads.iter().collect();
         in_order.sort_by_key(|r| r.edge.id);
+        let position: BTreeMap<NodeId, Point> = self.junctions.iter().map(|j| (j.id, j.position)).collect();
+        let inside = |p: Point| holds(to, degrees.of_point(p));
         for road in in_order {
-            let line = degrees.line(&road.points);
-            let mut pieces = clip_line(&line, to);
-            // osm2streets reads a box from the ways with a node in it: a road made of none of those is not read
-            let mut ways = road.provenance.ways().peekable();
-            if ways.peek().is_some() && !ways.any(|w| read.contains(&w.id)) {
-                pieces.clear();
-            }
+            // osm2streets trims a road back from its junction: where the junction is in the box and the trimmed end is
+            // not, the road reaches the box from the junction's point, as the way it was made from does
+            let reach = |end: NodeId, own: Option<&Point>| position.get(&end).copied().filter(|&j| inside(j) && own.is_some_and(|&p| !inside(p)));
+            let (before, after) = (reach(road.edge.from, road.points.first()), reach(road.edge.to, road.points.last()));
+            let points: Vec<Point> = before.into_iter().chain(road.points.iter().copied()).chain(after).collect();
+            // how far the road's own line starts along the line cut
+            let lead = before.map_or(0.0, |j| j.distance(road.points[0]));
+            let line = degrees.line(&points);
+            let pieces = clip_line(&line, to);
             if let [piece] = pieces.as_slice()
                 && piece.from_start
                 && piece.to_end
@@ -109,7 +112,7 @@ impl Network {
                 roads.push(kept);
                 continue;
             }
-            let along = along(&road.points);
+            let along = along(&points);
             for piece in pieces {
                 let points: Vec<Point> = piece.points.iter().map(|&p| metres.point(p)).collect();
                 if points.len() < 2 || points.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>() < MIN_PIECE_M {
@@ -140,7 +143,8 @@ impl Network {
                 cut.edge.from = start;
                 cut.edge.to = finish;
                 // each zone keeps its lanes over the stretch of the piece it covered, measured from the piece's start
-                cut.zones = zones_between(&road.zones, along.at(piece.start), along.at(piece.end));
+                // (a stretch before the road's own line is in its first zone)
+                cut.zones = zones_between(&road.zones, (along.at(piece.start) - lead).max(0.0), (along.at(piece.end) - lead).max(0.0));
                 cut.points = points;
                 cut.lay_out_lanes();
                 roads.push(cut);
@@ -174,26 +178,6 @@ impl Network {
         let mut place = Network { left_hand: self.left_hand, junctions, roads, corridors: Vec::new() };
         place.derive_corridors();
         place
-    }
-
-    /// The OpenStreetMap ways with a node in the box, as far as the network tells where their nodes lie: the points
-    /// of a road's centre line between its ends, and its end junctions that are OpenStreetMap nodes (a centre line's
-    /// own ends are where osm2streets trimmed it, not nodes).
-    fn ways_with_a_node_in(&self, degrees: &Degrees, r: &Frame) -> BTreeSet<i64> {
-        let inside = |p: Point| {
-            let [lon, lat] = degrees.of_point(p);
-            (r.west..=r.east).contains(&lon) && (r.south..=r.north).contains(&lat)
-        };
-        let nodes_in: BTreeSet<NodeId> = self.junctions.iter().filter(|j| !j.provenance.is_empty() && inside(j.position)).map(|j| j.id).collect();
-        self.roads
-            .iter()
-            .filter(|road| {
-                nodes_in.contains(&road.edge.from)
-                    || nodes_in.contains(&road.edge.to)
-                    || road.points.get(1..road.points.len().saturating_sub(1)).unwrap_or_default().iter().any(|&p| inside(p))
-            })
-            .flat_map(|road| road.provenance.ways().map(|w| w.id))
-            .collect()
     }
 }
 
@@ -263,6 +247,11 @@ fn clip_segment(a: [f64; 2], b: [f64; 2], r: &Frame) -> Option<(f64, f64)> {
         }
     }
     Some((t0, t1))
+}
+
+/// Whether a point in degrees lies in the box, its edges included.
+fn holds(r: &Frame, [lon, lat]: [f64; 2]) -> bool {
+    (r.west..=r.east).contains(&lon) && (r.south..=r.north).contains(&lat)
 }
 
 /// Whether a line in degrees reaches into the box: a point in it, or a stretch across it.
@@ -645,23 +634,30 @@ mod tests {
     }
 
     #[test]
-    fn clip_to_leaves_out_a_road_none_of_whose_ways_has_a_node_in_the_box() {
-        // osm2streets reads a box from the ways with a node in it: a way that only crosses a corner is not read
-        let mut corner = road(1, 1, 2, &[(350.0, 500.0), (500.0, 350.0)]);
-        corner.provenance = Provenance::of_ways([WayRef::new(70)]);
-        // this way crosses the opposite corner, then goes on to a junction in the box, so it is read, its piece across
-        // the corner with it
-        let mut across = road(2, 3, 4, &[(500.0, 680.0), (680.0, 500.0)]);
-        across.provenance = Provenance::of_ways([WayRef::new(71)]);
-        let mut on = road(3, 4, 5, &[(680.0, 500.0), (550.0, 500.0)]);
-        on.provenance = Provenance::of_ways([WayRef::new(71)]);
-        // a node of its own in the box: the bend
-        let mut bend = road(4, 6, 7, &[(350.0, 520.0), (450.0, 520.0), (450.0, 650.0)]);
-        bend.provenance = Provenance::of_ways([WayRef::new(72)]);
-        let place = network(vec![corner, across, on, bend]).clip_to(&frame(), &middle());
-        let ways: BTreeSet<i64> = place.roads.iter().flat_map(|r| r.provenance.ways().map(|w| w.id)).collect();
-        assert_eq!(ways, BTreeSet::from([71, 72]), "{place:?}");
-        assert_eq!(place.roads.len(), 3, "{place:?}");
+    fn clip_to_keeps_the_stretch_from_a_junction_in_the_box_to_its_edge_where_the_trimmed_line_lies_outside() {
+        // the junction is a metre inside the north edge; osm2streets trimmed the road back to beyond it
+        let mut r = road(1, 1, 2, &[(500.0, 605.0), (500.0, 700.0)]);
+        r.zones.push(Zone { from: crate::Coordinate::new(50.0), speed_kmh: Some(40), lanes: vec![lane(LaneKind::Bus)] });
+        let mut net = network(vec![r]);
+        net.junctions[0].position = Point::new(500.0, 599.0);
+        let (from, to) = (frame(), middle());
+        let place = net.clip_to(&from, &to);
+        assert_eq!(place.roads.len(), 1, "{place:?}");
+        let piece = &place.roads[0];
+        assert_eq!(piece.edge.from, NodeId(1), "it starts at the junction");
+        assert_eq!(piece.points[0], junction_of(&place, NodeId(1)).position, "from the junction's point");
+        let end = junction_of(&place, piece.edge.to);
+        assert!(end.provenance.is_empty() && (end.position.y_m() - to.height_m()).abs() <= 0.001, "{end:?}");
+        assert!((piece.length_m() - 1.0).abs() < 0.01, "{}", piece.length_m());
+        assert_eq!(piece.zones.len(), 1, "the zone where the road starts: {:?}", piece.zones);
+        assert_eq!(piece.zones[0].speed_kmh, None);
+    }
+
+    #[test]
+    fn clip_to_keeps_the_line_of_a_crossing_road_whose_end_inside_is_where_its_junction_is() {
+        let net = network(vec![road(1, 1, 2, &[(500.0, 500.0), (800.0, 500.0)])]);
+        let place = net.clip_to(&frame(), &middle());
+        assert_eq!(place.roads[0].points.len(), 2, "no point added: {:?}", place.roads[0].points);
     }
 
     /// The network with the ids it made up for its cut pieces and ends (those not in `whole`) numbered in order,
