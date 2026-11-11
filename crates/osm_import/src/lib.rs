@@ -26,6 +26,22 @@ pub fn import(osm: &[u8]) -> Result<Network, String> {
 /// The same, keeping only what lies in a box (south, west, north, east, in degrees): a road that
 /// crosses its edge is cut there and ends in a street running off the map.
 pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String> {
+    read_network(osm, bounds).map(|(network, _)| network)
+}
+
+/// The whole of what is read, with the frame its positions are in: the box of the data, whose south-west corner is
+/// the network's origin.
+pub fn import_whole(osm: &[u8]) -> Result<(Network, Frame), String> {
+    read_network(osm, None).map(|(network, gps)| (network, frame_of(&gps)))
+}
+
+/// The box osm2streets laid the network out over, as a frame.
+fn frame_of(gps: &geom::GPSBounds) -> Frame {
+    Frame { south: gps.min_lat, west: gps.min_lon, north: gps.max_lat, east: gps.max_lon }
+}
+
+/// `import_in`, with the bounds osm2streets laid the network out over.
+fn read_network(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<(Network, geom::GPSBounds), String> {
     let mut timer = Timer::throwaway();
     let clip = bounds.map(|[south, west, north, east]| {
         [(west, south), (east, south), (east, north), (west, north), (west, south)].into_iter().map(|(lon, lat)| geom::LonLat::new(lon, lat)).collect()
@@ -40,7 +56,7 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     network.roads.iter_mut().for_each(Road::lay_out_lanes);
     // and the corridors, which name the roads that are left
     network.derive_corridors();
-    Ok(network)
+    Ok((network, streets.gps_bounds))
 }
 
 /// `streets_reader::osm_to_street_network`, with the sidewalk tags made explicit before the lanes are worked out
@@ -474,6 +490,22 @@ mod tests {
         assert_eq!(speed_kmh(Some(Speed::miles_per_hour(30.0))), Some(48));
         assert_eq!(speed_kmh(Some(Speed::ZERO)), None);
         assert_eq!(speed_kmh(None), None);
+    }
+
+    #[test]
+    fn the_frame_of_the_data_maps_the_networks_metres_as_geom_laid_them_out() {
+        // the importer measures y up from the south; geom measures it down from the north
+        let gps = geom::GPSBounds::from(vec![geom::LonLat::new(-73.6031, 45.5226), geom::LonLat::new(-73.5925, 45.5297)]);
+        let frame = frame_of(&gps);
+        let size = gps.get_max_world_pt();
+        let (w, h) = (size.x(), size.y());
+        assert!((frame.width_m() - w).abs() < 1e-6 && (frame.height_m() - h).abs() < 1e-6, "{} x {} against {w} x {h}", frame.width_m(), frame.height_m());
+        for (fx, fy) in [(0.0, 0.0), (1.0, 1.0), (0.5, 0.5), (0.2, 0.9), (0.9, 0.1)] {
+            let (x, y) = (fx * w, fy * h);
+            let want = gps.convert_back_xy(x, h - y);
+            let got = frame.lon_lat(x, y);
+            assert!((got[0] - want.x()).abs() < 1e-9 && (got[1] - want.y()).abs() < 1e-9, "{fx},{fy}: {got:?} against {} {}", want.x(), want.y());
+        }
     }
 
     fn way(pts: &[(f64, f64)]) -> OsmWay {
