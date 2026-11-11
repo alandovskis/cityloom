@@ -255,8 +255,9 @@ Where the build settled what the spec left open or departed from it.
   counts in the cut are 100 to 107.7% of the clipped import's (the extra corner pieces carry no edit).
   Known residue: 3 records lost to `merge.rs` pairing two pieces of one way in the clipped import, and
   junction clusters within about 1 m of a box edge differ.
-- **Size.** 1,718 tiles, 570.1 MB of JSON at rest (largest tile 3.06 MB, about 337 KB gzipped); archive
-  571.5 MB. The server gzips full responses on the fly. Recommended follow-ups: compression at rest, and
+- **Size.** 1,718 tiles, 570.1 MB of JSON at rest (largest tile 3.06 MB); archive
+  571.5 MB. The server gzips full responses on the fly. Gzip level 6 was measured once, on the largest
+  tile (3.06 MB to about 337 KB), which is why compression at rest is a recommended follow-up, with
   dropping the lane shapes, which are recomputable and about 30% of a tile.
 - **Commands and CI.** `import <in> <out.json>` (the whole `Network`) and `fixture <in> <out.json>` (one
   `NetworkTile` of the input's own frame) are new; `tiles` takes `--out`; `index.json` lists names sorted as
