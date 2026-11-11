@@ -483,6 +483,14 @@ impl Layout {
         self.end_name_skipping(node, None)
     }
 
+    /// The two ends of street `edge`, first the one the street editor looks from.
+    pub(super) fn end_views(&self, edge: usize) -> Vec<EndView> {
+        [self.edges[edge].a, self.edges[edge].b]
+            .into_iter()
+            .map(|n| EndView { uid: node_uid(n), name: self.end_name_beside(n, edge), title: self.end_name(n), junction: self.nodes[n].junction })
+            .collect()
+    }
+
     /// An end of street `edge` in a sentence, as the street itself says it: without its own name, which the
     /// reader already has.
     pub(super) fn end_name_beside(&self, node: usize, edge: usize) -> Said {
@@ -879,11 +887,7 @@ impl City {
 
     /// The two ends of a street, first the one the street editor looks from.
     pub fn street_ends(&self, edge: u32) -> Vec<EndView> {
-        let Some(e) = self.edge_index(edge) else { return Vec::new() };
-        [self.layout.edges[e].a, self.layout.edges[e].b]
-            .into_iter()
-            .map(|n| EndView { uid: node_uid(n), name: self.layout.end_name_beside(n, e), junction: self.layout.nodes[n].junction })
-            .collect()
+        self.edge_index(edge).map(|e| self.layout.end_views(e)).unwrap_or_default()
     }
 
     /// The centreline of a street, in layout millimetres: its own shape, or the straight line between its ends.
@@ -1142,7 +1146,10 @@ pub struct PieceView {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct EndView {
     pub uid: u32,
+    /// The end as the street itself says it, without the street's own name.
     pub name: Said,
+    /// The end named in full, as the place calls itself: what a reader matches against the place's own title.
+    pub title: Said,
     pub junction: bool,
 }
 
@@ -2204,6 +2211,14 @@ mod tests {
         assert_eq!(en(&layout.end_name(0)), "the edge of the map");
         assert_eq!(City::new().junction_name(node_uid(1)).map(|n| en(&n)), Some("Junction 4".to_string()));
         assert_eq!(City::new().junction_name(node_uid(0)), None, "an end of a street is not a junction");
+    }
+
+    #[test]
+    fn an_end_is_named_without_the_street_for_the_heading_and_in_full_to_match_the_place() {
+        let layout = named(&[(0, "Avenue Y"), (1, "Avenue Z")]);
+        let ends = layout.end_views(0);
+        assert_eq!((en(&ends[1].name), en(&ends[1].title)), ("Avenue Z junction".to_string(), "Avenue Y and Avenue Z".to_string()));
+        assert_eq!(ends[1].title, layout.node_name(1));
     }
 
     #[test]

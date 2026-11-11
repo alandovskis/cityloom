@@ -104,8 +104,13 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 fn street_ends() -> Vec<EndView> {
     use crate::shared::said::{Arg, Said};
     vec![
-        EndView { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
-        EndView { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
+        EndView { name: Said::new("city-the-edge-of-the-map"), title: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
+        EndView {
+            name: Said::new("city-junction-number").with("n", Arg::Num(4)),
+            title: Said::new("city-junction-number").with("n", Arg::Num(4)),
+            junction: true,
+            uid: 2,
+        },
     ]
 }
 
@@ -1215,6 +1220,17 @@ fn zoned_street(starts: &[i32], frame_mm: Option<i32>, locale: Locale) -> Rc<Str
 
 fn strip_html(s: &Rc<StreetVm>) -> String {
     street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=None/> })
+}
+
+#[test]
+fn the_strip_measures_from_the_end_as_the_place_is_titled_in_full() {
+    use crate::shared::said::Said;
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    let end = |name: &'static str, title: &'static str| EndView { name: Said::new(name), title: Said::new(title), junction: false, uid: 1 };
+    let ends = vec![end("city-the-edge-of-the-map", "city-map-edge"), end("city-the-edge-of-the-map", "city-map-edge")];
+    let h = street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=Some(ends.clone())/> });
+    assert!(h.contains("Measured from Edge of the map"), "{h}");
+    assert!(!h.contains("Measured from the edge of the map"), "{h}");
 }
 
 #[test]

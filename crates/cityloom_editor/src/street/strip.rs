@@ -200,7 +200,7 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
             ZoneEnd::First => (true, 0),
             ZoneEnd::Last => (false, 1),
         };
-        let end = ends.with_value(|e| e.as_ref().and_then(|e| e.get(name)).map(|e| say(&i18n, w.units(), &e.name)));
+        let end = ends.with_value(|e| e.as_ref().and_then(|e| e.get(name)).map(|e| say(&i18n, w.units(), &e.title)));
         let end = end.unwrap_or_else(|| i18n.tr(if first { "st-zones-end-first" } else { "st-zones-end-second" }, &Args::new()));
         i18n.tr("st-zones-from", &Args::new().str("end", end))
     };
