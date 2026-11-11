@@ -1,6 +1,8 @@
 //! Roads divided by a median: two one-way carriageways of one street, running side by side
 //! in opposite directions, are one street with a median between its two halves.
 
+use std::collections::HashMap;
+
 use crate::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, RoadId, Zone};
 
 /// The widest a median can be, from centre line to centre line of the carriageways, for them to be one street.
@@ -89,19 +91,32 @@ fn side_of(a: &[Point], b: &[Point]) -> f64 {
 /// and run beside each other. Their ends become one node each, in the middle; a road left joining a node to itself
 /// by that (the crossing street's stub) is dropped.
 pub fn merge_dual_carriageways(net: &mut Network) {
-    let at = |net: &Network, id: NodeId| net.junctions.iter().find(|n| n.id == id).map(|n| n.position);
+    // the first junction of an id wins, as a linear search would find it
+    let mut index: HashMap<NodeId, usize> = HashMap::with_capacity(net.junctions.len());
+    for (k, n) in net.junctions.iter().enumerate() {
+        index.entry(n.id).or_insert(k);
+    }
+    let positions: HashMap<NodeId, Point<Local>> = index.iter().map(|(id, &k)| (*id, net.junctions[k].position)).collect();
+    let at = |id: NodeId| positions.get(&id).copied();
     let oriented: Vec<Option<Road>> = net.roads.iter().map(along).collect();
     let mut taken = vec![false; net.roads.len()];
     let mut pairs: Vec<(usize, usize)> = Vec::new();
+    // the roads that can be merged, by name, each group in ascending index order
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (k, o) in oriented.iter().enumerate() {
+        if let Some(r) = o {
+            by_name.entry(r.name.as_str()).or_default().push(k);
+        }
+    }
     for i in 0..net.roads.len() {
         let Some(a) = &oriented[i] else { continue };
         let mut best: Option<(f64, usize)> = None;
-        for j in 0..net.roads.len() {
+        for &j in &by_name[a.name.as_str()] {
             let Some(b) = &oriented[j] else { continue };
-            if i == j || taken[j] || a.name != b.name || a.road_type != b.road_type {
+            if i == j || taken[j] || a.road_type != b.road_type {
                 continue;
             }
-            let (Some(a0), Some(a1), Some(b0), Some(b1)) = (at(net, a.edge.from), at(net, a.edge.to), at(net, b.edge.from), at(net, b.edge.to)) else {
+            let (Some(a0), Some(a1), Some(b0), Some(b1)) = (at(a.edge.from), at(a.edge.to), at(b.edge.from), at(b.edge.to)) else {
                 continue;
             };
             // b runs the other way: it starts where a ends and ends where a starts
@@ -173,43 +188,45 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         gone[j] = true;
     }
 
-    // each merged pair's ends become one node, in the middle
+    // each merged pair's ends become one node, in the middle; a node merged away is dropped and
+    // the roads' ends that named it are rewritten once, after all the moves
+    let mut removed = vec![false; net.junctions.len()];
+    let mut into_of: HashMap<NodeId, NodeId> = HashMap::new(); // (a node merged away, the node it went into)
     for (from, into) in moved {
-        let (Some(f), Some(t)) = (at(net, from), at(net, into)) else { continue };
-        let mid = Point::<Local>::new((f.x_m() + t.x_m()) / 2.0, (f.y_m() + t.y_m()) / 2.0);
-        for n in &mut net.junctions {
-            if n.id == into {
-                n.position = mid;
-            }
+        let (Some(&fi), Some(&ti)) = (index.get(&from), index.get(&into)) else { continue };
+        if removed[fi] || removed[ti] {
+            continue;
         }
+        let (f, t) = (net.junctions[fi].position, net.junctions[ti].position);
+        net.junctions[ti].position = Point::<Local>::new((f.x_m() + t.x_m()) / 2.0, (f.y_m() + t.y_m()) / 2.0);
         if from != into {
-            let gone_node = net.junctions.iter().position(|n| n.id == from);
-            if let Some(g) = gone_node {
-                let g = net.junctions.remove(g);
-                if let Some(n) = net.junctions.iter_mut().find(|n| n.id == into) {
-                    n.provenance.extend(g.provenance);
-                    n.junction |= g.junction;
-                    if n.control == crate::Control::None {
-                        n.control = g.control;
-                    }
-                }
+            removed[fi] = true;
+            let g = net.junctions[fi].clone();
+            let n = &mut net.junctions[ti];
+            n.provenance.extend(g.provenance);
+            n.junction |= g.junction;
+            if n.control == crate::Control::None {
+                n.control = g.control;
             }
-            for r in &mut net.roads {
-                if r.edge.from == from {
-                    r.edge.from = into;
-                }
-                if r.edge.to == from {
-                    r.edge.to = into;
-                }
+            into_of.insert(from, into);
+        }
+    }
+    let mut k = 0;
+    net.junctions.retain(|_| {
+        k += 1;
+        !removed[k - 1]
+    });
+    if !into_of.is_empty() {
+        // a node can be merged into one that is itself merged away later: follow the chain (it has no cycle)
+        let resolve = |mut id: NodeId| {
+            while let Some(&next) = into_of.get(&id) {
+                id = next;
             }
-            for r in &mut merged {
-                if r.edge.from == from {
-                    r.edge.from = into;
-                }
-                if r.edge.to == from {
-                    r.edge.to = into;
-                }
-            }
+            id
+        };
+        for r in net.roads.iter_mut().chain(merged.iter_mut()) {
+            r.edge.from = resolve(r.edge.from);
+            r.edge.to = resolve(r.edge.to);
         }
     }
     let mut roads: Vec<Road> = net.roads.iter().enumerate().filter(|(i, _)| !gone[*i]).map(|(_, r)| r.clone()).collect();
@@ -445,6 +462,23 @@ mod tests {
         });
         // too far apart to be one street
         same(&|n| n.roads[1].points = vec![Point::new(300.0, 200.0), Point::new(150.0, 200.0), Point::new(0.0, 200.0)]);
+    }
+
+    #[test]
+    fn merging_twenty_thousand_roads_with_their_own_names_takes_under_two_seconds() {
+        const N: u32 = 20_000;
+        let mut net = Network::default();
+        for i in 0..N {
+            let x = i as f64 * 1000.0;
+            net.junctions.push(node(2 * i, x, 0.0));
+            net.junctions.push(node(2 * i + 1, x + 100.0, 0.0));
+            net.roads.push(oneway(i, &format!("Street {i}"), 2 * i, 2 * i + 1, vec![Point::new(x, 0.0), Point::new(x + 100.0, 0.0)]));
+        }
+        let start = std::time::Instant::now();
+        merge_dual_carriageways(&mut net);
+        let took = start.elapsed();
+        assert_eq!(net.roads.len(), N as usize);
+        assert!(took < std::time::Duration::from_secs(2), "took {took:?}");
     }
 
     #[test]
