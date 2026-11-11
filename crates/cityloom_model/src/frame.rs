@@ -38,7 +38,12 @@ impl Frame {
 
     /// `[lon, lat]` of a position in metres east and north of the box's south-west corner.
     pub fn lon_lat(&self, x_m: f64, y_m: f64) -> [f64; 2] {
-        [self.west + x_m / self.width_m() * (self.east - self.west), self.south + y_m / self.height_m() * (self.north - self.south)]
+        self.lon_lat_sized(self.width_m(), self.height_m(), x_m, y_m)
+    }
+
+    /// `lon_lat` for a caller that already holds `width_m()` and `height_m()` and maps many points.
+    pub fn lon_lat_sized(&self, width_m: f64, height_m: f64, x_m: f64, y_m: f64) -> [f64; 2] {
+        [self.west + x_m / width_m * (self.east - self.west), self.south + y_m / height_m * (self.north - self.south)]
     }
 
     /// Metres east and north of the box's south-west corner of a `[lon, lat]`; the inverse of `lon_lat`.
@@ -69,6 +74,14 @@ mod tests {
     fn the_south_west_corner_is_the_origin() {
         let f = plateau();
         assert_eq!(f.lon_lat(0.0, 0.0), [f.west, f.south]);
+    }
+
+    #[test]
+    fn lon_lat_sized_is_lon_lat_with_the_sizes_given() {
+        let f = plateau();
+        for (x, y) in [(0.0, 0.0), (12.5, 700.0), (799.0, 31.0)] {
+            assert_eq!(f.lon_lat_sized(f.width_m(), f.height_m(), x, y), f.lon_lat(x, y));
+        }
     }
 
     #[test]

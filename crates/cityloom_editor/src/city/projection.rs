@@ -3,11 +3,12 @@
 
 use crate::city::store::CityStore;
 use crate::place::Bounds;
+use cityloom_model::Frame;
 
 /// Where a layout lies on the earth.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Projection {
-    bounds: Bounds,
+    frame: Frame,
     width_m: f64,
     height_m: f64,
     /// Network metres (east, north of the box's south-west corner) of the layout's origin.
@@ -19,7 +20,7 @@ impl Projection {
     pub fn new(bounds: Bounds, origin_m: [f64; 2]) -> Projection {
         let frame = bounds.frame();
         let (width_m, height_m) = (frame.width_m(), frame.height_m());
-        Projection { bounds, width_m, height_m, origin_m: (origin_m[0], origin_m[1]) }
+        Projection { frame, width_m, height_m, origin_m: (origin_m[0], origin_m[1]) }
     }
 
     /// The box's size on the ground: along its south edge, and along its west edge.
@@ -33,7 +34,7 @@ impl Projection {
 
     /// `[lon, lat]` of a position in metres east and north of the box's south-west corner.
     pub fn network_lon_lat(&self, x_m: f64, y_m: f64) -> [f64; 2] {
-        self.bounds.frame().lon_lat(x_m, y_m)
+        self.frame.lon_lat_sized(self.width_m, self.height_m, x_m, y_m)
     }
 
     /// `[lon, lat]` of a position of the layout, in millimetres (x east, y south).
@@ -74,6 +75,15 @@ mod tests {
         assert_eq!(p.network_lon_lat(0.0, 0.0), [b.west, b.south]);
         let [lon, lat] = p.network_lon_lat(p.width_m(), p.height_m());
         assert!((lon - b.east).abs() < 1e-12 && (lat - b.north).abs() < 1e-12);
+    }
+
+    #[test]
+    fn network_positions_are_the_frames_own() {
+        let b = plateau();
+        let p = Projection::new(b, [0.0, 0.0]);
+        for (x, y) in [(0.0, 0.0), (10.5, 700.25), (799.0, 3.0)] {
+            assert_eq!(p.network_lon_lat(x, y), b.frame().lon_lat(x, y));
+        }
     }
 
     #[test]
