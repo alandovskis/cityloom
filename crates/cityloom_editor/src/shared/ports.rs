@@ -46,17 +46,6 @@ pub trait Fetcher {
     fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>);
 }
 
-/// Turns OpenStreetMap data into the street network JSON the city is made from. The reader is
-/// a module of its own that the page loads when it is first asked.
-pub trait Importer {
-    /// Starts loading the reader, because it will be asked to read soon (the data it reads is being fetched).
-    /// Nothing waits for this, and asking again does nothing.
-    fn prepare(&self) {}
-
-    /// `bounds` is the box to keep, south, west, north, east in degrees, or None to keep all of it.
-    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>);
-}
-
 /// Writes the design review as a PDF from its JSON. The writer is a module of its own that the page
 /// loads when it is first asked. The answer arrives later, once, to `done`.
 pub trait PdfWriter {
@@ -507,7 +496,6 @@ impl ArchiveFiles for FakeArchiveFiles {
 #[derive(Clone)]
 pub struct Ports {
     pub navigator: Rc<dyn Navigator>,
-    pub importer: Rc<dyn Importer>,
     pub pdf: Rc<dyn PdfWriter>,
     pub downloads: Rc<dyn Downloads>,
     pub fetcher: Rc<dyn Fetcher>,
@@ -712,58 +700,6 @@ impl FakeFetcher {
 impl Fetcher for FakeFetcher {
     fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>) {
         self.asked.borrow_mut().push((url.to_string(), body.map(str::to_string), done));
-    }
-}
-
-/// What a `FakeImporter` keeps of a request: the file, the bounds and what is told the result.
-type ImportRequest = (Vec<u8>, Option<[f64; 4]>, Box<dyn FnOnce(Result<String, String>)>);
-
-/// An importer that keeps what it is asked to read until the test answers.
-#[derive(Default)]
-pub struct FakeImporter {
-    asked: RefCell<Vec<ImportRequest>>,
-    prepared: Cell<u32>,
-}
-
-impl FakeImporter {
-    /// How many times the reader was told to get ready.
-    pub fn prepared(&self) -> u32 {
-        self.prepared.get()
-    }
-
-    /// What each request not yet answered asked to read, oldest first.
-    pub fn asked(&self) -> Vec<Vec<u8>> {
-        self.asked.borrow().iter().map(|(b, ..)| b.clone()).collect()
-    }
-
-    /// The box each request not yet answered asked to keep, oldest first.
-    pub fn bounds_asked(&self) -> Vec<Option<[f64; 4]>> {
-        self.asked.borrow().iter().map(|(_, b, _)| *b).collect()
-    }
-
-    /// Answers the oldest request not yet answered. False when there is none.
-    pub fn answer(&self, result: Result<String, String>) -> bool {
-        let first = {
-            let mut asked = self.asked.borrow_mut();
-            if asked.is_empty() { None } else { Some(asked.remove(0)) }
-        };
-        match first {
-            Some((_, _, done)) => {
-                done(result);
-                true
-            }
-            None => false,
-        }
-    }
-}
-
-impl Importer for FakeImporter {
-    fn prepare(&self) {
-        self.prepared.set(self.prepared.get() + 1);
-    }
-
-    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        self.asked.borrow_mut().push((osm, bounds, done));
     }
 }
 
@@ -1165,7 +1101,6 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
     (
         Ports {
             navigator: Rc::new(RecordingNavigator::default()),
-            importer: Rc::new(FakeImporter::default()),
             pdf: Rc::new(FakePdfWriter::default()),
             downloads: Rc::new(FakeDownloads::default()),
             fetcher,
@@ -1228,22 +1163,20 @@ pub fn test_ports_with_pdf() -> (Ports, Rc<FakePdfWriter>, Rc<FakeDownloads>) {
     (ports, pdf, downloads)
 }
 
-/// The same, with the fetcher and the importer too.
-pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>) {
-    let (ports, fetcher, importer, _) = test_ports_with_services();
-    (ports, fetcher, importer)
+/// The same, with the fetcher too.
+pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>) {
+    let (ports, fetcher, _) = test_ports_with_services();
+    (ports, fetcher)
 }
 
 /// The same, with the navigator too.
-pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>, Rc<RecordingNavigator>) {
+pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<RecordingNavigator>) {
     let (mut ports, ..) = test_ports_with_time();
     let fetcher = Rc::new(FakeFetcher::default());
-    let importer = Rc::new(FakeImporter::default());
     let navigator = Rc::new(RecordingNavigator::default());
     ports.fetcher = fetcher.clone();
-    ports.importer = importer.clone();
     ports.navigator = navigator.clone();
-    (ports, fetcher, importer, navigator)
+    (ports, fetcher, navigator)
 }
 
 #[cfg(test)]

@@ -225,15 +225,14 @@ mod tests {
     const BERLIN: &[u8] = br#"[{"display_name":"Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany","lat":"52.4990","lon":"13.4030","boundingbox":["52.48","52.51","13.38","13.43"]},
         {"display_name":"Kreuzberg, Bavaria, Germany","lat":"50.0","lon":"10.0","boundingbox":["49.9","50.1","9.9","10.1"]}]"#;
 
-    const NETWORK: &str = r#"{"left_hand":false,"junctions":[{"id":1,"provenance":[{"node":{"id":1}}],"position":[0.0,0.0],"junction":false,"control":"none"},
-        {"id":2,"provenance":[{"node":{"id":2}}],"position":[90.0,0.0],"junction":false,"control":"none"}],
-        "roads":[{"edge":{"id":1,"from":1,"to":2},"provenance":[{"way":{"id":5}}],"name":"Only Street","road_type":"local",
-        "zones":[{"from":0.0,"lanes":[{"kind":"driving","direction":"forward","width_m":3.0}]}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
+    /// The tile index that holds a place at `lat`, `lon`, and the tile, with one street through it.
+    fn tiles_at(lat: f64, lon: f64) -> (Vec<u8>, Vec<u8>) {
+        crate::place::tiles::testing::covering(lat, lon, None, "Only Street")
+    }
 
     struct Fixture {
         vm: Rc<AreaVm>,
         fetcher: Rc<crate::shared::ports::FakeFetcher>,
-        importer: Rc<crate::shared::ports::FakeImporter>,
         navigator: Rc<crate::shared::ports::RecordingNavigator>,
         storage: Rc<MemoryStorage>,
         said: Rc<RecordingAnnouncer>,
@@ -244,12 +243,12 @@ mod tests {
     }
 
     fn fixture_in(locale: Locale) -> Fixture {
-        let (mut ports, fetcher, importer, navigator) = test_ports_with_services();
+        let (mut ports, fetcher, navigator) = test_ports_with_services();
         let storage = Rc::new(MemoryStorage::default());
         let said = Rc::new(RecordingAnnouncer::default());
         ports.storage = storage.clone();
         ports.announcer = said.clone();
-        Fixture { vm: AreaVm::new(ports, crate::i18n_for(locale)), fetcher, importer, navigator, storage, said }
+        Fixture { vm: AreaVm::new(ports, crate::i18n_for(locale)), fetcher, navigator, storage, said }
     }
 
     /// `n` places found, as Nominatim would send them.
@@ -342,7 +341,7 @@ mod tests {
         f.fetcher.answer(Ok(places(2)));
         f.vm.choose(0);
         out.push(f.vm.note().unwrap());
-        f.fetcher.answer(Err("no tiles".into()));
+        f.fetcher.answer(Ok(tiles_at(1.0, 2.0).0));
         f.fetcher.answer(Err("the server answered 504".into()));
         out.push(f.vm.note().unwrap());
         f.vm.set_text("v");
@@ -423,10 +422,10 @@ mod tests {
             let f = fixture_in(locale);
             found(&f);
             f.vm.choose(0);
-            f.fetcher.answer(Err("no tiles".into()));
-            f.fetcher.answer(Ok(b"<osm/>".to_vec()));
+            let (index, tile) = tiles_at(52.499, 13.403);
+            f.fetcher.answer(Ok(index));
             f.storage.blocked(true);
-            f.importer.answer(Ok(NETWORK.to_string()));
+            f.fetcher.answer(Ok(tile));
             assert_eq!(f.vm.note().unwrap(), expected);
         }
         // Kept, then the choice of area cannot be: said the same way.
@@ -456,9 +455,9 @@ mod tests {
         assert_eq!(f.vm.status(), Status::Loading("Kreuzberg, Friedrichshain-Kreuzberg".into()));
         assert_eq!(f.vm.note().unwrap(), "Getting the streets of Kreuzberg, Friedrichshain-Kreuzberg…");
         assert!(f.navigator.take().is_empty(), "not before the streets are here");
-        f.fetcher.answer(Err("no tiles".into())); // the index of the metro tiles: none
-        f.fetcher.answer(Ok(b"<osm/>".to_vec()));
-        f.importer.answer(Ok(NETWORK.to_string()));
+        let (index, tile) = tiles_at(52.499, 13.403);
+        f.fetcher.answer(Ok(index)); // the index of the metro tiles
+        f.fetcher.answer(Ok(tile));
         assert_eq!(f.navigator.take(), vec!["map.html"]);
         let area = CityStore::current_area(&*f.storage);
         assert_eq!((area.name.as_str(), area.key().as_str()), ("Kreuzberg, Friedrichshain-Kreuzberg", "52.4990,13.4030"));
@@ -470,7 +469,7 @@ mod tests {
         let f = fixture();
         found(&f);
         f.vm.choose(1);
-        f.fetcher.answer(Err("no tiles".into()));
+        f.fetcher.answer(Ok(tiles_at(50.0, 10.0).0));
         f.fetcher.answer(Err("the server answered 504".into()));
         assert!(matches!(f.vm.status(), Status::Failed(_)) && f.vm.note().unwrap().contains("504"));
         assert!(f.navigator.take().is_empty());

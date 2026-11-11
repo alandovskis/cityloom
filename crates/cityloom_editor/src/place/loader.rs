@@ -1,18 +1,25 @@
 //! Finding a place by name, and making a city of the roads around it.
 
+use std::cell::RefCell;
 use std::rc::Rc;
+
+use cityloom_model::NetworkTile;
 
 use super::area::Area;
 use super::nominatim::{self, Place};
-use super::overpass;
 use super::tiles;
 use crate::city::store::CityStore;
-use crate::shared::ports::Ports;
+use crate::shared::ports::{Fetched, Ports};
 use crate::shared::said::{Arg, Said};
 
-/// What the browser or the OpenStreetMap reader said went wrong, passed on in its own words.
+/// What the browser said went wrong, passed on in its own words.
 fn problem(e: String) -> Said {
     Said::new("place-problem").with("e", Arg::Text(e))
+}
+
+/// The roads that were fetched could not be read; `e` says what was wrong with them.
+fn not_understood(e: String) -> Said {
+    Said::new("place-roads-not-understood").with("e", Arg::Text(e))
 }
 
 /// What is asked of the world's services, one thing at a time, with the answer handed on.
@@ -31,109 +38,94 @@ impl Loader {
         self.ports.fetcher.fetch(&nominatim::search_url(text), None, Box::new(move |r| done(r.map_err(problem).and_then(|body| nominatim::parse(&body)))));
     }
 
-    /// Makes sure the store holds the street network of its area: the roads
-    /// are fetched, read and kept, unless they already are.
+    /// Makes sure the store holds the street network of its area: the roads are fetched, cut out and kept, unless
+    /// they already are.
     ///
-    /// Where the roads come from: a tile of the metropolitan area's data if one holds the place, and
-    /// Overpass if not (or if the tile cannot be had).
+    /// Where the roads come from: the tile of the metropolitan area's data whose core holds the place, and every
+    /// other tile there is whose core the place's box reaches. A place no tile holds is not covered.
     ///
     /// Roads that are kept stand, unless the tile index gives a checksum for the tile that holds the place
-    /// and it is not the one they were made from: they are then read from the tile again. A tile that cannot
+    /// and it is not the one they were made from: they are then read from the tiles again. A tile that cannot
     /// be had, or read, leaves the roads that are kept as they are.
     pub fn load(&self, store: &CityStore, done: impl FnOnce(Result<(), Said>) + 'static) {
         let area = store.area().clone();
         let kept = store.has_network();
-        let done = Rc::new(std::cell::RefCell::new(Some(done)));
-        let finish: Rc<dyn Fn(Result<(), Said>)> = Rc::new(move |r| {
-            if let Some(done) = done.borrow_mut().take() {
-                done(r)
-            }
-        });
-        let this = self.clone();
-        let store = store.clone();
-        let overpass = {
-            let (this, area, store, finish) = (this.clone(), area.clone(), store.clone(), finish.clone());
-            move || this.read(overpass::ENDPOINT, Some(overpass::query(area.bounds())), area, store, finish)
-        };
+        let (this, store) = (self.clone(), store.clone());
         self.ports.fetcher.fetch(
             tiles::INDEX_URL,
             None,
             Box::new(move |index| {
-                let index = index.ok().and_then(|body| tiles::Index::parse(&body).ok());
-                let tile = index.as_ref().and_then(|i| i.tile_at(area.lat, area.lon));
-                let checksum = index.as_ref().and_then(|i| i.checksum_at(area.lat, area.lon));
-                if kept {
-                    let stale = checksum.is_some() && store.checksum() != checksum;
-                    let Some(url) = tile.filter(|_| stale) else { return finish(Ok(())) };
-                    this.ports.importer.prepare();
+                let not_covered = || Said::new("place-not-covered").with("area", label(&area));
+                let index = match index.map(|body| tiles::Index::parse(&body)) {
+                    Ok(Ok(index)) => index,
                     // whatever comes of it, there are roads
-                    let (importer, kept_anyway) = (this.clone(), Rc::new(move |_: Result<(), Said>| finish(Ok(()))));
-                    let (area, store, after) = (area.clone(), store.clone(), kept_anyway.clone());
-                    this.ports.fetcher.fetch(
-                        &url,
-                        None,
-                        Box::new(move |fetched| match fetched {
-                            Ok(osm) => importer.import(osm, area, store, checksum, after),
-                            Err(_) => after(Ok(())),
-                        }),
-                    );
-                    return;
+                    _ if kept => return done(Ok(())),
+                    Ok(Err(why)) => return done(Err(why)),
+                    Err(_) => return done(Err(not_covered())),
+                };
+                if index.tile_at(area.lat, area.lon).is_none() {
+                    return done(if kept { Ok(()) } else { Err(not_covered()) });
                 }
-                // The reader is a module of its own: load it while the roads come.
-                this.ports.importer.prepare();
-                match tile {
-                    Some(url) => {
-                        let (importer, after) = (this.clone(), overpass.clone());
-                        this.ports.fetcher.fetch(
-                            &url,
-                            None,
-                            Box::new(move |fetched| match fetched {
-                                Ok(osm) => importer.import(osm, area, store, checksum, finish),
-                                // a tile that is listed but cannot be had is no reason not to ask Overpass
-                                Err(_) => after(),
-                            }),
-                        );
-                    }
-                    None => overpass(),
+                let checksum = index.checksum_at(area.lat, area.lon);
+                if !kept {
+                    return this.read(&index, area, store, checksum, done);
                 }
+                if checksum.is_none() || store.checksum() == checksum {
+                    return done(Ok(()));
+                }
+                // whatever comes of it, there are roads
+                this.read(&index, area, store, checksum, move |_| done(Ok(())));
             }),
         );
     }
 
-    /// Fetches the data at `url` (by POST when there is a `body`) and imports it.
-    fn read(&self, url: &str, body: Option<String>, area: Area, store: CityStore, finish: Rc<dyn Fn(Result<(), Said>)>) {
-        let this = self.clone();
-        self.ports.fetcher.fetch(
-            url,
-            body.as_deref(),
-            Box::new(move |fetched| match fetched {
-                Err(e) => finish(Err(Said::new("place-fetch-failed").with("area", label(&area)).with("e", Arg::Text(e)))),
-                Ok(osm) => this.import(osm, area, store, None, finish),
-            }),
-        );
+    /// Fetches every tile the area's box reaches, the one holding the place first, and keeps what lies in the box,
+    /// with `checksum`, once they have all come.
+    fn read(&self, index: &tiles::Index, area: Area, store: CityStore, checksum: Option<String>, done: impl FnOnce(Result<(), Said>) + 'static) {
+        let urls = index.tiles_touching(area.bounds());
+        let answers: Rc<RefCell<Vec<Option<Fetched>>>> = Rc::new(RefCell::new(vec![None; urls.len()]));
+        let done = Rc::new(RefCell::new(Some(done)));
+        for (i, url) in urls.iter().enumerate() {
+            let (answers, done, urls, area, store, checksum) = (answers.clone(), done.clone(), urls.clone(), area.clone(), store.clone(), checksum.clone());
+            self.ports.fetcher.fetch(
+                url,
+                None,
+                Box::new(move |fetched| {
+                    let all = {
+                        let mut answers = answers.borrow_mut();
+                        answers[i] = Some(fetched);
+                        if answers.iter().any(Option::is_none) {
+                            return;
+                        }
+                        answers.drain(..).flatten().collect::<Vec<_>>()
+                    };
+                    let Some(done) = done.borrow_mut().take() else { return };
+                    done(keep(&urls, all, &area, &store, checksum.as_deref()));
+                }),
+            );
+        }
     }
+}
 
-    /// Reads the OpenStreetMap data, keeping what lies in the area, and keeps the network that makes, with
-    /// the checksum of the tile it came from, if it came from one.
-    fn import(&self, osm: Vec<u8>, area: Area, store: CityStore, checksum: Option<String>, finish: Rc<dyn Fn(Result<(), Said>)>) {
-        let b = area.bounds();
-        self.ports.importer.import(
-            osm,
-            Some([b.south, b.west, b.north, b.east]),
-            Box::new(move |read| {
-                finish(
-                    read.map_err(problem)
-                        .and_then(|json| serde_json::from_str(&json).map_err(|e| Said::new("place-roads-not-understood").with("e", Arg::Text(e.to_string()))))
-                        .and_then(|network: cityloom_model::Network| {
-                            if network.roads.is_empty() {
-                                return Err(Said::new("place-no-streets").with("area", label(&area)));
-                            }
-                            if store.keep_network_from(&network, checksum.as_deref()) { Ok(()) } else { Err(Said::new("place-roads-not-kept")) }
-                        }),
-                )
-            }),
-        );
+/// Reads the tiles fetched from `urls`, merges them by id, and keeps what lies in the area's box with `checksum`.
+fn keep(urls: &[String], fetched: Vec<Fetched>, area: &Area, store: &CityStore, checksum: Option<&str>) -> Result<(), Said> {
+    let mut merged: Option<NetworkTile> = None;
+    for (url, fetched) in urls.iter().zip(fetched) {
+        let bytes = fetched.map_err(|e| Said::new("place-fetch-failed").with("area", label(area)).with("e", Arg::Text(e)))?;
+        let tile: NetworkTile = serde_json::from_slice(&bytes).map_err(|e| not_understood(e.to_string()))?;
+        match &mut merged {
+            None => merged = Some(tile),
+            // the tiles of one area share its frame: one that does not is not of the same data
+            Some(m) if m.frame != tile.frame => return Err(not_understood(url.clone())),
+            Some(m) => m.network.absorb(&tile.network),
+        }
     }
+    let Some(tile) = merged else { return Err(Said::new("place-not-covered").with("area", label(area))) };
+    let network = tile.network.clip_to(&tile.frame, &area.bounds().frame());
+    if network.roads.is_empty() {
+        return Err(Said::new("place-no-streets").with("area", label(area)));
+    }
+    if store.keep_network_from(&network, checksum) { Ok(()) } else { Err(Said::new("place-roads-not-kept")) }
 }
 
 /// What an area is called in a message: its name, or where it is when it has none. Data, not words of the app.
@@ -143,19 +135,15 @@ fn label(area: &Area) -> Arg {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use cityloom_model::{Network, with_importer};
 
     use super::*;
+    use crate::city::store::NETWORK_KEY;
     use crate::place::area::default_area;
-    use crate::shared::ports::{MemoryStorage, test_ports_with_fetcher};
+    use crate::place::tiles::testing::{AREA, INDEX, covering, tile};
+    use crate::shared::ports::{FakeFetcher, MemoryStorage, Ports, test_ports_with_fetcher};
 
     type Seen<T> = Rc<RefCell<Option<T>>>;
-
-    /// The metro tiles are not there: the index asked for first is not found.
-    fn without_tiles(fetcher: &crate::shared::ports::FakeFetcher) {
-        assert_eq!(fetcher.asked()[0].0, "data/metro/index.json");
-        fetcher.answer(Err("the server answered 404".into()));
-    }
 
     fn seen<T>() -> Seen<T> {
         Rc::new(RefCell::new(None))
@@ -171,14 +159,69 @@ mod tests {
         crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), crate::shared::units::Units::Metres, said)
     }
 
-    const NETWORK: &str = r#"{"left_hand":false,"junctions":[{"id":1,"provenance":[{"node":{"id":1}}],"position":[0.0,0.0],"junction":false,"control":"none"},
-        {"id":2,"provenance":[{"node":{"id":2}}],"position":[90.0,0.0],"junction":false,"control":"none"}],
-        "roads":[{"edge":{"id":1,"from":1,"to":2},"provenance":[{"way":{"id":5}}],"name":"Only Street","road_type":"local",
-        "zones":[{"from":0.0,"lanes":[{"kind":"driving","direction":"forward","width_m":3.0},{"kind":"driving","direction":"backward","width_m":3.0}]}],"points":[[0.0,0.0],[90.0,0.0]]}]}"#;
+    /// The URLs asked and not yet answered, oldest first.
+    fn urls(fetcher: &FakeFetcher) -> Vec<String> {
+        fetcher.asked().into_iter().map(|(url, _)| url).collect()
+    }
+
+    /// The network kept for `area`, if one is.
+    fn kept_network(ports: &Ports, area: &Area) -> Option<Network> {
+        ports.storage.recall(&format!("{NETWORK_KEY}:{}", area.key())).map(|json| serde_json::from_str(&json).unwrap())
+    }
+
+    /// The name of each street of the city kept for `store`, in English.
+    fn names(store: &CityStore) -> Vec<String> {
+        let mut names: Vec<String> = store.open().view(0).edges.iter().map(|e| en(&e.called)).collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// The places of tile 12_9 and of tiles 12_9 and 12_10, whose boxes reach 0.0036 degrees north and south.
+    fn in_one_tile() -> Area {
+        Area::new("Inland", 45.371, -74.078)
+    }
+
+    fn on_the_edge() -> Area {
+        Area::new("Edgeton", 45.378, -74.078)
+    }
+
+    /// Tile 12_9: a street through the middle of `in_one_tile`, one across its box, one south of it, and one running
+    /// north into 12_10, which that tile holds too.
+    fn south() -> Vec<u8> {
+        tile(
+            &AREA,
+            &[
+                (1, "Inside Street", &[(45.371, -74.080), (45.371, -74.076)]),
+                (2, "Across Street", &[(45.372, -74.090), (45.372, -74.070)]),
+                (3, "Far Street", &[(45.364, -74.080), (45.364, -74.076)]),
+                (4, "Shared Street", &[(45.373, -74.076), (45.385, -74.076)]),
+            ],
+        )
+    }
+
+    /// Tile 12_10: the street both tiles hold, and one in the north of `on_the_edge`'s box.
+    fn north() -> Vec<u8> {
+        tile(&AREA, &[(4, "Shared Street", &[(45.373, -74.076), (45.385, -74.076)]), (5, "North Street", &[(45.381, -74.080), (45.381, -74.076)])])
+    }
+
+    fn parsed(bytes: &[u8]) -> NetworkTile {
+        serde_json::from_slice(bytes).unwrap()
+    }
+
+    /// A load of `area` begun on fresh ports: the ports, the fetcher, the store and what the load said.
+    fn loading(area: Area) -> (Ports, Rc<FakeFetcher>, CityStore, Seen<Result<(), Said>>) {
+        let (ports, fetcher, ..) = test_ports_with_fetcher();
+        let store = CityStore::for_area(ports.storage.clone(), area);
+        let result = seen();
+        let r = result.clone();
+        Loader::new(ports.clone()).load(&store, move |x| *r.borrow_mut() = Some(x));
+        (ports, fetcher, store, result)
+    }
 
     #[test]
     fn a_search_asks_nominatim_and_hands_on_the_places() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let (ports, fetcher, ..) = test_ports_with_fetcher();
         let found = seen();
         let f = found.clone();
         Loader::new(ports).search("Kreuzberg", move |r| *f.borrow_mut() = Some(r));
@@ -190,7 +233,7 @@ mod tests {
 
     #[test]
     fn a_search_that_cannot_reach_nominatim_says_why() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let (ports, fetcher, ..) = test_ports_with_fetcher();
         let found = seen();
         let f = found.clone();
         Loader::new(ports).search("x", move |r| *f.borrow_mut() = Some(r));
@@ -199,139 +242,196 @@ mod tests {
     }
 
     #[test]
-    fn an_area_is_fetched_read_and_kept_and_the_city_then_opens_on_it() {
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        without_tiles(&fetcher);
-        let (url, body) = fetcher.asked().remove(0);
-        assert_eq!(url, overpass::ENDPOINT);
-        assert!(body.unwrap().starts_with("[out:xml]"));
+    fn a_place_in_a_tile_is_cut_out_of_that_tile_and_kept_with_its_checksum() {
+        let area = in_one_tile();
+        let (ports, fetcher, store, result) = loading(area.clone());
+        assert_eq!(urls(&fetcher), vec!["data/metro/index.json"]);
+        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
+        assert_eq!(urls(&fetcher), vec!["data/metro/12_9.json"]);
         assert!(result.borrow().is_none(), "nothing is done before the roads arrive");
-        fetcher.answer(Ok(b"<osm/>".to_vec()));
-        assert_eq!(importer.asked(), vec![b"<osm/>".to_vec()]);
-        let [south, west, north, east] = importer.bounds_asked()[0].expect("only the area is kept");
-        let b = Area::new("Testville", 1.0, 2.0).bounds();
-        assert_eq!([south, west, north, east], [b.south, b.west, b.north, b.east]);
-        importer.answer(Ok(NETWORK.to_string()));
+        fetcher.answer(Ok(south()));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.open().view(0).name, "Testville");
+        assert!(fetcher.asked().is_empty(), "nothing more is asked: the roads come from the tile alone");
+        let t = parsed(&south());
+        assert_eq!(kept_network(&ports, &area), Some(t.network.clip_to(&t.frame, &area.bounds().frame())));
+        assert_eq!(store.checksum(), Some(with_importer("new")));
+        assert_eq!(names(&store), vec!["Across Street", "Inside Street", "Shared Street"], "Far Street is south of the box");
+        assert_eq!(store.open().view(0).name, "Inland", "the city opens on the area");
     }
 
     #[test]
-    fn the_default_area_is_read_like_any_other_from_its_tile_or_from_overpass() {
-        // from a tile, when the index has one for it
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), default_area());
-        Loader::new(ports).load(&store, |_| {});
+    fn a_place_whose_box_reaches_another_tile_is_read_from_both_with_each_road_once() {
+        let area = on_the_edge();
+        let (ports, fetcher, store, result) = loading(area.clone());
+        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
+        assert_eq!(urls(&fetcher), vec!["data/metro/12_9.json", "data/metro/12_10.json"], "the tile holding the place first");
+        fetcher.answer(Ok(south()));
+        assert!(result.borrow().is_none(), "the page waits for every tile");
+        fetcher.answer(Ok(north()));
+        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
+        let mut merged = parsed(&south());
+        merged.network.absorb(&parsed(&north()).network);
+        let kept = kept_network(&ports, &area).unwrap();
+        assert_eq!(kept, merged.network.clip_to(&AREA, &area.bounds().frame()));
+        let shared = kept.roads.iter().filter(|r| r.name == "Shared Street").count();
+        assert_eq!(shared, 1, "the road both tiles hold is kept once");
+        assert_eq!(names(&store), vec!["North Street", "Shared Street"], "Inside Street and Across Street are south of the box");
+        assert_eq!(store.checksum(), Some(with_importer("new")), "the checksum of the tile holding the place");
+    }
+
+    #[test]
+    fn a_place_no_tile_holds_is_not_covered_and_nothing_else_is_asked() {
+        // no index, as where the tiles are not deployed; an index that does not list the place's tile
+        let answers: [Result<Vec<u8>, String>; 2] = [Err("the server answered 404".into()), Ok(INDEX.as_bytes().to_vec())];
+        for (i, answer) in answers.into_iter().enumerate() {
+            let (_, fetcher, store, result) = loading(Area::new("Paris", 48.85, 2.35));
+            fetcher.answer(answer);
+            assert!(fetcher.asked().is_empty(), "case {i}: nothing more is asked");
+            let message = result.borrow_mut().take().unwrap().unwrap_err();
+            assert_eq!(en(&message), "CityLoom has no street data for Paris.", "case {i}");
+            assert_eq!(fr(&message), "CityLoom n’a pas de données de rues pour Paris.", "case {i}");
+            assert!(!store.has_network(), "case {i}");
+        }
+    }
+
+    #[test]
+    fn an_index_that_is_not_one_is_said() {
+        let (_, fetcher, store, result) = loading(in_one_tile());
+        fetcher.answer(Ok(b"<html>".to_vec()));
+        assert!(fetcher.asked().is_empty());
+        assert!(en(&result.borrow_mut().take().unwrap().unwrap_err()).starts_with("the tile index was not understood ("));
+        assert!(!store.has_network());
+    }
+
+    #[test]
+    fn each_thing_that_goes_wrong_with_a_tile_is_said_and_nothing_is_kept() {
+        let english =
+            ["the roads of Edgeton could not be fetched (offline)", "the roads were not understood (", "the roads were not understood (data/metro/12_10.json)"];
+        let french = [
+            "les rues de Edgeton n’ont pas pu être obtenues (offline)",
+            "les rues n’ont pas été comprises (",
+            "les rues n’ont pas été comprises (data/metro/12_10.json)",
+        ];
+        let elsewhere = cityloom_model::Frame { south: 45.0, ..AREA };
+        for step in 0..3 {
+            let (_, fetcher, store, result) = loading(on_the_edge());
+            fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
+            fetcher.answer(Ok(south()));
+            match step {
+                0 => fetcher.answer(Err("offline".into())),
+                1 => fetcher.answer(Ok(b"{not json".to_vec())),
+                _ => fetcher.answer(Ok(tile(&elsewhere, &[(5, "North Street", &[(45.381, -74.080), (45.381, -74.076)])]))),
+            };
+            assert!(fetcher.asked().is_empty(), "step {step}: nothing more is asked");
+            let message = result.borrow_mut().take().unwrap().unwrap_err();
+            assert!(en(&message).starts_with(english[step]), "step {step}: {}", en(&message));
+            assert!(fr(&message).starts_with(french[step]), "step {step}: {}", fr(&message));
+            assert!(!store.has_network(), "step {step}: {message:?}");
+        }
+    }
+
+    #[test]
+    fn a_place_whose_tile_has_no_roads_in_its_box_is_said_and_not_kept() {
+        let (_, fetcher, store, result) = loading(Area::new("Mid-field", 45.371, -74.078));
+        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
+        fetcher.answer(Ok(tile(&AREA, &[(3, "Far Street", &[(45.364, -74.080), (45.364, -74.076)])])));
+        let message = result.borrow_mut().take().unwrap().unwrap_err();
+        assert_eq!(en(&message), "OpenStreetMap has no streets around Mid-field");
+        assert_eq!(fr(&message), "OpenStreetMap n’a aucune rue autour de Mid-field");
+        assert!(!store.has_network());
+    }
+
+    #[test]
+    fn blocked_storage_is_said_and_not_taken_for_success() {
+        let (mut ports, fetcher, ..) = test_ports_with_fetcher();
+        let storage = Rc::new(MemoryStorage::default());
+        ports.storage = storage.clone();
+        let store = CityStore::for_area(ports.storage.clone(), in_one_tile());
+        storage.blocked(true);
+        let result = seen();
+        let r = result.clone();
+        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
+        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
+        fetcher.answer(Ok(south()));
+        assert_eq!(en(&result.borrow_mut().take().unwrap().unwrap_err()), "the roads could not be kept: storage is blocked or full");
+    }
+
+    #[test]
+    fn the_default_area_is_read_like_any_other_from_its_tile() {
         let d = default_area();
-        let index = format!(r#"{{"lon0":{},"lat0":{},"dlon":0.0257,"dlat":0.018,"tiles":["0_0"]}}"#, d.lon - 0.01, d.lat - 0.01);
-        fetcher.answer(Ok(index.into_bytes()));
-        assert_eq!(fetcher.asked(), vec![("data/metro/0_0.osm.pbf".to_string(), None)]);
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        assert_eq!(importer.asked(), vec![b"TILE".to_vec()]);
-
-        // and from Overpass when there are no tiles, as there are not where they are not deployed
-        let (ports, fetcher, _) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), default_area());
-        Loader::new(ports).load(&store, |_| {});
-        without_tiles(&fetcher);
-        assert_eq!(fetcher.asked()[0].0, overpass::ENDPOINT);
+        let (index, tile) = covering(d.lat, d.lon, None, "Rue Rachel");
+        let (_, fetcher, store, result) = loading(d);
+        fetcher.answer(Ok(index));
+        assert_eq!(urls(&fetcher), vec!["data/metro/0_0.json"]);
+        fetcher.answer(Ok(tile));
+        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
+        assert_eq!(names(&store), vec!["Rue Rachel"]);
+        assert_eq!(store.checksum(), None, "the index gave no checksum");
     }
 
-    /// A tile of Testville with a checksum, and the index that names it.
-    const SUMMED: &str = r#"{"lon0":1.9,"lat0":0.9,"dlon":0.0257,"dlat":0.018,"tiles":["3_5"],"checksums":{"3_5":"new"}}"#;
-
-    /// What the loader keeps for a tile whose checksum in the index is `new`: that, and the version of the importer.
-    fn new() -> String {
-        cityloom_model::with_importer("new")
+    /// The network an area was kept with before the load: one street, Only Street.
+    fn kept_before() -> Vec<u8> {
+        let (_, tile) = covering(1.0, 2.0, None, "Only Street");
+        tile
     }
 
-    /// What `kept_from` gives back: the ports, the fakes behind them, the store and what the load said.
-    type Kept = (crate::shared::ports::Ports, Rc<crate::shared::ports::FakeFetcher>, Rc<crate::shared::ports::FakeImporter>, CityStore, Seen<Result<(), Said>>);
+    /// What `kept_from` gives back: the fetcher, the store and what the load said.
+    type Kept = (Rc<FakeFetcher>, CityStore, Seen<Result<(), Said>>);
 
     /// Testville with its network kept as made from a tile that had `checksum`, and its load begun.
     fn kept_from(checksum: Option<&str>) -> Kept {
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        store.keep_network_from(&serde_json::from_str(NETWORK).unwrap(), checksum);
+        let (ports, fetcher, ..) = test_ports_with_fetcher();
+        let area = Area::new("Testville", 1.0, 2.0);
+        let store = CityStore::for_area(ports.storage.clone(), area.clone());
+        let t = parsed(&kept_before());
+        assert!(store.keep_network_from(&t.network.clip_to(&t.frame, &area.bounds().frame()), checksum));
         let result = seen();
         let r = result.clone();
-        Loader::new(ports.clone()).load(&store, move |x| *r.borrow_mut() = Some(x));
-        (ports, fetcher, importer, store, result)
+        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
+        (fetcher, store, result)
+    }
+
+    /// The index of Testville's tile, whose checksum is `new`, and that tile, whose street is now `name`.
+    fn testville_now(name: &str) -> (Vec<u8>, Vec<u8>) {
+        covering(1.0, 2.0, Some("new"), name)
     }
 
     #[test]
     fn an_area_already_kept_is_not_read_again_while_its_tile_is_the_same() {
-        let (_, fetcher, _, store, result) = kept_from(Some(&new()));
-        assert_eq!(fetcher.asked(), vec![("data/metro/index.json".to_string(), None)]);
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        assert!(fetcher.asked().is_empty(), "the tile is not fetched again");
+        let (fetcher, store, result) = kept_from(Some(&with_importer("new")));
+        assert_eq!(urls(&fetcher), vec!["data/metro/index.json"]);
+        fetcher.answer(Ok(testville_now("Changed Street").0));
+        assert!(fetcher.asked().is_empty(), "only the index is asked: the tile is not fetched again");
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
-    }
-
-    #[test]
-    fn the_reader_is_got_ready_when_the_roads_are_to_be_fetched_and_not_when_they_are_kept() {
-        // nothing to read: the reader is not loaded for it
-        let (_, fetcher, importer, ..) = kept_from(Some(&new()));
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        assert_eq!(importer.prepared(), 0);
-        // a changed tile, and a cold load from a tile or from Overpass: the reader loads while the roads come
-        let (_, fetcher, importer, ..) = kept_from(Some("old"));
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        assert_eq!((fetcher.asked().len(), importer.prepared()), (1, 1), "before the tile has come");
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        Loader::new(ports).load(&store, |_| {});
-        assert_eq!(importer.prepared(), 0, "the index has not come: it is not known that roads are to be read");
-        without_tiles(&fetcher);
-        assert_eq!((fetcher.asked()[0].0.as_str(), importer.prepared()), (overpass::ENDPOINT, 1));
-    }
-
-    #[test]
-    fn an_area_made_by_an_earlier_importer_is_read_again_once_though_its_tile_is_the_same() {
-        // what an earlier version kept: the tile's checksum as the index gives it, with no importer version
-        let (_, fetcher, importer, store, result) = kept_from(Some("new"));
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        assert_eq!(fetcher.asked(), vec![("data/metro/3_5.osm.pbf".to_string(), None)]);
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.checksum().as_deref(), Some(new().as_str()), "kept as made by this importer: not read again");
+        assert_eq!(store.checksum(), Some(with_importer("new")));
+        assert_eq!(names(&store), vec!["Only Street"]);
     }
 
     #[test]
     fn an_area_whose_tile_has_changed_is_read_again_and_keeps_the_new_checksum() {
-        let (_, fetcher, importer, store, result) = kept_from(Some("old"));
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        assert_eq!(fetcher.asked(), vec![("data/metro/3_5.osm.pbf".to_string(), None)]);
+        let (fetcher, store, result) = kept_from(Some("old"));
+        let (index, tile) = testville_now("Changed Street");
+        fetcher.answer(Ok(index));
+        assert_eq!(urls(&fetcher), vec!["data/metro/0_0.json"]);
         assert!(result.borrow().is_none(), "the page waits for the new roads");
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        assert_eq!(importer.asked(), vec![b"TILE".to_vec()]);
-        let two_roads = NETWORK.replace(r#""name":"Only Street""#, r#""name":"Changed Street""#);
-        importer.answer(Ok(two_roads));
+        fetcher.answer(Ok(tile));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
-        assert_eq!(
-            crate::shared::said::say_now(
-                &crate::i18n_for(crate::shared::i18n::Locale::En),
-                crate::shared::units::Units::Metres,
-                &store.open().view(0).edges[0].called
-            ),
-            "Changed Street"
-        );
+        assert_eq!(store.checksum(), Some(with_importer("new")));
+        assert_eq!(names(&store), vec!["Changed Street"]);
     }
 
     #[test]
-    fn an_area_kept_before_checksums_were_is_read_again_once() {
-        let (_, fetcher, importer, store, _) = kept_from(None);
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
+    fn an_area_made_by_an_earlier_importer_or_before_checksums_were_is_read_again_once() {
+        // what an earlier version kept: the tile's checksum as the index gives it, with no importer version; and nothing
+        for checksum in [Some("new"), None] {
+            let (fetcher, store, result) = kept_from(checksum);
+            let (index, tile) = testville_now("Only Street");
+            fetcher.answer(Ok(index));
+            assert_eq!(urls(&fetcher), vec!["data/metro/0_0.json"], "{checksum:?}");
+            fetcher.answer(Ok(tile));
+            assert_eq!(result.borrow_mut().take(), Some(Ok(())), "{checksum:?}");
+            assert_eq!(store.checksum(), Some(with_importer("new")), "{checksum:?}: kept as made by this importer, not read again");
+        }
     }
 
     #[test]
@@ -341,10 +441,10 @@ mod tests {
             Err("offline".into()),
             Ok(b"<html>".to_vec()),
             Ok(br#"{"lon0":50.0,"lat0":50.0,"dlon":0.0257,"dlat":0.018,"tiles":["0_0"],"checksums":{"0_0":"x"}}"#.to_vec()),
-            Ok(INDEX.as_bytes().to_vec()),
+            Ok(covering(1.0, 2.0, None, "Changed Street").0),
         ];
         for (i, answer) in answers.into_iter().enumerate() {
-            let (_, fetcher, _, store, result) = kept_from(Some("old"));
+            let (fetcher, store, result) = kept_from(Some("old"));
             fetcher.answer(answer);
             assert!(fetcher.asked().is_empty(), "case {i}: nothing more is asked");
             assert_eq!(result.borrow_mut().take(), Some(Ok(())), "case {i}");
@@ -354,156 +454,17 @@ mod tests {
 
     #[test]
     fn a_refresh_that_fails_leaves_the_roads_that_are_kept() {
-        for step in 0..3 {
-            let (_, fetcher, importer, store, result) = kept_from(Some("old"));
-            fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-            match step {
-                0 => assert!(fetcher.answer(Err("the server answered 404".into()))),
-                1 => {
-                    fetcher.answer(Ok(b"TILE".to_vec()));
-                    importer.answer(Err("bad data".into()));
-                }
-                _ => {
-                    fetcher.answer(Ok(b"TILE".to_vec()));
-                    importer.answer(Ok(r#"{"left_hand":false,"junctions":[],"roads":[]}"#.to_string()));
-                }
-            }
-            assert!(fetcher.asked().is_empty(), "step {step}: Overpass is not asked");
+        // a tile that cannot be had, one that is not a tile, and one with no roads in the box
+        let empty = tile(&AREA, &[]);
+        let answers: [Result<Vec<u8>, String>; 3] = [Err("the server answered 404".into()), Ok(b"{not json".to_vec()), Ok(empty)];
+        for (step, answer) in answers.into_iter().enumerate() {
+            let (fetcher, store, result) = kept_from(Some("old"));
+            fetcher.answer(Ok(testville_now("Changed Street").0));
+            fetcher.answer(answer);
+            assert!(fetcher.asked().is_empty(), "step {step}: nothing more is asked");
             assert_eq!(result.borrow_mut().take(), Some(Ok(())), "step {step}");
             assert_eq!(store.checksum().as_deref(), Some("old"), "step {step}");
-            assert_eq!(
-                crate::shared::said::say_now(
-                    &crate::i18n_for(crate::shared::i18n::Locale::En),
-                    crate::shared::units::Units::Metres,
-                    &store.open().view(0).edges[0].called
-                ),
-                "Only Street",
-                "step {step}"
-            );
+            assert_eq!(names(&store), vec!["Only Street"], "step {step}");
         }
-    }
-
-    #[test]
-    fn an_area_read_from_a_tile_keeps_the_tile_s_checksum_and_one_read_from_overpass_has_none() {
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        Loader::new(ports).load(&store, |_| {});
-        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
-
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        Loader::new(ports).load(&store, |_| {});
-        without_tiles(&fetcher);
-        fetcher.answer(Ok(b"<osm/>".to_vec()));
-        importer.answer(Ok(NETWORK.to_string()));
-        assert!(store.has_network() && store.checksum().is_none());
-    }
-
-    #[test]
-    fn each_thing_that_goes_wrong_is_said_and_nothing_is_kept() {
-        let english = ["the roads of Testville could not be fetched (offline)", "bad data", "the roads were not understood ("];
-        let french = ["les rues de Testville n’ont pas pu être obtenues (offline)", "bad data", "les rues n’ont pas été comprises ("];
-        for step in 0..3 {
-            let (ports, fetcher, importer) = test_ports_with_fetcher();
-            let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-            let result = seen();
-            let r = result.clone();
-            Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-            without_tiles(&fetcher);
-            match step {
-                0 => {
-                    fetcher.answer(Err("offline".into()));
-                }
-                1 => {
-                    fetcher.answer(Ok(vec![]));
-                    importer.answer(Err("bad data".into()));
-                }
-                _ => {
-                    fetcher.answer(Ok(vec![]));
-                    importer.answer(Ok("{not json".into()));
-                }
-            }
-            let message = result.borrow_mut().take().unwrap().unwrap_err();
-            assert!(en(&message).starts_with(english[step]), "step {step}: {}", en(&message));
-            assert!(fr(&message).starts_with(french[step]), "step {step}: {}", fr(&message));
-            assert!(!store.has_network(), "step {step}: {message:?}");
-        }
-    }
-
-    const INDEX: &str = r#"{"lon0":1.9,"lat0":0.9,"dlon":0.0257,"dlat":0.018,"tiles":["3_5"]}"#;
-
-    #[test]
-    fn a_place_in_a_tile_is_read_from_that_tile_and_overpass_is_not_asked() {
-        // 1.0, 2.0 is in tile ((2.0-1.9)/0.0257, (1.0-0.9)/0.018) = (3, 5)
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        assert_eq!(fetcher.asked(), vec![("data/metro/index.json".to_string(), None)]);
-        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
-        assert_eq!(fetcher.asked(), vec![("data/metro/3_5.osm.pbf".to_string(), None)]);
-        fetcher.answer(Ok(b"TILE".to_vec()));
-        assert_eq!(importer.asked(), vec![b"TILE".to_vec()]);
-        assert!(importer.bounds_asked()[0].is_some(), "only the area is kept of the whole tile");
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert!(fetcher.asked().is_empty(), "nothing was asked of Overpass");
-        assert!(store.has_network());
-    }
-
-    #[test]
-    fn a_place_no_tile_holds_is_asked_of_overpass() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
-        // the area is far from the tiles there are
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Paris", 48.85, 2.35));
-        Loader::new(ports).load(&store, |_| {});
-        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
-        assert_eq!(fetcher.asked()[0].0, overpass::ENDPOINT);
-    }
-
-    #[test]
-    fn a_tile_that_cannot_be_had_is_no_reason_not_to_ask_overpass() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        Loader::new(ports).load(&store, |_| {});
-        fetcher.answer(Ok(INDEX.as_bytes().to_vec()));
-        fetcher.answer(Err("the server answered 404".into()));
-        assert_eq!(fetcher.asked()[0].0, overpass::ENDPOINT);
-    }
-
-    #[test]
-    fn a_place_with_no_streets_round_it_is_said_and_not_kept() {
-        let (ports, fetcher, importer) = test_ports_with_fetcher();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Mid-ocean", 1.0, 2.0));
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        without_tiles(&fetcher);
-        fetcher.answer(Ok(b"<osm/>".to_vec()));
-        importer.answer(Ok(r#"{"left_hand":false,"junctions":[],"roads":[]}"#.to_string()));
-        let message = result.borrow_mut().take().unwrap().unwrap_err();
-        assert_eq!(en(&message), "OpenStreetMap has no streets around Mid-ocean");
-        assert_eq!(fr(&message), "OpenStreetMap n’a aucune rue autour de Mid-ocean");
-        assert!(!store.has_network());
-    }
-
-    #[test]
-    fn blocked_storage_is_said_and_not_taken_for_success() {
-        let (mut ports, fetcher, importer) = test_ports_with_fetcher();
-        let storage = Rc::new(MemoryStorage::default());
-        ports.storage = storage.clone();
-        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        storage.blocked(true);
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        without_tiles(&fetcher);
-        fetcher.answer(Ok(vec![]));
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(en(&result.borrow_mut().take().unwrap().unwrap_err()), "the roads could not be kept: storage is blocked or full");
     }
 }

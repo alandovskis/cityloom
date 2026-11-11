@@ -1,10 +1,9 @@
-//! Finding a place and the roads in it: what is asked of Nominatim and Overpass,
+//! Finding a place and the roads in it: what is asked of Nominatim and of the metro tiles,
 //! and how their answers are read. Pure, so it is tested without a network.
 
 pub mod area;
 pub mod loader;
 pub mod nominatim;
-pub mod overpass;
 pub mod tiles;
 pub mod view;
 pub mod vm;
