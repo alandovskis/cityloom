@@ -61,11 +61,14 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.e2e)
         self.assertTrue(pick("crates/cityloom_editor/src/account/vm.rs").integration)
 
-    def test_the_archive_code_runs_the_e2e_tier_alone(self):
-        s = pick("crates/citymodel_builder/src/archive.rs")
-        self.assertTrue(s.e2e)
-        self.assertFalse(s.integration)
-        self.assertFalse(s.ui)
+    def test_the_builder_runs_every_spec(self):
+        # it packs the archive the E2E tier serves, and makes the fixtures' network tiles every UI and integration spec
+        # is served (`citymodel_builder fixture`, `just e2e-fixtures`)
+        for path in ("crates/citymodel_builder/src/archive.rs", "crates/citymodel_builder/src/commands.rs"):
+            with self.subTest(path):
+                s = pick(path)
+                self.assertTrue(s.all)
+                self.assertTrue(s.ui and s.integration and s.e2e)
 
     def test_a_unit_test_file_runs_no_browser_test(self):
         s = pick("crates/cityloom_editor/src/street/tests.rs", "crates/cityloom_editor/src/map/tests.rs")
@@ -128,8 +131,8 @@ class Selection(unittest.TestCase):
         self.assertEqual(s.spec_args("ui"), "tests/curb.spec.ts tests/speed.spec.ts")
         self.assertEqual(s.spec_args("integration"), "tests/sync.spec.ts")
 
-    def test_the_archive_code_repeats_the_pages_over_the_archive(self):
-        s = pick("crates/citymodel_builder/src/archive.rs")
+    def test_the_archive_spec_repeats_the_pages_over_the_archive(self):
+        s = pick("e2e/tests/archive.spec.ts")
         self.assertEqual(s.spec_args("e2e"), "tests/archive.spec.ts tests/map.spec.ts tests/street.spec.ts")
         self.assertEqual(pick("e2e/tests/serve.spec.ts").spec_args("e2e"), "tests/serve.spec.ts")
 
