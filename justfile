@@ -56,8 +56,19 @@ server:
     cargo build -p cityloom_server --features test-provider
     ./scripts/pin-server.sh
 
+# The browser tests' road data: each OSM fixture of e2e/fixtures imported (`citymodel_builder fixture`) into one network
+# tile, e2e/fixtures/generated/<name>.json (gitignored), which the specs serve as a metro tile and the E2E tier packs.
+[private]
+e2e-fixtures:
+    #!/usr/bin/env sh
+    set -eu
+    mkdir -p e2e/fixtures/generated
+    for name in plateau turbo open-ends; do
+        cargo run -q -p citymodel_builder -- fixture "e2e/fixtures/$name.osm.pbf" "e2e/fixtures/generated/$name.json"
+    done
+
 # All three tiers of browser tests (e2e/tiers.json) after one build; with arguments, just those specs whatever their tier, `archive.spec.ts` skipping itself: `just e2e tests/street.spec.ts`. The integration tier needs `DATABASE_URL`.
-e2e *args: build server
+e2e *args: build server e2e-fixtures
     #!/usr/bin/env sh
     set -eu
     cd e2e
@@ -68,15 +79,15 @@ e2e *args: build server
     scripts/e2e-archive.sh
 
 # UI tier: one page, the network stubbed, the static server only (no database, no archive). Builds first, like `e2e`.
-e2e-ui *args: build server
+e2e-ui *args: build server e2e-fixtures
     cd e2e && npx playwright test --project=ui {{args}}
 
 # Integration tier: the real server and a Postgres (`DATABASE_URL`: `just db` starts one): sign-in, the account and the sync. Builds first.
-e2e-integration *args: build server
+e2e-integration *args: build server e2e-fixtures
     cd e2e && npx playwright test --project=integration {{args}}
 
 # E2E tier: the whole path from data to page. Packs the e2e fixtures (`citymodel_builder pack`) into target/e2e-archive and runs `archive.spec.ts` and the delivery specs, and the map and street specs again, against a fresh server that unpacks it (E2E_ARCHIVE=1). Builds first, like `e2e`.
-e2e-archive *args: build server
+e2e-archive *args: build server e2e-fixtures
     scripts/e2e-archive.sh {{args}}
 
 # Everything: unit tests, then the browser tests.

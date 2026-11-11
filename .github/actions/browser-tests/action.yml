@@ -1,8 +1,8 @@
 name: Browser test setup
 description: >-
-  What every browser tier needs and nothing the build needs: Playwright and its Chromium, and the wasm and the pinned
-  test-provider server that the `build` job made (web/pkg, web/vendor, target/e2e/cityloom_server). The caller has
-  checked the repository out.
+  What every browser tier needs and nothing the build needs: Playwright and its Chromium, and the wasm, the pinned
+  test-provider server and the fixtures' network tiles that the `build` job made (web/pkg, web/vendor,
+  target/e2e/cityloom_server, e2e/fixtures/generated). The caller has checked the repository out.
 
 runs:
   using: composite

@@ -5,3 +5,4 @@ playwright-report/
 web/pkg/
 website/build/
 website/.docusaurus/
+e2e/fixtures/generated/
