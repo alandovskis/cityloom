@@ -50,8 +50,8 @@ test("an area is made again when the checksum of its tile changes, and not other
     if (request.url().endsWith("/data/metro/0_0.osm.pbf")) tileReads++;
   });
   const key = "cityloom-checksum:45.5261,-73.5978";
-  // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in src/place/tiles.rs)
-  const IMPORTER = "+i9";
+  // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in crates/cityloom_model/src/importer.rs)
+  const IMPORTER = "+i10";
   const stored = () => page.evaluate((k) => localStorage.getItem(k), key);
 
   await page.goto("/map.html");

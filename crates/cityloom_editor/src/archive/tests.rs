@@ -125,7 +125,7 @@ fn an_export_holds_the_design_and_what_made_it_and_nothing_of_the_account_or_the
     assert_eq!((doc["kind"].as_str(), doc["format_version"].as_u64()), (Some("cityloom-design"), Some(1)));
     assert_eq!(doc["created_at"], "2001-09-09T01:46:40.000Z");
     assert_eq!(doc["app_version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(doc["source"]["importer_version"], crate::place::tiles::IMPORTER_VERSION);
+    assert_eq!(doc["source"]["importer_version"], cityloom_model::IMPORTER_VERSION);
     assert!(!doc.to_string().contains("fr-CA") && !doc.to_string().contains("big"));
 }
 

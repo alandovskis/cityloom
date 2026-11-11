@@ -40,11 +40,11 @@ use serde_json::{Map, Value};
 
 use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, NEWEST, STREETS, VERSION as EDITS_VERSION};
 use crate::city::store::{CHECKSUM_KEY, CityStore};
-use crate::place::tiles::IMPORTER_VERSION;
 use crate::restriction::store::{self as rules, RESTRICTIONS_KEY, RestrictionStore, Restrictions};
 use crate::shared::ports::Storage;
 use crate::shared::said::{Arg, Said};
 use crate::sync::model::{Kind, mark, valid_key};
+use cityloom_model::IMPORTER_VERSION;
 
 /// The `kind` field of every archive.
 pub const MAGIC: &str = "cityloom-design";

@@ -246,7 +246,7 @@ mod tests {
 
     /// What the loader keeps for a tile whose checksum in the index is `new`: that, and the version of the importer.
     fn new() -> String {
-        tiles::with_importer("new")
+        cityloom_model::with_importer("new")
     }
 
     /// What `kept_from` gives back: the ports, the fakes behind them, the store and what the load said.
