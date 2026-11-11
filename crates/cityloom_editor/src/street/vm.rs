@@ -1165,6 +1165,11 @@ impl StreetVm {
         self.green_edit(|e| e.add_green_from(&form))
     }
 
+    /// Adds the element `form` asks for at the first place from its start where it overlaps no other.
+    pub fn add_green_clear(&self, form: GreenForm) -> bool {
+        self.green_edit(|e| e.add_green_clear(&form))
+    }
+
     /// Changes the chosen element as `form` says, what it leaves open staying as it is.
     pub fn change_green(&self, form: &GreenForm) -> bool {
         self.on_chosen_green(|e, i| e.change_green(i, form))
@@ -3539,6 +3544,20 @@ mod green_tests {
         let said = r.said.take();
         assert_eq!(said.len(), 1, "announced once: {said:?}");
         assert!(said[0].contains("Add tree at 10.0 m"), "{said:?}");
+    }
+
+    #[test]
+    fn adding_with_no_place_asked_goes_to_the_first_clear_one_and_selects_it() {
+        let r = rig();
+        let bed = GreenForm { host: Some(0), ..GreenForm::new(GreenKind::Bed) };
+        assert!(r.vm.add_green_clear(bed));
+        assert!(r.vm.add_green_clear(bed));
+        let v = r.vm.view_now();
+        assert_eq!(v.green.cells.len(), 2);
+        assert_eq!(v.green.cells[0].from_mm, 0);
+        assert_eq!(v.green.cells[1].from_mm, v.green.cells[0].to_mm, "the second starts where the first ends");
+        assert_eq!(v.green.selected, Some(1), "the new element is the chosen one");
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-green-add");
     }
 
     #[test]

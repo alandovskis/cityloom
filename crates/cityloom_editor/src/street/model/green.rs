@@ -815,6 +815,25 @@ impl Editor {
         self.add_green(g)
     }
 
+    /// Adds the element `form` asks for at the first place from its start (the street's start when it leaves the place
+    /// open) where it overlaps no other: one that would overlap moves on to the end of the nearest element in its way,
+    /// until it fits or runs off the street. One revision.
+    pub fn add_green_clear(&mut self, form: &GreenForm) -> Result<(), GreenRefusal> {
+        let mut at = form.at_mm.unwrap_or(0);
+        loop {
+            match self.add_green_from(&GreenForm { at_mm: Some(at), ..*form }) {
+                Err(GreenRefusal::Overlap) => {
+                    let next = self.states[self.cursor].content.green.iter().map(Green::to_mm).filter(|&to| to > at).min();
+                    match next {
+                        Some(to) => at = to,
+                        None => return Err(GreenRefusal::Overlap),
+                    }
+                }
+                other => return other,
+            }
+        }
+    }
+
     /// Changes element `i` as `form` says, a field it leaves open staying as it is, except that a change of kind takes
     /// the new kind's defaults for the length, width and place across (a tree's size is medium unless one is asked). It
     /// is checked as an add is. One revision, whatever the number of fields; the element stays the chosen one.
@@ -1425,6 +1444,26 @@ mod tests {
         s.next_uid = 5;
         s.row_mm = total(&s.segments);
         s
+    }
+
+    #[test]
+    fn an_element_added_with_no_place_goes_to_the_first_clear_one() {
+        let s = narrow_sidewalks();
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        let form = GreenForm { host: Some(0), ..GreenForm::new(GreenKind::Bed) };
+        // The first takes the street's start, the next the end of the one in its way, and so on.
+        e.add_green_clear(&form).unwrap();
+        e.add_green_clear(&form).unwrap();
+        e.add_green_clear(&GreenForm { host: Some(0), ..GreenForm::new(GreenKind::Tree) }).unwrap();
+        let g = e.snapshot().green;
+        assert_eq!(g.len(), 3);
+        assert_eq!(g[0].from_mm, 0);
+        assert_eq!(g[1].from_mm, g[0].to_mm(), "the second starts where the first ends");
+        assert_eq!(g[2].from_mm, g[1].to_mm(), "the third starts where the second ends");
+        // A place asked for that is taken is moved on the same way; one with no room left is refused.
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        e.add_green_clear(&GreenForm { at_mm: Some(LEN - 1_000), host: Some(0), ..GreenForm::new(GreenKind::Bed) }).unwrap_err();
+        assert!(e.snapshot().green.is_empty());
     }
 
     #[test]

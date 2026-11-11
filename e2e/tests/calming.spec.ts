@@ -25,12 +25,23 @@ async function openCalmingStreet(page: Page, minM: number, stops = false) {
 
 const cells = (page: Page) => page.locator("#calming-strip").locator('[role="option"]');
 
-/** Chooses the free stretch `cell` and adds an element of `kind` (the Kind select's value) and `metres` there. */
-async function addElement(page: Page, cell: number, metres: number, kind = "0") {
+/** The kinds in the Kind select's order (its values are indexes), as the Add a piece menu names them. */
+const KINDS = ["Raised table", "Raised crossing", "Chicane", "Modal filter"];
+
+/** Chooses the free stretch `cell` and adds an element of `kind` (the Kind select's value) there from the Add a
+ *  piece menu, at the kind's default length. */
+async function addFromMenu(page: Page, cell: number, kind = "0") {
   await page.locator("#calming-" + cell).click();
-  await page.locator("#calming-kind").selectOption(kind);
+  await page.locator("#add-btn").click();
+  await page.locator(".calming-add-item", { hasText: KINDS[Number(kind)] }).click();
+  await page.locator("#calming-" + cell).click();
+}
+
+/** The same, then gives the element `metres`. */
+async function addElement(page: Page, cell: number, metres: number, kind = "0") {
+  await addFromMenu(page, cell, kind);
   await page.locator("#calming-length").fill(String(metres));
-  await page.locator("#calming-add").click();
+  await page.locator("#calming-length").press("Enter");
 }
 
 const editsVersion = (page: Page) =>
@@ -87,15 +98,16 @@ test.describe("raised tables and crossings", () => {
 
   test("a table that is too short or runs past the street is refused, and the refusal says why", async ({ page }) => {
     await openCalmingStreet(page, 20);
-    await addElement(page, 0, 4);
+    await addFromMenu(page, 0);
+    const label = await cells(page).nth(0).getAttribute("aria-label");
+    await page.locator("#calming-length").fill("4");
+    await page.locator("#calming-length").press("Enter");
     await expect(page.locator("#live")).toContainText("This element must be at least");
-    await expect(cells(page)).toHaveCount(1);
-    await expect(page.locator("#undo")).toBeDisabled();
-    await page.locator("#calming-0").click();
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", label!);
     await page.locator("#calming-length").fill("500");
-    await page.locator("#calming-add").click();
+    await page.locator("#calming-length").press("Enter");
     await expect(page.locator("#live")).toContainText("That would run past an end of the street.");
-    await expect(cells(page)).toHaveCount(1);
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", label!);
   });
 
   test("the arrows choose a cell and Alt with them moves the table by a metre; Remove takes it away", async ({
@@ -117,8 +129,11 @@ test.describe("raised tables and crossings", () => {
     await openCalmingStreet(page, 40, true);
     // A stop at the start of the right side, then a table at the start of the street.
     await page.locator("#stop-right-0").click();
+    await page.locator("#add-btn").click();
+    await page.locator(".stop-add-item", { hasText: "Curb extension" }).click();
+    await page.locator("#stop-right-0").click();
     await page.locator("#stop-length").fill("12");
-    await page.locator("#stop-add").click();
+    await page.locator("#stop-length").press("Enter");
     await addElement(page, 0, 8);
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: "Raised elements clear of transit stops" });
@@ -133,18 +148,18 @@ test.describe("raised tables and crossings", () => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr"));
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
-    await expect(page.locator("#calming-add")).toHaveText("Ajouter un élément surélevé");
+    await page.locator("#add-btn").click();
+    await expect(page.locator("#add-g-calming")).toHaveText("Apaisement de la circulation");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Plateau surélevé/);
   });
   test("a chicane is added with the tools, drawn as build-outs, saved as version 14 and undone", async ({ page }) => {
     await openCalmingStreet(page, 30);
-    await page.locator("#calming-0").click();
-    await page.locator("#calming-kind").selectOption("2");
+    await addFromMenu(page, 0, "2");
     // Only a chicane has a side to start on.
     await expect(page.locator("#calming-first")).toBeVisible();
     await page.locator("#calming-first").selectOption("left");
     await page.locator("#calming-length").fill("24");
-    await page.locator("#calming-add").click();
+    await page.locator("#calming-length").press("Enter");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane.*24\.0 m long/);
 
     // The 2.5D draws build-outs (not ramps), names them, and counts the chicane apart from the tables.
@@ -171,20 +186,21 @@ test.describe("raised tables and crossings", () => {
 
   test("a chicane that is too short is refused with its minimum", async ({ page }) => {
     await openCalmingStreet(page, 30);
-    await addElement(page, 0, 10, "2");
-    await expect(cells(page)).toHaveCount(1);
-    await expect(page.locator("#drawing .iso-chicane")).toHaveCount(0);
+    await addFromMenu(page, 0, "2");
+    await page.locator("#calming-length").fill("10");
+    await page.locator("#calming-length").press("Enter");
+    await expect(page.locator("#live")).toContainText("This element must be at least");
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane.*24\.0 m long/);
   });
   test("a modal filter is added with the tools, drawn as one block, saved as version 15 and undone", async ({
     page,
   }) => {
     await openCalmingStreet(page, 30);
-    await page.locator("#calming-0").click();
-    await page.locator("#calming-kind").selectOption("3");
+    await addFromMenu(page, 0, "3");
     // Only a chicane has a side to start on.
     await expect(page.locator("#calming-first")).toHaveCount(0);
     await page.locator("#calming-length").fill("2");
-    await page.locator("#calming-add").click();
+    await page.locator("#calming-length").press("Enter");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter.*2\.0 m long/);
 
     // The 2.5D draws one block, names it, and counts it apart from the tables and chicanes.
@@ -213,8 +229,10 @@ test.describe("raised tables and crossings", () => {
 
   test("a modal filter shorter than its minimum is refused", async ({ page }) => {
     await openCalmingStreet(page, 30);
-    await addElement(page, 0, 0.5, "3");
-    await expect(cells(page)).toHaveCount(1);
-    await expect(page.locator("#drawing .iso-filter")).toHaveCount(0);
+    await addFromMenu(page, 0, "3");
+    await page.locator("#calming-length").fill("0.5");
+    await page.locator("#calming-length").press("Enter");
+    await expect(page.locator("#live")).toContainText("This element must be at least");
+    await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter.*2\.0 m long/);
   });
 });

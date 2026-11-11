@@ -14,7 +14,7 @@ use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{SegView, TemplateView, View};
+use crate::street::model::{CalmingKind, GreenForm, GreenKind, MIN_STOP_MM, SegView, StopKind, TemplateView, View};
 use crate::street::text::status_text;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -487,6 +487,100 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             }
         })
         .collect_view();
+    // The transit stops: not pieces but stops on a side's curb, added into the chosen free stretch of a stops row,
+    // so offered only where a street has such a row.
+    let stop_rows = move || !w.view().stops.sides.is_empty();
+    let stop_items = StopKind::ALL
+        .iter()
+        .map(|&k| {
+            view! {
+                <li>
+                    <button
+                        type="button"
+                        class="add-item stop-add-item"
+                        on:click=move |_| {
+                            close(true);
+                            w.pick_stop_kind(k);
+                            w.add_stop(k, MIN_STOP_MM);
+                        }
+                    >
+                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
+                        <span class="dw">{move || w.units().length_fine_in(MIN_STOP_MM, w.i18n().locale())}</span>
+                    </button>
+                </li>
+            }
+        })
+        .collect_view();
+    // The green elements (a tree, a planting bed, a rain garden, a bioswale): not pieces but elements on a piece, added
+    // with the kind's defaults where the street has a piece to stand one on.
+    let can_add_green = move || w.view().green.can_add;
+    let green_items = GreenKind::ALL
+        .iter()
+        .map(|&k| {
+            view! {
+                <li>
+                    <button
+                        type="button"
+                        class="add-item green-add-item"
+                        on:click=move |_| {
+                            close(true);
+                            w.add_green_clear(GreenForm::new(k));
+                        }
+                    >
+                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
+                    </button>
+                </li>
+            }
+        })
+        .collect_view();
+    let green = view! {
+        <Show when=can_add_green>
+            <div class="add-group" role="group" aria-labelledby="add-g-green">
+                <p class="add-group-h" id="add-g-green">{say(w, "group-green")}</p>
+                <ul class="add-sub">{green_items.clone()}</ul>
+            </div>
+        </Show>
+    };
+    // Traffic calming: raised elements and chicanes on the roadway, added with the kind's default length into the chosen
+    // free stretch of the raised elements' strip, so offered only where the street has such a strip.
+    let calming_strip = move || !w.view().calming_strip.cells.is_empty();
+    let calming_items = CalmingKind::ALL
+        .iter()
+        .map(|&k| {
+            view! {
+                <li>
+                    <button
+                        type="button"
+                        class="add-item calming-add-item"
+                        on:click=move |_| {
+                            close(true);
+                            w.pick_calming_kind(k);
+                            w.add_calming(k, k.default_mm());
+                        }
+                    >
+                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
+                        <span class="dw">{move || w.units().length_fine_in(k.default_mm(), w.i18n().locale())}</span>
+                    </button>
+                </li>
+            }
+        })
+        .collect_view();
+    let calming = view! {
+        <Show when=calming_strip>
+            <div class="add-group" role="group" aria-labelledby="add-g-calming">
+                <p class="add-group-h" id="add-g-calming">{say(w, "group-calming")}</p>
+                <ul class="add-sub">{calming_items.clone()}</ul>
+            </div>
+        </Show>
+    };
+    let stops = view! {
+        <Show when=stop_rows>
+            <div class="add-group" role="group" aria-labelledby="add-g-stops">
+                <p class="add-group-h" id="add-g-stops">{say(w, "group-stops")}</p>
+                <ul class="add-sub">{stop_items.clone()}</ul>
+            </div>
+        </Show>
+    };
     view! {
         <button
             type="button"
@@ -509,7 +603,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
         <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys on:focusout=focus_out>
             <p class="menu-h">{say(w, "add-button")}</p>
             <p class="hint">{say(w, "add-hint")}</p>
-            <div id="palette" class="add-list">{groups}</div>
+            <div id="palette" class="add-list">{groups}{green}{calming}{stops}</div>
         </div>
     }
 }

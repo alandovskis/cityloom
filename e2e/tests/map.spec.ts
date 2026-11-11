@@ -590,8 +590,11 @@ async function addPatio(page: Page, spacerM = 0) {
 async function addNamedStop(page: Page, name: string) {
   const cells = page.locator("#stop-strip-right").locator('[role="option"]');
   await page.locator("#stop-right-0").click();
+  await page.locator("#add-btn").click();
+  await page.locator(".stop-add-item", { hasText: "Curb extension" }).click();
+  await page.locator("#stop-right-0").click();
   await page.locator("#stop-length").fill("12");
-  await page.locator("#stop-add").click();
+  await page.locator("#stop-length").press("Enter");
   await expect(cells).toHaveCount(2);
   await page.locator("#stop-right-0").click();
   await page.locator("#stop-name").fill(name);

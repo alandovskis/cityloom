@@ -58,6 +58,9 @@ group-transit = Transport en commun
 group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
+group-stops = Arrêts de transport en commun
+group-green = Infrastructure verte
+group-calming = Apaisement de la circulation
 
 # Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
 fit-used = Chaque mètre de la rue est utilisé
@@ -507,11 +510,8 @@ st-curb-stop-heading = Usages du bord de rue et arrêts le long de la rue
 st-stop-caption = Arrêts, { $side }
 st-stop-strip-label = Arrêts, { $side }
 st-stop-tools = Commandes des arrêts
-st-stop-kind = Type
 st-stop-name = Nom
 st-stop-length = Longueur ({ $unit })
-st-stop-shelter = Abribus
-st-stop-add = Ajouter un arrêt
 st-stop-remove = Retirer un arrêt
 stop-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.
 stop-refused-elsewhere = Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
@@ -585,7 +585,6 @@ st-green-host = Dans la coupe, sur
 st-green-fine = Dans la coupe, depuis le milieu de cet élément (cm)
 st-green-length = Longueur ({ $unit })
 st-green-width = Largeur ({ $unit })
-st-green-add = Ajouter
 st-green-change = Modifier
 st-green-remove = Retirer
 
@@ -710,7 +709,6 @@ st-calming-length = Longueur ({ $unit })
 st-calming-first = Commence à
 st-calming-first-left = Gauche
 st-calming-first-right = Droite
-st-calming-add = Ajouter un élément surélevé
 st-calming-remove = Retirer un élément surélevé
 
 # Les sources d’une règle (src/shared/sources.rs, #78), sous une vérification des pages de la rue et de l’intersection et dans le rapport.

@@ -1095,8 +1095,11 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     const strip = page.locator(`#stop-strip-${arm.side}`);
     const used = strip.locator('[role="option"].stop-cell:not(.gap)');
     await page.locator(`#stop-${arm.side}-0`).click();
+    await page.locator("#add-btn").click();
+    await page.locator(".stop-add-item", { hasText: "Curb stop" }).click();
+    await page.locator(`#stop-${arm.side}-0`).click();
     await page.locator("#stop-length").fill(String(STOP_M));
-    await page.locator("#stop-add").click();
+    await page.locator("#stop-length").press("Enter");
     await expect(used).toHaveCount(1);
     await expect(used).toHaveAttribute("aria-label", new RegExp(`, 0\\.0 m to ${STOP_M}\\.0 m,`));
     await used.click();
