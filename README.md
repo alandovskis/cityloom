@@ -3,7 +3,7 @@
 # CityLoom
 
 Streetmix at city scale: residents compose and compare whole-city scenarios.
-This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`street.html`) and the intersection editor (`intersection.html`). The home page finds a place by name; its streets come from OpenStreetMap (through Nominatim, Overpass and osm2streets) and become a city that the map opens the other two surfaces on, a street or junction at a time. What is edited is kept in browser storage.
+This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`street.html`) and the intersection editor (`intersection.html`). The home page finds a place by name; its streets come from OpenStreetMap (found through Nominatim, read from network tiles that osm2streets made) and become a city that the map opens the other two surfaces on, a street or junction at a time. What is edited is kept in browser storage.
 
 - `crates/`: every crate. `crates/cityloom_editor/src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
   - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.
@@ -49,16 +49,16 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 One command makes the road tiles below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
 
 ```sh
-brew install osmium-tool   # osmium cuts the road tiles
+brew install osmium-tool   # osmium keeps the roads the tiles are made of
 just prepare
 ```
 
-It also packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
+It also imports them and cuts the network into tiles, and packs the tiles into one archive, `data/montreal.citymodel` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
 
 ## Montréal metro tiles
 
-The roads of the whole Montréal metropolitan area are cut into tiles that are served with the pages, so that
-a place there is read from a file of a few kilobytes instead of being asked of Overpass (about 3 minutes; 1,700 tiles, about 49 MB, in `web/data/metro`).
+The roads of the whole Montréal metropolitan area are imported once, with osm2streets, and the network is cut into JSON tiles that are served with the pages (1,718 tiles, about 570 MB of JSON, in `web/data/metro`; the server compresses them on the fly), so that
+a place there is read from the tile that holds it and cut out of it in the browser.
 
 The tiles are not kept in git; `web/data/metro/index.json` is a placeholder that names none, and the command above
-overwrites it. Deploy the folder with the pages. Without tiles every place, the default one (the Plateau Mont-Royal) too, comes from Overpass, so the app then needs a network.
+overwrites it. Deploy the folder with the pages. Without tiles no place opens: a place no tile holds is reported as not covered.

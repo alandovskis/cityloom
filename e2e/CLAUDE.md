@@ -5,7 +5,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 ## General
 
 - Playwright specs `e2e/tests/*.spec.ts`, one per page; `shell.spec.ts` runs the same checks on all three. Run against built `web/pkg`: rebuild after Rust changes (`just e2e` does). Drags/pointer behaviour is covered only here.
-- `fixtures.ts`: fails every test on a page error; fresh browser context each (empty storage); starts on the Plateau (automatic fixture serves its metro tile, no network); stores `cityloom-lang=en` (`language.spec.ts` switches).
+- `fixtures.ts`: fails every test on a page error; fresh browser context each (empty storage); starts on the Plateau (automatic fixture serves its metro network tile, no network); stores `cityloom-lang=en` (`language.spec.ts` switches).
 - Open editors by the address the map gives a place (`openStreet`, `openJunction`, from `placesOnMap`); the map has no list of places.
 - Playwright reuses whatever listens on the port, so a stale server (or `just serve`) gives false results: `E2E_PORT=8291 just e2e` when 8137 is held. `E2E_PORT` moves server and Playwright.
 
@@ -16,8 +16,9 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 
 ## Fixtures
 
-- `home.spec.ts` stubs Nominatim, Overpass, metro tiles with `page.route`; `world.spec.ts` serves a one-place tile from `e2e/fixtures/plateau.osm.pbf`.
-- `junction.spec.ts` turbo tests serve `e2e/fixtures/turbo.osm.pbf` (`TURBO_PBF`): no Plateau junction has room for the basic layout.
+- The OSM fixtures (`e2e/fixtures/*.osm.pbf`, `open-ends.osm`) are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures` (`citymodel_builder fixture`), which every browser recipe runs first and CI's `build` job runs once and hands on in the `browser-build` artifact. `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`; `tileFrom(file)` answers a request for a tile with one.
+- `home.spec.ts` stubs Nominatim and metro tiles with `page.route` (no Overpass: any other host fails the test) and covers a place no tile holds ("not covered", in both languages, nothing kept); `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
+- `junction.spec.ts` turbo tests serve `TURBO_TILE`: no Plateau junction has room for the basic layout. `street.spec.ts` serves `OPEN_ENDS_TILE` for open street ends (its source `open-ends.osm` has a `<bounds>` element: the importer panics inside osm2streets on OSM XML without one).
 - `restrictions.spec.ts`: area by clicks and by keyboard (map focused, Enter places a corner at the centre, Shift+Enter closes).
 - Map page: `mapReady(page)` waits for places; MapLibre is a WebGL canvas (`window.cityloomMap`).
 

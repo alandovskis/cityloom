@@ -151,7 +151,7 @@ fn code_site() -> (tempfile::TempDir, Router) {
     std::fs::write(root.join("pkg/glue_bg.wasm"), b"\0asm\x01\0\0\0".repeat(50)).unwrap();
     std::fs::create_dir_all(root.join("data/metro")).unwrap();
     std::fs::write(root.join("data/metro/index.json"), "{}".repeat(50)).unwrap();
-    std::fs::write(root.join("data/metro/0_0.osm.pbf"), vec![7u8; 500]).unwrap();
+    std::fs::write(root.join("data/metro/0_0.json"), vec![7u8; 500]).unwrap();
     std::fs::write(root.join("data/app.js"), "not code").unwrap();
     std::fs::create_dir_all(root.join("fonts")).unwrap();
     std::fs::write(root.join("fonts/Face.ttf"), vec![3u8; 800]).unwrap();
@@ -197,7 +197,7 @@ async fn another_build_is_not_found_rather_than_served_as_the_current_one() {
     for path in [
         "/v/0000000000000000/app.css".to_string(),
         format!("/v/{id}/data/app.js"),
-        format!("/v/{id}/data/metro/0_0.osm.pbf"),
+        format!("/v/{id}/data/metro/0_0.json"),
         format!("/v/{id}/map.html"),
         format!("/v/{id}"),
     ] {
@@ -219,7 +219,7 @@ async fn a_change_to_any_versioned_file_changes_the_build_and_retires_the_old_ur
     assert_eq!(get(&router, &format!("/v/{before}/pkg/glue.js"), None).await.0, StatusCode::NOT_FOUND);
     assert_eq!(get(&router, &format!("/v/{after}/pkg/glue.js"), None).await.0, StatusCode::OK);
     // Data is not part of the build.
-    std::fs::write(d.path().join("data/metro/0_0.osm.pbf"), vec![1u8; 10]).unwrap();
+    std::fs::write(d.path().join("data/metro/0_0.json"), vec![1u8; 10]).unwrap();
     assert_eq!(build_id(&get(&router, "/map.html", None).await.2), after);
 }
 
@@ -253,7 +253,7 @@ async fn data_is_cached_as_long_as_it_is_safe_to() {
     // The index names the tiles' checksums: a few minutes stale only delays a refresh.
     assert_eq!(cache("/data/metro/index.json").await, "public, max-age=300, stale-while-revalidate=600");
     // A tile is not named by its content, and a cached old one would be kept under a new checksum: always revalidated.
-    assert_eq!(cache("/data/metro/0_0.osm.pbf").await, "no-cache");
+    assert_eq!(cache("/data/metro/0_0.json").await, "no-cache");
     assert_eq!(cache("/glyphs/Font/0-255.pbf").await, "public, max-age=86400, stale-while-revalidate=604800");
     assert_eq!(cache("/pkg/glue.js").await, "no-cache", "the unversioned name of a script is not kept");
     assert_eq!(cache("/nothing.js").await, "no-cache");
@@ -277,11 +277,19 @@ async fn text_and_wasm_are_compressed_with_the_best_encoding_the_client_takes() 
 #[tokio::test]
 async fn what_is_already_compressed_or_read_in_ranges_is_not_compressed_again() {
     let (_d, router) = code_site();
-    for path in ["/data/metro/0_0.osm.pbf", "/glyphs/Font/0-255.pbf"] {
+    for path in ["/glyphs/Font/0-255.pbf"] {
         let (_, headers, body) = get_with(&router, path, &[("accept-encoding", "br, gzip")]).await;
         assert!(headers.get(header::CONTENT_ENCODING).is_none(), "{path}");
         assert_eq!(body.len(), 500);
     }
+}
+
+#[tokio::test]
+async fn a_network_tile_is_json_and_is_compressed_on_the_fly() {
+    let (_d, router) = code_site();
+    let (_, headers, _) = get_with(&router, "/data/metro/0_0.json", &[("accept-encoding", "gzip")]).await;
+    assert_eq!(headers[header::CONTENT_TYPE], "application/json; charset=utf-8");
+    assert_eq!(headers[header::CONTENT_ENCODING], "gzip");
 }
 
 #[tokio::test]

@@ -3,8 +3,9 @@ mod support;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use cityloom_model::{Network, NetworkTile};
 use citymodel_builder::archive::{self, read_index};
-use citymodel_builder::commands::{self, Cli, PackJob};
+use citymodel_builder::commands::{self, Cli, Command, PackJob};
 use citymodel_builder::metro_index::Grid;
 use clap::Parser;
 use support::{calls, fake_tool, quiet_progress};
@@ -44,7 +45,7 @@ fn folders(root: &Path, grid: (f64, f64, f64, f64), on_disk: &[&str], listed: &[
     let metro = root.join("metro");
     fs::create_dir_all(&metro).unwrap();
     for name in on_disk {
-        fs::write(metro.join(format!("{name}.osm.pbf")), format!("tile {name}").repeat(30)).unwrap();
+        fs::write(metro.join(format!("{name}.json")), format!("tile {name}").repeat(30)).unwrap();
     }
     let tiles: Vec<String> = listed.iter().map(|n| format!("\"{n}\"")).collect();
     let (lon0, lat0, dlon, dlat) = grid;
@@ -83,7 +84,7 @@ fn pack_packs_the_folders_into_an_archive_the_server_reads() {
     let unpacked = archive::unpack(&job.out, &data).unwrap();
     assert_eq!(unpacked.tiles, 2);
     for name in ["0_0", "12_9"] {
-        let file = format!("{name}.osm.pbf");
+        let file = format!("{name}.json");
         assert_eq!(fs::read(data.join("montreal/metro").join(&file)).unwrap(), fs::read(metro.join(&file)).unwrap());
     }
     let index: serde_json::Value = serde_json::from_slice(&fs::read(data.join("montreal/metro/index.json")).unwrap()).unwrap();
@@ -118,17 +119,129 @@ fn a_tile_in_only_one_place_is_named() {
 }
 
 #[test]
-fn the_cli_parses_the_three_commands() {
+fn old_pbf_tiles_are_not_network_tiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let metro = folders(dir.path(), MONTREAL, &[], &["0_0"]);
+    fs::write(metro.join("0_0.osm.pbf"), "an old tile").unwrap();
+    let job = job(dir.path(), metro, None);
+    let (progress, _) = quiet_progress(commands::pack_steps(&job.out), dir.path());
+    let error = commands::run_pack(&progress, &job).unwrap_err();
+    assert!(error.lines.iter().any(|l| l.contains("0_0.json")), "{:?}", error.lines);
+    assert!(!job.out.exists());
+}
+
+#[test]
+fn an_empty_folder_says_it_has_no_network_tiles() {
+    let dir = tempfile::tempdir().unwrap();
+    let metro = folders(dir.path(), MONTREAL, &[], &[]);
+    let job = job(dir.path(), metro, None);
+    let (progress, _) = quiet_progress(commands::pack_steps(&job.out), dir.path());
+    let error = commands::run_pack(&progress, &job).unwrap_err();
+    assert!(error.lines.iter().any(|l| l.starts_with("no network tiles in")), "{:?}", error.lines);
+}
+
+#[test]
+fn fixture_writes_one_tile_of_the_whole_input_in_its_own_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf");
+    let out = dir.path().join("plateau.json");
+    commands::fixture(&input, &out).unwrap();
+    let bytes = fs::read(&out).unwrap();
+    let tile: NetworkTile = serde_json::from_slice(&bytes).unwrap();
+    assert!(tile.network.roads.len() > 150, "{} roads", tile.network.roads.len());
+    let (network, frame) = citymodel_builder::importer::import_whole(&fs::read(&input).unwrap()).unwrap();
+    assert_eq!(tile, NetworkTile { frame, network });
+    assert!(!bytes.contains(&b'\n'), "compact JSON");
+}
+
+#[test]
+fn fixture_says_what_it_cannot_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("junk.osm");
+    fs::write(&input, "not OSM").unwrap();
+    let out = dir.path().join("out.json");
+    let error = commands::fixture(&input, &out).unwrap_err();
+    assert!(error.starts_with(&format!("cannot import {}", input.display())), "{error}");
+    assert!(!out.exists());
+    let missing = commands::fixture(&dir.path().join("none.osm"), &out).unwrap_err();
+    assert!(missing.starts_with(&format!("cannot read {}", dir.path().join("none.osm").display())), "{missing}");
+}
+
+#[test]
+fn import_writes_the_network_of_the_input_as_compact_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/data/plateau.osm");
+    let out = dir.path().join("plateau.json");
+    commands::import(&input, &out).unwrap();
+    let bytes = fs::read(&out).unwrap();
+    let network: Network = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(network, citymodel_builder::importer::import(&fs::read(&input).unwrap()).unwrap());
+    assert!(!bytes.contains(&b'\n'), "compact JSON");
+}
+
+#[test]
+fn import_says_what_it_cannot_read_and_writes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.json");
+    let missing = dir.path().join("none.osm");
+    let error = commands::import(&missing, &out).unwrap_err();
+    assert!(error.starts_with(&format!("cannot read {}", missing.display())), "{error}");
+    assert!(!out.exists());
+    let junk = dir.path().join("junk.osm");
+    fs::write(&junk, "not OSM").unwrap();
+    let error = commands::import(&junk, &out).unwrap_err();
+    assert!(error.starts_with(&format!("cannot import {}", junk.display())), "{error}");
+    assert!(!out.exists());
+}
+
+#[test]
+fn the_import_command_fails_with_the_error_on_stderr_and_no_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let (missing, out) = (dir.path().join("none.osm"), dir.path().join("out.json"));
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_citymodel_builder")).arg("import").arg(&missing).arg(&out).output().unwrap();
+    assert!(!run.status.success());
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    assert!(stderr.contains(&format!("cannot read {}", missing.display())), "{stderr}");
+    assert!(!out.exists());
+
+    let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/crossing.osm");
+    let run = std::process::Command::new(env!("CARGO_BIN_EXE_citymodel_builder")).arg("import").arg(&input).arg(&out).output().unwrap();
+    assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+    let network: Network = serde_json::from_slice(&fs::read(&out).unwrap()).unwrap();
+    assert_eq!(network, citymodel_builder::importer::import(&fs::read(&input).unwrap()).unwrap());
+}
+
+#[test]
+fn the_cli_parses_the_commands() {
     let parse = |args: &[&str]| Cli::try_parse_from(std::iter::once("citymodel_builder").chain(args.iter().copied()));
     assert!(parse(&["pack", "--area", "x", "--created", "0"]).is_ok());
     assert!(parse(&["pack"]).is_ok());
     assert!(parse(&["prepare"]).is_ok());
-    assert!(parse(&["prepare", "q.osm.pbf", "--refresh", "--batch", "500"]).is_ok());
-    assert!(parse(&["tiles", "q.osm.pbf", "work", "--batch", "1"]).is_ok());
+    assert!(parse(&["prepare", "q.osm.pbf", "--refresh"]).is_ok());
+    assert!(parse(&["tiles", "q.osm.pbf", "work"]).is_ok());
     assert!(parse(&["tiles"]).is_err());
-    for batch in ["0", "501"] {
-        assert!(parse(&["prepare", "--batch", batch]).is_err(), "prepare {batch}");
-        assert!(parse(&["tiles", "q.osm.pbf", "--batch", batch]).is_err(), "tiles {batch}");
-    }
+    // the tiles are no longer cut by osmium in batches
+    assert!(parse(&["prepare", "--batch", "2"]).is_err());
+    assert!(parse(&["tiles", "q.osm.pbf", "--batch", "2"]).is_err());
+    assert!(parse(&["fixture", "in.osm.pbf", "out.json"]).is_ok());
+    assert!(parse(&["fixture", "in.osm.pbf"]).is_err());
+    assert!(parse(&["import", "in.osm", "out.json"]).is_ok());
+    assert!(parse(&["import", "in.osm"]).is_err());
     assert!(parse(&["basemap", "q.osm.pbf"]).is_err());
+}
+
+#[test]
+fn tiles_writes_where_out_says_and_else_where_it_did() {
+    let parse = |args: &[&str]| Cli::try_parse_from(std::iter::once("citymodel_builder").chain(args.iter().copied())).unwrap();
+    match parse(&["tiles", "q.osm.pbf", "work", "--out", "/tmp/metro"]).command {
+        Command::Tiles { out, .. } => assert_eq!(out, Some(PathBuf::from("/tmp/metro"))),
+        other => panic!("{other:?}"),
+    }
+    match parse(&["tiles", "q.osm.pbf"]).command {
+        Command::Tiles { out, workdir, .. } => assert_eq!((out, workdir), (None, None)),
+        other => panic!("{other:?}"),
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(2).unwrap().to_path_buf();
+    assert_eq!(commands::tiles_out(None), root.join("web/data/metro"));
+    assert_eq!(commands::tiles_out(Some(PathBuf::from("/x/metro"))), PathBuf::from("/x/metro"));
 }

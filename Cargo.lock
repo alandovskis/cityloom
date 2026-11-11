@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.67.1"
+version = "0.68.0"
 dependencies = [
  "any_spawner",
  "cityloom_model",
@@ -771,11 +771,16 @@ dependencies = [
 name = "citymodel_builder"
 version = "0.1.0"
 dependencies = [
+ "abstutil",
+ "cityloom_editor",
+ "cityloom_model",
  "clap",
  "ctrlc",
- "rlimit",
+ "geom",
+ "osm2streets",
  "serde_json",
  "sha2 0.11.1",
+ "streets_reader",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
@@ -2922,9 +2927,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -3923,21 +3925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "osm_import"
-version = "0.1.0"
-dependencies = [
- "abstutil",
- "cityloom_editor",
- "cityloom_model",
- "geom",
- "instant",
- "osm2streets",
- "serde_json",
- "streets_reader",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "osmpbf"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4889,15 +4876,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rlimit"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f35ee2729c56bb610f6dba436bf78135f728b7373bdffae2ec815b2d3eb98cc3"
-dependencies = [
- "libc",
 ]
 
 [[package]]

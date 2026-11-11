@@ -1,4 +1,4 @@
-use osm_import::{Control, RoadType, import};
+use citymodel_builder::importer::{self, Control, RoadType, import};
 
 const CROSSING: &[u8] = include_bytes!("crossing.osm");
 
@@ -22,7 +22,7 @@ fn a_road_keeps_its_lanes_and_the_osm_way_it_came_from() {
     let main = net.roads.iter().find(|r| r.name == "Main Street").unwrap();
     assert!(main.has_way(10) && main.provenance.ways().count() == 1);
     assert_eq!(main.road_type, RoadType::Collector);
-    assert!(main.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Driving).count() >= 2);
+    assert!(main.base_lanes().iter().filter(|l| l.kind == importer::LaneKind::Driving).count() >= 2);
     assert!(main.base_lanes().iter().all(|l| l.width_m > 0.0));
     assert!(main.points.len() >= 2);
 }
@@ -42,7 +42,7 @@ fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions
     assert_eq!(between.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.provenance, r.edge.from, r.edge.to)).collect::<Vec<_>>());
     let b = between[0];
     assert!(b.has_way(100) && b.has_way(101));
-    use osm_import::{Direction, LaneKind};
+    use importer::{Direction, LaneKind};
     let driving = |way| b.base_lanes().iter().filter(|l| l.kind == LaneKind::Driving && l.direction == way).count();
     assert!(driving(Direction::Forward) >= 2 && driving(Direction::Backward) >= 2, "{:?}", b.base_lanes());
 }
@@ -55,19 +55,19 @@ fn an_import_can_be_clipped_to_a_box_and_keeps_only_what_lies_in_it() {
     // 150 m either way of the middle of the extract (45.5261, -73.5978)
     let (lat, lon): (f64, f64) = (45.5261, -73.5978);
     let (dlat, dlon) = (150.0 / 111_320.0, 150.0 / (111_320.0 * lat.to_radians().cos()));
-    let clipped = osm_import::import_in(PLATEAU, Some([lat - dlat, lon - dlon, lat + dlat, lon + dlon])).unwrap();
+    let clipped = importer::import_in(PLATEAU, Some([lat - dlat, lon - dlon, lat + dlat, lon + dlon])).unwrap();
     assert!(clipped.roads.len() > 10, "{} roads", clipped.roads.len());
     assert!(clipped.roads.len() < all.roads.len() / 2, "{} of {}", clipped.roads.len(), all.roads.len());
     // nothing lies far outside the box: the data's own corner is 400 m away, the box 150 m
     let (min_x, max_x) = clipped.junctions.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.position.x_m()), b.max(n.position.x_m())));
     assert!(max_x - min_x < 400.0, "{} m wide", max_x - min_x);
     // no box is the same as `import`
-    assert_eq!(osm_import::import_in(PLATEAU, None).unwrap(), all);
+    assert_eq!(importer::import_in(PLATEAU, None).unwrap(), all);
 }
 
 #[test]
 fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
-    use osm_import::{Direction, LaneKind};
+    use importer::{Direction, LaneKind};
     let net = import(CROSSING).unwrap();
     let side = net.roads.iter().find(|r| r.name == "Side Road").unwrap();
     let sidewalks = |way| side.base_lanes().iter().filter(|l| l.kind == LaneKind::Sidewalk && l.direction == way).count();
@@ -78,7 +78,7 @@ const RENE_LEVESQUE: &[u8] = include_bytes!("rene_levesque.osm");
 
 #[test]
 fn a_bus_lane_tagged_with_hours_keeps_them() {
-    use osm_import::LaneKind;
+    use importer::LaneKind;
     let net = import(RENE_LEVESQUE).expect("the boulevard reads");
     assert!(!net.roads.is_empty());
     for road in &net.roads {
@@ -110,10 +110,10 @@ fn a_road_and_a_node_remember_the_version_of_each_osm_way_and_node_they_were_mad
 const SIDEWALKS: &[u8] = include_bytes!("sidewalks.osm");
 
 /// Which sides of a road have a sidewalk: (left, right), looking from its first end to its last.
-fn sidewalks_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
-    use osm_import::LaneKind;
+fn sidewalks_of(net: &importer::Network, name: &str) -> (bool, bool) {
+    use importer::LaneKind;
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
-    let walk = |l: Option<&osm_import::Lane>| l.is_some_and(|l| l.kind == LaneKind::Sidewalk);
+    let walk = |l: Option<&importer::Lane>| l.is_some_and(|l| l.kind == LaneKind::Sidewalk);
     (walk(road.base_lanes().first()), walk(road.base_lanes().last()))
 }
 
@@ -143,8 +143,8 @@ fn a_road_with_neither_side_tagged_is_given_sidewalks_as_before() {
 const TRACKS: &[u8] = include_bytes!("tracks.osm");
 
 /// Whether the outermost lane on each side of a road, leaving sidewalks out, is a bike lane: (left, right).
-fn bike_sides_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
-    use osm_import::LaneKind;
+fn bike_sides_of(net: &importer::Network, name: &str) -> (bool, bool) {
+    use importer::LaneKind;
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
     let lanes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind != LaneKind::Sidewalk).collect();
     (lanes.first().is_some_and(|l| l.kind == LaneKind::Bike), lanes.last().is_some_and(|l| l.kind == LaneKind::Bike))
@@ -166,7 +166,7 @@ fn a_bike_track_mapped_separately_is_a_bike_lane_beside_the_road() {
 
 #[test]
 fn a_road_with_separate_sidewalks_and_a_separate_track_has_both_on_both_sides_in_order() {
-    use osm_import::LaneKind::{Bike, Buffer, Driving, Sidewalk};
+    use importer::LaneKind::{Bike, Buffer, Driving, Sidewalk};
     let net = import(TRACKS).unwrap();
     let road = net.roads.iter().find(|r| r.name == "both separate").unwrap();
     let kinds: Vec<_> = road.base_lanes().iter().map(|l| l.kind).collect();
@@ -191,14 +191,14 @@ fn a_plain_separate_sidewalk_tag_is_a_sidewalk_on_each_side() {
 const TWO_WAY_TRACKS: &[u8] = include_bytes!("two_way_tracks.osm");
 
 /// The ways of the bike lanes of the road of that name, left to right.
-fn bike_ways(net: &osm_import::Network, name: &str) -> Vec<osm_import::Direction> {
+fn bike_ways(net: &importer::Network, name: &str) -> Vec<importer::Direction> {
     let road = net.roads.iter().find(|r| r.name == name).unwrap_or_else(|| panic!("no road {name}"));
-    road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.direction).collect()
+    road.base_lanes().iter().filter(|l| l.kind == importer::LaneKind::Bike).map(|l| l.direction).collect()
 }
 
 #[test]
 fn a_track_mapped_as_two_way_cycleways_is_a_two_way_bike_lane() {
-    use osm_import::Direction::Both;
+    use importer::Direction::Both;
     let net = import(TWO_WAY_TRACKS).unwrap();
     assert_eq!(bike_ways(&net, "two-way separate left"), [Both]);
     assert_eq!(bike_ways(&net, "separate left default"), [Both], "a cycleway is two-way unless it says otherwise");
@@ -211,12 +211,12 @@ fn a_track_mapped_as_two_way_cycleways_is_a_two_way_bike_lane() {
 fn a_track_mapped_as_one_way_cycleways_keeps_its_direction() {
     let net = import(TWO_WAY_TRACKS).unwrap();
     assert_eq!(bike_ways(&net, "one-way separate left").len(), 1);
-    assert_ne!(bike_ways(&net, "one-way separate left"), [osm_import::Direction::Both]);
+    assert_ne!(bike_ways(&net, "one-way separate left"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_cycleway_that_is_not_beside_the_road_on_that_side_does_not_make_it_two_way() {
-    use osm_import::Direction::Both;
+    use importer::Direction::Both;
     let net = import(TWO_WAY_TRACKS).unwrap();
     for name in ["separate left track on the right", "separate left crossing", "separate left far away"] {
         assert!(!bike_ways(&net, name).contains(&Both), "{name}");
@@ -225,7 +225,7 @@ fn a_cycleway_that_is_not_beside_the_road_on_that_side_does_not_make_it_two_way(
 
 #[test]
 fn a_bike_lane_tagged_oneway_no_on_its_side_is_two_way() {
-    use osm_import::Direction::Both;
+    use importer::Direction::Both;
     let net = import(TWO_WAY_TRACKS).unwrap();
     assert_eq!(bike_ways(&net, "tagged two-way left"), [Both]);
     assert_eq!(bike_ways(&net, "tagged two-way both"), [Both, Both]);
@@ -234,7 +234,7 @@ fn a_bike_lane_tagged_oneway_no_on_its_side_is_two_way() {
 
 #[test]
 fn a_two_way_cycleway_beside_another_street_is_not_the_roads_track() {
-    use osm_import::Direction::Both;
+    use importer::Direction::Both;
     let net = import(TWO_WAY_TRACKS).unwrap();
     assert!(!bike_ways(&net, "no track of its own").contains(&Both));
     // the street that has the cycleway beside it gets the track as it has always had it: none, as it is not tagged
@@ -243,64 +243,64 @@ fn a_two_way_cycleway_beside_another_street_is_not_the_roads_track() {
 
 #[test]
 fn a_path_or_footway_designated_for_bicycles_is_a_track_and_is_two_way_unless_it_says_otherwise() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "designated footway"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "designated footway"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_road_drawn_east_to_west_has_its_track_on_the_side_it_is_on() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "westbound"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "westbound"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_track_that_says_oneway_no_for_bicycles_is_two_way_whatever_oneway_says_and_the_other_way_round() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "bicycle oneway no"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "bicycle oneway no"), [importer::Direction::Both]);
 }
 
 #[test]
 fn one_way_tracks_on_both_sides_stay_one_way() {
     let ways = bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "one-way both sides");
     assert_eq!(ways.len(), 2);
-    assert!(!ways.contains(&osm_import::Direction::Both), "{ways:?}");
+    assert!(!ways.contains(&importer::Direction::Both), "{ways:?}");
 }
 
 #[test]
 fn a_track_at_an_angle_to_the_road_is_not_its_track_and_one_covering_part_of_it_is() {
     let net = import(TWO_WAY_TRACKS).unwrap();
-    assert!(!bike_ways(&net, "tilted track").contains(&osm_import::Direction::Both));
-    assert_eq!(bike_ways(&net, "partial track"), [osm_import::Direction::Both]);
+    assert!(!bike_ways(&net, "tilted track").contains(&importer::Direction::Both));
+    assert_eq!(bike_ways(&net, "partial track"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_two_way_road_with_oneway_no_on_a_side_has_a_two_way_lane_there() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "two-way road side"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "two-way road side"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_two_way_track_beside_a_road_in_left_hand_traffic_is_a_two_way_lane() {
     let net = import(include_bytes!("left_hand_track.osm")).unwrap();
     assert!(net.left_hand);
-    assert_eq!(bike_ways(&net, "left hand"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&net, "left hand"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_service_road_nearer_to_the_track_does_not_take_it_from_the_street_it_is_mapped_for() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "service nearer"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "service nearer"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_parking_aisle_beside_the_track_does_not_matter() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "aisle beside"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "aisle beside"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_track_beyond_the_middle_of_a_wide_road_is_still_its_track() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "wide road"), [osm_import::Direction::Both]);
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "wide road"), [importer::Direction::Both]);
 }
 
 #[test]
 fn a_road_that_will_not_use_the_track_does_not_take_it_from_the_street_that_will() {
-    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "competed for"), [osm_import::Direction::Both]);
-    assert!(!bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "one-way competitor").contains(&osm_import::Direction::Both));
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "competed for"), [importer::Direction::Both]);
+    assert!(!bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "one-way competitor").contains(&importer::Direction::Both));
 }
 
 const TRACK_CROSSING: &[u8] = include_bytes!("track_crossing.osm");
@@ -332,8 +332,8 @@ fn de_maisonneuve_ouest_has_a_two_way_bike_lane_from_the_cycleways_mapped_beside
     assert!(!roads.is_empty());
     assert_eq!(roads.len(), net.roads.len(), "only the boulevard is a road");
     for road in roads {
-        let bikes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.direction).collect();
-        assert_eq!(bikes, [osm_import::Direction::Both], "{:?}", road.provenance);
+        let bikes: Vec<_> = road.base_lanes().iter().filter(|l| l.kind == importer::LaneKind::Bike).map(|l| l.direction).collect();
+        assert_eq!(bikes, [importer::Direction::Both], "{:?}", road.provenance);
     }
 }
 
@@ -369,7 +369,7 @@ fn every_lane_of_an_imported_road_is_laid_out_along_it() {
 
 #[test]
 fn an_imported_network_has_corridors_for_the_users_its_lanes_serve() {
-    use osm_import::UserClass;
+    use importer::UserClass;
     let net = import(RENE_LEVESQUE).unwrap();
     assert!(net.corridors_of(UserClass::Driver).count() >= 1 && net.corridors_of(UserClass::Pedestrian).count() >= 1);
     for corridor in &net.corridors {

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { expect, PLATEAU_PBF, placesOnMap, test } from "./fixtures";
+import { expect, PLATEAU_TILE, placesOnMap, test } from "./fixtures";
 
 // Run by `just e2e-archive`: the server unpacked the archive `citymodel_builder pack` made of the fixtures, and the
 // fixtures do not route the road data (see fixtures.ts), so what the page gets is what the server
@@ -15,15 +15,21 @@ test("the server answers the tile index from the unpacked archive", async ({ req
   const index = await res.json();
   expect(Object.keys(index)).toEqual(["lon0", "lat0", "dlon", "dlat", "tiles", "checksums"]);
   expect(index.tiles).toEqual(["0_0"]);
-  const tile = readFileSync(PLATEAU_PBF);
+  const tile = readFileSync(PLATEAU_TILE);
   expect(index.checksums["0_0"]).toBe(createHash("sha256").update(tile).digest("hex").slice(0, 16));
 });
 
-test("the tile is the fixture's bytes, and is read in ranges", async ({ request }) => {
-  const tile = readFileSync(PLATEAU_PBF);
-  const whole = await request.get("/data/metro/0_0.osm.pbf");
-  expect(Buffer.from(await whole.body()).equals(tile)).toBe(true);
-  const part = await request.get("/data/metro/0_0.osm.pbf", { headers: { range: "bytes=0-15" } });
+test("the tile is the fixture's network, and is read in ranges", async ({ request }) => {
+  const tile = readFileSync(PLATEAU_TILE);
+  // the server may compress a whole answer; Playwright undoes that, so what is compared is the JSON itself
+  const whole = await request.get("/data/metro/0_0.json");
+  expect(whole.status()).toBe(200);
+  expect(whole.headers()["content-type"]).toContain("application/json");
+  expect(await whole.text()).toBe(tile.toString("utf8"));
+  // a range is of the tile's own bytes, never of a compressed copy, though the browser says it takes one
+  const part = await request.get("/data/metro/0_0.json", {
+    headers: { range: "bytes=0-15", "accept-encoding": "gzip, deflate, br, zstd" },
+  });
   expect(part.status()).toBe(206);
   expect(part.headers()["content-range"]).toBe(`bytes 0-15/${tile.length}`);
   expect(Buffer.from(await part.body()).equals(tile.subarray(0, 16))).toBe(true);

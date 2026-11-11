@@ -10,6 +10,8 @@ web/pkg/
 e2e/node_modules
 e2e/test-results/
 e2e/playwright-report/
+# The fixtures as network tiles, made by `just e2e-fixtures`.
+e2e/fixtures/generated/
 
 # RustRover and the other JetBrains IDEs: keep what the team can share (code style,
 # inspection profiles, run configurations), not what the IDE generates per machine.

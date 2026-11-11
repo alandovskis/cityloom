@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 
 // `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
 use crate::shared::ports::{
-    Account, AccountError, Announcer, Answer, ArchiveFiles, Downloads, Fetched, Fetcher, Importer, Me, Navigator, Page, PdfWriter, Picked, Ports, ProviderInfo,
+    Account, AccountError, Announcer, Answer, ArchiveFiles, Downloads, Fetched, Fetcher, Me, Navigator, Page, PdfWriter, Picked, Ports, ProviderInfo,
     Scheduler, Storage, WorkAnswer, WorkAsk, WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
 };
 use crate::shared::{live, store};
@@ -134,51 +134,6 @@ async fn request(url: &str, body: Option<&str>) -> Fetched {
     }
     let buffer = JsFuture::from(response.array_buffer().map_err(words)?).await.map_err(words)?;
     Ok(js_sys::Uint8Array::new(&buffer).to_vec())
-}
-
-/// The OpenStreetMap reader, which the page script loads on first use and offers as
-/// `window.cityloomImportOsm(bytes) -> Promise<string>`.
-struct BrowserImporter;
-
-impl Importer for BrowserImporter {
-    #[cfg(target_arch = "wasm32")]
-    fn prepare(&self) {
-        use wasm_bindgen::JsCast;
-        let Some(window) = web_sys::window() else { return };
-        if let Some(prepare) = js_sys::Reflect::get(&window, &"cityloomPrepareOsm".into()).ok().and_then(|f| f.dyn_into::<js_sys::Function>().ok()) {
-            let _ = prepare.call0(&window);
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        wasm_bindgen_futures::spawn_local(async move { done(read_osm(&osm, bounds).await) });
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn import(&self, _osm: Vec<u8>, _bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        done(Err("there is no OpenStreetMap reader here".to_string()));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn read_osm(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<String, String> {
-    use wasm_bindgen::JsCast;
-    let words = |e: wasm_bindgen::JsValue| {
-        e.as_string()
-            .or_else(|| js_sys::Reflect::get(&e, &"message".into()).ok().and_then(|m| m.as_string()))
-            .unwrap_or_else(|| "the map data could not be read".to_string())
-    };
-    let window = web_sys::window().ok_or("there is no window")?;
-    let read = js_sys::Reflect::get(&window, &"cityloomImportOsm".into()).map_err(words)?;
-    let read: js_sys::Function = read.dyn_into().map_err(|_| "the page has no OpenStreetMap reader".to_string())?;
-    let bounds = match bounds {
-        Some(b) => js_sys::Float64Array::from(&b[..]),
-        None => js_sys::Float64Array::new_with_length(0),
-    };
-    let promise = read.call2(&wasm_bindgen::JsValue::NULL, &js_sys::Uint8Array::from(osm), &bounds).map_err(words)?;
-    let json = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await.map_err(words)?;
-    json.as_string().ok_or_else(|| "the map data could not be read".to_string())
 }
 
 /// The report writer, which the page script loads on first use and offers as
@@ -633,7 +588,6 @@ impl crate::shared::ports::Mapper for BrowserMapper {
 pub fn browser_ports() -> Ports {
     Ports {
         navigator: Rc::new(BrowserNavigator),
-        importer: Rc::new(BrowserImporter),
         pdf: Rc::new(BrowserPdfWriter),
         downloads: Rc::new(BrowserDownloads),
         fetcher: Rc::new(BrowserFetcher),

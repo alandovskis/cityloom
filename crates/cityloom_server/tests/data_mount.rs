@@ -17,11 +17,11 @@ fn site(cache_control: &str, mounted: bool) -> (tempfile::TempDir, Router) {
     }
     std::fs::write(root.join("index.html"), "home").unwrap();
     std::fs::write(root.join("data/metro/index.json"), r#"{"from":"web"}"#).unwrap();
-    std::fs::write(root.join("data/metro/9_9.osm.pbf"), b"web tile").unwrap();
+    std::fs::write(root.join("data/metro/9_9.json"), b"web tile").unwrap();
     std::fs::write(root.join("data/other/a.json"), r#"{"other":true}"#).unwrap();
     std::fs::write(area.join("metro/index.json"), r#"{"from":"area"}"#).unwrap();
-    std::fs::write(area.join("metro/0_0.osm.pbf"), b"area tile 0_0").unwrap();
-    std::fs::write(area.join("metro/1_1.osm.pbf"), (0..=255u8).collect::<Vec<_>>()).unwrap();
+    std::fs::write(area.join("metro/0_0.json"), b"area tile 0_0").unwrap();
+    std::fs::write(area.join("metro/1_1.json"), (0..=255u8).collect::<Vec<_>>()).unwrap();
     std::fs::write(area.join(".index-sha256"), "secret-ish").unwrap();
     let router = cityloom_server::static_files::router_with_data(root, mounted.then_some(area), cache_control.to_string());
     (tmp, router)
@@ -46,10 +46,10 @@ async fn the_two_directories_come_from_the_area_and_not_from_web() {
     let (_tmp, router) = site("no-cache", true);
     let (status, _, body) = get(&router, "/data/metro/index.json", None).await;
     assert_eq!((status, body), (StatusCode::OK, br#"{"from":"area"}"#.to_vec()));
-    let (status, headers, body) = get(&router, "/data/metro/0_0.osm.pbf", None).await;
+    let (status, headers, body) = get(&router, "/data/metro/0_0.json", None).await;
     assert_eq!((status, body), (StatusCode::OK, b"area tile 0_0".to_vec()));
-    assert_eq!(header_of(&headers, "content-type"), "application/x-protobuf");
-    let (status, _, body) = get(&router, "/data/metro/1_1.osm.pbf", None).await;
+    assert_eq!(header_of(&headers, "content-type"), "application/json; charset=utf-8");
+    let (status, _, body) = get(&router, "/data/metro/1_1.json", None).await;
     assert_eq!((status, body.len()), (StatusCode::OK, 256));
 }
 
@@ -59,7 +59,7 @@ async fn index_json_keeps_its_cache_rule_and_a_tile_the_sites() {
     let (_, headers, _) = get(&router, "/data/metro/index.json", None).await;
     assert_eq!(header_of(&headers, "cache-control"), "public, max-age=300, stale-while-revalidate=600");
     assert_eq!(header_of(&headers, "content-type"), "application/json; charset=utf-8");
-    for path in ["/data/metro/index.json", "/data/metro/0_0.osm.pbf", "/data/metro/1_1.osm.pbf"] {
+    for path in ["/data/metro/index.json", "/data/metro/0_0.json", "/data/metro/1_1.json"] {
         let (_, headers, _) = get(&router, path, None).await;
         assert_eq!(header_of(&headers, "accept-ranges"), "bytes", "{path}");
         assert!(header_of(&headers, "vary").to_ascii_lowercase().contains("accept-encoding"), "{path}");
@@ -72,7 +72,7 @@ async fn index_json_keeps_its_cache_rule_and_a_tile_the_sites() {
 #[tokio::test]
 async fn a_tile_is_served_in_ranges() {
     let (_tmp, router) = site("no-cache", true);
-    let path = "/data/metro/1_1.osm.pbf";
+    let path = "/data/metro/1_1.json";
     let (status, headers, body) = get(&router, path, Some("bytes=10-29")).await;
     assert_eq!(status, StatusCode::PARTIAL_CONTENT);
     assert_eq!(header_of(&headers, "content-range"), "bytes 10-29/256");
@@ -86,9 +86,9 @@ async fn a_tile_is_served_in_ranges() {
 #[tokio::test]
 async fn a_file_missing_from_the_area_is_a_404_not_web_data() {
     let (_tmp, router) = site("no-cache", true);
-    assert_eq!(get(&router, "/data/metro/9_9.osm.pbf", None).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(get(&router, "/data/metro/9_9.json", None).await.0, StatusCode::NOT_FOUND);
     let (_tmp, router) = site("no-cache", false);
-    let (status, _, body) = get(&router, "/data/metro/9_9.osm.pbf", None).await;
+    let (status, _, body) = get(&router, "/data/metro/9_9.json", None).await;
     assert_eq!((status, body), (StatusCode::OK, b"web tile".to_vec()));
 }
 
@@ -134,7 +134,7 @@ async fn without_a_mount_nothing_changes() {
 #[tokio::test]
 async fn an_encoded_slash_or_nul_in_the_area_path_is_refused() {
     let (_tmp, router) = site("no-cache", true);
-    for path in ["/data/metro/0_0.osm.pbf%00", "/data/metro/a%2fb", "/data/metro/%2e%2e%2f.index-sha256"] {
+    for path in ["/data/metro/0_0.json%00", "/data/metro/a%2fb", "/data/metro/%2e%2e%2f.index-sha256"] {
         let (status, _, body) = get(&router, path, None).await;
         assert!(status.is_client_error(), "{path}: {status}");
         assert!(!String::from_utf8_lossy(&body).contains("secret-ish"), "{path}");
@@ -149,9 +149,9 @@ async fn the_app_router_serves_the_unpacked_area() {
     let work = tmp.path().join("work");
     std::fs::create_dir_all(&work).unwrap();
     std::fs::create_dir_all(tmp.path().join("areas")).unwrap();
-    std::fs::write(work.join("0_0.osm.pbf"), b"unpacked tile").unwrap();
-    let roads = vec![(0u16, 0u16, work.join("0_0.osm.pbf"))];
-    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, roads: &roads };
+    std::fs::write(work.join("0_0.json"), b"unpacked tile").unwrap();
+    let roads = vec![(0u16, 0u16, work.join("0_0.json"))];
+    let inputs = PackInputs { area: "montreal", source: "x", source_time: 0, created: 0, grid: GRID, networks: &roads };
     archive::pack(&inputs, &tmp.path().join("areas/montreal.citymodel"), &mut |_, _| {}).unwrap();
 
     let vars = [
@@ -161,11 +161,11 @@ async fn the_app_router_serves_the_unpacked_area() {
     ];
     let mut config = Config::from_lookup(&|k| vars.iter().find(|(name, _)| *name == k).map(|(_, v)| v.clone())).unwrap();
     std::fs::create_dir_all(tmp.path().join("web/data/metro")).unwrap();
-    std::fs::write(tmp.path().join("web/data/metro/0_0.osm.pbf"), b"web tile").unwrap();
+    std::fs::write(tmp.path().join("web/data/metro/0_0.json"), b"web tile").unwrap();
     cityloom_server::unpack_areas(&mut config).await.unwrap();
     let router = cityloom_server::app::router(&config, None);
 
-    let (status, _, body) = get(&router, "/data/metro/0_0.osm.pbf", None).await;
+    let (status, _, body) = get(&router, "/data/metro/0_0.json", None).await;
     assert_eq!((status, body), (StatusCode::OK, b"unpacked tile".to_vec()));
     let (status, headers, body) = get(&router, "/data/metro/index.json", None).await;
     assert_eq!(status, StatusCode::OK);

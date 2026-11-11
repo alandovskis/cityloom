@@ -12,7 +12,7 @@ const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;
  *
  *  The pages open the area of the world last chosen, the default one before any is: the Plateau
  *  Mont-Royal. There is no network in the tests, so its roads come from a metro tile served from
- *  `fixtures/plateau.osm.pbf`. A test that wants
+ *  `fixtures/generated/plateau.json` (`just e2e-fixtures` makes it). A test that wants
  *  something else asks for it with its own `page.route`, which wins over these. With `E2E_ARCHIVE=1` the default
  *  tile and its index are not routed: the server answers them from the archive. */
 export const test = base.extend<{ errors: string[]; world: void }>({
@@ -56,19 +56,23 @@ export { expect };
 /** What a screen reader was last told. */
 export const live = (page: Page) => page.locator("#live");
 
-export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
-export const TURBO_PBF = fileURLToPath(new URL("../fixtures/turbo.osm.pbf", import.meta.url));
-export const OPEN_ENDS_PBF = fileURLToPath(new URL("../fixtures/open-ends.osm.pbf", import.meta.url));
+/** The OSM fixtures of `e2e/fixtures`, each imported into one network tile (`just e2e-fixtures`, which the browser
+ *  test recipes run first). */
+const generated = (name: string) => fileURLToPath(new URL(`../fixtures/generated/${name}.json`, import.meta.url));
+export const PLATEAU_TILE = generated("plateau");
+export const TURBO_TILE = generated("turbo");
+export const OPEN_ENDS_TILE = generated("open-ends");
 
-/** What the Plateau needs where there is no network: a metro tile of it, and no Overpass. */
+/** The answer to a request for a metro tile: the network tile in `file`. */
+export const tileFrom = (file: string) => ({ contentType: "application/json", body: readFileSync(file) });
+
+/** What the Plateau needs where there is no network: a metro tile of it. */
 export async function serveWorld(page: Page) {
-  if (!FROM_ARCHIVE) {
-    await page.route("**/data/metro/index.json", (route) =>
-      route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
-    );
-    await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
-  }
-  await page.route("https://overpass-api.de/**", (route) => route.abort());
+  if (FROM_ARCHIVE) return;
+  await page.route("**/data/metro/index.json", (route) =>
+    route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+  );
+  await page.route("**/data/metro/0_0.json", (route) => route.fulfill(tileFrom(PLATEAU_TILE)));
 }
 
 /** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads

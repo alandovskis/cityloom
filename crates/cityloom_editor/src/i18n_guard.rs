@@ -123,7 +123,6 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/place/area.rs", include_str!("place/area.rs")),
     ("src/place/loader.rs", include_str!("place/loader.rs")),
     ("src/place/nominatim.rs", include_str!("place/nominatim.rs")),
-    ("src/place/overpass.rs", include_str!("place/overpass.rs")),
     ("src/place/tiles.rs", include_str!("place/tiles.rs")),
     ("src/place/vm.rs", include_str!("place/vm.rs")),
     ("src/place/view.rs", include_str!("place/view.rs")),

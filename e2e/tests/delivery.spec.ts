@@ -1,4 +1,4 @@
-import { expect, forgive, mapReady, placesOnMap, test } from "./fixtures";
+import { expect, forgive, placesOnMap, test } from "./fixtures";
 
 const PAGES = ["/", "/map.html", "street", "junction", "/account.html"];
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -164,39 +164,5 @@ test.describe("a module that does not start", () => {
     await page.goto("/");
     await expect(page.locator("#search")).toBeVisible();
     await expect(page.locator("#boot-failed")).toBeHidden();
-  });
-});
-
-test.describe("the reader of the roads after a deploy", () => {
-  test("is told as the page is, and is tried again by the next call", async ({ page, errors }) => {
-    // The first visit reads the roads and keeps them; the second does not need the reader, so it is not loaded yet.
-    await page.goto("/map.html");
-    await mapReady(page);
-    await page.reload();
-    await mapReady(page);
-    await expect(page.locator("#boot-failed")).toBeHidden();
-    // A new build went live while the page was open: its reader's address is gone.
-    await page.route("**/v/*/pkg/osm_import.js", (route) => route.fulfill({ status: 404, body: "gone" }));
-    const call = () =>
-      page.evaluate(async () => {
-        try {
-          await (window as any).cityloomImportOsm(new Uint8Array(), "{}");
-          return "read";
-        } catch (error) {
-          return String(error);
-        }
-      });
-    const first = await call();
-    expect(first).toMatch(/osm_import|module|fetch|import/i);
-    await expect(page.locator("#boot-failed")).toBeVisible();
-    await expect(page.locator("#boot-failed")).toContainText("CityLoom could not load.");
-    // The failure is not kept: once the address answers, the reader loads (and then reads nothing from no bytes).
-    await page.unroute("**/v/*/pkg/osm_import.js");
-    const requested = page.waitForRequest(/\/pkg\/osm_import\.js\?retry=2$/);
-    const second = await call();
-    await requested;
-    expect(second).not.toBe(first);
-    forgive(errors, /./);
-    errors.length = 0;
   });
 });

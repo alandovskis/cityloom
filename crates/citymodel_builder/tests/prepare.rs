@@ -13,7 +13,7 @@ use support::{Reply, fake_tool, quiet_progress, serve};
 fn the_steps_are_the_scripts_and_pack_is_last() {
     let steps = prepare::steps(std::path::Path::new("/data/quebec-latest.osm.pbf"));
     let keys: Vec<_> = steps.iter().map(|s| s.key).collect();
-    assert_eq!(keys, ["extract", "area", "highways", "tracks", "merge", "tiles", "index", "pack"]);
+    assert_eq!(keys, ["extract", "area", "highways", "tracks", "merge", "import", "tiles", "index", "pack"]);
     let groups: Vec<_> = steps.iter().map(|s| (s.group, s.subject.as_str())).collect();
     assert_eq!(
         groups,
@@ -23,6 +23,7 @@ fn the_steps_are_the_scripts_and_pack_is_last() {
             ("roads", "highways"),
             ("roads", "designated tracks"),
             ("roads", "merge"),
+            ("network", "whole area"),
             ("tiles", "cutting 1,734 tiles"),
             ("tiles", "index"),
             ("archive", "montreal.citymodel"),
@@ -95,16 +96,17 @@ fn the_whole_pipeline_runs_in_order_against_fake_tools() {
     let osmium = fake_tool(
         root,
         "osmium",
-        r#"if [ "$1" = extract ] && [ "$2" = --config ]; then
-  d=$(sed -n 's/.*"directory":"\([^"]*\)".*/\1/p' "$3"); head -c 500 /dev/zero > "$d/0_0.osm.pbf"
-fi"#,
+        // the import needs real OSM data: osmium's merge writes a small extract of the Plateau as the roads
+        &format!(
+            r#"if [ "$1" = merge ]; then cp '{}' "$5"; fi"#,
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../e2e/fixtures/plateau.osm.pbf").display()
+        ),
     );
     let out = root.join("out");
     let job = PrepareJob {
         extract: root.join("data/quebec-latest.osm.pbf"),
         refresh: false,
         url: "http://127.0.0.1:1/never".into(),
-        batch: 500,
         osmium: osmium.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),
@@ -118,8 +120,14 @@ fi"#,
 
     let data = root.join("unpacked");
     let unpacked = archive::unpack(&job.archive, &data).unwrap();
-    assert_eq!(unpacked.tiles, 1);
-    assert_eq!(fs::metadata(data.join("montreal/metro/0_0.osm.pbf")).unwrap().len(), 500);
+    let index: serde_json::Value = serde_json::from_slice(&fs::read(job.metro.join("index.json")).unwrap()).unwrap();
+    let listed: Vec<&str> = index["tiles"].as_array().unwrap().iter().map(|t| t.as_str().unwrap()).collect();
+    assert!(!listed.is_empty());
+    assert_eq!(unpacked.tiles, listed.len());
+    for name in listed {
+        let file = format!("{name}.json");
+        assert_eq!(fs::read(data.join("montreal/metro").join(&file)).unwrap(), fs::read(job.metro.join(&file)).unwrap());
+    }
     assert_eq!(fs::read(data.join("montreal/metro/index.json")).unwrap(), fs::read(job.metro.join("index.json")).unwrap());
     let mut tar = tar::Archive::new(fs::File::open(&job.archive).unwrap());
     let mut first = tar.entries().unwrap().next().unwrap().unwrap();
@@ -131,7 +139,7 @@ fi"#,
 
     let passes: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(1).unwrap().to_string()).collect();
     let groups: Vec<_> = prepare::steps(&job.extract).iter().map(|s| s.group.to_string()).collect();
-    assert_eq!(passes.len(), 8, "{text}");
+    assert_eq!(passes.len(), 9, "{text}");
     assert_eq!(passes, groups, "{text}");
     let subjects: Vec<_> = text.lines().filter(|l| l.starts_with("PASS ")).map(|l| l.split(' ').nth(2).unwrap().to_string()).collect();
     assert_eq!(subjects.first().map(String::as_str), Some("quebec-latest.osm.pbf"));
@@ -151,7 +159,6 @@ fn a_failed_step_stops_the_pipeline_before_pack() {
         extract: root.join("data/quebec-latest.osm.pbf"),
         refresh: false,
         url: "http://127.0.0.1:1/never".into(),
-        batch: 500,
         osmium: osmium.display().to_string(),
         work: root.join("work"),
         metro: out.join("metro"),

@@ -42,13 +42,12 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 - Versioned URLs: `public, max-age=31536000, immutable`. Pages: filled per request, whole, weak `ETag` (no ranges, no `Last-Modified`; `If-None-Match` weak, lists and `*`; HEAD from the GET); a 304 carries the 200's `Cache-Control`, which keeps the configured `CACHE_CONTROL` (`no-cache` in production).
 - New code references must be `v/{{build}}/`; `cityloom_server/tests/static_files.rs` fails on any other and on a reference to a missing file. Exceptions: favicons and `logo-*` svgs by name; `boot.js` is the one script not under `v/`.
 - Not versioned: `data/` (tile index `max-age=300, stale-while-revalidate=600`; tiles `CACHE_CONTROL`: a cached old tile would persist under a new checksum), `glyphs/`, `fonts/` (one day).
-- `scripts/precompress.mjs` (from `build.sh`) writes `.br`/`.gz` beside `web/pkg` and `web/vendor` files (gitignored); sent as is unless older than the file (then that coding is left out and the file compressed on the fly). Other text is compressed on the fly.
+- `scripts/precompress.mjs` (from `build.sh`) writes `.br`/`.gz` beside `web/pkg` and `web/vendor` files (gitignored); sent as is unless older than the file (then that coding is left out and the file compressed on the fly). Other text, the metro `.json` tiles included, is compressed on the fly (full 200 responses only; Range requests stay raw 206).
 
 ### Boot failure
 
 - Pages that run the module carry a hidden `#boot-failed` notice in both languages (`data-boot` keys `ui-boot-*`; checked by `shell::tests`), shown by `window.cityloomBootFailed()` (`web/boot.js`: classic script before the entry script, unversioned so it exists when the build's addresses do not).
 - The entry script's `onerror` calls it when the entry script or a static import (`city.js`, `mapcanvas.js`) is a 404 (a deploy after the page opened does this to `/v/<old build>/`); each entry script wraps only `import()` and `init()` of the glue in `try … catch` and calls it.
-- `osm_import` (lazy via `city.js`) calls it when it cannot load and does not keep the failed promise, so the next call retries (that place's roads stay unread until reload).
 - Home mounts search first (`mount_home`), the city after roads arrive (`MapPage::mount_city`; `#hero-facts-slot` keeps room for the facts line).
 
 ## Tests

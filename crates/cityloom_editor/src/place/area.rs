@@ -6,7 +6,7 @@ use super::Bounds;
 pub const HALF_M: f64 = 400.0;
 
 /// The area a visit begins with, before anyone has chosen one. It is made like any other: from
-/// a metro tile where there are tiles, from Overpass where there are not.
+/// the metro tiles that hold it.
 pub fn default_area() -> Area {
     Area::new("Plateau Mont-Royal, Montréal", 45.5261, -73.5978)
 }

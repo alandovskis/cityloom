@@ -47,11 +47,11 @@ just prepare
 
 La recette exécute `citymodel_builder`, l’outil Rust du dépôt (`cargo run -p citymodel_builder -- prepare`; ses arguments
 sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
-`just prepare --refresh` en prend un plus récent). Elle découpe ensuite les routes de la région métropolitaine en
-tuiles dans `web/data/metro` (nécessite `osmium-tool`). Enfin, il les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
+`just prepare --refresh` en prend un plus récent). Elle conserve ensuite les routes de la région métropolitaine (nécessite `osmium-tool`), les importe en une fois avec osm2streets et
+découpe le réseau de rues obtenu en tuiles JSON dans `web/data/metro` (environ 1 700 tuiles, environ 570 Mo). Enfin, il les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
 Git ignore les tuiles et l’archive.
 
-Rien n’exige les tuiles de routes : sans elles, tous les lieux, y compris celui par défaut, viennent d’Overpass.
+L’ouverture d’un lieu exige les tuiles de routes : sans elles, aucun lieu ne s’ouvre, y compris celui par défaut, et la page d’accueil indique que le lieu n’est pas couvert.
 
 ## Tests et mise en forme
 

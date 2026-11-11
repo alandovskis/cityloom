@@ -17,7 +17,7 @@ use crate::sync::model::Kind;
 
 /// The area the person is working in, which every page opens its city from.
 pub const AREA_KEY: &str = "cityloom-area";
-/// The street network of an area, as `osm_import` made it; the area's key follows.
+/// The street network of an area, as the importer of `citymodel_builder` made it; the area's key follows.
 pub const NETWORK_KEY: &str = "cityloom-network";
 /// The checksum of the metro tile an area's network was made from, where it was; the area's key follows.
 pub const CHECKSUM_KEY: &str = "cityloom-checksum";

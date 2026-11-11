@@ -1,10 +1,9 @@
-//! Finding a place and the roads in it: what is asked of Nominatim and Overpass,
+//! Finding a place and the roads in it: what is asked of Nominatim and of the metro tiles,
 //! and how their answers are read. Pure, so it is tested without a network.
 
 pub mod area;
 pub mod loader;
 pub mod nominatim;
-pub mod overpass;
 pub mod tiles;
 pub mod view;
 pub mod vm;
@@ -36,6 +35,11 @@ pub struct Bounds {
 }
 
 impl Bounds {
+    /// The same box as a `cityloom_model::Frame`.
+    pub fn frame(&self) -> cityloom_model::Frame {
+        cityloom_model::Frame { south: self.south, west: self.west, north: self.north, east: self.east }
+    }
+
     /// The box `half_m` metres either way of a point.
     pub fn around(lat: f64, lon: f64, half_m: f64) -> Bounds {
         const M_PER_DEG_LAT: f64 = 111_320.0;

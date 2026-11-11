@@ -7,7 +7,9 @@ description = "CityLoom's data preparation: the .citymodel area archive (library
 [features]
 # The pipeline's binary and the crates only it needs. The server depends on the library with default-features = false.
 default = ["cli"]
-cli = ["dep:ureq", "dep:clap", "dep:serde_json", "dep:rlimit", "dep:ctrlc"]
+cli = ["import", "dep:ureq", "dep:clap", "dep:serde_json", "dep:ctrlc"]
+# The importer, which makes the network tiles: osm2streets and its git dependencies.
+import = ["dep:osm2streets", "dep:streets_reader", "dep:abstutil", "dep:geom", "dep:cityloom_model"]
 
 [[bin]]
 name = "citymodel_builder"
@@ -22,12 +24,17 @@ thiserror = "2.0.21"
 ureq = { version = "3.5.1", optional = true, default-features = false, features = ["rustls"] }
 clap = { version = "4.6.7", optional = true, default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 serde_json = { version = "1.0.154", optional = true, features = ["float_roundtrip"] }
-rlimit = { version = "0.11.0", optional = true }
 ctrlc = { version = "3.5.2", optional = true }
+cityloom_model = { path = "../cityloom_model", optional = true }
+osm2streets = { git = "https://github.com/a-b-street/osm2streets", optional = true }
+streets_reader = { git = "https://github.com/a-b-street/osm2streets", optional = true }
+abstutil = { git = "https://github.com/a-b-street/abstreet", optional = true }
+geom = { git = "https://github.com/a-b-street/geom", version = "0.1.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+cityloom_editor = { path = "../cityloom_editor" }
 
 [[test]]
 name = "commands"
@@ -52,3 +59,9 @@ required-features = ["cli"]
 [[test]]
 name = "progress"
 required-features = ["cli"]
+
+# The importer's tests (`tests/importer/`): one test crate, so its modules share `common` and the fixtures beside them.
+[[test]]
+name = "importer"
+path = "tests/importer/main.rs"
+required-features = ["import"]

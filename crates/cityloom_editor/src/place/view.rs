@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn what_was_found_is_listed_with_the_first_chosen_and_the_button_offers_to_open_it() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let (ports, fetcher) = test_ports_with_fetcher();
         let vm = AreaVm::new(ports, crate::i18n_for(Locale::En));
         vm.set_text("Kreuzberg");
         vm.search();
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn while_the_streets_are_got_the_button_is_off_and_the_note_says_so() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let (ports, fetcher) = test_ports_with_fetcher();
         let vm = AreaVm::new(ports, crate::i18n_for(Locale::En));
         vm.set_text("x");
         vm.search();
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn the_box_speaks_french_with_no_english_left() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let (ports, fetcher) = test_ports_with_fetcher();
         let vm = AreaVm::new(ports, crate::i18n_for(Locale::FrCa));
         let h = page(&vm);
         assert!(h.contains("placeholder=\"Chercher un lieu, comme Kreuzberg, Berlin\""), "{h}");

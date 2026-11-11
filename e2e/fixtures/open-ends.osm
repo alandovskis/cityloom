@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- Source of open-ends.osm.pbf: osmium cat open-ends.osm -o open-ends.osm.pbf --overwrite -->
+<!-- Source of open-ends.osm.pbf: osmium cat open-ends.osm -o open-ends.osm.pbf, overwriting it (an XML comment cannot hold the double hyphen of the option) -->
 <osm version="0.6" generator="hand">
+  <!-- The one road lies on one latitude: without a box, the importer would make one of no height. -->
+  <bounds minlat="45.5251" minlon="-73.6078" maxlat="45.5271" maxlon="-73.5878"/>
   <node id="1" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.6078"/>
   <node id="2" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.5978"/>
   <node id="3" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.5878"/>

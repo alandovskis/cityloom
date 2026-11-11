@@ -2,7 +2,6 @@ import type { Page } from "@playwright/test";
 
 import {
   expect,
-  forgive,
   live,
   mapReady,
   mapStill,
@@ -382,19 +381,17 @@ test.describe("when there is no map", () => {
     expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
   });
 
-  test("an area whose roads could not be got says so", async ({ page, errors }) => {
+  test("an area whose roads could not be got says so", async ({ page }) => {
+    // no tile holds it
     await page.route("**/data/metro/index.json", (route) =>
       route.fulfill({ json: { lon0: 0, lat0: 0, dlon: 1, dlat: 1, tiles: [] } }),
     );
-    await page.route("https://overpass-api.de/**", (route) => route.abort());
     await page.goto("/map.html");
     await expect(page.locator(".map-canvas-note")).toContainText("The roads of this place could not be loaded");
     // no places stand in for the area, and the page names the area it could not load
     await expect(page.locator("#fit")).toHaveText("No roads to show.");
     await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
     await expect(page.locator("#title-block")).not.toContainText("Sample city");
-    // the refused request is the point of the test; anything else still fails it
-    forgive(errors, /^Failed to load resource: net::ERR_FAILED$/);
   });
 });
 

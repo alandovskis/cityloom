@@ -1,11 +1,15 @@
-//! The plain street network that `osm_import` produces and the editor reads.
+//! The plain street network that the importer of `citymodel_builder` (`citymodel_builder::importer`) produces and
+//! the editor reads.
 //! It stands between them so that the editor does not depend on osm2streets.
 //!
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.
 
 mod corridor;
+mod cut;
+mod frame;
 mod graph;
 mod hours;
+mod importer;
 mod junction;
 mod lane;
 mod network;
@@ -17,8 +21,11 @@ mod road_type;
 mod zone;
 
 pub use corridor::{Corridor, UserClass};
+pub use cut::NetworkTile;
+pub use frame::Frame;
 pub use graph::{Edge, Node, NodeId, connected};
 pub use hours::{Hours, Window};
+pub use importer::{IMPORTER_VERSION, with_importer};
 pub use junction::{Control, Junction};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
