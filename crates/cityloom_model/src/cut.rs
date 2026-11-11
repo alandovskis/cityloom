@@ -16,8 +16,10 @@ pub struct NetworkTile {
     pub network: Network,
 }
 
-/// A cut piece shorter than this, in metres, is where a road only touches the box, and is left out.
-const MIN_PIECE_M: f64 = 0.001;
+/// A piece made by cutting whose centre line is shorter than this, in metres, is left out, with the end it would
+/// have made: where a road only touches the box, or crosses its edge a step from a junction, it is noise the editor
+/// can neither draw nor pick. A road kept whole is never left out for its length.
+const MIN_CUT_PIECE_M: f64 = 1.0;
 
 impl Network {
     /// Roads whose centre line reaches into `rect` (a Frame, as lon/lat), whole, with the junctions they use;
@@ -72,8 +74,9 @@ impl Network {
     /// border (one new road id per inside piece, a new empty-provenance end junction), lanes laid out,
     /// corridors derived, priorities pruned. `from` is this network's frame.
     ///
-    /// A road that leaves the box and comes back is two pieces, never joined across the gap; a road that only
-    /// touches the box, or whose piece has fewer than two points, is left out. Where one of a road's junction and the
+    /// A road that leaves the box and comes back is two pieces, never joined across the gap; a piece made by cutting
+    /// that is shorter than `MIN_CUT_PIECE_M` (a road that only touches the box, or crosses its edge a step from a
+    /// junction) is left out, and so is one of fewer than two points. Where one of a road's junction and the
     /// end of its trimmed centre line there is in the box and the other is not, the road is cut as if its line went on
     /// to the junction's point, as the way it was made from does. A priority naming a cut road names the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
     /// for its position and the pieces its priority names. The roads are taken in order of id, and the result's roads,
@@ -116,7 +119,7 @@ impl Network {
             let along = along(&points);
             for piece in pieces {
                 let points: Vec<Point> = piece.points.iter().map(|&p| metres.point(p)).collect();
-                if points.len() < 2 || points.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>() < MIN_PIECE_M {
+                if points.len() < 2 || points.windows(2).map(|w| w[0].distance(w[1])).sum::<f64>() < MIN_CUT_PIECE_M {
                     continue;
                 }
                 let id = RoadId(next_road);
@@ -671,6 +674,27 @@ mod tests {
         assert_eq!(piece.points[0], end.position, "the centre line starts at the edge");
         assert!((piece.length_m() - 150.0).abs() < 0.01, "from the edge, along the way to the junction: {}", piece.length_m());
         assert_eq!(junction_ids(&place).len(), 2, "the junction outside is gone: {:?}", junction_ids(&place));
+    }
+
+    #[test]
+    fn clip_to_leaves_out_a_cut_piece_shorter_than_a_metre_with_the_end_it_would_have_made() {
+        let (from, to) = (frame(), middle());
+        // a road crossing the east edge 0.4 m from its junction inside, and another, apart, 1.5 m from its own
+        let net = network(vec![road(1, 1, 2, &[(599.6, 500.0), (800.0, 500.0)]), road(2, 3, 4, &[(598.5, 450.0), (800.0, 450.0)])]);
+        let place = net.clip_to(&from, &to);
+        assert_eq!(place.roads.len(), 1, "only the 1.5 m piece: {place:?}");
+        let kept = &place.roads[0];
+        assert_eq!(kept.edge.from, NodeId(3));
+        assert!((kept.length_m() - 1.5).abs() < 0.01, "{}", kept.length_m());
+        assert_eq!(junction_ids(&place).len(), 2, "the kept piece's two ends, and none for the piece left out: {:?}", junction_ids(&place));
+        assert!(!junction_ids(&place).contains(&1), "the junction only the short piece used goes with it");
+    }
+
+    #[test]
+    fn clip_to_keeps_whole_a_road_inside_however_short() {
+        let net = network(vec![road(1, 1, 2, &[(500.0, 500.0), (500.4, 500.0)])]);
+        let place = net.clip_to(&frame(), &middle());
+        assert_eq!(road_ids(&place), [1], "{place:?}");
     }
 
     #[test]
