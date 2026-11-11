@@ -1,0 +1,6 @@
+127.0.0.1:8293/
+127.0.0.1:8293/data/metro/index.json
+127.0.0.1:8293/api/me
+127.0.0.1:8293/data/metro/31_18.json
+127.0.0.1:8293/data/metro/31_17.json
+nominatim.openstreetmap.org/search

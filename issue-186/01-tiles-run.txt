@@ -1,0 +1,34 @@
+RUNS roads metro area
+PASS roads metro area 3s
+RUNS roads highways
+PASS roads highways 0s
+RUNS roads designated tracks
+PASS roads designated tracks 0s
+RUNS roads merge
+PASS roads merge 0s
+RUNS network whole area
+PASS network whole area 229,762 roads, 418,317 junctions 29s
+RUNS tiles cutting 1,734 tiles
+PASS tiles 1,718 tiles 570.1 MB 1s
+RUNS tiles index
+PASS tiles index 0s
+Steps: 7 passed, 7 total
+Time:  36s
+       36.30 real        59.06 user         2.54 sys
+          7283441664  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             1038231  page reclaims
+                 112  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 475  voluntary context switches
+               95050  involuntary context switches
+        459613508282  instructions retired
+        131590005313  cycles elapsed
+          6678451312  peak memory footprint

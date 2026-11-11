@@ -1,0 +1,14 @@
+RUNS archive montreal.citymodel
+RUNS archive montreal.citymodel 115 of 1,140 MB
+RUNS archive montreal.citymodel 229 of 1,140 MB
+RUNS archive montreal.citymodel 343 of 1,140 MB
+RUNS archive montreal.citymodel 457 of 1,140 MB
+RUNS archive montreal.citymodel 571 of 1,140 MB
+RUNS archive montreal.citymodel 685 of 1,140 MB
+RUNS archive montreal.citymodel 799 of 1,140 MB
+RUNS archive montreal.citymodel 913 of 1,140 MB
+RUNS archive montreal.citymodel 1,027 of 1,140 MB
+RUNS archive montreal.citymodel 1719 members, 571.5 MB
+PASS archive montreal.citymodel 1719 members, 571.5 MB 1s
+Steps: 1 passed, 1 total
+Time:  1s

@@ -1,0 +1,11 @@
+cityloom.idx
+networks/0_0.json
+networks/0_1.json
+networks/0_10.json
+...
+1718
+0
+index header:
+cityloom.idx: Write error: Broken pipe
+tar: Error exit delayed from previous errors.
+00000000: 434c 4f4f 4d49 4458 0200 0000 0800 6d6f  CLOOMIDX......mo
