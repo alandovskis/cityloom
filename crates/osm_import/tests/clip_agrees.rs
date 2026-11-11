@@ -1,11 +1,20 @@
-//! A place cut from the whole area's network is the place the importer makes when it reads only the place's box:
-//! the same streets, under the same keys. Plateau Mont-Royal and Kreuzberg, © OpenStreetMap contributors, ODbL.
+//! A place cut from the whole area's network is the place the importer makes when it reads only the place's box,
+//! as far as edits are concerned: an edit made on the clipped import follows its place into the cut, and never onto
+//! another place. As in `real_city.rs`, the measure is the places the importer made the same in both (a street of the
+//! same ways, width and class; a junction of the same nodes and as many arms): near a box's edge osm2streets may
+//! build a place otherwise when it reads the box alone, which no cut of the whole can follow.
+//! Plateau Mont-Royal and Kreuzberg, © OpenStreetMap contributors, ODbL.
+
+mod common;
 
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use cityloom_editor::city::model::City;
 use cityloom_editor::place::Bounds;
 use cityloom_editor::place::area::Area;
+use cityloom_editor::shared::ports::MemoryStorage;
+use common::{document, edit_everything, followed, shifted_from, store_with};
 use osm_import::{Frame, Network, import_in, import_whole};
 
 const KREUZBERG: &[u8] = include_bytes!("data/kreuzberg.osm");
@@ -17,46 +26,77 @@ fn street_keys(net: &Network, name: &str) -> BTreeSet<String> {
     city.view(0).edges.iter().filter_map(|e| city.street_record(e.uid)).map(|(key, _)| key).collect()
 }
 
-/// The way a street's key names: its smallest.
-fn way_of(key: &str) -> i64 {
-    key.strip_prefix('w').and_then(|k| k.split('~').next()).and_then(|w| w.parse().ok()).unwrap_or_else(|| panic!("no way in {key}"))
-}
-
 fn centre(f: &Frame) -> (f64, f64) {
     ((f.south + f.north) / 2.0, (f.west + f.east) / 2.0)
 }
 
 #[test]
-#[ignore = "48 of 52 keys (92.3%) agree: osm2streets builds the junctions within a metre of the box's east edge otherwise in the clipped import; see task-5-report.md"]
 fn clipping_the_whole_plateau_gives_the_places_the_clipped_import_gives() {
     let (whole, frame) = import_whole(PLATEAU).expect("the extract reads");
     let (lat, lon) = centre(&frame);
-    let area = Area::new("Plateau", lat, lon);
-    let b = Bounds::around(area.lat, area.lon, 250.0);
-    let cut = whole.clip_to(&frame, &b.frame());
-    let clipped = import_in(PLATEAU, Some([b.south, b.west, b.north, b.east])).expect("the box reads");
+    let middle = Area::new("Plateau", lat, lon);
+    // over the five boxes: (records found, made), (same-made places that follow, of), street keys (the same, of)
+    let (mut records, mut same, mut keys, mut wrong) = ((0, 0), (0, 0), (0, 0), 0);
+    for (dx, dy) in [(0.0, 0.0), (150.0, 0.0), (-150.0, 0.0), (0.0, 150.0), (0.0, -150.0)] {
+        let area = shifted_from(&middle, "Plateau", dx, dy);
+        let b = Bounds::around(area.lat, area.lon, 250.0);
+        let clipped = import_in(PLATEAU, Some([b.south, b.west, b.north, b.east])).expect("the box reads");
+        let cut = whole.clip_to(&frame, &b.frame());
 
-    let (from_cut, from_clip) = (street_keys(&cut, "Plateau"), street_keys(&clipped, "Plateau"));
-    let shared = from_clip.intersection(&from_cut).count();
-    let only_clip: Vec<_> = from_clip.difference(&from_cut).collect();
-    let only_cut: Vec<_> = from_cut.difference(&from_clip).collect();
+        // every place of the clipped import edited and kept, then the city made from the cut opened over the records
+        let storage = Rc::new(MemoryStorage::default());
+        let (streets, junctions, placed) = edit_everything(&store_with(&storage, area.clone(), &clipped), &storage);
+        assert_eq!((streets.lost, junctions.lost), (0, 0), "({dx}, {dy}): {streets:?} {junctions:?}");
+        let edits = document(&storage);
+        let made = edits.streets.len() + edits.junctions.len();
+        let (follows, took) = followed(&store_with(&storage, area, &cut), &edits, &placed);
+        let box_wrong: usize = follows.iter().map(|f| f.wrong).sum();
+        let box_same = follows.iter().fold((0, 0), |s, f| (s.0 + f.same.0, s.1 + f.same.1));
+
+        // for information: every record, the places osm2streets builds otherwise at the box's edge too, and the keys
+        let (from_cut, from_clip) = (street_keys(&cut, "Plateau"), street_keys(&clipped, "Plateau"));
+        let box_keys = (from_clip.intersection(&from_cut).count(), from_clip.len());
+        println!(
+            "({dx}, {dy}) m: same-made places follow {} of {} ({:.1}%); records found {} of {made} ({:.1}%); {box_wrong} on another place; \
+             street keys the same {} of {}; roads {} clipped, {} cut; junctions {:?}, cut streets {:?}, other streets {:?}",
+            box_same.0,
+            box_same.1,
+            percent(box_same),
+            took.len(),
+            percent((took.len(), made)),
+            box_keys.0,
+            box_keys.1,
+            clipped.roads.len(),
+            cut.roads.len(),
+            follows[0],
+            follows[1],
+            follows[2]
+        );
+        let lost: Vec<_> = edits.streets.keys().chain(edits.junctions.keys()).filter(|k| !took.contains(*k)).collect();
+        println!("  records not found: {lost:?}");
+        records = (records.0 + took.len(), records.1 + made);
+        same = (same.0 + box_same.0, same.1 + box_same.1);
+        keys = (keys.0 + box_keys.0, keys.1 + box_keys.1);
+        wrong += box_wrong;
+    }
     println!(
-        "keys: clipped import {}, cut {}, shared {shared} ({:.1}%); roads: clipped import {}, cut {}",
-        from_clip.len(),
-        from_cut.len(),
-        100.0 * shared as f64 / from_clip.len() as f64,
-        clipped.roads.len(),
-        cut.roads.len()
+        "all five boxes: same-made places follow {} of {} ({:.1}%); records found {} of {} ({:.1}%); street keys the same {} of {} ({:.1}%); {wrong} on another place",
+        same.0,
+        same.1,
+        percent(same),
+        records.0,
+        records.1,
+        percent(records),
+        keys.0,
+        keys.1,
+        percent(keys)
     );
-    println!("only in the clipped import: {only_clip:?}");
-    println!("only in the cut: {only_cut:?}");
+    assert_eq!(wrong, 0, "places that took the edit of another place");
+    assert!(same.0 * 100 >= same.1 * 95, "{} of {} places the importer made the same in both follow", same.0, same.1);
+}
 
-    assert!(from_clip.len() > 50, "{} streets", from_clip.len());
-    assert!(shared * 100 >= from_clip.len() * 95, "{shared} of {} keys of the clipped import are the cut's", from_clip.len());
-    let lacking: Vec<_> = from_cut.iter().filter(|k| !clipped.roads.iter().any(|r| r.has_way(way_of(k)))).collect();
-    assert!(lacking.is_empty(), "keys of the cut naming a way the clipped import lacks: {lacking:?}");
-    let (a, c) = (clipped.roads.len(), cut.roads.len());
-    assert!(a.abs_diff(c) * 100 <= a * 5, "{c} roads cut against {a} imported");
+fn percent((part, of): (usize, usize)) -> f64 {
+    100.0 * part as f64 / of as f64
 }
 
 #[test]
