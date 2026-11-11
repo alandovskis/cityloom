@@ -73,9 +73,9 @@ impl Network {
     /// corridors derived, priorities pruned. `from` is this network's frame.
     ///
     /// A road that leaves the box and comes back is two pieces, never joined across the gap; a road that only
-    /// touches the box, or whose piece has fewer than two points, is left out. Where a road's junction is in the box
-    /// and the end of its trimmed centre line is not, the road is cut as if its line went on to the junction's point,
-    /// as the way it was made from does. A priority naming a cut road names the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
+    /// touches the box, or whose piece has fewer than two points, is left out. Where one of a road's junction and the
+    /// end of its trimmed centre line there is in the box and the other is not, the road is cut as if its line went on
+    /// to the junction's point, as the way it was made from does. A priority naming a cut road names the piece that reaches the junction. A junction no road left uses is left out; one kept is as it was, but
     /// for its position and the pieces its priority names. The roads are taken in order of id, and the result's roads,
     /// junctions and priority lists are sorted by id, so the order the network holds them in makes no difference.
     pub fn clip_to(&self, from: &Frame, to: &Frame) -> Network {
@@ -93,9 +93,10 @@ impl Network {
         let position: BTreeMap<NodeId, Point> = self.junctions.iter().map(|j| (j.id, j.position)).collect();
         let inside = |p: Point| holds(to, degrees.of_point(p));
         for road in in_order {
-            // osm2streets trims a road back from its junction: where the junction is in the box and the trimmed end is
-            // not, the road reaches the box from the junction's point, as the way it was made from does
-            let reach = |end: NodeId, own: Option<&Point>| position.get(&end).copied().filter(|&j| inside(j) && own.is_some_and(|&p| !inside(p)));
+            // osm2streets trims a road back from its junction: where one of the junction and the trimmed end is in the
+            // box and the other is not, the way it was made from crosses the edge between them, so the line runs on to
+            // the junction's point
+            let reach = |end: NodeId, own: Option<&Point>| position.get(&end).copied().filter(|&j| own.is_some_and(|&p| inside(j) != inside(p)));
             let (before, after) = (reach(road.edge.from, road.points.first()), reach(road.edge.to, road.points.last()));
             let points: Vec<Point> = before.into_iter().chain(road.points.iter().copied()).chain(after).collect();
             // how far the road's own line starts along the line cut
@@ -651,6 +652,25 @@ mod tests {
         assert!((piece.length_m() - 1.0).abs() < 0.01, "{}", piece.length_m());
         assert_eq!(piece.zones.len(), 1, "the zone where the road starts: {:?}", piece.zones);
         assert_eq!(piece.zones[0].speed_kmh, None);
+    }
+
+    #[test]
+    fn clip_to_cuts_at_the_edge_a_road_whose_trimmed_line_is_inside_and_whose_junction_is_not() {
+        // the junction is a metre beyond the east edge; osm2streets trimmed the road back to inside the box
+        let mut net = network(vec![road(1, 1, 2, &[(595.0, 500.0), (450.0, 500.0)])]);
+        net.junctions[0].position = Point::new(601.0, 500.0);
+        let (from, to) = (frame(), middle());
+        let place = net.clip_to(&from, &to);
+        assert_eq!(place.roads.len(), 1, "{place:?}");
+        let piece = &place.roads[0];
+        assert!(piece.edge.id.0 > 1, "a cut piece, not the road whole: {:?}", piece.edge);
+        assert_eq!(piece.edge.to, NodeId(2), "the end inside is the road's own");
+        let end = junction_of(&place, piece.edge.from);
+        assert!(end.provenance.is_empty() && !end.junction, "the end at the border is new: {end:?}");
+        assert!((end.position.x_m() - to.width_m()).abs() <= 0.001, "on the east edge: {:?} of {}", end.position, to.width_m());
+        assert_eq!(piece.points[0], end.position, "the centre line starts at the edge");
+        assert!((piece.length_m() - 150.0).abs() < 0.01, "from the edge, along the way to the junction: {}", piece.length_m());
+        assert_eq!(junction_ids(&place).len(), 2, "the junction outside is gone: {:?}", junction_ids(&place));
     }
 
     #[test]
