@@ -3,7 +3,7 @@
 //! Montréal (800 m square), © OpenStreetMap contributors, ODbL.
 
 use cityloom_editor::city::model::City;
-use osm_import::import;
+use citymodel_builder::importer::{self, import};
 
 const KREUZBERG: &[u8] = include_bytes!("data/kreuzberg.osm");
 const PLATEAU: &[u8] = include_bytes!("data/plateau.osm");
@@ -49,9 +49,9 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     }
     // only a bike lane runs both ways. (The extract holds the roads only, no `highway=cycleway` ways and no
     // `oneway=no` on a side, so it has no two-way track to count; `tests/import.rs` pins them on fixtures.)
-    assert!(net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.direction == osm_import::Direction::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
+    assert!(net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.direction == importer::Direction::Both).all(|l| l.kind == importer::LaneKind::Bike));
     // the streets with a median in them
-    assert!(net.roads.iter().any(|r| r.base_lanes().iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
+    assert!(net.roads.iter().any(|r| r.base_lanes().iter().any(|l| l.kind == importer::LaneKind::Other)), "a divided street is merged");
 }
 
 #[test]
@@ -68,8 +68,8 @@ fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
         medians += view.segments.iter().filter(|s| s.kind == median).count();
         buffers += view.segments.iter().filter(|s| s.kind == buffer).count();
     }
-    let others = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Other).count();
-    let curbs = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    let others = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == importer::LaneKind::Other).count();
+    let curbs = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == importer::LaneKind::Buffer).count();
     assert_eq!(medians, others, "a median is a lane of the road that no lane uses, and nothing else");
     assert!(buffers > 0 && buffers <= curbs, "{buffers} buffers of {curbs} curbs: those beside a bike lane or a sidewalk are its own");
 }
@@ -77,7 +77,7 @@ fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
 #[test]
 fn every_street_of_the_montreal_extract_that_changed_width_with_the_buffers_is_found_by_the_width_it_had() {
     // What importer version 4 made of the extract: every buffer that is not planted a lane of its own, a median.
-    use osm_import::{BufferType, LaneKind};
+    use importer::{BufferType, LaneKind};
     let net = import(PLATEAU).expect("the extract reads");
     let mut old = net.clone();
     for l in old.roads.iter_mut().flat_map(|r| r.base_lanes_mut().iter_mut()) {
@@ -106,7 +106,7 @@ fn every_street_of_the_montreal_extract_that_changed_width_with_the_buffers_is_f
 fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
     // Every buffer of the extract is a curb that osm2streets inferred; none is a planter or a verge.
     let net = import(PLATEAU).expect("the extract reads");
-    let buffers = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    let buffers = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == importer::LaneKind::Buffer).count();
     assert!(buffers > 100, "{buffers} buffers");
     let city = City::from_network(&net, "Plateau");
     let planting = cityloom_editor::shared::catalogue::kind_index("planting").unwrap();
@@ -121,7 +121,7 @@ fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
 // The e2e fixture is the Plateau's metro tile: the default area and areas shifted a little from it, as the app cuts
 // them, each read through the real importer and kept in the same storage.
 
-mod common;
+use crate::common;
 
 mod kept {
     use std::collections::BTreeMap;
@@ -130,14 +130,15 @@ mod kept {
     use cityloom_editor::city::store::CityStore;
     use cityloom_editor::place::area::{Area, default_area};
     use cityloom_editor::shared::ports::MemoryStorage;
+    use citymodel_builder::importer;
 
     use super::common::{Follow, document, edit_everything, followed, shifted_from, store_with};
 
-    const TILE: &[u8] = include_bytes!("../../../e2e/fixtures/plateau.osm.pbf");
+    const TILE: &[u8] = include_bytes!("../../../../e2e/fixtures/plateau.osm.pbf");
 
     fn store(storage: &Rc<MemoryStorage>, area: Area) -> CityStore {
         let b = area.bounds();
-        let network = osm_import::import_in(TILE, Some([b.south, b.west, b.north, b.east])).expect("the tile reads");
+        let network = importer::import_in(TILE, Some([b.south, b.west, b.north, b.east])).expect("the tile reads");
         store_with(storage, area, &network)
     }
 
@@ -227,6 +228,7 @@ mod two_way_track {
     use cityloom_editor::city::store::CityStore;
     use cityloom_editor::place::area::Area;
     use cityloom_editor::shared::ports::{MemoryStorage, Storage};
+    use citymodel_builder::importer;
 
     const FIXTURE: &str = include_str!("de_maisonneuve.osm");
 
@@ -237,8 +239,8 @@ mod two_way_track {
 
     #[test]
     fn a_record_made_with_the_track_one_way_applies_to_the_street_when_it_is_two_way() {
-        let before = osm_import::import(without_tracks().as_bytes()).unwrap();
-        let now = osm_import::import(FIXTURE.as_bytes()).unwrap();
+        let before = importer::import(without_tracks().as_bytes()).unwrap();
+        let now = importer::import(FIXTURE.as_bytes()).unwrap();
         let storage = Rc::new(MemoryStorage::default());
         let store = CityStore::for_area(storage.clone() as Rc<dyn Storage>, Area::new("Saint-Marc", 45.4935, -73.58));
         assert!(store.keep_network(&before));
@@ -259,8 +261,8 @@ mod two_way_track {
         let city = store.open();
         let view = city.view(0);
         let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();
-        let bike = now.roads[index].base_lanes().iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
-        assert_eq!((bike.direction, bike.width_m), (osm_import::Direction::Both, 3.0), "the street is two-way now");
+        let bike = now.roads[index].base_lanes().iter().find(|l| l.kind == importer::LaneKind::Bike).unwrap();
+        assert_eq!((bike.direction, bike.width_m), (importer::Direction::Both, 3.0), "the street is two-way now");
         assert_eq!(view.edges[index].row_mm, one_way_mm, "and is shown as it was saved");
         assert!(view.edges[index].edited, "and the record made at {one_way_mm} mm still applies");
         assert_eq!(city.street_editor(view.edges[index].uid, 0).unwrap().snapshot(), edited);

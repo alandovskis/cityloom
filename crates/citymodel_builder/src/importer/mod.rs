@@ -1,10 +1,9 @@
 //! OpenStreetMap to a plain street network.
 //!
 //! osm2streets does the hard part (splitting ways at junctions, collapsing the
-//! tangle around a big crossing, reading lane tags). This crate runs it and
+//! tangle around a big crossing, reading lane tags). This module runs it and
 //! hands the result on as a small, stable shape of its own, so the editor
-//! depends on that shape and not on osm2streets. It is built as a separate
-//! WebAssembly module, loaded when a place is opened.
+//! depends on that shape and not on osm2streets.
 
 mod merge;
 
@@ -16,7 +15,6 @@ use std::collections::BTreeMap;
 use osm2streets::osm::WayID;
 use streets_reader::osm_reader::Way as OsmWay;
 use streets_reader::{OsmExtract, osm_reader::Document};
-use wasm_bindgen::prelude::*;
 
 /// Reads OSM XML (or PBF) into a network.
 pub fn import(osm: &[u8]) -> Result<Network, String> {
@@ -469,14 +467,6 @@ fn bus_hours(tags: &Tags) -> Option<String> {
     let hours = hours.trim();
     let hours = hours.strip_prefix('(').and_then(|h| h.strip_suffix(')')).unwrap_or(hours).trim();
     (!hours.is_empty()).then(|| hours.to_string())
-}
-
-/// For the browser: OSM XML or PBF in, the network as JSON out (or the error text, as a thrown string).
-/// `bounds` is empty, or the box to keep: south, west, north, east.
-#[wasm_bindgen]
-pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
-    let bounds = <[f64; 4]>::try_from(bounds).ok();
-    serde_json::to_string(&import_in(osm, bounds)?).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

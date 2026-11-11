@@ -7,7 +7,7 @@
 //! read is not reproduced (the network does not keep a way's nodes), so the cut keeps pieces across a box's corner.
 //! Plateau Mont-Royal and Kreuzberg, © OpenStreetMap contributors, ODbL.
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeSet;
 use std::rc::Rc;
@@ -16,8 +16,8 @@ use cityloom_editor::city::model::City;
 use cityloom_editor::place::Bounds;
 use cityloom_editor::place::area::Area;
 use cityloom_editor::shared::ports::MemoryStorage;
+use citymodel_builder::importer::{Frame, Network, import_in, import_whole};
 use common::{document, edit_everything, followed, shifted_from, store_with};
-use osm_import::{Frame, Network, import_in, import_whole};
 
 const KREUZBERG: &[u8] = include_bytes!("data/kreuzberg.osm");
 const PLATEAU: &[u8] = include_bytes!("data/plateau.osm");

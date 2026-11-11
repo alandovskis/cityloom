@@ -13,7 +13,7 @@ use cityloom_editor::city::store::CityStore;
 use cityloom_editor::junction::model::RING_STEP_MM;
 use cityloom_editor::place::area::Area;
 use cityloom_editor::shared::ports::{MemoryStorage, Storage};
-use osm_import::Network;
+use citymodel_builder::importer::Network;
 
 /// A store of `area` in `storage`, holding `network` as the area's roads.
 pub fn store_with(storage: &Rc<MemoryStorage>, area: Area, network: &Network) -> CityStore {

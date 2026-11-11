@@ -196,7 +196,7 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
 /// `citymodel_builder fixture`: the whole of `input`, imported, as one `NetworkTile` in compact JSON at `out`.
 pub fn fixture(input: &Path, out: &Path) -> Result<(), String> {
     let osm = fs::read(input).map_err(|e| format!("cannot read {}: {e}", input.display()))?;
-    let (network, frame) = osm_import::import_whole(&osm).map_err(|e| format!("cannot import {}: {e}", input.display()))?;
+    let (network, frame) = crate::importer::import_whole(&osm).map_err(|e| format!("cannot import {}: {e}", input.display()))?;
     let json = serde_json::to_vec(&NetworkTile { frame, network }).map_err(|e| format!("cannot write {}: {e}", out.display()))?;
     fs::write(out, json).map_err(|e| format!("cannot write {}: {e}", out.display()))
 }

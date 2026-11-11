@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use crate::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, RoadId, Zone};
+use crate::importer::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, RoadId, Zone};
 
 /// The widest a median can be, from centre line to centre line of the carriageways, for them to be one street.
 const MAX_APART_M: f64 = 60.0;
@@ -205,7 +205,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
             let n = &mut net.junctions[ti];
             n.provenance.extend(g.provenance);
             n.junction |= g.junction;
-            if n.control == crate::Control::None {
+            if n.control == crate::importer::Control::None {
                 n.control = g.control;
             }
             into_of.insert(from, into);
@@ -237,7 +237,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     net.roads = roads;
     // a priority road that was merged is the road it became; one that is gone is dropped
     for j in &mut net.junctions {
-        if let crate::Control::Priority(ids) = &mut j.control {
+        if let crate::importer::Control::Priority(ids) = &mut j.control {
             let mut kept: Vec<RoadId> = Vec::new();
             for id in ids.iter().map(|id| kept_as.iter().find(|(gone, _)| gone == id).map_or(*id, |(_, now)| *now)) {
                 if !kept.contains(&id) {
@@ -254,7 +254,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
 fn drop_unknown_priority(net: &mut Network) {
     let roads = &net.roads;
     for j in &mut net.junctions {
-        if let crate::Control::Priority(ids) = &mut j.control {
+        if let crate::importer::Control::Priority(ids) = &mut j.control {
             ids.retain(|id| roads.iter().any(|r| r.edge.id == *id));
         }
     }
@@ -271,7 +271,7 @@ fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Control, Coordinate, Edge, Junction, NodeRef, Provenance, RoadType, WayRef};
+    use crate::importer::{Control, Coordinate, Edge, Junction, NodeRef, Provenance, RoadType, WayRef};
 
     fn node(id: u32, x_m: f64, y_m: f64) -> Junction {
         Junction {

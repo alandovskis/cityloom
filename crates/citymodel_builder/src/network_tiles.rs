@@ -197,8 +197,8 @@ mod tests {
 
     #[test]
     fn the_tiles_are_what_reaching_gives_from_the_whole_network() {
-        let osm = fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../osm_import/tests/data/plateau.osm")).unwrap();
-        let (whole, frame) = osm_import::import_whole(&osm).unwrap();
+        let osm = fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/importer/data/plateau.osm")).unwrap();
+        let (whole, frame) = crate::importer::import_whole(&osm).unwrap();
         let grid = crate::tiles::grid();
         let tiles = cut(&whole, &frame, &grid);
         let mut expected = Vec::new();

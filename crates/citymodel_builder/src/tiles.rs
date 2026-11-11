@@ -131,7 +131,7 @@ pub fn run(p: &Progress, job: &TilesJob) -> Result<(), StepError> {
     let (network, frame) = p.step("import", |s| {
         // the importer takes the file's bytes; they go once it has read them
         let osm = fs::read(&roads).map_err(|e| StepError::new([format!("cannot read {}: {e}", roads.display())]))?;
-        let (network, frame) = osm_import::import_whole(&osm).map_err(|e| StepError::new([format!("cannot import {}: {e}", roads.display())]))?;
+        let (network, frame) = crate::importer::import_whole(&osm).map_err(|e| StepError::new([format!("cannot import {}: {e}", roads.display())]))?;
         let detail = format!("{} roads, {} junctions", thousands(network.roads.len()), thousands(network.junctions.len()));
         s.update(None, Some(&detail), None);
         Ok((network, frame))
