@@ -1,42 +1,42 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
 import type { Page } from "@playwright/test";
 
 import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
-const EXTRACT = fileURLToPath(new URL("../../crates/osm_import/tests/data/kreuzberg.osm", import.meta.url));
-const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 
-/** The two services a place is found and read from, answered without a network: Nominatim with two
- *  places, and Overpass with the real extract of Kreuzberg, which the OSM reader in the browser reads. */
-const stubWorld = async (page: Page, requests: string[] = []) => {
+/** Nominatim, answered without a network with the places in `found`; every request it gets is put in `requests`. */
+const stubSearch = async (page: Page, found: object[], requests: string[] = []) => {
   await page.route("https://nominatim.openstreetmap.org/**", (route) => {
     requests.push(route.request().url());
-    return route.fulfill({
-      headers: CORS,
-      json: [
-        {
-          display_name: "Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany",
-          lat: "52.5010",
-          lon: "13.4235",
-          boundingbox: ["52.48", "52.51", "13.38", "13.43"],
-        },
-        {
-          display_name: "Kreuzberg, Bavaria, Germany",
-          lat: "50.0",
-          lon: "10.0",
-          boundingbox: ["49.9", "50.1", "9.9", "10.1"],
-        },
-      ],
-    });
-  });
-  await page.route("https://overpass-api.de/**", (route) => {
-    requests.push(route.request().url());
-    return route.fulfill({ headers: CORS, contentType: "application/xml", body: readFileSync(EXTRACT) });
+    return route.fulfill({ headers: CORS, json: found });
   });
 };
+
+/** Two places of the Plateau, which the one metro tile the tests serve (fixtures.ts) holds. */
+const PLATEAU_PLACES = [
+  {
+    display_name: "Mile End, Montréal, Québec",
+    lat: "45.5265",
+    lon: "-73.5970",
+    boundingbox: ["45.5", "45.55", "-73.62", "-73.57"],
+  },
+  {
+    display_name: "Plateau Mont-Royal, Montréal, Québec",
+    lat: "45.5261",
+    lon: "-73.5978",
+    boundingbox: ["45.51", "45.54", "-73.61", "-73.56"],
+  },
+];
+
+/** A place far from any tile. */
+const KREUZBERG = [
+  {
+    display_name: "Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany",
+    lat: "52.5010",
+    lon: "13.4235",
+    boundingbox: ["52.48", "52.51", "13.38", "13.43"],
+  },
+];
 
 test.describe("the home page", () => {
   test.beforeEach(async ({ page }) => {
@@ -62,59 +62,36 @@ test.describe("the home page", () => {
 
   test("a search finds places, and Enter opens the first one's streets on the map", async ({ page }) => {
     const requests: string[] = [];
-    await stubWorld(page, requests);
-    await page.locator("#search").fill("Kreuzberg");
+    await stubSearch(page, PLATEAU_PLACES, requests);
+    await page.locator("#search").fill("Montréal");
     expect(requests).toEqual([]); // nothing is asked until the person asks
     await page.keyboard.press("Enter");
     await expect(page.locator('#area-results [role="option"]')).toHaveCount(2);
-    await expect(page.locator('#area-results [role="option"]').first()).toContainText(
-      "Kreuzberg, Friedrichshain-Kreuzberg",
-    );
+    await expect(page.locator('#area-results [role="option"]').first()).toContainText("Mile End, Montréal");
     await expect(page.locator(".search-note")).toContainText("2 places found");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/map\.html$/);
-    await expect(page.locator("#title-block")).toContainText("Kreuzberg, Friedrichshain-Kreuzberg");
-    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
-    expect(requests.some((r) => r.startsWith("https://overpass-api.de/"))).toBe(true);
+    await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
+    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(20);
   });
 
   test("has a Find button, which becomes Open once there are places to open", async ({ page }) => {
-    await stubWorld(page);
+    await stubSearch(page, PLATEAU_PLACES);
     const go = page.getByRole("button", { name: "Find" });
     await expect(go).toBeVisible();
-    await page.locator("#search").fill("Kreuzberg");
+    await page.locator("#search").fill("Montréal");
     await go.click();
     await expect(page.getByRole("button", { name: "Open" })).toBeVisible();
     await page.locator('#area-results [role="option"]').nth(0).click();
     await expect(page).toHaveURL(/map\.html$/);
   });
 
-  test("a place a metro tile holds is read from the tile, and Overpass is not asked", async ({ page }) => {
+  test("a place a metro tile holds is read from the tile, and nothing else is asked", async ({ page, baseURL }) => {
     const asked: string[] = [];
-    await page.route("https://nominatim.openstreetmap.org/**", (route) =>
-      route.fulfill({
-        headers: CORS,
-        json: [
-          {
-            display_name: "Mile End, Montréal, Québec",
-            lat: "45.5265",
-            lon: "-73.5970",
-            boundingbox: ["45.5", "45.55", "-73.62", "-73.57"],
-          },
-        ],
-      }),
-    );
-    await page.route("https://overpass-api.de/**", (route) => {
-      asked.push(route.request().url());
-      return route.abort();
-    });
-    // a grid of one tile, holding the extract the app ships
-    await page.route("**/data/metro/index.json", (route) =>
-      route.fulfill({ json: { lon0: -73.6, lat0: 45.52, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
-    );
-    await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
+    page.on("request", (request) => asked.push(request.url()));
+    await stubSearch(page, PLATEAU_PLACES.slice(0, 1));
     await page.locator("#search").fill("Mile End");
     await page.keyboard.press("Enter");
     await expect(page.locator('#area-results [role="option"]')).toHaveCount(1);
@@ -122,13 +99,36 @@ test.describe("the home page", () => {
     await expect(page).toHaveURL(/map\.html$/);
     await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
     expect((await placesOnMap(page)).streets.length).toBeGreaterThan(20);
-    expect(asked).toEqual([]);
+    expect(asked.filter((url) => url.endsWith("/data/metro/0_0.json")).length).toBeGreaterThan(0);
+    // the place search, and the site itself: no other host, Overpass least of all
+    const hosts = new Set(asked.map((url) => new URL(url).host));
+    expect(hosts).not.toContain("overpass-api.de");
+    expect([...hosts].sort()).toEqual(["nominatim.openstreetmap.org", new URL(baseURL!).host].sort());
+  });
+
+  test("a place no tile holds says so, in the page's language, and keeps nothing", async ({ page }) => {
+    const before = await page.evaluate(() => ({ ...localStorage }));
+    await stubSearch(page, KREUZBERG);
+    await page.locator("#search").fill("Kreuzberg");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#area-results [role="option"]')).toHaveCount(1);
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".search-note")).toContainText("CityLoom has no street data for Kreuzberg");
+    await expect(page).toHaveURL(/\/$/);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator(".search-note")).toContainText("CityLoom n’a pas de données de rues pour Kreuzberg");
+    // nothing of Kreuzberg was kept, and the place chosen before is still the one the pages open
+    const after = await page.evaluate(() => ({ ...localStorage }));
+    expect(Object.entries(after).filter(([k, v]) => /kreuzberg|52\.50/i.test(k + v))).toEqual([]);
+    const butLanguage = (s: Record<string, string>) => Object.entries(s).filter(([k]) => k !== "cityloom-lang");
+    expect(butLanguage(after)).toEqual(butLanguage(before));
   });
 
   test("a place whose streets cannot be got says so and stays on the page", async ({ page, errors }) => {
-    await stubWorld(page);
-    await page.route("https://overpass-api.de/**", (route) => route.fulfill({ status: 504, headers: CORS, body: "" }));
-    await page.locator("#search").fill("Kreuzberg");
+    await stubSearch(page, PLATEAU_PLACES);
+    await page.route("**/data/metro/0_0.json", (route) => route.fulfill({ status: 504, body: "" }));
+    await page.locator("#search").fill("Montréal");
     await page.keyboard.press("Enter");
     await expect(page.locator('#area-results [role="option"]')).toHaveCount(2);
     await page.keyboard.press("Enter");

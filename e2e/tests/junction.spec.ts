@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import {
   expect,
   live,
@@ -9,7 +7,8 @@ import {
   splitInto,
   streetLengthM,
   test,
-  TURBO_PBF,
+  tileFrom,
+  TURBO_TILE,
 } from "./fixtures";
 
 import type { Locator, Page } from "@playwright/test";
@@ -867,10 +866,10 @@ test.describe("signal timing on a junction of the city", () => {
   });
 });
 
-// Gives the one crossing of `fixtures/turbo.osm.pbf` (four streets with room for two entry lanes each) the basic turbo
+// Gives the one crossing of `fixtures/turbo.osm.pbf` (served as its network tile) (four streets with room for two entry lanes each) the basic turbo
 // layout from its details. The Plateau's own junctions have no room for it, so the tile is served in their place.
 async function basicTurbo(page: Page) {
-  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(TURBO_PBF) }));
+  await page.route("**/data/metro/0_0.json", (route) => route.fulfill(tileFrom(TURBO_TILE)));
   await openJunction(page);
   await expect(page.locator("#arm-count")).toHaveText("4 streets");
   await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Roundabout" });

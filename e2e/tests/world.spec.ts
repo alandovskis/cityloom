@@ -47,7 +47,7 @@ test("an area is made again when the checksum of its tile changes, and not other
   );
   let tileReads = 0;
   page.on("request", (request) => {
-    if (request.url().endsWith("/data/metro/0_0.osm.pbf")) tileReads++;
+    if (request.url().endsWith("/data/metro/0_0.json")) tileReads++;
   });
   const key = "cityloom-checksum:45.5261,-73.5978";
   // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in crates/cityloom_model/src/importer.rs)

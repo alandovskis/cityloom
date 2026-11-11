@@ -1,8 +1,16 @@
-import { readFileSync } from "node:fs";
-
 import type { Page } from "@playwright/test";
 
-import { expect, live, mapReady, OPEN_ENDS_PBF, openStreet, splitInto, streetLengthM, test } from "./fixtures";
+import {
+  expect,
+  live,
+  mapReady,
+  OPEN_ENDS_TILE,
+  openStreet,
+  splitInto,
+  streetLengthM,
+  test,
+  tileFrom,
+} from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -750,7 +758,7 @@ test.describe("the zones of a street", () => {
 });
 
 test("a street cut at both ends says it cannot be split", async ({ page }) => {
-  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(OPEN_ENDS_PBF) }));
+  await page.route("**/data/metro/0_0.json", (route) => route.fulfill(tileFrom(OPEN_ENDS_TILE)));
   // the tile holds one road and no junction, so the map's places are its one street
   await page.goto("/map.html");
   await mapReady(page);
