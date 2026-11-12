@@ -67,8 +67,16 @@ user sees is the list of their projects.
 
 ## My calls (not yet confirmed, marked for review)
 
-- The create form asks for a name only while Montreal is the sole area; the area
-  is shown read-only. A picker appears when a second area exists.
+- Superseded (2026-11-12, by the user's request "I should be able to select a
+  metropolitan area for a project"): the create form asks for a name and has a
+  labelled choice of metropolitan area (a `<select>`), even while Montréal is the
+  only entry, which is chosen by default; a hint says the choice cannot be changed
+  once the project is created. The catalogue is `place::area` (`Metro`: a stable
+  id, a name message, the box it covers and the place a new project's map opens on,
+  Plateau Mont-Royal for Montréal: the editor opens one place about 800 m across,
+  not a whole region). The project record still holds an area query, so older
+  records and builds read it as before; the list names the metropolitan area that
+  holds it, read-only, and nothing changes it after creation.
 - Where the current hero and introduction go: they move off the first screen to a
   short "about" section below or beside the list. The builder may choose the exact
   placement.

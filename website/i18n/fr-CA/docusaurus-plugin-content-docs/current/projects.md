@@ -6,18 +6,19 @@ sidebar_position: 2
 
 # Projets
 
-Votre travail dans CityLoom est conservé dans des projets. Un projet a un nom et un lieu : sa carte montre les rues et
-les jonctions de ce lieu, et ses modifications de rues, ses modifications de jonctions et ses règles de zone
+Votre travail dans CityLoom est conservé dans des projets. Un projet a un nom et une région métropolitaine : sa carte
+montre des rues et des jonctions de cette région, et ses modifications de rues, ses modifications de jonctions et ses règles de zone
 n’appartiennent qu’à lui. Deux projets peuvent modifier la même rue de deux façons différentes.
 
 ## La liste des projets
 
 La page d’accueil (`web/index.html`) présente vos projets sous **Vos projets**, le plus récemment modifié en premier.
-Chaque ligne indique le nom du projet, son lieu et le jour de sa dernière modification.
+Chaque ligne indique le nom du projet, sa région métropolitaine et le jour de sa dernière modification.
 
-- **Nouveau projet** : tapez un nom sous **Nom du projet** et choisissez **Créer le projet**. Un nom compte de 1 à
-  80 caractères. Le lieu d’un nouveau projet est toujours le Plateau-Mont-Royal, à Montréal; il ne peut pas encore être
-  choisi. Une fois le projet créé, son lieu ne change pas.
+- **Nouveau projet** : tapez un nom sous **Nom du projet**, choisissez sa **Région métropolitaine** et choisissez
+  **Créer le projet**. Un nom compte de 1 à 80 caractères. Montréal est pour l’instant la seule région métropolitaine;
+  elle est donc déjà choisie. La région métropolitaine ne peut plus être changée une fois le projet créé : la liste
+  l’affiche, et rien ne la modifie. La carte d’un nouveau projet s’ouvre sur le Plateau-Mont-Royal, à Montréal.
 - **Ouvrir** : choisissez le nom du projet. Sa carte s’ouvre (`map.html?project=<id>`), et les rues et les jonctions
   que vous ouvrez à partir de celle-ci sont modifiées dans ce projet.
 - **Renommer** : choisissez **Renommer**, tapez le nouveau nom et choisissez **Enregistrer le nom**. Échap ou
@@ -36,9 +37,9 @@ revient à la liste, qui indique **Ce projet n’est plus ici.**
 ## Le travail d’avant les projets
 
 Le travail conservé dans le navigateur par une version de CityLoom sans projets est déplacé, à la première ouverture de
-la liste, dans un projet nommé **Premier projet**, dans le même lieu qu’avant si ce lieu se trouvait dans la région de Montréal, sinon au Plateau-Mont-Royal, à
-Montréal. Il s’ouvre comme avant : vous n’avez
-rien à faire.
+la liste, dans un projet nommé **Premier projet**, dans la région métropolitaine de Montréal. Sa carte s’ouvre sur le même lieu
+qu’avant si ce lieu se trouvait dans la région de Montréal, sinon sur le Plateau-Mont-Royal. Il s’ouvre comme avant :
+vous n’avez rien à faire.
 
 ## Les projets sur plusieurs appareils
 

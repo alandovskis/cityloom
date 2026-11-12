@@ -6,18 +6,19 @@ sidebar_position: 2
 
 # Projects
 
-Your work in CityLoom is kept in projects. A project has a name and an area: its map shows that area's streets and
-junctions, and its street edits, junction edits and area rules belong to it alone. Two projects can change the same
+Your work in CityLoom is kept in projects. A project has a name and a metropolitan area: its map shows streets and
+junctions of that area, and its street edits, junction edits and area rules belong to it alone. Two projects can change the same
 street in two different ways.
 
 ## The list of projects
 
 The home page (`web/index.html`) lists your projects under **Your projects**, the one changed most recently first. Each
-row shows the project's name, its area and the day it was last changed.
+row shows the project's name, its metropolitan area and the day it was last changed.
 
-- **New project**: type a name under **Project name** and choose **Create project**. A name has 1 to 80 characters. A
-  new project's area is always Plateau Mont-Royal, Montréal: it cannot be chosen yet. Once a project is made, its area
-  does not change.
+- **New project**: type a name under **Project name**, choose its **Metropolitan area** and choose **Create project**.
+  A name has 1 to 80 characters. Montréal is the only metropolitan area for now, so it is already chosen. The
+  metropolitan area cannot be changed once the project is created: the list shows it, and nothing changes it. A new
+  project's map opens on Plateau Mont-Royal, in Montréal.
 - **Open**: choose the project's name. Its map opens (`map.html?project=<id>`), and the streets and junctions you open
   from there are edited in that project.
 - **Rename**: choose **Rename**, type the new name and choose **Save the name**. Escape or **Cancel** leaves it as it
@@ -35,8 +36,8 @@ the list, which says **That project is no longer here.**
 ## Work from before projects
 
 Work kept in the browser by a CityLoom that had no projects moves, the first time the list opens, into a project named
-**First project**, in the same area as before if that area was in the Montréal region, else in Plateau Mont-Royal,
-Montréal. It opens as it did, so nothing has to be done.
+**First project**, in the Montréal metropolitan area. Its map opens on the same place as before if that place was in
+the Montréal region, else on Plateau Mont-Royal. It opens as it did, so nothing has to be done.
 
 ## Projects on several devices
 
