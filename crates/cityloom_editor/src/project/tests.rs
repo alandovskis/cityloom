@@ -1056,6 +1056,10 @@ mod page {
             assert_eq!(shown, want, "{locale:?}");
             vm.ask_delete("first");
             assert!(vm.delete_question().unwrap().contains(first), "{locale:?}");
+            t.announcer.take();
+            assert!(vm.confirm_delete());
+            let said = t.announcer.take();
+            assert!(said.last().is_some_and(|s| s.contains(first)), "the deletion names it so too: {said:?}");
         }
     }
 

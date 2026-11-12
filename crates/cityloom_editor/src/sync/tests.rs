@@ -1271,6 +1271,28 @@ fn the_merge_report_counts_places_and_not_the_projects_own_records() {
     assert_eq!((report.get().ok, report.get().sent, report.get().received), (true, 0, 1), "one street received");
 }
 
+/// A full pull drops what the server no longer lists; of that, only places count as received.
+#[test]
+fn a_resync_counts_the_places_it_drops_and_not_a_projects_own_record() {
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 1_000);
+    let plateau = ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
+    let key = edit_street_in(&laptop, "first", 1, 100);
+    laptop.vm.known(&ada());
+    let phone = device(&server, T0 + 2_000);
+    phone.vm.known(&ada());
+    assert!(ProjectStore::new(phone.ports.storage.clone()).get(&plateau.id).is_some());
+    server.purge("project", &plateau.id); // both gone, with tombstones nobody saw
+    server.purge("street", &key);
+    let report = Rc::new(Cell::new(Report::default()));
+    let r = report.clone();
+    phone.vm.enable("ada", Box::new(move |x| r.set(x)));
+    assert!(ProjectStore::new(phone.ports.storage.clone()).get(&plateau.id).is_none(), "the project is dropped");
+    assert_eq!(record_of(&phone, &street_id(&key)), None, "and the street");
+    assert_eq!((report.get().ok, report.get().received), (true, 1), "only the street counts");
+}
+
 #[test]
 fn a_project_deleted_on_one_device_is_gone_from_the_other_with_its_places_and_its_server_rows() {
     hub::reset();
