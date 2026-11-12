@@ -204,7 +204,7 @@ test.describe("the list of projects", () => {
     await expect(page.locator(".project-row", { hasText: "Mile End" }).locator(".project-changed")).toHaveText(
       /^Modifié le (1er|\d{1,2}) [a-zéû]+ \d{4}$/,
     );
-    await expect(page.locator(".about-heading")).toHaveText("À propos de CityLoom");
+    await expect(page).toHaveTitle("Projets CityLoom");
     // The switch is followed without a reload.
     await page.locator("#account-btn").click();
     await page.locator('[data-lang="en"]').click();
@@ -214,7 +214,9 @@ test.describe("the list of projects", () => {
     await context.close();
   });
 
-  test("the first stop is a skip link to the list, and the list comes before the About section", async ({ page }) => {
+  test("the first stop is a skip link to the list, and the list's own controls follow its heading", async ({
+    page,
+  }) => {
     await page.goto("/");
     await listed(page);
     const skip = page.locator(".skip-link");
@@ -228,10 +230,6 @@ test.describe("the list of projects", () => {
     await expect(page.getByRole("link", { name: "First project" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Rename First project" })).toBeFocused();
-    const list = (await page.locator(".projects-card").boundingBox())!;
-    const about = (await page.locator(".hero-card").boundingBox())!;
-    expect(about.y).toBeGreaterThanOrEqual(list.y + list.height);
-    await expect(page.getByRole("heading", { level: 2, name: "About CityLoom" })).toBeVisible();
   });
 
   test("every control has a name, every field a label, and each id is the page's only one", async ({ page }) => {

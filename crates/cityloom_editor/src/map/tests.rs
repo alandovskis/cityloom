@@ -457,15 +457,15 @@ fn the_window_title_of_the_map_page_is_its_header_s_message_in_english() {
     assert!(!MAP_HTML.contains("<title data-i18n"), "the shell does not write the title");
 }
 
-// ---- the home page's markup -----------------------------------------------------------------
+// ---- the About page's markup ----------------------------------------------------------------
 
-const INDEX_HTML: &str = include_str!("../../../../web/index.html");
+const ABOUT_HTML: &str = include_str!("../../../../web/about.html");
 
 #[test]
-fn every_data_i18n_key_in_index_html_exists_in_both_languages() {
+fn every_data_i18n_key_in_about_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
-    let keys = i18n_keys(INDEX_HTML);
+    let keys = i18n_keys(ABOUT_HTML);
     assert!(keys.len() >= 17, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
@@ -476,32 +476,55 @@ fn every_data_i18n_key_in_index_html_exists_in_both_languages() {
 }
 
 #[test]
-fn the_english_text_in_index_html_is_the_english_message() {
+fn the_english_text_in_about_html_is_the_english_message() {
     let en = crate::i18n_for(Locale::En);
-    for (key, fallback) in crate::shell::view::i18n_keys(INDEX_HTML) {
+    for (key, fallback) in crate::shell::view::i18n_keys(ABOUT_HTML) {
         assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
     }
 }
 
 #[test]
-fn index_html_has_a_language_row_and_sets_the_language_in_the_head() {
-    assert!(INDEX_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
-    assert!(INDEX_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
-    assert_eq!(INDEX_HTML.matches("<script>").count(), 1);
-    assert!(INDEX_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
+fn about_html_has_a_language_row_and_sets_the_language_in_the_head() {
+    assert!(ABOUT_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+    assert!(ABOUT_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+    assert_eq!(ABOUT_HTML.matches("<script>").count(), 1);
+    assert!(ABOUT_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
 }
 
 #[test]
-fn the_window_title_of_the_home_page_is_its_message_in_english() {
-    // mount_home sets the title in the language of the page; the markup's own is the English message.
+fn the_window_title_of_the_about_page_is_its_heading_in_english() {
+    // mount_about sets the title in the language of the page; the markup's own is the English message.
     let en = crate::i18n_for(Locale::En);
-    assert!(INDEX_HTML.contains(&format!("<title>{}</title>", en.tr_now("map-home-title", &Args::new()))));
-    assert!(!INDEX_HTML.contains("<title data-i18n"), "the shell does not write the title");
+    assert!(ABOUT_HTML.contains(&format!("<title>{}</title>", en.tr_now("map-about-heading", &Args::new()))));
+    assert!(!ABOUT_HTML.contains("<title data-i18n"), "the shell does not write the title");
+}
+
+#[test]
+fn the_about_page_has_one_h1_a_skip_link_to_it_and_the_introduction_under_it() {
+    assert_eq!(ABOUT_HTML.matches("<h1").count(), 1);
+    let h1 = ABOUT_HTML
+        .find(r#"<h1 id="about-heading" class="about-heading" tabindex="-1" data-i18n="map-about-heading">About CityLoom</h1>"#)
+        .expect("the heading");
+    let skip = ABOUT_HTML.find(r##"<a class="skip-link" href="#about-heading" data-i18n="map-about-skip">"##).expect("a skip link to the heading");
+    assert!(skip < ABOUT_HTML.find("<header").unwrap(), "the skip link is the first stop, before the bar");
+    assert!(h1 < ABOUT_HTML.find(r#"data-i18n="map-home-heading""#).unwrap(), "the introduction is under the heading");
+    assert!(ABOUT_HTML.contains(r#"<main class="hero" aria-labelledby="about-heading">"#));
+}
+
+#[test]
+fn the_about_page_sends_to_the_projects_and_never_to_a_map_it_has_no_project_for() {
+    assert!(ABOUT_HTML.contains(r#"<a class="btn" href="index.html" data-i18n="map-about-open-projects">Open your projects</a>"#));
+    assert!(!ABOUT_HTML.contains(r#"href="map.html"#), "no project is open on this page, so no map");
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    assert_eq!(fr.tr_now("map-about-open-projects", &Args::new()), "Ouvrir vos projets");
+    assert_eq!(fr.tr_now("map-about-heading", &Args::new()), "À propos de CityLoom");
+    assert_eq!(en.tr_now("map-about-skip", &Args::new()), "Skip to the introduction");
+    assert_eq!(fr.tr_now("map-about-skip", &Args::new()), "Aller à la présentation");
 }
 
 #[test]
 fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages() {
-    assert!(INDEX_HTML.contains(r#"<a href="https://www.openstreetmap.org/copyright" data-i18n="map-home-osm-contributors">"#));
+    assert!(ABOUT_HTML.contains(r#"<a href="https://www.openstreetmap.org/copyright" data-i18n="map-home-osm-contributors">"#));
     let credit = |i18n: &I18n| ["map-home-streets-by", "map-home-osm-contributors"].map(|k| i18n.tr_now(k, &Args::new())).join(" ");
     assert_eq!(credit(&crate::i18n_for(Locale::En)), "Streets © OpenStreetMap contributors");
     assert_eq!(credit(&crate::i18n_for(Locale::FrCa)), "Rues © les contributeurs d’OpenStreetMap");

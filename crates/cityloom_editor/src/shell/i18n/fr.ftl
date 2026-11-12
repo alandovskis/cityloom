@@ -26,6 +26,10 @@ region-japan = Japon
 # Le balisage que toutes les pages partagent.
 ui-skip-drawing = Passer au dessin
 ui-home = CityLoom, accueil
+# Les liens de la barre du haut, et le nom du repère qui les contient.
+ui-nav = Pages
+ui-nav-projects = Projets
+ui-nav-about = À propos
 ui-settings = Réglages
 ui-units = Unités
 ui-region = Région

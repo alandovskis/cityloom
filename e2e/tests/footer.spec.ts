@@ -8,6 +8,7 @@ const VERSION = /^Version \d+\.\d+\.\d+$/;
 
 const PAGES = [
   { name: "home", open: (page: Page) => page.goto("/") },
+  { name: "about", open: (page: Page) => page.goto("/about.html") },
   {
     name: "map",
     open: async (page: Page) => {

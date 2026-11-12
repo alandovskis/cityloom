@@ -58,27 +58,20 @@ pub fn say(text: &str) {
     shared::live::say(text);
 }
 
-/// The home page as its script sees it: the list of projects (`project`), and below it the About section with the city
-/// drawn behind it (the map's home part). The page is put together here, where slices may meet: neither slice uses
-/// the other.
+/// The home page as its script sees it: the list of projects (`project`), and nothing else. It is in no project.
 #[wasm_bindgen]
-pub struct HomePage(map::MapPage);
+pub struct HomePage(std::rc::Rc<shared::i18n::I18n>);
 
 #[wasm_bindgen]
 impl HomePage {
     /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
     pub fn mount_shell(&self) {
-        self.0.mount_shell();
-    }
-
-    /// The city behind the About section, once its roads are got (`prepare_city`).
-    pub fn mount_city(&self) {
-        self.0.mount_city();
+        shell::mount(self.0.clone(), std::rc::Rc::new(shell::Bare::default()), "details-details", false);
     }
 }
 
-/// Draws the home page: first the list of projects, which moves the work kept from before projects into the first
-/// project, then the window title, all in one set of words the shell switches.
+/// Draws the home page, the list of projects, which first moves the work kept from before projects into the first
+/// project, in one set of words the shell switches.
 #[wasm_bindgen]
 pub fn mount_projects() -> HomePage {
     // Components create effects as they are built, before any is mounted.
@@ -86,7 +79,39 @@ pub fn mount_projects() -> HomePage {
     let ports = shared::platform::browser_ports();
     let i18n = i18n_browser(&ports);
     project::mount_list(ports, i18n.clone());
-    HomePage(map::mount_home(i18n))
+    HomePage(i18n)
+}
+
+/// The About page as its script sees it: what CityLoom is for, with the city of the project opened last drawn behind
+/// it (the map's About part). The page is put together here, where slices may meet: the map slice draws it, and the
+/// project slice moves the work from before projects first.
+#[wasm_bindgen]
+pub struct AboutPage(map::MapPage);
+
+#[wasm_bindgen]
+impl AboutPage {
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
+    pub fn mount_shell(&self) {
+        self.0.mount_shell();
+    }
+
+    /// The city behind the About card, once its roads are got (`prepare_city`).
+    pub fn mount_city(&self) {
+        self.0.mount_city();
+    }
+}
+
+/// Draws the About page: its window title now, the city when `AboutPage::mount_city` is called. Its shell syncs as soon
+/// as it knows who is signed in, as the home page's does, so the work from before projects is moved into the first
+/// project before anything is read: the city drawn is that project's when it is the one opened last.
+#[wasm_bindgen]
+pub fn mount_about() -> AboutPage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let ports = shared::platform::browser_ports();
+    let i18n = i18n_browser(&ports);
+    project::migrate::move_legacy_work(&ports.storage, &i18n);
+    AboutPage(map::mount_about(i18n))
 }
 
 /// Every slice's messages, in one place: a slice's `.ftl` files are registered here.

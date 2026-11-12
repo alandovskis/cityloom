@@ -152,18 +152,20 @@ map-status-bad-more = { $n ->
 
 ## Recommencer
 
-## Le balisage de la page d’accueil (web/index.html)
-map-home-title = CityLoom : réaménagez les rues de votre ville
+## Le balisage de la page À propos (web/about.html); la description est aussi celle de la page d’accueil (web/index.html)
+# Le titre de la page et celui de sa fenêtre.
+map-about-heading = À propos de CityLoom
+map-about-skip = Aller à la présentation
 map-home-description = Choisissez n’importe quelle rue ou jonction de la ville, réorganisez-la et voyez aussitôt ce qui fonctionne toujours.
 map-home-heading = Réaménagez les rues de votre ville.
 map-home-lead = Ouvrez un projet, choisissez une rue ou une jonction sur sa carte et réorganisez-la. Vous voyez tout de suite ce qui fonctionne toujours.
-map-home-open-map = Ouvrir la carte de la ville
+map-about-open-projects = Ouvrir vos projets
 # La mention est en trois morceaux autour d’un lien : map-home-streets-by, puis le lien map-home-osm-contributors, puis un point dans le balisage.
 map-home-streets-by = Rues ©
 map-home-osm-contributors = les contributeurs d’OpenStreetMap
 map-home-placeholders = Les largeurs et les règles qu’utilisent les vérifications sont provisoires.
 
-## Le bandeau de la page d’accueil (src/map/home.rs, src/map/svg.rs)
+## La ville de la page À propos (src/map/home.rs, src/map/svg.rs)
 # `city` est le nom de la ville (une donnée), `counts` est map-counts.
 map-hero-facts = { $city } : { $counts }.
 # Le nom d’une rue modifiée sur le dessin ; `name` est celui de la rue. « Modifié » s’accorde avec « lieu ».

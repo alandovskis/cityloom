@@ -167,6 +167,11 @@ const OPENERS: { name: string; open: (page: Page) => Promise<unknown>; ready?: (
     // The shell binds the menus once the page's module has loaded; a click before that does nothing.
     ready: (page) => expect(page.locator("#region option")).toHaveCount(6),
   },
+  {
+    name: "about",
+    open: (page) => page.goto("/about.html"),
+    ready: (page) => expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible(),
+  },
   { name: "map", open: (page) => page.goto("/map.html"), ready: mapReady },
   { name: "street", open: (page) => openStreet(page) },
   { name: "junction", open: (page) => openJunction(page) },
@@ -225,22 +230,16 @@ test("the map page can be read in French and the choice is kept", async ({ page 
 
 test("the home page can be read in French and the choice is kept", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("#region option")).toHaveCount(6);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("h1")).toHaveText("Your projects");
-  await expect(page.locator(".about-title")).toHaveText("Redesign the streets of your city.");
   await chooseFrench(page);
   await expect(page.locator("h1")).toHaveText("Vos projets");
-  await expect(page.locator(".about-title")).toHaveText("Réaménagez les rues de votre ville.");
-  await expect(page.locator(".lead")).toContainText("Ouvrez un projet");
-  await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
-  await expect(page.locator(".hero-facts")).toContainText("rues");
-  await expect(page).toHaveTitle("CityLoom : réaménagez les rues de votre ville");
+  await expect(page).toHaveTitle("Projets CityLoom");
   await page.reload();
-  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("#region option")).toHaveCount(6);
   await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
   await expect(page.locator("h1")).toHaveText("Vos projets");
-  await expect(page.locator(".about-title")).toHaveText("Réaménagez les rues de votre ville.");
 });
 
 test("the junction page can be read in French and the choice is kept", async ({ page }) => {

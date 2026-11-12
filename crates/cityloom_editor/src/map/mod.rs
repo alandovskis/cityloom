@@ -60,9 +60,9 @@ impl MapPage {
         cb.forget();
     }
 
-    /// The home page's city: its roads have been got (`prepare_city`), so the city behind the hero card and the
-    /// line saying how it stands are drawn. Until then the page shows its list of projects and no city, so the
-    /// list is not kept waiting for the roads.
+    /// The About page's city: its roads have been got (`prepare_city`), so the city behind the About card and the
+    /// line saying how it stands are drawn. Until then the page shows its words and no city, so they are not kept
+    /// waiting for the roads.
     pub fn mount_city(&self) {
         self.0.reopen();
         let vm = self.0.clone();
@@ -114,12 +114,11 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     Some(MapPage(vm, i18n))
 }
 
-/// Draws the home page's window title and hands back what the page needs to reach its About section. The city behind
-/// the card and how it stands come later, from `MapPage::mount_city`, once the area's roads are got. Called by the
-/// home page's entry point (`lib.rs`, `mount_projects`) after the list of projects, with the page's one set of words,
-/// `i18n`.
-pub fn mount_home(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
-    // The About section shows the city of the project opened last (with none, the default area's, only read).
+/// Draws the About page's window title and hands back what the page needs to reach it. The city behind the card and
+/// how it stands come later, from `MapPage::mount_city`, once the area's roads are got. Called by the About page's
+/// entry point (`lib.rs`, `mount_about`) with the page's one set of words, `i18n`.
+pub fn mount_about(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
+    // The About page shows the city of the project opened last (with none, the default area's, only read).
     let root = browser_ports();
     let ports = crate::project::context::peek(root.clone()).unwrap_or(root);
     let vm = vm::MapVm::new(ports, i18n.clone());
@@ -127,6 +126,6 @@ pub fn mount_home(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     // The window title is the page's own and does not wait for the city; it renders nothing.
     let title = vm.clone();
-    leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::HomeTitle vm=title.clone()/> }.into_any()).forget();
+    leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::AboutTitle vm=title.clone()/> }.into_any()).forget();
     MapPage(vm, i18n)
 }

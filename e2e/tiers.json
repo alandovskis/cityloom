@@ -2,6 +2,7 @@
   "_comment": "The three tiers of the browser tests, and the only place a spec (e2e/tests/*.spec.ts, by name without the suffix) is given one. ui: one page, the network stubbed with page.route, the static server only (no database, no archive). integration: the real server and a Postgres (DATABASE_URL). e2e: the whole path from data to page, over a server that unpacks the built .citymodel archive (`just e2e-archive`), and the delivery of the site by the real server. Each spec is in exactly one tier: playwright.config.ts and scripts/include/tests/test_ci_changes.py fail when one is in none or in two. archive_also names UI specs that the e2e tier runs again over the unpacked archive (they stay UI specs).",
   "ui": [
     "a11y",
+    "about",
     "account",
     "calming",
     "curb",

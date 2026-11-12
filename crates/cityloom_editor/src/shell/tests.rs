@@ -69,6 +69,7 @@ fn the_version_label_says_the_crate_version_in_both_languages() {
 fn every_app_page_shows_the_version_in_its_footer() {
     for (name, html) in [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -142,6 +143,7 @@ fn the_share_variant_follows_the_slots_data_share() {
 fn every_app_page_has_one_slot_for_the_sign_in_menu() {
     for (name, html) in [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -246,6 +248,7 @@ fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under(
 fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
     let pages = [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -291,7 +294,7 @@ fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
 #[test]
 fn the_pages_that_read_the_city_preload_the_tile_index() {
     for (name, html) in [
-        ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),

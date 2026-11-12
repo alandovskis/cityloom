@@ -1,4 +1,6 @@
 # What the list of projects says (src/project/view.rs, src/project/vm.rs, src/project/text.rs, web/index.html).
+# The home page's window title.
+project-page-title = CityLoom projects
 project-list-heading = Your projects
 project-skip = Skip to your projects
 project-empty = You have no projects yet. Name your first one below to start.
@@ -40,4 +42,3 @@ project-refused-unusable = The list of projects could not be changed on this dev
 project-created = Project { $name } created.
 project-renamed = Project renamed to { $name }.
 project-deleted = Project { $name } deleted.
-project-about-heading = About CityLoom

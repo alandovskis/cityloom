@@ -62,6 +62,7 @@ test.describe("a tap on the junction selects a part, there is nothing to drag", 
 
 const pages: [string, (p: Page) => Promise<unknown>][] = [
   ["home", (p) => p.goto("/")],
+  ["about", (p) => p.goto("/about.html")],
   [
     "map",
     async (p) => {

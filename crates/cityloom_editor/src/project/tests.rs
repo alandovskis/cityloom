@@ -1235,8 +1235,8 @@ mod page {
     use crate::project::view::ProjectsView;
     use crate::project::vm::{ProjectsVm, Row};
     use crate::project::{LAST_KEY, ProjectStore, RESOURCES};
-    use crate::shared::i18n::Locale;
     use crate::shared::i18n::tests::parity_problems;
+    use crate::shared::i18n::{Args, Locale};
     use crate::shared::ports::{Storage, TestPorts, test_ports_full};
     use crate::shared::testing::html;
     use crate::sync::model::stamp;
@@ -1636,19 +1636,57 @@ mod page {
             }
         }
         let lib = include_str!("../lib.rs");
-        assert!(lib.contains("project::mount_list(") && lib.contains("map::mount_home("), "lib.rs puts the home page together");
+        assert!(lib.contains("project::mount_list("), "lib.rs puts the home page together");
+        assert!(lib.contains("map::mount_about("), "lib.rs puts the About page together");
     }
 
     const INDEX_HTML: &str = include_str!("../../../../web/index.html");
+    const HOME_JS: &str = include_str!("../../../../web/home.js");
 
     #[test]
-    fn the_home_page_s_first_stop_is_a_skip_link_to_the_list_and_the_about_section_follows_it() {
+    fn the_home_page_s_first_stop_is_a_skip_link_to_the_list_and_the_list_is_all_it_holds() {
         let skip = INDEX_HTML.find(r##"<a class="skip-link" href="#projects-heading" data-i18n="project-skip">"##).expect("a skip link to the list");
         assert!(skip < INDEX_HTML.find("<header").unwrap(), "before the bar");
-        let list = INDEX_HTML.find(r#"id="projects-slot""#).expect("the list's slot");
-        let about = INDEX_HTML.find(r#"data-i18n="project-about-heading""#).expect("an About section");
-        assert!(list < about, "the list comes first");
-        assert!(about < INDEX_HTML.find(r#"data-i18n="map-home-heading""#).unwrap(), "the introduction is in the About section");
+        assert!(INDEX_HTML.contains(r#"id="projects-slot""#), "the list's slot");
         assert_eq!(INDEX_HTML.matches("<h1").count(), 0, "the list's heading is the page's only h1, drawn with the list");
+        // About CityLoom is a page of its own (about.html): no About section, no city behind the list.
+        for gone in ["project-about-heading", "map-home-heading", "hero", "data/metro/index.json"] {
+            assert!(!INDEX_HTML.contains(gone), "{gone:?} is still on the home page");
+        }
+        // The list needs no city: the page's script only draws it and binds the shell.
+        assert!(HOME_JS.contains("wasm.mount_projects()") && HOME_JS.contains(".mount_shell()"));
+        assert!(!HOME_JS.contains("prepare_city") && !HOME_JS.contains("mount_city") && !HOME_JS.contains("city.js"), "{HOME_JS}");
+    }
+
+    #[test]
+    fn every_data_i18n_key_in_index_html_exists_in_both_languages_and_its_english_is_the_message() {
+        use crate::shell::view::i18n_keys;
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+        let keys = i18n_keys(INDEX_HTML);
+        assert!(keys.len() >= 12, "the page should have been converted: {}", keys.len());
+        for (key, fallback) in keys {
+            assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
+            fr.tr_now(&key, &Args::new());
+        }
+        assert_eq!(en.missing(), Vec::<String>::new(), "missing in en");
+        assert_eq!(fr.missing(), Vec::<String>::new(), "missing in fr");
+    }
+
+    #[test]
+    fn index_html_has_a_language_row_and_sets_the_language_in_the_head() {
+        assert!(INDEX_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+        assert!(INDEX_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+        assert_eq!(INDEX_HTML.matches("<script>").count(), 1);
+        assert!(INDEX_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
+    }
+
+    #[test]
+    fn the_window_title_of_the_home_page_is_its_message_in_english_and_says_projects_in_french() {
+        // mount_list sets the title in the language of the page; the markup's own is the English message.
+        let en = crate::i18n_for(Locale::En);
+        assert!(INDEX_HTML.contains(&format!("<title>{}</title>", en.tr_now("project-page-title", &Args::new()))));
+        assert!(!INDEX_HTML.contains("<title data-i18n"), "the shell does not write the title");
+        assert_eq!(en.tr_now("project-page-title", &Args::new()), "CityLoom projects");
+        assert_eq!(crate::i18n_for(Locale::FrCa).tr_now("project-page-title", &Args::new()), "Projets CityLoom");
     }
 }

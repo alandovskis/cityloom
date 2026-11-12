@@ -216,6 +216,9 @@ pub fn ProjectsView(vm: Rc<ProjectsVm>) -> impl IntoView {
     let vm: Vm = StoredValue::new_local(vm);
     #[cfg(target_arch = "wasm32")]
     follow_focus(vm);
+    // The window title is the page's, in its language (the shell leaves `<title>` to the page).
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| document().set_title(&word(vm, "project-page-title")));
     view! {
         <h1 id="projects-heading" tabindex="-1">{move || word(vm, "project-list-heading")}</h1>
         // One status for the page's life: its words follow a switch of language and it empties once the person acts.

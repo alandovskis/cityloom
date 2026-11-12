@@ -152,18 +152,20 @@ map-status-bad-more = { $n ->
 
 ## Start over
 
-## The home page's markup (web/index.html)
-map-home-title = CityLoom: redesign the streets of your city
+## The About page's markup (web/about.html); the description is the home page's too (web/index.html)
+# The page's heading and its window title.
+map-about-heading = About CityLoom
+map-about-skip = Skip to the introduction
 map-home-description = Pick any street or junction of the city, rearrange it, and see at once what still works.
 map-home-heading = Redesign the streets of your city.
 map-home-lead = Open a project, pick a street or junction on its map, and rearrange it. You see straight away what still works.
-map-home-open-map = Open the city map
+map-about-open-projects = Open your projects
 # The credit is three pieces around a link: map-home-streets-by, then the link map-home-osm-contributors, then a full stop in the markup.
 map-home-streets-by = Streets ©
 map-home-osm-contributors = OpenStreetMap contributors
 map-home-placeholders = The widths and rules the checks use are placeholders.
 
-## The home page's hero (src/map/home.rs, src/map/svg.rs)
+## The About page's city (src/map/home.rs, src/map/svg.rs)
 # `city` is the city's name (data), `counts` is map-counts.
 map-hero-facts = { $city }: { $counts }.
 # The name of a changed street on the drawing; `name` is the street's.

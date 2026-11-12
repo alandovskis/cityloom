@@ -1,8 +1,5 @@
-// Starts the home page. The page itself is drawn and driven by the WebAssembly
-// module (`mount_projects`: the list of projects, and the About section below it);
-// this loads it and binds what every page shares.
-
-import "./city.js";
+// Starts the home page: the list of projects. The page is drawn and driven by the WebAssembly module
+// (`mount_projects`); this loads it and binds what every page shares (`mount_shell`).
 
 let wasm;
 try {
@@ -12,9 +9,4 @@ try {
   globalThis.cityloomBootFailed?.();
   throw error;
 }
-// The list does not need the city: it is there at once, and the city behind it is drawn when its
-// roads are got.
-const page = wasm.mount_projects();
-page.mount_shell();
-await wasm.prepare_city();
-page.mount_city();
+wasm.mount_projects().mount_shell();

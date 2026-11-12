@@ -1,42 +1,8 @@
-/* The home page: the list of projects, then an About card, floating over the city drawn behind them. */
+/* The pages in no project: the list of projects (index.html), and the About page (about.html, which adds
+   about.css). Each is one card under the bar. */
 
 body.home {
   min-height: 100svh;
-}
-#hero-map-slot {
-  display: contents;
-}
-
-.hero-map {
-  position: fixed;
-  z-index: 0;
-  top: 0;
-  left: 0;
-  right: -14vw;
-  bottom: -10vh;
-  pointer-events: none;
-  /* Every street, the freeway too, eases in from the card's edge instead of starting with a cut. */
-  --card-right: calc(clamp(16px, 5vw, 80px) + 780px);
-  -webkit-mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
-  mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
-}
-/* A backdrop: its names would be cut by the card, and nothing in it is read. */
-.hero-map #map .m-name,
-.hero-map #map .m-tag {
-  display: none;
-}
-.hero-map svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-/* The same drawing as the map page, without its labels' halo being needed on a plain ground. */
-.hero-map #map line,
-.hero-map #map circle {
-  fill: none;
-  stroke-linecap: butt;
 }
 
 .bar {
@@ -228,7 +194,7 @@ body.home {
   filter: brightness(1.08);
 }
 
-/* The page scrolls (the list, then About): the version ends it instead of floating over the cards. */
+/* The page scrolls when its card is long: the version ends it instead of floating over the card. */
 body.home .site-foot {
   position: relative;
   height: auto;
@@ -236,91 +202,7 @@ body.home .site-foot {
   left: 0;
 }
 
-/* ---- About: what CityLoom is for, with the city drawn behind it ---- */
-
-.hero {
-  position: relative;
-  z-index: 5;
-  padding: 0 clamp(16px, 5vw, 80px) 48px;
-}
-.about-heading {
-  color: var(--ink-2);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.about-title {
-  margin-top: 8px;
-  font-size: clamp(28px, 4vw, 44px);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-}
-.lead {
-  margin-top: 16px;
-  max-width: 52ch;
-  color: var(--ink-2);
-  font-size: clamp(17px, 1.8vw, 20px);
-  line-height: 1.45;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 22px;
-  margin-top: 28px;
-}
-.hero-actions .btn {
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 12px;
-  font-size: 16px;
-}
-
-/* The room for the line that says how the city stands, which comes when the city's roads are got; the card is
-   centred, so it would move when the line arrived. One line is its height: margin 28 + rule and padding 19 + text 22. */
-#hero-facts-slot {
-  display: flow-root;
-  min-height: 69px;
-}
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 6px;
-  margin-top: 28px;
-  padding-top: 18px;
-  border-top: 1px solid var(--rule);
-  color: var(--ok);
-  font-size: 15px;
-  font-weight: 600;
-}
-.hero-facts.bad {
-  color: var(--warn);
-}
-.hero-note {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 13px;
-}
-
 @media (max-width: 899px) {
-  .hero-map {
-    position: relative;
-    left: 0;
-    height: 36svh;
-    order: 3;
-    right: 0;
-    bottom: 0;
-    -webkit-mask-image: none;
-    mask-image: none;
-    margin: 0 8px 8px;
-    border-radius: var(--r-card);
-    overflow: hidden;
-  }
   body.home {
     display: flex;
     flex-direction: column;
@@ -337,10 +219,6 @@ body.home .site-foot {
     order: 1;
     padding: 4px 8px 8px;
   }
-  .hero {
-    order: 2;
-    padding: 0 8px 12px;
-  }
   .projects-card,
   .hero-card {
     width: 100%;
@@ -354,4 +232,3 @@ body.home .site-foot {
     grid-row: auto;
   }
 }
-
