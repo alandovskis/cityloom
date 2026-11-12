@@ -30,6 +30,19 @@ fn create_trims_keeps_and_gives_the_default_area() {
 }
 
 #[test]
+fn a_project_is_made_in_the_metropolitan_area_chosen_and_keeps_where_its_map_opens() {
+    use crate::place::area::{MONTREAL, metro, metro_of};
+    let (s, _) = store();
+    let montreal = metro(MONTREAL).unwrap();
+    let p = s.create_in("Plateau", montreal).unwrap();
+    // The record keeps an area query, as every build reads it: the place in the metropolitan area its map opens on.
+    assert_eq!(p.area, montreal.start().to_query());
+    let area = crate::place::area::Area::from_query(&p.area).unwrap();
+    assert_eq!(metro_of(&area), Some(montreal));
+    assert_eq!(s.get(&p.id).unwrap().area, p.area);
+}
+
+#[test]
 fn ids_are_random_where_storage_has_randomness_and_numbered_where_it_has_none() {
     let (s, storage) = store();
     let a = s.create("A").unwrap();
@@ -1337,7 +1350,7 @@ mod page {
         assert_eq!(names(&vm), ["Plateau"]);
         assert!(!vm.is_empty());
         assert_eq!(vm.create_error(), None);
-        assert_eq!(vm.rows()[0].area_label, crate::place::area::default_area().name);
+        assert_eq!(vm.rows()[0].area_label, "Montréal");
         assert!(!vm.create(""));
         assert_eq!(vm.create_error().as_deref(), Some("Give the project a name."));
         assert!(!vm.create(&"x".repeat(81)));
@@ -1526,7 +1539,7 @@ mod page {
         // An item is named by the project's name and its area, both shown.
         assert!(out.contains(&format!(r#"aria-labelledby="project-name-{id} project-area-{id}""#)), "{out}");
         assert!(out.contains(&format!(r#"id="project-area-{id}""#)));
-        assert!(out.contains(&crate::place::area::default_area().name));
+        assert!(out.contains(&format!(r#"<span id="project-area-{id}">Montréal</span>"#)), "{out}");
         assert!(out.contains(&format!(r#"href="map.html?project={id}""#)));
         assert!(out.contains(r#"aria-label="Rename Plateau""#) && out.contains(r#"aria-label="Delete Plateau""#));
         assert!(out.contains("Verdun &lt;b&gt;"), "a name is text, not markup");
@@ -1534,15 +1547,117 @@ mod page {
     }
 
     #[test]
-    fn an_empty_list_asks_for_the_first_project_and_the_form_shows_the_area() {
+    fn an_empty_list_asks_for_the_first_project_and_the_form_offers_the_metropolitan_area() {
         let (vm, _) = page();
         let out = markup(vm);
         assert!(out.contains("<h1"));
         assert!(out.contains(r#"class="project-empty""#) && out.contains("You have no projects yet."));
         assert!(!out.contains("<li"));
         assert!(out.contains(r#"<label for="project-name""#) && out.contains(r#"id="project-name""#));
-        assert!(out.contains(&crate::place::area::default_area().name), "the area is shown, not chosen");
-        assert!(!out.contains("<select"));
+        assert!(out.contains(r#"<label for="project-metro-field""#) && out.contains("Metropolitan area"), "{out}");
+        assert!(out.contains(r#"<select id="project-metro-field""#), "{out}");
+    }
+
+    // ---- the metropolitan area ---------------------------------------------------------------
+
+    #[test]
+    fn the_form_offers_the_metropolitan_areas_of_the_catalogue_with_montreal_chosen() {
+        for (locale, label) in [(Locale::En, "Montréal"), (Locale::FrCa, "Montréal")] {
+            let t = test_ports_full();
+            let vm = page_in(locale, &t);
+            let offered: Vec<(&str, String, bool)> = vm.metro_options().into_iter().map(|o| (o.id, o.label, o.chosen)).collect();
+            assert_eq!(offered, [("montreal", label.to_string(), true)]);
+        }
+    }
+
+    #[test]
+    fn a_metropolitan_area_the_catalogue_does_not_have_is_not_chosen() {
+        let (vm, _) = page();
+        assert!(!vm.choose_metro("toronto"));
+        assert!(!vm.choose_metro(""));
+        assert!(vm.choose_metro("montreal"));
+        assert_eq!(vm.metro_options().iter().filter(|o| o.chosen).map(|o| o.id).collect::<Vec<_>>(), ["montreal"]);
+    }
+
+    #[test]
+    fn creating_keeps_the_chosen_metropolitan_area_and_the_row_names_it() {
+        use crate::place::area::{MONTREAL, metro};
+        let (vm, t) = page();
+        assert!(vm.choose_metro(MONTREAL));
+        assert!(vm.create("Plateau"));
+        let id = id_of(&vm, "Plateau");
+        let kept = ProjectStore::new(t.ports.storage.clone()).get(&id).unwrap();
+        assert_eq!(kept.area, metro(MONTREAL).unwrap().start().to_query());
+        assert_eq!(vm.rows()[0].area_label, "Montréal");
+    }
+
+    fn record(id: &str, area: &str) -> crate::project::Project {
+        crate::project::Project { id: id.into(), name: id.into(), area: area.into(), created_at: stamp(0), placeholder: false }
+    }
+
+    #[test]
+    fn a_row_names_the_metropolitan_area_its_project_lies_in() {
+        use crate::place::area::{Area, default_area};
+        for (locale, montreal) in [(Locale::En, "Montréal"), (Locale::FrCa, "Montréal")] {
+            let t = test_ports_full();
+            let store = ProjectStore::new(t.ports.storage.clone());
+            // A record made before the catalogue: the Plateau, or another place in Montréal.
+            assert!(store.put_raw(record("p1", &default_area().to_query())));
+            assert!(store.put_raw(record("p2", &Area::new("Verdun", 45.4586, -73.5719).to_query())));
+            // A place no metropolitan area holds is named by its own name.
+            assert!(store.put_raw(record("p3", &Area::new("Berlin", 52.5, 13.4).to_query())));
+            // An area that cannot be read opens the default area: it is named by the default metropolitan area.
+            assert!(store.put_raw(record("p4", "area=nonsense")));
+            assert!(store.put_raw(record("p5", "")));
+            let vm = page_in(locale, &t);
+            let mut labels: Vec<(String, String)> = vm.rows().into_iter().map(|r| (r.id, r.area_label)).collect();
+            labels.sort();
+            let want = [("p1", montreal), ("p2", montreal), ("p3", "Berlin"), ("p4", montreal), ("p5", montreal)];
+            assert_eq!(labels, want.map(|(id, label)| (id.to_string(), label.to_string())), "{locale:?}");
+        }
+    }
+
+    #[test]
+    fn the_first_project_moved_from_before_projects_is_named_by_its_metropolitan_area() {
+        let t = test_ports_full();
+        t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+        t.storage.remember("cityloom-area", &crate::place::area::Area::new("Verdun", 45.4586, -73.5719).to_query());
+        let vm = page_in(Locale::En, &t);
+        assert_eq!(vm.rows().into_iter().map(|r| (r.id, r.area_label)).collect::<Vec<_>>(), [("first".to_string(), "Montréal".to_string())]);
+    }
+
+    #[test]
+    fn the_form_has_a_labelled_choice_of_metropolitan_area_said_to_be_fixed() {
+        for (locale, label, fixed) in [
+            (Locale::En, "Metropolitan area", "The metropolitan area cannot be changed once the project is created."),
+            (Locale::FrCa, "Région métropolitaine", "La région métropolitaine ne peut plus être changée une fois le projet créé."),
+        ] {
+            let t = test_ports_full();
+            let out = markup(page_in(locale, &t));
+            let field = &out[out.find(r#"<label for="project-metro-field""#).expect(&out)..];
+            assert!(field.starts_with(&format!(r#"<label for="project-metro-field">{label}</label>"#)), "{field}");
+            let select = &field[field.find("<select").unwrap()..];
+            let select = &select[..select.find("</select>").unwrap()];
+            assert!(select.contains(r#"aria-describedby="project-metro-hint""#), "{select}");
+            assert_eq!(select.matches("<option").count(), 1, "{select}");
+            assert!(select.contains(r#"<option value="montreal" selected"#) && select.contains(">Montréal</option>"), "{select}");
+            assert!(out.contains(&format!(r#"<p id="project-metro-hint" class="project-hint">{fixed}</p>"#)), "{out}");
+        }
+    }
+
+    #[test]
+    fn a_project_s_metropolitan_area_is_shown_and_nothing_changes_it() {
+        let (vm, _) = page();
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.start_rename(&id);
+        let out = markup(vm);
+        // One choice of metropolitan area, the create form's; the row and its rename form have none.
+        assert_eq!(out.matches("<select").count(), 1, "{out}");
+        let row = &out[out.find(r#"class="project-row""#).unwrap()..out.find("</li>").unwrap()];
+        assert!(row.contains(&format!(r#"<span id="project-area-{id}">Montréal</span>"#)), "{row}");
+        assert!(row.contains("Metropolitan area"), "{row}");
+        assert!(!row.contains("<select") && !row.contains("project-metro-field"), "{row}");
     }
 
     #[test]

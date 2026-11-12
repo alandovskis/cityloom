@@ -147,6 +147,7 @@ body.home {
   font-weight: 600;
 }
 .project-create input,
+.project-create select,
 .project-rename input {
   min-height: 44px;
   padding: 0 12px;
@@ -157,6 +158,7 @@ body.home {
   font-size: 16px;
 }
 .project-create input:focus-visible,
+.project-create select:focus-visible,
 .project-rename input:focus-visible {
   border-color: var(--accent);
 }
@@ -164,17 +166,10 @@ body.home {
 .project-rename input[aria-invalid="true"] {
   border-color: var(--warn);
 }
-.project-area {
-  display: flex;
-  gap: 8px;
-  margin: 0;
+/* What the person is told about a field, under it. */
+.project-hint {
   color: var(--ink-2);
-}
-.project-area dt {
-  font-weight: 600;
-}
-.project-area dd {
-  margin: 0;
+  font-size: 14px;
 }
 .project-error {
   color: var(--warn);

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::city::edits::{self, EDITS_KEY, JUNCTIONS, STREETS};
 use crate::city::store::AREA_KEY;
-use crate::place::area::{Area, default_area};
+use crate::place::area::{Area, Metro, default_area, default_metro};
 use crate::project::model::{Project, Refused, clean_name};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::ports::Storage;
@@ -188,12 +188,19 @@ impl ProjectStore {
         }
     }
 
-    /// Keeps a new project in the default area, and marks it for the sync.
+    /// Keeps a new project in the default metropolitan area, and marks it for the sync.
     pub fn create(&self, name: &str) -> Result<Project, Refused> {
+        self.create_in(name, default_metro())
+    }
+
+    /// Keeps a new project in the metropolitan area `metro`, and marks it for the sync. The record names the place in
+    /// it that the project's map opens on (`Metro::start`), as an area query, the form every build reads; the
+    /// metropolitan area is the one that holds it (`place::area::metro_of`), and nothing changes it later.
+    pub fn create_in(&self, name: &str, metro: &Metro) -> Result<Project, Refused> {
         let name = clean_name(name)?;
         let created = self.write(|projects| {
             let project =
-                Project { id: self.fresh_id(projects), name, area: default_area().to_query(), created_at: stamp(self.storage.now_ms()), placeholder: false };
+                Project { id: self.fresh_id(projects), name, area: metro.start().to_query(), created_at: stamp(self.storage.now_ms()), placeholder: false };
             projects.push(project.clone());
             Ok(project)
         })?;

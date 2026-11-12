@@ -7,7 +7,8 @@ project-empty = Vous n’avez encore aucun projet. Nommez le premier ci-dessous 
 project-create-heading = Nouveau projet
 project-create-name = Nom du projet
 project-create-submit = Créer le projet
-project-area = Lieu
+project-metro = Région métropolitaine
+project-metro-fixed = La région métropolitaine ne peut plus être changée une fois le projet créé.
 project-changed = Modifié le { $when }
 # Un jour de l’année, comme l’écrit la liste des projets : 12 novembre 2026.
 project-date = { $day ->

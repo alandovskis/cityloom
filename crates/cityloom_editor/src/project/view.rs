@@ -139,7 +139,7 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                 {row.name.clone()}
             </a>
             <p class="project-meta">
-                <span class="project-area-label">{move || word(vm, "project-area")}</span>
+                <span class="project-area-label">{move || word(vm, "project-metro")}</span>
                 " "
                 <span id=area_id>{row.area_label.clone()}</span>
                 {(!row.changed.is_empty()).then(|| view! { <span class="project-changed">{row.changed.clone()}</span> })}
@@ -170,7 +170,7 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
     }
 }
 
-/// The form that makes a new project, in the default area, which it shows.
+/// The form that makes a new project: its name and the metropolitan area it is made in, which is fixed then.
 fn create_form(vm: Vm) -> impl IntoView {
     let field = NodeRef::<leptos::html::Input>::new();
     let invalid = move || vm.with_value(|v| v.create_error()).is_some();
@@ -198,10 +198,24 @@ fn create_form(vm: Vm) -> impl IntoView {
                     aria-describedby="project-create-error"
                 />
             </div>
-            <dl class="project-area">
-                <dt>{move || word(vm, "project-area")}</dt>
-                <dd>{vm.with_value(|v| v.default_area_label())}</dd>
-            </dl>
+            <div class="project-field">
+                <label for="project-metro-field">{move || word(vm, "project-metro")}</label>
+                <select
+                    id="project-metro-field"
+                    aria-describedby="project-metro-hint"
+                    on:change=move |ev| {
+                        vm.with_value(|v| v.choose_metro(&event_target_value(&ev)));
+                    }
+                >
+                    {move || {
+                        vm.with_value(|v| v.metro_options())
+                            .into_iter()
+                            .map(|o| view! { <option value=o.id selected=o.chosen>{o.label}</option> })
+                            .collect_view()
+                    }}
+                </select>
+                <p id="project-metro-hint" class="project-hint">{move || word(vm, "project-metro-fixed")}</p>
+            </div>
             <p id="project-create-error" class="project-error">
                 {move || vm.with_value(|v| v.create_error())}
             </p>

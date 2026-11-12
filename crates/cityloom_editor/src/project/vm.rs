@@ -5,7 +5,7 @@ use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
-use crate::place::area::{Area, default_area};
+use crate::place::area::{Area, Metro, default_metro, metro, metro_of, metros};
 use crate::project::migrate::move_legacy_work;
 use crate::project::model::Project;
 use crate::project::store::{ProjectStore, last_changed};
@@ -13,6 +13,8 @@ use crate::project::text::{changed_text, refused_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Ports;
 use crate::shared::project_id::{FIRST, link};
+use crate::shared::said::say;
+use crate::shared::units::Units;
 use crate::sync::hub;
 
 /// A project as the list shows it.
@@ -24,6 +26,17 @@ pub struct Row {
     pub area_label: String,
     /// When it last changed, in the page's language; empty where that is not known.
     pub changed: String,
+}
+
+/// A metropolitan area the create form offers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetroOption {
+    /// Its catalogue id, the option's value.
+    pub id: &'static str,
+    /// Its name, in the page's language.
+    pub label: String,
+    /// Whether a new project is made in it.
+    pub chosen: bool,
 }
 
 /// Where focus should go after what the person was using was removed or moved. The view-model cannot touch the page,
@@ -56,6 +69,8 @@ pub struct ProjectsVm {
     renaming: ArcRwSignal<Option<String>>,
     rename_error: ArcRwSignal<Option<&'static str>>,
     deleting: ArcRwSignal<Option<String>>,
+    /// The catalogue id of the metropolitan area a new project is made in.
+    metro: ArcRwSignal<&'static str>,
     /// Whether the page was sent here because its project is no longer here, until the person does something.
     missing: ArcRwSignal<bool>,
     focus: ArcRwSignal<(u32, Focus)>,
@@ -64,10 +79,6 @@ pub struct ProjectsVm {
 /// Whether the page's query string says it was sent here from a project that is not here (`?missing=1`).
 fn was_missing(path: &str) -> bool {
     path.split_once('?').is_some_and(|(_, query)| query.split('#').next().unwrap_or("").split('&').any(|pair| pair == "missing=1"))
-}
-
-fn area_label(project: &Project) -> String {
-    Area::from_query(&project.area).unwrap_or_else(default_area).name
 }
 
 impl ProjectsVm {
@@ -88,6 +99,7 @@ impl ProjectsVm {
             renaming: ArcRwSignal::new(None),
             rename_error: ArcRwSignal::new(None),
             deleting: ArcRwSignal::new(None),
+            metro: ArcRwSignal::new(default_metro().id),
             missing: ArcRwSignal::new(missing),
             focus: ArcRwSignal::new((0, Focus::None)),
         });
@@ -151,8 +163,27 @@ impl ProjectsVm {
         projects.sort_by(|a, b| b.0.cmp(&a.0));
         projects
             .into_iter()
-            .map(|(when, p)| Row { changed: changed_text(&self.i18n, &when), area_label: area_label(&p), name: self.name_of(&p), id: p.id })
+            .map(|(when, p)| Row { changed: changed_text(&self.i18n, &when), area_label: self.area_label(&p), name: self.name_of(&p), id: p.id })
             .collect()
+    }
+
+    /// The name of the metropolitan area a project is in, in the page's language (tracked): the one that holds the
+    /// place its record names, whatever build made it. A place no metropolitan area holds is named by its own name;
+    /// an area that cannot be read opens the default area, so it is named by the default metropolitan area.
+    fn area_label(&self, project: &Project) -> String {
+        match Area::from_query(&project.area) {
+            Some(area) => match metro_of(&area) {
+                Some(metro) => self.metro_name(metro),
+                None if area.name.is_empty() => area.key(),
+                None => area.name,
+            },
+            None => self.metro_name(default_metro()),
+        }
+    }
+
+    fn metro_name(&self, metro: &Metro) -> String {
+        // Nothing a metropolitan area's name says has a length in it.
+        say(&self.i18n, Units::Metres, &metro.name())
     }
 
     /// The name a project is shown by. A placeholder (its places came from the sync before its record, or with none, as
@@ -184,17 +215,27 @@ impl ProjectsVm {
         }
     }
 
-    /// The name of the area a new project is in: the default one, the only one there is.
-    pub fn default_area_label(&self) -> String {
-        default_area().name
+    /// The metropolitan areas a new project can be made in, the chosen one marked; tracked.
+    pub fn metro_options(&self) -> Vec<MetroOption> {
+        let chosen = self.metro.get();
+        metros().iter().map(|m| MetroOption { id: m.id, label: self.metro_name(m), chosen: m.id == chosen }).collect()
+    }
+
+    /// Makes new projects in the metropolitan area the catalogue lists as `id`. False, and nothing changes, where it
+    /// lists none.
+    pub fn choose_metro(&self, id: &str) -> bool {
+        let Some(metro) = metro(id) else { return false };
+        self.metro.set(metro.id);
+        true
     }
 
     // ---- create ----
 
-    /// Keeps a new project named `name`; says why where it is refused. True where it was kept.
+    /// Keeps a new project named `name` in the chosen metropolitan area; says why where it is refused. True where it was kept.
     pub fn create(&self, name: &str) -> bool {
         self.acted();
-        match self.store.create(name) {
+        let metro = metro(self.metro.get_untracked()).unwrap_or_else(default_metro);
+        match self.store.create_in(name, metro) {
             Ok(project) => {
                 self.create_error.set(None);
                 self.refresh();

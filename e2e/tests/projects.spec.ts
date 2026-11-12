@@ -51,8 +51,8 @@ test.describe("the list of projects", () => {
       "You have no projects yet. Name your first one below to start.",
     );
     await expect(rows(page)).toHaveCount(0);
-    // The area is shown, not chosen: there is one.
-    await expect(page.locator(".project-create .project-area")).toContainText("Plateau Mont-Royal, Montréal");
+    // The metropolitan area is chosen in the form: Montréal, the only one, is chosen already.
+    await expect(page.getByLabel("Metropolitan area")).toHaveValue("montreal");
 
     // An empty name is refused, and the field says why.
     await page.getByRole("button", { name: "Create project" }).click();
@@ -66,7 +66,7 @@ test.describe("the list of projects", () => {
     await expect(page.locator(".project-empty")).toHaveCount(0);
     await expect(page.locator("#project-name")).toHaveValue("");
     await expect(live(page)).toHaveText("Project Plateau study created.");
-    const row = page.getByRole("listitem", { name: "Plateau study Plateau Mont-Royal, Montréal" });
+    const row = page.getByRole("listitem", { name: "Plateau study Montréal" });
     await expect(row).toBeVisible();
     await expect(row.locator(".project-changed")).toHaveText(/^Changed [A-Z][a-z]+ \d{1,2}, \d{4}$/);
 
@@ -81,6 +81,56 @@ test.describe("the list of projects", () => {
     expect(await page.evaluate(() => localStorage.getItem("cityloom-project"))).toBe(id);
     expect(errors).toEqual([]);
     await context.close();
+  });
+
+  test("a project is made in the metropolitan area chosen, which its row shows and nothing changes", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await listed(page);
+    const choice = page.getByLabel("Metropolitan area");
+    await expect(choice).toHaveJSProperty("tagName", "SELECT");
+    await expect(choice).toHaveAccessibleDescription(
+      "The metropolitan area cannot be changed once the project is created.",
+    );
+    await expect(choice.locator("option")).toHaveText(["Montréal"]);
+    await choice.selectOption("montreal");
+    await page.getByLabel("Project name").fill("Mile End study");
+    await page.getByRole("button", { name: "Create project" }).click();
+    const row = page.getByRole("listitem", { name: "Mile End study Montréal" });
+    await expect(row).toBeVisible();
+    await expect(row.locator(".project-meta")).toContainText("Metropolitan area Montréal");
+    // Nothing in the row, nor in its rename form, chooses a metropolitan area: it is fixed.
+    await page.getByRole("button", { name: "Rename Mile End study" }).click();
+    await expect(row.locator("select, input:not(#project-rename-field)")).toHaveCount(0);
+    await expect(page.locator("#projects-slot select")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+
+    // Its map opens on Montréal's starting place, from the metro tiles.
+    await page.getByRole("link", { name: "Mile End study" }).click();
+    await expect(page).toHaveURL(/\/map\.html\?project=p-[0-9a-f]{12}$/);
+    await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
+    const id = new URL(page.url()).searchParams.get("project")!;
+    const area = await page.evaluate(
+      (id) =>
+        JSON.parse(localStorage.getItem("cityloom-projects")!).projects.find((p: { id: string }) => p.id === id).area,
+      id,
+    );
+    expect(area).toBe("area=45.5261,-73.5978&name=Plateau%20Mont-Royal%2C%20Montr%C3%A9al");
+  });
+
+  test("the choice of metropolitan area is labelled in French too", async ({ page }) => {
+    await page.goto("/");
+    await listed(page);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    const choice = page.getByLabel("Région métropolitaine");
+    await expect(choice).toHaveValue("montreal");
+    await expect(choice).toHaveAccessibleDescription(
+      "La région métropolitaine ne peut plus être changée une fois le projet créé.",
+    );
+    await expect(choice.locator("option")).toHaveText(["Montréal"]);
+    await expect(page.getByRole("listitem", { name: "First project Montréal" })).toBeVisible();
   });
 
   test("renames a project and deletes one only once asked, and says so", async ({ page }) => {
@@ -241,8 +291,8 @@ test.describe("the list of projects", () => {
       const ids = new Map<string, number>();
       for (const el of document.querySelectorAll("[id]")) ids.set(el.id, (ids.get(el.id) ?? 0) + 1);
       for (const [id, n] of ids) if (n > 1) out.push(`#${id} ×${n}`);
-      for (const el of document.querySelectorAll("#projects-slot input")) {
-        const input = el as HTMLInputElement;
+      for (const el of document.querySelectorAll("#projects-slot input, #projects-slot select")) {
+        const input = el as HTMLInputElement | HTMLSelectElement;
         if (!input.labels || input.labels.length === 0) out.push(`input #${input.id} has no label`);
       }
       for (const el of document.querySelectorAll("#projects-slot button, #projects-slot a")) {
