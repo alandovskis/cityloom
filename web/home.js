@@ -12,7 +12,7 @@ try {
   globalThis.cityloomBootFailed?.();
   throw error;
 }
-// The list and the search do not need the city: they are there at once, and the city behind them is drawn when its
+// The list does not need the city: it is there at once, and the city behind it is drawn when its
 // roads are got.
 const page = wasm.mount_projects();
 page.mount_shell();

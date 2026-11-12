@@ -266,54 +266,12 @@ body.home .site-foot {
   line-height: 1.45;
 }
 
-.hero-search {
-  margin-top: 28px;
-}
-/* The way in: a white field with a clear edge, a blue glyph, and a blue Search button. */
-.hero-search .search input {
-  height: 64px;
-  padding: 0 128px 0 58px;
-  border: 2px solid var(--field-line);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
-  font-size: 18px;
-}
-.hero-search .search input:hover {
-  border-color: var(--ink-2);
-}
-.hero-search .search input:focus {
-  border-color: var(--accent);
-}
-.hero-search .search-go {
-  right: 10px;
-  top: 10px;
-  display: block;
-  height: 44px;
-  padding: 0 22px;
-  border-radius: 10px;
-  font-size: 16px;
-}
-.hero-search .search-ico {
-  stroke: var(--accent);
-  left: 19px;
-  top: 19px;
-  width: 26px;
-  height: 26px;
-}
-.hero-search .search-key {
-  display: none;
-}
-.hero-search .search-pop {
-  top: calc(100% + 10px);
-}
-
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 22px;
-  margin-top: 18px;
+  margin-top: 28px;
 }
 .hero-actions .btn {
   min-height: 48px;
@@ -397,15 +355,3 @@ body.home .site-foot {
   }
 }
 
-@media (max-width: 520px) {
-  .hero-search .search input {
-    padding-right: 112px;
-    font-size: 16px;
-  }
-  .hero-search .search-go {
-    padding: 0 16px;
-  }
-  .hero-search .search-key {
-    display: none;
-  }
-}

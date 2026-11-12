@@ -156,7 +156,7 @@ map-status-bad-more = { $n ->
 map-home-title = CityLoom: redesign the streets of your city
 map-home-description = Pick any street or junction of the city, rearrange it, and see at once what still works.
 map-home-heading = Redesign the streets of your city.
-map-home-lead = Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.
+map-home-lead = Open a project, pick a street or junction on its map, and rearrange it. You see straight away what still works.
 map-home-open-map = Open the city map
 # The credit is three pieces around a link: map-home-streets-by, then the link map-home-osm-contributors, then a full stop in the markup.
 map-home-streets-by = Streets ©

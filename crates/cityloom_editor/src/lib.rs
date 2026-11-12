@@ -78,7 +78,7 @@ impl HomePage {
 }
 
 /// Draws the home page: first the list of projects, which moves the work kept from before projects into the first
-/// project, then the About section's search and window title, all in one set of words the shell switches.
+/// project, then the window title, all in one set of words the shell switches.
 #[wasm_bindgen]
 pub fn mount_projects() -> HomePage {
     // Components create effects as they are built, before any is mounted.

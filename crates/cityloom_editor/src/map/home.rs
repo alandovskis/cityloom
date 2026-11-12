@@ -1,5 +1,5 @@
 //! The home page's views: the city drawn quietly behind the hero card, and a line
-//! saying how the city stands. The search box is the map's own.
+//! saying how the city stands.
 
 use std::rc::Rc;
 

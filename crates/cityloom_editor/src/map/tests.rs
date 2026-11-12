@@ -72,6 +72,28 @@ fn a_map_page_whose_area_s_roads_were_not_had_names_the_area() {
 }
 
 #[test]
+fn the_map_opens_the_area_of_its_project_and_offers_no_way_to_change_it() {
+    use crate::place::area::Area;
+    use crate::project::ProjectStore;
+    use crate::shared::ports::Storage;
+    let (ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let p = ProjectStore::new(ports.storage.clone()).create("Here").unwrap();
+    let area = Area::from_query(&p.area).expect("a project names its area");
+    *page.path.borrow_mut() = format!("/map.html?project={}", p.id);
+    let before: Vec<(String, Option<String>)> = storage.keys().into_iter().map(|k| (k.clone(), storage.recall(&k))).collect();
+    let ports = crate::project::context::peek(ports).expect("the page's project");
+    assert_eq!(CityStore::current_area(&*ports.storage), area);
+    let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
+    assert_eq!(vm.title(), area.name);
+    let h = map_html(|| view! { <map_ui::TitleBlock vm=vm.clone()/><map_ui::SearchBox vm=vm.clone()/><map_ui::MapTools vm=vm.clone()/> });
+    assert!(h.contains(&format!("id=\"tb-street\">{}<", area.name)), "{h}");
+    // nothing on the page finds or chooses another area, and opening it keeps no area
+    assert!(!h.contains("area-results") && !h.contains("Find a place"), "{h}");
+    let after: Vec<(String, Option<String>)> = storage.keys().into_iter().map(|k| (k.clone(), storage.recall(&k))).collect();
+    assert_eq!(after, before);
+}
+
+#[test]
 fn the_key_says_what_the_colours_of_the_places_mean() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <map_ui::Legend vm=vm.clone()/> });

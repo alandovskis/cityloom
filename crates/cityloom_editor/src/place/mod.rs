@@ -1,26 +1,19 @@
-//! Finding a place and the roads in it: what is asked of Nominatim and of the metro tiles,
-//! and how their answers are read. Pure, so it is tested without a network.
+//! A place and the roads in it: what is asked of the metro tiles, and how their answers are read. Pure, so it is
+//! tested without a network.
 
 pub mod area;
 pub mod loader;
-pub mod nominatim;
 pub mod tiles;
-pub mod view;
-pub mod vm;
 
 use crate::shared::i18n::{I18n, Resources};
 use crate::shared::said::Said;
 use crate::shared::units::Units;
 
-/// What the place search says, in both languages.
+/// Why a place's roads could not be had, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
-/// A place's message in words, for a view. Nothing a place says has a length in it, so the units do not matter.
-pub fn say(i18n: &I18n, said: &Said) -> String {
-    crate::shared::said::say(i18n, Units::Metres, said)
-}
-
-/// The same, for a command: nothing is watched.
+/// A place's message in words, for a command: nothing is watched. Nothing a place says has a length in it, so the
+/// units do not matter.
 pub fn say_now(i18n: &I18n, said: &Said) -> String {
     crate::shared::said::say_now(i18n, Units::Metres, said)
 }
@@ -115,6 +108,29 @@ mod tests {
     fn the_place_ftl_files_have_the_same_messages_and_variables() {
         use crate::shared::i18n::tests::parity_problems;
         assert_eq!(parity_problems(RESOURCES.en, RESOURCES.fr), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_words_of_the_place_search_are_gone_with_it() {
+        // A project's area is fixed when it is made: nothing searches for a place any more.
+        let gone = [
+            "place-search-label",
+            "place-search-placeholder",
+            "place-results",
+            "place-find",
+            "place-open",
+            "place-searching",
+            "place-found",
+            "place-nothing",
+            "place-loading",
+            "place-search-unexpected",
+            "place-area-not-kept",
+            "place-problem",
+        ];
+        for ftl in [RESOURCES.en, RESOURCES.fr] {
+            let held: Vec<&str> = ftl.lines().filter_map(|l| l.split_once(" =").map(|(id, _)| id.trim())).filter(|id| gone.contains(id)).collect();
+            assert_eq!(held, Vec::<&str>::new());
+        }
     }
 
     #[test]

@@ -18,8 +18,9 @@ const touchAction = (el: Locator) => el.first().evaluate((e) => getComputedStyle
 
 for (const theme of ["light", "dark"]) {
   test.describe(`the focus ring, ${theme} theme`, () => {
-    test("the home search field has a 2px ring in the accent", async ({ page }) => {
-      await page.goto("/");
+    test("the map's search field has a 2px ring in the accent", async ({ page }) => {
+      await page.goto("/map.html");
+      await mapReady(page);
       await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
       const field = page.locator(".search input").first();
       await field.focus();

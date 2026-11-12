@@ -162,7 +162,7 @@ test.describe("a module that does not start", () => {
 
   test("shows nothing when the module starts", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#search")).toBeVisible();
+    await expect(page.locator("h1")).toHaveText("Your projects");
     await expect(page.locator("#boot-failed")).toBeHidden();
   });
 });

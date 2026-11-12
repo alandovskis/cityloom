@@ -232,8 +232,7 @@ test("the home page can be read in French and the choice is kept", async ({ page
   await chooseFrench(page);
   await expect(page.locator("h1")).toHaveText("Vos projets");
   await expect(page.locator(".about-title")).toHaveText("Réaménagez les rues de votre ville.");
-  await expect(page.locator("#search")).toHaveAttribute("placeholder", "Chercher un lieu, comme Kreuzberg, Berlin");
-  await expect(page.locator(".search-go")).toHaveText("Chercher");
+  await expect(page.locator(".lead")).toContainText("Ouvrez un projet");
   await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
   await expect(page.locator(".hero-facts")).toContainText("rues");
   await expect(page).toHaveTitle("CityLoom : réaménagez les rues de votre ville");

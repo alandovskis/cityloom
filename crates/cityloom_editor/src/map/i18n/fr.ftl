@@ -156,7 +156,7 @@ map-status-bad-more = { $n ->
 map-home-title = CityLoom : réaménagez les rues de votre ville
 map-home-description = Choisissez n’importe quelle rue ou jonction de la ville, réorganisez-la et voyez aussitôt ce qui fonctionne toujours.
 map-home-heading = Réaménagez les rues de votre ville.
-map-home-lead = Trouvez un lieu, choisissez une rue ou une jonction sur sa carte et réorganisez-la. Vous voyez tout de suite ce qui fonctionne toujours.
+map-home-lead = Ouvrez un projet, choisissez une rue ou une jonction sur sa carte et réorganisez-la. Vous voyez tout de suite ce qui fonctionne toujours.
 map-home-open-map = Ouvrir la carte de la ville
 # La mention est en trois morceaux autour d’un lien : map-home-streets-by, puis le lien map-home-osm-contributors, puis un point dans le balisage.
 map-home-streets-by = Rues ©
