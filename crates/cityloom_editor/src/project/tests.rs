@@ -908,7 +908,7 @@ mod context {
         let before: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
         *t.page.path.borrow_mut() = "/street.html?street=7&project=p1".into();
         assert!(enter(t.ports.clone()).is_none());
-        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        assert_eq!(t.navigator.take_replaced(), [MISSING_HREF]);
         let after: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
         assert_eq!(after, before, "nothing is written");
     }
@@ -918,11 +918,18 @@ mod context {
         use crate::project::context::peek;
         let t = two_projects();
         *t.page.path.borrow_mut() = "/map.html?project=p1".into();
-        assert_eq!(peek(t.ports.clone()).storage.project().as_deref(), Some("p1"));
+        assert_eq!(peek(t.ports.clone()).unwrap().storage.project().as_deref(), Some("p1"));
+        // nothing resolves: no project's ports, and none of the page's own (root) storage for anything to write into
         *t.page.path.borrow_mut() = "/map.html?project=gone".into();
-        assert_eq!(peek(t.ports.clone()).storage.project(), None, "the page's own storage");
-        assert!(t.navigator.take().is_empty());
-        assert_eq!(t.storage.recall(LAST_KEY), None);
+        assert!(peek(t.ports.clone()).is_none());
+        *t.page.path.borrow_mut() = "/".into();
+        assert!(peek(t.ports.clone()).is_none(), "none opened");
+        assert!(ProjectStore::new(t.ports.storage.clone()).open("p1"));
+        assert_eq!(peek(t.ports.clone()).unwrap().storage.project().as_deref(), Some("p1"), "the one opened last");
+        assert!(ProjectStore::new(t.ports.storage.clone()).delete("p1"));
+        assert!(peek(t.ports.clone()).is_none(), "the one opened last, deleted since");
+        assert!(t.navigator.take().is_empty() && t.navigator.take_replaced().is_empty());
+        assert!(t.storage.recall(LAST_KEY).is_none_or(|v| v.is_empty()));
     }
 
     fn news(kind: Kind, key: &str, origin: Origin) -> Change {
@@ -939,21 +946,26 @@ mod context {
         hub::publish(&[news(Kind::Project, "first", Origin::Remote)]);
         hub::publish(&[news(Kind::Project, "p1", Origin::Remote)]);
         hub::publish(&[news(Kind::Street, "p1:w1~n1~n2", Origin::Remote)]);
-        assert!(t.navigator.take().is_empty());
+        assert!(t.navigator.take().is_empty() && t.navigator.take_replaced().is_empty());
         assert!(ProjectStore::new(t.ports.storage.clone()).remove_raw("p1"));
         hub::publish(&[news(Kind::Project, "p1", Origin::Remote)]);
-        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        assert_eq!(t.navigator.take_replaced(), [MISSING_HREF]);
+        assert!(t.navigator.take().is_empty(), "the page is replaced, not stacked under the list");
         hub::reset();
     }
 
     #[test]
-    fn a_replaced_record_that_takes_the_project_away_sends_the_page_away_too() {
+    fn a_replaced_record_that_takes_the_project_away_sends_the_page_away_and_shuts_its_storage() {
         hub::reset();
         let t = two_projects();
-        leave_when_removed(&t.ports, "first");
+        let scoped = std::rc::Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), "first"));
+        leave_when_removed(&t.ports, &scoped);
+        assert!(scoped.remember("cityloom-edits", "x"), "open while the project is listed");
         assert!(ProjectStore::new(t.ports.storage.clone()).remove_raw("first"));
         hub::publish(&[news(Kind::Project, "first", Origin::Replaced)]);
-        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        assert_eq!(t.navigator.take_replaced(), [MISSING_HREF]);
+        assert!(!scoped.remember("cityloom-edits", "y"), "nothing more of the gone project is kept");
+        assert_eq!(t.storage.recall("cityloom-edits@first").as_deref(), Some(""), "blanked by the removal, and left so");
         hub::reset();
     }
 }

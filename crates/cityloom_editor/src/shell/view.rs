@@ -118,8 +118,8 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     }
     if let Some(export) = by_id("share-export") {
         let v = vm.clone();
-        // The archive holds the work of the page's project (the sync keeps the root storage).
-        let archive = crate::archive::vm::ArchiveVm::new(crate::project::context::peek(crate::shared::platform::browser_ports()), vm.i18n());
+        // The archive holds the work of the page's project (the sync keeps the root storage); with none it does nothing.
+        let archive = crate::archive::vm::ArchiveVm::for_page(crate::shared::platform::browser_ports(), vm.i18n());
         listen(&export, "click", move |_: MouseEvent| {
             v.close_share();
             // As for Print: the menu is hidden under the focus, so the Share button takes it. The result is announced.

@@ -780,18 +780,27 @@ impl Downloads for FakeDownloads {
 #[derive(Default)]
 pub struct RecordingNavigator {
     gone: RefCell<Vec<String>>,
+    replaced: RefCell<Vec<String>>,
 }
 
 impl RecordingNavigator {
-    /// Where it was sent since this was last called.
+    /// Where it was sent (`go`) since this was last called.
     pub fn take(&self) -> Vec<String> {
         std::mem::take(&mut *self.gone.borrow_mut())
+    }
+
+    /// Where it was sent in place of the page (`replace`) since this was last called.
+    pub fn take_replaced(&self) -> Vec<String> {
+        std::mem::take(&mut *self.replaced.borrow_mut())
     }
 }
 
 impl Navigator for RecordingNavigator {
     fn go(&self, href: &str) {
         self.gone.borrow_mut().push(href.to_string());
+    }
+    fn replace(&self, href: &str) {
+        self.replaced.borrow_mut().push(href.to_string());
     }
 }
 

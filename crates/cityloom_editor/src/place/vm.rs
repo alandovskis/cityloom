@@ -43,6 +43,9 @@ pub struct AreaVm {
     active: ArcRwSignal<Option<usize>>,
     /// Which search the answer to is wanted; an older one that arrives late is dropped.
     turn: Cell<u32>,
+    /// No project resolves on the page: a place found cannot be made a project's area, so choosing one does nothing
+    /// (the root storage is never written, and no map is opened only to send the page away).
+    inert: bool,
 }
 
 /// The name an area is called: where it is, as far as the second place name.
@@ -56,6 +59,19 @@ impl AreaVm {
 
     /// The search, saying what it says in the language of `i18n` (the page's one instance, which the shell switches).
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<AreaVm> {
+        AreaVm::made(ports, i18n, false)
+    }
+
+    /// The search of the page's project (`project::context::peek`, from the page's own ports); where no project
+    /// resolves, one that finds places but whose choice does nothing.
+    pub fn for_page(ports: Ports, i18n: Rc<I18n>) -> Rc<AreaVm> {
+        match crate::project::context::peek(ports.clone()) {
+            Some(ports) => AreaVm::made(ports, i18n, false),
+            None => AreaVm::made(ports, i18n, true),
+        }
+    }
+
+    fn made(ports: Ports, i18n: Rc<I18n>, inert: bool) -> Rc<AreaVm> {
         Rc::new(AreaVm {
             loader: Loader::new(ports.clone()),
             ports,
@@ -65,6 +81,7 @@ impl AreaVm {
             status: ArcRwSignal::new(Status::Idle),
             active: ArcRwSignal::new(None),
             turn: Cell::new(0),
+            inert,
         })
     }
 
@@ -194,6 +211,9 @@ impl AreaVm {
     /// Makes a city of the streets round the place in row `i` and opens its map. If the streets cannot
     /// be got, the page stays as it is and says why.
     pub fn choose(self: &Rc<Self>, i: usize) {
+        if self.inert {
+            return;
+        }
         let Some(place) = self.found.get_untracked().get(i).cloned() else { return };
         if matches!(self.status.get_untracked(), Status::Loading(_)) {
             return;
@@ -464,6 +484,34 @@ mod tests {
         let area = CityStore::current_area(&*f.storage);
         assert_eq!((area.name.as_str(), area.key().as_str()), ("Kreuzberg, Friedrichshain-Kreuzberg", "52.4990,13.4030"));
         assert_eq!(CityStore::current(f.storage.clone()).open().view(0).name, "Kreuzberg, Friedrichshain-Kreuzberg");
+    }
+
+    #[test]
+    fn with_no_project_open_choosing_a_place_writes_nothing_marks_nothing_and_opens_nothing() {
+        use crate::project::ProjectStore;
+        let (ports, fetcher, navigator) = test_ports_with_services();
+        let root = ports.storage.clone();
+        for gone in [false, true] {
+            if gone {
+                let p = ProjectStore::new(root.clone()).create("Gone").unwrap();
+                assert!(ProjectStore::new(root.clone()).open(&p.id) && ProjectStore::new(root.clone()).delete(&p.id));
+            }
+            let before: Vec<(String, Option<String>)> = root.keys().into_iter().map(|k| (k.clone(), root.recall(&k))).collect();
+            let vm = AreaVm::for_page(ports.clone(), crate::i18n_for(Locale::En));
+            let f = Fixture {
+                vm,
+                fetcher: fetcher.clone(),
+                navigator: navigator.clone(),
+                storage: Rc::new(MemoryStorage::default()),
+                said: Rc::new(RecordingAnnouncer::default()),
+            };
+            found(&f);
+            f.vm.choose(0);
+            assert!(f.fetcher.asked().is_empty(), "no streets are fetched for a choice that cannot be kept");
+            let after: Vec<(String, Option<String>)> = root.keys().into_iter().map(|k| (k.clone(), root.recall(&k))).collect();
+            assert_eq!(after, before);
+            assert!(f.navigator.take().is_empty() && f.navigator.take_replaced().is_empty());
+        }
     }
 
     #[test]

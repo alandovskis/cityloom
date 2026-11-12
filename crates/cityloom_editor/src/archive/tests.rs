@@ -437,6 +437,40 @@ fn export_offers_a_file_and_says_so_and_with_no_work_makes_none() {
 }
 
 #[test]
+fn with_no_project_open_the_archive_of_the_page_does_nothing_and_with_one_it_works_in_it() {
+    use crate::project::ProjectStore;
+    let a = device();
+    design(&a.ports.storage);
+    let text = archive_of(&a);
+    let b = device();
+    // none opened, then one opened and deleted since: the page resolves no project
+    for gone in [false, true] {
+        if gone {
+            let p = ProjectStore::new(b.ports.storage.clone()).create("Gone").unwrap();
+            assert!(ProjectStore::new(b.ports.storage.clone()).open(&p.id));
+            assert!(ProjectStore::new(b.ports.storage.clone()).delete(&p.id));
+        }
+        let before = snapshot(&b.storage);
+        let vm = ArchiveVm::for_page(b.ports.clone(), crate::i18n_for(Locale::En));
+        b.files.stage("x.cityloom-design.json", &text);
+        vm.import();
+        vm.import_text(&text);
+        vm.choose(Choice::UseArchive);
+        vm.export();
+        assert_eq!(snapshot(&b.storage), before, "nothing written and nothing marked");
+        assert_eq!(b.files.take_saved(), vec![]);
+        assert_eq!(vm.result_text(), None);
+    }
+    // the page's project: the import goes into it
+    let p = ProjectStore::new(b.ports.storage.clone()).create("Here").unwrap();
+    *b.page.path.borrow_mut() = format!("/account.html?project={}", p.id);
+    let vm = ArchiveVm::for_page(b.ports.clone(), crate::i18n_for(Locale::En));
+    vm.import_text(&text);
+    assert!(b.storage.recall(&format!("{EDITS_KEY}@{}", p.id)).is_some_and(|v| !v.is_empty()));
+    assert_eq!(b.storage.recall(EDITS_KEY), None);
+}
+
+#[test]
 fn export_refuses_work_it_cannot_read_rather_than_make_an_archive_that_lacks_it() {
     let t = device();
     t.storage.remember(EDITS_KEY, "damaged");

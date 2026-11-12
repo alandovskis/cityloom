@@ -825,13 +825,13 @@ fn a_junction_page_for_a_project_not_here_goes_to_the_list_and_for_no_junction_t
     *t.page.path.borrow_mut() = "/intersection.html?junction=3&project=gone".into();
     assert!(!super::enter_junction_in(t.ports.clone(), 3));
     assert!(super::open_junction_in(t.ports.clone(), 3).is_none());
-    assert_eq!(t.navigator.take(), [crate::project::context::MISSING_HREF, crate::project::context::MISSING_HREF]);
+    assert_eq!(t.navigator.take_replaced(), [crate::project::context::MISSING_HREF, crate::project::context::MISSING_HREF]);
     assert!(t.storage.keys().iter().all(|k| !k.ends_with("@gone")), "{:?}", t.storage.keys());
     // a junction the project's city does not have (no roads are kept here): back to that project's map
     *t.page.path.borrow_mut() = "/intersection.html?junction=999&project=p1".into();
     assert!(!super::enter_junction_in(t.ports.clone(), 999));
     assert!(!super::enter_junction_in(t.ports.clone(), 0));
-    assert_eq!(t.navigator.take(), ["map.html?project=p1", "map.html?project=p1"]);
+    assert_eq!(t.navigator.take_replaced(), ["map.html?project=p1", "map.html?project=p1"]);
     crate::sync::hub::reset();
 }
 

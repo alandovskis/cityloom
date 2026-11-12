@@ -259,12 +259,35 @@ fn a_street_opened_in_a_project_keeps_its_edits_in_that_project_only() {
 }
 
 #[test]
+fn once_a_sync_removes_the_street_s_project_its_last_edit_is_neither_kept_nor_marked() {
+    use crate::shared::ports::Storage;
+    use crate::sync::model::{Change, Id, Kind, Loaded, Origin, load};
+    crate::sync::hub::reset();
+    let t = bendville_in_p1("/street.html?street=1&project=p1");
+    let sheet = crate::street::open_street_in(t.ports.clone(), 1).expect("Bendville's street, in p1");
+    let vm = sheet.vm();
+    let u = vm.view_now().segments[0].uid;
+    // an edit still waiting in the keeper when the project is deleted on another device
+    assert!(vm.apply(|e| e.nudge_width(u, -100)));
+    assert!(crate::project::ProjectStore::new(t.ports.storage.clone()).remove_raw("p1"));
+    crate::sync::hub::publish(&[Change { id: Id::new(Kind::Project, "p1"), origin: Origin::Remote }]);
+    assert_eq!(t.navigator.take_replaced(), [crate::project::context::MISSING_HREF]);
+    vm.flush();
+    assert!(t.storage.recall("cityloom-edits@p1").is_none_or(|v| v.is_empty()), "the gone project's work does not come back");
+    if let Loaded::Current(doc) = load(&*t.storage) {
+        // (the project's own record and its area were marked when the test made them)
+        assert!(doc.records.keys().all(|name| !name.starts_with("street/")), "the street is not marked: {:?}", doc.records.keys().collect::<Vec<_>>());
+    }
+    crate::sync::hub::reset();
+}
+
+#[test]
 fn a_street_page_for_a_project_that_is_not_here_opens_nothing_and_goes_to_the_list() {
     use crate::shared::ports::Storage;
     crate::sync::hub::reset();
     let t = bendville_in_p1("/street.html?street=1&project=gone");
     assert!(crate::street::open_street_in(t.ports.clone(), 1).is_none());
-    assert_eq!(t.navigator.take(), [crate::project::context::MISSING_HREF]);
+    assert_eq!(t.navigator.take_replaced(), [crate::project::context::MISSING_HREF]);
     assert!(t.storage.keys().iter().all(|k| !k.ends_with("@gone")), "{:?}", t.storage.keys());
     crate::sync::hub::reset();
 }
@@ -275,7 +298,7 @@ fn a_street_page_for_no_street_of_the_city_goes_to_the_map_of_its_project() {
     let t = bendville_in_p1("/street.html?street=99&project=p1");
     assert!(crate::street::open_street_in(t.ports.clone(), 99).is_none());
     assert!(crate::street::open_street_in(t.ports.clone(), 0).is_none());
-    assert_eq!(t.navigator.take(), ["map.html?project=p1", "map.html?project=p1"]);
+    assert_eq!(t.navigator.take_replaced(), ["map.html?project=p1", "map.html?project=p1"]);
     crate::sync::hub::reset();
 }
 

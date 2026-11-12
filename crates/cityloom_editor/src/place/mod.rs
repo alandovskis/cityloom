@@ -152,7 +152,10 @@ pub fn prepare_city() -> js_sys::Promise {
     use crate::city::store::CityStore;
     use crate::shared::platform::browser_ports;
     js_sys::Promise::new(&mut |resolve, _| {
-        let ports = crate::project::context::peek(browser_ports());
+        // With no project the default area's roads are got: only the roads are kept (shared by every project), no
+        // project's work.
+        let root = browser_ports();
+        let ports = crate::project::context::peek(root.clone()).unwrap_or(root);
         let store = CityStore::current(ports.storage.clone());
         let announcer = ports.announcer.clone();
         let i18n = crate::i18n_for(crate::shared::i18n::detect(&ports));

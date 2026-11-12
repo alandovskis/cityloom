@@ -17,11 +17,19 @@ pub const SCOPED_KEYS: [&str; 5] = ["cityloom-edits", "cityloom-edits-damaged", 
 pub struct ScopedStorage {
     inner: Rc<dyn Storage>,
     project: String,
+    /// The project is gone (deleted elsewhere): nothing more is kept through this storage.
+    closed: std::cell::Cell<bool>,
 }
 
 impl ScopedStorage {
     pub fn new(inner: Rc<dyn Storage>, project: &str) -> ScopedStorage {
-        ScopedStorage { inner, project: project.to_string() }
+        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false) }
+    }
+
+    /// From now on every write is refused, so a page whose project is gone cannot bring its work back (an editor's
+    /// last flush) nor mark it for the sync. Reads go on.
+    pub fn close(&self) {
+        self.closed.set(true);
     }
 
     fn name(&self, key: &str) -> String {
@@ -35,7 +43,7 @@ impl Storage for ScopedStorage {
     }
 
     fn remember(&self, key: &str, value: &str) -> bool {
-        self.inner.remember(&self.name(key), value)
+        !self.closed.get() && self.inner.remember(&self.name(key), value)
     }
 
     /// Every key of the inner storage, scoped ones under their suffixed names: nothing is hidden.
@@ -64,6 +72,18 @@ impl Storage for ScopedStorage {
 mod tests {
     use super::*;
     use crate::shared::ports::MemoryStorage;
+
+    #[test]
+    fn a_closed_project_storage_keeps_nothing_more_and_still_reads() {
+        let (inner, a, _) = pair();
+        assert!(a.remember("cityloom-edits", "A"));
+        a.close();
+        assert!(!a.remember("cityloom-edits", "B"));
+        assert!(!a.remember("cityloom-sync", "{}"), "not even the person's own keys: a mark would name the project");
+        assert_eq!(inner.recall("cityloom-edits@a"), Some("A".into()));
+        assert_eq!(inner.recall("cityloom-sync"), None);
+        assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
+    }
 
     fn pair() -> (Rc<MemoryStorage>, ScopedStorage, ScopedStorage) {
         let inner = Rc::new(MemoryStorage::default());

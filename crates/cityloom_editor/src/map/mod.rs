@@ -121,12 +121,13 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
 pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    // Until the home page lists the projects, it shows the city of the project opened last, and its search chooses
-    // that project's area.
-    let ports = crate::project::context::peek(browser_ports());
+    // Until the home page lists the projects, it shows the city of the project opened last (with none, the default
+    // area's, only read), and its search chooses that project's area (with none, choosing does nothing).
+    let root = browser_ports();
+    let ports = crate::project::context::peek(root.clone()).unwrap_or_else(|| root.clone());
     // One instance for the page: the shell switches it, and the hero and the search follow.
     let i18n = crate::i18n_browser(&ports);
-    let vm = vm::MapVm::new(ports.clone(), i18n.clone());
+    let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {
@@ -135,7 +136,7 @@ pub fn mount_home() -> MapPage {
     // The window title is the page's own and does not wait for the city; it renders nothing.
     mount(
         "search-slot",
-        view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(ports.clone(), i18n.clone())/><home::HomeTitle vm=vm.clone()/> }.into_any(),
+        view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::for_page(root, i18n.clone())/><home::HomeTitle vm=vm.clone()/> }.into_any(),
     );
     MapPage(vm, i18n)
 }

@@ -12,6 +12,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - Writes: `edits::Draft::put_raw` (one write; unreadable records untouched) and `RestrictionStore::put_raw`, not `CityStore::write_street` (needs network loaded); then `sync::model::mark` per record. Failed write restores both documents.
 - Damaged/newer local edits or rules stop import (`LocalEdits`/`LocalRules`) only if the archive has records for them; no copy aside, no write. Export refuses where local edits/rules are unreadable; no file when no work.
 - Port `ArchiveFiles` (`save`, `pick` with callback; `FakeArchiveFiles`; `BrowserFiles` in `platform.rs`: Blob download, never-attached `<input type=file>`).
+- Per project: the pages build it with `ArchiveVm::for_page(root ports)`, over the project `project::context::peek` resolves (the page's, else the one opened last); with none, every command (export, import) does nothing and nothing is written. Task 8 of the projects plan adds the per-project export/import tests.
 - `ArchiveVm`: conflict question focused on "Keep mine", `Escape` cancels, result focused and announced. E2E: `e2e/tests/design-archive.spec.ts` (`archive.spec.ts` is the area archive's).
 - Known limits:
   - Conflict decided for the whole import, not per place.

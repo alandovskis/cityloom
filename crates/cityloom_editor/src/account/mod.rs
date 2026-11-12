@@ -43,9 +43,10 @@ pub fn mount_account() -> AccountPage {
     vm.load();
     leptos::mount::mount_to(slot.unchecked_into(), move || view! { <view::AccountView vm=vm/> }).forget();
     // The design archive works on this device's storage, signed in or not, so it has a slot of its own. It holds the
-    // work of the project opened last (the page is in none of its own); the account stays the root storage's.
+    // work of the project opened last (the page is in none of its own), and does nothing when there is none; the
+    // account stays the root storage's.
     if let Some(slot) = leptos::prelude::document().get_element_by_id("archive-slot") {
-        let archive = crate::archive::vm::ArchiveVm::new(crate::project::context::peek(ports), i18n.clone());
+        let archive = crate::archive::vm::ArchiveVm::for_page(ports, i18n.clone());
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <crate::archive::view::ArchiveView vm=archive/> }).forget();
     }
     AccountPage(i18n)
