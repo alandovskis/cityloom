@@ -35,6 +35,8 @@ project-delete-confirm = Supprimer { $name } et tout ce qu’il contient? Cette 
 project-delete-yes = Supprimer le projet
 project-gone = Ce projet n’est plus ici.
 project-first-name = Premier projet
+# A project whose places came before its record, until its record or a rename names it.
+project-placeholder-name = Projet
 project-refused-empty = Donnez un nom au projet.
 project-refused-long = Le nom d’un projet compte au plus 80 caractères.
 project-refused-unusable = La liste des projets n’a pas pu être modifiée sur cet appareil.

@@ -151,7 +151,21 @@ impl ProjectsVm {
         self.version.track();
         let mut projects: Vec<(String, Project)> = self.store.list().into_iter().map(|p| (last_changed(&*self.ports.storage, &p), p)).collect();
         projects.sort_by(|a, b| b.0.cmp(&a.0));
-        projects.into_iter().map(|(when, p)| Row { changed: changed_text(&self.i18n, &when), area_label: area_label(&p), id: p.id, name: p.name }).collect()
+        projects
+            .into_iter()
+            .map(|(when, p)| Row { changed: changed_text(&self.i18n, &when), area_label: area_label(&p), name: self.name_of(&p), id: p.id })
+            .collect()
+    }
+
+    /// The name a project is shown by. A placeholder (its places came from the sync before its record, or with none, as
+    /// an older CityLoom's rows do for the first project) holds no name of the person's: it is named in the page's
+    /// language, the first project as the migration names it.
+    fn name_of(&self, project: &Project) -> String {
+        match (project.placeholder, project.id == FIRST) {
+            (false, _) => project.name.clone(),
+            (true, true) => self.word("project-first-name"),
+            (true, false) => self.word("project-placeholder-name"),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -289,7 +303,7 @@ impl ProjectsVm {
         let Some(id) = self.deleting.get_untracked() else { return false };
         self.acted();
         self.deleting.set(None);
-        let name = self.store.get(&id).map(|p| p.name).unwrap_or_default();
+        let name = self.store.get(&id).map(|p| self.name_of(&p)).unwrap_or_default();
         let done = self.store.delete(&id);
         self.refresh();
         if done {

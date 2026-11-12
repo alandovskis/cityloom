@@ -32,6 +32,8 @@ project-delete-confirm = Delete { $name } and everything in it? This cannot be u
 project-delete-yes = Delete the project
 project-gone = That project is no longer here.
 project-first-name = First project
+# A project whose places came before its record, until its record or a rename names it.
+project-placeholder-name = Project
 project-refused-empty = Give the project a name.
 project-refused-long = A project name has at most 80 characters.
 project-refused-unusable = The list of projects could not be changed on this device.

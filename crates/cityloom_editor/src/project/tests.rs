@@ -1038,6 +1038,27 @@ mod page {
         }
     }
 
+    /// A project whose places the sync brought before its record (an older CityLoom's rows, under bare keys, are the
+    /// first project's) is a placeholder: it is named in the page's language, the first project as the migration names
+    /// it, any other as a project; the delete question names it so too.
+    #[test]
+    fn a_placeholder_is_named_in_the_page_s_language() {
+        for (locale, first, other) in [(Locale::En, "First project", "Project"), (Locale::FrCa, "Premier projet", "Projet")] {
+            let t = test_ports_full();
+            let store = ProjectStore::new(t.ports.storage.clone());
+            assert!(store.ensure("first"));
+            assert!(store.ensure("p9"));
+            let vm = page_in(locale, &t);
+            let mut shown = names(&vm);
+            shown.sort();
+            let mut want = vec![first.to_string(), other.to_string()];
+            want.sort();
+            assert_eq!(shown, want, "{locale:?}");
+            vm.ask_delete("first");
+            assert!(vm.delete_question().unwrap().contains(first), "{locale:?}");
+        }
+    }
+
     #[test]
     fn a_project_opened_before_is_still_the_one_opened_last_after_a_load() {
         let t = test_ports_full();
