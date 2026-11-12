@@ -1260,6 +1260,27 @@ mod page {
         assert!(out.contains(r#"aria-label="Renommer Plateau""#));
     }
 
+    #[test]
+    fn the_project_slice_uses_no_other_slice_s_page_the_home_page_is_put_together_in_lib_rs() {
+        let sources = [
+            ("mod.rs", include_str!("mod.rs")),
+            ("vm.rs", include_str!("vm.rs")),
+            ("view.rs", include_str!("view.rs")),
+            ("text.rs", include_str!("text.rs")),
+            ("context.rs", include_str!("context.rs")),
+            ("store.rs", include_str!("store.rs")),
+            ("migrate.rs", include_str!("migrate.rs")),
+            ("model.rs", include_str!("model.rs")),
+        ];
+        for (file, src) in sources {
+            for slice in ["map", "street", "junction", "shell", "account", "archive"] {
+                assert!(!src.contains(&format!("crate::{slice}::")), "project/{file} uses the {slice} slice");
+            }
+        }
+        let lib = include_str!("../lib.rs");
+        assert!(lib.contains("project::mount_list(") && lib.contains("map::mount_home("), "lib.rs puts the home page together");
+    }
+
     const INDEX_HTML: &str = include_str!("../../../../web/index.html");
 
     #[test]

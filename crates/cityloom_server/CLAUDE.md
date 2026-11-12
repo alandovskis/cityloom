@@ -48,7 +48,7 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 
 - Pages that run the module carry a hidden `#boot-failed` notice in both languages (`data-boot` keys `ui-boot-*`; checked by `shell::tests`), shown by `window.cityloomBootFailed()` (`web/boot.js`: classic script before the entry script, unversioned so it exists when the build's addresses do not).
 - The entry script's `onerror` calls it when the entry script or a static import (`city.js`, `mapcanvas.js`) is a 404 (a deploy after the page opened does this to `/v/<old build>/`); each entry script wraps only `import()` and `init()` of the glue in `try … catch` and calls it.
-- Home mounts the list of projects and the About section's search first (`mount_projects`), the city after roads arrive (`ProjectsPage::mount_city`; `#hero-facts-slot` keeps room for the facts line).
+- Home mounts the list of projects and the About section's search first (`mount_projects`), the city after roads arrive (`HomePage::mount_city`, `lib.rs`; `#hero-facts-slot` keeps room for the facts line).
 
 ## Tests
 

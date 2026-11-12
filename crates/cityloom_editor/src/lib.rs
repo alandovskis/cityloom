@@ -58,6 +58,37 @@ pub fn say(text: &str) {
     shared::live::say(text);
 }
 
+/// The home page as its script sees it: the list of projects (`project`), and below it the About section with the city
+/// drawn behind it (the map's home part). The page is put together here, where slices may meet: neither slice uses
+/// the other.
+#[wasm_bindgen]
+pub struct HomePage(map::MapPage);
+
+#[wasm_bindgen]
+impl HomePage {
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
+    pub fn mount_shell(&self) {
+        self.0.mount_shell();
+    }
+
+    /// The city behind the About section, once its roads are got (`prepare_city`).
+    pub fn mount_city(&self) {
+        self.0.mount_city();
+    }
+}
+
+/// Draws the home page: first the list of projects, which moves the work kept from before projects into the first
+/// project, then the About section's search and window title, all in one set of words the shell switches.
+#[wasm_bindgen]
+pub fn mount_projects() -> HomePage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let ports = shared::platform::browser_ports();
+    let i18n = i18n_browser(&ports);
+    project::mount_list(ports, i18n.clone());
+    HomePage(map::mount_home(i18n))
+}
+
 /// Every slice's messages, in one place: a slice's `.ftl` files are registered here.
 const RESOURCES: &[shared::i18n::Resources] = &[
     shell::RESOURCES,

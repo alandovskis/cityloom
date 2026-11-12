@@ -116,8 +116,8 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
 
 /// Draws the home page's About section: its search box into the element it keeps for it, and the window title; and
 /// hands back what the page needs to reach it. The city behind the card and how it stands come later, from
-/// `MapPage::mount_city`, once the area's roads are got. Called by the list of projects (`project::mount_projects`),
-/// which owns the page and gives it its words, `i18n`.
+/// `MapPage::mount_city`, once the area's roads are got. Called by the home page's entry point (`lib.rs`,
+/// `mount_projects`) after the list of projects, with the page's one set of words, `i18n`.
 pub fn mount_home(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
     // The About section shows the city of the project opened last (with none, the default area's, only read), and its
     // search chooses that project's area (with none, choosing does nothing).
