@@ -114,19 +114,15 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     Some(MapPage(vm, i18n))
 }
 
-/// Draws the home page's search box into the element it keeps for it, and hands back what the script needs to
-/// reach the page. The city behind the hero card and how it stands come later, from `MapPage::mount_city`, once
-/// the area's roads are got.
-#[wasm_bindgen]
-pub fn mount_home() -> MapPage {
-    // Components create effects as they are built, before any is mounted.
-    let _ = any_spawner::Executor::init_wasm_bindgen();
-    // Until the home page lists the projects, it shows the city of the project opened last (with none, the default
-    // area's, only read), and its search chooses that project's area (with none, choosing does nothing).
+/// Draws the home page's About section: its search box into the element it keeps for it, and the window title; and
+/// hands back what the page needs to reach it. The city behind the card and how it stands come later, from
+/// `MapPage::mount_city`, once the area's roads are got. Called by the list of projects (`project::mount_projects`),
+/// which owns the page and gives it its words, `i18n`.
+pub fn mount_home(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
+    // The About section shows the city of the project opened last (with none, the default area's, only read), and its
+    // search chooses that project's area (with none, choosing does nothing).
     let root = browser_ports();
     let ports = crate::project::context::peek(root.clone()).unwrap_or_else(|| root.clone());
-    // One instance for the page: the shell switches it, and the hero and the search follow.
-    let i18n = crate::i18n_browser(&ports);
     let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };

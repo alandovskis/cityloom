@@ -969,3 +969,287 @@ mod context {
         hub::reset();
     }
 }
+
+/// The home page: the list of projects, its view-model and its markup.
+mod page {
+    use std::rc::Rc;
+
+    use leptos::prelude::*;
+
+    use crate::city::edits::EDITS_KEY;
+    use crate::project::text::changed_text;
+    use crate::project::view::ProjectsView;
+    use crate::project::vm::{ProjectsVm, Row};
+    use crate::project::{LAST_KEY, ProjectStore, RESOURCES};
+    use crate::shared::i18n::Locale;
+    use crate::shared::i18n::tests::parity_problems;
+    use crate::shared::ports::{Storage, TestPorts, test_ports_full};
+    use crate::shared::testing::html;
+    use crate::sync::model::stamp;
+
+    /// 2026-11-12, 15:00 UTC.
+    const NOV_12: u64 = 1_794_495_600_000;
+    /// 2026-03-01, 09:00 UTC.
+    const MAR_1: u64 = 1_772_355_600_000;
+    const LEGACY_EDITS: &str = r#"{"version":5,"streets":{},"junctions":{}}"#;
+
+    fn page_in(locale: Locale, t: &TestPorts) -> Rc<ProjectsVm> {
+        ProjectsVm::new(t.ports.clone(), crate::i18n_for(locale))
+    }
+
+    fn page() -> (Rc<ProjectsVm>, TestPorts) {
+        let t = test_ports_full();
+        (page_in(Locale::En, &t), t)
+    }
+
+    fn names(vm: &ProjectsVm) -> Vec<String> {
+        vm.rows().into_iter().map(|r| r.name).collect()
+    }
+
+    fn id_of(vm: &ProjectsVm, name: &str) -> String {
+        vm.rows().into_iter().find(|r| r.name == name).unwrap().id
+    }
+
+    #[test]
+    fn the_ftl_files_have_the_same_messages_and_variables() {
+        assert_eq!(parity_problems(RESOURCES.en, RESOURCES.fr), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_browser_with_no_projects_has_an_empty_list() {
+        let (vm, _) = page();
+        assert!(vm.is_empty());
+        assert_eq!(vm.rows(), Vec::<Row>::new());
+        assert_eq!(vm.notice(), None);
+    }
+
+    #[test]
+    fn the_work_from_before_projects_is_the_first_project_named_in_the_page_s_language() {
+        for (locale, name) in [(Locale::En, "First project"), (Locale::FrCa, "Premier projet")] {
+            let t = test_ports_full();
+            t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+            let vm = page_in(locale, &t);
+            assert_eq!(names(&vm), [name]);
+            assert_eq!(vm.rows()[0].id, "first");
+            assert!(t.storage.recall(EDITS_KEY).is_none_or(|v| v.is_empty()), "no legacy key is left");
+            assert_eq!(t.storage.recall("cityloom-edits@first").as_deref(), Some(LEGACY_EDITS));
+            // The work was where the pages opened before: they still open it.
+            assert_eq!(t.storage.recall(LAST_KEY).as_deref(), Some("first"));
+        }
+    }
+
+    #[test]
+    fn a_project_opened_before_is_still_the_one_opened_last_after_a_load() {
+        let t = test_ports_full();
+        let store = ProjectStore::new(t.ports.storage.clone());
+        let p = store.create("Plateau").unwrap();
+        store.create("Verdun").unwrap();
+        store.open(&p.id);
+        t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+        page_in(Locale::En, &t);
+        assert_eq!(t.storage.recall(LAST_KEY), Some(p.id));
+        assert_eq!(t.storage.recall(EDITS_KEY).as_deref(), Some(LEGACY_EDITS), "with projects listed nothing is moved");
+    }
+
+    #[test]
+    fn creating_adds_a_row_and_an_empty_name_is_refused_with_a_reason() {
+        let (vm, t) = page();
+        assert!(vm.create("  Plateau "));
+        assert_eq!(names(&vm), ["Plateau"]);
+        assert!(!vm.is_empty());
+        assert_eq!(vm.create_error(), None);
+        assert_eq!(vm.rows()[0].area_label, crate::place::area::default_area().name);
+        assert!(!vm.create(""));
+        assert_eq!(vm.create_error().as_deref(), Some("Give the project a name."));
+        assert!(!vm.create(&"x".repeat(81)));
+        assert_eq!(vm.create_error().as_deref(), Some("A project name has at most 80 characters."));
+        assert_eq!(names(&vm), ["Plateau"]);
+        assert!(vm.create("Verdun"));
+        assert_eq!(vm.create_error(), None, "a project taken clears the reason");
+        assert_eq!(t.announcer.take().last().map(String::as_str), Some("Project Verdun created."));
+    }
+
+    #[test]
+    fn renaming_changes_the_row_and_an_empty_name_is_refused() {
+        let (vm, _) = page();
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.start_rename(&id);
+        assert_eq!(vm.renaming().as_deref(), Some(id.as_str()));
+        assert!(!vm.rename(&id, " "));
+        assert_eq!(vm.rename_error().as_deref(), Some("Give the project a name."));
+        assert_eq!(vm.renaming().as_deref(), Some(id.as_str()), "the form stays open");
+        assert!(vm.rename(&id, "Mile End"));
+        assert_eq!(names(&vm), ["Mile End"]);
+        assert_eq!(vm.renaming(), None);
+        assert_eq!(vm.rename_error(), None);
+        vm.start_rename(&id);
+        vm.cancel_rename();
+        assert_eq!(vm.renaming(), None);
+    }
+
+    #[test]
+    fn deleting_is_asked_first_and_cancelling_deletes_nothing() {
+        let (vm, t) = page();
+        vm.create("Plateau");
+        vm.create("Verdun");
+        let id = id_of(&vm, "Plateau");
+        t.storage.remember(&format!("cityloom-edits@{id}"), "{}");
+        vm.ask_delete(&id);
+        assert_eq!(vm.deleting().map(|r| r.id), Some(id.clone()));
+        assert_eq!(vm.delete_question().as_deref(), Some("Delete Plateau and everything in it? This cannot be undone."));
+        vm.cancel_delete();
+        assert_eq!(vm.deleting(), None);
+        assert_eq!(names(&vm).len(), 2);
+        assert_eq!(t.storage.recall(&format!("cityloom-edits@{id}")).as_deref(), Some("{}"));
+
+        vm.ask_delete(&id);
+        assert!(vm.confirm_delete());
+        assert_eq!(names(&vm), ["Verdun"]);
+        assert_eq!(vm.deleting(), None);
+        assert!(t.storage.recall(&format!("cityloom-edits@{id}")).is_none_or(|v| v.is_empty()), "the project's own keys go with it");
+        assert_eq!(t.announcer.take().last().map(String::as_str), Some("Project Plateau deleted."));
+        assert!(!vm.confirm_delete(), "nothing is asked any more");
+    }
+
+    #[test]
+    fn the_rows_are_newest_change_first() {
+        let (vm, t) = page();
+        t.storage.set_now(MAR_1);
+        vm.create("Old");
+        t.storage.set_now(MAR_1 + 1_000);
+        vm.create("Newer");
+        assert_eq!(names(&vm), ["Newer", "Old"]);
+        t.storage.set_now(NOV_12);
+        assert!(vm.rename(&id_of(&vm, "Old"), "Renamed"));
+        assert_eq!(names(&vm), ["Renamed", "Newer"]);
+        assert_eq!(vm.rows()[0].changed, "Changed November 12, 2026");
+    }
+
+    #[test]
+    fn opening_remembers_the_project_and_goes_to_its_map() {
+        let (vm, t) = page();
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.open(&id);
+        assert_eq!(t.storage.recall(LAST_KEY), Some(id.clone()));
+        assert_eq!(t.navigator.take(), [format!("map.html?project={id}")]);
+        vm.open("gone");
+        assert!(t.navigator.take().is_empty(), "a project that is not listed is not opened");
+    }
+
+    #[test]
+    fn a_page_sent_back_because_its_project_is_gone_says_so() {
+        let t = test_ports_full();
+        *t.page.path.borrow_mut() = "/index.html?missing=1".into();
+        assert_eq!(page_in(Locale::En, &t).notice().as_deref(), Some("That project is no longer here."));
+        assert_eq!(page_in(Locale::FrCa, &t).notice().as_deref(), Some("Ce projet n’est plus ici."));
+        *t.page.path.borrow_mut() = "/index.html?missing=10".into();
+        assert_eq!(page_in(Locale::En, &t).notice(), None);
+    }
+
+    #[test]
+    fn a_change_is_dated_in_the_page_s_language_and_an_unknown_one_is_not() {
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+        assert_eq!(changed_text(&en, &stamp(NOV_12)), "Changed November 12, 2026");
+        assert_eq!(changed_text(&fr, &stamp(NOV_12)), "Modifié le 12 novembre 2026");
+        assert_eq!(changed_text(&en, &stamp(MAR_1)), "Changed March 1, 2026");
+        assert_eq!(changed_text(&fr, &stamp(MAR_1)), "Modifié le 1er mars 2026");
+        // The first project's record is made at the epoch: when it last changed is not known.
+        assert_eq!(changed_text(&en, &stamp(0)), "");
+        assert_eq!(changed_text(&en, "not a time"), "");
+    }
+
+    #[test]
+    fn a_project_the_sync_brings_shows_at_once() {
+        crate::sync::hub::reset();
+        let (vm, t) = page();
+        assert!(vm.is_empty());
+        ProjectStore::new(t.ports.storage.clone()).create("From elsewhere").unwrap();
+        let id = crate::sync::model::Id::new(crate::sync::model::Kind::Project, "p1");
+        crate::sync::hub::publish(&[crate::sync::model::Change { id, origin: crate::sync::model::Origin::Remote }]);
+        assert_eq!(names(&vm), ["From elsewhere"]);
+        crate::sync::hub::reset();
+    }
+
+    // ---- the markup --------------------------------------------------------------------------
+
+    fn markup(vm: Rc<ProjectsVm>) -> String {
+        html(move || view! { <ProjectsView vm=vm/> }.into_any())
+    }
+
+    #[test]
+    fn the_list_has_a_heading_and_one_item_per_project_named_with_its_area() {
+        let (vm, _) = page();
+        vm.create("Plateau");
+        vm.create("Verdun <b>");
+        let id = id_of(&vm, "Plateau");
+        let out = markup(vm.clone());
+        assert_eq!(out.matches("<h1").count(), 1);
+        assert!(out.contains(r#"id="projects-heading""#) && out.contains("Your projects"));
+        assert_eq!(out.matches(r#"class="project-row""#).count(), 2, "{out}");
+        // An item is named by the project's name and its area, both shown.
+        assert!(out.contains(&format!(r#"aria-labelledby="project-name-{id} project-area-{id}""#)), "{out}");
+        assert!(out.contains(&format!(r#"id="project-area-{id}""#)));
+        assert!(out.contains(&crate::place::area::default_area().name));
+        assert!(out.contains(&format!(r#"href="map.html?project={id}""#)));
+        assert!(out.contains(r#"aria-label="Rename Plateau""#) && out.contains(r#"aria-label="Delete Plateau""#));
+        assert!(out.contains("Verdun &lt;b&gt;"), "a name is text, not markup");
+        assert!(!out.contains("project-empty"));
+    }
+
+    #[test]
+    fn an_empty_list_asks_for_the_first_project_and_the_form_shows_the_area() {
+        let (vm, _) = page();
+        let out = markup(vm);
+        assert!(out.contains("<h1"));
+        assert!(out.contains(r#"class="project-empty""#) && out.contains("You have no projects yet."));
+        assert!(!out.contains("<li"));
+        assert!(out.contains(r#"<label for="project-name""#) && out.contains(r#"id="project-name""#));
+        assert!(out.contains(&crate::place::area::default_area().name), "the area is shown, not chosen");
+        assert!(!out.contains("<select"));
+    }
+
+    #[test]
+    fn a_question_before_deleting_and_a_refusal_are_in_the_page() {
+        let (vm, _) = page();
+        vm.create("Plateau");
+        vm.create("");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        let out = markup(vm);
+        assert!(out.contains("Delete Plateau and everything in it?"));
+        assert!(out.contains(r#"id="project-delete-safe""#));
+        assert!(out.contains("Give the project a name.") && out.contains(r#"aria-invalid="true""#));
+    }
+
+    #[test]
+    fn the_missing_project_notice_is_an_alert() {
+        let t = test_ports_full();
+        *t.page.path.borrow_mut() = "/index.html?missing=1".into();
+        let out = markup(page_in(Locale::En, &t));
+        assert!(out.contains(r#"role="alert""#) && out.contains("That project is no longer here."));
+    }
+
+    #[test]
+    fn the_page_speaks_french() {
+        let t = test_ports_full();
+        let vm = page_in(Locale::FrCa, &t);
+        vm.create("Plateau");
+        let out = markup(vm);
+        assert!(out.contains("Vos projets"), "{out}");
+        assert!(out.contains(r#"aria-label="Renommer Plateau""#));
+    }
+
+    const INDEX_HTML: &str = include_str!("../../../../web/index.html");
+
+    #[test]
+    fn the_home_page_s_first_stop_is_a_skip_link_to_the_list_and_the_about_section_follows_it() {
+        let skip = INDEX_HTML.find(r##"<a class="skip-link" href="#projects-heading" data-i18n="project-skip">"##).expect("a skip link to the list");
+        assert!(skip < INDEX_HTML.find("<header").unwrap(), "before the bar");
+        let list = INDEX_HTML.find(r#"id="projects-slot""#).expect("the list's slot");
+        let about = INDEX_HTML.find(r#"data-i18n="project-about-heading""#).expect("an About section");
+        assert!(list < about, "the list comes first");
+        assert!(about < INDEX_HTML.find(r#"data-i18n="map-home-heading""#).unwrap(), "the introduction is in the About section");
+        assert_eq!(INDEX_HTML.matches("<h1").count(), 0, "the list's heading is the page's only h1, drawn with the list");
+    }
+}

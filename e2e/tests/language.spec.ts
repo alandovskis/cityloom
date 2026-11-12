@@ -227,9 +227,11 @@ test("the home page can be read in French and the choice is kept", async ({ page
   await page.goto("/");
   await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
+  await expect(page.locator("h1")).toHaveText("Your projects");
+  await expect(page.locator(".about-title")).toHaveText("Redesign the streets of your city.");
   await chooseFrench(page);
-  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+  await expect(page.locator("h1")).toHaveText("Vos projets");
+  await expect(page.locator(".about-title")).toHaveText("Réaménagez les rues de votre ville.");
   await expect(page.locator("#search")).toHaveAttribute("placeholder", "Chercher un lieu, comme Kreuzberg, Berlin");
   await expect(page.locator(".search-go")).toHaveText("Chercher");
   await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
@@ -238,7 +240,8 @@ test("the home page can be read in French and the choice is kept", async ({ page
   await page.reload();
   await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
-  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+  await expect(page.locator("h1")).toHaveText("Vos projets");
+  await expect(page.locator(".about-title")).toHaveText("Réaménagez les rues de votre ville.");
 });
 
 test("the junction page can be read in French and the choice is kept", async ({ page }) => {

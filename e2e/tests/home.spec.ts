@@ -44,19 +44,21 @@ test.describe("the home page", () => {
     await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
   });
 
-  test("is the first thing at the site root, and says what CityLoom is for", async ({ page }) => {
+  test("is the first thing at the site root: the projects, then what CityLoom is for", async ({ page }) => {
     await expect(page).toHaveTitle("CityLoom: redesign the streets of your city");
-    await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
+    await expect(page.locator("h1")).toHaveText("Your projects");
+    await expect(page.getByRole("heading", { level: 2, name: "About CityLoom" })).toBeVisible();
+    await expect(page.locator(".about-title")).toHaveText("Redesign the streets of your city.");
     await expect(page.locator(".lead")).toContainText("rearrange it");
     await expect(page.locator(".hero-note")).toContainText("OpenStreetMap");
   });
 
-  test("puts the search box in the middle of the first screen, and it is big", async ({ page }) => {
+  test("puts the search box in the About section, below the list, and it is big", async ({ page }) => {
     const box = (await page.locator("#search").boundingBox())!;
-    const viewport = page.viewportSize()!;
+    const list = (await page.locator(".projects-card").boundingBox())!;
     expect(box.height).toBeGreaterThanOrEqual(56);
     expect(box.width).toBeGreaterThan(400);
-    expect(box.y).toBeLessThan(viewport.height * 0.7);
+    expect(box.y).toBeGreaterThan(list.y + list.height);
     await expect(page.locator("#search")).toHaveAttribute("placeholder", /Find a place/);
   });
 

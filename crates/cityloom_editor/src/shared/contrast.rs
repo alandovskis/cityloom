@@ -424,4 +424,41 @@ mod tests {
             assert!(editor[forced - 400..].contains(&format!("#drawing .iso-junction {class}")), "{class}");
         }
     }
+
+    #[test]
+    fn the_list_of_projects_text_fields_and_buttons_clear_aa_in_both_themes() {
+        let (app, home) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/home.css"));
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let pick = |name: &str| {
+                let t = token(app, name);
+                if i == 0 { t.0 } else { t.1 }
+            };
+            let panel = pick("panel").unwrap();
+            // The dark wash is translucent: it is measured over the panel it sits on.
+            let wash = pick("warn-wash").unwrap_or_else(|| blend("#f59e0b", &panel, 0.18));
+            let text = [
+                ("accent (a project's name) on panel", pick("accent").unwrap(), panel.clone()),
+                ("ink-2 (area, date, empty list) on panel", pick("ink-2").unwrap(), panel.clone()),
+                ("warn (a refusal) on panel", pick("warn").unwrap(), panel.clone()),
+                ("ink (the notice, the question) on warn-wash", pick("ink").unwrap(), wash.clone()),
+                ("accent-ink on accent (Create project)", pick("accent-ink").unwrap(), pick("accent").unwrap()),
+            ];
+            for (what, fg, bg) in text {
+                assert!(contrast(&fg, &bg) >= 4.5, "{what} {theme}: {:.2}", contrast(&fg, &bg));
+            }
+            let edges =
+                [("field-line (a name field) on panel", pick("field-line").unwrap()), ("map-bad (Delete the project) on panel", pick("map-bad").unwrap())];
+            for (what, edge) in edges {
+                assert!(contrast(&edge, &panel) >= 3.0, "{what} {theme}: {:.2}", contrast(&edge, &panel));
+            }
+        }
+        // The rules use those tokens.
+        assert!(rule(home, ".project-open").contains("color: var(--accent);"));
+        assert!(rule(home, ".project-meta").contains("color: var(--ink-2);"));
+        assert!(rule(home, ".project-error").contains("color: var(--warn);"));
+        assert!(rule(home, ".project-notice").contains("background: var(--warn-wash);") && rule(home, ".project-notice").contains("color: var(--ink);"));
+        assert!(rule(home, ".project-rename input").contains("border: 1.5px solid var(--field-line);"));
+        assert!(rule(home, ".btn.danger").contains("border-color: var(--map-bad);"));
+        assert!(rule(home, ".project-create-go").contains("color: var(--accent-ink);"));
+    }
 }

@@ -20,6 +20,7 @@
     <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
     <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu se charger. Rechargez la page; si cela ne règle rien, vérifiez votre connexion.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
   </div>
+  <a class="skip-link" href="#projects-heading" data-i18n="project-skip">Skip to your projects</a>
   <header class="bar" data-covers>
     <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="v/{{build}}/brand.svg#wordmark"/></svg></a>
     <nav class="surfaces" data-i18n-aria-label="map-editors" aria-label="Editors">
@@ -64,9 +65,14 @@
 
   <div id="hero-map-slot"></div>
 
-  <main class="hero">
+  <main class="projects">
+    <div class="projects-card" id="projects-slot" data-covers="left"></div>
+  </main>
+
+  <section class="hero" aria-labelledby="about-heading">
     <div class="hero-card" data-covers="left">
-      <h1 data-i18n="map-home-heading">Redesign the streets of your city.</h1>
+      <h2 id="about-heading" class="about-heading" data-i18n="project-about-heading">About CityLoom</h2>
+      <p class="about-title" data-i18n="map-home-heading">Redesign the streets of your city.</p>
       <p class="lead" data-i18n="map-home-lead">Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.</p>
       <div class="hero-search" id="search-slot"></div>
       <div class="hero-actions">
@@ -75,7 +81,7 @@
       <div id="hero-facts-slot"></div>
       <p class="hero-note"><span data-i18n="map-home-streets-by">Streets ©</span> <a href="https://www.openstreetmap.org/copyright" data-i18n="map-home-osm-contributors">OpenStreetMap contributors</a>. <span data-i18n="map-home-placeholders">The widths and rules the checks use are placeholders.</span></p>
     </div>
-  </main>
+  </section>
   <footer class="site-foot"><span data-version></span></footer>
 
   <output id="live" class="sr-only" aria-live="polite"></output>

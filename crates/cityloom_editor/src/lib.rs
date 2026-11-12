@@ -70,6 +70,7 @@ const RESOURCES: &[shared::i18n::Resources] = &[
     restriction::RESOURCES,
     sync::RESOURCES,
     archive::RESOURCES,
+    project::RESOURCES,
 ];
 
 /// The words of the app in `locale`.

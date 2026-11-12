@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync` and `project` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -15,6 +15,11 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
+    (
+        "src/project/store.rs",
+        "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
+    ),
+    ("src/project/tests.rs", "test-only"),
     ("src/archive/tests.rs", "test-only"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
@@ -162,6 +167,13 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/frame.rs", include_str!("junction/frame.rs")),
     ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
     ("src/map/camera.rs", include_str!("map/camera.rs")),
+    ("src/project/context.rs", include_str!("project/context.rs")),
+    ("src/project/migrate.rs", include_str!("project/migrate.rs")),
+    ("src/project/mod.rs", include_str!("project/mod.rs")),
+    ("src/project/model.rs", include_str!("project/model.rs")),
+    ("src/project/text.rs", include_str!("project/text.rs")),
+    ("src/project/view.rs", include_str!("project/view.rs")),
+    ("src/project/vm.rs", include_str!("project/vm.rs")),
     ("src/city/projection.rs", include_str!("city/projection.rs")),
 ];
 
@@ -472,6 +484,11 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
+    ("projects-heading", "the id of the list of projects' heading, where focus goes"),
+    ("project-name", "the id of the create form's name field, where focus goes"),
+    ("project-rename-field", "the id of the rename form's name field, where focus goes"),
+    ("project-delete-safe", "the id of the Cancel button of the question before deleting, where focus goes"),
     ("map-canvas", "the id of the element MapLibre draws the map into (web/map.html)"),
     ("iso-zebra", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
     ("iso-stopline", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
@@ -781,7 +798,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
