@@ -268,3 +268,12 @@ mod two_way_track {
         assert_eq!(city.street_editor(view.edges[index].uid, 0).unwrap().snapshot(), edited);
     }
 }
+
+/// Which meetings of streets are kept as junctions does not depend on how a corner is rounded: the corners are
+/// tuned when a junction is first asked for, after this is settled. The counts are what the city made before the
+/// tuning was put off (every meeting checked after its corners were tuned).
+#[test]
+fn the_meetings_kept_as_junctions_are_the_same_as_when_corners_were_tuned_while_the_city_was_built() {
+    let count = |osm: &[u8], name: &str| City::from_network(&import(osm).expect("the extract reads"), name).view(0).nodes.iter().filter(|n| n.junction).count();
+    assert_eq!((count(KREUZBERG, "Kreuzberg"), count(PLATEAU, "Plateau")), (6, 27));
+}

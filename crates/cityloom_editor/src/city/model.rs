@@ -8,6 +8,7 @@
 //! shows in the junctions at its ends. Everything here is a synthetic
 //! placeholder: the layout, the names and the widths.
 
+use std::cell::OnceCell;
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -270,9 +271,13 @@ impl Layout {
 pub struct City {
     layout: Layout,
     streets: BTreeMap<u32, Street>,
-    junctions: BTreeMap<u32, State>,
+    /// The junctions that are not as first laid out: an edit was taken or kept for them. The others read as
+    /// `today_junctions`.
+    edited_junctions: BTreeMap<u32, State>,
     today_streets: BTreeMap<u32, Street>,
-    today_junctions: BTreeMap<u32, State>,
+    /// Each junction as first laid out, by uid, made when first asked for (it tunes the corners, which costs far
+    /// more than everything else the city is built of). A node that is no junction has none.
+    today_junctions: BTreeMap<u32, OnceCell<State>>,
     /// The key of each street, by edge index; None where it has none or another street has the same one.
     street_keys: Vec<Option<String>>,
     /// The same for the junctions, by node index (None for a node that is not a junction).
@@ -516,8 +521,9 @@ impl Layout {
         }
     }
 
-    /// A junction as first laid out, from the streets that meet there.
-    fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
+    /// The arms of the junction at `node` as the streets that meet there give them, corners as the node prefers them
+    /// and each arm reading its street.
+    fn arms_at(&self, node: usize, streets: &BTreeMap<u32, Street>) -> Vec<Arm> {
         let def = &self.nodes[node];
         let mut incident: Vec<(i32, usize)> = self.edges_at(node).into_iter().map(|e| (self.leaving(e, node), e)).collect();
         incident.sort_by_key(|(b, _)| *b);
@@ -542,8 +548,13 @@ impl Layout {
             })
             .collect();
         junction::normalize(&mut arms, 0);
-        tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s = State {
+        arms
+    }
+
+    /// The state of a junction of `arms`, as first laid out.
+    fn state_of(&self, node: usize, arms: Vec<Arm>) -> State {
+        let def = &self.nodes[node];
+        State {
             label: junction::today(),
             arms,
             control: def.control,
@@ -554,7 +565,21 @@ impl Layout {
             turbo: None,
             signal_plan: None,
             source: def.source.clone(),
-        };
+        }
+    }
+
+    /// Whether the junction editor can draw the meeting at `node` with its streets as they are. How its corners are
+    /// rounded does not decide it, so this is asked of the arms as `arms_at` gives them, before they are tuned.
+    fn is_drawable(&self, node: usize, streets: &BTreeMap<u32, Street>, region: usize) -> bool {
+        let s = self.state_of(node, self.arms_at(node, streets));
+        Junction::from_city(junction::unlabelled(), &s, &s, region).is_some()
+    }
+
+    /// A junction as first laid out, from the streets that meet there, its corners tuned.
+    fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
+        let mut arms = self.arms_at(node, streets);
+        tune_corners(&mut arms, self.nodes[node].control, self.nodes[node].corner_mm);
+        let mut s = self.state_of(node, arms);
         forget_streets(&mut s);
         s
     }
@@ -598,11 +623,19 @@ impl Layout {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many junctions have had their corners tuned on this thread (tests only).
+    static TUNED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// Gives each corner the radius nearest `preferred` that leaves its sidewalk
 /// and keeps its turn slow. Streets differ in the pavement they have beside
 /// the curb, so one radius does not suit every corner of a junction. A corner
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
+    #[cfg(test)]
+    TUNED.with(|t| t.set(t.get() + 1));
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
     let state = |arms: &[Arm]| State {
         label: junction::unlabelled(),
@@ -694,35 +727,25 @@ impl City {
     pub fn on(mut layout: Layout) -> City {
         let today_streets: BTreeMap<u32, Street> = layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone())).collect();
         let region = REGIONS.iter().position(|r| r.drive_side == layout.side).unwrap_or(0);
-        let mut today_junctions: BTreeMap<u32, State> = BTreeMap::new();
+        let mut today_junctions: BTreeMap<u32, OnceCell<State>> = BTreeMap::new();
         for n in 0..layout.nodes.len() {
             if !layout.nodes[n].junction {
                 continue;
             }
-            let mut s = layout.generate(n, &today_streets);
-            for a in &mut s.arms {
-                let e = (a.edge as usize).saturating_sub(1);
-                a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
-                a.beyond = today_streets.get(&a.edge).and_then(|st| beyond_from(&layout, e, n, st));
-                a.stops = today_streets.get(&a.edge).map_or_else(Vec::new, |st| stops_from(&layout, e, n, st, layout.side));
-                a.curb_near = today_streets.get(&a.edge).map_or_else(Vec::new, |st| curb_from(&layout, e, n, st));
-            }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
-            // As in `tune_corners`, the name is a throwaway: this only asks whether the junction can be drawn.
-            if Junction::from_city(junction::unlabelled(), &s, &s, region).is_none() {
+            if layout.is_drawable(n, &today_streets, region) {
+                today_junctions.insert(node_uid(n), OnceCell::new());
+            } else {
                 layout.nodes[n].junction = false;
-                continue;
             }
-            forget_streets(&mut s);
-            today_junctions.insert(node_uid(n), s);
         }
         let street_keys = alone(layout.edge_keys());
         let junction_keys = alone((0..layout.nodes.len()).map(|n| layout.nodes[n].junction.then(|| layout.node_key(n)).flatten()).collect());
         City {
             layout,
             streets: today_streets.clone(),
-            junctions: today_junctions.clone(),
+            edited_junctions: BTreeMap::new(),
             today_streets,
             today_junctions,
             street_keys,
@@ -788,8 +811,8 @@ impl City {
             });
             if on_streets && self.layout.junction_fits(&state, n) {
                 let uid = node_uid(n);
-                let source = self.today_junctions[&uid].source.clone();
-                self.junctions.insert(uid, State { source, label: junction::earlier(), ..state });
+                let source = self.layout.nodes[n].source.clone();
+                self.edited_junctions.insert(uid, State { source, label: junction::earlier(), ..state });
                 self.took_junctions.insert(uid, records[ri].0.clone());
             }
         }
@@ -830,12 +853,36 @@ impl City {
         Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street }))
     }
 
+    /// The junction at `uid` as first laid out, made now if it was not yet. None for a node that is no junction.
+    fn today_junction(&self, uid: u32) -> Option<&State> {
+        let node = self.node_index(uid)?;
+        Some(self.today_junctions.get(&uid)?.get_or_init(|| self.layout.generate(node, &self.today_streets)))
+    }
+
+    /// Every junction as it now stands, by uid (tests only: it makes them all).
+    #[cfg(test)]
+    fn all_junctions(&self) -> Vec<(u32, &State)> {
+        self.today_junctions.keys().map(|&uid| (uid, self.junction(uid).expect("a junction has a state"))).collect()
+    }
+
+    /// The junction at `uid` to change in place, as it now stands (tests only).
+    #[cfg(test)]
+    fn junction_mut(&mut self, uid: u32) -> Option<&mut State> {
+        let today = self.today_junction(uid)?.clone();
+        Some(self.edited_junctions.entry(uid).or_insert(today))
+    }
+
+    /// The junction at `uid` as it now stands: as edited, or else as first laid out.
+    fn junction(&self, uid: u32) -> Option<&State> {
+        self.edited_junctions.get(&uid).map_or_else(|| self.today_junction(uid), Some)
+    }
+
     /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
     /// own, or an arm's street could not be found again from what the record says of it.
     pub fn junction_record(&self, node: u32) -> Option<(String, JunctionRecord)> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let key = self.junction_keys[n].clone()?;
-        let mut state = self.junctions.get(&node)?.clone();
+        let mut state = self.junction(node)?.clone();
         let mut arm_streets = BTreeMap::new();
         for arm in &mut state.arms {
             let e = self.edge_index(arm.edge)?;
@@ -906,17 +953,21 @@ impl City {
     /// reaches along it. A plain connection, a map edge and a street not in the city are no junction and have
     /// neither of the others.
     pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
-        self.street_end_infos_of(edge, region, &self.junctions, &self.streets)
+        self.street_end_infos_of(edge, region, false)
     }
 
-    /// `street_end_infos` read from the given junctions and streets (the imported ones, or the edited).
-    fn street_end_infos_of(&self, edge: u32, region: usize, junctions: &BTreeMap<u32, State>, streets: &BTreeMap<u32, Street>) -> [EndInfo; 2] {
+    /// `street_end_infos` read from the junctions and streets as imported (`today`) or as edited.
+    fn street_end_infos_of(&self, edge: u32, region: usize, today: bool) -> [EndInfo; 2] {
+        let streets = if today { &self.today_streets } else { &self.streets };
         let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
         let has_stops = streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
         let (a, b) = (self.layout.edges[e].a, self.layout.edges[e].b);
         let at = |n: usize, first_end: bool| {
-            let arm_state =
-                self.layout.nodes[n].junction.then(|| junctions.get(&node_uid(n))).flatten().map(|j| (j, arm_at_end(&j.arms, edge, first_end, a == b)));
+            let arm_state = self.layout.nodes[n]
+                .junction
+                .then(|| if today { self.today_junction(node_uid(n)) } else { self.junction(node_uid(n)) })
+                .flatten()
+                .map(|j| (j, arm_at_end(&j.arms, edge, first_end, a == b)));
             let crossing = arm_state.is_some_and(|(_, a)| a.is_some_and(|a| a.crossing.is_some()));
             let reach_mm = match arm_state {
                 Some((j, Some(arm))) if has_stops => {
@@ -932,18 +983,19 @@ impl City {
 
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
-        self.street_editor_of(edge, region, (&self.junctions, &self.streets))
+        self.street_editor_of(edge, region, false)
     }
 
     /// The street editor on one street as it was imported: its view is the "before" of `street_editor`'s.
     pub fn street_editor_today(&self, edge: u32, region: usize) -> Option<Editor> {
-        self.street_editor_of(edge, region, (&self.today_junctions, &self.today_streets))
+        self.street_editor_of(edge, region, true)
     }
 
-    fn street_editor_of(&self, edge: u32, region: usize, (junctions, streets): (&BTreeMap<u32, State>, &BTreeMap<u32, Street>)) -> Option<Editor> {
+    fn street_editor_of(&self, edge: u32, region: usize, today: bool) -> Option<Editor> {
+        let streets = if today { &self.today_streets } else { &self.streets };
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
         let editor = Editor::from_street(self.today_streets.get(&edge)?, streets.get(&edge)?, region);
-        Some(editor.with_frame(frame).with_ends(self.street_end_infos_of(edge, region, junctions, streets)))
+        Some(editor.with_frame(frame).with_ends(self.street_end_infos_of(edge, region, today)))
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -987,7 +1039,7 @@ impl City {
     /// fall short of the rules as they stand; only what a change adds is flagged.
     fn failing_today(&self, node: u32, region: usize) -> Vec<&'static str> {
         let Some(n) = self.node_index(node) else { return Vec::new() };
-        let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
+        let Some(state) = self.today_junction(node) else { return Vec::new() };
         let today = self.with_streets_of(&self.today_streets, n, state, region);
         Junction::from_city(junction::unlabelled(), &today, &today, region)
             .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
@@ -997,8 +1049,8 @@ impl City {
     /// they now stand. None when it cannot be drawn with them.
     pub fn junction_editor(&self, node: u32, region: usize) -> Option<Junction> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
-        let today = self.with_streets(n, self.today_junctions.get(&node)?, region);
-        let now = self.with_streets(n, self.junctions.get(&node)?, region);
+        let today = self.with_streets(n, self.today_junction(node)?, region);
+        let now = self.with_streets(n, self.junction(node)?, region);
         Junction::from_city(self.layout.node_name(n), &today, &now, region)
     }
 
@@ -1006,7 +1058,7 @@ impl City {
     /// "before" of `junction_editor`'s. None when it cannot be drawn.
     pub fn junction_editor_today(&self, node: u32, region: usize) -> Option<Junction> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
-        let today = self.with_streets_of(&self.today_streets, n, self.today_junctions.get(&node)?, region);
+        let today = self.with_streets_of(&self.today_streets, n, self.today_junction(node)?, region);
         Junction::from_city(self.layout.node_name(n), &today, &today, region)
     }
 
@@ -1014,7 +1066,7 @@ impl City {
     pub fn keep_junction(&mut self, node: u32, state: State) -> bool {
         let fits = self.node_index(node).filter(|&n| self.layout.nodes[n].junction).is_some_and(|n| self.layout.junction_fits(&state, n));
         if fits {
-            self.junctions.insert(node, state);
+            self.edited_junctions.insert(node, state);
         }
         fits
     }
@@ -1091,10 +1143,11 @@ impl City {
                 failing: Vec::new(),
             };
             if def.junction {
-                let now = &self.junctions[&uid];
-                v.edited = !same_junction(now, &self.today_junctions[&uid]);
-                v.arms = now.arms.len();
-                v.control = Some(junction::control_key(now.control));
+                if let Some(now) = self.junction(uid) {
+                    v.edited = self.edited_junctions.contains_key(&uid) && self.today_junction(uid).is_some_and(|today| !same_junction(now, today));
+                    v.arms = now.arms.len();
+                    v.control = Some(junction::control_key(now.control));
+                }
                 match self.junction_editor(uid, region) {
                     Some(j) => {
                         let at_first = self.failing_today(uid, region);
@@ -1299,6 +1352,33 @@ mod tests {
     use super::*;
     use crate::shared::said::Arg;
 
+    fn tuned_so_far() -> u32 {
+        TUNED.with(|t| t.get())
+    }
+
+    #[test]
+    fn building_a_city_tunes_no_junction_and_a_junction_is_tuned_once_when_first_asked_for() {
+        let before = tuned_so_far();
+        let city = City::new();
+        assert_eq!(tuned_so_far(), before, "a city is built without tuning any corner");
+        let node = (0..city.layout.nodes.len()).find(|&n| city.layout.nodes[n].junction).map(node_uid).expect("the sample has a junction");
+        assert!(city.junction_editor(node, 0).is_some());
+        assert_eq!(tuned_so_far(), before + 1);
+        assert!(city.junction_editor(node, 0).is_some());
+        assert!(city.junction_editor_today(node, 0).is_some());
+        assert_eq!(tuned_so_far(), before + 1, "the tuned junction is kept");
+    }
+
+    #[test]
+    fn a_street_editor_tunes_only_the_junctions_at_the_ends_of_its_street() {
+        let before = tuned_so_far();
+        let city = City::new();
+        let junctions = city.layout.nodes.iter().filter(|n| n.junction).count();
+        assert!(junctions > 2, "the sample has more junctions than a street has ends");
+        assert!(city.street_editor(1, 0).is_some());
+        assert!(tuned_so_far() - before <= 2, "{} of {junctions} junctions tuned", tuned_so_far() - before);
+    }
+
     #[test]
     fn every_place_of_the_sample_city_has_a_key_and_no_two_places_share_one() {
         let layout = Layout::sample();
@@ -1372,10 +1452,10 @@ mod tests {
         let mut city = City::new();
         let end =
             [city.layout.edges[0].a, city.layout.edges[0].b].into_iter().find(|&n| city.layout.nodes[n].junction).expect("an end of street 1 is a junction");
-        let mut state = city.junctions[&node_uid(end)].clone();
+        let mut state = city.junction(node_uid(end)).unwrap().clone();
         state.arms.iter_mut().filter(|arm| arm.edge == 1).for_each(|arm| arm.crossing = None);
         assert!(city.keep_junction(node_uid(end), state));
-        let today = city.street_end_infos_of(1, 0, &city.today_junctions, &city.today_streets);
+        let today = city.street_end_infos_of(1, 0, true);
         assert!(today.iter().any(|x| x.crossing), "the imported street has its crossing");
         assert!(city.street_end_infos(1, 0).iter().all(|x| !x.crossing), "the edited one has none");
         assert_ne!(today, city.street_end_infos(1, 0));
@@ -1391,11 +1471,11 @@ mod tests {
     fn the_imported_junction_differs_from_the_edited_one_after_an_edit() {
         let mut city = City::new();
         let node = a_junction_node(&city);
-        let mut state = city.junctions[&node].clone();
+        let mut state = city.junction(node).unwrap().clone();
         state.control = (state.control + 1) % crate::junction::model::CONTROLS.len();
         assert!(city.keep_junction(node, state.clone()));
         assert_eq!(city.junction_editor(node, 0).unwrap().current().control, state.control);
-        assert_eq!(city.junction_editor_today(node, 0).unwrap().current().control, city.today_junctions[&node].control);
+        assert_eq!(city.junction_editor_today(node, 0).unwrap().current().control, city.today_junction(node).unwrap().control);
         assert_ne!(city.junction_editor_today(node, 0).unwrap().current().control, state.control);
     }
 
@@ -1423,13 +1503,13 @@ mod tests {
         let (a, b) = (e.a, e.b);
         let ends = city.street_end_infos(edge, 0);
         for (n, info) in [a, b].into_iter().zip(ends) {
-            let has = city.layout.nodes[n].junction && city.junctions[&node_uid(n)].arms.iter().any(|arm| arm.edge == edge && arm.crossing.is_some());
+            let has = city.layout.nodes[n].junction && city.junction(node_uid(n)).unwrap().arms.iter().any(|arm| arm.edge == edge && arm.crossing.is_some());
             assert_eq!(info.crossing, has);
         }
         assert!(ends.iter().any(|x| x.crossing), "an end of street 1 is a junction with a crossing");
         // Taking the crossing off that arm clears the end; a street the city does not have has none.
         let n = [a, b][ends.iter().position(|x| x.crossing).unwrap()];
-        let state = city.junctions.get_mut(&node_uid(n)).unwrap();
+        let state = city.junction_mut(node_uid(n)).unwrap();
         state.arms.iter_mut().filter(|arm| arm.edge == edge).for_each(|arm| arm.crossing = None);
         assert!(city.street_end_infos(edge, 0).iter().all(|x| !x.crossing));
         assert_eq!(city.street_end_infos(999, 0), [EndInfo::default(); 2]);
@@ -1620,8 +1700,8 @@ mod tests {
                 e.streets.insert(key, record);
             }
         }
-        for (&uid, state) in &city.junctions {
-            if !same_junction(state, &city.today_junctions[&uid])
+        for (uid, state) in city.all_junctions() {
+            if !same_junction(state, city.today_junction(uid).unwrap())
                 && let Some((key, record)) = city.junction_record(uid)
             {
                 e.junctions.insert(key, record);
@@ -1647,7 +1727,7 @@ mod tests {
     fn a_saved_turbo_must_name_a_layout_a_block_and_two_arms_of_the_junction() {
         use crate::junction::turbo::Turbo;
         let mut city = City::new();
-        let state = city.junctions[&node_uid(1)].clone();
+        let state = city.junction(node_uid(1)).unwrap().clone();
         let (a, b) = (state.arms[0].uid, state.arms[1].uid);
         let with = |t: Turbo| State { turbo: Some(t), ..state.clone() };
         assert!(city.keep_junction(node_uid(1), with(Turbo { layout: 0, size: 0, main: vec![a, b] })), "indexes in range, two arms of the junction");
@@ -1668,12 +1748,12 @@ mod tests {
         let mut city = City::new();
         let street = narrowed(&city, 1);
         assert!(city.keep_street(1, street.clone()));
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let back = City::load(&edits_of(&city));
         assert_eq!(back.streets[&1], street);
-        assert_eq!(back.junctions[&node_uid(1)].ring_extra_mm, 500);
+        assert_eq!(back.junction(node_uid(1)).unwrap().ring_extra_mm, 500);
         assert_eq!(back.streets[&2], back.today_streets[&2], "what was not edited is as first laid out");
         assert_eq!(back.view(0).edited, 2);
     }
@@ -1835,7 +1915,7 @@ mod tests {
     /// The sample city with an edited junction 1, its edits, and the junction's node index.
     fn edited_junction() -> (Edits, usize) {
         let mut city = City::new();
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let edits = edits_of(&city);
@@ -1844,7 +1924,7 @@ mod tests {
     }
 
     fn junction_is_as_first_laid_out(back: &City) -> bool {
-        back.junctions[&node_uid(1)].ring_extra_mm == back.today_junctions[&node_uid(1)].ring_extra_mm
+        back.junction(node_uid(1)).unwrap().ring_extra_mm == back.today_junction(node_uid(1)).unwrap().ring_extra_mm
     }
 
     #[test]
@@ -1934,7 +2014,7 @@ mod tests {
         let far = cut.edges[0].a;
         cut.nodes[far].source.clear();
         let mut city = City::on(cut);
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let edits = edits_of(&city);
@@ -1996,7 +2076,7 @@ mod tests {
     fn a_street_without_a_key_stays_as_first_laid_out_while_the_others_take_their_edits() {
         let mut city = City::new();
         assert!(city.keep_street(2, narrowed(&city, 2)));
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let edits = edits_of(&city);
@@ -2015,13 +2095,13 @@ mod tests {
         let text = edits.to_json();
         let crate::city::edits::Document::Current(read) = crate::city::edits::parse(Some(&text)) else { panic!("not read back") };
         assert_eq!(read.junctions.values().next().unwrap().state.label, junction::earlier());
-        assert_eq!(City::load(&read).junctions[&node_uid(1)].label, junction::earlier());
+        assert_eq!(City::load(&read).junction(node_uid(1)).unwrap().label, junction::earlier());
     }
 
     #[test]
     fn a_junction_edit_comes_back_with_its_arms_on_the_right_streets() {
         let mut city = City::new();
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let edits = edits_of(&city);
@@ -2029,8 +2109,8 @@ mod tests {
         // node index 1 is now at the other end of the table
         let node = back.layout.nodes.len() - 2;
         let uid = node_uid(node);
-        assert_eq!(back.junctions[&uid].ring_extra_mm, 500);
-        let mut arms: Vec<u32> = back.junctions[&uid].arms.iter().map(|a| a.edge).collect();
+        assert_eq!(back.junction(uid).unwrap().ring_extra_mm, 500);
+        let mut arms: Vec<u32> = back.junction(uid).unwrap().arms.iter().map(|a| a.edge).collect();
         arms.sort_unstable();
         let mut want: Vec<u32> = back.layout.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
         want.sort_unstable();
@@ -2038,7 +2118,7 @@ mod tests {
         // and each arm is on the street it was on: the same key
         let was: BTreeMap<u32, ArmStreet> = edits.junctions.values().next().unwrap().arm_streets.clone();
         let keys = back.layout.edge_keys();
-        for arm in &back.junctions[&uid].arms {
+        for arm in &back.junction(uid).unwrap().arms {
             assert_eq!(keys[arm.edge as usize - 1], was[&arm.uid].key);
         }
     }
@@ -2046,7 +2126,7 @@ mod tests {
     #[test]
     fn a_junction_whose_arm_street_is_no_longer_there_is_not_applied() {
         let mut city = City::new();
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.ring_extra_mm = 500;
         assert!(city.keep_junction(node_uid(1), state));
         let mut edits = edits_of(&city);
@@ -2057,7 +2137,7 @@ mod tests {
             }
         }
         let back = City::load(&edits);
-        assert_eq!(back.junctions[&node_uid(1)].ring_extra_mm, back.today_junctions[&node_uid(1)].ring_extra_mm);
+        assert_eq!(back.junction(node_uid(1)).unwrap().ring_extra_mm, back.today_junction(node_uid(1)).unwrap().ring_extra_mm);
     }
 
     #[test]
@@ -2104,9 +2184,9 @@ mod tests {
         let back = City::load(&edits_of(&city));
         assert_eq!(back.streets, city.streets);
         // A junction comes back the same but for its history label, which is not kept (an edited one reads "earlier").
-        assert_eq!(back.junctions.keys().collect::<Vec<_>>(), city.junctions.keys().collect::<Vec<_>>());
-        assert!(back.junctions.iter().all(|(k, s)| same_junction(s, &city.junctions[k])));
-        assert_eq!(back.junctions[&node_uid(1)].label, junction::earlier());
+        assert_eq!(back.all_junctions().iter().map(|(u, _)| *u).collect::<Vec<_>>(), city.all_junctions().iter().map(|(u, _)| *u).collect::<Vec<_>>());
+        assert!(back.all_junctions().iter().all(|(k, s)| same_junction(s, city.junction(*k).unwrap())));
+        assert_eq!(back.junction(node_uid(1)).unwrap().label, junction::earlier());
         let v = back.view(0);
         assert!(v.edges[0].edited && v.nodes[1].edited);
         assert_eq!(v.edited, 2);
@@ -2122,11 +2202,11 @@ mod tests {
     #[test]
     fn a_save_whose_junction_has_other_streets_is_not_used() {
         let mut city = City::new();
-        let mut state = city.junctions[&node_uid(1)].clone();
+        let mut state = city.junction(node_uid(1)).unwrap().clone();
         state.arms[0].edge = 99;
         assert!(!city.keep_junction(node_uid(1), state));
-        assert!(!city.keep_junction(node_uid(0), city.junctions[&node_uid(1)].clone()));
-        assert!(!city.keep_junction(999, city.junctions[&node_uid(1)].clone()));
+        assert!(!city.keep_junction(node_uid(0), city.junction(node_uid(1)).unwrap().clone()));
+        assert!(!city.keep_junction(999, city.junction(node_uid(1)).unwrap().clone()));
     }
 
     #[test]
@@ -2543,7 +2623,7 @@ mod tests {
 
     /// What the junction at `node` reads of street `edge`.
     fn arm_section(city: &City, node: usize, edge: u32) -> Street {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
+        let state = city.with_streets(node, &city.junction(node_uid(node)).unwrap(), 0);
         state.arms.iter().find(|a| a.edge == edge).and_then(|a| a.section.clone()).unwrap()
     }
 
@@ -2567,7 +2647,7 @@ mod tests {
     }
 
     fn arm_beyond(city: &City, node: usize, edge: u32) -> Option<crate::street::model::Beyond> {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
+        let state = city.with_streets(node, &city.junction(node_uid(node)).unwrap(), 0);
         state.arms.iter().find(|a| a.edge == edge).unwrap().beyond.clone()
     }
 
@@ -2647,7 +2727,7 @@ mod tests {
         let kept = j.snapshot();
         assert!(kept.arms.iter().all(|a| a.beyond.is_none() && a.section.is_none()));
         assert!(!serde_json::to_string(&j.current()).unwrap().contains("beyond"));
-        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.beyond.is_none())));
+        assert!(city.all_junctions().iter().all(|(_, s)| s.arms.iter().all(|a| a.beyond.is_none())));
     }
 
     /// Street `uid` as the city has it, with a stop of 10 m from `from_mm` on its right (the city's length for it).
@@ -2667,7 +2747,7 @@ mod tests {
     }
 
     fn arm_stops(city: &City, node: usize, edge: u32) -> Vec<EndStop> {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
+        let state = city.with_streets(node, &city.junction(node_uid(node)).unwrap(), 0);
         state.arms.iter().find(|a| a.edge == edge).unwrap().stops.clone()
     }
 
@@ -2749,7 +2829,7 @@ mod tests {
         assert!(j.current().arms.iter().any(|a| !a.stops.is_empty()), "the open junction has them");
         assert!(j.snapshot().arms.iter().all(|a| a.stops.is_empty()));
         assert!(!serde_json::to_string(&j.current()).unwrap().contains("stops"));
-        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.stops.is_empty())));
+        assert!(city.all_junctions().iter().all(|(_, s)| s.arms.iter().all(|a| a.stops.is_empty())));
     }
 
     /// Street `uid` as the city has it, with a parking use of 6 m from `from_mm` on its right.
@@ -2765,7 +2845,7 @@ mod tests {
     fn an_arm_carries_the_curbside_uses_of_its_street_and_keeps_none() {
         let mut city = City::new();
         assert!(city.keep_street(2, with_use(&city, 2, 12_000)));
-        let state = city.with_streets(1, &city.junctions[&node_uid(1)], 0);
+        let state = city.with_streets(1, &city.junction(node_uid(1)).unwrap(), 0);
         let arm = state.arms.iter().find(|a| a.edge == 2).unwrap();
         assert_eq!(arm.curb_near.len(), 1);
         assert_eq!((arm.curb_near[0].near_mm, arm.curb_near[0].far_mm), (12_000, 18_000));
@@ -2773,7 +2853,7 @@ mod tests {
         let j = city.junction_editor(node_uid(1), 0).unwrap();
         assert!(j.snapshot().arms.iter().all(|a| a.curb_near.is_empty()));
         assert!(!serde_json::to_string(&j.current()).unwrap().contains("curb_near"));
-        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.curb_near.is_empty())));
+        assert!(city.all_junctions().iter().all(|(_, s)| s.arms.iter().all(|a| a.curb_near.is_empty())));
     }
 
     #[test]
@@ -2784,7 +2864,7 @@ mod tests {
         let n = city.layout.edges[e].a;
         let reach = |city: &City| city.street_end_infos(2, 0)[0].reach_mm;
         let arm_of = |city: &City| {
-            let state = city.with_streets(n, &city.junctions[&node_uid(n)], 0);
+            let state = city.with_streets(n, &city.junction(node_uid(n)).unwrap(), 0);
             let arm = state.arms.iter().find(|a| a.edge == 2).unwrap().clone();
             let mouth =
                 crate::junction::read_model::layout(&state, 0).unwrap().arms[state.arms.iter().position(|a| a.uid == arm.uid).unwrap()].mouth.round() as i32;
@@ -2794,7 +2874,7 @@ mod tests {
         let c = arm.crossing.expect("the sample junction's arm has a crossing");
         assert_eq!(reach(&city), mouth + c.setback_mm + c.width_mm);
         let uid = node_uid(n);
-        city.junctions.get_mut(&uid).unwrap().arms.iter_mut().filter(|a| a.edge == 2).for_each(|a| a.crossing = None);
+        city.junction_mut(uid).unwrap().arms.iter_mut().filter(|a| a.edge == 2).for_each(|a| a.crossing = None);
         let (_, mouth) = arm_of(&city);
         assert_eq!(reach(&city), mouth);
         assert!(mouth > 0);
