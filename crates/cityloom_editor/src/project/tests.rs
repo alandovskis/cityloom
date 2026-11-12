@@ -779,6 +779,41 @@ mod migration {
         assert!(server.row("street", &key).is_some_and(|r| r.edited_at == stamp(T0 + 100_000)), "with the time it was edited");
     }
 
+    /// The move failed (a full storage refused the copy) and a sync then brought another project, so the move can no
+    /// longer run and the places are no longer paused: what the old document still holds must not go up as a removal.
+    #[test]
+    fn work_left_under_the_old_keys_after_a_failed_move_never_goes_up_as_a_removal() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let laptop = device(&server, T0 + 50_000);
+        ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
+        laptop.vm.known(&ada());
+        let phone = device(&server, T0 + 100_000);
+        let key = legacy_edit(&phone, 1, 100);
+        phone.storage.refuse("cityloom-edits@first");
+        assert!(!migrate_legacy(&phone.ports.storage, NAME));
+        phone.vm.known(&ada());
+        assert!(ProjectStore::new(phone.ports.storage.clone()).list().iter().any(|p| p.id != FIRST), "another project came down");
+        assert_eq!(server.tombstones(), 0, "{:?}", server.live());
+        assert!(entry_of(&phone.storage, &Id::new(Kind::Street, &key)).is_some_and(|e| e.pending && !e.deleted), "it still waits");
+    }
+
+    /// A record the old document no longer holds was removed: its removal goes up, the old document notwithstanding.
+    #[test]
+    fn a_record_the_old_document_no_longer_holds_is_sent_as_a_removal() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let d = device(&server, T0 + 100_000);
+        ProjectStore::new(d.ports.storage.clone()).create("Plateau").unwrap();
+        let kept = legacy_edit(&d, 1, 100);
+        assert!(mark(&*d.ports.storage, Kind::Street, "w-gone", true));
+        d.vm.known(&ada());
+        assert_eq!(server.tombstones(), 1, "{:?}", server.live());
+        assert!(server.row("street", "w-gone").is_some());
+        assert!(!server.live().contains(&format!("street/{kept}")));
+        assert!(entry_of(&d.storage, &Id::new(Kind::Street, &kept)).is_some_and(|e| e.pending), "the old document's still waits");
+    }
+
     #[test]
     fn a_real_first_project_pulled_before_the_migration_still_takes_the_legacy_work() {
         crate::sync::hub::reset();

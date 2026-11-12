@@ -186,7 +186,8 @@ impl SyncVm {
         }
         self.cancel_timer();
         let storage = self.ports.storage.clone();
-        let Some(doc) = model::open(&*storage) else { return };
+        let Some(mut doc) = model::open(&*storage) else { return };
+        hold_legacy(&mut doc, &storage);
         let usable = |kind: Kind| local::usable(&storage, kind);
         let batch = model::next_batch(&doc, &|id| local::read(&storage, id), &usable, true);
         if !batch.is_empty() {
@@ -351,6 +352,17 @@ impl SyncVm {
         }
         let waiting = model::open(&**storage).is_some_and(|doc| doc.has_pending(&|_| true));
         if ok && !waiting { Status::Synced } else { Status::NotSynced }
+    }
+}
+
+/// Leaves out of a copy of the document about to be sent every pending record the document from before projects still
+/// holds and `first` does not (`local::held_in_legacy`): read from `first` it has no body and would go up as a
+/// removal. Its entry stays pending in the stored document, so it goes once the move has taken it.
+fn hold_legacy(sendable: &mut SyncDoc, storage: &Rc<dyn crate::shared::ports::Storage>) {
+    for (name, entry) in sendable.records.iter_mut().filter(|(_, e)| e.pending) {
+        if Id::from_name(name).is_some_and(|id| local::held_in_legacy(storage, &id)) {
+            entry.pending = false;
+        }
     }
 }
 
@@ -581,6 +593,7 @@ impl Run {
                 e.pending = false;
             }
         }
+        hold_legacy(&mut sendable, &storage);
         let mut batch = model::next_batch(&sendable, &|id| local::read(&storage, id), &usable, false);
         if self.single.get() {
             batch.truncate(1);

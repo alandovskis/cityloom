@@ -101,6 +101,24 @@ pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     }
 }
 
+/// Whether the record is a first-project one that `first`'s documents do not hold but the document kept from before
+/// projects (the bare `cityloom-edits`, `cityloom-restrictions`, `cityloom-area`) still does: work the move has not
+/// taken yet (it failed, or can no longer run). Its pending entry is not to be sent: with no body it would go up as a
+/// removal. A record neither holds was removed and its removal goes up.
+pub fn held_in_legacy(storage: &Shared, id: &Id) -> bool {
+    let (project, key) = split_key(&id.key);
+    if id.kind == Kind::Project || project != FIRST || read(storage, id).is_some() {
+        return false;
+    }
+    // Over the root storage the stores read the bare keys: the documents from before projects.
+    match id.kind {
+        Kind::Street | Kind::Junction => section(id.kind).is_some_and(|s| edits_draft(storage).is_some_and(|d| d.get_raw(s, key).is_some())),
+        Kind::Rule => RestrictionStore::new(storage.clone()).raw(key).is_some(),
+        Kind::Area => storage.recall(AREA_KEY).is_some_and(|q| Area::from_query(&q).is_some()),
+        Kind::Project => false,
+    }
+}
+
 /// Keeps `body` as the record. False where the kind's document is unusable (damaged or a newer build's: it is not
 /// written or replaced), the body is not what the kind holds (an area that is not an area) or storage refused. A record
 /// of a project the list does not hold adds a placeholder project, so it can be reached; the project's own record
