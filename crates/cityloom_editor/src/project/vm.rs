@@ -129,6 +129,12 @@ impl ProjectsVm {
         self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new().str("name", name.to_string())));
     }
 
+    /// Says why a name was refused. The reason is also shown beside the field, but a person who submitted with Enter
+    /// is still in the field, and moving focus there again tells a screen reader nothing.
+    fn refuse(&self, key: &str) {
+        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
+    }
+
     fn ask_focus(&self, to: Focus) {
         self.focus.update(|f| *f = (f.0.wrapping_add(1), to));
     }
@@ -176,6 +182,7 @@ impl ProjectsVm {
             }
             Err(refused) => {
                 self.create_error.set(Some(refused_key(refused)));
+                self.refuse(refused_key(refused));
                 self.ask_focus(Focus::CreateField);
                 false
             }
@@ -229,6 +236,7 @@ impl ProjectsVm {
             }
             Err(refused) => {
                 self.rename_error.set(Some(refused_key(refused)));
+                self.refuse(refused_key(refused));
                 self.ask_focus(Focus::RenameField);
                 false
             }

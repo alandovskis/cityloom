@@ -1070,6 +1070,26 @@ mod page {
     }
 
     #[test]
+    fn a_refused_name_is_said_aloud_in_the_page_s_language() {
+        // Enter in the field submits it and focus stays there: the reason must be said, not only shown.
+        for (locale, empty, long) in [
+            (Locale::En, "Give the project a name.", "A project name has at most 80 characters."),
+            (Locale::FrCa, "Donnez un nom au projet.", "Le nom d’un projet compte au plus 80 caractères."),
+        ] {
+            let t = test_ports_full();
+            let vm = page_in(locale, &t);
+            assert!(!vm.create(" "));
+            assert_eq!(t.announcer.take(), [empty]);
+            assert!(vm.create("Plateau"));
+            t.announcer.take();
+            let id = id_of(&vm, "Plateau");
+            vm.start_rename(&id);
+            assert!(!vm.rename(&id, &"x".repeat(81)));
+            assert_eq!(t.announcer.take(), [long]);
+        }
+    }
+
+    #[test]
     fn renaming_changes_the_row_and_an_empty_name_is_refused() {
         let (vm, _) = page();
         vm.create("Plateau");
