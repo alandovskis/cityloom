@@ -1249,6 +1249,28 @@ fn opting_in_uploads_all_local_projects() {
     assert_eq!(live, want);
 }
 
+/// The merge report says "places" (streets, junctions, rules, the area): a project's own record is no place, so it
+/// is counted neither way.
+#[test]
+fn the_merge_report_counts_places_and_not_the_projects_own_records() {
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 1_000);
+    let plateau = ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
+    edit_street_in(&laptop, &plateau.id, 1, 100);
+    let report = Rc::new(Cell::new(Report::default()));
+    let r = report.clone();
+    laptop.vm.enable("ada", Box::new(move |x| r.set(x)));
+    assert!(server.live().contains(&format!("project/{}", plateau.id)), "the project's record went up");
+    assert_eq!((report.get().ok, report.get().sent, report.get().received), (true, 1, 0), "one street sent");
+    let phone = device(&server, T0 + 2_000);
+    let report = Rc::new(Cell::new(Report::default()));
+    let r = report.clone();
+    phone.vm.enable("ada", Box::new(move |x| r.set(x)));
+    assert!(ProjectStore::new(phone.ports.storage.clone()).get(&plateau.id).is_some(), "the project's record came down");
+    assert_eq!((report.get().ok, report.get().sent, report.get().received), (true, 0, 1), "one street received");
+}
+
 #[test]
 fn a_project_deleted_on_one_device_is_gone_from_the_other_with_its_places_and_its_server_rows() {
     hub::reset();

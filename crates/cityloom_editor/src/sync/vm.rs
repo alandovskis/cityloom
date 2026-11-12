@@ -493,7 +493,9 @@ impl Run {
                     if !kept {
                         return Applied::Failed;
                     }
-                    self.received.set(self.received.get() + 1);
+                    if id.kind.is_place() {
+                        self.received.set(self.received.get() + 1);
+                    }
                     self.changes.borrow_mut().push(Change { id: id.clone(), origin: if replaced { Origin::Replaced } else { Origin::Remote } });
                 }
                 model::adopted(doc, &id, remote);
@@ -538,7 +540,9 @@ impl Run {
                     continue;
                 }
                 if here {
-                    self.received.set(self.received.get() + 1);
+                    if id.kind.is_place() {
+                        self.received.set(self.received.get() + 1);
+                    }
                     self.changes.borrow_mut().push(Change { id: id.clone(), origin: Origin::Remote });
                 }
                 doc.forget(&id);
@@ -643,7 +647,9 @@ impl Run {
             match result.status {
                 WorkStatus::Accepted => {
                     model::accepted(&mut doc, put, result.rev);
-                    self.sent.set(self.sent.get() + 1);
+                    if kind.is_place() {
+                        self.sent.set(self.sent.get() + 1);
+                    }
                     // The batch that was too big is behind: the rest goes together again.
                     self.single.set(false);
                 }

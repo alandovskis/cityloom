@@ -49,6 +49,11 @@ impl Kind {
     pub fn parse(s: &str) -> Option<Kind> {
         Kind::ALL.into_iter().find(|k| k.as_str() == s)
     }
+
+    /// A place, as the merge report counts them (a street, a junction, a rule, the area); a project's own record is not.
+    pub fn is_place(self) -> bool {
+        self != Kind::Project
+    }
 }
 
 /// A record: its kind and its key (the place key, the rule's id, or `current`).
