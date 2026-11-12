@@ -1,8 +1,9 @@
-// The About page: what CityLoom is for, with the city of the project opened last drawn behind it.
+// The About page: what CityLoom is for, with the city of the project opened last drawn behind it; and the top bar
+// every page shares, which leads to it.
 
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, mapReady, openJunction, openStreet, test } from "./fixtures";
 
 /** Opens the About page and waits for the city behind it, which is drawn once its roads are got. */
 async function openAbout(page: Page) {
@@ -106,6 +107,53 @@ test.describe("the About page", () => {
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
     await expect(page.locator("h1")).toHaveText("À propos de CityLoom");
   });
+});
+
+// The top bar of every page: Projects and About, the page's own marked as current, no Map (a map is opened from its
+// project), and the logo goes to the list of projects.
+const PAGES: { name: string; open: (page: Page) => Promise<unknown>; current?: "Projects" | "About" }[] = [
+  { name: "home", open: (page) => page.goto("/"), current: "Projects" },
+  { name: "about", open: (page) => page.goto("/about.html"), current: "About" },
+  { name: "map", open: (page) => page.goto("/map.html").then(() => mapReady(page)) },
+  { name: "street", open: openStreet },
+  { name: "junction", open: openJunction },
+  { name: "account", open: (page) => page.goto("/account.html") },
+  { name: "credits", open: (page) => page.goto("/credits.html") },
+];
+
+for (const { name, open, current } of PAGES) {
+  test(`the ${name} page's bar links the projects and About, and no map`, async ({ page }) => {
+    await open(page);
+    const nav = page.getByRole("navigation", { name: "Pages" });
+    await expect(nav.getByRole("link")).toHaveText(["Projects", "About"]);
+    for (const link of ["Projects", "About"]) {
+      const item = nav.getByRole("link", { name: link, exact: true });
+      if (link === current) await expect(item).toHaveAttribute("aria-current", "page");
+      else await expect(item).not.toHaveAttribute("aria-current");
+    }
+    await expect(page.locator(".bar").getByRole("link", { name: /^(Map|City map)$/ })).toHaveCount(0);
+    await expect(page.locator('.bar a[href^="map.html"]')).toHaveCount(0);
+    await expect(page.locator(".bar .brand")).toHaveAttribute("href", "index.html");
+    await nav.getByRole("link", { name: "About", exact: true }).click();
+    await expect(page).toHaveURL(/\/about\.html$/);
+    await expect(page.locator("h1")).toHaveText("About CityLoom");
+    await page.locator(".bar .brand").click();
+    await expect(page).toHaveURL(/\/index\.html$/);
+    await expect(page.locator("h1")).toHaveText("Your projects");
+  });
+}
+
+test("the bar's links are in French for a French reader, the current one still marked", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#region option")).toHaveCount(6);
+  await page.locator("#account-btn").click();
+  await page.locator('[data-lang="fr-CA"]').click();
+  const nav = page.getByRole("navigation", { name: "Pages" });
+  await expect(nav.getByRole("link")).toHaveText(["Projets", "À propos"]);
+  await expect(nav.getByRole("link", { name: "Projets" })).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("link", { name: "À propos" }).click();
+  await expect(page.locator("h1")).toHaveText("À propos de CityLoom");
+  await expect(nav.getByRole("link", { name: "À propos" })).toHaveAttribute("aria-current", "page");
 });
 
 test("the city behind the card is read from the metro tile, and nothing else is asked", async ({ page, baseURL }) => {

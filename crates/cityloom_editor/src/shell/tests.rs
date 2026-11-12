@@ -291,6 +291,51 @@ fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
     }
 }
 
+/// The top bar of every page: the logo goes to the list of projects, and the bar's links are Projects and About, the
+/// page's own marked as current. A map is opened from its project, never from the bar.
+#[test]
+fn every_page_s_bar_links_the_projects_and_about_and_never_a_map() {
+    let pages = [
+        ("index", include_str!("../../../../web/index.html"), Some("index.html")),
+        ("about", include_str!("../../../../web/about.html"), Some("about.html")),
+        ("map", include_str!("../../../../web/map.html"), None),
+        ("street", include_str!("../../../../web/street.html"), None),
+        ("intersection", include_str!("../../../../web/intersection.html"), None),
+        ("account", include_str!("../../../../web/account.html"), None),
+        ("credits", include_str!("../../../../web/credits.html"), None),
+    ];
+    let link = |href: &str, key: &str, text: &str, current: bool| {
+        let current = if current { r#" aria-current="page""# } else { "" };
+        format!(r#"<a href="{href}" class="surface"{current} data-i18n="{key}">{text}</a>"#)
+    };
+    for (name, html, current) in pages {
+        let bar = &html[html.find("<header class=\"bar\"").unwrap_or_else(|| panic!("{name}.html has no bar"))..];
+        let bar = &bar[..bar.find("</header>").unwrap()];
+        let brand = &bar[bar.find(r#"<a class="brand""#).expect("the logo")..];
+        assert!(brand.starts_with(r#"<a class="brand" href="index.html" "#), "{name}.html: the logo goes to the list of projects");
+        let nav = &bar[bar.find("<nav class=\"surfaces\"").expect("the bar's links")..];
+        let nav = &nav[..nav.find("</nav>").unwrap()];
+        let (projects, about) = (current == Some("index.html"), current == Some("about.html"));
+        if name == "credits" {
+            // The credits page is in English only: the same links, without the shell's keys.
+            assert!(nav.contains(r#"aria-label="Pages""#), "{name}.html: {nav}");
+            assert!(nav.contains(r#"<a href="index.html" class="surface">Projects</a>"#), "{name}.html: {nav}");
+            assert!(nav.contains(r#"<a href="about.html" class="surface">About</a>"#), "{name}.html: {nav}");
+        } else {
+            assert!(nav.contains(r#"data-i18n-aria-label="ui-nav" aria-label="Pages""#), "{name}.html: {nav}");
+            assert!(nav.contains(&link("index.html", "ui-nav-projects", "Projects", projects)), "{name}.html: {nav}");
+            assert!(nav.contains(&link("about.html", "ui-nav-about", "About", about)), "{name}.html: {nav}");
+        }
+        assert_eq!(nav.matches("<a ").count(), 2, "{name}.html: Projects and About, nothing else: {nav}");
+        assert_eq!(nav.matches("aria-current").count(), usize::from(current.is_some()), "{name}.html: {nav}");
+        assert!(!bar.contains("map.html"), "{name}.html: no way to a map from the bar");
+    }
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let words = |i18n: &crate::shared::i18n::I18n| ["ui-nav", "ui-nav-projects", "ui-nav-about"].map(|k| i18n.tr_now(k, &Args::new()));
+    assert_eq!(words(&en), ["Pages", "Projects", "About"]);
+    assert_eq!(words(&fr), ["Pages", "Projets", "À propos"]);
+}
+
 #[test]
 fn the_pages_that_read_the_city_preload_the_tile_index() {
     for (name, html) in [

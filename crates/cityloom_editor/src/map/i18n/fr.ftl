@@ -3,9 +3,6 @@
 ## Le balisage de la page
 map-page-title = Carte de la ville CityLoom
 map-page-description = Voyez toute la ville d’un coup d’œil et ouvrez n’importe quelle rue ou jonction pour la modifier.
-map-brand = CityLoom, la carte de la ville
-map-editors = Éditeurs
-map-nav-map = Carte
 map-canvas-label = Carte de la ville, nord en haut
 map-does-it-work = Est-ce que ça fonctionne?
 map-your-changes = Vos modifications

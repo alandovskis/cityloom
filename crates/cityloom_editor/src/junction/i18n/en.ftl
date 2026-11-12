@@ -287,8 +287,6 @@ jn-part-next = Next part
 
 ## The page's markup (web/intersection.html); the window title is the header's jn-title
 jn-page-description = Change how a junction of streets works: corners, crossings, lanes, turns and control.
-jn-page-editors = Editors
-jn-page-map = Map
 jn-page-details = Details
 jn-page-details-toggle-title = Show or hide the details ( [ )
 jn-page-key-select = select

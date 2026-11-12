@@ -3,9 +3,6 @@
 ## The page's markup
 map-page-title = CityLoom city map
 map-page-description = See the whole city at once and open any street or junction to change it.
-map-brand = CityLoom, the city map
-map-editors = Editors
-map-nav-map = Map
 map-canvas-label = Map of the city, north up
 map-does-it-work = Does it work?
 map-your-changes = Your changes
