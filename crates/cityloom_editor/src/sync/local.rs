@@ -7,6 +7,7 @@
 //! from it and the record is kept in that project's own documents (`ScopedStorage`). A `project` record is the
 //! project's entry in the list (`ProjectStore`), its key the project id.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use serde_json::{Value, json};
@@ -14,7 +15,7 @@ use serde_json::{Value, json};
 use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, STREETS};
 use crate::city::store::AREA_KEY;
 use crate::place::area::Area;
-use crate::project::migrate::legacy_waiting;
+use crate::project::migrate::{area_moved, legacy_kept, legacy_waiting};
 use crate::project::model::Project;
 use crate::project::store::{self as projects, ProjectStore};
 use crate::restriction::store::RestrictionStore;
@@ -101,21 +102,80 @@ pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     }
 }
 
-/// Whether the record is a first-project one that `first`'s documents do not hold but the document kept from before
-/// projects (the bare `cityloom-edits`, `cityloom-restrictions`, `cityloom-area`) still does: work the move has not
-/// taken yet (it failed, or can no longer run). Its pending entry is not to be sent: with no body it would go up as a
-/// removal. A record neither holds was removed and its removal goes up.
-pub fn held_in_legacy(storage: &Shared, id: &Id) -> bool {
-    let (project, key) = split_key(&id.key);
-    if id.kind == Kind::Project || project != FIRST || read(storage, id).is_some() {
-        return false;
+/// The keys a document kept from before projects holds, or all of them where it cannot be read (damaged, or a newer
+/// build's): what it holds is not known, so nothing of its kinds may go up as a removal.
+enum Held {
+    Keys(BTreeSet<String>),
+    All,
+}
+
+impl Held {
+    fn has(&self, key: &str) -> bool {
+        match self {
+            Held::Keys(keys) => keys.contains(key),
+            Held::All => true,
+        }
     }
-    // Over the root storage the stores read the bare keys: the documents from before projects.
-    match id.kind {
-        Kind::Street | Kind::Junction => section(id.kind).is_some_and(|s| edits_draft(storage).is_some_and(|d| d.get_raw(s, key).is_some())),
-        Kind::Rule => RestrictionStore::new(storage.clone()).raw(key).is_some(),
-        Kind::Area => storage.recall(AREA_KEY).is_some_and(|q| Area::from_query(&q).is_some()),
-        Kind::Project => false,
+}
+
+/// What an unfinished move still holds under the bare keys and `first`'s documents do not, read once for a push.
+pub struct LegacyHold {
+    streets: Held,
+    junctions: Held,
+    rules: Held,
+    /// A Montreal area the move would take is kept under the bare key.
+    area: bool,
+    first_streets: BTreeSet<String>,
+    first_junctions: BTreeSet<String>,
+    first_rules: BTreeSet<String>,
+    first_area: bool,
+}
+
+/// While a move from before projects is unfinished (`project::migrate::legacy_kept`: it failed, or can no longer run
+/// since another project is listed), the records it has not taken yet; None where no move is unfinished. Takes the
+/// root storage, over which the stores read the bare keys: the documents from before projects.
+pub fn legacy_hold(storage: &Shared) -> Option<LegacyHold> {
+    if !legacy_kept(storage) {
+        return None;
+    }
+    let keys = |draft: &Draft, section: &str| draft.raw_keys(section).into_iter().collect::<BTreeSet<_>>();
+    let (streets, junctions) = match edits::draft(storage.recall(EDITS_KEY).as_deref()) {
+        Ok(draft) => (Held::Keys(keys(&draft, STREETS)), Held::Keys(keys(&draft, JUNCTIONS))),
+        Err(Document::Empty) => (Held::Keys(BTreeSet::new()), Held::Keys(BTreeSet::new())),
+        Err(_) => (Held::All, Held::All),
+    };
+    let old_rules = RestrictionStore::new(storage.clone());
+    let rules = if old_rules.is_usable() { Held::Keys(old_rules.raw_ids().into_iter().collect()) } else { Held::All };
+    let first = scoped(storage, FIRST);
+    let first_draft = edits_draft(&first).unwrap_or_else(Draft::new);
+    Some(LegacyHold {
+        streets,
+        junctions,
+        rules,
+        area: storage.recall(AREA_KEY).is_some_and(|query| area_moved(&query)),
+        first_streets: keys(&first_draft, STREETS),
+        first_junctions: keys(&first_draft, JUNCTIONS),
+        first_rules: RestrictionStore::new(first.clone()).raw_ids().into_iter().collect(),
+        first_area: first.recall(AREA_KEY).is_some_and(|query| Area::from_query(&query).is_some()),
+    })
+}
+
+impl LegacyHold {
+    /// Whether the record is a first-project one the old documents still hold and `first`'s do not: its pending entry
+    /// is not to be sent, since with no body it would go up as a removal. A record neither holds was removed, and its
+    /// removal goes up.
+    pub fn holds(&self, id: &Id) -> bool {
+        let (project, key) = split_key(&id.key);
+        if project != FIRST {
+            return false;
+        }
+        match id.kind {
+            Kind::Street => !self.first_streets.contains(key) && self.streets.has(key),
+            Kind::Junction => !self.first_junctions.contains(key) && self.junctions.has(key),
+            Kind::Rule => !self.first_rules.contains(key) && self.rules.has(key),
+            Kind::Area => !self.first_area && self.area,
+            Kind::Project => false,
+        }
     }
 }
 
@@ -465,6 +525,44 @@ mod tests {
         memory.remember("cityloom-edits", "{}");
         assert!(write(&s, &Id::new(Kind::Project, "p1"), &project_body("Plateau")));
         assert!(usable(&s, Kind::Street));
+    }
+
+    #[test]
+    fn work_under_the_old_keys_is_held_only_while_the_move_is_unfinished() {
+        let (s, memory) = storage();
+        let street = Id::new(Kind::Street, "w1");
+        let area = Id::new(Kind::Area, AREA_RECORD);
+        // nothing kept under the old edits or rules: no move is waiting, nothing is held, not even an area left behind
+        memory.remember("cityloom-area", &crate::place::area::default_area().to_query());
+        assert!(legacy_hold(&s).is_none());
+        let mut draft = Draft::new();
+        assert!(draft.put_raw(STREETS, "w1", json!({"x": 1})));
+        memory.remember(EDITS_KEY, &draft.to_json());
+        let hold = legacy_hold(&s).expect("a move is waiting");
+        assert!(hold.holds(&street));
+        assert!(!hold.holds(&Id::new(Kind::Street, "w2")), "gone from the old document: a removal");
+        assert!(!hold.holds(&Id::new(Kind::Street, "p1:w1")), "another project's");
+        assert!(hold.holds(&area), "a Montreal area the move would take");
+        // an area the move would leave behind is not held
+        memory.remember("cityloom-area", &crate::place::area::Area::new("Berlin", 52.5, 13.4).to_query());
+        assert!(!legacy_hold(&s).unwrap().holds(&area));
+        // once `first` holds it, it is sent from there
+        assert!(write(&s, &street, &json!({"x": 2})));
+        assert!(!legacy_hold(&s).unwrap().holds(&street));
+    }
+
+    #[test]
+    fn an_old_document_that_cannot_be_read_holds_every_record_of_its_kinds() {
+        let (s, memory) = storage();
+        memory.remember(EDITS_KEY, "{broken");
+        let hold = legacy_hold(&s).expect("a move is waiting");
+        assert!(hold.holds(&Id::new(Kind::Street, "w9")) && hold.holds(&Id::new(Kind::Junction, "n9")));
+        assert!(!hold.holds(&Id::new(Kind::Rule, "r-9")), "the rules are readable, and hold none");
+        memory.remember(EDITS_KEY, "");
+        memory.remember("cityloom-restrictions", "{broken");
+        let hold = legacy_hold(&s).expect("a move is waiting");
+        assert!(hold.holds(&Id::new(Kind::Rule, "r-9")));
+        assert!(!hold.holds(&Id::new(Kind::Street, "w9")));
     }
 
     #[test]

@@ -356,11 +356,13 @@ impl SyncVm {
 }
 
 /// Leaves out of a copy of the document about to be sent every pending record the document from before projects still
-/// holds and `first` does not (`local::held_in_legacy`): read from `first` it has no body and would go up as a
-/// removal. Its entry stays pending in the stored document, so it goes once the move has taken it.
+/// holds and `first` does not (`local::legacy_hold`, read once, and only while a move is unfinished): read from
+/// `first` it has no body and would go up as a removal. Its entry stays pending in the stored document, so it goes once
+/// the move has taken it.
 fn hold_legacy(sendable: &mut SyncDoc, storage: &Rc<dyn crate::shared::ports::Storage>) {
+    let Some(hold) = local::legacy_hold(storage) else { return };
     for (name, entry) in sendable.records.iter_mut().filter(|(_, e)| e.pending) {
-        if Id::from_name(name).is_some_and(|id| local::held_in_legacy(storage, &id)) {
+        if Id::from_name(name).is_some_and(|id| hold.holds(&id)) {
             entry.pending = false;
         }
     }

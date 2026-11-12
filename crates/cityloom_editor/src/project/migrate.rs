@@ -118,7 +118,18 @@ fn merge_rules(storage: &Rc<dyn Storage>, scoped: &Rc<dyn Storage>) -> bool {
 /// read from `first`'s still empty documents would go up as a removal.
 pub fn legacy_waiting(storage: &Rc<dyn Storage>) -> bool {
     let store = ProjectStore::new(storage.clone());
-    store.is_usable() && store.list().iter().all(|p| p.id == FIRST) && (kept(storage, EDITS_KEY).is_some() || kept(storage, RESTRICTIONS_KEY).is_some())
+    store.is_usable() && store.list().iter().all(|p| p.id == FIRST) && legacy_kept(storage)
+}
+
+/// Whether a move is unfinished: a legacy `cityloom-edits` or `cityloom-restrictions` is kept (more than blank), what
+/// a finished move leaves blank, whether or not the move can still run.
+pub fn legacy_kept(storage: &Rc<dyn Storage>) -> bool {
+    kept(storage, EDITS_KEY).is_some() || kept(storage, RESTRICTIONS_KEY).is_some()
+}
+
+/// Whether the move takes the legacy area kept as `query`: one in Montreal; any other stays where it is.
+pub fn area_moved(query: &str) -> bool {
+    Area::from_query(query).as_ref().is_some_and(is_montreal)
 }
 
 /// `migrate_legacy` for a page that opens in no project (the home page, the Account page), before it builds anything:

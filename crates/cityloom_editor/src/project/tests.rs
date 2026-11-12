@@ -789,13 +789,92 @@ mod migration {
         ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
         laptop.vm.known(&ada());
         let phone = device(&server, T0 + 100_000);
-        let key = legacy_edit(&phone, 1, 100);
+        let held = legacy_kinds(&phone);
         phone.storage.refuse("cityloom-edits@first");
         assert!(!migrate_legacy(&phone.ports.storage, NAME));
         phone.vm.known(&ada());
         assert!(ProjectStore::new(phone.ports.storage.clone()).list().iter().any(|p| p.id != FIRST), "another project came down");
         assert_eq!(server.tombstones(), 0, "{:?}", server.live());
-        assert!(entry_of(&phone.storage, &Id::new(Kind::Street, &key)).is_some_and(|e| e.pending && !e.deleted), "it still waits");
+        for id in &held {
+            assert!(entry_of(&phone.storage, id).is_some_and(|e| e.pending && !e.deleted), "{} still waits", id.name());
+        }
+        // nor as the page is left
+        phone.vm.leave();
+        assert_eq!(server.tombstones(), 0, "{:?}", server.live());
+        for id in &held {
+            assert!(entry_of(&phone.storage, id).is_some_and(|e| e.pending), "{}", id.name());
+        }
+    }
+
+    /// Work of each kind an older build kept under the bare keys and marked: a street, a junction, a rule and the area.
+    fn legacy_kinds(d: &crate::sync::tests::Device) -> Vec<Id> {
+        let street = legacy_edit(d, 1, 100);
+        let mut draft = crate::city::edits::draft(d.storage.recall("cityloom-edits").as_deref()).unwrap();
+        assert!(draft.put_raw(crate::city::edits::JUNCTIONS, "n7", serde_json::json!({ "v": "legacy" })));
+        d.storage.remember("cityloom-edits", &draft.to_json());
+        assert!(mark(&*d.ports.storage, Kind::Junction, "n7", false));
+        let ring = serde_json::json!([[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]]);
+        let rule = serde_json::json!({"name": "R", "rule": {"kind": "car_free"}, "ring": ring});
+        assert!(crate::restriction::store::RestrictionStore::new(d.ports.storage.clone()).put_raw("r-legacy", rule));
+        assert!(mark(&*d.ports.storage, Kind::Rule, "r-legacy", false));
+        d.storage.remember("cityloom-area", &default_area().to_query());
+        assert!(mark(&*d.ports.storage, Kind::Area, crate::sync::model::AREA_RECORD, false));
+        vec![
+            Id::new(Kind::Street, &street),
+            Id::new(Kind::Junction, "n7"),
+            Id::new(Kind::Rule, "r-legacy"),
+            Id::new(Kind::Area, crate::sync::model::AREA_RECORD),
+        ]
+    }
+
+    /// The move failed, the first project and another came down, and the person deletes the first: what the first held
+    /// goes as removals, the work still under the old keys stays waiting.
+    #[test]
+    fn deleting_the_first_project_after_a_failed_move_leaves_the_old_work_waiting() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let laptop = device(&server, T0 + 50_000);
+        let laptop_key = legacy_edit(&laptop, 2, 150);
+        assert!(migrate_legacy(&laptop.ports.storage, NAME));
+        ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
+        laptop.vm.known(&ada());
+        let phone = device(&server, T0 + 100_000);
+        let phone_key = legacy_edit(&phone, 1, 100);
+        phone.storage.refuse("cityloom-edits@first");
+        assert!(!migrate_legacy(&phone.ports.storage, NAME));
+        phone.storage.refuse_nothing();
+        phone.vm.known(&ada());
+        let store = ProjectStore::new(phone.ports.storage.clone());
+        assert!(store.get(FIRST).is_some() && store.list().len() == 2, "{:?}", store.list());
+        phone.storage.set_now(T0 + 200_000);
+        assert!(store.delete(FIRST));
+        phone.vm.sync();
+        assert!(!server.live().contains(&format!("street/{laptop_key}")), "the first project's street went as a removal");
+        assert!(server.row("street", &laptop_key).is_some());
+        assert!(server.row("street", &phone_key).is_none(), "the old work did not go up, as a removal or otherwise");
+        assert!(entry_of(&phone.storage, &Id::new(Kind::Street, &phone_key)).is_some_and(|e| e.pending));
+    }
+
+    /// The move leaves an area outside Montreal under the bare key on purpose: it is no unfinished move, and deleting
+    /// the first project sends the area's removal.
+    #[test]
+    fn an_area_the_move_leaves_behind_does_not_hold_back_the_removal_of_the_first_project_s_area() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let d = device(&server, T0 + 100_000);
+        legacy_edit(&d, 1, 100);
+        d.storage.remember("cityloom-area", &Area::new("Berlin", 52.5, 13.4).to_query());
+        let area = Id::new(Kind::Area, crate::sync::model::AREA_RECORD);
+        assert!(mark(&*d.ports.storage, area.kind, &area.key, false));
+        assert!(migrate_legacy(&d.ports.storage, NAME));
+        assert!(d.storage.recall("cityloom-area").is_some_and(|a| !a.is_empty()), "left where it was");
+        d.vm.known(&ada());
+        d.storage.set_now(T0 + 200_000);
+        assert!(ProjectStore::new(d.ports.storage.clone()).delete(FIRST));
+        d.vm.sync();
+        assert!(server.row("area", &area.key).is_some(), "{:?}", server.live());
+        assert!(!server.live().contains(&area.name()));
+        assert!(entry_of(&d.storage, &area).is_some_and(|e| !e.pending), "sent");
     }
 
     /// A record the old document no longer holds was removed: its removal goes up, the old document notwithstanding.
