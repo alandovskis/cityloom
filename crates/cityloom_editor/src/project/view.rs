@@ -43,11 +43,12 @@ fn follow_focus(vm: Vm) {
 /// The form that renames project `id`, in its row.
 fn rename_form(vm: Vm, row: Row) -> impl IntoView {
     let field = NodeRef::<leptos::html::Input>::new();
-    let id = row.id.clone();
+    let (id, label) = (row.id.clone(), row.name.clone());
     let invalid = move || vm.with_value(|v| v.rename_error()).is_some();
     view! {
         <form
             class="project-rename"
+            aria-label=move || vm.with_value(|v| v.named("project-rename-named", &label))
             on:submit=move |ev| {
                 ev.prevent_default();
                 let name = field.get().map(|f| f.value()).unwrap_or_default();
@@ -83,7 +84,7 @@ fn rename_form(vm: Vm, row: Row) -> impl IntoView {
     }
 }
 
-/// The question asked in the row before project `row` is deleted.
+/// The question asked in a row before its project is deleted.
 fn delete_question(vm: Vm) -> impl IntoView {
     view! {
         <div
@@ -217,7 +218,10 @@ pub fn ProjectsView(vm: Rc<ProjectsVm>) -> impl IntoView {
     follow_focus(vm);
     view! {
         <h1 id="projects-heading" tabindex="-1">{move || word(vm, "project-list-heading")}</h1>
-        {move || vm.with_value(|v| v.notice()).map(|notice| view! { <p class="project-notice" role="alert">{notice}</p> })}
+        // One status for the page's life: its words follow a switch of language and it empties once the person acts.
+        <p class="project-notice" role="status" hidden=move || vm.with_value(|v| v.notice()).is_none()>
+            {move || vm.with_value(|v| v.notice())}
+        </p>
         {move || {
             let rows = vm.with_value(|v| v.rows());
             if rows.is_empty() {

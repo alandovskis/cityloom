@@ -152,8 +152,35 @@ test.describe("the list of projects", () => {
   test("a page sent back from a project that is gone says so", async ({ page }) => {
     await page.goto("/map.html?project=zzz");
     await expect(page).toHaveURL(/\/index\.html\?missing=1$/);
-    await expect(page.getByRole("alert")).toHaveText("That project is no longer here.");
+    const notice = page.locator(".project-notice");
+    await expect(notice).toHaveAttribute("role", "status");
+    await expect(notice).toHaveText("That project is no longer here.");
     await expect(rows(page)).toHaveCount(1);
+    // The same status follows the language, and goes once the person does something.
+    const node = await notice.elementHandle();
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(notice).toHaveText("Ce projet n’est plus ici.");
+    expect(await node!.evaluate((el) => el.isConnected)).toBe(true);
+    await page.getByLabel("Nom du projet").fill("Verdun");
+    await page.keyboard.press("Enter");
+    await expect(notice).toBeHidden();
+  });
+
+  test("a name that is refused is said, also when it was sent with Enter", async ({ page }) => {
+    await page.goto("/");
+    await listed(page);
+    await page.getByLabel("Project name").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText("Give the project a name.");
+    await expect(page.getByLabel("Project name")).toHaveAttribute("aria-describedby", "project-create-error");
+  });
+
+  test("the rename form says which project it renames", async ({ page }) => {
+    await page.goto("/");
+    await listed(page);
+    await page.getByRole("button", { name: "Rename First project" }).click();
+    await expect(page.getByRole("form", { name: "Rename First project" })).toBeVisible();
   });
 
   test("is in French for a French reader, the first project too", async ({ browser, baseURL }) => {
@@ -167,7 +194,7 @@ test.describe("the list of projects", () => {
     await listed(page);
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
     await expect(page.locator("h1")).toHaveText("Vos projets");
-    await expect(page.getByRole("alert")).toHaveText("Ce projet n’est plus ici.");
+    await expect(page.locator(".project-notice")).toHaveText("Ce projet n’est plus ici.");
     await expect(page.getByRole("link", { name: "Premier projet" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Renommer Premier projet" })).toBeVisible();
     await page.getByLabel("Nom du projet").fill("Mile End");

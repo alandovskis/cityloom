@@ -1243,11 +1243,47 @@ mod page {
     }
 
     #[test]
-    fn the_missing_project_notice_is_an_alert() {
+    fn the_missing_project_notice_is_a_status_and_goes_once_the_person_does_something() {
         let t = test_ports_full();
         *t.page.path.borrow_mut() = "/index.html?missing=1".into();
         let out = markup(page_in(Locale::En, &t));
-        assert!(out.contains(r#"role="alert""#) && out.contains("That project is no longer here."));
+        assert!(out.contains(r#"role="status""#) && out.contains("That project is no longer here."), "{out}");
+        assert!(!out.contains(r#"role="alert""#));
+        type Command = fn(&ProjectsVm);
+        let commands: [(&str, Command); 4] = [
+            ("create", |vm| assert!(vm.create("Plateau"))),
+            ("open", |vm| vm.open("first")),
+            ("rename", |vm| assert!(vm.rename("first", "Renamed"))),
+            ("delete", |vm| {
+                vm.ask_delete("first");
+                assert!(vm.confirm_delete());
+            }),
+        ];
+        for (what, command) in commands {
+            let t = test_ports_full();
+            t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+            *t.page.path.borrow_mut() = "/index.html?missing=1".into();
+            let vm = page_in(Locale::En, &t);
+            assert!(vm.notice().is_some(), "{what}");
+            command(&vm);
+            assert_eq!(vm.notice(), None, "{what}");
+            assert!(!markup(vm).contains("That project is no longer here."), "{what}");
+        }
+        // With nothing to say, the status is there and empty, so a notice is never a new node.
+        let (vm, _) = page();
+        let out = markup(vm);
+        assert!(out.contains(r#"role="status""#) && out.contains("hidden"));
+    }
+
+    #[test]
+    fn the_rename_form_says_which_project_it_renames() {
+        let (vm, _) = page();
+        vm.create("Plateau");
+        vm.start_rename(&id_of(&vm, "Plateau"));
+        let out = markup(vm);
+        let form = &out[out.find("<form").unwrap()..];
+        let form = &form[..form.find('>').unwrap()];
+        assert!(form.contains(r#"aria-label="Rename Plateau""#), "{form}");
     }
 
     #[test]

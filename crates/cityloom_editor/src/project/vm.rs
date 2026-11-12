@@ -56,8 +56,8 @@ pub struct ProjectsVm {
     renaming: ArcRwSignal<Option<String>>,
     rename_error: ArcRwSignal<Option<&'static str>>,
     deleting: ArcRwSignal<Option<String>>,
-    /// Whether the page was sent here because its project is no longer here.
-    missing: bool,
+    /// Whether the page was sent here because its project is no longer here, until the person does something.
+    missing: ArcRwSignal<bool>,
     focus: ArcRwSignal<(u32, Focus)>,
 }
 
@@ -90,7 +90,7 @@ impl ProjectsVm {
             renaming: ArcRwSignal::new(None),
             rename_error: ArcRwSignal::new(None),
             deleting: ArcRwSignal::new(None),
-            missing,
+            missing: ArcRwSignal::new(missing),
             focus: ArcRwSignal::new((0, Focus::None)),
         });
         // What a sync brings or takes (a project made, renamed or deleted elsewhere, a place changed) shows at once.
@@ -159,9 +159,17 @@ impl ProjectsVm {
         self.store.list().is_empty()
     }
 
-    /// What the page says first when it was sent here from a project that is no longer here; tracked.
+    /// What the page says first when it was sent here from a project that is no longer here, until the person's first
+    /// command; tracked.
     pub fn notice(&self) -> Option<String> {
-        self.missing.then(|| self.word("project-gone"))
+        self.missing.get().then(|| self.word("project-gone"))
+    }
+
+    /// The person did something: the notice of a project that is gone has been seen.
+    fn acted(&self) {
+        if self.missing.get_untracked() {
+            self.missing.set(false);
+        }
     }
 
     /// The name of the area a new project is in: the default one, the only one there is.
@@ -173,6 +181,7 @@ impl ProjectsVm {
 
     /// Keeps a new project named `name`; says why where it is refused. True where it was kept.
     pub fn create(&self, name: &str) -> bool {
+        self.acted();
         match self.store.create(name) {
             Ok(project) => {
                 self.create_error.set(None);
@@ -224,6 +233,7 @@ impl ProjectsVm {
 
     /// Gives project `id` the name `name`; says why where it is refused, and the form stays open. True where it was kept.
     pub fn rename(&self, id: &str, name: &str) -> bool {
+        self.acted();
         match self.store.rename(id, name) {
             Ok(()) => {
                 self.renaming.set(None);
@@ -277,6 +287,7 @@ impl ProjectsVm {
     /// could not be changed.
     pub fn confirm_delete(&self) -> bool {
         let Some(id) = self.deleting.get_untracked() else { return false };
+        self.acted();
         self.deleting.set(None);
         let name = self.store.get(&id).map(|p| p.name).unwrap_or_default();
         let done = self.store.delete(&id);
@@ -299,6 +310,7 @@ impl ProjectsVm {
 
     /// Remembers project `id` as the one opened last and goes to its map. Nothing where it is not listed.
     pub fn open(&self, id: &str) {
+        self.acted();
         if self.store.open(id) {
             self.ports.navigator.go(&self.href(id));
         }
