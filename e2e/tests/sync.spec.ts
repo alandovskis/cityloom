@@ -19,6 +19,11 @@ const serverWork = async (context: BrowserContext) => {
   return { status: response.status(), body: response.status() === 200 ? await response.json() : null };
 };
 
+/** How many places (streets, junctions, rules, the area) the server holds for this context: its records but the
+ *  projects' own, which `storingAccount` checks apart. */
+const serverPlaces = async (context: BrowserContext) =>
+  ((await serverWork(context)).body?.records ?? []).filter((r: { kind: string }) => r.kind !== "project").length;
+
 /** The streets this browser holds edits for. */
 const editedStreets = (page: Page) =>
   page.evaluate(() =>
@@ -45,7 +50,12 @@ async function storingAccount(page: Page, context: BrowserContext, baseURL: stri
   const sub = unique();
   await newAccount(page, context, baseURL, { sub });
   await page.getByRole("radio", { name: SERVER }).check();
-  await expect(live(page)).toHaveText("Your work was merged with your account: 0 places sent, 0 places received.");
+  // only the first project's own record (the fixtures seed it) goes up
+  await expect(live(page)).toHaveText("Your work was merged with your account: 1 place sent, 0 places received.");
+  const records = (await serverWork(context)).body.records.map(
+    (r: { kind: string; key: string }) => `${r.kind}/${r.key}`,
+  );
+  expect(records).toEqual(["project/first"]);
   return sub;
 }
 
@@ -74,7 +84,7 @@ test("an edit on one device appears on another when its tab is shown again", asy
   const href = await openStreet(page, 0);
   await phone.page.goto("/" + href);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   expect(await editedStreets(phone.page)).toEqual([]);
   await shown(phone.page);
   await expect(live(phone.page)).toHaveText("Updated from another device.");
@@ -102,7 +112,7 @@ test("an edit made offline is sent when the network returns, and the menu says s
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.locator("#sync-status")).toHaveText("Synced");
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-sync") ?? "{}").records)).toMatchObject({
     [`street/${edited}`]: { pending: false },
   });
@@ -133,7 +143,7 @@ test("the last edit is sent when the page is left, with nothing else to send it"
   // Nothing else can send it: no other page of the app opens to find it marked. Whether the 250 ms debounce had already
   // sent it first is told by the recorded fetches: the test needs a keepalive one.
   await page.goto("about:blank");
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   const reader = await context.newPage();
   await reader.goto("/map.html");
   expect(
@@ -157,7 +167,7 @@ test("when two devices changed the same place the later edit is kept on both and
   await phone.context.setOffline(true);
   await widen(phone.page); // the phone's change comes first ...
   await narrow(page); // ... the laptop's later, and a different one: two equal bodies are no conflict
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   await phone.context.setOffline(false);
   await shown(phone.page);
   await expect(live(phone.page)).toHaveText("Your change to this place was replaced by a later one.");
@@ -176,7 +186,7 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   const phone = await secondDevice(browser, baseURL!, sub);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   await shown(phone.page); // the phone gets the street while the copy is still on the server
   await expect.poll(async () => (await editedStreets(phone.page)).length).toBe(1);
   await page.goto("/account.html");
@@ -187,7 +197,7 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   );
   await page.locator("#stop-no").click();
   await expect(page.getByRole("radio", { name: SERVER })).toBeChecked();
-  expect((await serverWork(context)).body.records.length).toBe(1);
+  expect(await serverPlaces(context)).toBe(1);
   await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
   await page.locator("#stop-yes").click();
   await expect(live(page)).toHaveText(
@@ -225,11 +235,16 @@ test("turning storage on merges the work made while signed out and says how many
   await page.goto("/map.html");
   await newAccount(page, context, baseURL!);
   await page.getByRole("radio", { name: SERVER }).check();
-  await expect(live(page)).toHaveText("Your work was merged with your account: 1 place sent, 0 places received.");
+  // the street and the first project's own record
+  await expect(live(page)).toHaveText("Your work was merged with your account: 2 places sent, 0 places received.");
   await expect(page.locator("#merge-report")).toHaveText(
-    "Your work was merged with your account: 1 place sent, 0 places received.",
+    "Your work was merged with your account: 2 places sent, 0 places received.",
   );
-  expect((await serverWork(context)).body.records.length).toBe(1);
+  const kinds = (await serverWork(context)).body.records.map(
+    (r: { kind: string; key: string }) => `${r.kind}/${r.key}`,
+  );
+  expect(kinds.filter((k: string) => !k.startsWith("street/"))).toEqual(["project/first"]);
+  expect(kinds.filter((k: string) => k.startsWith("street/"))).toHaveLength(1);
 });
 
 test("a person who never chose server storage sends nothing and the menu shows no status", async ({
@@ -254,7 +269,7 @@ test("deleting the account deletes the server copy and keeps the browser's work"
   await storingAccount(page, context, baseURL!);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   await page.goto("/account.html");
   await expect(page.getByText("including the work you stored there")).toHaveCount(0);
   await page.locator("#delete-btn").click();
@@ -278,7 +293,7 @@ test("a device that signs in to a storing account receives its places and sends 
   const sub = await storingAccount(page, context, baseURL!);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverPlaces(context)).toBe(1);
   const [onLaptop] = await editedStreets(page);
   const phone = await anotherBrowser(browser, baseURL!);
   await openStreet(phone.page, 1);
@@ -291,6 +306,6 @@ test("a device that signs in to a storing account receives its places and sends 
   await chooseProvider(phone.page, "fake");
   await expect(phone.page.locator("#session-btn-label")).toHaveText("Ada");
   await expect.poll(async () => (await editedStreets(phone.page)).sort()).toEqual([onLaptop, onPhone].sort()); // received
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(2); // sent
+  await expect.poll(async () => await serverPlaces(context)).toBe(2); // sent
   await phone.context.close();
 });

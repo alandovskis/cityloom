@@ -367,6 +367,22 @@ test.describe("the city map", () => {
   });
 });
 
+test.describe("a page for a project that is not here", () => {
+  for (const path of [
+    "/map.html?project=zzz",
+    "/street.html?street=1&project=zzz",
+    "/intersection.html?junction=1&project=zzz",
+  ])
+    test(`${path} goes to the home page with missing=1, and is not left in the history`, async ({ page }) => {
+      await page.goto("/index.html");
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/index\.html\?missing=1$/);
+      // the page that could not open was replaced: going back leaves the list for where the person was
+      await page.goBack();
+      await expect(page).toHaveURL(/\/index\.html$/);
+    });
+});
+
 test.describe("when there is no map", () => {
   test("a browser without WebGL is told, and the page and its notes still work", async ({ page }) => {
     await page.addInitScript(() => {
