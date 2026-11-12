@@ -25,6 +25,9 @@ row shows the project's name, its area and the day it was last changed.
 - **Delete**: choose **Delete**. The row asks first; **Delete the project** removes the project and everything in it.
   This cannot be undone.
 
+Every page's top bar has **Projects**, which comes back to this list, and **About**, a page that says what CityLoom is
+for; the CityLoom logo also comes back here. There is no Map link in the bar: a map is opened from its project.
+
 The map and the editors carry the project in their address. A page opened without one opens the project you opened
 last. If that project is no longer there, for example because it was deleted on another device, the page goes back to
 the list, which says **That project is no longer here.**

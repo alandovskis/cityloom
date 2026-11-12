@@ -202,12 +202,16 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Place search (home page) | the roads … could not be fetched | les rues … n’ont pas pu être obtenues | The roads are `rues`, as everywhere in the app. The error in brackets is the browser's own, not translated. |
 | Place search (home page) | storage (the browser's) | stockage |  |
 | Place search (home page) | tile index | index des tuiles | Never shown to a person today: the loader goes on without it. |
-| Home page | Redesign the streets of your city | Réaménagez les rues de votre ville | `réaménager` for redesigning a street, `réorganiser` for Arrange. |
-| Home page | rearrange (a street) | réorganiser | As Arrange on the street page. |
-| Home page | Open the city map | Ouvrir la carte de la ville |  |
+| About page | Redesign the streets of your city | Réaménagez les rues de votre ville | `réaménager` for redesigning a street, `réorganiser` for Arrange. |
+| About page | rearrange (a street) | réorganiser | As Arrange on the street page. |
+| About page | About CityLoom | À propos de CityLoom | The page's heading and window title; the top bar's link is `À propos`. |
+| About page | Skip to the introduction | Aller à la présentation | `Aller à`, as the home page's skip link `Aller à vos projets`. |
+| About page | Open your projects | Ouvrir vos projets | The About page's button; it opens the list, never a map. |
+| Top bar | Pages (the bar's links, as a landmark) / Projects / About | Pages / Projets / À propos |  |
 | Home page | home (the brand link) | accueil |  |
-| Home page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
-| Home page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
+| Home page | CityLoom projects (window title) | Projets CityLoom | As `Carte de la ville CityLoom`. |
+| About page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
+| About page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
 | Junction | junction | jonction | As in the city's names (`Jonction 4`); `intersection` only in the Atlas name `L2`. |
 | Junction | arm (one street at a junction) | branche | Not shown alone: an arm is said `Rue (nord)`. |
 | Junction | north, north-east … (in a sentence) | nord, nord-est, est, sud-est, sud, sud-ouest, ouest, nord-ouest | Lowercase in brackets after the street: `Rue Principale (nord)`. |

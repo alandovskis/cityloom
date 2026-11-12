@@ -51,7 +51,7 @@ street network into JSON tiles in `web/data/metro` (about 1,700 tiles, about 570
 into one archive, `data/montreal.citymodel`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
 archive are ignored by git.
 
-Opening a place needs the road tiles: without them no place opens, the default one included, and the home page says the place is not covered.
+Opening a place needs the road tiles: without them no place opens, the default one included, and the page that opens it says the place is not covered.
 
 ## Tests and formatting
 

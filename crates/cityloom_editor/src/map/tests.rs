@@ -765,7 +765,7 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }
 
-/// The home page is built before the area's roads are read, so that its search does not wait for them.
+/// The About page is built before the area's roads are read, so that its words do not wait for them.
 #[test]
 fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
     use cityloom_model::{

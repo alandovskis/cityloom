@@ -96,7 +96,7 @@ panels) stay on each device.
 
 ## JavaScript
 
-Logic belongs in Rust. The page scripts in `web/` (`home.js`, `map.js`, `app.js` for the street page and `junction.js`)
+Logic belongs in Rust. The page scripts in `web/` (`home.js`, `about.js`, `map.js`, `app.js` for the street page and `junction.js`)
 are start-up glue: they load the module, call `mount_*` and mount the shell. The street and junction scripts also set up
 the hatch patterns and flush the page's edits on `pagehide`, and `map.js` creates the map. The one exception is
 `web/mapcanvas.js`, the adapter that owns the MapLibre map.

@@ -3,7 +3,7 @@
 Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
 
 ## Map page and overlay
-- Exception to the root's SVG rule: MapLibre map on a plain ground, no SVG. `svg.rs` and `camera.rs` remain only for the home hero (`map/home.rs`).
+- Exception to the root's SVG rule: MapLibre map on a plain ground, no SVG. `svg.rs` and `camera.rs` remain only for the city drawn behind the About page's card (`map/home.rs`: `HeroMap`, `HeroFacts`, `AboutTitle`; `mount_about`, composed by `lib.rs`). The drawing is `inert` and `aria-hidden`, so its place links can be neither pressed nor reached. The About page (`web/about.html`, `about.css` over `home.css`; messages `map-about-*` and `map-home-*`) links to the projects, never to a map: it is in no project.
 - `overlay.rs` makes GeoJSON places (`hot` ids `s-<uid>` / `j-<uid>`; streets carry `class`); `style.rs` holds the layers (dotted white `places-pedestrian`; `zone-ticks` via `overlay::zone_ticks`, `style::zone_tick_layers`, `Mapper::set_zone_ticks`; rules in the root's Street zones bullet). `city::projection` places the layout on the earth.
 - The view-model reaches MapLibre only through the `Mapper` port.
 - `editable.rs`: in the open view (`MapEvent::View`, what the panels leave open) editable = a street wholly in it, a street too big for it while it crosses it, a junction whose point is in it. Sent by `Mapper::set_editable` (feature-state `editable`; `style.rs` mutes the rest). A press on a muted place opens nothing and says `map-not-editable`.

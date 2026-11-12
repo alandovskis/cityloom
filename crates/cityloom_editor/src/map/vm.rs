@@ -447,7 +447,7 @@ impl MapVm {
         &self.i18n
     }
 
-    /// The project the map is opened in; none outside a project (the home page's city).
+    /// The project the map is opened in; none outside a project (the About page's city).
     pub fn project(&self) -> Option<String> {
         self.ports.storage.project()
     }
@@ -1079,7 +1079,7 @@ impl MapVm {
         self.core.edit(|m| m.city = city);
     }
 
-    /// The city is opened again because its roads have arrived since this view-model was made (the home page is
+    /// The city is opened again because its roads have arrived since this view-model was made (the About page is
     /// built before the area's roads are read): it is read again and the camera is put on the whole of it.
     pub fn reopen(&self) {
         self.reload();

@@ -221,7 +221,7 @@ components:
 
 **Creative North Star: "The Familiar Map"**
 
-CityLoom looks like the map tool a resident already knows how to use, executed with full craft and sitting alongside Streetmix. The drawing is the page: on the map and home pages the city fills the viewport, and on the editors one large white plate holds the street section or junction plan. Everything else is a small number of quiet white cards floating over a cool grey-blue land. No theme, no costume. The product is for non-experts, so the interface is plainly legible and does not announce itself.
+CityLoom looks like the map tool a resident already knows how to use, executed with full craft and sitting alongside Streetmix. The drawing is the page: on the map and About pages the city fills the viewport, and on the editors one large white plate holds the street section or junction plan. Everything else is a small number of quiet white cards floating over a cool grey-blue land. No theme, no costume. The product is for non-experts, so the interface is plainly legible and does not announce itself.
 
 The system is deliberately narrow. System type, one 16px card, one two-layer shadow, one blue, one amber. Colour carries meaning rather than decoration: blue is what the person has chosen or can act on, amber is what does not fit, green appears only to say something passes. Both themes are designed, light by default, dark through `prefers-color-scheme` or an explicit `data-theme`.
 
@@ -295,7 +295,7 @@ The page is a stack of layers: the drawing at the back, floating cards on top. A
 
 **Map page.** The map fills the viewport, with no card on the left (`data-left="none"` on the page makes `--lw` 0). Notes card on the right (360px, as tall as its content), with its show/hide button a tab beside it down the window's right-hand side (vertical text, `.notes-tab`, against the card and at the edge when the card is hidden), zoom group bottom-right, the status chip bottom-centre of the open area between the cards.
 
-**Home page.** One hero card (up to 780px, 44px/48px padding) holds the headline, the large search with its blue Search button, the way in, and how the city stands. The city is drawn full-bleed behind it, inert, and eases in from the card's right edge with a gradient mask. Names are hidden on this backdrop.
+**Home and About pages.** The home page is one card (up to 780px, 44px/48px padding) holding the list of projects on a plain ground. The About page is one card of the same size holding the heading, the headline, the lead, the way to the projects and how the city stands; the city of the project opened last is drawn full-bleed behind it, inert, and eases in from the card's right edge with a gradient mask. Names are hidden on this backdrop. Every page's bar links Projects and About, the current one in the accent wash.
 
 **Editors (street and intersection).** A three-part arrangement under the bar: a left details card (300px), a right Notes card (340px, tabs), and a centre column between them. The centre column is a vertical stack with 12px gaps: a **stage head** (title card plus tool strip), the **plate** (the drawing on a white 16px card), the status chip, and for junctions two **tray** cards. Under 1360px wide the Notes card starts closed (the person can open it); under 900px every card stacks below the drawing and the bar wraps to a second and third row.
 
@@ -315,7 +315,7 @@ The page is a stack of layers: the drawing at the back, floating cards on top. A
 Hybrid: a white card over a tinted land is the main depth cue, supported by two soft shadows. Nothing is ever flat-on-flat; nothing has a hard or offset shadow.
 
 ### Shadow Vocabulary
-- **Float** (`box-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 8px 24px rgb(15 23 42 / 0.12)`; dark `0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5)`): the bar, side panels, the home hero card, menus, popovers, the zoom group, the status chip, the drag chip.
+- **Float** (`box-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 8px 24px rgb(15 23 42 / 0.12)`; dark `0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5)`): the bar, side panels, the About card, menus, popovers, the zoom group, the status chip, the drag chip.
 - **Soft** (`box-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.06)`; dark `0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3)`): cards that sit on the page rather than over a map (editor title card, tool strip, drawing plate, tray cards, read card) and the raised selected segment of a tab or unit control.
 - **Inset amber** (`inset 0 0 0 1px var(--warn-line)`, with Soft): the failing status chip's edge.
 - **Focus ring** (`outline: 2px solid var(--accent); outline-offset: 2px`) on `:focus-visible`; fields add `0 0 0 3px var(--accent-wash)` on focus.

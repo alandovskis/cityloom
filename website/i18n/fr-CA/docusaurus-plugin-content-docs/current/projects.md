@@ -25,6 +25,10 @@ Chaque ligne indique le nom du projet, son lieu et le jour de sa dernière modif
 - **Supprimer** : choisissez **Supprimer**. La ligne demande d’abord une confirmation; **Supprimer le projet** retire
   le projet et tout ce qu’il contient. Cette action est irréversible.
 
+La barre du haut de chaque page offre **Projets**, qui ramène à cette liste, et **À propos**, une page qui indique à
+quoi sert CityLoom; le logo de CityLoom ramène aussi ici. La barre n’a pas de lien Carte : une carte s’ouvre depuis son
+projet.
+
 La carte et les éditeurs portent le projet dans leur adresse. Une page ouverte sans projet ouvre celui que vous avez
 ouvert en dernier. Si ce projet n’est plus là, par exemple parce qu’il a été supprimé sur un autre appareil, la page
 revient à la liste, qui indique **Ce projet n’est plus ici.**

@@ -105,7 +105,7 @@ panneaux) restent propres à chaque appareil.
 
 ## JavaScript
 
-La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `map.js`, `app.js` pour la page de la rue et
+La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `about.js`, `map.js`, `app.js` pour la page de la rue et
 `junction.js`) servent au démarrage : ils chargent le module, appellent `mount_*` et montent le shell. Les scripts de la
 rue et de la jonction préparent aussi les motifs de hachures et enregistrent les modifications de la page à `pagehide`,
 et `map.js` crée la carte. La seule exception est `web/mapcanvas.js`, l’adaptateur qui possède la carte MapLibre.
