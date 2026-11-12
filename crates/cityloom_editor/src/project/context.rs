@@ -4,6 +4,7 @@
 
 use std::rc::Rc;
 
+use crate::place::area::Area;
 use crate::project::store::ProjectStore;
 use crate::shared::ports::{Ports, Storage};
 use crate::shared::scoped::{ScopedStorage, in_project};
@@ -63,6 +64,14 @@ fn enter_scoped(ports: Ports) -> Option<(Ports, Rc<ScopedStorage>)> {
 /// (`MISSING_HREF`) and there is none: nothing of the project is read or written.
 pub fn enter(ports: Ports) -> Option<Ports> {
     enter_scoped(ports).map(|(ports, _)| ports)
+}
+
+/// The area the record of `storage`'s project names (`Storage::project`; the list is read through the scoped storage,
+/// which passes its key to the root). None over the root storage, or where the project is not listed, its record is a
+/// placeholder the sync made before the real one came, or its area cannot be read: the caller then falls back.
+pub fn area_of(storage: &dyn Storage) -> Option<Area> {
+    let project = crate::project::store::find(storage, &storage.project()?)?;
+    if project.placeholder { None } else { Area::from_query(&project.area) }
 }
 
 /// The ports of the project the page is opened in, without sending the page away or remembering the project (the

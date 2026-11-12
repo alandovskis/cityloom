@@ -231,10 +231,13 @@ fn in_a_project_the_heading_s_links_open_the_places_of_that_project() {
     assert_eq!(count(&h, "project=p1"), 3, "{h}");
 }
 
-/// A browser holding Bendville's roads in project `p1` (its area chosen there), with the page at `path`.
+/// A browser holding Bendville's roads in project `p1`, whose record names Bendville, with the page at `path`.
 fn bendville_in_p1(path: &str) -> crate::shared::ports::TestPorts {
     let t = crate::shared::ports::test_ports_full();
-    assert_eq!(crate::project::ProjectStore::new(t.ports.storage.clone()).create("Bendville").unwrap().id, "p1");
+    let projects = crate::project::ProjectStore::new(t.ports.storage.clone());
+    let p = projects.create("Bendville").unwrap();
+    assert_eq!(p.id, "p1");
+    assert!(projects.put_raw(crate::project::model::Project { area: crate::restriction::fixtures::bendville().to_query(), ..p }));
     crate::restriction::fixtures::bent_store(crate::shared::scoped::in_project(t.ports.clone(), "p1").storage);
     *t.page.path.borrow_mut() = path.into();
     t

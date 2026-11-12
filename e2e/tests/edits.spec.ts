@@ -1,4 +1,4 @@
-import { expect, mapReady, openStreet, placesOnMap, test } from "./fixtures";
+import { expect, mapReady, openStreet, placesOnMap, setFirstArea, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 // What a resident edits is kept in one document per project (`cityloom-edits@first` for the first project the
@@ -80,7 +80,7 @@ const eastmost = (shapes: Record<string, number[][]>, kind: string) =>
     .sort((a, b) => b[1] - a[1])[0][0];
 
 const switchTo = async (page: Page, query: string, name: string) => {
-  await page.evaluate((q) => localStorage.setItem("cityloom-area@first", q), query);
+  await setFirstArea(page, query);
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText(name);
 };
@@ -126,7 +126,7 @@ test("the edit is there from another area of the same tile", async ({ page }) =>
   const edited = Object.values<any>((await edits(page)).streets)[0].street.segments[0].width_mm;
   expect(edited).toBeGreaterThan(0);
 
-  await page.evaluate((query) => localStorage.setItem("cityloom-area@first", query), NORTH_AREA);
+  await setFirstArea(page, NORTH_AREA);
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText("North");
   const streets = (await placesOnMap(page)).streets;

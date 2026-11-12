@@ -51,6 +51,15 @@ fn parse(stored: Option<&str>) -> Document {
     }
 }
 
+/// The listed project `id`; none where it is not listed or the list is damaged or a newer build's. Only reads, so it
+/// takes any storage: a `ScopedStorage` passes the list's key through to the root.
+pub fn find(storage: &dyn Storage, id: &str) -> Option<Project> {
+    match parse(storage.recall(PROJECTS_KEY).as_deref()) {
+        Document::Current(projects) => projects.into_iter().find(|p| p.id == id),
+        _ => None,
+    }
+}
+
 /// The person's projects. Takes the root storage, never a `ScopedStorage`: the list belongs to no project.
 #[derive(Clone)]
 pub struct ProjectStore {
@@ -75,7 +84,7 @@ impl ProjectStore {
     }
 
     pub fn get(&self, id: &str) -> Option<Project> {
-        self.list().into_iter().find(|p| p.id == id)
+        find(&*self.storage, id)
     }
 
     /// Whether the document can be read and changed: none kept, or one of this version.

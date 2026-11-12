@@ -85,8 +85,19 @@ export const FIRST_PROJECT = {
   created_at: "1970-01-01T00:00:00.000Z",
 };
 
-/* A page of the first project keeps its edits, area rules and area under `cityloom-edits@first`,
- * `cityloom-restrictions@first` and `cityloom-area@first` (`<key>@<project>`): the specs read and seed those. */
+/* A page of the first project keeps its edits and area rules under `cityloom-edits@first` and
+ * `cityloom-restrictions@first` (`<key>@<project>`): the specs read and seed those. Its area is the one its record
+ * names, which `setFirstArea` changes. */
+
+/** Makes the first project's record name the area `query` (an `Area::to_query`): its pages open that area. Nothing
+ *  in the app changes a project's area; only the specs that follow an edit into another area do. */
+export async function setFirstArea(page: Page, query: string) {
+  await page.evaluate((query) => {
+    const doc = JSON.parse(localStorage.getItem("cityloom-projects")!);
+    doc.projects.find((p: { id: string }) => p.id === "first").area = query;
+    localStorage.setItem("cityloom-projects", JSON.stringify(doc));
+  }, query);
+}
 
 /** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads
  *  keeps it, because the choice is only stored when there is none), so there is no network; and the first project,
