@@ -1123,3 +1123,19 @@ fn a_tab_that_still_believes_in_the_previous_account_does_not_sync_under_the_new
     assert_eq!(server.calls.borrow().iter().filter(|c| c.starts_with("push")).count(), 1, "the store is not sent again");
     assert_eq!(model::open(&*tab2.storage).unwrap().user.as_deref(), Some("bob"));
 }
+
+#[test]
+fn a_mark_through_a_project_scoped_storage_carries_the_project_in_its_key() {
+    let inner = Rc::new(MemoryStorage::default());
+    let scoped = crate::shared::scoped::ScopedStorage::new(inner.clone(), "p1");
+    assert!(model::mark(&scoped, Kind::Street, "w1", false));
+    let doc = model::open(&scoped).unwrap();
+    assert!(doc.entry(&Id::new(Kind::Street, "p1:w1")).is_some());
+    assert!(doc.entry(&Id::new(Kind::Street, "w1")).is_none());
+
+    let plain = MemoryStorage::default();
+    assert!(model::mark(&plain, Kind::Street, "w1", false));
+    let doc = model::open(&plain).unwrap();
+    assert!(doc.entry(&Id::new(Kind::Street, "w1")).is_some());
+    assert!(doc.entry(&Id::new(Kind::Street, "p1:w1")).is_none());
+}

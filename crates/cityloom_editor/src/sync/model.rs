@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::shared::ports::{Storage, WorkPut, WorkRecord};
+use crate::shared::project_id::wire_key;
 
 /// Where the sync state is kept.
 pub const SYNC_KEY: &str = "cityloom-sync";
@@ -248,7 +249,11 @@ pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool
         return false;
     }
     let Some(mut doc) = open(storage) else { return false };
-    let id = Id::new(kind, key);
+    let wire = match storage.project() {
+        Some(project) => wire_key(&project, key),
+        None => key.to_string(),
+    };
+    let id = Id::new(kind, &wire);
     let rev = doc.entry(&id).map_or(0, |e| e.rev);
     doc.records.insert(id.name(), Entry { edited_at: stamp(storage.now_ms()), pending: true, deleted, rev, blocked: false });
     let kept = save(storage, &doc);

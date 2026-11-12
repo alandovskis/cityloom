@@ -28,6 +28,11 @@ pub trait Storage {
     /// `BrowserStorage` is the page's one `localStorage` (each mount makes a handle of its own, so the object behind
     /// a handle cannot name it); a fake gives each instance a number of its own, so two simulated devices stay apart.
     fn identity(&self) -> usize;
+    /// The project this storage is scoped to, or None where it is not scoped to one (the sync then names records by
+    /// their bare keys).
+    fn project(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Runs something after a delay, which can be called off.
