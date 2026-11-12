@@ -31,7 +31,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - `CityStore::current` opens the chosen area (`cityloom-area`), else the default (Plateau Mont-Royal, made like any other); until its roads are kept the city has no places. The network is kept under `cityloom-network:<key>`. Edits are not kept per area but per project (`<key>@<project>` through `ScopedStorage`; the choice of an area belongs to the project); work from before projects is moved into project `first` by `project::migrate_legacy`.
 
 ## Persistence
-- A page opened from the map (`?junction=3`, `?street=7`) edits one place. `CityBinding` writes back through `CityStore` against the city as stored now (another tab's change is not overwritten), behind a 250 ms debounced `Keeper`; `flush()` on `pagehide`. Without a place of the city the page goes back to the map. A write failure is said once.
+- A page opened from the map (`?junction=3&project=p1`, `?street=7&project=p1`) edits one place of its project's city. `CityBinding` writes back through `CityStore` against the city as stored now (another tab's change is not overwritten), behind a 250 ms debounced `Keeper`; `flush()` on `pagehide`; `record()` is the place's wire id (the store's `Storage::project` prefix, as `mark` adds it), so an editor in another project than `first` hears the sync's changes to its place. Without a place of the city the page goes back to its project's map (`map.html?project=<id>`). A write failure is said once.
 - `Arm.stops`, `Arm.beyond` and `Arm.section` are derived from the street (`#[serde(skip)]`), never kept. The positional uid (`?street=7`, `s-<uid>`) stays internal.
 
 ### The edits document (`cityloom-edits`, `city/edits.rs`; records keyed per `city/keys.rs`)

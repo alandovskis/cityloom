@@ -71,6 +71,15 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         dark.as_ref().is_some_and(|m| m.matches()),
         roomy || !notes_give_way,
     );
+    // The markup's links to the map and the editors open them in the page's project, whichever another tab opened since.
+    for a in all("a[href]") {
+        if let Some(href) = a.get_attribute("href") {
+            let linked = vm.link(&href);
+            if linked != href {
+                let _ = a.set_attribute("href", &linked);
+            }
+        }
+    }
     // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
     // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
     if let Some(slot) = by_id("share-slot") {
@@ -109,7 +118,8 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     }
     if let Some(export) = by_id("share-export") {
         let v = vm.clone();
-        let archive = crate::archive::vm::ArchiveVm::new(crate::shared::platform::browser_ports(), vm.i18n());
+        // The archive holds the work of the page's project (the sync keeps the root storage).
+        let archive = crate::archive::vm::ArchiveVm::new(crate::project::context::peek(crate::shared::platform::browser_ports()), vm.i18n());
         listen(&export, "click", move |_: MouseEvent| {
             v.close_share();
             // As for Print: the menu is hidden under the focus, so the Share button takes it. The result is announced.

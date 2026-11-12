@@ -138,8 +138,9 @@ mod tests {
     }
 }
 
-/// Gets the roads of the area the person is working in, from where they come from, unless
-/// they are already kept. The pages call this before they open the city. Resolves with the
+/// Gets the roads of the area the person is working in (the area of the page's project, `project::context::peek`),
+/// from where they come from, unless they are already kept. The pages call this before they open the city. Resolves
+/// with the
 /// empty string when the city is ready, or with what went wrong, in words; the city is then the
 /// sample, so the page still works.
 ///
@@ -151,7 +152,7 @@ pub fn prepare_city() -> js_sys::Promise {
     use crate::city::store::CityStore;
     use crate::shared::platform::browser_ports;
     js_sys::Promise::new(&mut |resolve, _| {
-        let ports = browser_ports();
+        let ports = crate::project::context::peek(browser_ports());
         let store = CityStore::current(ports.storage.clone());
         let announcer = ports.announcer.clone();
         let i18n = crate::i18n_for(crate::shared::i18n::detect(&ports));

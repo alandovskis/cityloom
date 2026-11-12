@@ -61,9 +61,10 @@ pub struct SyncVm {
 
 impl SyncVm {
     /// `ports.storage` is the ROOT storage, never a project's (`ScopedStorage`): the sync carries every project, and
-    /// `sync::local` finds each record's project from its wire key.
+    /// `sync::local` finds each record's project from its wire key. Given a project's storage it refuses, in a release
+    /// build too: it would prefix that project's keys a second time.
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<SyncVm> {
-        debug_assert!(ports.storage.project().is_none(), "the sync is given the root storage, not a project's");
+        assert!(ports.storage.project().is_none(), "the sync is given the root storage, not a project's");
         let key = ports.storage.identity();
         let vm = Rc::new(SyncVm {
             ports,

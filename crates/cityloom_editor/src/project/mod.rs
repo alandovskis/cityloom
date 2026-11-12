@@ -1,5 +1,6 @@
 //! The person's projects: named containers, each tied to an area.
 
+pub mod context;
 pub mod migrate;
 pub mod model;
 pub mod store;

@@ -215,6 +215,15 @@ pub(crate) struct Device {
     pub(crate) vm: Rc<SyncVm>,
 }
 
+/// The sync carries every project: given a project's storage it would prefix that project's wire keys a second time,
+/// so it refuses one, in a release build too (an `assert!`, not a `debug_assert!`).
+#[test]
+#[should_panic(expected = "the sync is given the root storage, not a project's")]
+fn the_sync_refuses_a_project_s_storage() {
+    let (ports, ..) = test_ports_with_time();
+    SyncVm::new(crate::shared::scoped::in_project(ports, "p1"), crate::i18n_for(Locale::En));
+}
+
 pub(crate) fn device(server: &Rc<ServerSim>, now: u64) -> Device {
     let (mut ports, announcer, storage, scheduler) = test_ports_with_time();
     storage.set_now(now);

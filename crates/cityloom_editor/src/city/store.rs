@@ -69,6 +69,11 @@ impl CityStore {
         CityStore::for_area(storage, area)
     }
 
+    /// The project whose edits the store keeps (`Storage::project`); none over the root storage.
+    pub fn project(&self) -> Option<String> {
+        self.storage.project()
+    }
+
     /// The area `current` would open, whether or not its roads are kept yet: the one last chosen, and the
     /// default one when none was or what was kept is not an area.
     pub fn current_area(storage: &dyn Storage) -> Area {

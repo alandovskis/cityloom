@@ -356,6 +356,31 @@ fn the_shell_builds_the_sync_and_the_session_reports_to_it() {
 }
 
 #[test]
+fn the_shell_s_links_to_the_map_and_the_editors_stay_in_the_page_s_project() {
+    let shell = |target: std::rc::Rc<dyn crate::shell::Target>| {
+        crate::sync::hub::reset();
+        let (ports, ..) = crate::shared::ports::test_ports_with_time();
+        crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true)
+    };
+    let vm = shell(std::rc::Rc::new(crate::shell::Bare::in_project(Some("p1".into()))));
+    assert_eq!(vm.link("map.html"), "map.html?project=p1");
+    assert_eq!(vm.link("street.html"), "street.html?project=p1");
+    assert_eq!(vm.link("index.html"), "index.html");
+    assert_eq!(vm.link("account.html"), "account.html");
+    assert_eq!(shell(std::rc::Rc::new(crate::shell::Bare::default())).link("map.html"), "map.html", "a page outside a project");
+    // an editor's page is in the project its storage is
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let street = crate::street::vm::StreetVm::new(
+        crate::shared::scoped::in_project(ports, "p2"),
+        crate::i18n_for(Locale::En),
+        crate::street::model::Editor::new(0),
+        None,
+    );
+    assert_eq!(shell(street).link("map.html"), "map.html?project=p2");
+    crate::sync::hub::reset();
+}
+
+#[test]
 fn a_page_opened_offline_learns_it_is_signed_in_when_the_network_returns_and_starts_the_sync_once() {
     use crate::shared::ports::{AccountCall, AccountError, AccountReply, Me, WorkAsk, WorkCall, WorkPage, WorkReply, test_ports_full};
     crate::sync::hub::reset();

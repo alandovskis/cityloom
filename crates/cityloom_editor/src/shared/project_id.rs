@@ -23,6 +23,28 @@ pub fn split_key(wire: &str) -> (&str, &str) {
     }
 }
 
+/// The pages that open inside a project: the map and the two editors.
+pub const PROJECT_PAGES: [&str; 3] = ["map.html", "street.html", "intersection.html"];
+
+/// `href` naming `project` (`project=<id>` added to its query) where it leads to one of `PROJECT_PAGES` and names no
+/// project yet; any other address, or no project, leaves it as it is.
+pub fn link(href: &str, project: Option<&str>) -> String {
+    let Some(project) = project else { return href.to_string() };
+    let (rest, fragment) = href.split_once('#').map_or((href, None), |(r, f)| (r, Some(f)));
+    let (path, query) = rest.split_once('?').map_or((rest, None), |(p, q)| (p, Some(q)));
+    let page = path.rsplit('/').next().unwrap_or(path);
+    let named = query.is_some_and(|q| q.split('&').any(|pair| pair == "project" || pair.starts_with("project=")));
+    if !PROJECT_PAGES.contains(&page) || named {
+        return href.to_string();
+    }
+    let query = match query {
+        Some(q) if !q.is_empty() => format!("{q}&project={project}"),
+        _ => format!("project={project}"),
+    };
+    let fragment = fragment.map(|f| format!("#{f}")).unwrap_or_default();
+    format!("{path}?{query}{fragment}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,5 +73,19 @@ mod tests {
         assert!(!valid("Has Upper"));
         assert!(!valid("under_score"));
         assert!(!valid(&"a".repeat(17)));
+    }
+
+    #[test]
+    fn a_link_to_a_page_of_a_project_names_the_project() {
+        assert_eq!(link("map.html", Some("p1")), "map.html?project=p1");
+        assert_eq!(link("street.html?street=7", Some("p1")), "street.html?street=7&project=p1");
+        assert_eq!(link("intersection.html?junction=3", Some("first")), "intersection.html?junction=3&project=first");
+        assert_eq!(link("/map.html#x", Some("p1")), "/map.html?project=p1#x");
+        // already named, no project, or a page outside a project: as it is
+        assert_eq!(link("map.html?project=p2", Some("p1")), "map.html?project=p2");
+        assert_eq!(link("street.html?street=7", None), "street.html?street=7");
+        for other in ["index.html", "account.html", "credits.html", "https://www.openstreetmap.org/", "#wrap", "mapping.html"] {
+            assert_eq!(link(other, Some("p1")), other);
+        }
     }
 }

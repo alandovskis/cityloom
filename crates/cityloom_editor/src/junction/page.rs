@@ -48,7 +48,7 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
         <h1 id="street-name">{name}</h1>
         <p class="street-sub" id="street-sub">
             {move || linked().then(|| view! {
-                <a class="back" href="map.html">
+                <a class="back" href=w.link("map.html")>
                     <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
                     {move || w.tr("jn-city-map")}
                 </a>
@@ -166,16 +166,17 @@ pub fn StuckHeader(i18n: Rc<I18n>, name: Said) -> impl IntoView {
     view! { <h1 id="street-name">{move || words().1}</h1> }
 }
 
-/// What the page of a junction says when the streets that meet there no longer make a junction.
+/// What the page of a junction says when the streets that meet there no longer make a junction. `map` is the address of
+/// the city map of the page's project.
 #[component]
-pub fn Stuck(i18n: Rc<I18n>) -> impl IntoView {
+pub fn Stuck(i18n: Rc<I18n>, #[prop(into)] map: String) -> impl IntoView {
     let held = StoredValue::new_local(i18n);
     let tr = move |key: &'static str| move || held.with_value(|i18n| i18n.tr(key, &Args::new()));
     view! {
         <div class="stuck">
             <h2 class="note-h">{tr("jn-stuck-title")}</h2>
             <p>{tr("jn-stuck-text")}</p>
-            <p><a class="back" href="map.html">{tr("jn-city-map")}</a></p>
+            <p><a class="back" href=map>{tr("jn-city-map")}</a></p>
         </div>
     }
 }

@@ -18,14 +18,11 @@ async function start({ hatches, mount_street_page, open_street, prepare_city }) 
   await prepare_city();
 
   const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
-  // The page edits a street of the city (`?street=7`) and writes each change back. It is reached from the
-  // map: without a street of the city it goes there.
+  // The page edits a street of the city of its project (`?street=7&project=p1`) and writes each change back.
+  // Without a street of that city the module sends it to the project's map, and without the project to the list.
   const placeId = placeParam("street");
-  const sheet = placeId ? open_street(placeId) : undefined;
-  if (!sheet) {
-    location.replace("map.html");
-    await new Promise(() => {});
-  }
+  const sheet = open_street(placeId);
+  if (!sheet) await new Promise(() => {});
 
   // The hatch patterns the section and the swatches are filled with.
   document.getElementById("defs").innerHTML =

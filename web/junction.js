@@ -14,18 +14,16 @@ try {
 }
 await start(wasm);
 
-async function start({ hatches, junction_exists, mount_bare_shell, mount_page, open_junction, prepare_city }) {
+async function start({ hatches, enter_junction, mount_bare_shell, mount_page, open_junction, prepare_city }) {
   await prepare_city();
 
   const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 
-  // The page edits a junction of the city (`?junction=3`), reading its streets from the city, and writes each
-  // change back. It is reached from the map: without a junction of the city it goes there.
+  // The page edits a junction of the city of its project (`?junction=3&project=p1`), reading its streets from the
+  // city, and writes each change back. Without a junction of that city the module sends it to the project's map,
+  // and without the project to the list.
   const placeId = placeParam("junction");
-  if (!placeId || !junction_exists(placeId)) {
-    location.replace("map.html");
-    await new Promise(() => {});
-  }
+  if (!enter_junction(placeId)) await new Promise(() => {});
   const editor = open_junction(placeId);
   if (!editor) {
     // The streets here have been changed so that the junction cannot be drawn: the module says so.

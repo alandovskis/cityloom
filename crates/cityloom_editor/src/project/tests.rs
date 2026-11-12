@@ -836,3 +836,124 @@ mod migration {
         assert_eq!(w(&laptop), w(&phone));
     }
 }
+
+mod context {
+    use crate::project::context::{MISSING_HREF, Resolved, enter, leave_when_removed, open_page, resolve};
+    use crate::project::{LAST_KEY, Project, ProjectStore};
+    use crate::shared::ports::{Storage, TestPorts, test_ports_full};
+    use crate::sync::hub;
+    use crate::sync::model::{Change, Id, Kind, Origin, stamp};
+
+    /// A browser with the projects `first` and `p1`.
+    fn two_projects() -> TestPorts {
+        let t = test_ports_full();
+        let store = ProjectStore::new(t.ports.storage.clone());
+        let first =
+            Project { id: "first".into(), name: "First".into(), area: crate::place::area::default_area().to_query(), created_at: stamp(0), placeholder: false };
+        assert!(store.put_raw(first));
+        assert_eq!(store.create("Plateau").unwrap().id, "p1");
+        t
+    }
+
+    #[test]
+    fn the_project_the_address_names_is_opened() {
+        let t = two_projects();
+        assert_eq!(resolve(&t.ports.storage, "?project=p1"), Resolved::Project("p1".into()));
+        assert_eq!(resolve(&t.ports.storage, "street=7&project=p1"), Resolved::Project("p1".into()));
+    }
+
+    #[test]
+    fn a_project_that_is_not_here_is_missing_even_when_another_was_opened_last() {
+        let t = two_projects();
+        assert!(ProjectStore::new(t.ports.storage.clone()).open("first"));
+        assert_eq!(resolve(&t.ports.storage, "?project=zzz"), Resolved::Missing);
+        assert_eq!(resolve(&t.ports.storage, "?street=7&project="), Resolved::Missing);
+        assert_eq!(resolve(&t.ports.storage, "?street=7&project"), Resolved::Missing);
+    }
+
+    #[test]
+    fn with_no_project_named_the_one_opened_last_is_opened() {
+        let t = two_projects();
+        assert!(ProjectStore::new(t.ports.storage.clone()).open("first"));
+        assert_eq!(resolve(&t.ports.storage, ""), Resolved::Project("first".into()));
+        assert_eq!(resolve(&t.ports.storage, "?street=7"), Resolved::Project("first".into()));
+    }
+
+    #[test]
+    fn with_no_project_named_and_none_opened_it_is_missing() {
+        let t = two_projects();
+        assert_eq!(resolve(&t.ports.storage, ""), Resolved::Missing);
+        // one opened last and deleted since is none
+        t.storage.remember(LAST_KEY, "p9");
+        assert_eq!(resolve(&t.ports.storage, "?street=7"), Resolved::Missing);
+    }
+
+    #[test]
+    fn entering_a_project_scopes_the_storage_and_remembers_it() {
+        let t = two_projects();
+        *t.page.path.borrow_mut() = "/street.html?street=7&project=p1".into();
+        let ports = enter(t.ports.clone()).expect("p1 is here");
+        assert_eq!(ports.storage.project().as_deref(), Some("p1"));
+        assert_eq!(t.storage.recall(LAST_KEY).as_deref(), Some("p1"));
+        assert!(t.navigator.take().is_empty());
+        ports.storage.remember("cityloom-edits", "x");
+        assert_eq!(t.storage.recall("cityloom-edits@p1").as_deref(), Some("x"));
+        assert_eq!(t.storage.recall("cityloom-edits"), None);
+    }
+
+    #[test]
+    fn a_page_for_a_deleted_project_goes_to_the_list_and_writes_nothing() {
+        let t = two_projects();
+        assert!(ProjectStore::new(t.ports.storage.clone()).delete("p1"));
+        let before: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        *t.page.path.borrow_mut() = "/street.html?street=7&project=p1".into();
+        assert!(enter(t.ports.clone()).is_none());
+        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        let after: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        assert_eq!(after, before, "nothing is written");
+    }
+
+    #[test]
+    fn a_look_at_the_page_s_project_neither_sends_the_page_away_nor_remembers_it() {
+        use crate::project::context::peek;
+        let t = two_projects();
+        *t.page.path.borrow_mut() = "/map.html?project=p1".into();
+        assert_eq!(peek(t.ports.clone()).storage.project().as_deref(), Some("p1"));
+        *t.page.path.borrow_mut() = "/map.html?project=gone".into();
+        assert_eq!(peek(t.ports.clone()).storage.project(), None, "the page's own storage");
+        assert!(t.navigator.take().is_empty());
+        assert_eq!(t.storage.recall(LAST_KEY), None);
+    }
+
+    fn news(kind: Kind, key: &str, origin: Origin) -> Change {
+        Change { id: Id::new(kind, key), origin }
+    }
+
+    #[test]
+    fn the_page_leaves_for_the_list_when_a_sync_removes_its_project() {
+        hub::reset();
+        let t = two_projects();
+        *t.page.path.borrow_mut() = "/map.html?project=p1".into();
+        assert!(open_page(t.ports.clone()).is_some());
+        // another project's news, a place's, or its own while it is still listed: the page stays
+        hub::publish(&[news(Kind::Project, "first", Origin::Remote)]);
+        hub::publish(&[news(Kind::Project, "p1", Origin::Remote)]);
+        hub::publish(&[news(Kind::Street, "p1:w1~n1~n2", Origin::Remote)]);
+        assert!(t.navigator.take().is_empty());
+        assert!(ProjectStore::new(t.ports.storage.clone()).remove_raw("p1"));
+        hub::publish(&[news(Kind::Project, "p1", Origin::Remote)]);
+        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        hub::reset();
+    }
+
+    #[test]
+    fn a_replaced_record_that_takes_the_project_away_sends_the_page_away_too() {
+        hub::reset();
+        let t = two_projects();
+        leave_when_removed(&t.ports, "first");
+        assert!(ProjectStore::new(t.ports.storage.clone()).remove_raw("first"));
+        hub::publish(&[news(Kind::Project, "first", Origin::Replaced)]);
+        assert_eq!(t.navigator.take(), [MISSING_HREF]);
+        hub::reset();
+    }
+}

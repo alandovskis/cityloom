@@ -226,6 +226,14 @@ impl Navigator for BrowserNavigator {
         #[cfg(not(target_arch = "wasm32"))]
         let _ = href;
     }
+    fn replace(&self, href: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = leptos::prelude::window().location().replace(href);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = href;
+    }
 }
 
 /// The browser's side of `ArchiveFiles`: a download through a temporary link, and a file chooser on an input that is
@@ -602,10 +610,24 @@ pub fn browser_ports() -> Ports {
     }
 }
 
+/// `browser_ports()` inside project `project`: its storage keeps the project's own keys apart
+/// (`shared::scoped::ScopedStorage`). The shell and the sync keep `browser_ports()`, the root storage.
+pub fn browser_ports_in(project: &str) -> Ports {
+    crate::shared::scoped::in_project(browser_ports(), project)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    #[test]
+    fn a_projects_browser_ports_keep_its_keys_apart_and_share_the_page_storage() {
+        let ports = browser_ports_in("p1");
+        assert_eq!(ports.storage.project().as_deref(), Some("p1"));
+        assert_eq!(browser_ports().storage.project(), None);
+        assert_eq!(ports.storage.identity(), browser_ports().storage.identity());
+    }
 
     #[test]
     fn natively_the_browser_account_says_unavailable_and_the_page_has_a_root_path_and_no_fragment() {

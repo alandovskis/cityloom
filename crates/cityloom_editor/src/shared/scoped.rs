@@ -3,7 +3,13 @@
 
 use std::rc::Rc;
 
-use crate::shared::ports::Storage;
+use crate::shared::ports::{Ports, Storage};
+
+/// `ports` inside project `project`: the same ports, the storage scoped to the project.
+pub fn in_project(ports: Ports, project: &str) -> Ports {
+    let storage: Rc<dyn Storage> = Rc::new(ScopedStorage::new(ports.storage.clone(), project));
+    Ports { storage, ..ports }
+}
 
 /// The keys that hold one project's data. Each is stored as `<key>@<project>`.
 pub const SCOPED_KEYS: [&str; 5] = ["cityloom-edits", "cityloom-edits-damaged", "cityloom-restrictions", "cityloom-restrictions-damaged", "cityloom-area"];

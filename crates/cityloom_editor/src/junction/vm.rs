@@ -72,6 +72,16 @@ impl JunctionVm {
         &self.i18n
     }
 
+    /// The project the junction is edited in; none outside a project.
+    pub fn project(&self) -> Option<String> {
+        self.ports.storage.project()
+    }
+
+    /// `href` to another page of the junction's project (`shared::project_id::link`).
+    pub fn link(&self, href: &str) -> String {
+        crate::shared::project_id::link(href, self.project().as_deref())
+    }
+
     /// The view, which a view that reads it draws again when the junction changes.
     pub fn view(&self) -> Rc<JView> {
         self.core.view()
@@ -391,6 +401,9 @@ impl JunctionVm {
 impl crate::shell::Target for JunctionVm {
     fn set_units(&self, units: Units) {
         JunctionVm::set_units(self, units);
+    }
+    fn project(&self) -> Option<String> {
+        JunctionVm::project(self)
     }
 
     fn apply_region(&self, region: usize) -> bool {

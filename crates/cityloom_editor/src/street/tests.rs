@@ -222,6 +222,64 @@ fn a_city_street_s_heading_links_to_the_junctions_it_runs_between() {
 }
 
 #[test]
+fn in_a_project_the_heading_s_links_open_the_places_of_that_project() {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let s = StreetVm::new(crate::shared::scoped::in_project(ports, "p1"), crate::i18n_for(Locale::En), Editor::new(1), None);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([Some(7), Some(3)])/> });
+    assert!(h.contains("href=\"intersection.html?junction=2&amp;project=p1\""), "{h}");
+    assert!(h.contains("href=\"street.html?street=7&amp;project=p1\"") && h.contains("href=\"street.html?street=3&amp;project=p1\""), "{h}");
+    assert_eq!(count(&h, "project=p1"), 3, "{h}");
+}
+
+/// A browser holding Bendville's roads in project `p1` (its area chosen there), with the page at `path`.
+fn bendville_in_p1(path: &str) -> crate::shared::ports::TestPorts {
+    let t = crate::shared::ports::test_ports_full();
+    assert_eq!(crate::project::ProjectStore::new(t.ports.storage.clone()).create("Bendville").unwrap().id, "p1");
+    crate::restriction::fixtures::bent_store(crate::shared::scoped::in_project(t.ports.clone(), "p1").storage);
+    *t.page.path.borrow_mut() = path.into();
+    t
+}
+
+#[test]
+fn a_street_opened_in_a_project_keeps_its_edits_in_that_project_only() {
+    use crate::shared::ports::Storage;
+    crate::sync::hub::reset();
+    let t = bendville_in_p1("/street.html?street=1&project=p1");
+    let sheet = crate::street::open_street_in(t.ports.clone(), 1).expect("Bendville's street, in p1");
+    assert!(t.navigator.take().is_empty());
+    let vm = sheet.vm();
+    let u = vm.view_now().segments[0].uid;
+    assert!(vm.apply(|e| e.nudge_width(u, -100)));
+    vm.flush();
+    assert!(t.storage.recall("cityloom-edits@p1").is_some_and(|v| !v.is_empty()));
+    for other in ["cityloom-edits", "cityloom-edits@first"] {
+        assert_eq!(t.storage.recall(other), None, "{other}");
+    }
+    crate::sync::hub::reset();
+}
+
+#[test]
+fn a_street_page_for_a_project_that_is_not_here_opens_nothing_and_goes_to_the_list() {
+    use crate::shared::ports::Storage;
+    crate::sync::hub::reset();
+    let t = bendville_in_p1("/street.html?street=1&project=gone");
+    assert!(crate::street::open_street_in(t.ports.clone(), 1).is_none());
+    assert_eq!(t.navigator.take(), [crate::project::context::MISSING_HREF]);
+    assert!(t.storage.keys().iter().all(|k| !k.ends_with("@gone")), "{:?}", t.storage.keys());
+    crate::sync::hub::reset();
+}
+
+#[test]
+fn a_street_page_for_no_street_of_the_city_goes_to_the_map_of_its_project() {
+    crate::sync::hub::reset();
+    let t = bendville_in_p1("/street.html?street=99&project=p1");
+    assert!(crate::street::open_street_in(t.ports.clone(), 99).is_none());
+    assert!(crate::street::open_street_in(t.ports.clone(), 0).is_none());
+    assert_eq!(t.navigator.take(), ["map.html?project=p1", "map.html?project=p1"]);
+    crate::sync::hub::reset();
+}
+
+#[test]
 fn a_city_street_has_arrows_to_the_streets_that_carry_on_from_its_ends() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends()) neighbours=Some([None, Some(3)])/> });

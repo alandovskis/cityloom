@@ -27,6 +27,7 @@ use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, speed_un
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
+use crate::shared::project_id::link;
 use crate::shared::said::{self, Arg, Said};
 use crate::shared::units::Units;
 
@@ -55,13 +56,13 @@ fn fold(text: &str) -> String {
     text.to_lowercase().replace('\u{2019}', "'").replace(['\u{a0}', '\u{202f}'], " ")
 }
 
-/// The place a `hot` name (`s-7`, `j-3`) opens.
-fn href_of(hot: &str) -> Option<String> {
+/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
+fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
     let (kind, uid) = hot.split_once('-')?;
     let uid: u32 = uid.parse().ok()?;
     match kind {
-        "s" => Some(street_href(uid)),
-        "j" => Some(junction_href(uid)),
+        "s" => Some(street_href(uid, project)),
+        "j" => Some(junction_href(uid, project)),
         _ => None,
     }
 }
@@ -173,12 +174,14 @@ pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
     label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
 
-pub fn street_href(uid: u32) -> String {
-    format!("street.html?street={uid}")
+/// The street page of street `uid`, in `project` where the map is opened in one.
+pub fn street_href(uid: u32, project: Option<&str>) -> String {
+    link(&format!("street.html?street={uid}"), project)
 }
 
-pub fn junction_href(uid: u32) -> String {
-    format!("intersection.html?junction={uid}")
+/// The junction page of junction `uid`, in `project` where the map is opened in one.
+pub fn junction_href(uid: u32, project: Option<&str>) -> String {
+    link(&format!("intersection.html?junction={uid}"), project)
 }
 
 // ---- what the view binds to ----------------------------------------------------------------
@@ -444,6 +447,11 @@ impl MapVm {
         &self.i18n
     }
 
+    /// The project the map is opened in; none outside a project (the home page's city).
+    pub fn project(&self) -> Option<String> {
+        self.ports.storage.project()
+    }
+
     /// The message `key`, for a view: drawn again when the language is switched.
     pub fn word(&self, key: &str) -> String {
         self.i18n.tr(key, &Args::new())
@@ -494,7 +502,7 @@ impl MapVm {
         Self::junctions(&v)
             .into_iter()
             .map(|n| PlaceRow {
-                href: junction_href(n.uid),
+                href: junction_href(n.uid, self.project().as_deref()),
                 hot: format!("j-{}", n.uid),
                 name: n.name.clone(),
                 sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
@@ -510,7 +518,7 @@ impl MapVm {
         v.edges
             .iter()
             .map(|e| PlaceRow {
-                href: street_href(e.uid),
+                href: street_href(e.uid, self.project().as_deref()),
                 hot: format!("s-{}", e.uid),
                 name: e.called.clone(),
                 sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
@@ -667,12 +675,13 @@ impl MapVm {
     /// was changed and what fails.
     fn places_for_notes<'a>(&self, v: &'a CityView) -> Vec<(String, Said, bool, bool, &'a [Said])> {
         let mut all = Vec::new();
+        let project = self.project();
         for n in Self::junctions(v) {
-            all.push((junction_href(n.uid), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
+            all.push((junction_href(n.uid, project.as_deref()), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
             let name = street_note(e.called.clone(), e.ends.clone());
-            all.push((street_href(e.uid), name, e.ok, e.edited, e.failing.as_slice()));
+            all.push((street_href(e.uid, project.as_deref()), name, e.ok, e.edited, e.failing.as_slice()));
         }
         all
     }
@@ -867,12 +876,13 @@ impl MapVm {
     /// The first `NETWORK_PLACES` of a finding's places as links, and `and 5 more places` for the rest.
     fn place_links(&self, places: &[Place]) -> (Vec<NetworkPlace>, Option<String>) {
         let hidden = places.len().saturating_sub(NETWORK_PLACES);
+        let project = self.project();
         let links = places
             .iter()
             .take(NETWORK_PLACES)
             .map(|p| match p.kind {
-                PlaceKind::Street => NetworkPlace { href: street_href(p.uid), hot: format!("s-{}", p.uid), name: self.say(&p.name) },
-                PlaceKind::Junction => NetworkPlace { href: junction_href(p.uid), hot: format!("j-{}", p.uid), name: self.say(&p.name) },
+                PlaceKind::Street => NetworkPlace { href: street_href(p.uid, project.as_deref()), hot: format!("s-{}", p.uid), name: self.say(&p.name) },
+                PlaceKind::Junction => NetworkPlace { href: junction_href(p.uid, project.as_deref()), hot: format!("j-{}", p.uid), name: self.say(&p.name) },
             })
             .collect();
         (links, (hidden > 0).then(|| self.i18n.tr("net-more-places", &Args::new().num("n", hidden as i64))))
@@ -1125,7 +1135,7 @@ impl MapVm {
                 Draw::Naming(_) => {}
                 Draw::Idle => {
                     let place = hot.as_deref().filter(|h| self.can_edit(h));
-                    match place.and_then(href_of) {
+                    match place.and_then(|hot| href_of(hot, self.project().as_deref())) {
                         Some(href) => self.ports.navigator.go(&href),
                         None => {
                             // A refused press on a place (muted, outside every outline) is not a press on nothing: it
@@ -1471,6 +1481,7 @@ impl MapVm {
     /// allow. A street inside several areas is found once for each.
     fn findings_in(&self, v: &CityView, list: &[Restriction]) -> Vec<AreaStreet> {
         let Some(p) = self.projection() else { return Vec::new() };
+        let project = self.project();
         let mut found = Vec::new();
         for r in list {
             for e in v.edges.iter().filter(|e| r.holds(&e.shape_mm, &p)) {
@@ -1480,7 +1491,15 @@ impl MapVm {
                 let conflicts = conflicts(r.rule, &street);
                 let speed_unknown = speed_unknown(r.rule, &street);
                 let name = street_note(e.called.clone(), e.ends.clone());
-                found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts, speed_unknown });
+                found.push(AreaStreet {
+                    area: r.id.clone(),
+                    uid: e.uid,
+                    href: street_href(e.uid, project.as_deref()),
+                    name,
+                    rule: r.rule,
+                    conflicts,
+                    speed_unknown,
+                });
             }
         }
         found
@@ -1577,6 +1596,9 @@ impl MapVm {
 impl crate::shell::Target for MapVm {
     fn set_units(&self, units: Units) {
         MapVm::set_units(self, units);
+    }
+    fn project(&self) -> Option<String> {
+        MapVm::project(self)
     }
 
     fn apply_region(&self, region: usize) -> bool {
@@ -2202,6 +2224,25 @@ mod tests {
         assert_eq!(mapper.take(), vec![MapCall::Editable(vec!["s-1".into()])], "the view is narrower than the street and crosses it");
         mapper.say(MapEvent::View { bounds: [e + thin, s - 1.0, e + 3.0 * thin, n + 1.0] });
         assert_eq!(mapper.take(), vec![MapCall::Editable(vec![])], "and no longer once it misses it");
+    }
+
+    #[test]
+    fn in_a_project_every_place_the_map_opens_is_opened_in_that_project() {
+        let (ports, ..) = test_ports();
+        let navigator = Rc::new(RecordingNavigator::default());
+        let mapper = Rc::new(FakeMapper::default());
+        let ports = crate::shared::scoped::in_project(Ports { navigator: navigator.clone(), mapper: mapper.clone(), ..ports }, "p1");
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
+        let (streets, junctions) = (vm.street_rows(), vm.junction_rows());
+        assert!(!streets.is_empty() && !junctions.is_empty());
+        for row in streets.iter().chain(&junctions) {
+            assert!(row.href.ends_with("&project=p1"), "{}", row.href);
+        }
+        vm.attach();
+        mapper.say(MapEvent::Ready);
+        let hot = format!("s-{}", vm.view().edges[0].uid);
+        mapper.say(press(&hot));
+        assert_eq!(navigator.take(), vec![format!("street.html?street={}&project=p1", vm.view().edges[0].uid)]);
     }
 
     #[test]

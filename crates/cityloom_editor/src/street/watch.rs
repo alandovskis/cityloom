@@ -55,6 +55,11 @@ impl SheetWatch {
         self.vm.with_value(|v| v.i18n().clone())
     }
 
+    /// `href` to another page of the street's project.
+    pub fn link(&self, href: &str) -> String {
+        self.vm.with_value(|v| v.link(href))
+    }
+
     pub fn units(&self) -> Units {
         self.vm.with_value(|v| v.units())
     }

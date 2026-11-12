@@ -1584,7 +1584,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             "i-h-street",
             "jn-insp-street",
             view! {
-                <a class="btn" href=format!("street.html?street={edge}")>{words(w, "jn-insp-cross-section")}</a>
+                <a class="btn" href=w.link(&format!("street.html?street={edge}"))>{words(w, "jn-insp-cross-section")}</a>
                 <p class="insp-range">{words(w, "jn-insp-street-note")}</p>
             },
         )

@@ -66,6 +66,10 @@ pub trait Downloads {
 /// Opens another page of the site.
 pub trait Navigator {
     fn go(&self, href: &str);
+    /// Goes to `href` in place of this page, so going back does not come here again (a page that cannot open).
+    fn replace(&self, href: &str) {
+        self.go(href);
+    }
 }
 
 /// What a person's account looks like to the page, as the server's `GET /api/me` says it.

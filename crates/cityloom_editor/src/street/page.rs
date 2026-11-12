@@ -146,7 +146,7 @@ fn street_title(w: SheetWatch) -> String {
 fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
     let name = e.name.clone();
     let words = move || said::say(&w.i18n(), w.units(), &name);
-    if e.junction { view! { <a href=format!("intersection.html?junction={}", e.uid)>{words}</a> }.into_any() } else { words.into_any() }
+    if e.junction { view! { <a href=w.link(&format!("intersection.html?junction={}", e.uid))>{words}</a> }.into_any() } else { words.into_any() }
 }
 
 /// One arrow along the street, toward the street that carries on from `end`: a link naming where it leads, or
@@ -157,7 +157,7 @@ fn step(w: SheetWatch, previous: bool, place: said::Said, to: Option<u32>) -> im
     let icon = view! { <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d=arrow/></svg> };
     match to {
         Some(street) => view! {
-            <a class="btn street-step" href=format!("street.html?street={street}")>
+            <a class="btn street-step" href=w.link(&format!("street.html?street={street}"))>
                 {icon}
                 {say(w, label)}
                 <span class="sr-only">", " {toward}</span>

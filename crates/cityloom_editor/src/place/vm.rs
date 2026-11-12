@@ -205,7 +205,9 @@ impl AreaVm {
         let vm = self.clone();
         self.loader.load(&store, move |result| {
             match result {
-                Ok(()) if CityStore::choose(&*vm.ports.storage, &area) => vm.ports.navigator.go("map.html"),
+                Ok(()) if CityStore::choose(&*vm.ports.storage, &area) => {
+                    vm.ports.navigator.go(&crate::shared::project_id::link("map.html", vm.ports.storage.project().as_deref()))
+                }
                 Ok(()) => vm.status.set(Status::Failed(Said::new("place-area-not-kept"))),
                 Err(why) => vm.status.set(Status::Failed(why)),
             }
@@ -462,6 +464,21 @@ mod tests {
         let area = CityStore::current_area(&*f.storage);
         assert_eq!((area.name.as_str(), area.key().as_str()), ("Kreuzberg, Friedrichshain-Kreuzberg", "52.4990,13.4030"));
         assert_eq!(CityStore::current(f.storage.clone()).open().view(0).name, "Kreuzberg, Friedrichshain-Kreuzberg");
+    }
+
+    #[test]
+    fn a_place_chosen_in_a_project_is_that_project_s_area_and_opens_its_map() {
+        let (ports, fetcher, navigator) = test_ports_with_services();
+        let root = ports.storage.clone();
+        let vm = AreaVm::new(crate::shared::scoped::in_project(ports, "p1"), crate::i18n_for(Locale::En));
+        let f = Fixture { vm, fetcher, navigator, storage: Rc::new(MemoryStorage::default()), said: Rc::new(RecordingAnnouncer::default()) };
+        found(&f);
+        f.vm.choose(0);
+        let (index, tile) = tiles_at(52.499, 13.403);
+        f.fetcher.answer(Ok(index));
+        f.fetcher.answer(Ok(tile));
+        assert_eq!(f.navigator.take(), vec!["map.html?project=p1"]);
+        assert!(root.recall("cityloom-area@p1").is_some() && root.recall("cityloom-area").is_none());
     }
 
     #[test]

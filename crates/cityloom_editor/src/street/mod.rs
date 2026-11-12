@@ -41,6 +41,8 @@ use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
 use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+use crate::shared::ports::Ports;
+use crate::shared::project_id::link;
 
 /// What the street page says, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
@@ -49,7 +51,15 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 /// module mounts; the script only starts it up and hands it what the shell
 /// chooses (units, region).
 #[wasm_bindgen]
-pub struct Sheet(Rc<vm::StreetVm>);
+pub struct Sheet(Rc<vm::StreetVm>, CityStore);
+
+impl Sheet {
+    /// The view-model behind the page (tests).
+    #[cfg(test)]
+    pub fn vm(&self) -> Rc<vm::StreetVm> {
+        self.0.clone()
+    }
+}
 
 #[wasm_bindgen]
 impl Sheet {
@@ -82,7 +92,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = sheet.0.clone();
-    let city = edge.map(|edge| (edge, CityStore::current(browser_ports().storage).open()));
+    let city = edge.map(|edge| (edge, sheet.1.open()));
     let ends = city.as_ref().map(|(edge, city)| city.street_ends(*edge));
     let neighbours = city.as_ref().map(|(edge, city)| city.street_neighbours(*edge));
     let mount = |id: &str, view: AnyView| {
@@ -123,17 +133,27 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("provenance", view! { <page::Provenance vm=vm/> }.into_any());
 }
 
-/// The street editor on one street of the city kept in this browser, which
-/// writes what is made back to the city. Nothing when there is no such street.
+/// The street editor on one street of the city of the page's project (`project::context`), which writes what is
+/// made back to the city. Nothing when there is no such street (the page has then gone to its project's map), or
+/// when the project is not here (the page has gone to the list).
 #[wasm_bindgen]
 pub fn open_street(edge: u32) -> Option<Sheet> {
-    let ports = browser_ports();
+    open_street_in(browser_ports(), edge)
+}
+
+/// `open_street` from the page's own ports (root storage).
+pub fn open_street_in(ports: Ports, edge: u32) -> Option<Sheet> {
+    let ports = crate::project::context::open_page(ports)?;
     let store = CityStore::current(ports.storage.clone());
-    let street = store.open().street_editor(edge, store.region())?;
+    // No street is numbered 0: the page's script gives 0 for an address with no street.
+    let Some(street) = (edge != 0).then(|| store.open().street_editor(edge, store.region())).flatten() else {
+        ports.navigator.replace(&link("map.html", ports.storage.project().as_deref()));
+        return None;
+    };
     let place = Place::Street(edge);
     // One instance for the page: the shell switches it and the street's words follow.
     let i18n = crate::i18n_browser(&ports);
-    let vm = vm::StreetVm::new(ports, i18n, street, Some(CityBinding { store, place }));
+    let vm = vm::StreetVm::new(ports, i18n, street, Some(CityBinding { store: store.clone(), place }));
     vm.watch_sync();
-    Some(Sheet(vm))
+    Some(Sheet(vm, store))
 }

@@ -38,6 +38,8 @@ use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
 use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+use crate::shared::ports::Ports;
+use crate::shared::project_id::link;
 
 /// What the junction says, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
@@ -102,10 +104,22 @@ fn page_i18n(ports: &crate::shared::ports::Ports) -> Rc<crate::shared::i18n::I18
     crate::i18n_browser(ports)
 }
 
-/// Whether the city kept in this browser has junction `node`; the page goes back to the map when it has not.
+/// Whether the city of the page's project (`project::context`) has junction `node`. Where it has not, the page has
+/// gone to that project's map; where the project is not here, to the list.
 #[wasm_bindgen]
-pub fn junction_exists(node: u32) -> bool {
-    CityStore::current(browser_ports().storage).open().junction_name(node).is_some()
+pub fn enter_junction(node: u32) -> bool {
+    enter_junction_in(browser_ports(), node)
+}
+
+/// `enter_junction` from the page's own ports (root storage).
+pub fn enter_junction_in(ports: Ports, node: u32) -> bool {
+    let Some(ports) = crate::project::context::enter(ports) else { return false };
+    // No junction is numbered 0: the page's script gives 0 for an address with no junction.
+    let here = node != 0 && CityStore::current(ports.storage.clone()).open().junction_name(node).is_some();
+    if !here {
+        ports.navigator.replace(&link("map.html", ports.storage.project().as_deref()));
+    }
+    here
 }
 
 /// The page of junction `node` when the streets that meet there can no longer be drawn as a junction: it says
@@ -114,7 +128,10 @@ pub fn junction_exists(node: u32) -> bool {
 pub fn mount_bare_shell(node: u32) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let ports = browser_ports();
+    // `open_junction` already watches for the project's removal.
+    let Some(ports) = crate::project::context::enter(browser_ports()) else { return };
+    let project = ports.storage.project();
+    let map = link("map.html", project.as_deref());
     let i18n = page_i18n(&ports);
     let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
     let doc = leptos::prelude::document();
@@ -134,17 +151,22 @@ pub fn mount_bare_shell(node: u32) {
     }
     if let Some(at) = find(".stage-main") {
         let i18n = i18n.clone();
-        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::Stuck i18n=i18n/> }).forget();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::Stuck i18n=i18n map=map/> }).forget();
     }
-    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::default()), "details-details", true);
+    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", true);
 }
 
-/// The junction editor on one junction of the city kept in this browser, which
-/// writes what is made back to the city. Nothing when there is no such junction
-/// or it cannot be drawn with the streets as they now are.
+/// The junction editor on one junction of the city of the page's project, which writes what is made back to the
+/// city. Nothing when there is no such junction or it cannot be drawn with the streets as they now are, or when the
+/// project is not here (the page has then gone to the list).
 #[wasm_bindgen]
 pub fn open_junction(node: u32) -> Option<Editor> {
-    let ports = browser_ports();
+    open_junction_in(browser_ports(), node)
+}
+
+/// `open_junction` from the page's own ports (root storage).
+pub fn open_junction_in(ports: Ports, node: u32) -> Option<Editor> {
+    let ports = crate::project::context::open_page(ports)?;
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
