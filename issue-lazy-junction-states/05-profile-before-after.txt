@@ -1,0 +1,15 @@
+# Native timing of what open_street does, release build, Plateau extract (ms); head 97e742dd vs origin/main
+## origin/main's city/model.rs
+network: 153 roads, 194 junctions, 192 KB json
+run 0: json parse 0.5 | Layout::from_network 0.5 | City::on 89.2 | street_editor(1) 0.0
+run 1: json parse 0.4 | Layout::from_network 0.3 | City::on 83.2 | street_editor(1) 0.0
+run 2: json parse 0.4 | Layout::from_network 0.3 | City::on 82.5 | street_editor(1) 0.0
+run 3: json parse 0.4 | Layout::from_network 0.3 | City::on 82.8 | street_editor(1) 0.0
+run 4: json parse 0.4 | Layout::from_network 0.3 | City::on 83.0 | street_editor(1) 0.0
+## head 97e742dd
+network: 153 roads, 194 junctions, 192 KB json
+run 0: json parse 0.5 | Layout::from_network 0.4 | City::on 6.1 | street_editor(1) 4.4
+run 1: json parse 0.4 | Layout::from_network 0.3 | City::on 5.0 | street_editor(1) 4.2
+run 2: json parse 0.4 | Layout::from_network 0.3 | City::on 4.9 | street_editor(1) 4.2
+run 3: json parse 0.4 | Layout::from_network 0.3 | City::on 5.1 | street_editor(1) 4.2
+run 4: json parse 0.4 | Layout::from_network 0.3 | City::on 4.8 | street_editor(1) 4.2

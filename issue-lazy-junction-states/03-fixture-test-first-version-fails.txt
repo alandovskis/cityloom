@@ -1,0 +1,24 @@
+# model.rs as in the first commit (c4261484), the fixture test from head
+$ cargo test -p citymodel_builder --release --features import --test importer a_meeting_that_can_be_drawn
+     Running tests/importer/main.rs (<repo>/build/release/deps/importer-02c7efd6ead8784e)
+
+running 1 test
+test real_city::a_meeting_that_can_be_drawn_only_once_its_corners_are_tuned_is_still_a_junction ... FAILED
+
+failures:
+
+---- real_city::a_meeting_that_can_be_drawn_only_once_its_corners_are_tuned_is_still_a_junction stdout ----
+
+thread 'real_city::a_meeting_that_can_be_drawn_only_once_its_corners_are_tuned_is_still_a_junction' (20252383) panicked at crates/citymodel_builder/tests/importer/real_city.rs:292:5:
+assertion `left == right` failed: the three streets meet in one junction
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    real_city::a_meeting_that_can_be_drawn_only_once_its_corners_are_tuned_is_still_a_junction
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p citymodel_builder --test importer`

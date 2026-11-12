@@ -1,0 +1,5 @@
+# Which nodes the city keeps as junctions: head 97e742dd vs origin/main, on 46 real extracts (Kreuzberg, Plateau, 4 fixtures, the 40 largest Montreal metro tiles)
+extracts: 46 46
+junctions origin/main: 13429 head: 13429
+openable origin/main: 13429 head: 13429
+extracts whose junction uids differ: 0

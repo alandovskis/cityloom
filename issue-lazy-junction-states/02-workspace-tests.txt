@@ -1,0 +1,37 @@
+# head 97e742dd
+$ cargo test --workspace --exclude cityloom_server --release --features citymodel_builder/import   (every test target; cityloom_server needs a database)
+     Running unittests src/lib.rs (<repo>/build/release/deps/cityloom_editor-4da45eb61d4ab8ad)
+test result: ok. 2954 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.21s
+     Running unittests src/lib.rs (<repo>/build/release/deps/cityloom_model-740e4825d38202dd)
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (<repo>/build/release/deps/cityloom_report-2d5d1b790a8498f6)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (<repo>/build/release/deps/cityloom_report_pdf-88ec514587c743ee)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/pdf.rs (<repo>/build/release/deps/pdf-1ac258db1f2de81b)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (<repo>/build/release/deps/citymodel_builder-8fdb14dd87b42f20)
+test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/main.rs (<repo>/build/release/deps/citymodel_builder-9f1d4314853f9bc0)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/archive.rs (<repo>/build/release/deps/archive-3da228978ff0f440)
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/commands.rs (<repo>/build/release/deps/commands-a677a28c7ae17f34)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/ctrl_c.rs (<repo>/build/release/deps/ctrl_c-64e4770dd43a85ad)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/download.rs (<repo>/build/release/deps/download-503ae4bdeec0e593)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/importer/main.rs (<repo>/build/release/deps/importer-ec2e379de4c547a8)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+     Running tests/prepare.rs (<repo>/build/release/deps/prepare-134fd487f70bda60)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/progress.rs (<repo>/build/release/deps/progress-1812b697e1f54c32)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running tests/tiles.rs (<repo>/build/release/deps/tiles-9551211985df695c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

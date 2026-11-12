@@ -1,0 +1,5 @@
+# head 97e742dd, one clean run of the whole UI tier: E2E_PORT=18440 just e2e-ui (builds the wasm and the server first)
+  433 passed (2.0m)
+exit 0
+failed tests:
+0

@@ -1,0 +1,5 @@
+# head 97e742dd
+$ cargo test -p cityloom_editor --lib   (all editor unit tests; the two new ones are listed below the totals)
+test city::model::tests::a_street_editor_tunes_only_the_junctions_at_the_ends_of_its_street ... ok
+test city::model::tests::building_a_city_tunes_no_junction_and_a_junction_is_tuned_once_when_first_asked_for ... ok
+test result: ok. 2954 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 20.16s
