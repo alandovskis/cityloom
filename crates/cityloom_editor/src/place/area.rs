@@ -11,6 +11,12 @@ pub fn default_area() -> Area {
     Area::new("Plateau Mont-Royal, Montréal", 45.5261, -73.5978)
 }
 
+/// Whether `area` lies in the metropolitan area of Montreal, the one the catalogue covers: a box of degrees round the
+/// island and its surroundings.
+pub fn is_montreal(area: &Area) -> bool {
+    (45.2..=45.8).contains(&area.lat) && (-74.3..=-73.3).contains(&area.lon)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Area {
     pub name: String,

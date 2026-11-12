@@ -276,6 +276,21 @@ pub fn mark_all(storage: &dyn Storage, records: &[(Kind, String)], deleted: bool
     kept
 }
 
+/// Gives the record `kind`/`key` (the key as it travels) an entry waiting to be sent, edited at `at`, where it has none;
+/// an entry already there is left as it is. For a record that exists from the start, as the first project's does: edited
+/// at `stamp(0)`, so any real edit of it, here or elsewhere, is later. Says whether the record has an entry afterwards.
+pub fn claim_at(storage: &dyn Storage, kind: Kind, key: &str, at: &str) -> bool {
+    let id = Id::new(kind, key);
+    let Some(mut doc) = open(storage) else { return false };
+    if doc.entry(&id).is_some() {
+        return true;
+    }
+    doc.records.insert(id.name(), Entry { edited_at: at.to_string(), pending: true, deleted: false, rev: 0, blocked: false });
+    let kept = save(storage, &doc);
+    crate::sync::hub::marked(storage.identity());
+    kept
+}
+
 /// Marks every record of the stores that has no entry as edited at `at`: work made before anything was marked (while
 /// signed out, with storage off or on an older build) counts as edited when storage is turned on. Where the document
 /// replaced a damaged one (`unmarked_at`), that time stands instead of `at`, and it is cleared only once every kind

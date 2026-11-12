@@ -29,9 +29,9 @@ fn first(storage: &Rc<dyn Storage>) -> Rc<dyn Storage> {
 }
 
 #[derive(Clone)]
-struct Row {
-    rev: i64,
-    edited_at: String,
+pub(crate) struct Row {
+    pub(crate) rev: i64,
+    pub(crate) edited_at: String,
     deleted: bool,
     body: Option<Value>,
     /// The server could not open the body: it comes with `error: "corrupt"` and none.
@@ -99,7 +99,7 @@ impl ServerSim {
         self.rows.borrow().values().filter(|r| r.deleted).count()
     }
 
-    fn row(&self, kind: &str, key: &str) -> Option<Row> {
+    pub(crate) fn row(&self, kind: &str, key: &str) -> Option<Row> {
         self.rows.borrow().get(&(kind.to_string(), key.to_string())).cloned()
     }
 
