@@ -16,8 +16,8 @@ La page d’accueil (`web/index.html`) présente vos projets sous **Vos projets*
 Chaque ligne indique le nom du projet, son lieu et le jour de sa dernière modification.
 
 - **Nouveau projet** : tapez un nom sous **Nom du projet** et choisissez **Créer le projet**. Un nom compte de 1 à
-  80 caractères. Le lieu d’un nouveau projet est le Plateau-Mont-Royal, à Montréal, le seul lieu offert pour l’instant;
-  le lieu d’un projet ne change pas.
+  80 caractères. Le lieu d’un nouveau projet est toujours le Plateau-Mont-Royal, à Montréal; il ne peut pas encore être
+  choisi. Une fois le projet créé, son lieu ne change pas.
 - **Ouvrir** : choisissez le nom du projet. Sa carte s’ouvre (`map.html?project=<id>`), et les rues et les jonctions
   que vous ouvrez à partir de celle-ci sont modifiées dans ce projet.
 - **Renommer** : choisissez **Renommer**, tapez le nouveau nom et choisissez **Enregistrer le nom**. Échap ou
@@ -32,7 +32,8 @@ revient à la liste, qui indique **Ce projet n’est plus ici.**
 ## Le travail d’avant les projets
 
 Le travail conservé dans le navigateur par une version de CityLoom sans projets est déplacé, à la première ouverture de
-la liste, dans un projet nommé **Premier projet**, dans le même lieu qu’avant. Il s’ouvre comme avant : vous n’avez
+la liste, dans un projet nommé **Premier projet**, dans le même lieu qu’avant si ce lieu se trouvait dans la région de Montréal, sinon au Plateau-Mont-Royal, à
+Montréal. Il s’ouvre comme avant : vous n’avez
 rien à faire.
 
 ## Les projets sur plusieurs appareils

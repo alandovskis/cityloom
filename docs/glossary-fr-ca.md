@@ -317,6 +317,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Home page | project | projet | A named container of the person's work, tied to one area. |
 | Home page | Your projects / New project / First project | Vos projets / Nouveau projet / Premier projet |  |
 | Home page | area (of a project) | lieu | As the place search: not `zone`, which is an area rule's. |
+| Home page | Area (the label before a project's area, `project-area`) | Lieu | The project's area is a `lieu` in every sentence too (docs included); `zone` is kept for area rules (`règles de zone`) and the map's drawn areas. |
 | Home page | Changed (a date) | Modifié le | Dates read `12 novembre 2026`, `1er mars 2026`. |
 
 ## Terms to confirm
