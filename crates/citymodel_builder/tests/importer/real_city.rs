@@ -269,11 +269,26 @@ mod two_way_track {
     }
 }
 
-/// Which meetings of streets are kept as junctions does not depend on how a corner is rounded: the corners are
-/// tuned when a junction is first asked for, after this is settled. The counts are what the city made before the
-/// tuning was put off (every meeting checked after its corners were tuned).
+/// Which meetings of streets are kept as junctions is what it was when every junction's corners were tuned while the
+/// city was built; they are now tuned when a junction is first asked for. The places are the nodes the city made
+/// before that, by uid.
 #[test]
 fn the_meetings_kept_as_junctions_are_the_same_as_when_corners_were_tuned_while_the_city_was_built() {
-    let count = |osm: &[u8], name: &str| City::from_network(&import(osm).expect("the extract reads"), name).view(0).nodes.iter().filter(|n| n.junction).count();
-    assert_eq!((count(KREUZBERG, "Kreuzberg"), count(PLATEAU, "Plateau")), (6, 27));
+    let junctions = |osm: &[u8], name: &str| -> Vec<u32> {
+        City::from_network(&import(osm).expect("the extract reads"), name).view(0).nodes.iter().filter(|n| n.junction).map(|n| n.uid).collect()
+    };
+    assert_eq!(junctions(KREUZBERG, "Kreuzberg"), [12, 14, 28, 37, 54, 97]);
+    assert_eq!(junctions(PLATEAU, "Plateau"), [1, 2, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 21, 28, 37, 44, 47, 50, 55, 61, 63, 74, 76, 96, 97, 99, 100]);
+}
+
+/// A meeting of three streets that cannot be drawn with its corners as the node prefers them, and can once they are
+/// rounded to fit: the city keeps it as a junction, as it did when every junction's corners were tuned while the
+/// city was built. (Three roads of Rue Vignal in Montréal, cut out of a metro tile; © OpenStreetMap contributors, ODbL.)
+#[test]
+fn a_meeting_that_can_be_drawn_only_once_its_corners_are_tuned_is_still_a_junction() {
+    let net: cityloom_model::Network = serde_json::from_str(include_str!("data/corners_decide_drawable.json")).expect("the network reads");
+    let city = City::from_network(&net, "Vignal");
+    let junctions: Vec<_> = city.view(0).nodes.into_iter().filter(|n| n.junction).collect();
+    assert_eq!(junctions.len(), 1, "the three streets meet in one junction");
+    assert!(city.junction_editor(junctions[0].uid, 0).is_some(), "and it can be opened");
 }
