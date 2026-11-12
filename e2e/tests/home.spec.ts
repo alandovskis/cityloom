@@ -72,7 +72,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
     await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
     expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(20);
   });
@@ -85,7 +85,7 @@ test.describe("the home page", () => {
     await go.click();
     await expect(page.getByRole("button", { name: "Open" })).toBeVisible();
     await page.locator('#area-results [role="option"]').nth(0).click();
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
   });
 
   test("a place a metro tile holds is read from the tile, and nothing else is asked", async ({ page, baseURL }) => {
@@ -96,7 +96,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator('#area-results [role="option"]')).toHaveCount(1);
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
     await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
     expect((await placesOnMap(page)).streets.length).toBeGreaterThan(20);
     expect(asked.filter((url) => url.endsWith("/data/metro/0_0.json")).length).toBeGreaterThan(0);
@@ -156,13 +156,13 @@ test.describe("the home page", () => {
     page,
   }) => {
     await page.getByRole("link", { name: "Open the city map" }).click();
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
     await page.goBack();
     await expect(page.locator('a[href="street.html"], a[href="intersection.html"]')).toHaveCount(0);
   });
 
   test("the top bar links to the map and the brand stays home", async ({ page }) => {
-    await expect(page.locator('.surfaces a[href="map.html"]')).toBeVisible();
+    await expect(page.locator('.surfaces a[href="map.html?project=first"]')).toBeVisible();
     await expect(page.locator(".brand")).toHaveAttribute("href", "index.html");
   });
 

@@ -285,10 +285,10 @@ const breakJunctions = async (page: Page) => {
   await page.goto("/map.html");
   await mapReady(page);
   await page.evaluate(() => {
-    const edits = JSON.parse(localStorage.getItem("cityloom-edits")!);
+    const edits = JSON.parse(localStorage.getItem("cityloom-edits@first")!);
     for (const record of Object.values<any>(edits.streets))
       for (const segment of record.street.segments) segment.width_mm *= 40;
-    localStorage.setItem("cityloom-edits", JSON.stringify(edits));
+    localStorage.setItem("cityloom-edits@first", JSON.stringify(edits));
   });
 };
 
@@ -304,7 +304,7 @@ test("a junction that cannot be drawn says so, keeps its shell and follows the l
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
   expect(name).not.toBe("");
   expect(await page.title()).toContain(name);
-  await expect(stuck.locator("a.back")).toHaveAttribute("href", "map.html");
+  await expect(stuck.locator("a.back")).toHaveAttribute("href", "map.html?project=first");
 
   // The shell still works: the settings menu opens and the language switch re-words the panel.
   await chooseFrench(page);

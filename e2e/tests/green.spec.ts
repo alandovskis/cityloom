@@ -87,7 +87,7 @@ async function openStreetWithAJunctionAtItsStart(page: Page) {
 }
 
 const editsVersion = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "{}").version);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "{}").version);
 
 const crowns = (page: Page) => page.locator("#drawing .iso-solid.s-crown");
 

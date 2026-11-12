@@ -27,7 +27,7 @@ test("what is kept for the area is kept under its own keys", async ({ page }) =>
   expect(keys.some((k) => k.startsWith("cityloom-network:45.5261,-73.5978"))).toBe(true);
   expect(keys.filter((k) => k.startsWith("cityloom-city"))).toEqual([]);
   // a visit alone writes no edits document
-  const edits = await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "null"));
+  const edits = await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "null"));
   expect(edits).toBeNull();
 });
 

@@ -83,7 +83,7 @@ test.describe("the Provenance tab on the map page", () => {
     await openProvenance(page);
     const link = page.locator("#source-slot li[data-kind] a").first();
     const href = await link.getAttribute("href");
-    expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+$/);
+    expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+&project=first$/);
     await link.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/${href!.replace("?", "\\?")}$`));

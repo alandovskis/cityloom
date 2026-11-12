@@ -27,7 +27,7 @@ test.describe("the junction editor on a junction of the city", () => {
   }) => {
     const name = (await page.locator("#street-name").innerText()).trim();
     expect(name).not.toBe("");
-    await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
+    await expect(page.locator("a.back")).toHaveAttribute("href", "map.html?project=first");
     await expect(page).toHaveTitle(`${name} · CityLoom`);
     await expect(page.locator(".lower")).toHaveCount(0);
     await expect(page.locator('.surface[href="street.html"]')).toHaveCount(0);
@@ -279,12 +279,12 @@ test.describe("what the junction editor keeps in the city", () => {
 
   test("a junction that is not in the city goes back to the map", async ({ page }) => {
     await page.goto("/intersection.html?junction=999");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
   });
 
   test("the page without a junction goes back to the map", async ({ page }) => {
     await page.goto("/intersection.html");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
   });
 
   test("a street change made elsewhere shows in the junction at its end", async ({ page }) => {
@@ -1128,7 +1128,10 @@ test.describe("a street's transit stop on the arm that meets it", () => {
   const kept = (page: Page, fromM: number) =>
     expect
       .poll(() =>
-        page.evaluate((m) => (localStorage.getItem("cityloom-edits") ?? "").includes(`"from_mm":${m * 1000}`), fromM),
+        page.evaluate(
+          (m) => (localStorage.getItem("cityloom-edits@first") ?? "").includes(`"from_mm":${m * 1000}`),
+          fromM,
+        ),
       )
       .toBe(true);
 
@@ -1265,7 +1268,10 @@ test.describe("a street's curbside use on the arm that meets it", () => {
   const kept = (page: Page, fromM: number) =>
     expect
       .poll(() =>
-        page.evaluate((m) => (localStorage.getItem("cityloom-edits") ?? "").includes(`"from_mm":${m * 1000}`), fromM),
+        page.evaluate(
+          (m) => (localStorage.getItem("cityloom-edits@first") ?? "").includes(`"from_mm":${m * 1000}`),
+          fromM,
+        ),
       )
       .toBe(true);
 

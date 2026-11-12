@@ -112,7 +112,7 @@ const openPanel = async (page: Page) => {
   await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "true");
 };
 
-const kept = (page: Page) => page.evaluate(() => localStorage.getItem("cityloom-restrictions"));
+const kept = (page: Page) => page.evaluate(() => localStorage.getItem("cityloom-restrictions@first"));
 /** The corners of the area this browser keeps (its id is random; the tests declare one). */
 const keptRing = async (page: Page) =>
   Object.values(JSON.parse((await kept(page)) ?? "{}").restrictions ?? {}).map((r: any) => r.ring)[0] as
@@ -273,7 +273,7 @@ test.describe("area restrictions", () => {
     await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "true");
     const flagged = page.locator("[id^='area-details-'] li.bad a").first();
     const href = await flagged.getAttribute("href");
-    expect(href).toMatch(/^street\.html\?street=\d+$/);
+    expect(href).toMatch(/^street\.html\?street=\d+&project=first$/);
 
     await page.goto("/" + href);
     await expect(page.locator("#checks li.bad", { hasText: "Area rule: Test zone" })).toHaveCount(1);
@@ -316,7 +316,7 @@ test.describe("area restrictions", () => {
       / places\. (One street conflicts|\d+ streets conflict) with an area rule\.$/,
     );
     const href = await page.locator("[id^='area-details-'] li.bad a").first().getAttribute("href");
-    expect(href).toMatch(/^street\.html\?street=\d+$/);
+    expect(href).toMatch(/^street\.html\?street=\d+&project=first$/);
 
     await page.goto("/" + href);
     const row = page.locator("#checks li.bad", { hasText: "Area rule: Slow zone" });
@@ -549,7 +549,7 @@ test.describe("area restrictions", () => {
     await recordNavigations(page);
     const spot = await junctionSpot(page, 0, await areaCorners(page));
     await page.mouse.click(spot.x, spot.y);
-    await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${spot.junction}`]);
+    await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${spot.junction}&project=first`]);
   });
 
   test("a click on a corner of the selected area moves nothing and opens nothing under it", async ({ page }) => {
@@ -582,7 +582,7 @@ test.describe("area restrictions", () => {
     await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "false");
     await expect.poll(() => drawnAt(page, "areas-vertex", j)).toBe(0);
     await page.mouse.click(j.x, j.y);
-    await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${j.junction}`]);
+    await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${j.junction}&project=first`]);
   });
 
   test("a right button let go during a corner drag does not end it", async ({ page }) => {

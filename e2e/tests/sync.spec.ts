@@ -21,11 +21,13 @@ const serverWork = async (context: BrowserContext) => {
 
 /** The streets this browser holds edits for. */
 const editedStreets = (page: Page) =>
-  page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("cityloom-edits") ?? '{"streets":{}}').streets));
+  page.evaluate(() =>
+    Object.keys(JSON.parse(localStorage.getItem("cityloom-edits@first") ?? '{"streets":{}}').streets),
+  );
 
 /** What this browser holds as the streets' edits, whole. */
 const streetEdits = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? '{"streets":{}}').streets);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? '{"streets":{}}').streets);
 
 /** Changes the first piece of the street on the page by one step: wider (`+`) or narrower (`-`). */
 async function resize(page: Page, key: "+" | "-") {

@@ -146,7 +146,7 @@ test.describe("the city map", () => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
     await page.mouse.click(spot.x, spot.y);
-    await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}$`));
+    await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
   });
 
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
@@ -731,7 +731,7 @@ test.describe("the curbside uses and stops on the map", () => {
     const spot = await curbsideSpot(page);
     await page.mouse.move(spot!.x, spot!.y);
     await page.mouse.click(spot!.x, spot!.y);
-    await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}$`));
+    await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}&project=first$`));
   });
 
   test("a use of a street not wholly in view is muted and a press says so", async ({ page }) => {

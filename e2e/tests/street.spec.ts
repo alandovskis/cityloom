@@ -362,12 +362,12 @@ test.describe("what the street editor keeps in the city", () => {
 
   test("a street that is not in the city goes back to the map", async ({ page }) => {
     await page.goto("/street.html?street=999");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
   });
 
   test("the page without a street goes back to the map", async ({ page }) => {
     await page.goto("/street.html");
-    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page).toHaveURL(/map\.html\?project=first$/);
   });
 });
 

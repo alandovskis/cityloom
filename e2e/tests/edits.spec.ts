@@ -1,7 +1,8 @@
 import { expect, mapReady, openStreet, placesOnMap, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
-// What a resident edits is kept in one document, `cityloom-edits`, under the OpenStreetMap-derived key of the
+// What a resident edits is kept in one document per project (`cityloom-edits@first` for the first project the
+// tests work in), under the OpenStreetMap-derived key of the
 // place (`w<way>~n<end>~n<end>` for a street, `w<way>~n<end>~x~<heading>` where the area's box cuts it, `n<node>`
 // for a junction), so an edit follows its place into another area that holds it.
 
@@ -27,7 +28,7 @@ const firstPieceWidth = async (page: Page) => {
   return width.inputValue();
 };
 
-const edits = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "null"));
+const edits = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "null"));
 
 /** Widens the first piece of a street and leaves the page, which keeps the edit. Says which street it
  *  was, and the width its piece has now. */
@@ -79,7 +80,7 @@ const eastmost = (shapes: Record<string, number[][]>, kind: string) =>
     .sort((a, b) => b[1] - a[1])[0][0];
 
 const switchTo = async (page: Page, query: string, name: string) => {
-  await page.evaluate((q) => localStorage.setItem("cityloom-area", q), query);
+  await page.evaluate((q) => localStorage.setItem("cityloom-area@first", q), query);
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText(name);
 };
@@ -125,7 +126,7 @@ test("the edit is there from another area of the same tile", async ({ page }) =>
   const edited = Object.values<any>((await edits(page)).streets)[0].street.segments[0].width_mm;
   expect(edited).toBeGreaterThan(0);
 
-  await page.evaluate((query) => localStorage.setItem("cityloom-area", query), NORTH_AREA);
+  await page.evaluate((query) => localStorage.setItem("cityloom-area@first", query), NORTH_AREA);
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText("North");
   const streets = (await placesOnMap(page)).streets;
@@ -160,7 +161,7 @@ test("an old per-area save is no longer read, and is left as it was", async ({ p
     ([area, uid, street]) => {
       const text = JSON.stringify({ version: 2, streets: { [uid]: street }, junctions: {} });
       localStorage.setItem(`cityloom-city:${area}`, text);
-      localStorage.removeItem("cityloom-edits");
+      localStorage.removeItem("cityloom-edits@first");
       return [`cityloom-city:${area}`, text];
     },
     [DEFAULT_AREA, uid, record.street] as const,

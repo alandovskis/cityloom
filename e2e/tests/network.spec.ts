@@ -68,7 +68,7 @@ test.describe("the network checks on the map page", () => {
     await expect(finding.locator(".net-severity")).toHaveText(/^(Problem|Notice)$/);
     const link = finding.locator("a").first();
     const href = await link.getAttribute("href");
-    expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+$/);
+    expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+&project=first$/);
     await link.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/${href!.replace("?", "\\?")}$`));
@@ -140,7 +140,8 @@ test.describe("the network checks on the map page", () => {
     await expect(finding).toBeVisible();
     expect(await finding.locator("a").count()).toBeGreaterThan(0);
     const hrefs = await finding.locator("a").evaluateAll((els) => els.map((e) => e.getAttribute("href")!));
-    for (const href of hrefs) expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+$/);
+    for (const href of hrefs)
+      expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+&project=first$/);
     await finding.locator("a").first().focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/${hrefs[0].replace("?", "\\?")}$`));
