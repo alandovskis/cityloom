@@ -19,11 +19,21 @@ pub struct ScopedStorage {
     project: String,
     /// The project is gone (deleted elsewhere): nothing more is kept through this storage.
     closed: std::cell::Cell<bool>,
+    /// Asked before each write: whether the project is still here. None for a storage the caller vouches for (the sync,
+    /// which writes a project's places before listing it; the migration, before it lists `first`).
+    still_here: Option<Box<dyn Fn() -> bool>>,
 }
 
 impl ScopedStorage {
     pub fn new(inner: Rc<dyn Storage>, project: &str) -> ScopedStorage {
-        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false) }
+        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false), still_here: None }
+    }
+
+    /// A page's storage: every write (the project's documents, and a mark, which would name the project) is refused
+    /// while `still_here` says no, so a project deleted in another tab is not brought back by an editor still open in
+    /// this one. `shared` knows no project list: the caller (`project::context`) says how to ask.
+    pub fn guarded(inner: Rc<dyn Storage>, project: &str, still_here: impl Fn() -> bool + 'static) -> ScopedStorage {
+        ScopedStorage { still_here: Some(Box::new(still_here)), ..ScopedStorage::new(inner, project) }
     }
 
     /// From now on every write is refused, so a page whose project is gone cannot bring its work back (an editor's
@@ -43,7 +53,7 @@ impl Storage for ScopedStorage {
     }
 
     fn remember(&self, key: &str, value: &str) -> bool {
-        !self.closed.get() && self.inner.remember(&self.name(key), value)
+        !self.closed.get() && self.still_here.as_ref().is_none_or(|here| here()) && self.inner.remember(&self.name(key), value)
     }
 
     /// Every key of the inner storage, scoped ones under their suffixed names: nothing is hidden.
@@ -90,6 +100,20 @@ mod tests {
         let a = ScopedStorage::new(inner.clone(), "a");
         let b = ScopedStorage::new(inner.clone(), "b");
         (inner, a, b)
+    }
+
+    #[test]
+    fn a_guarded_storage_keeps_nothing_while_its_project_is_not_here_and_still_reads() {
+        let inner = Rc::new(MemoryStorage::default());
+        let here = Rc::new(std::cell::Cell::new(true));
+        let asked = here.clone();
+        let a = ScopedStorage::guarded(inner.clone(), "a", move || asked.get());
+        assert!(a.remember("cityloom-edits", "A"));
+        here.set(false);
+        assert!(!a.remember("cityloom-edits", "B"));
+        assert!(!a.remember("cityloom-sync", "{}"), "a mark would name the project");
+        assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
+        assert_eq!(inner.recall("cityloom-sync"), None);
     }
 
     #[test]

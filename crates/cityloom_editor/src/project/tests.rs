@@ -1025,6 +1025,31 @@ mod context {
         assert_eq!(after, before, "nothing is written");
     }
 
+    /// Another tab deletes the project (no sync tells this one): the editor still open here must not bring it back with
+    /// its next flush, neither its documents nor a mark.
+    #[test]
+    fn a_page_whose_project_another_tab_deleted_writes_and_marks_nothing() {
+        use crate::project::context::peek;
+        let t = two_projects();
+        *t.page.path.borrow_mut() = "/street.html?street=7&project=p1".into();
+        let page = open_page(t.ports.clone()).expect("p1 is here");
+        let look = peek(t.ports.clone()).expect("p1 is here");
+        let edits = crate::city::edits::EDITS_KEY;
+        assert!(page.storage.remember(edits, "{\"version\":5}"), "while the project is here the page keeps its work");
+        // the other tab: its own handle on the same browser storage
+        let other: std::rc::Rc<dyn Storage> = t.storage.clone();
+        assert!(ProjectStore::new(other).delete("p1"));
+        let before: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        for ports in [&page, &look] {
+            assert!(!ports.storage.remember(edits, "{\"version\":5,\"streets\":{}}"));
+            assert!(!crate::sync::model::mark(&*ports.storage, Kind::Street, "w1", false));
+        }
+        let after: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        assert_eq!(after, before, "nothing written, nothing marked");
+        let doc = crate::sync::model::open(&*t.storage).unwrap();
+        assert!(doc.entry(&Id::new(Kind::Street, "p1:w1")).is_none());
+    }
+
     #[test]
     fn a_look_at_the_page_s_project_neither_sends_the_page_away_nor_remembers_it() {
         use crate::project::context::peek;

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::place::area::Area;
 use crate::project::store::ProjectStore;
 use crate::shared::ports::{Ports, Storage};
-use crate::shared::scoped::{ScopedStorage, in_project};
+use crate::shared::scoped::ScopedStorage;
 use crate::sync::hub;
 use crate::sync::model::{Change, Kind};
 
@@ -43,12 +43,19 @@ fn search_of(ports: &Ports) -> String {
     ports.page.path().split_once('?').map(|(_, search)| search.to_string()).unwrap_or_default()
 }
 
+/// A page's storage for project `id` over the root `storage`: it keeps nothing once the project is no longer listed (a
+/// tab deleted it; no sync need say so), so an editor still open cannot bring the project back.
+fn page_storage(storage: &Rc<dyn Storage>, id: &str) -> Rc<ScopedStorage> {
+    let (root, project) = (storage.clone(), id.to_string());
+    Rc::new(ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some()))
+}
+
 /// `enter`, keeping the project's storage so that it can be shut.
 fn enter_scoped(ports: Ports) -> Option<(Ports, Rc<ScopedStorage>)> {
     match resolve(&ports.storage, &search_of(&ports)) {
         Resolved::Project(id) => {
             ProjectStore::new(ports.storage.clone()).open(&id);
-            let scoped = Rc::new(ScopedStorage::new(ports.storage.clone(), &id));
+            let scoped = page_storage(&ports.storage, &id);
             let storage: Rc<dyn Storage> = scoped.clone();
             Some((Ports { storage, ..ports }, scoped))
         }
@@ -79,7 +86,10 @@ pub fn area_of(storage: &dyn Storage) -> Option<Area> {
 /// project to write into, and what would write stays inert rather than write the root storage.
 pub fn peek(ports: Ports) -> Option<Ports> {
     match resolve(&ports.storage, &search_of(&ports)) {
-        Resolved::Project(id) => Some(in_project(ports, &id)),
+        Resolved::Project(id) => {
+            let storage: Rc<dyn Storage> = page_storage(&ports.storage, &id);
+            Some(Ports { storage, ..ports })
+        }
         Resolved::Missing => None,
     }
 }
