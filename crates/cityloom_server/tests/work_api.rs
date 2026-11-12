@@ -86,6 +86,30 @@ async fn a_record_is_stored_and_comes_back_with_a_newer_builds_fields_untouched(
 }
 
 #[sqlx::test]
+async fn a_project_record_is_accepted_and_comes_back_beside_prefixed_places(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut b = storing(&app, "a").await;
+    let r = put(
+        &mut b,
+        vec![
+            record("project", "p-0123456789ab", 0, MIDDLE, Some(json!({"name": "Plateau", "future": [1]}))),
+            record("street", "w1", 0, MIDDLE, Some(json!({"n": 1}))),
+            record("street", "p-0123456789ab:w1", 0, MIDDLE, Some(json!({"n": 2}))),
+        ],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    assert!(r.json()["results"].as_array().unwrap().iter().all(|x| x["status"] == "accepted"));
+    let pulled = b.get("/api/work?since=0").await.json();
+    let records = pulled["records"].as_array().unwrap();
+    assert_eq!(records.len(), 3);
+    let project = records.iter().find(|x| x["kind"] == "project").unwrap();
+    assert_eq!((project["key"].as_str(), project["body"].clone()), (Some("p-0123456789ab"), json!({"name": "Plateau", "future": [1]})));
+    let n = |key: &str| records.iter().find(|x| x["kind"] == "street" && x["key"] == key).unwrap()["body"]["n"].clone();
+    assert_eq!((n("w1"), n("p-0123456789ab:w1")), (json!(1), json!(2)));
+}
+
+#[sqlx::test]
 async fn the_later_edit_wins_and_the_loser_is_told_what_won(pool: PgPool) {
     let app = TestApp::new(pool);
     let mut a = storing(&app, "same-person").await;
