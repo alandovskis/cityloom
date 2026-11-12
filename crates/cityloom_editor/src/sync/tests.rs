@@ -95,7 +95,7 @@ impl ServerSim {
         self.rows.borrow().iter().filter(|(_, r)| !r.deleted).map(|((k, key), _)| format!("{k}/{key}")).collect()
     }
 
-    fn tombstones(&self) -> usize {
+    pub(crate) fn tombstones(&self) -> usize {
         self.rows.borrow().values().filter(|r| r.deleted).count()
     }
 

@@ -81,24 +81,28 @@ fn merge_rules(storage: &Rc<dyn Storage>, scoped: &Rc<dyn Storage>) -> bool {
     true
 }
 
-/// Moves the work from before projects into project `first`, named `first_name` (words the caller renders). Runs where
-/// the list can be changed and holds no project (or only the placeholder the sync made for `first`, which it adopts)
-/// and a legacy `cityloom-edits` or `cityloom-restrictions` is kept: an area alone starts nothing. Says whether it moved
-/// everything it found; false leaves what it did not move where it was. Where a document cannot be merged, nothing is
-/// changed and the project is not listed, so a later run tries again.
+/// Whether `migrate_legacy` has work to move: the list can be changed and holds no project but `first` (none, the
+/// placeholder the sync made for it, or the real one a sync brought from a device that moved its work already), and a
+/// legacy `cityloom-edits` or `cityloom-restrictions` is kept (an area alone starts nothing). While it is so the sync
+/// leaves the places alone (`sync::local::usable`): their entries name bare keys, which are now `first`'s, and a body
+/// read from `first`'s still empty documents would go up as a removal.
+pub fn legacy_waiting(storage: &Rc<dyn Storage>) -> bool {
+    let store = ProjectStore::new(storage.clone());
+    store.is_usable() && store.list().iter().all(|p| p.id == FIRST) && (kept(storage, EDITS_KEY).is_some() || kept(storage, RESTRICTIONS_KEY).is_some())
+}
+
+/// Moves the work from before projects into project `first`, named `first_name` (words the caller renders), where
+/// `legacy_waiting`. A placeholder `first` is adopted (made real, with this name); a real one keeps its record and takes
+/// the work as a placeholder would. Says whether it moved everything it found; false leaves what it did not move where
+/// it was. Where a document cannot be merged, nothing is changed and the project is not listed, so a later run tries
+/// again.
 pub fn migrate_legacy(storage: &Rc<dyn Storage>, first_name: &str) -> bool {
     let store = ProjectStore::new(storage.clone());
-    if !store.is_usable() {
+    if !legacy_waiting(storage) {
         return false;
     }
-    match store.list().as_slice() {
-        [] => {}
-        [only] if only.id == FIRST && only.placeholder => {}
-        _ => return false,
-    }
-    if kept(storage, EDITS_KEY).is_none() && kept(storage, RESTRICTIONS_KEY).is_none() {
-        return false;
-    }
+    // A record a sync brought from a device that moved its work first: its name and area are the person's.
+    let listed = store.get(FIRST).is_some_and(|p| !p.placeholder);
     let Ok(name) = clean_name(first_name) else { return false };
     // An area that is not Montreal is ignored: the project is in the default one and the stored value stays untouched.
     let area = kept(storage, AREA_KEY).and_then(|query| Area::from_query(&query)).filter(is_montreal);
@@ -146,7 +150,7 @@ pub fn migrate_legacy(storage: &Rc<dyn Storage>, first_name: &str) -> bool {
     }
 
     let project = Project { id: FIRST.to_string(), name, area: area.unwrap_or_else(default_area).to_query(), created_at: stamp(0), placeholder: false };
-    if !store.put_raw(project) {
+    if !listed && !store.put_raw(project) {
         return false;
     }
     // The project's record is new: it waits to be sent, older than any rename of it made anywhere.

@@ -400,14 +400,16 @@ mod migration {
     }
 
     #[test]
-    fn a_project_that_is_a_real_first_is_not_adopted_again() {
+    fn a_real_first_project_takes_the_work_and_keeps_its_record() {
         let (ports, storage) = world();
         let s = ProjectStore::new(ports.storage.clone());
-        s.put_raw(Project { id: "first".into(), name: "Named".into(), area: default_area().to_query(), created_at: stamp(0), placeholder: false });
+        let named = Project { id: "first".into(), name: "Named".into(), area: montreal_elsewhere(), created_at: stamp(5), placeholder: false };
+        s.put_raw(named.clone());
         storage.remember("cityloom-edits", "{\"stray\":1}");
-        assert!(!migrate_legacy(&ports.storage, NAME));
-        assert_eq!(storage.recall("cityloom-edits").as_deref(), Some("{\"stray\":1}"));
-        assert_eq!(s.get(FIRST).unwrap().name, "Named");
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"stray\":1}"));
+        assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        assert_eq!(s.list(), vec![named], "a record the sync brought is the person's: neither renamed nor moved");
     }
 
     #[test]
@@ -694,6 +696,64 @@ mod migration {
         store.open().street_record(1).unwrap().0
     }
 
+    /// Edits street `edge` as an editor of a build from before projects did: under the bare keys, marked pending.
+    fn legacy_edit(d: &crate::sync::tests::Device, edge: u32, by: i32) -> String {
+        let store = CityStore::sample(d.ports.storage.clone());
+        let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= by;
+        s.segments[1].width_mm += by;
+        assert!(store.write_street(edge, s));
+        store.open().street_record(edge).unwrap().0
+    }
+
+    #[test]
+    fn legacy_work_with_a_pending_entry_synced_before_the_migration_sends_no_removal_and_goes_up_after_it() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let d = device(&server, T0 + 100_000);
+        let key = legacy_edit(&d, 1, 100);
+        assert!(entry_of(&d.storage, &Id::new(Kind::Street, &key)).is_some_and(|e| e.pending), "the old build marked it");
+        // a page that syncs (the Account page) before the home page has moved the work
+        d.vm.known(&ada());
+        assert_eq!(server.tombstones(), 0, "the work is still under the old keys: nothing may go up as a removal");
+        assert!(!server.live().contains(&format!("street/{key}")));
+        assert!(migrate_legacy(&d.ports.storage, NAME));
+        d.storage.set_now(T0 + 200_000);
+        d.vm.sync();
+        assert_eq!(server.tombstones(), 0);
+        assert!(server.live().contains(&format!("street/{key}")), "{:?}", server.live());
+        assert!(server.row("street", &key).is_some_and(|r| r.edited_at == stamp(T0 + 100_000)), "with the time it was edited");
+    }
+
+    #[test]
+    fn a_real_first_project_pulled_before_the_migration_still_takes_the_legacy_work() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        // the laptop moved its work and sent its first project
+        let laptop = device(&server, T0 + 100_000);
+        let laptop_key = legacy_edit(&laptop, 1, 100);
+        assert!(migrate_legacy(&laptop.ports.storage, "Laptop's name"));
+        laptop.vm.known(&ada());
+        assert!(server.live().contains(&"project/first".to_string()));
+        // the phone, still holding work from before projects, syncs first and pulls that project
+        let phone = device(&server, T0 + 200_000);
+        let phone_key = legacy_edit(&phone, 2, 150);
+        phone.vm.known(&ada());
+        let pulled = ProjectStore::new(phone.ports.storage.clone()).get(FIRST).expect("the project came down");
+        assert!(!pulled.placeholder);
+        let places = |d: &crate::sync::tests::Device| crate::project::store::records(&d.ports.storage, FIRST);
+        assert!(!places(&phone).contains(&(Kind::Street, laptop_key.clone())), "the places wait for the move");
+        assert!(migrate_legacy(&phone.ports.storage, NAME), "a real first project does not strand the old work");
+        assert!(places(&phone).contains(&(Kind::Street, phone_key.clone())), "{:?}", places(&phone));
+        assert!(phone.storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        assert_eq!(ProjectStore::new(phone.ports.storage.clone()).get(FIRST).unwrap().name, "Laptop's name", "the pulled record stands");
+        phone.storage.set_now(T0 + 300_000);
+        phone.vm.sync();
+        assert!(server.live().contains(&format!("street/{phone_key}")), "{:?}", server.live());
+        assert!(places(&phone).contains(&(Kind::Street, laptop_key.clone())), "the laptop's place came down once the move was made");
+        assert_eq!(server.tombstones(), 0);
+    }
+
     fn first_width(d: &crate::sync::tests::Device) -> i32 {
         let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(d.ports.storage.clone(), FIRST));
         CityStore::sample(scoped).open().street_editor(1, 0).unwrap().snapshot().segments[0].width_mm
@@ -762,6 +822,8 @@ mod migration {
         // both worked before projects and had synced: the street is the same, the phone's entry says so
         let key = legacy_street(&laptop, 100);
         assert_eq!(legacy_street(&phone, 100), key);
+        // the laptop moves its work and sends it (a sync waits for the move: `legacy_waiting`)
+        assert!(migrate_legacy(&laptop.ports.storage, NAME));
         laptop.vm.known(&ada());
         let row = server.row("street", &key).unwrap();
         let mut doc = crate::sync::model::open(&*phone.storage).unwrap();
@@ -772,8 +834,7 @@ mod migration {
         doc.records
             .insert(id.name(), crate::sync::model::Entry { edited_at: row.edited_at.clone(), pending: false, deleted: false, rev: row.rev, blocked: false });
         assert!(crate::sync::model::save(&*phone.storage, &doc));
-        // the laptop migrates, edits the street later and sends it
-        assert!(migrate_legacy(&laptop.ports.storage, NAME));
+        // the laptop edits the street later and sends it
         laptop.storage.set_now(T0 + 150_000);
         let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(laptop.ports.storage.clone(), FIRST));
         let store = CityStore::sample(scoped);

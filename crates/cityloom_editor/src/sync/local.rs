@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, STREETS};
 use crate::city::store::AREA_KEY;
 use crate::place::area::Area;
+use crate::project::migrate::legacy_waiting;
 use crate::project::model::Project;
 use crate::project::store::{self as projects, ProjectStore};
 use crate::restriction::store::RestrictionStore;
@@ -63,10 +64,13 @@ fn usable_in(scoped: &Shared, kind: Kind) -> bool {
 
 /// Whether this kind's documents can be read and changed: the list for projects, else the kind's document in every
 /// project (one damaged project pauses the kind, so nothing is ever written over it).
+/// While the work from before projects waits to be moved into `first` (`project::migrate::legacy_waiting`), no place
+/// is: their entries name bare keys, `first`'s, whose documents do not hold them yet, and a pending one would go up as
+/// a removal.
 pub fn usable(storage: &Shared, kind: Kind) -> bool {
     match kind {
         Kind::Project => ProjectStore::new(storage.clone()).is_usable(),
-        _ => projects(storage).iter().all(|project| usable_in(&scoped(storage, project), kind)),
+        _ => !legacy_waiting(storage) && projects(storage).iter().all(|project| usable_in(&scoped(storage, project), kind)),
     }
 }
 
@@ -425,6 +429,24 @@ mod tests {
         assert!(!write(&s, &Id::new(Kind::Project, "p9"), &project_body("Verdun")));
         assert!(!remove(&s, &Id::new(Kind::Project, "p9")));
         assert_eq!(memory.recall("cityloom-edits@p9"), None);
+    }
+
+    #[test]
+    fn the_places_wait_while_work_from_before_projects_waits_to_be_moved() {
+        let (s, memory) = storage();
+        for legacy in ["cityloom-edits", "cityloom-restrictions"] {
+            memory.remember(legacy, "{}");
+            for kind in [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area] {
+                assert!(!usable(&s, kind), "{legacy}: {kind:?}");
+            }
+            assert!(usable(&s, Kind::Project), "the projects still come and go: a pulled `first` takes the work");
+            memory.remember(legacy, " ");
+            assert!(usable(&s, Kind::Street), "a blank key is no work");
+        }
+        // with another project listed the move can no longer run: nothing waits on it
+        memory.remember("cityloom-edits", "{}");
+        assert!(write(&s, &Id::new(Kind::Project, "p1"), &project_body("Plateau")));
+        assert!(usable(&s, Kind::Street));
     }
 
     #[test]
