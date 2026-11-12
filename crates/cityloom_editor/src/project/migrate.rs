@@ -169,6 +169,8 @@ pub fn migrate_legacy(storage: &Rc<dyn Storage>, first_name: &str) -> bool {
         let write = match present.as_deref() {
             None => Some(first_only(key, &old)),
             Some(present) if present == old => None,
+            // The key the sync filled is left as it is; the pages open the area the project's record names, which is
+            // the legacy one where this run makes the record (`context::area_of`), so the key decides nothing there.
             Some(_) if key == AREA_KEY => None,
             Some(present) if key == EDITS_KEY => match merge_edits(storage, &old, present) {
                 Some(merged) => Some(merged),

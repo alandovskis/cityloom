@@ -602,7 +602,7 @@ mod migration {
     }
 
     #[test]
-    fn a_scoped_area_is_kept_over_the_legacy_one() {
+    fn a_scoped_area_key_is_left_as_it_is_and_the_project_s_record_names_the_legacy_area() {
         let (ports, storage) = world();
         let s = ProjectStore::new(ports.storage.clone());
         assert!(s.ensure(FIRST));
@@ -610,7 +610,10 @@ mod migration {
         storage.remember("cityloom-area@first", &default_area().to_query());
         storage.remember("cityloom-area", &montreal_elsewhere());
         assert!(migrate_legacy(&ports.storage, NAME));
-        assert_eq!(storage.recall("cityloom-area@first"), Some(default_area().to_query()));
+        assert_eq!(storage.recall("cityloom-area@first"), Some(default_area().to_query()), "the key is not written over");
+        assert_eq!(s.get(FIRST).unwrap().area, montreal_elsewhere(), "the record, which the pages open, names the legacy area");
+        let scoped = crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), FIRST);
+        assert_eq!(crate::project::context::area_of(&scoped).map(|a| a.to_query()), Some(montreal_elsewhere()));
     }
 
     #[test]
