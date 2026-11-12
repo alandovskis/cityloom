@@ -569,22 +569,20 @@ impl Layout {
         }
     }
 
-    /// The arms of the junction at `node` as the streets that meet there give them, their corners tuned.
-    fn tuned_arms_at(&self, node: usize, streets: &BTreeMap<u32, Street>) -> Vec<Arm> {
-        let mut arms = self.arms_at(node, streets);
+    /// The junction at `node` as first laid out from `arms`, their corners tuned.
+    fn tuned(&self, node: usize, mut arms: Vec<Arm>) -> State {
         tune_corners(&mut arms, self.nodes[node].control, self.nodes[node].corner_mm);
-        arms
+        self.state_of(node, arms)
     }
 
-    /// Whether the junction editor can draw the meeting at `node` with `arms` as its arms.
-    fn can_draw(&self, node: usize, arms: Vec<Arm>, region: usize) -> bool {
-        let s = self.state_of(node, arms);
-        Junction::from_city(junction::unlabelled(), &s, &s, region).is_some()
+    /// Whether the junction editor can draw `state`.
+    fn draws(state: &State, region: usize) -> bool {
+        Junction::from_city(junction::unlabelled(), state, state, region).is_some()
     }
 
     /// A junction as first laid out, from the streets that meet there, its corners tuned.
     fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
-        let mut s = self.state_of(node, self.tuned_arms_at(node, streets));
+        let mut s = self.tuned(node, self.arms_at(node, streets));
         forget_streets(&mut s);
         s
     }
@@ -741,13 +739,15 @@ impl City {
             // a plain connection of streets. Nearly every meeting can be drawn with its corners as the node
             // prefers them, and that is all it takes to know it is a junction; the corners are tuned when the
             // junction is first asked for. One that cannot is asked again with its corners tuned, since a radius that
-            // fits can make it drawable, and is then kept tuned.
-            if layout.can_draw(n, layout.arms_at(n, &today_streets), region) {
+            // fits can make it drawable, and is then kept tuned. (The other way round, a meeting drawn as the node
+            // prefers but not once tuned, stays a junction the editor then cannot open, where the city once made it
+            // a plain connection; no real extract has one, but none of them drives on the left.)
+            let state = layout.state_of(n, layout.arms_at(n, &today_streets));
+            if Layout::draws(&state, region) {
                 today_junctions.insert(node_uid(n), OnceCell::new());
             } else {
-                let tuned = layout.tuned_arms_at(n, &today_streets);
-                if layout.can_draw(n, tuned.clone(), region) {
-                    let mut state = layout.state_of(n, tuned);
+                let mut state = layout.tuned(n, state.arms);
+                if Layout::draws(&state, region) {
                     forget_streets(&mut state);
                     today_junctions.insert(node_uid(n), OnceCell::from(state));
                 } else {
