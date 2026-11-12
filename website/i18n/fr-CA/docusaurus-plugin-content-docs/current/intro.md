@@ -8,8 +8,9 @@ sidebar_position: 1
 # Introduction
 
 CityLoom est un éditeur de rues, de jonctions et de cartes de ville. Il est écrit en Rust, compilé en WebAssembly et
-dessiné avec [Leptos](https://leptos.dev/) 0.8 (rendu côté client). Il s’exécute dans le navigateur; il n’a pas de
-serveur d’applications : un serveur de fichiers statiques sert ses fichiers.
+dessiné avec [Leptos](https://leptos.dev/) 0.8 (rendu côté client). Il s’exécute dans le navigateur, qui conserve votre travail.
+Un serveur (`cityloom_server`) sert ses fichiers et offre une connexion facultative; une personne qui le choisit peut y
+stocker son travail et le recevoir sur chaque appareil où elle se connecte.
 
 Les rues viennent d’[OpenStreetMap](https://www.openstreetmap.org/). Les règles, les taux et les seuils du catalogue (ce
 à quoi une vérification compare une rue) sont des valeurs provisoires synthétiques, non une norme.
