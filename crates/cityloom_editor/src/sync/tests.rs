@@ -39,7 +39,7 @@ struct Row {
 }
 
 /// The server's rules in memory: one account.
-struct ServerSim {
+pub(crate) struct ServerSim {
     rows: RefCell<BTreeMap<(String, String), Row>>,
     rev: Cell<i64>,
     floor: Cell<i64>,
@@ -55,7 +55,7 @@ struct ServerSim {
 }
 
 impl ServerSim {
-    fn new() -> Rc<ServerSim> {
+    pub(crate) fn new() -> Rc<ServerSim> {
         Rc::new(ServerSim {
             rows: RefCell::new(BTreeMap::new()),
             rev: Cell::new(0),
@@ -91,7 +91,7 @@ impl ServerSim {
     }
 
     /// The live records as `kind/key`.
-    fn live(&self) -> Vec<String> {
+    pub(crate) fn live(&self) -> Vec<String> {
         self.rows.borrow().iter().filter(|(_, r)| !r.deleted).map(|((k, key), _)| format!("{k}/{key}")).collect()
     }
 
@@ -207,15 +207,15 @@ fn page(rev: i64) -> WorkPage {
 }
 
 /// A browser: its storage, its clock, and a sync view-model talking to `server`.
-struct Device {
-    ports: Ports,
-    storage: Rc<MemoryStorage>,
+pub(crate) struct Device {
+    pub(crate) ports: Ports,
+    pub(crate) storage: Rc<MemoryStorage>,
     scheduler: Rc<ManualScheduler>,
     announcer: Rc<RecordingAnnouncer>,
-    vm: Rc<SyncVm>,
+    pub(crate) vm: Rc<SyncVm>,
 }
 
-fn device(server: &Rc<ServerSim>, now: u64) -> Device {
+pub(crate) fn device(server: &Rc<ServerSim>, now: u64) -> Device {
     let (mut ports, announcer, storage, scheduler) = test_ports_with_time();
     storage.set_now(now);
     ports.work = server.clone();
@@ -224,9 +224,9 @@ fn device(server: &Rc<ServerSim>, now: u64) -> Device {
 }
 
 /// The time the tests start from: 2027-01-15T08:00:00Z.
-const T0: u64 = 1_800_000_000_000;
+pub(crate) const T0: u64 = 1_800_000_000_000;
 
-fn ada() -> Me {
+pub(crate) fn ada() -> Me {
     Me { id: "ada".into(), display_name: "Ada".into(), store_on_server: Some(true), identities: vec![] }
 }
 

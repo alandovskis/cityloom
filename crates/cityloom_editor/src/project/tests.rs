@@ -278,3 +278,339 @@ fn last_changed_counts_the_projects_own_record() {
     s.rename(&a.id, "B").unwrap();
     assert_eq!(last_changed(&*storage, &a), crate::sync::model::stamp(7_000));
 }
+
+// ---- migration of the work kept before projects existed ----
+
+mod migration {
+    use std::cell::Cell;
+
+    use super::super::migrate_legacy;
+    use super::*;
+    use crate::city::store::CityStore;
+    use crate::place::area::{Area, default_area};
+    use crate::shared::ports::Ports;
+    use crate::shared::project_id::FIRST;
+    use crate::shared::scoped::SCOPED_KEYS;
+    use crate::sync::model::stamp;
+    use crate::sync::tests::{ServerSim, T0, ada, device};
+
+    const NAME: &str = "My first project";
+
+    fn world() -> (Ports, Rc<MemoryStorage>) {
+        let (ports, _, storage) = test_ports();
+        (ports, storage)
+    }
+
+    fn legacy_all(storage: &MemoryStorage) {
+        storage.remember("cityloom-edits", "{\"edits\":1}");
+        storage.remember("cityloom-edits-damaged", "{not json");
+        storage.remember("cityloom-restrictions", "{\"rules\":1}");
+        storage.remember("cityloom-restrictions-damaged", "{also not");
+        storage.remember("cityloom-area", &default_area().to_query());
+    }
+
+    fn snapshot(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
+        let mut keys = storage.keys();
+        keys.sort();
+        keys.into_iter().map(|k| (storage.recall(&k), k)).map(|(v, k)| (k, v)).collect()
+    }
+
+    fn montreal_elsewhere() -> String {
+        Area::new("Verdun", 45.4586, -73.5719).to_query()
+    }
+
+    #[test]
+    fn legacy_work_moves_into_the_first_project_and_the_old_keys_are_blank() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        assert!(migrate_legacy(&ports.storage, NAME));
+        let list = ProjectStore::new(ports.storage.clone()).list();
+        assert_eq!(list, vec![Project { id: "first".into(), name: NAME.into(), area: default_area().to_query(), created_at: stamp(0), placeholder: false }]);
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+        assert_eq!(storage.recall("cityloom-edits-damaged@first").as_deref(), Some("{not json"));
+        assert_eq!(storage.recall("cityloom-restrictions@first").as_deref(), Some("{\"rules\":1}"));
+        assert_eq!(storage.recall("cityloom-restrictions-damaged@first").as_deref(), Some("{also not"));
+        assert_eq!(storage.recall("cityloom-area@first"), Some(default_area().to_query()));
+        for key in SCOPED_KEYS {
+            assert!(storage.recall(key).is_none_or(|v| v.is_empty()), "{key} is blank");
+        }
+    }
+
+    #[test]
+    fn the_stored_area_is_the_projects_when_it_is_in_montreal() {
+        let (ports, storage) = world();
+        storage.remember("cityloom-edits", "{}");
+        storage.remember("cityloom-area", &montreal_elsewhere());
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).get(FIRST).unwrap().area, montreal_elsewhere());
+        assert_eq!(storage.recall("cityloom-area@first"), Some(montreal_elsewhere()));
+    }
+
+    #[test]
+    fn restrictions_alone_trigger_the_move() {
+        let (ports, storage) = world();
+        storage.remember("cityloom-restrictions", "{\"rules\":1}");
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-restrictions@first").as_deref(), Some("{\"rules\":1}"));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).get(FIRST).unwrap().area, default_area().to_query());
+    }
+
+    #[test]
+    fn an_area_alone_creates_nothing() {
+        let (ports, storage) = world();
+        storage.remember("cityloom-area", &montreal_elsewhere());
+        let before = snapshot(&storage);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert!(ProjectStore::new(ports.storage.clone()).list().is_empty());
+        assert_eq!(snapshot(&storage), before);
+    }
+
+    #[test]
+    fn no_legacy_data_or_only_blank_data_creates_nothing() {
+        let (ports, storage) = world();
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        storage.remember("cityloom-edits", "");
+        storage.remember("cityloom-restrictions", "  ");
+        let before = snapshot(&storage);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(snapshot(&storage), before);
+        assert!(ProjectStore::new(ports.storage.clone()).list().is_empty());
+    }
+
+    #[test]
+    fn a_second_run_returns_false_and_changes_nothing() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        assert!(migrate_legacy(&ports.storage, NAME));
+        let before = snapshot(&storage);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(snapshot(&storage), before);
+    }
+
+    #[test]
+    fn with_a_project_already_listed_a_stray_legacy_key_stays_put() {
+        let (ports, storage) = world();
+        let s = ProjectStore::new(ports.storage.clone());
+        s.create("Mine").unwrap();
+        storage.remember("cityloom-edits", "{\"stray\":1}");
+        let before = snapshot(&storage);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(snapshot(&storage), before);
+        assert_eq!(s.list().len(), 1);
+    }
+
+    #[test]
+    fn a_project_that_is_a_real_first_is_not_adopted_again() {
+        let (ports, storage) = world();
+        let s = ProjectStore::new(ports.storage.clone());
+        s.put_raw(Project { id: "first".into(), name: "Named".into(), area: default_area().to_query(), created_at: stamp(0), placeholder: false });
+        storage.remember("cityloom-edits", "{\"stray\":1}");
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-edits").as_deref(), Some("{\"stray\":1}"));
+        assert_eq!(s.get(FIRST).unwrap().name, "Named");
+    }
+
+    #[test]
+    fn an_area_outside_montreal_or_unreadable_is_ignored_and_left_alone() {
+        for bad in [Area::new("Berlin", 52.5, 13.4).to_query(), "area=nonsense".to_string(), "sample".to_string()] {
+            let (ports, storage) = world();
+            storage.remember("cityloom-edits", "{}");
+            storage.remember("cityloom-area", &bad);
+            assert!(migrate_legacy(&ports.storage, NAME), "{bad}");
+            assert_eq!(ProjectStore::new(ports.storage.clone()).get(FIRST).unwrap().area, default_area().to_query(), "{bad}");
+            assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{}"));
+            assert!(storage.recall("cityloom-area@first").is_none(), "{bad}");
+            assert_eq!(storage.recall("cityloom-area").as_deref(), Some(bad.as_str()), "not lost");
+        }
+    }
+
+    #[test]
+    fn a_copy_the_storage_refuses_leaves_everything_in_place_and_the_next_run_finishes() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        storage.refuse("cityloom-restrictions@first");
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert!(ProjectStore::new(ports.storage.clone()).list().is_empty(), "no project while the work is not all copied");
+        assert_eq!(storage.recall("cityloom-edits").as_deref(), Some("{\"edits\":1}"));
+        assert_eq!(storage.recall("cityloom-restrictions").as_deref(), Some("{\"rules\":1}"));
+        assert_eq!(storage.recall("cityloom-area"), Some(default_area().to_query()));
+        storage.refuse_nothing();
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-restrictions@first").as_deref(), Some("{\"rules\":1}"));
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).list().len(), 1);
+        assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+    }
+
+    #[test]
+    fn a_storage_that_refuses_everything_loses_nothing() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        storage.blocked(true);
+        let before = snapshot(&storage);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(snapshot(&storage), before);
+    }
+
+    #[test]
+    fn a_list_that_cannot_be_kept_leaves_the_legacy_keys_and_the_next_run_finishes() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        storage.refuse(PROJECTS_KEY);
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-edits").as_deref(), Some("{\"edits\":1}"));
+        assert!(storage.recall(PROJECTS_KEY).is_none());
+        storage.refuse_nothing();
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).list().len(), 1);
+    }
+
+    #[test]
+    fn an_old_key_the_storage_will_not_blank_is_reported_and_the_work_is_in_the_project() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        storage.refuse("cityloom-edits");
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).list().len(), 1);
+    }
+
+    #[test]
+    fn a_damaged_or_newer_list_is_not_touched_and_nothing_moves() {
+        for raw in ["{not json", "{\"version\":99,\"projects\":[]}"] {
+            let (ports, storage) = world();
+            legacy_all(&storage);
+            storage.remember(PROJECTS_KEY, raw);
+            let before = snapshot(&storage);
+            assert!(!migrate_legacy(&ports.storage, NAME), "{raw}");
+            assert_eq!(snapshot(&storage), before, "{raw}");
+        }
+    }
+
+    #[test]
+    fn a_copy_already_in_the_project_is_never_overwritten_and_the_old_value_stays() {
+        let (ports, storage) = world();
+        legacy_all(&storage);
+        storage.remember("cityloom-edits@first", "{\"pulled\":1}");
+        assert!(!migrate_legacy(&ports.storage, NAME), "incomplete");
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"pulled\":1}"));
+        assert_eq!(storage.recall("cityloom-edits").as_deref(), Some("{\"edits\":1}"), "the old value is not blanked");
+        // the keys with no clash did move
+        assert_eq!(storage.recall("cityloom-restrictions@first").as_deref(), Some("{\"rules\":1}"));
+        assert!(storage.recall("cityloom-restrictions").is_none_or(|v| v.is_empty()));
+        assert_eq!(ProjectStore::new(ports.storage.clone()).list().len(), 1);
+    }
+
+    #[test]
+    fn a_copy_an_earlier_run_made_is_recognised_and_the_old_key_blanked() {
+        let (ports, storage) = world();
+        storage.remember("cityloom-edits", "{\"edits\":1}");
+        storage.remember("cityloom-edits@first", "{\"edits\":1}");
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+    }
+
+    #[test]
+    fn a_placeholder_first_the_sync_made_is_adopted() {
+        let (ports, storage) = world();
+        storage.set_now(777_000);
+        let s = ProjectStore::new(ports.storage.clone());
+        assert!(s.ensure(FIRST));
+        assert!(s.get(FIRST).unwrap().placeholder);
+        // a pulled bare-key record landed in the project; this device also has legacy work
+        storage.remember("cityloom-edits", "{\"edits\":1}");
+        assert!(migrate_legacy(&ports.storage, NAME));
+        assert_eq!(
+            s.list(),
+            vec![Project { id: "first".into(), name: NAME.into(), area: default_area().to_query(), created_at: stamp(0), placeholder: false }]
+        );
+        assert_eq!(storage.recall("cityloom-edits@first").as_deref(), Some("{\"edits\":1}"));
+        assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        assert!(entry_of(&storage, &Id::new(Kind::Project, "first")).is_some_and(|e| e.pending), "now sent");
+    }
+
+    #[test]
+    fn a_placeholder_alone_does_not_start_a_migration_and_another_placeholder_is_not_adopted() {
+        let (ports, _) = world();
+        let s = ProjectStore::new(ports.storage.clone());
+        assert!(s.ensure(FIRST));
+        assert!(!migrate_legacy(&ports.storage, NAME), "no legacy data");
+        assert!(s.get(FIRST).unwrap().placeholder);
+        let (ports, storage2) = world();
+        let s = ProjectStore::new(ports.storage.clone());
+        assert!(s.ensure("p1"));
+        storage2.remember("cityloom-edits", "{}");
+        assert!(!migrate_legacy(&ports.storage, NAME));
+        assert_eq!(storage2.recall("cityloom-edits").as_deref(), Some("{}"));
+    }
+
+    #[test]
+    fn the_project_and_the_moved_records_are_marked_for_the_sync() {
+        let (ports, storage) = world();
+        storage.set_now(9_000_000);
+        // real documents, written as a build from before projects wrote them (bare keys)
+        let store = CityStore::sample(ports.storage.clone());
+        let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(store.write_street(1, s));
+        let street = store.open().street_record(1).unwrap().0;
+        storage.remember("cityloom-area", &default_area().to_query());
+        // forget the marks a pre-migration write left: the migration has to make them itself
+        storage.remember(crate::sync::model::SYNC_KEY, "");
+        assert!(migrate_legacy(&ports.storage, NAME));
+        for id in [Id::new(Kind::Project, "first"), Id::new(Kind::Street, &street), Id::new(Kind::Area, crate::sync::model::AREA_RECORD)] {
+            let entry = entry_of(&storage, &id).unwrap_or_else(|| panic!("{} marked", id.name()));
+            assert!(entry.pending && !entry.deleted, "{}", id.name());
+            assert_eq!(entry.edited_at, stamp(9_000_000));
+        }
+        // and under wire keys that are bare, as the first project's are
+        assert!(entry_of(&storage, &Id::new(Kind::Street, &format!("first:{street}"))).is_none());
+    }
+
+    #[test]
+    fn two_devices_that_migrate_apart_end_with_one_first_project_and_no_duplicate_places() {
+        crate::sync::hub::reset();
+        let server = ServerSim::new();
+        let laptop = device(&server, T0 + 100_000);
+        let phone = device(&server, T0 + 200_000);
+        let mut keys = Vec::new();
+        for (d, by) in [(&laptop, 100), (&phone, 150)] {
+            let store = CityStore::sample(d.ports.storage.clone());
+            let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
+            s.segments[0].width_mm -= by;
+            s.segments[1].width_mm += by;
+            assert!(store.write_street(1, s));
+            keys.push(store.open().street_record(1).unwrap().0);
+            d.storage.remember("cityloom-area", &default_area().to_query());
+        }
+        assert_eq!(keys[0], keys[1]);
+        assert!(migrate_legacy(&laptop.ports.storage, NAME));
+        assert!(migrate_legacy(&phone.ports.storage, NAME));
+        laptop.vm.known(&ada());
+        let report = Rc::new(Cell::new(crate::sync::model::Report::default()));
+        let r = report.clone();
+        phone.vm.enable("ada", Box::new(move |x| r.set(x)));
+        assert!(report.get().ok);
+        laptop.vm.sync();
+        let mut live = server.live();
+        live.sort();
+        assert_eq!(live, [format!("area/{}", crate::sync::model::AREA_RECORD), "project/first".to_string(), format!("street/{}", keys[0])]);
+        for d in [&laptop, &phone] {
+            let list = ProjectStore::new(d.ports.storage.clone()).list();
+            assert_eq!(list.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["first"]);
+            assert!(!list[0].placeholder);
+            let streets = crate::project::store::records(&d.ports.storage, FIRST).into_iter().filter(|(k, _)| *k == Kind::Street).count();
+            assert_eq!(streets, 1);
+            assert!(d.storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        }
+        // the later edit won on both
+        let w = |d: &crate::sync::tests::Device| {
+            let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(d.ports.storage.clone(), FIRST));
+            CityStore::sample(scoped).open().street_editor(1, 0).unwrap().snapshot().segments[0].width_mm
+        };
+        assert_eq!(w(&laptop), w(&phone));
+    }
+}
