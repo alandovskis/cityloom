@@ -7,3 +7,5 @@ place-roads-not-kept = les rues n’ont pas pu être conservées : le stockage e
 place-roads-not-understood = les rues n’ont pas été comprises ({ $e })
 place-index-not-understood = l’index des tuiles n’a pas été compris ({ $e })
 place-index-no-size = l’index des tuiles n’a pas de taille de tuile
+# Le nom d’une région métropolitaine du catalogue (src/place/area.rs), tel que l’affiche la liste des projets.
+place-metro-montreal = Montréal
