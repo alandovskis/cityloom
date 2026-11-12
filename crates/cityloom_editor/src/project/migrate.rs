@@ -21,6 +21,7 @@ use crate::place::area::{Area, default_area, is_montreal};
 use crate::project::model::{Project, clean_name};
 use crate::project::store::ProjectStore;
 use crate::restriction::store::{RESTRICTIONS_KEY, RestrictionStore};
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Storage;
 use crate::shared::project_id::FIRST;
 use crate::shared::scoped::{SCOPED_KEYS, ScopedStorage};
@@ -89,6 +90,26 @@ fn merge_rules(storage: &Rc<dyn Storage>, scoped: &Rc<dyn Storage>) -> bool {
 pub fn legacy_waiting(storage: &Rc<dyn Storage>) -> bool {
     let store = ProjectStore::new(storage.clone());
     store.is_usable() && store.list().iter().all(|p| p.id == FIRST) && (kept(storage, EDITS_KEY).is_some() || kept(storage, RESTRICTIONS_KEY).is_some())
+}
+
+/// `migrate_legacy` for a page that opens in no project (the home page, the Account page), before it builds anything:
+/// the first project is named in the page's language and, where nothing was opened before, opened, so the pages open
+/// the old work as they did. Says whether the move took the work into `first` now (a page sent to the list because it
+/// named no project then has its project after all).
+pub fn move_legacy_work(storage: &Rc<dyn Storage>, i18n: &I18n) -> bool {
+    if !legacy_waiting(storage) {
+        return false;
+    }
+    let store = ProjectStore::new(storage.clone());
+    let real = |store: &ProjectStore| store.get(FIRST).is_some_and(|p| !p.placeholder);
+    let was_real = real(&store);
+    let complete = migrate_legacy(storage, &i18n.tr_now("project-first-name", &Args::new()));
+    // A first project made now, or a real one that took the work.
+    let moved = real(&store) && (!was_real || complete);
+    if moved && store.last_opened().is_none() {
+        store.open(FIRST);
+    }
+    moved
 }
 
 /// Moves the work from before projects into project `first`, named `first_name` (words the caller renders), where

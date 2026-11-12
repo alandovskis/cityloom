@@ -37,6 +37,9 @@ pub fn mount_account() -> AccountPage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
     let i18n = crate::i18n_browser(&ports);
+    // This page syncs as soon as its shell knows who is signed in, and a sign-in comes back here: the work from before
+    // projects is moved into the first project first, as on the home page (the archive below then finds it too).
+    crate::project::migrate::move_legacy_work(&ports.storage, &i18n);
     let vm = vm::AccountVm::new(ports.clone(), i18n.clone());
     let slot_id = "account-slot";
     let slot = leptos::prelude::document().get_element_by_id(slot_id).unwrap_or_else(|| panic!("the page has no #{slot_id}"));

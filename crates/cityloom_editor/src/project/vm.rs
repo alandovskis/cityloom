@@ -6,7 +6,7 @@ use std::rc::{Rc, Weak};
 use leptos::prelude::*;
 
 use crate::place::area::{Area, default_area};
-use crate::project::migrate::migrate_legacy;
+use crate::project::migrate::move_legacy_work;
 use crate::project::model::Project;
 use crate::project::store::{ProjectStore, last_changed};
 use crate::project::text::{changed_text, refused_key};
@@ -75,12 +75,10 @@ impl ProjectsVm {
     /// the first project, named in the page's language; that project is then the one the pages open.
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<ProjectsVm> {
         let store = ProjectStore::new(ports.storage.clone());
-        let unlisted = store.get(FIRST).is_none_or(|p| p.placeholder);
-        migrate_legacy(&ports.storage, &i18n.tr_now("project-first-name", &Args::new()));
-        if unlisted && store.get(FIRST).is_some_and(|p| !p.placeholder) && store.last_opened().is_none() {
-            store.open(FIRST);
-        }
-        let missing = was_missing(&ports.page.path());
+        // A page sent here because it named no project (a bookmark from before projects) has its project once the
+        // work is moved: nothing is gone then.
+        let moved = move_legacy_work(&ports.storage, &i18n);
+        let missing = was_missing(&ports.page.path()) && !moved;
         let vm = Rc::new(ProjectsVm {
             ports,
             i18n,

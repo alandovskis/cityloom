@@ -1254,6 +1254,42 @@ mod page {
         assert_eq!(page_in(Locale::En, &t).notice(), None);
     }
 
+    /// A bookmark from before projects names no project and none was opened, so the page was sent here; the work it
+    /// was about is then moved into the first project, which is here: nothing is gone.
+    #[test]
+    fn a_page_sent_back_before_the_work_from_before_projects_was_moved_says_nothing_is_gone() {
+        let t = test_ports_full();
+        *t.page.path.borrow_mut() = "/index.html?missing=1".into();
+        t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+        let vm = page_in(Locale::En, &t);
+        assert_eq!(vm.notice(), None);
+        assert_eq!(names(&vm), ["First project"]);
+        // a later visit, the work long moved, for a project that is truly not here
+        assert_eq!(page_in(Locale::En, &t).notice().as_deref(), Some("That project is no longer here."));
+    }
+
+    #[test]
+    fn moving_the_work_from_before_projects_opens_the_first_project_once_and_says_so() {
+        use crate::project::migrate::move_legacy_work;
+        let t = test_ports_full();
+        let en = crate::i18n_for(Locale::En);
+        assert!(!move_legacy_work(&t.ports.storage, &en), "nothing to move");
+        t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+        assert!(move_legacy_work(&t.ports.storage, &en));
+        let store = ProjectStore::new(t.ports.storage.clone());
+        assert_eq!(store.get("first").unwrap().name, "First project");
+        assert_eq!(store.last_opened().as_deref(), Some("first"));
+        assert!(!move_legacy_work(&t.ports.storage, &en), "moved already");
+        // a project opened before stays the one opened last
+        let t = test_ports_full();
+        let other = ProjectStore::new(t.ports.storage.clone());
+        other.ensure("first");
+        t.storage.remember(LAST_KEY, "first");
+        t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+        assert!(move_legacy_work(&t.ports.storage, &crate::i18n_for(Locale::FrCa)));
+        assert_eq!(other.get("first").unwrap().name, "Premier projet");
+    }
+
     #[test]
     fn a_change_is_dated_in_the_page_s_language_and_an_unknown_one_is_not() {
         let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
@@ -1347,7 +1383,14 @@ mod page {
         ];
         for (what, command) in commands {
             let t = test_ports_full();
-            t.storage.remember(EDITS_KEY, LEGACY_EDITS);
+            let first = crate::project::Project {
+                id: "first".into(),
+                name: "First".into(),
+                area: crate::place::area::default_area().to_query(),
+                created_at: crate::sync::model::stamp(0),
+                placeholder: false,
+            };
+            assert!(ProjectStore::new(t.ports.storage.clone()).put_raw(first));
             *t.page.path.borrow_mut() = "/index.html?missing=1".into();
             let vm = page_in(Locale::En, &t);
             assert!(vm.notice().is_some(), "{what}");

@@ -208,3 +208,15 @@ fn a_name_with_markup_is_escaped() {
     let out = html(move || view! { <AccountView vm=vm/> }.into_any());
     assert!(!out.contains("<script>x") && out.contains("&lt;script&gt;"), "{out}");
 }
+
+/// The Account page syncs as soon as it knows who is signed in (its shell builds the sync), and a sign-in comes back
+/// here: the work from before projects must be in the first project before anything of the page is built, as on the
+/// home page, so the archive finds it and the sync carries it.
+#[test]
+fn the_page_moves_the_work_from_before_projects_before_it_builds_anything() {
+    let source = include_str!("mod.rs");
+    let body = source.split("pub fn mount_account()").nth(1).expect("mount_account");
+    let moved = body.find("project::migrate::move_legacy_work(").expect("the page moves the work");
+    let built = body.find("AccountVm::new(").expect("the page builds its view-model");
+    assert!(moved < built, "the move comes first");
+}
