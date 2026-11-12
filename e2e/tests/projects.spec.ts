@@ -194,7 +194,8 @@ test.describe("the list of projects", () => {
     await listed(page);
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
     await expect(page.locator("h1")).toHaveText("Vos projets");
-    await expect(page.locator(".project-notice")).toHaveText("Ce projet n’est plus ici.");
+    // Sent here by a bookmark from before projects: its work is the first project now, so nothing is gone.
+    await expect(page.locator(".project-notice")).toBeHidden();
     await expect(page.getByRole("link", { name: "Premier projet" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Renommer Premier projet" })).toBeVisible();
     await page.getByLabel("Nom du projet").fill("Mile End");
