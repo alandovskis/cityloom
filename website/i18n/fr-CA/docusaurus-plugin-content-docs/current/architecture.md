@@ -1,7 +1,7 @@
 ---
 id: architecture
 title: Architecture
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Architecture
@@ -23,10 +23,12 @@ qui possède la fonctionnalité.
 | `restriction/` | Les règles déclarées sur une zone de la carte.                                                                                    |
 | `sync/`        | Conserve le travail d’une personne connectée sur le serveur, quand elle l’a choisi, et le fusionne entre ses appareils.           |
 | `archive/`     | L’archive de conception : exportation et importation des modifications et des règles de zone d’une personne dans un seul fichier. |
+| `project/`     | Les projets : la liste de la page d’accueil, le projet dans lequel une page est ouverte, le déplacement du travail plus ancien.   |
 | `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                                           |
 
 Une tranche peut utiliser le `model` d’une autre tranche, `city::store`, `city::binding`, `city::projection`,
-`restriction::store`, `shell::Target` et `shared`; les magasins et les éditeurs utilisent aussi les types de `sync::model` et `mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
+`restriction::store`, `project::context` (le projet dans lequel une page est ouverte), `shell::Target` et `shared`; la
+synchronisation utilise aussi `project::store`, pour transporter le travail de chaque projet; les magasins et les éditeurs utilisent aussi les types de `sync::model` et `mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
 d’une autre tranche.
 
 ## MVVM dans une tranche

@@ -1,7 +1,7 @@
 ---
 id: getting-started
 title: Démarrage
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Démarrage

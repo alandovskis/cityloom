@@ -1,7 +1,7 @@
 ---
 id: issues
 title: Signaler un problème
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Signaler un problème
