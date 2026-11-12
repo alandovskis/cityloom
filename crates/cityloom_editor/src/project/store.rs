@@ -13,7 +13,7 @@ use crate::place::area::{Area, default_area};
 use crate::project::model::{Project, Refused, clean_name};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::ports::Storage;
-use crate::shared::project_id::{split_key, valid, wire_key};
+use crate::shared::project_id::{round_trips, split_key, valid, wire_key};
 use crate::shared::scoped::{SCOPED_KEYS, ScopedStorage};
 use crate::sync::model::{AREA_RECORD, Id, Kind, Loaded, load, mark, mark_all, stamp};
 
@@ -267,6 +267,8 @@ pub fn records(storage: &Rc<dyn Storage>, project: &str) -> Vec<(Kind, String)> 
     if scoped.recall(AREA_KEY).is_some_and(|query| Area::from_query(&query).is_some()) {
         out.push((Kind::Area, AREA_RECORD.to_string()));
     }
+    // A key whose wire key would name another project (`p-abc:w1` in `first`) is that project's, not this one's.
+    out.retain(|(_, key)| round_trips(project, key));
     out
 }
 

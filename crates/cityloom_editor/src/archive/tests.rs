@@ -244,6 +244,9 @@ fn every_kind_of_bad_archive_gets_its_own_error_and_leaves_storage_byte_identica
         ("streets that are not an object", with(&|v| v["edits"]["streets"] = json!(5)), ArchiveError::Damaged(model::PART_EDITS)),
         ("a street that is not an object", with(&|v| v["edits"]["streets"] = json!({"w1~n2~n3": 7})), ArchiveError::Damaged(model::PART_EDITS)),
         ("a key the sync cannot carry", with(&|v| v["edits"]["streets"] = json!({"a b": {}})), ArchiveError::Damaged(model::PART_EDITS)),
+        // imported into the first project it would travel as project p-abc's
+        ("a key naming another project", with(&|v| v["edits"]["junctions"] = json!({"p-abc:n7": {}})), ArchiveError::Damaged(model::PART_EDITS)),
+        ("a rule id naming another project", with(&|v| v["restrictions"]["restrictions"] = json!({"p-abc:r-1": {}})), ArchiveError::Damaged(model::PART_RULES)),
         ("newer rules", with(&|v| v["restrictions"]["version"] = json!(2)), ArchiveError::RulesNewer(2)),
         ("rules without a version", with(&|v| drop(v["restrictions"].as_object_mut().unwrap().remove("version"))), ArchiveError::Damaged(model::PART_RULES)),
         ("rules that are not a table", with(&|v| v["restrictions"]["restrictions"] = json!("x")), ArchiveError::Damaged(model::PART_RULES)),

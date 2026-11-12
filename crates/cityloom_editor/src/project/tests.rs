@@ -224,6 +224,28 @@ fn delete_marks_every_record_of_the_project_deleted_and_no_other_projects() {
     assert!(listed.contains(&other(Kind::Street, &keys[1])));
 }
 
+/// A first-project key starting with another project's id (an older build's tab kept a pulled `p-abc:` record under
+/// it, or an archive brought it) would travel as that project's record: it is not the first project's to send or to
+/// remove.
+#[test]
+fn a_first_project_key_that_names_another_project_is_not_its_record_and_deleting_first_leaves_that_project_alone() {
+    let (s, storage) = store();
+    let p = s.create("Plateau").unwrap();
+    let stray = format!("{}:w1", p.id);
+    let mut draft = crate::city::edits::Draft::new();
+    assert!(draft.put_raw(crate::city::edits::STREETS, "w9", serde_json::json!({"mine": "first"})));
+    assert!(draft.put_raw(crate::city::edits::STREETS, &stray, serde_json::json!({"stray": 1})));
+    storage.remember("cityloom-edits@first", &draft.to_json());
+    let root: Rc<dyn Storage> = storage.clone();
+    assert_eq!(store::records(&root, "first"), [(Kind::Street, "w9".to_string())]);
+    // the first project is a project like another: deleting it marks its own records only
+    let area = crate::place::area::default_area().to_query();
+    assert!(s.put_raw(Project { id: "first".into(), name: "First".into(), area, created_at: crate::sync::model::stamp(0), placeholder: false }));
+    assert!(s.delete("first"));
+    assert!(entry_of(&storage, &Id::new(Kind::Street, "w9")).is_some_and(|e| e.deleted));
+    assert_eq!(entry_of(&storage, &Id::new(Kind::Street, &stray)), None, "{stray} is project {}'s", p.id);
+}
+
 #[test]
 fn rename_and_delete_on_a_damaged_list_copy_nothing_aside_and_leave_it() {
     let (s, storage) = store();
@@ -523,6 +545,35 @@ mod migration {
         assert_eq!(street_of(&storage, kept, "only-legacy").as_deref(), Some("legacy"), "nothing stranded");
         assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
         assert!(!s.get(FIRST).unwrap().placeholder);
+    }
+
+    /// An older build's tab kept the records it pulled from project p-abc under their wire keys (`p-abc:w1`) in the
+    /// old document; in `first` they would travel as p-abc's own. They are p-abc's, on the server: they are dropped.
+    #[test]
+    fn records_another_project_left_in_the_old_documents_do_not_move_into_the_first() {
+        for pulled_first in [false, true] {
+            let (ports, storage) = world();
+            let s = ProjectStore::new(ports.storage.clone());
+            let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), FIRST));
+            if pulled_first {
+                assert!(s.ensure(FIRST));
+                storage.remember("cityloom-edits@first", &edits_doc(&[("pulled", "pulled")]));
+                assert!(crate::restriction::store::RestrictionStore::new(scoped.clone()).put_raw("r-pulled", serde_json::json!({ "v": "pulled" })));
+            }
+            storage.remember("cityloom-edits", &edits_doc(&[("w1", "legacy"), ("p-abc:w1", "p-abc's")]));
+            let legacy = crate::restriction::store::RestrictionStore::new(ports.storage.clone());
+            for id in ["r-1", "p-abc:r-2"] {
+                assert!(legacy.put_raw(id, serde_json::json!({ "v": "legacy" })));
+            }
+            assert!(migrate_legacy(&ports.storage, NAME), "{pulled_first}");
+            let kept = "cityloom-edits@first";
+            assert_eq!(street_of(&storage, kept, "w1").as_deref(), Some("legacy"), "{pulled_first}");
+            assert_eq!(street_of(&storage, kept, "p-abc:w1"), None, "{pulled_first}");
+            let rules = crate::restriction::store::RestrictionStore::new(scoped);
+            assert!(rules.raw("r-1").is_some(), "{pulled_first}");
+            assert!(rules.raw("p-abc:r-2").is_none(), "{pulled_first}");
+            assert!(storage.recall("cityloom-edits").is_none_or(|v| v.is_empty()));
+        }
     }
 
     #[test]

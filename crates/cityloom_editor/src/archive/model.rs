@@ -42,6 +42,7 @@ use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, NEWEST, ST
 use crate::city::store::{CHECKSUM_KEY, CityStore};
 use crate::restriction::store::{self as rules, RESTRICTIONS_KEY, RestrictionStore, Restrictions};
 use crate::shared::ports::Storage;
+use crate::shared::project_id::{FIRST, round_trips};
 use crate::shared::said::{Arg, Said};
 use crate::sync::model::{Kind, mark, valid_key};
 use cityloom_model::IMPORTER_VERSION;
@@ -266,12 +267,19 @@ pub fn parse_and_validate(text: &str) -> Result<Archive, ArchiveError> {
 
 type Records = BTreeMap<String, Value>;
 
+/// Whether a record kept under `key` can be carried by the sync from any project the archive is imported into: a key
+/// the server takes, and one that does not start with another project's id (in the first project `p-abc:w1` would
+/// travel as project `p-abc`'s `w1`).
+fn carried(key: &str) -> bool {
+    valid_key(key) && round_trips(FIRST, key)
+}
+
 /// The records of one section, each of which has to be an object under a key the sync can carry.
 fn section(draft: &Draft, name: &str, part: &'static str) -> Result<Records, ArchiveError> {
     let mut out = Records::new();
     for key in draft.raw_keys(name) {
         let record = draft.get_raw(name, &key).filter(|r| r.is_object()).ok_or(ArchiveError::Damaged(part))?;
-        if !valid_key(&key) {
+        if !carried(&key) {
             return Err(ArchiveError::Damaged(part));
         }
         out.insert(key, record.clone());
@@ -311,7 +319,7 @@ fn read_rules(value: Option<&Value>) -> Result<Records, ArchiveError> {
     }
     let mut out = Records::new();
     for (id, record) in doc["restrictions"].as_object().into_iter().flatten() {
-        if !record.is_object() || !valid_key(id) {
+        if !record.is_object() || !carried(id) {
             return Err(damaged);
         }
         out.insert(id.clone(), record.clone());

@@ -1158,6 +1158,16 @@ fn a_mark_through_a_project_scoped_storage_carries_the_project_in_its_key() {
 }
 
 #[test]
+fn a_mark_whose_wire_key_would_name_another_project_is_not_kept() {
+    let inner = Rc::new(MemoryStorage::default());
+    let first = crate::shared::scoped::ScopedStorage::new(inner.clone(), "first");
+    assert!(!model::mark(&first, Kind::Street, "p-abc:w1", false), "it would travel as project p-abc's w1");
+    assert!(model::open(&first).unwrap().records.is_empty());
+    let other = crate::shared::scoped::ScopedStorage::new(inner.clone(), "p1");
+    assert!(model::mark(&other, Kind::Street, "p-abc:w1", false), "p1:p-abc:w1 comes back as p1's");
+}
+
+#[test]
 fn a_mark_whose_wire_key_the_server_would_refuse_is_not_kept() {
     // Review Focus 1: a record the server answers 400 for would stop every batch it is in.
     let inner = Rc::new(MemoryStorage::default());

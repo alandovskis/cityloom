@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::shared::ports::{Storage, WorkPut, WorkRecord};
-use crate::shared::project_id::wire_key;
+use crate::shared::project_id::{round_trips, wire_key};
 
 /// Where the sync state is kept.
 pub const SYNC_KEY: &str = "cityloom-sync";
@@ -264,6 +264,8 @@ pub fn mark_all(storage: &dyn Storage, records: &[(Kind, String)], deleted: bool
     let ids: Vec<Id> = records
         .iter()
         .filter(|(_, key)| valid_key(key))
+        // A key whose wire key would name another project is not this project's to send.
+        .filter(|(_, key)| project.as_deref().is_none_or(|p| round_trips(p, key)))
         .map(|(kind, key)| Id::new(*kind, &project.as_deref().map_or_else(|| key.clone(), |p| wire_key(p, key))))
         .filter(|id| valid_key(&id.key))
         .collect();

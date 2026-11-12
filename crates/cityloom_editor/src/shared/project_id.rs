@@ -23,6 +23,13 @@ pub fn split_key(wire: &str) -> (&str, &str) {
     }
 }
 
+/// Whether `key` of `project` comes back as itself from its wire key. Only a first-project key that starts with another
+/// project's id and `:` does not (`p-abc:w1` would travel as project `p-abc`'s `w1`): such a record is not the first
+/// project's to send, list or remove, and is never kept there.
+pub fn round_trips(project: &str, key: &str) -> bool {
+    split_key(&wire_key(project, key)) == (project, key)
+}
+
 /// The pages that open inside a project: the map and the two editors.
 pub const PROJECT_PAGES: [&str; 3] = ["map.html", "street.html", "intersection.html"];
 
@@ -62,6 +69,23 @@ mod tests {
         assert_eq!(wire_key("p-0123456789ab", "current"), "p-0123456789ab:current");
         assert_eq!(split_key("p-0123456789ab:current"), ("p-0123456789ab", "current"));
         assert_eq!(split_key("p-0123456789ab:w1~n2"), ("p-0123456789ab", "w1~n2"));
+    }
+
+    #[test]
+    fn a_key_with_a_colon_round_trips_unless_it_would_name_another_project_from_the_first() {
+        // `first:` is no other project's prefix: the key stays the first project's
+        assert_eq!(split_key("first:x"), ("first", "first:x"));
+        assert!(round_trips("first", "first:x"));
+        // under another project any key comes back whole, colons and all
+        assert_eq!(split_key(&wire_key("p1", "p-abc:w1")), ("p1", "p-abc:w1"));
+        assert!(round_trips("p1", "p-abc:w1"));
+        assert!(round_trips("p1", "first:x"));
+        // a first-project key that starts with another project's id would come back as that project's
+        assert_eq!(split_key(&wire_key("first", "p-abc:w1")), ("p-abc", "w1"));
+        assert!(!round_trips("first", "p-abc:w1"));
+        // a prefix that is no project id is part of the key
+        assert!(round_trips("first", "Not An Id:w1"));
+        assert!(round_trips("first", "w1~n2~n3"));
     }
 
     #[test]

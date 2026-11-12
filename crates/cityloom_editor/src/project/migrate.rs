@@ -23,7 +23,7 @@ use crate::project::store::ProjectStore;
 use crate::restriction::store::{RESTRICTIONS_KEY, RestrictionStore};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Storage;
-use crate::shared::project_id::FIRST;
+use crate::shared::project_id::{FIRST, round_trips};
 use crate::shared::scoped::{SCOPED_KEYS, ScopedStorage};
 use crate::sync::model::{Id, Kind, Loaded, claim_at, load, stamp};
 
@@ -48,13 +48,42 @@ fn old_wins(storage: &Rc<dyn Storage>, kind: Kind, key: &str, old: &Value, new: 
     }
 }
 
+/// The old document `key` holds as the first project will keep it: without the records whose key starts with another
+/// project's id (an older build's tab kept what it pulled of project `p-abc` as `p-abc:w1`; in `first` it would travel
+/// as that project's own, and it is that project's, on the server). Text it cannot read passes as it is.
+fn first_only(key: &str, old: &str) -> String {
+    let stray = |id: &str| !round_trips(FIRST, id);
+    if key == EDITS_KEY {
+        let Ok(mut draft) = edits::draft(Some(old)) else { return old.to_string() };
+        let strays: Vec<(&str, String)> =
+            [STREETS, JUNCTIONS].into_iter().flat_map(|section| draft.raw_keys(section).into_iter().filter(|k| stray(k)).map(move |k| (section, k))).collect();
+        if strays.is_empty() {
+            return old.to_string();
+        }
+        for (section, k) in strays {
+            draft.remove_raw(section, &k);
+        }
+        return draft.to_json();
+    }
+    if key == RESTRICTIONS_KEY {
+        let Ok(mut doc) = serde_json::from_str::<Value>(old) else { return old.to_string() };
+        if let Some(rules) = doc.get_mut("restrictions").and_then(Value::as_object_mut)
+            && rules.keys().any(|id| stray(id))
+        {
+            rules.retain(|id, _| !stray(id));
+            return doc.to_string();
+        }
+    }
+    old.to_string()
+}
+
 /// The edits documents merged record by record, as text to keep; None where either cannot be read as a document of
 /// this version (damaged, or a newer build's): neither is ever written over.
 fn merge_edits(storage: &Rc<dyn Storage>, old: &str, new: &str) -> Option<String> {
     let old = edits::draft(Some(old)).ok()?;
     let mut merged = edits::draft(Some(new)).ok()?;
     for (section, kind) in [(STREETS, Kind::Street), (JUNCTIONS, Kind::Junction)] {
-        for key in old.raw_keys(section) {
+        for key in old.raw_keys(section).into_iter().filter(|key| round_trips(FIRST, key)) {
             let Some(record) = old.get_raw(section, &key) else { continue };
             if old_wins(storage, kind, &key, record, merged.get_raw(section, &key)) && !merged.put_raw(section, &key, record.clone()) {
                 return None;
@@ -71,7 +100,7 @@ fn merge_rules(storage: &Rc<dyn Storage>, scoped: &Rc<dyn Storage>) -> bool {
     if !old.is_usable() || !merged.is_usable() {
         return false;
     }
-    for id in old.raw_ids() {
+    for id in old.raw_ids().into_iter().filter(|id| round_trips(FIRST, id)) {
         let Some(record) = old.raw(&id) else { continue };
         if old_wins(storage, Kind::Rule, &id, &record, merged.raw(&id).as_ref())
             && !(merged.put_raw(&id, record.clone()) && merged.raw(&id).as_ref() == Some(&record))
@@ -138,7 +167,7 @@ pub fn migrate_legacy(storage: &Rc<dyn Storage>, first_name: &str) -> bool {
         let present = kept(storage, &name);
         // What the project's key should hold, where it must be written.
         let write = match present.as_deref() {
-            None => Some(old.clone()),
+            None => Some(first_only(key, &old)),
             Some(present) if present == old => None,
             Some(_) if key == AREA_KEY => None,
             Some(present) if key == EDITS_KEY => match merge_edits(storage, &old, present) {
