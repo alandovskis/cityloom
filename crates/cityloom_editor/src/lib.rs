@@ -11,6 +11,7 @@ pub mod city;
 pub mod junction;
 pub mod map;
 pub mod place;
+pub mod project;
 pub mod restriction;
 pub mod shared;
 pub mod shell;

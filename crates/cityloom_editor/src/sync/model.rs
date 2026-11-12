@@ -30,10 +30,11 @@ pub enum Kind {
     Junction,
     Rule,
     Area,
+    Project,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area];
+    pub const ALL: [Kind; 5] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area, Kind::Project];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -41,6 +42,7 @@ impl Kind {
             Kind::Junction => "junction",
             Kind::Rule => "rule",
             Kind::Area => "area",
+            Kind::Project => "project",
         }
     }
 

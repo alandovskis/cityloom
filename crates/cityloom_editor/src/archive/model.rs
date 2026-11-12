@@ -162,7 +162,7 @@ impl Archive {
         match kind {
             Kind::Street => &self.streets,
             Kind::Junction => &self.junctions,
-            Kind::Rule | Kind::Area => &self.rules,
+            Kind::Rule | Kind::Area | Kind::Project => &self.rules,
         }
     }
 }

@@ -34,7 +34,7 @@ impl Differences {
             match e.kind {
                 Kind::Street => d.streets += 1,
                 Kind::Junction => d.junctions += 1,
-                Kind::Rule | Kind::Area => d.rules += 1,
+                Kind::Rule | Kind::Area | Kind::Project => d.rules += 1,
             }
         }
         d

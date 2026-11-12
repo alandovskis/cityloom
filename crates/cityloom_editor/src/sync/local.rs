@@ -27,7 +27,8 @@ fn section(kind: Kind) -> Option<&'static str> {
     match kind {
         Kind::Street => Some(STREETS),
         Kind::Junction => Some(JUNCTIONS),
-        Kind::Rule | Kind::Area => None,
+        // Projects are handled by sync::local in Task 3 of the projects plan; until then they hold no section.
+        Kind::Rule | Kind::Area | Kind::Project => None,
     }
 }
 
@@ -36,7 +37,8 @@ pub fn usable(storage: &Shared, kind: Kind) -> bool {
     match kind {
         Kind::Street | Kind::Junction => edits_draft(storage).is_some(),
         Kind::Rule => RestrictionStore::new(storage.clone()).is_usable(),
-        Kind::Area => true,
+        // Task 3 gives projects their own document; until then nothing of this kind is held, so it never pauses the sync.
+        Kind::Area | Kind::Project => true,
     }
 }
 
@@ -63,6 +65,8 @@ pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
         Kind::Street | Kind::Junction => edits_draft(storage)?.get_raw(section(id.kind)?, &id.key).cloned(),
         Kind::Rule => RestrictionStore::new(storage.clone()).raw(&id.key),
         Kind::Area => storage.recall(AREA_KEY).filter(|q| Area::from_query(q).is_some()).map(|query| json!({ "query": query })),
+        // Task 3 of the projects plan.
+        Kind::Project => None,
     }
 }
 
@@ -84,6 +88,8 @@ pub fn write(storage: &Shared, id: &Id, body: &Value) -> bool {
             Some(query) if Area::from_query(query).is_some() => storage.remember(AREA_KEY, query),
             _ => false,
         },
+        // Task 3 of the projects plan.
+        Kind::Project => false,
     }
 }
 
@@ -100,7 +106,8 @@ pub fn remove(storage: &Shared, id: &Id) -> bool {
             let rules = RestrictionStore::new(storage.clone());
             rules.is_usable() && rules.remove_raw(&id.key)
         }
-        Kind::Area => true,
+        // The chosen area is never removed; projects are Task 3 of the projects plan.
+        Kind::Area | Kind::Project => true,
     }
 }
 
