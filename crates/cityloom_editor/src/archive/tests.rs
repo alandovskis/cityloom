@@ -88,9 +88,15 @@ fn the_design_survives_export_then_import_into_an_empty_device() {
     assert_eq!(stored(&b.storage, RESTRICTIONS_KEY)["restrictions"], stored(&a.storage, RESTRICTIONS_KEY)["restrictions"]);
     // the imported work is an edit like any other: marked, so that a device that syncs sends it
     let doc = sync::open(&*b.ports.storage).expect("a sync document was written");
-    for id in
-        [Kind::Street, Kind::Junction, Kind::Rule].iter().flat_map(|k| crate::sync::local::ids(&b.ports.storage).into_iter().filter(move |i| i.kind == *k))
-    {
+    // The archive still works on the device's own (unscoped) documents: list their records as the sync names them.
+    let draft = edits::draft(b.storage.recall(EDITS_KEY).as_deref()).ok().unwrap();
+    let ids: Vec<Id> = [(Kind::Street, edits::STREETS), (Kind::Junction, edits::JUNCTIONS)]
+        .into_iter()
+        .flat_map(|(kind, section)| draft.raw_keys(section).into_iter().map(move |key| Id { kind, key }))
+        .chain(RestrictionStore::new(b.ports.storage.clone()).raw_ids().into_iter().map(|key| Id { kind: Kind::Rule, key }))
+        .collect();
+    assert_eq!(ids.len(), 3);
+    for id in ids {
         assert!(doc.entry(&id).is_some_and(|e| e.pending), "{id:?} waits to be sent");
     }
 }

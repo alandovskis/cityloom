@@ -191,7 +191,7 @@ const ALLOWED: &[&str] = &[
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("the sync document serialises", "a panic message about the code, never shown"),
-    ("a street and a junction have a section", "a panic message about the code, never shown"),
+    ("the sync is given the root storage, not a project's", "a debug assertion about the code, never shown"),
     ("left: min(%, calc(100% - px)); width: max(%, px); top: px", "the style of a cell of the Green row, CSS"),
     ("hint archive-error", "two CSS classes of the design archive's refusal line"),
     ("an archive serialises", "a panic message about the code, never shown"),

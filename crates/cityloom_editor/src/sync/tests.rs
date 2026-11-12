@@ -7,8 +7,8 @@ use std::rc::Rc;
 
 use serde_json::{Value, json};
 
-use crate::city::edits::EDITS_KEY;
 use crate::city::store::CityStore;
+use crate::project::ProjectStore;
 use crate::restriction::model::Rule;
 use crate::restriction::store::RestrictionStore;
 use crate::shared::i18n::{Args, Locale};
@@ -19,6 +19,14 @@ use crate::shared::ports::{
 use crate::sync::model::{self, Change, Id, Kind, Origin, Report};
 use crate::sync::vm::{Status, SyncVm};
 use crate::sync::{RESOURCES, hub, local, text};
+
+/// Where the first project keeps its edits: the sync reads every project's records from its own documents.
+const FIRST_EDITS: &str = "cityloom-edits@first";
+
+/// The first project's view of a device's storage, where its stores keep its places.
+fn first(storage: &Rc<dyn Storage>) -> Rc<dyn Storage> {
+    Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), crate::shared::project_id::FIRST))
+}
 
 #[derive(Clone)]
 struct Row {
@@ -224,7 +232,7 @@ fn ada() -> Me {
 
 /// Moves `by` mm from the first piece of street `edge` to the second and writes it, as the editor does. Gives the key.
 fn edit_street(d: &Device, edge: u32, by: i32) -> String {
-    let store = CityStore::sample(d.ports.storage.clone());
+    let store = CityStore::sample(first(&d.ports.storage));
     let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
     s.segments[0].width_mm -= by;
     s.segments[1].width_mm += by;
@@ -233,7 +241,7 @@ fn edit_street(d: &Device, edge: u32, by: i32) -> String {
 }
 
 fn width(d: &Device, edge: u32) -> i32 {
-    CityStore::sample(d.ports.storage.clone()).open().street_editor(edge, 0).unwrap().snapshot().segments[0].width_mm
+    CityStore::sample(first(&d.ports.storage)).open().street_editor(edge, 0).unwrap().snapshot().segments[0].width_mm
 }
 
 fn street_id(key: &str) -> Id {
@@ -415,14 +423,14 @@ fn a_newer_edits_document_pauses_the_streets_but_the_rules_still_sync_and_it_is_
     let server = ServerSim::new();
     let d = device(&server, T0);
     let newer = r#"{"version":99,"streets":{"w1":{"from":"the future"}}}"#;
-    d.storage.remember(EDITS_KEY, newer);
+    d.storage.remember(FIRST_EDITS, newer);
     let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
-    RestrictionStore::new(d.ports.storage.clone()).add("Zone", Rule::CarFree, ring).unwrap();
+    RestrictionStore::new(first(&d.ports.storage)).add("Zone", Rule::CarFree, ring).unwrap();
     server.seed("street", "w2~n1~n2", json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     assert_eq!(d.vm.status(), Status::Paused);
     assert_eq!(server.live(), ["rule/r1", "street/w2~n1~n2"], "the rule went up");
-    assert_eq!(d.storage.recall(EDITS_KEY).as_deref(), Some(newer), "the newer document is neither read, applied to, nor replaced");
+    assert_eq!(d.storage.recall(FIRST_EDITS).as_deref(), Some(newer), "the newer document is neither read, applied to, nor replaced");
     let said = d.announcer.take();
     assert_eq!(said.iter().filter(|s| s.starts_with("Syncing is paused")).count(), 1, "{said:?}");
     d.vm.refresh();
@@ -452,7 +460,7 @@ fn an_unsaved_edit_is_flushed_first_and_goes_in_the_same_run() {
     hub::reset();
     let server = ServerSim::new();
     let d = device(&server, T0);
-    let store = CityStore::sample(d.ports.storage.clone());
+    let store = CityStore::sample(first(&d.ports.storage));
     hub::register(
         move || {
             let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
@@ -522,7 +530,7 @@ fn leaving_the_page_pushes_what_waits_with_keepalive_and_pulls_nothing() {
     vm.known(&ada());
     assert_eq!(work.calls(), [WorkCall::Pull(WorkAsk::first(0))]);
     assert!(work.answer(WorkReply::Page(Ok(page(0)))));
-    let store = CityStore::sample(ports.storage.clone());
+    let store = CityStore::sample(first(&ports.storage));
     let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
     s.segments[0].width_mm -= 100;
     s.segments[1].width_mm += 100;
@@ -543,7 +551,7 @@ fn a_413_is_retried_one_record_at_a_time_and_the_refused_record_is_blocked_and_s
     let work = Rc::new(FakeWorkSync::default());
     ports.work = work.clone();
     storage.set_now(T0);
-    let store = CityStore::sample(ports.storage.clone());
+    let store = CityStore::sample(first(&ports.storage));
     for edge in [1, 2] {
         let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -588,7 +596,7 @@ fn two_waiting_places() -> (Rc<FakeWorkSync>, Rc<RecordingAnnouncer>, Rc<MemoryS
     let work = Rc::new(FakeWorkSync::default());
     ports.work = work.clone();
     storage.set_now(T0);
-    let store = CityStore::sample(ports.storage.clone());
+    let store = CityStore::sample(first(&ports.storage));
     for edge in [1, 2] {
         let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -631,7 +639,7 @@ fn an_account_wide_limit_blocks_nothing_stops_pushing_for_the_page_and_is_said_o
         assert_eq!(vm.status(), Status::NotSynced);
         assert_eq!(announcer.take(), [said]);
         // a later write and a tab shown again pull but never push again, and say nothing more
-        let store = CityStore::sample(ports.storage.clone());
+        let store = CityStore::sample(first(&ports.storage));
         let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 50;
         s.segments[1].width_mm += 50;
@@ -670,13 +678,13 @@ fn a_run_that_skipped_a_record_does_not_move_the_revision_on_so_the_record_comes
     hub::reset();
     let server = ServerSim::new();
     let d = device(&server, T0);
-    d.storage.remember(EDITS_KEY, r#"{"version":99,"streets":{}}"#);
+    d.storage.remember(FIRST_EDITS, r#"{"version":99,"streets":{}}"#);
     server.seed("street", "w2~n1~n2", json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     assert_eq!(d.vm.status(), Status::Paused);
     assert_eq!(model::open(&*d.storage).unwrap().rev, 0, "the street was skipped, so the revision stays where it was");
     // the document can be read again
-    d.storage.forget(EDITS_KEY);
+    d.storage.forget(FIRST_EDITS);
     d.vm.refresh();
     assert!(record_of(&d, &street_id("w2~n1~n2")).is_some(), "it comes back with the next run");
     assert_eq!((d.vm.status(), model::open(&*d.storage).unwrap().rev), (Status::Synced, 1));
@@ -757,7 +765,7 @@ fn a_failed_apply_does_not_advance_the_revision_and_nothing_is_sent_over_it() {
     edit_street(&laptop, 1, 100);
     laptop.vm.known(&ada());
     let phone = device(&server, T0 + 200_000);
-    phone.storage.refuse(EDITS_KEY); // the browser's storage is full
+    phone.storage.refuse(FIRST_EDITS); // the browser's storage is full
     phone.vm.known(&ada());
     assert_eq!(phone.vm.status(), Status::NotSynced);
     assert_eq!(model::open(&*phone.storage).unwrap().rev, 0, "it will pull that page again");
@@ -775,7 +783,7 @@ fn rules_made_before_syncing_are_renamed_once_so_two_devices_r1_never_meet() {
     let laptop = device(&server, T0 + 1_000);
     let phone = device(&server, T0 + 2_000);
     for (d, name) in [(&laptop, "Laptop"), (&phone, "Phone")] {
-        let r = RestrictionStore::new(d.ports.storage.clone()).add(name, Rule::CarFree, ring.clone()).unwrap();
+        let r = RestrictionStore::new(first(&d.ports.storage)).add(name, Rule::CarFree, ring.clone()).unwrap();
         assert_eq!(r.id, "r1", "both made their first rule before syncing");
         d.storage.with_randomness(true);
     }
@@ -786,9 +794,9 @@ fn rules_made_before_syncing_are_renamed_once_so_two_devices_r1_never_meet() {
     assert_eq!(live.len(), 2, "{live:?}: two rules, not one");
     assert!(live.iter().all(|k| k.starts_with("rule/r-")), "{live:?}");
     for d in [&laptop, &phone] {
-        let names: Vec<String> = RestrictionStore::new(d.ports.storage.clone()).all().into_iter().map(|r| r.name).collect();
+        let names: Vec<String> = RestrictionStore::new(first(&d.ports.storage)).all().into_iter().map(|r| r.name).collect();
         assert_eq!(names.len(), 2, "{names:?}");
-        assert!(RestrictionStore::new(d.ports.storage.clone()).raw("r1").is_none());
+        assert!(RestrictionStore::new(first(&d.ports.storage)).raw("r1").is_none());
     }
 }
 
@@ -799,17 +807,17 @@ fn a_rule_removed_on_one_device_is_removed_on_the_other() {
     let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
     let laptop = device(&server, T0 + 1_000);
     laptop.storage.with_randomness(true);
-    let rule = RestrictionStore::new(laptop.ports.storage.clone()).add("Zone", Rule::CarFree, ring).unwrap();
+    let rule = RestrictionStore::new(first(&laptop.ports.storage)).add("Zone", Rule::CarFree, ring).unwrap();
     laptop.vm.known(&ada());
     let phone = device(&server, T0 + 2_000);
     phone.vm.known(&ada());
-    assert_eq!(RestrictionStore::new(phone.ports.storage.clone()).all().len(), 1);
+    assert_eq!(RestrictionStore::new(first(&phone.ports.storage)).all().len(), 1);
     laptop.storage.set_now(T0 + 3_000);
-    assert!(RestrictionStore::new(laptop.ports.storage.clone()).remove(&rule.id));
+    assert!(RestrictionStore::new(first(&laptop.ports.storage)).remove(&rule.id));
     laptop.vm.refresh();
     assert_eq!(server.tombstones(), 1);
     phone.vm.refresh();
-    assert_eq!(RestrictionStore::new(phone.ports.storage.clone()).all().len(), 0);
+    assert_eq!(RestrictionStore::new(first(&phone.ports.storage)).all().len(), 0);
 }
 
 #[test]
@@ -908,10 +916,10 @@ fn what_was_applied_before_a_store_refused_a_record_is_still_published() {
     let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
     let laptop = device(&server, T0 + 100_000);
     edit_street(&laptop, 1, 100);
-    RestrictionStore::new(laptop.ports.storage.clone()).add("Zone", Rule::CarFree, ring).unwrap();
+    RestrictionStore::new(first(&laptop.ports.storage)).add("Zone", Rule::CarFree, ring).unwrap();
     laptop.vm.known(&ada());
     let phone = device(&server, T0 + 200_000);
-    phone.storage.refuse(EDITS_KEY); // the street cannot be kept, the rule can
+    phone.storage.refuse(FIRST_EDITS); // the street cannot be kept, the rule can
     let told = Rc::new(RefCell::new(Vec::new()));
     let t = told.clone();
     hub::register(|| {}, move |changes: &[Change]| t.borrow_mut().extend(changes.iter().map(|c| c.id.name())));
@@ -926,7 +934,7 @@ fn a_batch_413_does_not_send_the_rest_of_the_backlog_one_record_per_call() {
     let work = Rc::new(FakeWorkSync::default());
     ports.work = work.clone();
     storage.set_now(T0);
-    let store = CityStore::sample(ports.storage.clone());
+    let store = CityStore::sample(first(&ports.storage));
     for edge in [1, 2, 3] {
         let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -1046,14 +1054,14 @@ fn a_store_that_was_unusable_at_the_first_claim_still_has_its_records_claimed_as
     let server = ServerSim::new();
     let d = device(&server, T0);
     let key = edit_street(&d, 1, 100);
-    let edits = d.storage.recall(EDITS_KEY).unwrap();
+    let edits = d.storage.recall(FIRST_EDITS).unwrap();
     // the sync document is damaged, and for a while the edits document is a newer build's
     d.storage.remember(model::SYNC_KEY, "{damaged");
-    d.storage.remember(EDITS_KEY, r#"{"version":99}"#);
+    d.storage.remember(FIRST_EDITS, r#"{"version":99}"#);
     server.seed("street", &key, json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     // the build is back (a rule keeps the document busy meanwhile), later
-    d.storage.remember(EDITS_KEY, &edits);
+    d.storage.remember(FIRST_EDITS, &edits);
     d.storage.set_now(T0 + 600_000);
     d.vm.refresh();
     assert_eq!(record_of(&d, &street_id(&key)), Some(json!({"theirs": true})), "the server's copy won over the street that came back");
@@ -1138,4 +1146,143 @@ fn a_mark_through_a_project_scoped_storage_carries_the_project_in_its_key() {
     let doc = model::open(&plain).unwrap();
     assert!(doc.entry(&Id::new(Kind::Street, "w1")).is_some());
     assert!(doc.entry(&Id::new(Kind::Street, "p1:w1")).is_none());
+}
+
+#[test]
+fn a_mark_whose_wire_key_the_server_would_refuse_is_not_kept() {
+    // Review Focus 1: a record the server answers 400 for would stop every batch it is in.
+    let inner = Rc::new(MemoryStorage::default());
+    let scoped = crate::shared::scoped::ScopedStorage::new(inner.clone(), "p-0123456789ab");
+    let long = format!("w{}", "1".repeat(189));
+    assert!(!model::mark(&scoped, Kind::Street, &long, false), "p-0123456789ab:{long} is 205 characters");
+    assert!(model::open(&scoped).unwrap().records.is_empty());
+    assert!(model::mark(&*inner, Kind::Street, &long, false), "bare, the same key fits");
+}
+
+/// The project `project`'s own view of the device's storage, as its pages will have it.
+fn in_project(d: &Device, project: &str) -> Rc<dyn Storage> {
+    Rc::new(crate::shared::scoped::ScopedStorage::new(d.ports.storage.clone(), project))
+}
+
+/// As `edit_street`, in `project`.
+fn edit_street_in(d: &Device, project: &str, edge: u32, by: i32) -> String {
+    let store = CityStore::sample(in_project(d, project));
+    let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
+    s.segments[0].width_mm -= by;
+    s.segments[1].width_mm += by;
+    assert!(store.write_street(edge, s));
+    store.open().street_record(edge).unwrap().0
+}
+
+fn width_in(d: &Device, project: &str, edge: u32) -> i32 {
+    CityStore::sample(in_project(d, project)).open().street_editor(edge, 0).unwrap().snapshot().segments[0].width_mm
+}
+
+#[test]
+fn two_projects_records_go_up_and_come_down_on_another_device_each_in_its_project() {
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 1_000);
+    let plateau = ProjectStore::new(laptop.ports.storage.clone()).create("Plateau").unwrap();
+    let key = edit_street_in(&laptop, "first", 1, 100);
+    assert_eq!(edit_street_in(&laptop, &plateau.id, 1, 300), key, "the same place in both projects");
+    laptop.vm.known(&ada());
+    let live = server.live();
+    for name in [format!("street/{key}"), format!("street/{}:{key}", plateau.id), format!("project/{}", plateau.id)] {
+        assert!(live.contains(&name), "{name} in {live:?}");
+    }
+    let phone = device(&server, T0 + 2_000);
+    phone.vm.known(&ada());
+    let listed = ProjectStore::new(phone.ports.storage.clone()).list();
+    assert_eq!(listed.iter().filter(|p| !p.placeholder).cloned().collect::<Vec<_>>(), vec![plateau.clone()]);
+    // no device here made the first project (moving existing work into it is not part of this test): its places came
+    // without its record, so it stands as a placeholder that reaches them
+    assert!(listed.iter().any(|p| p.id == "first" && p.placeholder), "{listed:?}");
+    assert!(!server.live().contains(&"project/first".to_string()), "and a placeholder is never sent");
+    assert_eq!(width_in(&phone, "first", 1), width_in(&laptop, "first", 1));
+    assert_eq!(width_in(&phone, &plateau.id, 1), width_in(&laptop, &plateau.id, 1));
+    assert_ne!(width_in(&phone, "first", 1), width_in(&phone, &plateau.id, 1), "each project kept its own");
+}
+
+#[test]
+#[should_panic(expected = "root storage")]
+fn the_sync_refuses_a_projects_storage() {
+    let (mut ports, _, storage, _) = test_ports_with_time();
+    ports.storage = Rc::new(crate::shared::scoped::ScopedStorage::new(storage, "p1"));
+    SyncVm::new(ports, crate::i18n_for(Locale::En));
+}
+
+#[test]
+fn opting_in_uploads_all_local_projects() {
+    hub::reset();
+    let server = ServerSim::new();
+    let d = device(&server, T0 + 1_000);
+    let store = ProjectStore::new(d.ports.storage.clone());
+    let a = store.create("A").unwrap();
+    let b = store.create("B").unwrap();
+    let ka = edit_street_in(&d, &a.id, 1, 100);
+    let kb = edit_street_in(&d, &b.id, 2, 100);
+    let kf = edit_street_in(&d, "first", 3, 100);
+    let report = Rc::new(Cell::new(Report::default()));
+    let r = report.clone();
+    d.vm.enable("ada", Box::new(move |x| r.set(x)));
+    assert!(report.get().ok);
+    let mut live = server.live();
+    live.sort();
+    let mut want = vec![
+        format!("project/{}", a.id),
+        format!("project/{}", b.id),
+        format!("street/{}:{ka}", a.id),
+        format!("street/{}:{kb}", b.id),
+        format!("street/{kf}"),
+    ];
+    want.sort();
+    assert_eq!(live, want);
+}
+
+#[test]
+fn a_project_deleted_on_one_device_is_gone_from_the_other_with_its_places_and_its_server_rows() {
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 1_000);
+    let store = ProjectStore::new(laptop.ports.storage.clone());
+    let plateau = store.create("Plateau").unwrap();
+    let key = edit_street_in(&laptop, &plateau.id, 1, 100);
+    edit_street_in(&laptop, "first", 1, 100);
+    laptop.vm.known(&ada());
+    let phone = device(&server, T0 + 2_000);
+    phone.vm.known(&ada());
+    let gone = street_id(&format!("{}:{key}", plateau.id));
+    assert!(record_of(&phone, &gone).is_some());
+    laptop.storage.set_now(T0 + 3_000);
+    assert!(store.delete(&plateau.id));
+    laptop.vm.refresh();
+    assert_eq!(server.live(), [format!("street/{key}")], "only the first project's street is left on the server");
+    phone.storage.set_now(T0 + 4_000);
+    phone.vm.refresh();
+    assert!(ProjectStore::new(phone.ports.storage.clone()).get(&plateau.id).is_none());
+    assert_eq!(record_of(&phone, &gone), None);
+    assert!(record_of(&phone, &street_id(&key)).is_some());
+    assert!(!local::ids(&phone.ports.storage).contains(&gone));
+}
+
+#[test]
+fn numbered_rules_of_every_project_are_renamed_once_under_their_project() {
+    hub::reset();
+    let server = ServerSim::new();
+    let d = device(&server, T0 + 1_000);
+    let p = ProjectStore::new(d.ports.storage.clone()).create("Plateau").unwrap();
+    let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
+    for project in ["first", p.id.as_str()] {
+        assert_eq!(RestrictionStore::new(in_project(&d, project)).add("Zone", Rule::CarFree, ring.clone()).unwrap().id, "r1");
+    }
+    d.storage.with_randomness(true);
+    d.vm.known(&ada());
+    let rules: Vec<String> = server.live().into_iter().filter(|k| k.starts_with("rule/")).collect();
+    assert_eq!(rules.len(), 2, "{rules:?}");
+    assert!(rules.iter().any(|k| k.starts_with("rule/r-")), "{rules:?}");
+    assert!(rules.iter().any(|k| k.starts_with(&format!("rule/{}:r-", p.id))), "{rules:?}");
+    for project in ["first", p.id.as_str()] {
+        assert!(RestrictionStore::new(in_project(&d, project)).raw("r1").is_none(), "{project}");
+    }
 }

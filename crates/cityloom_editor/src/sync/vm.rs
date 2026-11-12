@@ -12,6 +12,7 @@ use leptos::prelude::*;
 use crate::restriction::store::RestrictionStore;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::{Me, Ports, WorkAsk, WorkError, WorkPushed, WorkPut, WorkRecord, WorkStatus};
+use crate::shared::project_id::wire_key;
 use crate::sync::model::{self, Change, Decision, Entry, Id, Kind, Origin, Report, SyncDoc};
 use crate::sync::{hub, local, text};
 
@@ -59,7 +60,10 @@ pub struct SyncVm {
 }
 
 impl SyncVm {
+    /// `ports.storage` is the ROOT storage, never a project's (`ScopedStorage`): the sync carries every project, and
+    /// `sync::local` finds each record's project from its wire key.
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<SyncVm> {
+        debug_assert!(ports.storage.project().is_none(), "the sync is given the root storage, not a project's");
         let key = ports.storage.identity();
         let vm = Rc::new(SyncVm {
             ports,
@@ -287,18 +291,21 @@ impl SyncVm {
     /// Gives the `r<n>` rules random ids (once: later there are none). A rule that had been sent under its old id is
     /// removed there; the new ids are claimed as never marked.
     fn rename_rules(&self, doc: &mut SyncDoc) {
+        // The root storage: every project's rules are renamed, each in its own document.
         let storage = self.ports.storage.clone();
-        if !local::usable(&storage, Kind::Rule) {
-            return;
-        }
-        let renamed = RestrictionStore::new(storage.clone()).rename_numbered(&mut || storage.random_hex());
-        for (old, _) in renamed {
-            let id = Id::new(Kind::Rule, &old);
-            let seen = doc.entry(&id).map_or(0, |e| e.rev);
-            if seen > 0 {
-                doc.records.insert(id.name(), Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: true, rev: seen, blocked: false });
-            } else {
-                doc.forget(&id);
+        for project in local::projects(&storage) {
+            let rules = RestrictionStore::new(local::scoped(&storage, &project));
+            if !rules.is_usable() {
+                continue;
+            }
+            for (old, _) in rules.rename_numbered(&mut || storage.random_hex()) {
+                let id = Id::new(Kind::Rule, &wire_key(&project, &old));
+                let seen = doc.entry(&id).map_or(0, |e| e.rev);
+                if seen > 0 {
+                    doc.records.insert(id.name(), Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: true, rev: seen, blocked: false });
+                } else {
+                    doc.forget(&id);
+                }
             }
         }
     }

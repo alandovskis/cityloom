@@ -246,18 +246,31 @@ pub fn valid_key(key: &str) -> bool {
 
 /// A store wrote a record (or removed it, with `deleted`): it waits to be sent, edited now. Signed in or not. Says
 /// whether the mark was kept (not where the sync document is a newer build's); an edit is never held up by it.
+/// Through a project's storage the key is the project's own and the record travels under its wire key; a wire key the
+/// server would refuse is not marked (the edit stays on this device).
 pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool {
-    if !valid_key(key) {
+    mark_all(storage, &[(kind, key.to_string())], deleted)
+}
+
+/// `mark` for several records with one read and one write of the document. Says whether the marks were kept (false
+/// where none could be: every key refused, or the document a newer build's).
+pub fn mark_all(storage: &dyn Storage, records: &[(Kind, String)], deleted: bool) -> bool {
+    let project = storage.project();
+    let ids: Vec<Id> = records
+        .iter()
+        .filter(|(_, key)| valid_key(key))
+        .map(|(kind, key)| Id::new(*kind, &project.as_deref().map_or_else(|| key.clone(), |p| wire_key(p, key))))
+        .filter(|id| valid_key(&id.key))
+        .collect();
+    if ids.is_empty() {
         return false;
     }
     let Some(mut doc) = open(storage) else { return false };
-    let wire = match storage.project() {
-        Some(project) => wire_key(&project, key),
-        None => key.to_string(),
-    };
-    let id = Id::new(kind, &wire);
-    let rev = doc.entry(&id).map_or(0, |e| e.rev);
-    doc.records.insert(id.name(), Entry { edited_at: stamp(storage.now_ms()), pending: true, deleted, rev, blocked: false });
+    let edited_at = stamp(storage.now_ms());
+    for id in ids {
+        let rev = doc.entry(&id).map_or(0, |e| e.rev);
+        doc.records.insert(id.name(), Entry { edited_at: edited_at.clone(), pending: true, deleted, rev, blocked: false });
+    }
     let kept = save(storage, &doc);
     crate::sync::hub::marked(storage.identity());
     kept

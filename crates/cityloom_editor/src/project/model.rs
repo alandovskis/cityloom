@@ -15,6 +15,15 @@ pub struct Project {
     pub area: String,
     /// `sync::model::stamp`.
     pub created_at: String,
+    /// Made by the sync for a project whose places came before its own record (`ProjectStore::ensure`): kept on this
+    /// device only and never sent, so it cannot replace the project's name elsewhere; the project's record replaces it
+    /// when it comes, and a rename makes it the person's own.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub placeholder: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Why a change was not taken.

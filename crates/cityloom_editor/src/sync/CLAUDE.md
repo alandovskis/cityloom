@@ -7,13 +7,22 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 ## Modules
 
 - `model.rs` (no I/O): `cityloom-sync` document, `mark`, `decide`, `next_batch`.
-- `local.rs`: stores' records as raw JSON by kind and key. A kind whose document is damaged or from a newer build is not `usable`: nothing read, listed, written or replaced; syncing says once it is paused.
+- `local.rs`: stores' records as raw JSON by kind and wire key; takes the ROOT storage and reads the project from the key (`split_key`), keeping each record in that project's documents (`ScopedStorage`). `ids` lists every project's records (`first` always, plus the listed ones, via `project::store::records`) and each listed project's own record; a wire key the server would refuse is not listed but stays readable. A kind whose document is damaged or from a newer build in any project is not `usable` (`project`: the list's document): nothing read, listed, written or replaced; syncing says once it is paused. May use `project::store` (like `restriction::store`, `city::edits`).
 - `hub.rs`: thread-local. Editors hook up with `watch`; stores' marks reach the sync through it; `enable`/`disable`/`stop` serve the Account page. Names a storage by `Storage::identity()`.
-- `vm.rs` (`SyncVm`, built by the shell), `text.rs`. Port: `WorkSync` (`pull`, `push`, `clear`; `FakeWorkSync`).
+- `vm.rs` (`SyncVm`, built by the shell over the ROOT storage, never a project's: a debug assertion says so), `text.rs`. Port: `WorkSync` (`pull`, `push`, `clear`; `FakeWorkSync`).
 
 ## Record
 
-`kind` (`street`, `junction`, `rule`, `area`), `key` (place key, rule id, or `current` for the area; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+`kind` (`street`, `junction`, `rule`, `area`, `project`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+
+## Projects
+
+- A `project` record's body is the list entry `{id, name, area, created_at}`; written by `ProjectStore::put_raw` (in place, or appended), removed by `ProjectStore::remove_raw` (entry, scoped keys, last-opened id), neither marking. The key names the project, whatever the body's `id`.
+- A pulled record of a project the list lacks adds a placeholder (`ProjectStore::ensure`: name `PLACEHOLDER_NAME`, default area, `created_at` now, `placeholder: true`) so its places are reachable. A placeholder is never sent (`ids` skips it, `read` gives none), so it cannot replace the project's name elsewhere; the project's record replaces it, a rename makes it the person's. Removing a record of an unlisted project writes nothing.
+- `ProjectStore::delete` marks deleted the project record and every record of the project (its documents' and those the sync document knows), in one `mark_all`.
+- `mark` refuses a key whose wire key the server would refuse (a 190-character key under a 14-character project id): the edit stays on the device.
+- Numbered rules are renamed per project, the old id going as `<project>:r<n>`.
+- Removing a pulled `project` record removes that project's places, the device's waiting edits there too (the project was deleted elsewhere).
 
 ## `/api/work`
 
@@ -35,8 +44,8 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 
 ## Marking
 
-- `CityStore::write_street`/`write_junction`/`choose` and `RestrictionStore::{add, update, remove, restore}` call `sync::model::mark` (depends only on `shared`) with `Storage::now_ms`, signed in or not, only when the stored JSON changed (the keeper also writes on a selection); a place moved off is marked deleted.
-- The sync's own writes (`RestrictionStore::{put_raw, remove_raw, rename_numbered}`, `edits::Draft::{put_raw, remove_raw}`) never mark.
+- `CityStore::write_street`/`write_junction`/`choose`, `RestrictionStore::{add, update, remove, restore}` and `ProjectStore::{create, rename, delete}` call `sync::model::mark` (depends only on `shared`) with `Storage::now_ms`, signed in or not, only when the stored JSON changed (the keeper also writes on a selection); a place moved off is marked deleted.
+- The sync's own writes (`RestrictionStore::{put_raw, remove_raw, rename_numbered}`, `edits::Draft::{put_raw, remove_raw}`, `ProjectStore::{put_raw, ensure, remove_raw}`) never mark.
 - Latest `edited_at` wins per place; a pulled record replaces the local one unless the local waits with a later time.
 
 ## When it runs
