@@ -558,14 +558,21 @@ impl Editor {
             .map(|&(rule, id, label, ok_detail)| match fails.iter().find(|f| f.rule == rule) {
                 Some(f) => {
                     let element = &content.calming[f.element];
-                    Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(f.named.clone().unwrap_or_else(|| element.named())) }
+                    Check {
+                        id,
+                        ok: false,
+                        label: Said::new(label),
+                        detail: f.detail.clone(),
+                        zone: Some(f.named.clone().unwrap_or_else(|| element.named())),
+                        standard: None,
+                    }
                 }
                 None => {
                     let detail = match (rule, max_kmh(content.speed, &content.zones)) {
                         (1, Some(kmh)) => Said::new("check-detail-calming-speed-ok").with("kmh", Arg::Num(i64::from(kmh))),
                         _ => Said::new(ok_detail).with("max", Arg::Num(i64::from(ceiling))),
                     };
-                    Check { id, ok: true, label: Said::new(label), detail, zone: None }
+                    Check { id, ok: true, label: Said::new(label), detail, zone: None, standard: None }
                 }
             })
             .collect()

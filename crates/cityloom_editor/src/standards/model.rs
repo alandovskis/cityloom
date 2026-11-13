@@ -154,34 +154,54 @@ impl Default for Standards {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
     NameEmpty,
-    NameTooLong { max: usize },
+    NameTooLong {
+        max: usize,
+    },
     NameTaken,
     /// A length outside what is plausible (millimetres).
-    Length { field: Field, min_mm: i32, max_mm: i32 },
+    Length {
+        field: Field,
+        min_mm: i32,
+        max_mm: i32,
+    },
     /// A speed outside what is plausible (kilometres an hour).
-    Speed { min_kmh: u16, max_kmh: u16 },
+    Speed {
+        min_kmh: u16,
+        max_kmh: u16,
+    },
     SpeedsEmpty,
-    SpeedsMany { max: usize },
+    SpeedsMany {
+        max: usize,
+    },
     SpeedsOrder,
     UnknownKind(String),
     UnknownClass(String),
     /// The smallest width is above the largest.
-    WidthOrder { kind: &'static str },
+    WidthOrder {
+        kind: &'static str,
+    },
     /// The kind's own default width is outside the range.
-    WidthDefault { kind: &'static str, default_mm: i32 },
+    WidthDefault {
+        kind: &'static str,
+        default_mm: i32,
+    },
     /// A figure typed that is no number.
     NotANumber,
     /// There is no such profile.
     Unknown,
     /// The browser keeps no more profiles (the limit) or will not keep them (storage blocked).
-    TooMany { max: usize },
+    TooMany {
+        max: usize,
+    },
     Storage,
     /// The profiles were written by a newer build, which this one leaves alone.
     Newer,
     /// The text is no exported profile.
     ImportUnreadable,
     /// The exported profile's schema version is not one this build reads.
-    ImportVersion { found: u32 },
+    ImportVersion {
+        found: u32,
+    },
 }
 
 impl Refusal {
@@ -193,7 +213,9 @@ impl Refusal {
             Refusal::Length { field, min_mm, max_mm } => {
                 Said::new("standards-refused-length").with("field", Arg::Msg(field.key())).with("min", Arg::Length(*min_mm)).with("max", Arg::Length(*max_mm))
             }
-            Refusal::Speed { min_kmh, max_kmh } => Said::new("standards-refused-speed").with("min", Arg::Num((*min_kmh).into())).with("max", Arg::Num((*max_kmh).into())),
+            Refusal::Speed { min_kmh, max_kmh } => {
+                Said::new("standards-refused-speed").with("min", Arg::Num((*min_kmh).into())).with("max", Arg::Num((*max_kmh).into()))
+            }
             Refusal::SpeedsEmpty => Said::new("standards-refused-speeds-empty"),
             Refusal::SpeedsMany { max } => Said::new("standards-refused-speeds-many").with("max", Arg::Num(*max as i64)),
             Refusal::SpeedsOrder => Said::new("standards-refused-speeds-order"),
@@ -311,7 +333,10 @@ impl Standards {
             let (value, builtin) = (self.length_mm(field).expect("a length figure"), field.builtin_mm().expect("a length figure"));
             if value < builtin {
                 out.push(
-                    Said::new("standards-warn-length").with("field", Arg::Msg(field.key())).with("value", Arg::Length(value)).with("builtin", Arg::Length(builtin)),
+                    Said::new("standards-warn-length")
+                        .with("field", Arg::Msg(field.key()))
+                        .with("value", Arg::Length(value))
+                        .with("builtin", Arg::Length(builtin)),
                 );
             }
         }

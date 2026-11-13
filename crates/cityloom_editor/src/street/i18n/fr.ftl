@@ -739,3 +739,9 @@ src-applies-raised-crossing = Traversée surélevée à une petite intersection 
 src-applies-atlas = Mesures de priorité au transport en commun : le menu Transformer reprend les codes et les noms de ses mesures de la boîte à outils de l’Atlas. Ce que chacune fait ici (les voies qu’elle exige, les largeurs qu’elle vérifie) est un paramètre provisoire de CityLoom, et non les indications de l’Atlas.
 src-atlas-junction-label = Priorité au transport en commun aux intersections
 src-applies-atlas-junction = Mesures de priorité au transport en commun à une intersection : les codes et les noms des mesures que peut avoir une approche (voies de dépassement, portes pour autobus et autres) viennent de la boîte à outils de l’Atlas. Ce que chacune fait ici est un paramètre provisoire de CityLoom, et non les indications de l’Atlas.
+
+# A speed target a standards profile sets for the street's class (#79); the check exists only with such a profile.
+check-label-speed-target = Limite de vitesse sous la cible de sa catégorie
+check-detail-speed-target-over = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, dépasse la cible de { $target }{" "}km/h pour une rue de type { $class }.
+check-detail-speed-target-ok = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, respecte la cible de { $target }{" "}km/h pour une rue de type { $class }.
+check-detail-speed-target-none = Aucune limite de vitesse n’est fixée; la cible pour une rue de type { $class } est de { $target }{" "}km/h.

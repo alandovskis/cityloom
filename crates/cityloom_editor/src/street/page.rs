@@ -14,7 +14,7 @@ use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{CalmingKind, GreenForm, GreenKind, MIN_STOP_MM, SegView, StopKind, TemplateView, View};
+use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind, TemplateView, View};
 use crate::street::text::status_text;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -501,11 +501,11 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                         on:click=move |_| {
                             close(true);
                             w.pick_stop_kind(k);
-                            w.add_stop(k, MIN_STOP_MM);
+                            w.add_stop(k, crate::standards::model::stop_min_mm());
                         }
                     >
                         <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
-                        <span class="dw">{move || w.units().length_fine_in(MIN_STOP_MM, w.i18n().locale())}</span>
+                        <span class="dw">{move || w.units().length_fine_in(crate::standards::model::stop_min_mm(), w.i18n().locale())}</span>
                     </button>
                 </li>
             }

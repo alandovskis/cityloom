@@ -481,6 +481,7 @@ mod tests {
             zone: Some(
                 Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right")),
             ),
+            standard: None,
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
         assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
@@ -500,6 +501,7 @@ mod tests {
                     .with("at", Arg::Length(42_000))
                     .with("across", Arg::KindLower("sidewalk")),
             ),
+            standard: None,
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Tree pits with enough soil: Tree at 42.0 m, on sidewalk");
         let fr_row = say_now(&fr(), Units::Metres, &check_label(&row));

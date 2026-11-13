@@ -22,6 +22,7 @@ pub use speed::Speed;
 mod beyond;
 mod school;
 pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
+mod profile;
 mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
@@ -59,8 +60,8 @@ pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
-/// Sidewalk on each edge is a sheet check, not a hard rule.
-pub const ACCESS_LANE_MM: i32 = 3000;
+use crate::standards::model as standards;
+pub use crate::standards::model::ACCESS_LANE_MM;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Segment {
@@ -159,7 +160,10 @@ impl Segment {
     /// Like `bounds`, leaving out the variant at `skip`.
     fn bounds_except(&self, skip: Option<usize>) -> (i32, i32) {
         let variants = self.variants.iter().enumerate().filter(|(i, _)| Some(*i) != skip).map(|(_, v)| v.kind);
-        std::iter::once(self.kind).chain(variants).fold((0, i32::MAX), |(lo, hi), k| (lo.max(KINDS[k].min_mm), hi.min(KINDS[k].max_mm)))
+        std::iter::once(self.kind).chain(variants).fold((0, i32::MAX), |(lo, hi), k| {
+            let (min_mm, max_mm) = standards::kind_bounds(k);
+            (lo.max(min_mm), hi.min(max_mm))
+        })
     }
 
     /// The piece as it is at `time_min`: its type, surface and direction then,
@@ -200,7 +204,10 @@ impl Segment {
         }
         let (lo, hi) = self.bounds_except(skip);
         (0..KINDS.len())
-            .filter(|&k| k != self.kind && KINDS[k].shares_road && KINDS[k].id != "bike" && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm))
+            .filter(|&k| {
+                let (min_mm, max_mm) = standards::kind_bounds(k);
+                k != self.kind && KINDS[k].shares_road && KINDS[k].id != "bike" && lo.max(min_mm) <= hi.min(max_mm)
+            })
             .collect()
     }
 }
@@ -348,8 +355,8 @@ impl Street {
             .iter()
             .enumerate()
             .map(|(i, p)| {
-                let k = &KINDS[p.kind];
-                let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(k.min_mm, k.max_mm));
+                let (min_mm, max_mm) = standards::kind_bounds(p.kind);
+                let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(min_mm, max_mm));
                 g.direction = direction_for(p.kind, p.direction);
                 g.variants = p
                     .variants
@@ -593,8 +600,7 @@ struct State {
     green_move: Option<((i32, i32), (i32, i32))>,
 }
 
-/// The speed limits an editor sets, in kilometres an hour.
-pub const SPEED_CHOICES: [u16; 12] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+pub use crate::standards::model::SPEED_CHOICES;
 
 pub struct Editor {
     /// What the street is called, where it has a name of its own.
@@ -923,7 +929,8 @@ impl Editor {
         }
         let k = &KINDS[kind];
         let remaining = self.row_mm() - total(self.current());
-        let width = if remaining >= k.min_mm { (remaining / SNAP_MM * SNAP_MM).clamp(k.min_mm, k.default_mm) } else { k.default_mm };
+        let min_mm = standards::kind_bounds(kind).0;
+        let width = if remaining >= min_mm { (remaining / SNAP_MM * SNAP_MM).clamp(min_mm, k.default_mm) } else { k.default_mm };
         let uid = self.new_uid();
         let seg = Segment::new(uid, kind, width);
         self.edit(Said::new("rev-add").with("kind", kind_lower(kind)), |segs| {
@@ -1431,7 +1438,7 @@ impl Editor {
         let z = self.zone;
         let zoned = content.zones.len() > 1;
         let current = if zoned { zone_speed::speed_in(content.speed, &content.zones, z) } else { content.speed };
-        if kmh.is_some_and(|n| !SPEED_CHOICES.contains(&n)) || current.kmh() == kmh {
+        if kmh.is_some_and(|n| !standards::speed_choices().contains(&n)) || current.kmh() == kmh {
             return false;
         }
         let label = match (zoned, kmh) {
@@ -1597,6 +1604,7 @@ impl Editor {
     /// With two zones or more and a transition at some boundary, the boundary checks follow them (`transition_checks`).
     fn street_checks(&self) -> Vec<Check> {
         let mut street = self.zone_checks();
+        street.extend(self.speed_target_check());
         if !self.states[self.cursor].content.curb.is_empty() {
             street.extend(self.curb_checks());
         }
@@ -1609,6 +1617,7 @@ impl Editor {
         if !self.states[self.cursor].content.green.is_empty() {
             street.extend(self.green_checks());
         }
+        self.name_standards(&mut street);
         street
     }
 
@@ -1646,6 +1655,7 @@ impl Editor {
             label: if id == "lane-drop" { Said::new("check-label-lane-drop") } else { Said::new("check-label-transition-room") },
             detail,
             zone,
+            standard: None,
         };
         let mut out = Vec::new();
         for id in ["transition-room", "lane-drop"] {
@@ -1758,9 +1768,9 @@ pub fn walkway_access(street: &Street) -> bool {
 /// run of sidewalk, the others in a lane.
 fn access_ok(segs: &[Segment], pedestrian: bool) -> bool {
     if pedestrian {
-        widest_walkway_mm(segs) >= ACCESS_LANE_MM
+        widest_walkway_mm(segs) >= standards::access_lane_mm()
     } else {
-        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
+        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= standards::access_lane_mm())
     }
 }
 
@@ -1795,6 +1805,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
     vec![
         Check {
             zone: None,
+            standard: None,
             id: "fits",
             ok: fits,
             label: Said::new("check-label-fits"),
@@ -1808,6 +1819,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
         },
         Check {
             zone: None,
+            standard: None,
             id: "edges",
             ok: both_edges,
             label: Said::new("check-label-edges"),
@@ -1823,6 +1835,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
         },
         Check {
             zone: None,
+            standard: None,
             id: "access",
             ok: access,
             label: Said::new("check-label-access"),
@@ -1833,11 +1846,12 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
                     (true, true) => "check-access-ped-ok",
                     (true, false) => "check-access-ped-bad",
                 };
-                Said::new(key).with("amount", Arg::Length(ACCESS_LANE_MM))
+                Said::new(key).with("amount", Arg::Length(standards::access_lane_mm()))
             },
         },
         Check {
             zone: None,
+            standard: None,
             id: "side",
             ok: keeps,
             label: side_said(side),
@@ -1907,6 +1921,9 @@ pub struct Check {
     pub detail: Said,
     /// The first zone that fails this check, when the street has several zones and the check fails; else `None`.
     pub zone: Option<Said>,
+    /// Which standard the threshold came from, when a standards profile is in force and the check reads a figure it
+    /// can set: the profile's name, the figure used and the built-in one. `None` for the built-in standard.
+    pub standard: Option<Said>,
 }
 
 #[derive(Serialize)]
