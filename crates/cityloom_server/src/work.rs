@@ -27,6 +27,7 @@ pub enum Kind {
     Rule,
     Area,
     Project,
+    Milestone,
 }
 
 impl Kind {
@@ -37,6 +38,7 @@ impl Kind {
             Kind::Rule => "rule",
             Kind::Area => "area",
             Kind::Project => "project",
+            Kind::Milestone => "milestone",
         }
     }
 
@@ -47,6 +49,7 @@ impl Kind {
             "rule" => Kind::Rule,
             "area" => Kind::Area,
             "project" => Kind::Project,
+            "milestone" => Kind::Milestone,
             _ => return None,
         })
     }

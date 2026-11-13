@@ -416,3 +416,49 @@ async fn migration_0003_applies_over_0002_rows_and_leaves_them_readable(pool: Pg
     assert_eq!(r.push(user, vec![put(Kind::Project, "first", 0, 2, "{}")], t(10)).await.unwrap().items[0].verdict, Verdict::Accepted);
     assert!(sqlx::query(insert).bind(user).bind("bogus").execute(&pool).await.is_err(), "the check still refuses other kinds");
 }
+
+#[test]
+fn a_milestone_has_its_own_kind_and_its_body_is_bound_to_it() {
+    let user = Uuid::nil();
+    let id = Id { kind: Kind::Milestone, key: "p-0123456789ab:m-0123456789ab".into() };
+    assert_eq!(Kind::parse("milestone"), Some(Kind::Milestone));
+    assert_eq!(Kind::Milestone.as_str(), "milestone");
+    assert_eq!(work::aad(&id, user), format!("work.milestone.p-0123456789ab:m-0123456789ab.{user}"));
+}
+
+#[sqlx::test]
+async fn a_milestone_round_trips_as_one_large_record_and_is_sealed_under_its_own_kind(pool: PgPool) {
+    let r = repo(pool.clone());
+    let user = storing(&r, "a").await;
+    let body = format!("{{\"name\":\"Before the bike lanes\",\"edits\":\"{}\"}}", "e".repeat(300 * 1024));
+    let pushed = r.push(user, vec![put(Kind::Milestone, "m-0123456789ab", 0, 1, &body)], t(10)).await.unwrap();
+    assert_eq!(pushed.items[0].verdict, Verdict::Accepted);
+    let pulled = r.pull(user, Ask::first(0), t(10)).await.unwrap();
+    let rec = &pulled.records[0];
+    assert_eq!((rec.id.kind, rec.id.key.as_str(), rec.unreadable), (Kind::Milestone, "m-0123456789ab", false));
+    assert_eq!(text(&rec.body), body);
+    let kind: String = sqlx::query_scalar("select kind from work where user_id = $1").bind(user).fetch_one(&pool).await.unwrap();
+    assert_eq!(kind, "milestone");
+    sqlx::query("update work set kind = 'rule' where user_id = $1").bind(user).execute(&pool).await.unwrap();
+    assert!(r.pull(user, Ask::first(0), t(10)).await.unwrap().records[0].unreadable, "the kind is part of what it is sealed with");
+}
+
+#[sqlx::test(migrations = false)]
+async fn migration_0004_applies_over_0003_rows_and_leaves_them_readable(pool: PgPool) {
+    for sql in
+        [include_str!("../migrations/0001_accounts.sql"), include_str!("../migrations/0002_work.sql"), include_str!("../migrations/0003_work_project_kind.sql")]
+    {
+        sqlx::raw_sql(sql).execute(&pool).await.unwrap();
+    }
+    let r = repo(pool.clone());
+    let user = storing(&r, "a").await;
+    r.push(user, vec![put(Kind::Street, "w1", 0, 1, "{\"n\":1}"), put(Kind::Project, "p1", 0, 1, "{\"n\":2}")], t(10)).await.unwrap();
+    let insert = "insert into work (user_id, kind, key, rev, edited_at, changed_at, deleted, body) values ($1, $2, 'k', 9, now(), now(), false, '\\x00')";
+    assert!(sqlx::query(insert).bind(user).bind("milestone").execute(&pool).await.is_err(), "0003 does not know the milestone kind");
+    sqlx::raw_sql(include_str!("../migrations/0004_work_milestone_kind.sql")).execute(&pool).await.unwrap();
+    let pulled = r.pull(user, Ask::first(0), t(10)).await.unwrap();
+    assert_eq!(pulled.records.len(), 2);
+    assert!(pulled.records.iter().all(|rec| !rec.unreadable && rec.body.is_some()));
+    assert_eq!(r.push(user, vec![put(Kind::Milestone, "m1", 0, 2, "{}")], t(10)).await.unwrap().items[0].verdict, Verdict::Accepted);
+    assert!(sqlx::query(insert).bind(user).bind("bogus").execute(&pool).await.is_err(), "the check still refuses other kinds");
+}
