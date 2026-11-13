@@ -3,3 +3,4 @@
 //! Profiles section live here; the street page reads only `model` and `store`.
 
 pub mod model;
+pub mod store;
