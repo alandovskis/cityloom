@@ -31,7 +31,7 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
   - `user` differing from the page's account: stop and ask `/api/me` again (`SyncVm::on_account_changed`). The document switches account only after the first page proves the session's, so two tabs on two accounts do not flip it.
   - `error: "corrupt"` with no body: leave the record alone.
 - `410 resync` (`start` older than a purged tombstone, or `since` above the account's rev): pull everything, drop what the server no longer lists. `410 reset` (other epoch): storage was turned off and on meanwhile.
-- `PUT {records: [{kind, key, base_rev, edited_at, deleted, body}]}` (max 100, body max 64 KB) -> `{rev, results: [{kind, key, status, rev, record?}]}`; `status` `accepted` | `superseded` (server's newer record comes back).
+- `PUT {records: [{kind, key, base_rev, edited_at, deleted, body}]}` (max 100, body max 1 MiB) -> `{rev, results: [{kind, key, status, rev, record?}]}`; `status` `accepted` | `superseded` (server's newer record comes back).
 - `413 {"error": "too-large", "limit": "record"|"records"|"bytes"|"batch"}`: batch refused whole (account cap 5,000 records, 2 MB sealed). `400` bad JSON/key/time. `409 storage-off` any call while storage is not on the server. `401 signed-out`.
 - `DELETE`: removes the server copy, new epoch (other devices reset, keep their places). The app never calls it.
 

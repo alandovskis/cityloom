@@ -163,7 +163,13 @@ async fn what_the_server_will_not_take_is_refused_whole(pool: PgPool) {
 async fn a_limit_is_a_413_that_names_it(pool: PgPool) {
     let app = TestApp::new(pool);
     let mut b = storing(&app, "a").await;
-    let big = json!({"x": "y".repeat(65 * 1024)});
+    let roomy = json!({"x": "y".repeat(512 * 1024)});
+    assert_eq!(
+        put(&mut b, vec![record("street", "roomy", 0, MIDDLE, Some(roomy))]).await.status,
+        StatusCode::OK,
+        "a design snapshot of half a megabyte is one record"
+    );
+    let big = json!({"x": "y".repeat(1024 * 1024 + 1024)});
     let r = put(&mut b, vec![record("street", "big", 0, MIDDLE, Some(big))]).await;
     assert_eq!((r.status, r.json()["error"].as_str(), r.json()["limit"].as_str()), (StatusCode::PAYLOAD_TOO_LARGE, Some("too-large"), Some("record")));
     let many: Vec<Value> = (0..101).map(|i| record("street", &format!("k{i}"), 0, MIDDLE, Some(json!({})))).collect();

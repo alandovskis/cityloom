@@ -10,7 +10,8 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 pub const MAX_KEY: usize = 200;
-pub const MAX_RECORD_BYTES: usize = 64 * 1024;
+/// A record is a place, a rule, a project or a design milestone (a snapshot of a project's work).
+pub const MAX_RECORD_BYTES: usize = 1024 * 1024;
 pub const MAX_RECORDS: usize = 5_000;
 pub const MAX_SEALED_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_BATCH: usize = 100;
@@ -438,7 +439,8 @@ mod tests {
     fn a_batch_is_refused_whole_for_the_limit_it_passes() {
         let big = |n: usize| Put { body: Some(vec![b' '; n]), ..put("a", 0, at(0)) };
         assert_eq!(plan(&[], &[big(MAX_RECORD_BYTES + 1)]).unwrap_err(), Refusal::TooLarge(Limit::Record));
-        assert!(plan(&[], &[big(MAX_RECORD_BYTES)]).is_ok(), "exactly 64 KB is allowed");
+        assert!(plan(&[], &[big(MAX_RECORD_BYTES)]).is_ok(), "exactly the limit is allowed");
+        assert!(plan(&[], &[big(512 * 1024)]).is_ok(), "a design snapshot is one record");
         let many: Vec<Put> = (0..MAX_BATCH + 1).map(|i| put(&format!("k{i}"), 0, at(0))).collect();
         assert_eq!(plan(&[], &many).unwrap_err(), Refusal::TooLarge(Limit::Batch));
         assert_eq!(plan(&[], &[put("a", 0, at(0)), put("a", 0, at(1))]).unwrap_err(), Refusal::Duplicate);
