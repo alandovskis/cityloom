@@ -56,6 +56,8 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Zone boundary | limite | `Limite entre deux zones`; the start of a zone is its `début`. To confirm, see below. |
 | Street page | 2.5D boundary label (the two zones that meet in the drawing) | limite … au premier plan … au-delà | `sur un tronçon de 40 m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà` (`svg-iso-label-joint`). To confirm, see below. |
 | Street page | Curbside (the lane at the edge of the street and what stands along it) | bord de rue | `Usages du bord de rue`, `Bord de rue, à droite`. |
+| Street page | Standards profile (a set of local thresholds the checks use) | profil de normes | `Norme en vigueur`, `Normes de base` (the built-in ones), `Norme X : 3,5 m (de base : 3,0 m)`. `norme` for the set of thresholds, `seuil` for one figure. |
+| Street page | Export / Import a profile | Exporter / Importer le profil | As for the design archive. |
 | Street page | Use (of the curbside) | usage | `Ajouter un usage`; `Usage`. Not `utilisation` or `affectation`. |
 | Street page | Free (a stretch of the curbside with no use) | Libre | `curb-gap`. |
 | Street page | Tree pit | Fosse d’arbre | Shown as `Street tree` in English: `curb-use-tree`. |
