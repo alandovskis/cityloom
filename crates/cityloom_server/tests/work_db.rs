@@ -150,14 +150,14 @@ async fn the_account_limits_are_kept_over_many_batches(pool: PgPool) {
     assert_eq!(r.push(user, vec![put(Kind::Street, "one-more", 0, 1, "{}")], t(10)).await.unwrap_err(), WorkError::TooLarge(Limit::Records));
     let n: i64 = sqlx::query_scalar("select count(*) from work where user_id = $1").bind(user).fetch_one(&pool).await.unwrap();
     assert_eq!(n, 5_000);
-    // 2 MB of sealed bodies, on another account: 10 records of 60,000 bytes per batch, the fourth batch is too much
+    // 16 MiB of sealed bodies, on another account: 5 records of the largest size per batch, the fourth batch is too much
     let other = storing(&r, "b").await;
-    let sixty = "z".repeat(60_000 - 8);
+    let largest = format!("{{\"x\":\"{}\"}}", "z".repeat(work::MAX_RECORD_BYTES - 8));
     for batch in 0..3 {
-        let puts: Vec<Put> = (0..10).map(|i| put(Kind::Rule, &format!("r{batch}-{i}"), 0, 1, &format!("{{\"x\":\"{sixty}\"}}"))).collect();
+        let puts: Vec<Put> = (0..5).map(|i| put(Kind::Rule, &format!("r{batch}-{i}"), 0, 1, &largest)).collect();
         r.push(other, puts, t(10)).await.unwrap();
     }
-    let puts: Vec<Put> = (0..10).map(|i| put(Kind::Rule, &format!("r3-{i}"), 0, 1, &format!("{{\"x\":\"{sixty}\"}}"))).collect();
+    let puts: Vec<Put> = (0..5).map(|i| put(Kind::Rule, &format!("r3-{i}"), 0, 1, &largest)).collect();
     assert_eq!(r.push(other, puts, t(10)).await.unwrap_err(), WorkError::TooLarge(Limit::Bytes));
 }
 
@@ -333,11 +333,10 @@ async fn deleting_the_account_deletes_the_work_and_rewrapping_the_key_leaves_it_
 async fn a_batch_that_replaces_bodies_with_tombstones_and_smaller_ones_brings_a_full_account_back_under_the_limit(pool: PgPool) {
     let r = repo(pool.clone());
     let user = storing(&r, "a").await;
-    let sixty = "z".repeat(60_000 - 8);
-    let big = format!("{{\"x\":\"{sixty}\"}}");
-    // 34 sealed bodies of about 60,000 bytes: the account is nearly full
-    for batch in 0..4 {
-        let puts: Vec<Put> = (0..10).filter(|i| batch * 10 + i < 34).map(|i| put(Kind::Rule, &format!("r{}", batch * 10 + i), 0, 1, &big)).collect();
+    let big = format!("{{\"x\":\"{}\"}}", "z".repeat(work::MAX_RECORD_BYTES - 8));
+    // 15 sealed bodies of the largest size: the account is nearly full
+    for batch in 0..3 {
+        let puts: Vec<Put> = (0..5).map(|i| put(Kind::Rule, &format!("r{}", batch * 5 + i), 0, 1, &big)).collect();
         r.push(user, puts, t(10)).await.unwrap();
     }
     let stored = |pool: PgPool| async move {
@@ -348,18 +347,18 @@ async fn a_batch_that_replaces_bodies_with_tombstones_and_smaller_ones_brings_a_
             .unwrap()
     };
     let full = stored(pool.clone()).await;
-    assert!(full as usize + 60_000 > work::MAX_SEALED_BYTES, "another 60 KB body does not fit");
+    assert!(full as usize + work::MAX_RECORD_BYTES > work::MAX_SEALED_BYTES, "another body of the largest size does not fit");
     assert_eq!(r.push(user, vec![put(Kind::Rule, "extra", 0, 1, &big)], t(10)).await.unwrap_err(), WorkError::TooLarge(Limit::Bytes));
-    // one batch: ten tombstones and ten shrunk bodies free about 1.2 MB, and an addition of 60 KB then fits
-    let mut batch: Vec<Put> = (0..10).map(|i| gone(Kind::Rule, &format!("r{i}"), i as i64 + 1, 20)).collect();
-    batch.extend((10..20).map(|i| put(Kind::Rule, &format!("r{i}"), i as i64 + 1, 20, "{}")));
+    // one batch: five tombstones and five shrunk bodies free about 10 MiB, and an addition of the largest size then fits
+    let mut batch: Vec<Put> = (0..5).map(|i| gone(Kind::Rule, &format!("r{i}"), i as i64 + 1, 20)).collect();
+    batch.extend((5..10).map(|i| put(Kind::Rule, &format!("r{i}"), i as i64 + 1, 20, "{}")));
     batch.push(put(Kind::Rule, "extra", 0, 20, &big));
     let pushed = r.push(user, batch, t(30)).await.unwrap();
     assert!(pushed.items.iter().all(|i| i.verdict == Verdict::Accepted));
     let after = stored(pool).await;
-    let sealed_big = 60_000 + work::SEAL_OVERHEAD as i64;
-    assert_eq!(full, 34 * sealed_big);
-    assert_eq!(after, 15 * sealed_big + 10 * (2 + work::SEAL_OVERHEAD as i64), "the planner's byte count matches the bytes stored");
+    let sealed_big = work::MAX_RECORD_BYTES as i64 + work::SEAL_OVERHEAD as i64;
+    assert_eq!(full, 15 * sealed_big);
+    assert_eq!(after, 6 * sealed_big + 5 * (2 + work::SEAL_OVERHEAD as i64), "the planner's byte count matches the bytes stored");
 }
 
 #[test]

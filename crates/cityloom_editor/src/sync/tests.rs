@@ -638,7 +638,7 @@ fn a_batch_refused_over_a_record_limit_goes_one_at_a_time_and_the_refused_one_is
 fn an_account_wide_limit_blocks_nothing_stops_pushing_for_the_page_and_is_said_once() {
     for (limit, said) in [
         ("records", "The server keeps at most 5,000 records per account, so the rest stays on this device only."),
-        ("bytes", "The server keeps at most 2 MB of work per account, so the rest stays on this device only."),
+        ("bytes", "The server keeps at most 16 MB of work per account, so the rest stays on this device only."),
     ] {
         let (work, announcer, storage, scheduler, vm, ports) = two_waiting_places();
         assert!(work.answer(WorkReply::Pushed(Err(WorkError::TooLarge(limit.into())))));
