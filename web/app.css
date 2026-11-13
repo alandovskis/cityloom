@@ -37,6 +37,12 @@
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.06);
 
   --r-card: 16px;
+  /* Fixed in both themes on purpose: MapLibre's attribution box is pale in both, and the key's dots repeat the
+     map's own marks. */
+  --attrib-ring: #0b1220;
+  --attrib-halo: #ffffff;
+  --dot-core: #ffffff;
+  --dot-core-bad: #111827;
   --r-ctl: 12px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -939,9 +945,9 @@ a.btn {
 /* MapLibre's attribution is a pale box over the map in both themes, so the page's ring (light blue in dark) is
    lost on it: a dark ring with a white one outside it is seen on the box and on the map either side. */
 .maplibregl-ctrl-attrib a:focus-visible {
-  outline: 2px solid #0b1220;
+  outline: 2px solid var(--attrib-ring);
   outline-offset: 1px;
-  box-shadow: 0 0 0 4px #ffffff;
+  box-shadow: 0 0 0 4px var(--attrib-halo);
 }
 /* The key's dots repeat `style::OK`, `CHANGED`, `BAD` and `CONFLICT`: keep them equal. */
 .dot {
@@ -978,10 +984,10 @@ a.btn {
   position: absolute;
   inset: 2px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--dot-core);
 }
 .dot-bad::after {
-  background: #111827;
+  background: var(--dot-core-bad);
 }
 
 /* The home page's backdrop: the city drawn as an SVG. */
@@ -1389,6 +1395,18 @@ a.btn {
   }
   .place-row {
     padding: 12px 10px;
+  }
+  .menu-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .report-notice-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  details.src summary {
+    min-height: 44px;
   }
   .keys,
   .search-key {

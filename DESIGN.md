@@ -132,6 +132,26 @@ typography:
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.45
+  section:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "17px"
+    fontWeight: 700
+    lineHeight: 1.3
+  reading-lead:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.45
+  name:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "20px"
+    fontWeight: 700
+    lineHeight: 1.15
+  chip:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "12px"
+    fontWeight: 600
+    lineHeight: 1.45
 rounded:
   card: "16px"
   search: "14px"
