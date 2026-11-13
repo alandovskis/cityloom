@@ -45,6 +45,11 @@ impl Watch {
         self.vm.with_value(|v| v.link(href))
     }
 
+    /// The planning goal chosen.
+    pub fn goal(&self) -> crate::shared::goals::GoalChoice {
+        self.vm.with_value(|v| v.goal().clone())
+    }
+
     pub fn version(&self) -> RwSignal<u32> {
         self.vm.with_value(|v| v.version())
     }

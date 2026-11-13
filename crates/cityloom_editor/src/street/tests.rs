@@ -2429,3 +2429,20 @@ fn a_fitted_street_figure_leaves_out_the_speed_signs_words() {
     // Only street names are kept in a fitted figure, so the sign's number and word are not drawn.
     assert!(!f.items.iter().any(|i| matches!(i, Item::Text { .. })), "{:?}", f.items.iter().filter(|i| matches!(i, Item::Text { .. })).collect::<Vec<_>>());
 }
+
+#[test]
+fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_street_as_it_was() {
+    use crate::shared::goals::Goal;
+    let s = street_shared(0);
+    let before = serde_json::to_string(&*s.view_now()).unwrap();
+    let plain = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(!plain.contains("goal-mark"));
+    s.goal().set(Some(Goal::SchoolRoute));
+    let marked = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(marked.contains("goal-mark") && marked.contains("Bears on your goal"), "{marked}");
+    let guide = street_html(|| view! { <notes::GoalGuide vm=s.clone()/> });
+    assert!(guide.contains("Improve a school route"), "{guide}");
+    s.goal().set(None);
+    assert_eq!(serde_json::to_string(&*s.view_now()).unwrap(), before, "a goal is a preference, not an edit");
+    assert!(!street_html(|| view! { <notes::Checks vm=s.clone()/> }).contains("goal-mark"));
+}

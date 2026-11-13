@@ -1670,3 +1670,47 @@ details.src ul {
 .checks li.bad details.src {
   color: var(--ink-2);
 }
+
+/* Guided design goals (#72): the picker and the checks that bear on the chosen goal. Marked by an edge and by words,
+   never by colour alone. */
+.goal-guide {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.goal-guide legend {
+  font-weight: 600;
+  padding: 0;
+}
+.goal-choice {
+  display: block;
+  padding: 4px 0;
+}
+.goal-note,
+.goal-picks span {
+  color: var(--ink-2);
+}
+.goal-picks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.goal-picks li {
+  border-top: 1px solid var(--rule);
+  padding: 8px 0;
+}
+.goal-picks span {
+  display: block;
+}
+.goal-picks .goal-conflict {
+  font-style: italic;
+}
+.checks li.goal {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+.goal-mark {
+  display: block;
+  font-size: 0.85em;
+  font-weight: 400;
+}

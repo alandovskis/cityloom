@@ -127,6 +127,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("impact", view! { <notes::LastChange vm=vm.clone()/> }.into_any());
     mount("space", view! { <notes::Space vm=vm.clone()/> }.into_any());
     mount("cap", view! { <notes::Capacity vm=vm.clone()/> }.into_any());
+    mount("goal-slot", view! { <notes::GoalGuide vm=vm.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
     mount("atlas-source", view! { <notes::AtlasSource vm=vm.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions vm=vm.clone()/> }.into_any());

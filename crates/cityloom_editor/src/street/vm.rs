@@ -96,6 +96,7 @@ pub struct StreetVm {
     stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
     /// The tab of the left panel showing.
     panel_tab: ArcRwSignal<PanelTab>,
+    goal: crate::shared::goals::GoalChoice,
     /// What the last change did to the street, as shown.
     impact: ArcRwSignal<Option<Impact>>,
     /// What the last change did, waiting for the edits to settle, and the timer that shows it.
@@ -149,6 +150,7 @@ impl StreetVm {
     /// is written back to it; otherwise it is a sandbox.
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
+        let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
         let panel_tab = ports.storage.recall(PANEL_TAB_KEY).and_then(|id| PanelTab::from_id(&id)).unwrap_or(PanelTab::Piece);
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
@@ -178,6 +180,7 @@ impl StreetVm {
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
                 panel_tab: ArcRwSignal::new(panel_tab),
+                goal,
                 impact: ArcRwSignal::new(None),
                 impact_pending: RefCell::new(None),
                 impact_timer: Cell::new(None),
@@ -280,6 +283,11 @@ impl StreetVm {
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
         self.edit(f)
+    }
+
+    /// The planning goal chosen (#72): it marks checks and lists measures, and changes nothing in the street.
+    pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
+        &self.goal
     }
 
     /// The tab of the left panel showing, which a view that reads it draws again when another is chosen.
