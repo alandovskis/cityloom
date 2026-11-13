@@ -15,6 +15,7 @@ pub mod project;
 pub mod restriction;
 pub mod shared;
 pub mod shell;
+pub mod standards;
 pub mod street;
 pub mod sync;
 
