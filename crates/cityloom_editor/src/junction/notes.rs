@@ -115,19 +115,28 @@ pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
     move || conflict_note(&watch.view()).map(|key| watch.tr(key)).unwrap_or_default()
 }
 
+/// The planning goal's picker and guidance (#72).
+#[component]
+pub fn GoalGuide(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
+    move || crate::shared::goals_view::goal_guide(watch.goal(), crate::shared::goals::Place::Junction, &watch.i18n())
+}
+
 #[component]
 pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
     move || {
         let (v, units) = watch.now();
+        let goal = watch.goal().get();
         v.checks
             .iter()
             .map(|k| {
+                let marked = goal.is_some_and(|g| g.bears_on(k.id));
                 view! {
-                    <li class=if k.ok { "ok" } else { "bad" }>
+                    <li class=if k.ok { "ok" } else { "bad" } class:goal=marked>
                         {icon(k.ok)}
                         <div>
-                            <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span></b>
+                            <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{watch.tr("goal-check-mark")}</span> })}</b>
                             <span>{check_detail(k, &watch.i18n(), units)}</span>
                             {crate::shared::sources_view::source_note(k.id, &watch.say(&k.label), &watch.i18n(), units)}
                         </div>

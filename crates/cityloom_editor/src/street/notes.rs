@@ -214,15 +214,17 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
     move || {
         let (v, units) = w.now();
         let i18n = w.i18n();
+        let goal = w.vm_goal().get();
         let editor = v
             .checks
             .iter()
             .map(|c| {
+                let marked = goal.is_some_and(|g| g.bears_on(c.id));
                 view! {
-                    <li class=if c.ok { "ok" } else { "bad" }>
+                    <li class=if c.ok { "ok" } else { "bad" } class:goal=marked>
                         {icon(c.ok)}
                         <div>
-                            <b>{say(&i18n, units, &crate::street::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
+                            <b>{say(&i18n, units, &crate::street::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{plain(&i18n, "goal-check-mark")}</span> })}</b>
                             <span>{say(&i18n, units, &c.detail)}</span>
                             {crate::shared::sources_view::source_note(c.id, &say(&i18n, units, &crate::street::text::check_label(c)), &i18n, units)}
                         </div>
@@ -248,6 +250,16 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view();
         view! { {editor}{areas} }
+    }
+}
+
+/// The planning goal's picker and guidance (#72).
+#[component]
+pub fn GoalGuide(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let choice = w.vm_goal();
+        crate::shared::goals_view::goal_guide(choice, crate::shared::goals::Place::Street, &w.i18n())
     }
 }
 
