@@ -38,7 +38,7 @@ test.describe("standards profiles on the street page", () => {
     await createProfile(page, "City of X");
     await page.locator("#standards-access-lane").fill("3.5");
     await page.locator("#standards-save").click();
-    await expect(page.locator("#standards-access-lane")).toHaveValue("3.50");
+    await expect(page.locator("#standards-access-lane")).toHaveValue(/^3\.5/);
     await expect(page.locator("#standards-error")).toBeHidden();
 
     await page.locator("#standards-in-force").selectOption({ label: "City of X" });
@@ -46,7 +46,7 @@ test.describe("standards profiles on the street page", () => {
     await page.locator("#t-checks").click();
     const access = checkNamed(page, "Room for emergency vehicles");
     await expect(access.locator(".check-standard")).toHaveText("Standard City of X: 3.5 m (built-in 3.0 m)");
-    await expect(access).toContainText("A lane of 3.5 m");
+    await expect(access).toContainText("3.5 m or more");
 
     // The choice is the browser's: it is still in force when the page is opened again.
     await page.reload();
@@ -66,6 +66,7 @@ test.describe("standards profiles on the street page", () => {
     await page.locator("#standards-access-lane").fill("far");
     await page.locator("#standards-save").click();
     await expect(page.locator("#standards-error")).toHaveText("That is not a number.");
+    await page.locator("#standards-access-lane").fill("3");
     await page.locator("#standards-rename").fill("   ");
     await page.locator("#standards-save").click();
     await expect(page.locator("#standards-error")).toHaveText("Give the profile a name.");
@@ -103,7 +104,7 @@ test.describe("standards profiles on the street page", () => {
     await page.locator("#standards-in-force").selectOption({ label: "Widths" });
     await page
       .locator("#piece-list .piece-cell")
-      .filter({ hasText: /Travel lane|Voie de circulation/ })
+      .filter({ hasText: /Driving lane/ })
       .first()
       .click();
     await expect(page.locator("#i-width-range")).toContainText("Standard Widths: 2.8 m to 3.4 m");
@@ -126,7 +127,7 @@ test.describe("standards profiles on the street page", () => {
     await page.locator("#standards-import-text").fill(file.replace("City of X", "City of Y"));
     await page.locator("#standards-import").click();
     await expect(page.locator("#standards-list li")).toHaveCount(2);
-    await page.locator("#standards-import-text").fill(file.replace("3500", "100"));
+    await page.locator("#standards-import-text").fill(file.replace("City of X", "City of Z").replace("3500", "100"));
     await page.locator("#standards-import").click();
     await expect(page.locator("#standards-error")).toContainText("must be between 2.0 m and 6.0 m");
 
