@@ -17,6 +17,7 @@ pub mod shared;
 pub mod shell;
 pub mod street;
 pub mod sync;
+pub mod timeline;
 
 use shared::{atlas, symbols};
 use wasm_bindgen::prelude::*;

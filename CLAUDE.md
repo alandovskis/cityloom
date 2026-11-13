@@ -82,6 +82,7 @@ Folder-level `CLAUDE.md` files hold the details of each area and load when you w
 - `src/project/CLAUDE.md`: Project slice (`src/project/`): projects, the home page's list, the move of older work
 - `src/restriction/CLAUDE.md`: Restriction slice (`src/restriction/`)
 - `src/sync/CLAUDE.md`: Sync slice (`src/sync/`)
+- `src/timeline/CLAUDE.md`: Timeline slice (`src/timeline/`)
 - `src/archive/CLAUDE.md`: Archive slice (`src/archive/`)
 - `src/shared/CLAUDE.md`: Shared kernel (`src/shared/`)
 - `src/account/CLAUDE.md`: Account slice (`src/account/`)

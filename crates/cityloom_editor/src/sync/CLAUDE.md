@@ -13,7 +13,7 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 
 ## Record
 
-`kind` (`street`, `junction`, `rule`, `area`, `project`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+`kind` (`street`, `junction`, `rule`, `area`, `project`, `milestone`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
 
 ## Projects
 
@@ -63,7 +63,7 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 
 - Area rules get ids `r-<32 hex>` where storage has randomness (`Storage::random_hex`; test fake has none unless asked, so tests' `r1` stay); existing `r<n>` are renamed once at first sync.
 - Editors reload a place a sync changed (`StreetVm::watch_sync`, `JunctionVm::watch_sync`) and say "Updated from another device." or "Your change to this place was replaced by a later one."
-- Opt in (`hub::enable`): merges, says places sent/received (`Report`: streets, junctions, rules, the area; a `project` record is no place, `Kind::is_place`). Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
+- Opt in (`hub::enable`): merges, says places sent/received (`Report`: streets, junctions, rules, the area; a `project` record and a `milestone` are no place, `Kind::is_place`). Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
 
 ## Known limits
 

@@ -31,10 +31,12 @@ pub enum Kind {
     Rule,
     Area,
     Project,
+    /// A design milestone: a snapshot of a project's work (`timeline`).
+    Milestone,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 5] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area, Kind::Project];
+    pub const ALL: [Kind; 6] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area, Kind::Project, Kind::Milestone];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -43,6 +45,7 @@ impl Kind {
             Kind::Rule => "rule",
             Kind::Area => "area",
             Kind::Project => "project",
+            Kind::Milestone => "milestone",
         }
     }
 
@@ -50,9 +53,10 @@ impl Kind {
         Kind::ALL.into_iter().find(|k| k.as_str() == s)
     }
 
-    /// A place, as the merge report counts them (a street, a junction, a rule, the area); a project's own record is not.
+    /// A place, as the merge report counts them (a street, a junction, a rule, the area); a project's own record and a
+    /// milestone are not.
     pub fn is_place(self) -> bool {
-        self != Kind::Project
+        !matches!(self, Kind::Project | Kind::Milestone)
     }
 }
 

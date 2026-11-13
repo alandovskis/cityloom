@@ -216,6 +216,15 @@ fn delete_marks_every_record_of_the_project_deleted_and_no_other_projects() {
         assert!(city.write_street(1, street));
         keys.push(city.open().street_record(1).unwrap().0);
         RestrictionStore::new(scoped(&storage, &p.id)).add("Zone", Rule::CarFree, ring.clone()).unwrap();
+        let milestone = crate::timeline::model::Draft {
+            name: "Before".into(),
+            auto: false,
+            app_version: "0".into(),
+            author: None,
+            summary: Default::default(),
+            snapshot: Default::default(),
+        };
+        crate::timeline::store::MilestoneStore::new(scoped(&storage, &p.id)).create(milestone).unwrap();
         assert!(CityStore::choose(&*scoped(&storage, &p.id), &crate::place::area::default_area()));
     }
     // A junction known only to the sync document (its own document no longer holds it): marked deleted too.
@@ -223,13 +232,20 @@ fn delete_marks_every_record_of_the_project_deleted_and_no_other_projects() {
     storage.set_now(5_000);
     assert!(s.delete(&a.id));
     let wire = |kind: Kind, key: &str| Id::new(kind, &crate::shared::project_id::wire_key(&a.id, key));
-    for id in [wire(Kind::Street, &keys[0]), wire(Kind::Rule, "r1"), wire(Kind::Area, "current"), wire(Kind::Junction, "n7"), Id::new(Kind::Project, &a.id)] {
+    for id in [
+        wire(Kind::Street, &keys[0]),
+        wire(Kind::Rule, "r1"),
+        wire(Kind::Milestone, "m1"),
+        wire(Kind::Area, "current"),
+        wire(Kind::Junction, "n7"),
+        Id::new(Kind::Project, &a.id),
+    ] {
         let e = entry_of(&storage, &id).unwrap_or_else(|| panic!("{id:?} has an entry"));
         assert!(e.deleted && e.pending, "{id:?}");
         assert_eq!(e.edited_at, crate::sync::model::stamp(5_000), "{id:?}");
     }
     let other = |kind: Kind, key: &str| Id::new(kind, &crate::shared::project_id::wire_key(&b.id, key));
-    for id in [other(Kind::Street, &keys[1]), other(Kind::Rule, "r1"), other(Kind::Area, "current")] {
+    for id in [other(Kind::Street, &keys[1]), other(Kind::Rule, "r1"), other(Kind::Milestone, "m1"), other(Kind::Area, "current")] {
         assert!(!entry_of(&storage, &id).unwrap_or_else(|| panic!("{id:?} has an entry")).deleted, "{id:?}");
     }
     let listed = crate::sync::local::ids(&(storage.clone() as Rc<dyn Storage>));
