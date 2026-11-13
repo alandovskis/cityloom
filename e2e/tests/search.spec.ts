@@ -64,7 +64,7 @@ test.describe("the search box on the city map", () => {
   test("Enter opens the first place found", async ({ page }) => {
     await page.locator("#search").fill(await firstJunctionName(page));
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
+    await expect(page).toHaveURL(/intersection\.html\?junction=\d+&project=first$/);
   });
 
   test("the arrow keys move down the results and Enter opens the one they are on", async ({ page }) => {
@@ -113,7 +113,7 @@ test.describe("the search box on the city map", () => {
   test("clicking a result opens the place", async ({ page }) => {
     await page.locator("#search").fill(await firstJunctionName(page));
     await page.locator('#search-results [role="option"] a').first().click();
-    await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
+    await expect(page).toHaveURL(/intersection\.html\?junction=\d+&project=first$/);
   });
 });
 

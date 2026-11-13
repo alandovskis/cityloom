@@ -191,6 +191,16 @@ impl StreetVm {
         &self.i18n
     }
 
+    /// The project the street is edited in; none outside a project.
+    pub fn project(&self) -> Option<String> {
+        self.ports.storage.project()
+    }
+
+    /// `href` to another page of the street's project (`shared::project_id::link`).
+    pub fn link(&self, href: &str) -> String {
+        crate::shared::project_id::link(href, self.project().as_deref())
+    }
+
     // ---- what the views read ----
 
     /// The view, which a view that reads it draws again when the street changes.
@@ -1407,6 +1417,9 @@ impl StreetVm {
 impl crate::shell::Target for StreetVm {
     fn set_units(&self, units: Units) {
         StreetVm::set_units(self, units);
+    }
+    fn project(&self) -> Option<String> {
+        StreetVm::project(self)
     }
 
     fn apply_region(&self, region: usize) -> bool {

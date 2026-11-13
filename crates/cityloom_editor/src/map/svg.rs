@@ -229,7 +229,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
         write!(
             s,
             "<a class=\"place\" href=\"{}\" data-hl=\"s-{}\" aria-label=\"{}\"><title>{}</title><line class=\"m-hit\" {} stroke-width=\"{}\"/></a>",
-            crate::map::vm::street_href(l.e.uid),
+            crate::map::vm::street_href(l.e.uid, None),
             l.e.uid,
             esc(&street_label(l.e, i18n, units)),
             esc(&say(i18n, units, &l.e.name())),
@@ -242,7 +242,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
         write!(
             s,
             "<a class=\"place\" href=\"{}\" data-hl=\"j-{}\" aria-label=\"{}\"><title>{}</title><circle class=\"m-hit\" cx=\"{}\" cy=\"{}\" r=\"{}\"/></a>",
-            crate::map::vm::junction_href(n.uid),
+            crate::map::vm::junction_href(n.uid, None),
             n.uid,
             esc(&junction_label(n, i18n, units)),
             esc(&say(i18n, units, &n.name)),

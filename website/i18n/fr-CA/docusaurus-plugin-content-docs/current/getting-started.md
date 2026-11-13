@@ -1,7 +1,7 @@
 ---
 id: getting-started
 title: Démarrage
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Démarrage
@@ -51,7 +51,7 @@ sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de
 découpe le réseau de rues obtenu en tuiles JSON dans `web/data/metro` (environ 1 700 tuiles, environ 570 Mo). Enfin, il les réunit dans une seule archive, `data/montreal.citymodel`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
 Git ignore les tuiles et l’archive.
 
-L’ouverture d’un lieu exige les tuiles de routes : sans elles, aucun lieu ne s’ouvre, y compris celui par défaut, et la page d’accueil indique que le lieu n’est pas couvert.
+L’ouverture d’un lieu exige les tuiles de routes : sans elles, aucun lieu ne s’ouvre, y compris celui par défaut, et la page qui l’ouvre indique que le lieu n’est pas couvert.
 
 ## Tests et mise en forme
 

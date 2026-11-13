@@ -26,6 +26,10 @@ region-japan = Japan
 # The markup every page shares.
 ui-skip-drawing = Skip to the drawing
 ui-home = CityLoom, home
+# The top bar's links, and the name of the landmark that holds them.
+ui-nav = Pages
+ui-nav-projects = Projects
+ui-nav-about = About
 ui-settings = Settings
 ui-units = Units
 ui-region = Region

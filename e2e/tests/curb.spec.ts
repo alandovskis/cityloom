@@ -28,7 +28,7 @@ async function addUse(page: Page, cell: number, use: string, metres: number) {
 }
 
 const editsVersion = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "{}").version);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "{}").version);
 
 test.describe("the curbside strip", () => {
   test("the Use choice follows the chosen cell, also after it was changed by hand", async ({ page }) => {

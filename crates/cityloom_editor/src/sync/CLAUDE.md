@@ -7,13 +7,22 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 ## Modules
 
 - `model.rs` (no I/O): `cityloom-sync` document, `mark`, `decide`, `next_batch`.
-- `local.rs`: stores' records as raw JSON by kind and key. A kind whose document is damaged or from a newer build is not `usable`: nothing read, listed, written or replaced; syncing says once it is paused.
+- `local.rs`: stores' records as raw JSON by kind and wire key; takes the ROOT storage and reads the project from the key (`split_key`), keeping each record in that project's documents (`ScopedStorage`). `ids` lists every project's records (`first` always, plus the listed ones, via `project::store::records`) and each listed project's own record; a wire key the server would refuse is not listed but stays readable. A kind whose document is damaged or from a newer build in any project is not `usable` (`project`: the list's document): nothing read, listed, written or replaced; syncing says once it is paused. No place kind is `usable` either while work from before projects waits under the bare keys (`project::migrate::legacy_waiting`): it would be read from `first`'s documents, which do not hold it yet, and go up as removals. Where the move can no longer run (it failed, then another project came) the pause lifts, so each push (`Run::push` and the keepalive `leave`) also leaves out (`vm.rs` `hold_legacy`, on a copy: the entry stays pending) any pending first-project record that `first`'s documents lack and the bare legacy document still holds (`local::legacy_hold`, read once per push, and only while a move is unfinished: a legacy edits or restrictions key kept, `project::migrate::legacy_kept`; the area only where the move would take it, `migrate::area_moved`: one outside Montreal stays under the bare key by design and holds nothing). A legacy document that cannot be read holds every record of its kinds (edits: streets and junctions; restrictions: rules). A record neither holds was removed, and its removal goes up. May use `project::store` and `project::migrate::{legacy_waiting, legacy_kept, area_moved}` (like `restriction::store`, `city::edits`).
 - `hub.rs`: thread-local. Editors hook up with `watch`; stores' marks reach the sync through it; `enable`/`disable`/`stop` serve the Account page. Names a storage by `Storage::identity()`.
-- `vm.rs` (`SyncVm`, built by the shell), `text.rs`. Port: `WorkSync` (`pull`, `push`, `clear`; `FakeWorkSync`).
+- `vm.rs` (`SyncVm`, built by the shell over the ROOT storage, never a project's: `new` panics on a `ScopedStorage`, release builds too), `text.rs`. Port: `WorkSync` (`pull`, `push`, `clear`; `FakeWorkSync`).
 
 ## Record
 
-`kind` (`street`, `junction`, `rule`, `area`), `key` (place key, rule id, or `current` for the area; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+`kind` (`street`, `junction`, `rule`, `area`, `project`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+
+## Projects
+
+- A `project` record's body is the list entry `{id, name, area, created_at}`; written by `ProjectStore::put_raw` (in place, or appended), removed by `ProjectStore::remove_raw` (entry, scoped keys, last-opened id), neither marking. The key names the project, whatever the body's `id`.
+- A pulled record of a project the list lacks adds a placeholder (`ProjectStore::ensure`: name `PLACEHOLDER_NAME`, default area, `created_at` now, `placeholder: true`) so its places are reachable. A placeholder is never sent (`ids` skips it, `read` gives none), so it cannot replace the project's name elsewhere; the project's record replaces it, a rename makes it the person's. Removing a record of an unlisted project writes nothing.
+- `ProjectStore::delete` marks deleted the project record and every record of the project (its documents' and those the sync document knows), in one `mark_all`.
+- `mark` refuses a key whose wire key the server would refuse (a 190-character key under a 14-character project id), or one whose wire key would name another project (`p-abc:w1` in `first`, `shared::project_id::round_trips`): the edit stays on the device.
+- Numbered rules are renamed per project, the old id going as `<project>:r<n>`.
+- Removing a pulled `project` record removes that project's places, the device's waiting edits there too (the project was deleted elsewhere).
 
 ## `/api/work`
 
@@ -35,8 +44,8 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 
 ## Marking
 
-- `CityStore::write_street`/`write_junction`/`choose` and `RestrictionStore::{add, update, remove, restore}` call `sync::model::mark` (depends only on `shared`) with `Storage::now_ms`, signed in or not, only when the stored JSON changed (the keeper also writes on a selection); a place moved off is marked deleted.
-- The sync's own writes (`RestrictionStore::{put_raw, remove_raw, rename_numbered}`, `edits::Draft::{put_raw, remove_raw}`) never mark.
+- `CityStore::write_street`/`write_junction`/`choose`, `RestrictionStore::{add, update, remove, restore}` and `ProjectStore::{create, rename, delete}` call `sync::model::mark` (depends only on `shared`) with `Storage::now_ms`, signed in or not, only when the stored JSON changed (the keeper also writes on a selection); a place moved off is marked deleted.
+- The sync's own writes (`RestrictionStore::{put_raw, remove_raw, rename_numbered}`, `edits::Draft::{put_raw, remove_raw}`, `ProjectStore::{put_raw, ensure, remove_raw}`) never mark.
 - Latest `edited_at` wins per place; a pulled record replaces the local one unless the local waits with a later time.
 
 ## When it runs
@@ -54,7 +63,7 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 
 - Area rules get ids `r-<32 hex>` where storage has randomness (`Storage::random_hex`; test fake has none unless asked, so tests' `r1` stay); existing `r<n>` are renamed once at first sync.
 - Editors reload a place a sync changed (`StreetVm::watch_sync`, `JunctionVm::watch_sync`) and say "Updated from another device." or "Your change to this place was replaced by a later one."
-- Opt in (`hub::enable`): merges, says places sent/received. Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
+- Opt in (`hub::enable`): merges, says places sent/received (`Report`: streets, junctions, rules, the area; a `project` record is no place, `Kind::is_place`). Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
 
 ## Known limits
 
@@ -62,4 +71,5 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 - The map page does not redraw a place a sync changed (reads the city on open).
 - The area chosen on one device replaces another's when its page next opens.
 - Rules list is in id order, so a random-id rule can land anywhere.
+- Work held after a failed move from before projects is not retried once another project is listed: the migration runs only where the list is empty or holds nothing but `first`, so that work stays pending and unsent (never a removal) until the person deletes the other projects or a later change lets the migration merge into `first` beside other projects.
 - "Received" at opt-in is 0 in normal use (server copy is per account; turning storage off empties it).

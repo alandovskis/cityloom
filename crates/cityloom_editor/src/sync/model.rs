@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::shared::ports::{Storage, WorkPut, WorkRecord};
+use crate::shared::project_id::{round_trips, wire_key};
 
 /// Where the sync state is kept.
 pub const SYNC_KEY: &str = "cityloom-sync";
@@ -29,10 +30,11 @@ pub enum Kind {
     Junction,
     Rule,
     Area,
+    Project,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area];
+    pub const ALL: [Kind; 5] = [Kind::Street, Kind::Junction, Kind::Rule, Kind::Area, Kind::Project];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -40,11 +42,17 @@ impl Kind {
             Kind::Junction => "junction",
             Kind::Rule => "rule",
             Kind::Area => "area",
+            Kind::Project => "project",
         }
     }
 
     pub fn parse(s: &str) -> Option<Kind> {
         Kind::ALL.into_iter().find(|k| k.as_str() == s)
+    }
+
+    /// A place, as the merge report counts them (a street, a junction, a rule, the area); a project's own record is not.
+    pub fn is_place(self) -> bool {
+        self != Kind::Project
     }
 }
 
@@ -243,14 +251,48 @@ pub fn valid_key(key: &str) -> bool {
 
 /// A store wrote a record (or removed it, with `deleted`): it waits to be sent, edited now. Signed in or not. Says
 /// whether the mark was kept (not where the sync document is a newer build's); an edit is never held up by it.
+/// Through a project's storage the key is the project's own and the record travels under its wire key; a wire key the
+/// server would refuse is not marked (the edit stays on this device).
 pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool {
-    if !valid_key(key) {
+    mark_all(storage, &[(kind, key.to_string())], deleted)
+}
+
+/// `mark` for several records with one read and one write of the document. Says whether the marks were kept (false
+/// where none could be: every key refused, or the document a newer build's).
+pub fn mark_all(storage: &dyn Storage, records: &[(Kind, String)], deleted: bool) -> bool {
+    let project = storage.project();
+    let ids: Vec<Id> = records
+        .iter()
+        .filter(|(_, key)| valid_key(key))
+        // A key whose wire key would name another project is not this project's to send.
+        .filter(|(_, key)| project.as_deref().is_none_or(|p| round_trips(p, key)))
+        .map(|(kind, key)| Id::new(*kind, &project.as_deref().map_or_else(|| key.clone(), |p| wire_key(p, key))))
+        .filter(|id| valid_key(&id.key))
+        .collect();
+    if ids.is_empty() {
         return false;
     }
     let Some(mut doc) = open(storage) else { return false };
+    let edited_at = stamp(storage.now_ms());
+    for id in ids {
+        let rev = doc.entry(&id).map_or(0, |e| e.rev);
+        doc.records.insert(id.name(), Entry { edited_at: edited_at.clone(), pending: true, deleted, rev, blocked: false });
+    }
+    let kept = save(storage, &doc);
+    crate::sync::hub::marked(storage.identity());
+    kept
+}
+
+/// Gives the record `kind`/`key` (the key as it travels) an entry waiting to be sent, edited at `at`, where it has none;
+/// an entry already there is left as it is. For a record that exists from the start, as the first project's does: edited
+/// at `stamp(0)`, so any real edit of it, here or elsewhere, is later. Says whether the record has an entry afterwards.
+pub fn claim_at(storage: &dyn Storage, kind: Kind, key: &str, at: &str) -> bool {
     let id = Id::new(kind, key);
-    let rev = doc.entry(&id).map_or(0, |e| e.rev);
-    doc.records.insert(id.name(), Entry { edited_at: stamp(storage.now_ms()), pending: true, deleted, rev, blocked: false });
+    let Some(mut doc) = open(storage) else { return false };
+    if doc.entry(&id).is_some() {
+        return true;
+    }
+    doc.records.insert(id.name(), Entry { edited_at: at.to_string(), pending: true, deleted: false, rev: 0, blocked: false });
     let kept = save(storage, &doc);
     crate::sync::hub::marked(storage.identity());
     kept

@@ -361,3 +361,59 @@ async fn a_batch_that_replaces_bodies_with_tombstones_and_smaller_ones_brings_a_
     assert_eq!(full, 34 * sealed_big);
     assert_eq!(after, 15 * sealed_big + 10 * (2 + work::SEAL_OVERHEAD as i64), "the planner's byte count matches the bytes stored");
 }
+
+#[test]
+fn the_sealed_body_of_a_project_is_bound_to_kind_project_and_its_id() {
+    let user = Uuid::nil();
+    let id = Id { kind: Kind::Project, key: "p-0123456789ab".into() };
+    assert_eq!(Kind::parse("project"), Some(Kind::Project));
+    assert_eq!(Kind::Project.as_str(), "project");
+    assert_eq!(work::aad(&id, user), format!("work.project.p-0123456789ab.{user}"));
+}
+
+#[sqlx::test]
+async fn a_project_record_round_trips_and_is_sealed_under_its_own_kind(pool: PgPool) {
+    let r = repo(pool.clone());
+    let user = storing(&r, "a").await;
+    let body = r#"{"name":"Plateau","future":[1]}"#;
+    let pushed = r.push(user, vec![put(Kind::Project, "p-0123456789ab", 0, 1, body)], t(10)).await.unwrap();
+    assert_eq!(pushed.items[0].verdict, Verdict::Accepted);
+    let pulled = r.pull(user, Ask::first(0), t(10)).await.unwrap();
+    let rec = &pulled.records[0];
+    assert_eq!((rec.id.kind, rec.id.key.as_str(), rec.unreadable), (Kind::Project, "p-0123456789ab", false));
+    assert_eq!(text(&rec.body), body);
+    let kind: String = sqlx::query_scalar("select kind from work where user_id = $1").bind(user).fetch_one(&pool).await.unwrap();
+    assert_eq!(kind, "project");
+    // the same body under another kind does not open: the kind is part of what it is sealed with
+    sqlx::query("update work set kind = 'rule' where user_id = $1").bind(user).execute(&pool).await.unwrap();
+    assert!(r.pull(user, Ask::first(0), t(10)).await.unwrap().records[0].unreadable);
+}
+
+#[sqlx::test]
+async fn a_bare_key_and_a_project_prefixed_key_are_distinct_rows(pool: PgPool) {
+    let r = repo(pool);
+    let user = storing(&r, "a").await;
+    r.push(user, vec![put(Kind::Street, "w1", 0, 1, "{\"n\":1}"), put(Kind::Street, "p1:w1", 0, 1, "{\"n\":2}")], t(10)).await.unwrap();
+    let pulled = r.pull(user, Ask::first(0), t(10)).await.unwrap();
+    assert_eq!(pulled.records.len(), 2);
+    let of = |key: &str| text(&pulled.records.iter().find(|rec| rec.id.key == key).unwrap().body);
+    assert_eq!((of("w1").as_str(), of("p1:w1").as_str()), ("{\"n\":1}", "{\"n\":2}"));
+}
+
+#[sqlx::test(migrations = false)]
+async fn migration_0003_applies_over_0002_rows_and_leaves_them_readable(pool: PgPool) {
+    for sql in [include_str!("../migrations/0001_accounts.sql"), include_str!("../migrations/0002_work.sql")] {
+        sqlx::raw_sql(sql).execute(&pool).await.unwrap();
+    }
+    let r = repo(pool.clone());
+    let user = storing(&r, "a").await;
+    r.push(user, vec![put(Kind::Street, "w1", 0, 1, "{\"n\":1}"), put(Kind::Area, "current", 0, 1, "{\"q\":2}")], t(10)).await.unwrap();
+    let insert = "insert into work (user_id, kind, key, rev, edited_at, changed_at, deleted, body) values ($1, $2, 'k', 9, now(), now(), false, '\\x00')";
+    assert!(sqlx::query(insert).bind(user).bind("project").execute(&pool).await.is_err(), "0002 does not know the project kind");
+    sqlx::raw_sql(include_str!("../migrations/0003_work_project_kind.sql")).execute(&pool).await.unwrap();
+    let pulled = r.pull(user, Ask::first(0), t(10)).await.unwrap();
+    assert_eq!(pulled.records.len(), 2);
+    assert!(pulled.records.iter().all(|rec| !rec.unreadable && rec.body.is_some()));
+    assert_eq!(r.push(user, vec![put(Kind::Project, "first", 0, 2, "{}")], t(10)).await.unwrap().items[0].verdict, Verdict::Accepted);
+    assert!(sqlx::query(insert).bind(user).bind("bogus").execute(&pool).await.is_err(), "the check still refuses other kinds");
+}

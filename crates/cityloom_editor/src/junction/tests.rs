@@ -792,6 +792,50 @@ fn a_city_junction_s_heading_links_back_to_the_map() {
 }
 
 #[test]
+fn in_a_project_the_junction_s_links_open_the_map_and_streets_of_that_project() {
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid + 10;
+    }
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let s = JunctionVm::new(
+        crate::shared::scoped::in_project(ports, "p1"),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        Junction::from_city(crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Junction 4".into())), &state, &state, 0)
+            .unwrap(),
+        None,
+    );
+    let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
+    assert!(h.contains("href=\"map.html?project=p1\""), "{h}");
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("href=\"street.html?street=") && h.contains("&amp;project=p1\""), "{h}");
+    let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+    let h = html(|| view! { <page::Stuck i18n=i18n.clone() map=crate::shared::project_id::link("map.html", Some("p1"))/> }.into_any());
+    assert!(h.contains("href=\"map.html?project=p1\""), "{h}");
+}
+
+#[test]
+fn a_junction_page_for_a_project_not_here_goes_to_the_list_and_for_no_junction_to_its_project_s_map() {
+    use crate::shared::ports::Storage;
+    crate::sync::hub::reset();
+    let t = crate::shared::ports::test_ports_full();
+    assert_eq!(crate::project::ProjectStore::new(t.ports.storage.clone()).create("P").unwrap().id, "p1");
+    *t.page.path.borrow_mut() = "/intersection.html?junction=3&project=gone".into();
+    assert!(!super::enter_junction_in(t.ports.clone(), 3));
+    assert!(super::open_junction_in(t.ports.clone(), 3).is_none());
+    assert_eq!(t.navigator.take_replaced(), [crate::project::context::MISSING_HREF, crate::project::context::MISSING_HREF]);
+    assert!(t.storage.keys().iter().all(|k| !k.ends_with("@gone")), "{:?}", t.storage.keys());
+    // a junction the project's city does not have (no roads are kept here): back to that project's map
+    *t.page.path.borrow_mut() = "/intersection.html?junction=999&project=p1".into();
+    assert!(!super::enter_junction_in(t.ports.clone(), 999));
+    assert!(!super::enter_junction_in(t.ports.clone(), 0));
+    assert_eq!(t.navigator.take_replaced(), ["map.html?project=p1", "map.html?project=p1"]);
+    crate::sync::hub::reset();
+}
+
+#[test]
 fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
     let s = shared(0);
     let n = arm(&s, 0);
@@ -1428,7 +1472,7 @@ fn junction_four() -> crate::shared::said::Said {
 fn a_junction_that_cannot_be_drawn_says_so_in_english() {
     use crate::shared::i18n::Locale;
     let i18n = crate::i18n_for(Locale::En);
-    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone()/> }.into_any());
+    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone() map="map.html"/> }.into_any());
     for want in [
         "<h1 id=\"street-name\">Junction 4</h1>",
         "class=\"stuck\"",
@@ -1445,7 +1489,7 @@ fn a_junction_that_cannot_be_drawn_says_so_in_english() {
 fn a_junction_that_cannot_be_drawn_says_so_in_french() {
     use crate::shared::i18n::Locale;
     let i18n = crate::i18n_for(Locale::FrCa);
-    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone()/> }.into_any());
+    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone() map="map.html"/> }.into_any());
     speaks_french(
         &h,
         &["Junction", "cannot be drawn", "The streets", "City map"],
@@ -1477,7 +1521,7 @@ fn the_junction_page_and_the_page_of_one_that_cannot_be_drawn_start_in_the_store
     let i18n = super::page_i18n(&ports);
     assert_eq!(i18n.locale_now(), Locale::FrCa);
     assert_eq!(*page.lang.borrow(), "fr-CA", "the document says the language the page is in");
-    let h = html(|| view! { <page::Stuck i18n=i18n.clone()/> }.into_any());
+    let h = html(|| view! { <page::Stuck i18n=i18n.clone() map="map.html"/> }.into_any());
     assert!(h.contains("Cette jonction ne peut pas être dessinée"), "{h}");
 }
 

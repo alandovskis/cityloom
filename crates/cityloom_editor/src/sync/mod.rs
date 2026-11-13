@@ -8,7 +8,7 @@ pub mod hub;
 pub mod local;
 pub mod model;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 pub mod text;
 pub mod vm;
 

@@ -12,6 +12,7 @@ use leptos::prelude::*;
 use crate::restriction::store::RestrictionStore;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::{Me, Ports, WorkAsk, WorkError, WorkPushed, WorkPut, WorkRecord, WorkStatus};
+use crate::shared::project_id::wire_key;
 use crate::sync::model::{self, Change, Decision, Entry, Id, Kind, Origin, Report, SyncDoc};
 use crate::sync::{hub, local, text};
 
@@ -59,7 +60,11 @@ pub struct SyncVm {
 }
 
 impl SyncVm {
+    /// `ports.storage` is the ROOT storage, never a project's (`ScopedStorage`): the sync carries every project, and
+    /// `sync::local` finds each record's project from its wire key. Given a project's storage it refuses, in a release
+    /// build too: it would prefix that project's keys a second time.
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<SyncVm> {
+        assert!(ports.storage.project().is_none(), "the sync is given the root storage, not a project's");
         let key = ports.storage.identity();
         let vm = Rc::new(SyncVm {
             ports,
@@ -181,7 +186,8 @@ impl SyncVm {
         }
         self.cancel_timer();
         let storage = self.ports.storage.clone();
-        let Some(doc) = model::open(&*storage) else { return };
+        let Some(mut doc) = model::open(&*storage) else { return };
+        hold_legacy(&mut doc, &storage);
         let usable = |kind: Kind| local::usable(&storage, kind);
         let batch = model::next_batch(&doc, &|id| local::read(&storage, id), &usable, true);
         if !batch.is_empty() {
@@ -287,18 +293,21 @@ impl SyncVm {
     /// Gives the `r<n>` rules random ids (once: later there are none). A rule that had been sent under its old id is
     /// removed there; the new ids are claimed as never marked.
     fn rename_rules(&self, doc: &mut SyncDoc) {
+        // The root storage: every project's rules are renamed, each in its own document.
         let storage = self.ports.storage.clone();
-        if !local::usable(&storage, Kind::Rule) {
-            return;
-        }
-        let renamed = RestrictionStore::new(storage.clone()).rename_numbered(&mut || storage.random_hex());
-        for (old, _) in renamed {
-            let id = Id::new(Kind::Rule, &old);
-            let seen = doc.entry(&id).map_or(0, |e| e.rev);
-            if seen > 0 {
-                doc.records.insert(id.name(), Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: true, rev: seen, blocked: false });
-            } else {
-                doc.forget(&id);
+        for project in local::projects(&storage) {
+            let rules = RestrictionStore::new(local::scoped(&storage, &project));
+            if !rules.is_usable() {
+                continue;
+            }
+            for (old, _) in rules.rename_numbered(&mut || storage.random_hex()) {
+                let id = Id::new(Kind::Rule, &wire_key(&project, &old));
+                let seen = doc.entry(&id).map_or(0, |e| e.rev);
+                if seen > 0 {
+                    doc.records.insert(id.name(), Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: true, rev: seen, blocked: false });
+                } else {
+                    doc.forget(&id);
+                }
             }
         }
     }
@@ -343,6 +352,19 @@ impl SyncVm {
         }
         let waiting = model::open(&**storage).is_some_and(|doc| doc.has_pending(&|_| true));
         if ok && !waiting { Status::Synced } else { Status::NotSynced }
+    }
+}
+
+/// Leaves out of a copy of the document about to be sent every pending record the document from before projects still
+/// holds and `first` does not (`local::legacy_hold`, read once, and only while a move is unfinished): read from
+/// `first` it has no body and would go up as a removal. Its entry stays pending in the stored document, so it goes once
+/// the move has taken it.
+fn hold_legacy(sendable: &mut SyncDoc, storage: &Rc<dyn crate::shared::ports::Storage>) {
+    let Some(hold) = local::legacy_hold(storage) else { return };
+    for (name, entry) in sendable.records.iter_mut().filter(|(_, e)| e.pending) {
+        if Id::from_name(name).is_some_and(|id| hold.holds(&id)) {
+            entry.pending = false;
+        }
     }
 }
 
@@ -485,7 +507,9 @@ impl Run {
                     if !kept {
                         return Applied::Failed;
                     }
-                    self.received.set(self.received.get() + 1);
+                    if id.kind.is_place() {
+                        self.received.set(self.received.get() + 1);
+                    }
                     self.changes.borrow_mut().push(Change { id: id.clone(), origin: if replaced { Origin::Replaced } else { Origin::Remote } });
                 }
                 model::adopted(doc, &id, remote);
@@ -530,7 +554,9 @@ impl Run {
                     continue;
                 }
                 if here {
-                    self.received.set(self.received.get() + 1);
+                    if id.kind.is_place() {
+                        self.received.set(self.received.get() + 1);
+                    }
                     self.changes.borrow_mut().push(Change { id: id.clone(), origin: Origin::Remote });
                 }
                 doc.forget(&id);
@@ -569,6 +595,7 @@ impl Run {
                 e.pending = false;
             }
         }
+        hold_legacy(&mut sendable, &storage);
         let mut batch = model::next_batch(&sendable, &|id| local::read(&storage, id), &usable, false);
         if self.single.get() {
             batch.truncate(1);
@@ -635,7 +662,9 @@ impl Run {
             match result.status {
                 WorkStatus::Accepted => {
                     model::accepted(&mut doc, put, result.rev);
-                    self.sent.set(self.sent.get() + 1);
+                    if kind.is_place() {
+                        self.sent.set(self.sent.get() + 1);
+                    }
                     // The batch that was too big is behind: the rest goes together again.
                     self.single.set(false);
                 }

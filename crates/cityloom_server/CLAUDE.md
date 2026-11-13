@@ -13,7 +13,7 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 - `session`: `__Host-cityloom-session`, 30 days sliding, refreshed after a day. `flow`: `__Host-cityloom-flow`, encrypted, ten minutes, `safe_return`.
 - `providers`: one OpenID Connect client for OpenStreetMap, Google, Microsoft, Apple. `apple.rs` signs/renews Apple's client secret; `microsoft.rs` checks the issuer against the token's own tenant.
 - `auth`, `api` (`api/work.rs` is `/api/work`, see `src/sync/CLAUDE.md`).
-- `work`: rules over metadata, no I/O (`Put`, `plan_batch`, `Ask`); `db/work.rs` is `WorkRepo`. Migration `0002_work.sql`: `users.work_rev`, `users.work_epoch` (new each time storage is turned on), `work` table (row per `(user, kind, key)`, tombstone flag, purged after 90 days).
+- `work`: rules over metadata, no I/O (`Put`, `plan_batch`, `Ask`); `db/work.rs` is `WorkRepo`. Migration `0002_work.sql`: `users.work_rev`, `users.work_epoch` (new each time storage is turned on), `work` table (row per `(user, kind, key)`, tombstone flag, purged after 90 days). Migration `0003_work_project_kind.sql` lets `work.kind` be `project` (`Kind::Project`; the key is the project id; other kinds' keys may carry a `<project>:` prefix, bare ones are the `first` project's; no row is rewritten, the AD stays `work.<kind>.<key>.<user_id>`).
 - `app`: router, Origin check on changes, `require_ready`, request logs without queries. Rate limits keyed on the rightmost `X-Forwarded-For` (Railway's proxy appends it; `client_address`): `/auth` `AUTH_RATE_PERIOD_SECS`/`AUTH_RATE_BURST` (6 s, 20); `/api/work` own limiter `WORK_RATE_PERIOD_SECS`/`WORK_RATE_BURST` (1 s, 60). `e2e/playwright.config.ts` raises both bursts.
 - `fake_provider`: feature `test-provider` only, never in a release (`scripts/check-no-fake.sh`); tests pick who signs in with the `fake-login` cookie.
 
@@ -48,7 +48,7 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 
 - Pages that run the module carry a hidden `#boot-failed` notice in both languages (`data-boot` keys `ui-boot-*`; checked by `shell::tests`), shown by `window.cityloomBootFailed()` (`web/boot.js`: classic script before the entry script, unversioned so it exists when the build's addresses do not).
 - The entry script's `onerror` calls it when the entry script or a static import (`city.js`, `mapcanvas.js`) is a 404 (a deploy after the page opened does this to `/v/<old build>/`); each entry script wraps only `import()` and `init()` of the glue in `try … catch` and calls it.
-- Home mounts search first (`mount_home`), the city after roads arrive (`MapPage::mount_city`; `#hero-facts-slot` keeps room for the facts line).
+- Home mounts the list of projects (`mount_projects`) and reads no city. The About page (`about.html`) mounts its words first (`mount_about`), the city after roads arrive (`AboutPage::mount_city`, `lib.rs`; `#hero-facts-slot` keeps room for the facts line). Pages are served by the same generic rule (any `*.html` gets its `{{build}}`), so a new page needs no server change.
 
 ## Tests
 

@@ -16,7 +16,10 @@ try {
 // so and has no map to show.
 await wasm.prepare_city();
 
+// The map of the page's project (`?project=p1`, else the one opened last); without one the module has sent the
+// page to the list.
 const page = wasm.mount_map(await canvas.createMapCanvas("map-canvas"));
+if (!page) await new Promise(() => {});
 page.mount_shell();
 // The shell makes the Share menu's Download report item when it mounts, so it is bound after.
 page.bind_report();

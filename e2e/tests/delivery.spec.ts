@@ -1,6 +1,6 @@
 import { expect, forgive, placesOnMap, test } from "./fixtures";
 
-const PAGES = ["/", "/map.html", "street", "junction", "/account.html"];
+const PAGES = ["/", "/about.html", "/map.html", "street", "junction", "/account.html"];
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
 test.describe("the delivery of the site's code", () => {
@@ -162,7 +162,7 @@ test.describe("a module that does not start", () => {
 
   test("shows nothing when the module starts", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#search")).toBeVisible();
+    await expect(page.locator("h1")).toHaveText("Your projects");
     await expect(page.locator("#boot-failed")).toBeHidden();
   });
 });

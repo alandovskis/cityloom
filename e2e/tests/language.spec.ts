@@ -167,6 +167,11 @@ const OPENERS: { name: string; open: (page: Page) => Promise<unknown>; ready?: (
     // The shell binds the menus once the page's module has loaded; a click before that does nothing.
     ready: (page) => expect(page.locator("#region option")).toHaveCount(6),
   },
+  {
+    name: "about",
+    open: (page) => page.goto("/about.html"),
+    ready: (page) => expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible(),
+  },
   { name: "map", open: (page) => page.goto("/map.html"), ready: mapReady },
   { name: "street", open: (page) => openStreet(page) },
   { name: "junction", open: (page) => openJunction(page) },
@@ -225,20 +230,16 @@ test("the map page can be read in French and the choice is kept", async ({ page 
 
 test("the home page can be read in French and the choice is kept", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("#region option")).toHaveCount(6);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
+  await expect(page.locator("h1")).toHaveText("Your projects");
   await chooseFrench(page);
-  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
-  await expect(page.locator("#search")).toHaveAttribute("placeholder", "Chercher un lieu, comme Kreuzberg, Berlin");
-  await expect(page.locator(".search-go")).toHaveText("Chercher");
-  await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
-  await expect(page.locator(".hero-facts")).toContainText("rues");
-  await expect(page).toHaveTitle("CityLoom : réaménagez les rues de votre ville");
+  await expect(page.locator("h1")).toHaveText("Vos projets");
+  await expect(page).toHaveTitle("Projets CityLoom");
   await page.reload();
-  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("#region option")).toHaveCount(6);
   await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
-  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+  await expect(page.locator("h1")).toHaveText("Vos projets");
 });
 
 test("the junction page can be read in French and the choice is kept", async ({ page }) => {
@@ -285,10 +286,10 @@ const breakJunctions = async (page: Page) => {
   await page.goto("/map.html");
   await mapReady(page);
   await page.evaluate(() => {
-    const edits = JSON.parse(localStorage.getItem("cityloom-edits")!);
+    const edits = JSON.parse(localStorage.getItem("cityloom-edits@first")!);
     for (const record of Object.values<any>(edits.streets))
       for (const segment of record.street.segments) segment.width_mm *= 40;
-    localStorage.setItem("cityloom-edits", JSON.stringify(edits));
+    localStorage.setItem("cityloom-edits@first", JSON.stringify(edits));
   });
 };
 
@@ -304,7 +305,7 @@ test("a junction that cannot be drawn says so, keeps its shell and follows the l
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
   expect(name).not.toBe("");
   expect(await page.title()).toContain(name);
-  await expect(stuck.locator("a.back")).toHaveAttribute("href", "map.html");
+  await expect(stuck.locator("a.back")).toHaveAttribute("href", "map.html?project=first");
 
   // The shell still works: the settings menu opens and the language switch re-words the panel.
   await chooseFrench(page);

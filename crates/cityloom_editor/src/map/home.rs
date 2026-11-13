@@ -1,5 +1,5 @@
-//! The home page's views: the city drawn quietly behind the hero card, and a line
-//! saying how the city stands. The search box is the map's own.
+//! The About page's views: the city drawn quietly behind the About card, and a line
+//! saying how the city stands.
 
 use std::rc::Rc;
 
@@ -72,11 +72,11 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
-/// The home page's window title, in the language of the page. The shell leaves `<title>` to the page.
+/// The About page's window title, its heading in the language of the page. The shell leaves `<title>` to the page.
 #[component]
-pub fn HomeTitle(vm: Rc<MapVm>) -> impl IntoView {
+pub fn AboutTitle(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
-    Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-home-title"))));
+    Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-about-heading"))));
 }
 
 /// How the city stands: its name and size, and whether it works.

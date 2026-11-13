@@ -1,0 +1,135 @@
+/* The About page (about.html, over home.css): what CityLoom is for, in a card floating over the city of the project
+   opened last, drawn behind it. */
+
+#hero-map-slot {
+  display: contents;
+}
+
+.hero-map {
+  position: fixed;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  right: -14vw;
+  bottom: -10vh;
+  pointer-events: none;
+  /* Every street, the freeway too, eases in from the card's edge instead of starting with a cut. */
+  --card-right: calc(clamp(16px, 5vw, 80px) + 780px);
+  -webkit-mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
+  mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
+}
+/* A backdrop: its names would be cut by the card, and nothing in it is read. */
+.hero-map #map .m-name,
+.hero-map #map .m-tag {
+  display: none;
+}
+.hero-map svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* The same drawing as the map page, without its labels' halo being needed on a plain ground. */
+.hero-map #map line,
+.hero-map #map circle {
+  fill: none;
+  stroke-linecap: butt;
+}
+
+.hero {
+  position: relative;
+  z-index: 5;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 48px;
+}
+.about-heading {
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* The skip link's target: focus is shown only when the keyboard put it there. */
+.about-heading:focus {
+  outline: none;
+}
+.about-heading:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.about-title {
+  margin-top: 8px;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.lead {
+  margin-top: 16px;
+  max-width: 52ch;
+  color: var(--ink-2);
+  font-size: clamp(17px, 1.8vw, 20px);
+  line-height: 1.45;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  margin-top: 28px;
+}
+.hero-actions .btn {
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+/* The room for the line that says how the city stands, which comes when the city's roads are got; the card is
+   centred, so it would move when the line arrived. One line is its height: margin 28 + rule and padding 19 + text 22. */
+#hero-facts-slot {
+  display: flow-root;
+  min-height: 69px;
+}
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  color: var(--ok);
+  font-size: 15px;
+  font-weight: 600;
+}
+.hero-facts.bad {
+  color: var(--warn);
+}
+.hero-note {
+  margin-top: 6px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+@media (max-width: 899px) {
+  .hero-map {
+    position: relative;
+    left: 0;
+    height: 36svh;
+    order: 3;
+    right: 0;
+    bottom: 0;
+    -webkit-mask-image: none;
+    mask-image: none;
+    margin: 0 8px 8px;
+    border-radius: var(--r-card);
+    overflow: hidden;
+  }
+  .hero {
+    order: 2;
+    padding: 4px 8px 12px;
+  }
+}

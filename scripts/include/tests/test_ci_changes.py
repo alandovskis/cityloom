@@ -54,6 +54,23 @@ class Selection(unittest.TestCase):
                 self.assertFalse(s.integration)
                 self.assertFalse(s.e2e)
 
+    def test_the_list_of_projects_runs_the_home_specs_and_the_project_store_runs_every_page_that_opens_one(self):
+        for f in ("vm.rs", "view.rs", "text.rs", "i18n/en.ftl"):
+            with self.subTest(f):
+                s = pick(f"crates/cityloom_editor/src/project/{f}")
+                self.assertIn("projects", s.specs)
+                self.assertIn("a11y", s.specs)
+                self.assertNotIn("map", s.specs)
+                self.assertNotIn("sync", s.specs)
+        # Which project a page opens, the list's store and the move of the old work: every page and the sync use them.
+        for f in ("context.rs", "store.rs", "model.rs", "migrate.rs", "mod.rs"):
+            with self.subTest(f):
+                s = pick(f"crates/cityloom_editor/src/project/{f}")
+                for spec in ("projects", "home", "map", "street", "junction", "sync", "account", "archive", "a11y"):
+                    self.assertIn(spec, s.specs)
+                self.assertTrue(s.integration)
+                self.assertTrue(s.e2e)
+
     def test_the_server_and_the_sync_run_the_integration_tier(self):
         self.assertTrue(pick("crates/cityloom_server/src/app.rs").integration)
         s = pick("crates/cityloom_editor/src/sync/vm.rs")

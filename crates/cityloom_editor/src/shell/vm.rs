@@ -30,6 +30,10 @@ pub trait Target {
     fn apply_region(&self, region: usize) -> bool;
     /// The id of the region the page's model now holds.
     fn region_id(&self) -> String;
+    /// The project the page is opened in; none for a page outside a project.
+    fn project(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The target of a page that has nothing of its own to bind (a junction that cannot be drawn): the menu
@@ -37,9 +41,21 @@ pub trait Target {
 #[derive(Default)]
 pub struct Bare {
     region: std::cell::RefCell<String>,
+    project: Option<String>,
+}
+
+impl Bare {
+    /// The target of a bare page opened in `project`.
+    pub fn in_project(project: Option<String>) -> Bare {
+        Bare { project, ..Bare::default() }
+    }
 }
 
 impl Target for Bare {
+    fn project(&self) -> Option<String> {
+        self.project.clone()
+    }
+
     fn set_units(&self, _: Units) {}
 
     fn apply_region(&self, region: usize) -> bool {
@@ -206,6 +222,12 @@ impl ShellVm {
 
     fn say(&self, key: &str) -> String {
         self.i18n.tr_now(key, &Args::new())
+    }
+
+    /// `href` as a link of this page: one to the map or an editor names the page's project, so it opens there whichever
+    /// project another tab opened since (`shared::project_id::link`).
+    pub fn link(&self, href: &str) -> String {
+        crate::shared::project_id::link(href, self.target.project().as_deref())
     }
 
     // ---- units ----

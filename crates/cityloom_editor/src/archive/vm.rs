@@ -30,10 +30,26 @@ pub struct ArchiveVm {
     waiting: ArcRwSignal<Option<Differences>>,
     held: RefCell<Option<Archive>>,
     focus: ArcRwSignal<(u32, Focus)>,
+    /// No project resolves on the page: there is nothing to export and nowhere to import into, so every command does
+    /// nothing (the root storage is never written).
+    inert: bool,
 }
 
 impl ArchiveVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<ArchiveVm> {
+        ArchiveVm::made(ports, i18n, false)
+    }
+
+    /// The archive of the page's project (`project::context::peek`, from the page's own ports); where no project
+    /// resolves (none opened, or the one opened last deleted since), one whose commands do nothing.
+    pub fn for_page(ports: Ports, i18n: Rc<I18n>) -> Rc<ArchiveVm> {
+        match crate::project::context::peek(ports.clone()) {
+            Some(ports) => ArchiveVm::made(ports, i18n, false),
+            None => ArchiveVm::made(ports, i18n, true),
+        }
+    }
+
+    fn made(ports: Ports, i18n: Rc<I18n>, inert: bool) -> Rc<ArchiveVm> {
         Rc::new(ArchiveVm {
             ports,
             i18n,
@@ -41,6 +57,7 @@ impl ArchiveVm {
             waiting: ArcRwSignal::new(None),
             held: RefCell::new(None),
             focus: ArcRwSignal::new((0, Focus::None)),
+            inert,
         })
     }
 
@@ -88,6 +105,9 @@ impl ArchiveVm {
 
     /// Offers this device's design work as a file.
     pub fn export(&self) {
+        if self.inert {
+            return;
+        }
         let text = match model::export(&self.ports.storage) {
             Ok(text) => text,
             Err(e) => return self.finish(Outcome::Failed(e), Focus::Result),
@@ -110,6 +130,9 @@ impl ArchiveVm {
 
     /// Lets the person choose an archive and reads it.
     pub fn import(self: &Rc<Self>) {
+        if self.inert {
+            return;
+        }
         let vm = self.clone();
         self.ports.files.pick(Box::new(move |picked| {
             if let Some(picked) = picked {
@@ -121,6 +144,9 @@ impl ArchiveVm {
     /// Reads `text` as an archive. Nothing is written unless it is whole and the work it would change is readable;
     /// where places differ, nothing is written until the person chooses.
     pub fn import_text(&self, text: &str) {
+        if self.inert {
+            return;
+        }
         self.held.borrow_mut().take();
         self.waiting.set(None);
         let archive = match model::parse_and_validate(text) {

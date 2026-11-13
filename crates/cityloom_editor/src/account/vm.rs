@@ -689,8 +689,9 @@ mod tests {
         let _sync = sync_for(&t);
         vm.load();
         t.account.answer(AccountReply::Me(Ok(me(None, vec![identity("a", "google", None)]))));
-        // a street edited here before storage was turned on
-        let store = crate::city::store::CityStore::sample(t.ports.storage.clone());
+        // a street edited here, in the first project, before storage was turned on
+        let first: Rc<dyn crate::shared::ports::Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), "first"));
+        let store = crate::city::store::CityStore::sample(first);
         let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
         s.segments[1].width_mm += 100;

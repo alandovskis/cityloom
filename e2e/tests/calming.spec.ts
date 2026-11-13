@@ -45,7 +45,7 @@ async function addElement(page: Page, cell: number, metres: number, kind = "0") 
 }
 
 const editsVersion = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "{}").version);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "{}").version);
 
 test.describe("raised tables and crossings", () => {
   test("a table is added with the tools, drawn, kept over a reload and undone", async ({ page }) => {

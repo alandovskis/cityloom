@@ -1,26 +1,19 @@
-//! Finding a place and the roads in it: what is asked of Nominatim and of the metro tiles,
-//! and how their answers are read. Pure, so it is tested without a network.
+//! A place and the roads in it: what is asked of the metro tiles, and how their answers are read. Pure, so it is
+//! tested without a network.
 
 pub mod area;
 pub mod loader;
-pub mod nominatim;
 pub mod tiles;
-pub mod view;
-pub mod vm;
 
 use crate::shared::i18n::{I18n, Resources};
 use crate::shared::said::Said;
 use crate::shared::units::Units;
 
-/// What the place search says, in both languages.
+/// Why a place's roads could not be had, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
-/// A place's message in words, for a view. Nothing a place says has a length in it, so the units do not matter.
-pub fn say(i18n: &I18n, said: &Said) -> String {
-    crate::shared::said::say(i18n, Units::Metres, said)
-}
-
-/// The same, for a command: nothing is watched.
+/// A place's message in words, for a command: nothing is watched. Nothing a place says has a length in it, so the
+/// units do not matter.
 pub fn say_now(i18n: &I18n, said: &Said) -> String {
     crate::shared::said::say_now(i18n, Units::Metres, said)
 }
@@ -118,6 +111,29 @@ mod tests {
     }
 
     #[test]
+    fn the_words_of_the_place_search_are_gone_with_it() {
+        // A project's area is fixed when it is made: nothing searches for a place any more.
+        let gone = [
+            "place-search-label",
+            "place-search-placeholder",
+            "place-results",
+            "place-find",
+            "place-open",
+            "place-searching",
+            "place-found",
+            "place-nothing",
+            "place-loading",
+            "place-search-unexpected",
+            "place-area-not-kept",
+            "place-problem",
+        ];
+        for ftl in [RESOURCES.en, RESOURCES.fr] {
+            let held: Vec<&str> = ftl.lines().filter_map(|l| l.split_once(" =").map(|(id, _)| id.trim())).filter(|id| gone.contains(id)).collect();
+            assert_eq!(held, Vec::<&str>::new());
+        }
+    }
+
+    #[test]
     fn a_load_failure_is_worded_in_the_language_the_page_starts_in() {
         use crate::shared::i18n::{Locale, detect};
         use crate::shared::ports::test_ports_with_page;
@@ -138,8 +154,9 @@ mod tests {
     }
 }
 
-/// Gets the roads of the area the person is working in, from where they come from, unless
-/// they are already kept. The pages call this before they open the city. Resolves with the
+/// Gets the roads of the area the person is working in (the area of the page's project, `project::context::peek`),
+/// from where they come from, unless they are already kept. The pages call this before they open the city. Resolves
+/// with the
 /// empty string when the city is ready, or with what went wrong, in words; the city is then the
 /// sample, so the page still works.
 ///
@@ -151,7 +168,10 @@ pub fn prepare_city() -> js_sys::Promise {
     use crate::city::store::CityStore;
     use crate::shared::platform::browser_ports;
     js_sys::Promise::new(&mut |resolve, _| {
-        let ports = browser_ports();
+        // With no project the default area's roads are got: only the roads are kept (shared by every project), no
+        // project's work.
+        let root = browser_ports();
+        let ports = crate::project::context::peek(root.clone()).unwrap_or(root);
         let store = CityStore::current(ports.storage.clone());
         let announcer = ports.announcer.clone();
         let i18n = crate::i18n_for(crate::shared::i18n::detect(&ports));

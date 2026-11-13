@@ -6,7 +6,8 @@ import { anotherBrowser, expect, live, test } from "./fixtures";
 
 test.beforeEach(async ({ request }) => requireServer(request));
 
-// The merge ends the announcement of the choice: nothing was waiting on a fresh account.
+// The merge ends the announcement of the choice: nothing was waiting on a fresh account (the browser's first project
+// goes up too, but a project's own record is no place).
 const MERGED = "Your work was merged with your account: 0 places sent, 0 places received.";
 
 test.describe("signed out", () => {

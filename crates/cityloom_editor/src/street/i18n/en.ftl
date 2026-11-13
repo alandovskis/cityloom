@@ -1,7 +1,5 @@
 # What the street page says: the markup of street.html.
 st-page-description = Rearrange a street's fixed width: add, move and resize its pieces and see at once whether it fits.
-st-editors = Editors
-st-map = Map
 st-piece-details = Piece details
 st-details-toggle-title = Show or hide the piece details ( [ )
 st-key-select = select

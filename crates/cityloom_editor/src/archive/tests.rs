@@ -88,9 +88,15 @@ fn the_design_survives_export_then_import_into_an_empty_device() {
     assert_eq!(stored(&b.storage, RESTRICTIONS_KEY)["restrictions"], stored(&a.storage, RESTRICTIONS_KEY)["restrictions"]);
     // the imported work is an edit like any other: marked, so that a device that syncs sends it
     let doc = sync::open(&*b.ports.storage).expect("a sync document was written");
-    for id in
-        [Kind::Street, Kind::Junction, Kind::Rule].iter().flat_map(|k| crate::sync::local::ids(&b.ports.storage).into_iter().filter(move |i| i.kind == *k))
-    {
+    // The archive still works on the device's own (unscoped) documents: list their records as the sync names them.
+    let draft = edits::draft(b.storage.recall(EDITS_KEY).as_deref()).ok().unwrap();
+    let ids: Vec<Id> = [(Kind::Street, edits::STREETS), (Kind::Junction, edits::JUNCTIONS)]
+        .into_iter()
+        .flat_map(|(kind, section)| draft.raw_keys(section).into_iter().map(move |key| Id { kind, key }))
+        .chain(RestrictionStore::new(b.ports.storage.clone()).raw_ids().into_iter().map(|key| Id { kind: Kind::Rule, key }))
+        .collect();
+    assert_eq!(ids.len(), 3);
+    for id in ids {
         assert!(doc.entry(&id).is_some_and(|e| e.pending), "{id:?} waits to be sent");
     }
 }
@@ -238,6 +244,9 @@ fn every_kind_of_bad_archive_gets_its_own_error_and_leaves_storage_byte_identica
         ("streets that are not an object", with(&|v| v["edits"]["streets"] = json!(5)), ArchiveError::Damaged(model::PART_EDITS)),
         ("a street that is not an object", with(&|v| v["edits"]["streets"] = json!({"w1~n2~n3": 7})), ArchiveError::Damaged(model::PART_EDITS)),
         ("a key the sync cannot carry", with(&|v| v["edits"]["streets"] = json!({"a b": {}})), ArchiveError::Damaged(model::PART_EDITS)),
+        // imported into the first project it would travel as project p-abc's
+        ("a key naming another project", with(&|v| v["edits"]["junctions"] = json!({"p-abc:n7": {}})), ArchiveError::Damaged(model::PART_EDITS)),
+        ("a rule id naming another project", with(&|v| v["restrictions"]["restrictions"] = json!({"p-abc:r-1": {}})), ArchiveError::Damaged(model::PART_RULES)),
         ("newer rules", with(&|v| v["restrictions"]["version"] = json!(2)), ArchiveError::RulesNewer(2)),
         ("rules without a version", with(&|v| drop(v["restrictions"].as_object_mut().unwrap().remove("version"))), ArchiveError::Damaged(model::PART_RULES)),
         ("rules that are not a table", with(&|v| v["restrictions"]["restrictions"] = json!("x")), ArchiveError::Damaged(model::PART_RULES)),
@@ -428,6 +437,140 @@ fn export_offers_a_file_and_says_so_and_with_no_work_makes_none() {
     t.files.refuse_saves(true);
     vm.export();
     assert!(vm.result_text().unwrap().starts_with("The file could not be offered"));
+}
+
+#[test]
+fn with_no_project_open_the_archive_of_the_page_does_nothing_and_with_one_it_works_in_it() {
+    use crate::project::ProjectStore;
+    let a = device();
+    design(&a.ports.storage);
+    let text = archive_of(&a);
+    let b = device();
+    // none opened, then one opened and deleted since: the page resolves no project
+    for gone in [false, true] {
+        if gone {
+            let p = ProjectStore::new(b.ports.storage.clone()).create("Gone").unwrap();
+            assert!(ProjectStore::new(b.ports.storage.clone()).open(&p.id));
+            assert!(ProjectStore::new(b.ports.storage.clone()).delete(&p.id));
+        }
+        let before = snapshot(&b.storage);
+        let vm = ArchiveVm::for_page(b.ports.clone(), crate::i18n_for(Locale::En));
+        b.files.stage("x.cityloom-design.json", &text);
+        vm.import();
+        vm.import_text(&text);
+        vm.choose(Choice::UseArchive);
+        vm.export();
+        assert_eq!(snapshot(&b.storage), before, "nothing written and nothing marked");
+        assert_eq!(b.files.take_saved(), vec![]);
+        assert_eq!(vm.result_text(), None);
+    }
+    // the page's project: the import goes into it
+    let p = ProjectStore::new(b.ports.storage.clone()).create("Here").unwrap();
+    *b.page.path.borrow_mut() = format!("/account.html?project={}", p.id);
+    let vm = ArchiveVm::for_page(b.ports.clone(), crate::i18n_for(Locale::En));
+    vm.import_text(&text);
+    assert!(b.storage.recall(&format!("{EDITS_KEY}@{}", p.id)).is_some_and(|v| !v.is_empty()));
+    assert_eq!(b.storage.recall(EDITS_KEY), None);
+}
+
+/// A device with two projects, `first` holding `design` and `p1` holding only a street of its own and a rule of its
+/// own; the page is opened in `p1`.
+fn two_projects() -> (TestPorts, String) {
+    use crate::project::ProjectStore;
+    use crate::shared::scoped::in_project;
+    let t = device();
+    let projects = ProjectStore::new(t.ports.storage.clone());
+    let first = projects.create("First").unwrap();
+    let p1 = projects.create("Other").unwrap();
+    design(&in_project(t.ports.clone(), &first.id).storage);
+    let own = in_project(t.ports.clone(), &p1.id).storage;
+    let city = CityStore::sample(own.clone());
+    let street = city.open().view(0).edges[1].uid;
+    let mut s = city.open().street_editor(street, 0).unwrap().snapshot();
+    s.segments[0].width_mm -= 300;
+    s.segments[1].width_mm += 300;
+    assert!(city.write_street(street, s));
+    assert!(RestrictionStore::new(own).add("Only here", Rule::SpeedLimit { kmh: 20 }, RING.to_vec()).is_some());
+    *t.page.path.borrow_mut() = format!("/account.html?project={}", p1.id);
+    (t, p1.id)
+}
+
+#[test]
+fn an_export_from_a_project_holds_that_project_s_work_and_none_of_another_s() {
+    let (t, p1) = two_projects();
+    let vm = ArchiveVm::for_page(t.ports.clone(), crate::i18n_for(Locale::En));
+    vm.export();
+    let saved = t.files.take_saved();
+    assert_eq!(saved.len(), 1);
+    let archive = model::parse_and_validate(&saved[0].1).unwrap();
+    assert_eq!((archive.streets(), archive.junctions(), archive.rules()), (1, 0, 1));
+    let doc: Value = serde_json::from_str(&saved[0].1).unwrap();
+    assert_eq!(doc["edits"]["streets"], stored(&t.storage, &format!("{EDITS_KEY}@{p1}"))["streets"]);
+    let names: Vec<&str> = doc["restrictions"]["restrictions"].as_object().unwrap().values().filter_map(|r| r["name"].as_str()).collect();
+    assert_eq!(names, ["Only here"]);
+}
+
+#[test]
+fn an_import_into_a_project_writes_only_that_project_s_documents_and_marks_only_its_records() {
+    let (t, p1) = two_projects();
+    // The archive: what p1 holds (the same), a street p1 holds edited another way (a conflict), and a junction and a
+    // rule it does not hold (new).
+    let a = device();
+    design(&a.ports.storage);
+    // the street p1 holds, edited another way on another device
+    let c = device();
+    let city = CityStore::sample(c.ports.storage.clone());
+    let street = city.open().view(0).edges[1].uid;
+    let mut s = city.open().street_editor(street, 0).unwrap().snapshot();
+    s.segments[0].width_mm -= 500;
+    s.segments[1].width_mm += 500;
+    assert!(city.write_street(street, s));
+    let differs = stored(&c.storage, EDITS_KEY)["streets"].clone();
+    let key = differs.as_object().unwrap().keys().next().unwrap().clone();
+    assert!(stored(&t.storage, &format!("{EDITS_KEY}@{p1}"))["streets"].get(&key).is_some(), "p1 holds that street");
+    let mut doc: Value = serde_json::from_str(&archive_of(&a)).unwrap();
+    doc["edits"]["streets"] = differs;
+    let mut rules = stored(&t.storage, &format!("{RESTRICTIONS_KEY}@{p1}"))["restrictions"].clone();
+    let theirs = doc["restrictions"]["restrictions"].as_object().unwrap().values().next().unwrap().clone();
+    rules["r9"] = theirs;
+    doc["restrictions"]["restrictions"] = rules;
+    let text = doc.to_string();
+
+    let before = snapshot(&t.storage);
+    let vm = ArchiveVm::for_page(t.ports.clone(), crate::i18n_for(Locale::En));
+    vm.import_text(&text);
+    assert!(vm.confirming(), "{:?}", vm.result_text());
+    let plan = model::plan_import(&model::parse_and_validate(&text).unwrap(), &crate::shared::scoped::in_project(t.ports.clone(), &p1).storage).unwrap();
+    assert_eq!((plan.count(Status::New), plan.count(Status::Same), plan.count(Status::Conflict)), (2, 1, 1));
+    vm.choose(Choice::UseArchive);
+    assert!(vm.result_text().unwrap().starts_with("Import finished. Added: 2. Replaced: 1."), "{:?}", vm.result_text());
+
+    let after = snapshot(&t.storage);
+    let changed: Vec<&String> =
+        after.keys().chain(before.keys()).filter(|k| before.get(*k) != after.get(*k)).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+    let edits_here = format!("{EDITS_KEY}@{p1}");
+    let rules_here = format!("{RESTRICTIONS_KEY}@{p1}");
+    assert_eq!(
+        changed,
+        [&edits_here, &rules_here, &sync::SYNC_KEY.to_string()].into_iter().collect::<std::collections::BTreeSet<_>>().into_iter().collect::<Vec<_>>()
+    );
+    assert_eq!(stored(&t.storage, &edits_here)["streets"][&key], doc["edits"]["streets"][&key]);
+    // every record the import marked is one of p1's
+    let earlier = MemoryStorage::default();
+    if let Some(doc) = before.get(sync::SYNC_KEY) {
+        earlier.remember(sync::SYNC_KEY, doc);
+    }
+    let was = sync::open(&earlier).map(|d| d.records).unwrap_or_default();
+    let now = sync::open(&*t.ports.storage).unwrap().records;
+    let marked: Vec<&String> = now.iter().filter(|(name, e)| was.get(*name) != Some(*e)).map(|(name, _)| name).collect();
+    // the new junction and rule (the replaced street was already waiting to be sent, as p1's own edit)
+    assert_eq!(marked.len(), 2, "{marked:?}");
+    let replaced = Id::new(Kind::Street, &crate::shared::project_id::wire_key(&p1, &key));
+    assert!(now.get(&replaced.name()).is_some_and(|e| e.pending), "{replaced:?} waits to be sent");
+    for name in marked {
+        let id = Id::from_name(name).unwrap();
+        assert_eq!(crate::shared::project_id::split_key(&id.key).0, p1, "{name}");
+    }
 }
 
 #[test]

@@ -1,42 +1,8 @@
-/* The home page: the city drawn behind one floating card, with the search box as the way in. */
+/* The pages in no project: the list of projects (index.html), and the About page (about.html, which adds
+   about.css). Each is one card under the bar. */
 
 body.home {
   min-height: 100svh;
-}
-#hero-map-slot {
-  display: contents;
-}
-
-.hero-map {
-  position: fixed;
-  z-index: 0;
-  top: 0;
-  left: 0;
-  right: -14vw;
-  bottom: -10vh;
-  pointer-events: none;
-  /* Every street, the freeway too, eases in from the card's edge instead of starting with a cut. */
-  --card-right: calc(clamp(16px, 5vw, 80px) + 780px);
-  -webkit-mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
-  mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
-}
-/* A backdrop: its names would be cut by the card, and nothing in it is read. */
-.hero-map #map .m-name,
-.hero-map #map .m-tag {
-  display: none;
-}
-.hero-map svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-/* The same drawing as the map page, without its labels' halo being needed on a plain ground. */
-.hero-map #map line,
-.hero-map #map circle {
-  fill: none;
-  stroke-linecap: butt;
 }
 
 .bar {
@@ -46,14 +12,14 @@ body.home {
   justify-self: start;
 }
 
-.hero {
+/* ---- the list of projects: the first thing on the page ---- */
+
+.projects {
   position: relative;
   z-index: 5;
-  min-height: 100svh;
-  display: grid;
-  align-items: center;
-  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 48px;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 24px;
 }
+.projects-card,
 .hero-card {
   width: min(780px, 100%);
   padding: 44px 48px;
@@ -61,118 +27,177 @@ body.home {
   background: var(--panel);
   box-shadow: var(--shadow);
 }
-.hero h1 {
-  font-size: clamp(34px, 5vw, 56px);
+.projects-card h1 {
+  font-size: clamp(30px, 4vw, 44px);
   font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
 }
-.lead {
-  margin-top: 16px;
-  max-width: 52ch;
-  color: var(--ink-2);
-  font-size: clamp(17px, 1.8vw, 20px);
-  line-height: 1.45;
+.projects-card h1:focus {
+  outline: none;
 }
-
-.hero-search {
-  margin-top: 28px;
+.projects-card h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
-/* The way in: a white field with a clear edge, a blue glyph, and a blue Search button. */
-.hero-search .search input {
-  height: 64px;
-  padding: 0 128px 0 58px;
-  border: 2px solid var(--field-line);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
-  font-size: 18px;
-}
-.hero-search .search input:hover {
-  border-color: var(--ink-2);
-}
-.hero-search .search input:focus {
-  border-color: var(--accent);
-}
-.hero-search .search-go {
-  right: 10px;
-  top: 10px;
-  display: block;
-  height: 44px;
-  padding: 0 22px;
-  border-radius: 10px;
-  font-size: 16px;
-}
-.hero-search .search-ico {
-  stroke: var(--accent);
-  left: 19px;
-  top: 19px;
-  width: 26px;
-  height: 26px;
-}
-.hero-search .search-key {
-  display: none;
-}
-.hero-search .search-pop {
-  top: calc(100% + 10px);
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 22px;
+.project-notice {
   margin-top: 18px;
-}
-.hero-actions .btn {
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 12px;
-  font-size: 16px;
-}
-
-/* The room for the line that says how the city stands, which comes when the city's roads are got; the card is
-   centred, so it would move when the line arrived. One line is its height: margin 28 + rule and padding 19 + text 22. */
-#hero-facts-slot {
-  display: flow-root;
-  min-height: 69px;
-}
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 6px;
-  margin-top: 28px;
-  padding-top: 18px;
-  border-top: 1px solid var(--rule);
-  color: var(--ok);
-  font-size: 15px;
+  padding: 12px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+  color: var(--ink);
   font-weight: 600;
 }
-.hero-facts.bad {
-  color: var(--warn);
+.project-empty {
+  margin-top: 16px;
+  color: var(--ink-2);
+  font-size: 17px;
 }
-.hero-note {
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 13px;
+.project-list {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.project-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+}
+.project-row:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+.project-open {
+  grid-column: 1;
+  justify-self: start;
+  color: var(--accent);
+  font-size: 19px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.project-meta {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.project-area-label {
+  font-weight: 600;
+}
+/* The date is its own item: on a wide line it stands apart, on a narrow one it takes the next line. */
+.project-changed {
+  margin-left: 12px;
+}
+@media (max-width: 520px) {
+  .project-changed {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+.project-row > .project-buttons {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.project-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.project-rename,
+.project-row > .confirm {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+.project-rename {
+  display: grid;
+  gap: 8px;
+}
+.confirm {
+  padding: 14px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+}
+.confirm > * + * {
+  margin-top: 10px;
+}
+.btn.danger {
+  border-color: var(--map-bad);
+}
+.project-create {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+.project-create h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.project-field {
+  display: grid;
+  gap: 6px;
+}
+.project-field label,
+.project-rename label {
+  font-weight: 600;
+}
+.project-create input,
+.project-create select,
+.project-rename input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+}
+.project-create input:focus-visible,
+.project-create select:focus-visible,
+.project-rename input:focus-visible {
+  border-color: var(--accent);
+}
+.project-create input[aria-invalid="true"],
+.project-rename input[aria-invalid="true"] {
+  border-color: var(--warn);
+}
+/* What the person is told about a field, under it. */
+.project-hint {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.project-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+.project-error:empty {
+  display: none;
+}
+.project-create-go {
+  justify-self: start;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.project-create-go:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+/* The page scrolls when its card is long: the version ends it instead of floating over the card. */
+body.home .site-foot {
+  position: relative;
+  height: auto;
+  padding: 0 clamp(16px, 5vw, 80px) 16px;
+  left: 0;
 }
 
 @media (max-width: 899px) {
-  .hero-map {
-    position: relative;
-    left: 0;
-    height: 36svh;
-    order: 3;
-    right: 0;
-    bottom: 0;
-    -webkit-mask-image: none;
-    mask-image: none;
-    margin: 0 8px 8px;
-    border-radius: var(--r-card);
-    overflow: hidden;
-  }
   body.home {
     display: flex;
     flex-direction: column;
@@ -185,26 +210,20 @@ body.home {
     grid-column: 1 / -1;
     grid-row: 2;
   }
-  .hero {
+  .projects {
     order: 1;
-    min-height: 0;
-    padding: 4px 8px 12px;
+    padding: 4px 8px 8px;
   }
+  .projects-card,
   .hero-card {
     width: 100%;
     padding: 28px 22px;
   }
-}
-
-@media (max-width: 520px) {
-  .hero-search .search input {
-    padding-right: 112px;
-    font-size: 16px;
+  .project-row {
+    grid-template-columns: 1fr;
   }
-  .hero-search .search-go {
-    padding: 0 16px;
-  }
-  .hero-search .search-key {
-    display: none;
+  .project-row > .project-buttons {
+    grid-column: 1;
+    grid-row: auto;
   }
 }

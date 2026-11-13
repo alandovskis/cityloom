@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync` and `project` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -15,6 +15,11 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
+    (
+        "src/project/store.rs",
+        "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
+    ),
+    ("src/project/tests.rs", "test-only"),
     ("src/archive/tests.rs", "test-only"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
@@ -122,10 +127,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/place/mod.rs", include_str!("place/mod.rs")),
     ("src/place/area.rs", include_str!("place/area.rs")),
     ("src/place/loader.rs", include_str!("place/loader.rs")),
-    ("src/place/nominatim.rs", include_str!("place/nominatim.rs")),
     ("src/place/tiles.rs", include_str!("place/tiles.rs")),
-    ("src/place/vm.rs", include_str!("place/vm.rs")),
-    ("src/place/view.rs", include_str!("place/view.rs")),
     ("src/junction/model.rs", include_str!("junction/model.rs")),
     ("src/junction/read_model.rs", include_str!("junction/read_model.rs")),
     ("src/junction/phase_svg.rs", include_str!("junction/phase_svg.rs")),
@@ -162,6 +164,13 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/frame.rs", include_str!("junction/frame.rs")),
     ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
     ("src/map/camera.rs", include_str!("map/camera.rs")),
+    ("src/project/context.rs", include_str!("project/context.rs")),
+    ("src/project/migrate.rs", include_str!("project/migrate.rs")),
+    ("src/project/mod.rs", include_str!("project/mod.rs")),
+    ("src/project/model.rs", include_str!("project/model.rs")),
+    ("src/project/text.rs", include_str!("project/text.rs")),
+    ("src/project/view.rs", include_str!("project/view.rs")),
+    ("src/project/vm.rs", include_str!("project/vm.rs")),
     ("src/city/projection.rs", include_str!("city/projection.rs")),
 ];
 
@@ -191,7 +200,7 @@ const ALLOWED: &[&str] = &[
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("the sync document serialises", "a panic message about the code, never shown"),
-    ("a street and a junction have a section", "a panic message about the code, never shown"),
+    ("the sync is given the root storage, not a project's", "a debug assertion about the code, never shown"),
     ("left: min(%, calc(100% - px)); width: max(%, px); top: px", "the style of a cell of the Green row, CSS"),
     ("hint archive-error", "two CSS classes of the design archive's refusal line"),
     ("an archive serialises", "a panic message about the code, never shown"),
@@ -240,7 +249,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),
     ("Point", "a GeoJSON geometry type, data for MapLibre"),
-    ("Plateau Mont-Royal, Montréal", "the default area's own name: a place name is data, like the names the place search gives"),
+    ("Plateau Mont-Royal, Montréal", "the default area's own name: a place name is data, like the street names OpenStreetMap gives"),
     ("an arm carries the street it reads", "a panic message about the code, never shown"),
     ("a junction state is always drawable", "a panic message about the code, never shown"),
     (" on", "a CSS class appended to a class list"),
@@ -472,6 +481,11 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
+    ("projects-heading", "the id of the list of projects' heading, where focus goes"),
+    ("project-name", "the id of the create form's name field, where focus goes"),
+    ("project-rename-field", "the id of the rename form's name field, where focus goes"),
+    ("project-delete-safe", "the id of the Cancel button of the question before deleting, where focus goes"),
     ("map-canvas", "the id of the element MapLibre draws the map into (web/map.html)"),
     ("iso-zebra", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
     ("iso-stopline", "the CSS class of a shape of the junction's 2.5D (junction/iso/scene.rs)"),
@@ -672,7 +686,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-theme-set", "the name of an attribute"),
     ("data-theme", "the name of an attribute"),
     ("data-covers", "the name of a data- attribute marking what floats over the map"),
-    ("search-slot", "the id of an element of the map and home pages"),
+    ("search-slot", "the id of an element of the map page"),
     ("map-tools-slot", "the id of an element of the map page"),
     ("map-slot", "the id of an element of the map page"),
     ("plan-key", "the id of an element of the map page"),
@@ -690,8 +704,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("declare-area", "the id of the Area rules panel's Declare button, which the focus goes back to"),
     ("area-rule", "the id of the rule's control in the Area rules panel, which the focus goes to when an outline closes"),
     ("area-undo", "the id of the Area rules panel's Undo button, which the focus goes to when an area is deleted"),
-    ("hero-map-slot", "the id of an element of the home page"),
-    ("hero-facts-slot", "the id of an element of the home page"),
+    ("hero-map-slot", "the id of an element of the About page (web/about.html)"),
+    ("hero-facts-slot", "the id of an element of the About page (web/about.html)"),
     ("m-walk", "a CSS class of the hero map's drawing"),
     ("m-shoulder", "a CSS class of the hero map's drawing"),
     ("queue-offset", "the id of a junction approach measure, data for the page"),
@@ -781,7 +795,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

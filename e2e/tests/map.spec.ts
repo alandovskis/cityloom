@@ -146,7 +146,7 @@ test.describe("the city map", () => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
     await page.mouse.click(spot.x, spot.y);
-    await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}$`));
+    await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
   });
 
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
@@ -365,6 +365,22 @@ test.describe("the city map", () => {
       hot,
     );
   });
+});
+
+test.describe("a page for a project that is not here", () => {
+  for (const path of [
+    "/map.html?project=zzz",
+    "/street.html?street=1&project=zzz",
+    "/intersection.html?junction=1&project=zzz",
+  ])
+    test(`${path} goes to the home page with missing=1, and is not left in the history`, async ({ page }) => {
+      await page.goto("/index.html");
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/index\.html\?missing=1$/);
+      // the page that could not open was replaced: going back leaves the list for where the person was
+      await page.goBack();
+      await expect(page).toHaveURL(/\/index\.html$/);
+    });
 });
 
 test.describe("when there is no map", () => {
@@ -731,7 +747,7 @@ test.describe("the curbside uses and stops on the map", () => {
     const spot = await curbsideSpot(page);
     await page.mouse.move(spot!.x, spot!.y);
     await page.mouse.click(spot!.x, spot!.y);
-    await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}$`));
+    await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}&project=first$`));
   });
 
   test("a use of a street not wholly in view is muted and a press says so", async ({ page }) => {

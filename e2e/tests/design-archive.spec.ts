@@ -7,7 +7,7 @@ import { anotherBrowser, expect, mapReady, openStreet, test } from "./fixtures";
 // The design archive (issue #74): Export design and Import design on the Account page. The Account page works on
 // this device's storage, so no account server is involved. (`archive.spec.ts` is the area archive's.)
 
-const EDITS = "cityloom-edits";
+const EDITS = "cityloom-edits@first";
 
 const edits = (page: Page) => page.evaluate((key) => localStorage.getItem(key), EDITS);
 

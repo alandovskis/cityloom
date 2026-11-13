@@ -2,6 +2,7 @@
 
 use crate::city::store::CityStore;
 use crate::junction::model::State;
+use crate::shared::project_id::wire_key;
 use crate::street::model::Street;
 use crate::sync::model::{Id, Kind};
 
@@ -31,13 +32,16 @@ impl CityBinding {
         self.store.write_street(edge, street)
     }
 
-    /// The sync's name for this page's place: its kind and key. None where the place has no key of its own.
+    /// The sync's name for this page's place: its kind and wire key (the project's prefix added, as `mark` adds it).
+    /// None where the place has no key of its own.
     pub fn record(&self) -> Option<Id> {
         let city = self.store.open();
-        match self.place {
-            Place::Street(edge) => city.street_key(edge).map(|key| Id { kind: Kind::Street, key }),
-            Place::Junction(node) => city.junction_key(node).map(|key| Id { kind: Kind::Junction, key }),
-        }
+        let (kind, key) = match self.place {
+            Place::Street(edge) => (Kind::Street, city.street_key(edge)?),
+            Place::Junction(node) => (Kind::Junction, city.junction_key(node)?),
+        };
+        let key = self.store.project().map_or_else(|| key.clone(), |project| wire_key(&project, &key));
+        Some(Id { kind, key })
     }
 }
 
@@ -64,6 +68,19 @@ mod tests {
         let keyless = CityStore::sample_without_osm_ids(ports.storage);
         let place = Place::Street(keyless.open().view(0).edges[0].uid);
         assert_eq!(CityBinding { store: keyless, place }.record(), None, "a place with no key of its own is not synced");
+    }
+
+    #[test]
+    fn in_another_project_than_the_first_a_binding_names_its_place_by_its_wire_key() {
+        let (ports, _, root) = test_ports();
+        let storage: std::rc::Rc<dyn crate::shared::ports::Storage> = std::rc::Rc::new(crate::shared::scoped::ScopedStorage::new(root.clone(), "p1"));
+        let store = CityStore::sample(storage);
+        let edge = store.open().view(0).edges[0].uid;
+        let bare = store.open().street_record(edge).unwrap().0;
+        let b = CityBinding { store, place: Place::Street(edge) };
+        assert_eq!(b.record(), Some(Id { kind: Kind::Street, key: format!("p1:{bare}") }));
+        let first = CityBinding { store: CityStore::sample(crate::shared::scoped::in_project(ports, "first").storage), place: Place::Street(edge) };
+        assert_eq!(first.record(), Some(Id { kind: Kind::Street, key: bare }), "the first project's keys are bare");
     }
 
     #[test]

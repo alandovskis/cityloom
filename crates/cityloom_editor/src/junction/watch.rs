@@ -40,6 +40,11 @@ impl Watch {
         self.vm.with_value(|v| v.i18n().tr(key, &Args::new()))
     }
 
+    /// `href` to another page of the junction's project.
+    pub fn link(&self, href: &str) -> String {
+        self.vm.with_value(|v| v.link(href))
+    }
+
     pub fn version(&self) -> RwSignal<u32> {
         self.vm.with_value(|v| v.version())
     }

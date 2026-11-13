@@ -69,6 +69,7 @@ fn the_version_label_says_the_crate_version_in_both_languages() {
 fn every_app_page_shows_the_version_in_its_footer() {
     for (name, html) in [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -142,6 +143,7 @@ fn the_share_variant_follows_the_slots_data_share() {
 fn every_app_page_has_one_slot_for_the_sign_in_menu() {
     for (name, html) in [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -246,6 +248,7 @@ fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under(
 fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
     let pages = [
         ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -288,10 +291,55 @@ fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
     }
 }
 
+/// The top bar of every page: the logo goes to the list of projects, and the bar's links are Projects and About, the
+/// page's own marked as current. A map is opened from its project, never from the bar.
+#[test]
+fn every_page_s_bar_links_the_projects_and_about_and_never_a_map() {
+    let pages = [
+        ("index", include_str!("../../../../web/index.html"), Some("index.html")),
+        ("about", include_str!("../../../../web/about.html"), Some("about.html")),
+        ("map", include_str!("../../../../web/map.html"), None),
+        ("street", include_str!("../../../../web/street.html"), None),
+        ("intersection", include_str!("../../../../web/intersection.html"), None),
+        ("account", include_str!("../../../../web/account.html"), None),
+        ("credits", include_str!("../../../../web/credits.html"), None),
+    ];
+    let link = |href: &str, key: &str, text: &str, current: bool| {
+        let current = if current { r#" aria-current="page""# } else { "" };
+        format!(r#"<a href="{href}" class="surface"{current} data-i18n="{key}">{text}</a>"#)
+    };
+    for (name, html, current) in pages {
+        let bar = &html[html.find("<header class=\"bar\"").unwrap_or_else(|| panic!("{name}.html has no bar"))..];
+        let bar = &bar[..bar.find("</header>").unwrap()];
+        let brand = &bar[bar.find(r#"<a class="brand""#).expect("the logo")..];
+        assert!(brand.starts_with(r#"<a class="brand" href="index.html" "#), "{name}.html: the logo goes to the list of projects");
+        let nav = &bar[bar.find("<nav class=\"surfaces\"").expect("the bar's links")..];
+        let nav = &nav[..nav.find("</nav>").unwrap()];
+        let (projects, about) = (current == Some("index.html"), current == Some("about.html"));
+        if name == "credits" {
+            // The credits page is in English only: the same links, without the shell's keys.
+            assert!(nav.contains(r#"aria-label="Pages""#), "{name}.html: {nav}");
+            assert!(nav.contains(r#"<a href="index.html" class="surface">Projects</a>"#), "{name}.html: {nav}");
+            assert!(nav.contains(r#"<a href="about.html" class="surface">About</a>"#), "{name}.html: {nav}");
+        } else {
+            assert!(nav.contains(r#"data-i18n-aria-label="ui-nav" aria-label="Pages""#), "{name}.html: {nav}");
+            assert!(nav.contains(&link("index.html", "ui-nav-projects", "Projects", projects)), "{name}.html: {nav}");
+            assert!(nav.contains(&link("about.html", "ui-nav-about", "About", about)), "{name}.html: {nav}");
+        }
+        assert_eq!(nav.matches("<a ").count(), 2, "{name}.html: Projects and About, nothing else: {nav}");
+        assert_eq!(nav.matches("aria-current").count(), usize::from(current.is_some()), "{name}.html: {nav}");
+        assert!(!bar.contains("map.html"), "{name}.html: no way to a map from the bar");
+    }
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let words = |i18n: &crate::shared::i18n::I18n| ["ui-nav", "ui-nav-projects", "ui-nav-about"].map(|k| i18n.tr_now(k, &Args::new()));
+    assert_eq!(words(&en), ["Pages", "Projects", "About"]);
+    assert_eq!(words(&fr), ["Pages", "Projets", "À propos"]);
+}
+
 #[test]
 fn the_pages_that_read_the_city_preload_the_tile_index() {
     for (name, html) in [
-        ("index", include_str!("../../../../web/index.html")),
+        ("about", include_str!("../../../../web/about.html")),
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
@@ -353,6 +401,31 @@ fn the_shell_builds_the_sync_and_the_session_reports_to_it() {
     );
     assert_eq!(vm.sync().status(), crate::sync::Status::Off);
     assert!(crate::sync::hub::current().is_some(), "the page's sync is where the other pages reach it");
+}
+
+#[test]
+fn the_shell_s_links_to_the_map_and_the_editors_stay_in_the_page_s_project() {
+    let shell = |target: std::rc::Rc<dyn crate::shell::Target>| {
+        crate::sync::hub::reset();
+        let (ports, ..) = crate::shared::ports::test_ports_with_time();
+        crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true)
+    };
+    let vm = shell(std::rc::Rc::new(crate::shell::Bare::in_project(Some("p1".into()))));
+    assert_eq!(vm.link("map.html"), "map.html?project=p1");
+    assert_eq!(vm.link("street.html"), "street.html?project=p1");
+    assert_eq!(vm.link("index.html"), "index.html");
+    assert_eq!(vm.link("account.html"), "account.html");
+    assert_eq!(shell(std::rc::Rc::new(crate::shell::Bare::default())).link("map.html"), "map.html", "a page outside a project");
+    // an editor's page is in the project its storage is
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let street = crate::street::vm::StreetVm::new(
+        crate::shared::scoped::in_project(ports, "p2"),
+        crate::i18n_for(Locale::En),
+        crate::street::model::Editor::new(0),
+        None,
+    );
+    assert_eq!(shell(street).link("map.html"), "map.html?project=p2");
+    crate::sync::hub::reset();
 }
 
 #[test]

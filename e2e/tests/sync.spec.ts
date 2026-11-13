@@ -5,7 +5,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 
 import { chooseProvider, loginAs, newAccount, requireServer, unique } from "./account-helpers";
-import { anotherBrowser, expect, live, openStreet, test } from "./fixtures";
+import { anotherBrowser, expect, live, openStreet, placesOnMap, serveWorld, test } from "./fixtures";
 
 test.beforeEach(async ({ request }) => requireServer(request));
 
@@ -19,13 +19,26 @@ const serverWork = async (context: BrowserContext) => {
   return { status: response.status(), body: response.status() === 200 ? await response.json() : null };
 };
 
+/** Every record the server holds for this context, as `<kind>/<key>`, sorted. */
+const serverRecords = async (context: BrowserContext): Promise<string[]> =>
+  ((await serverWork(context)).body?.records ?? [])
+    .map((r: { kind: string; key: string }) => `${r.kind}/${r.key}`)
+    .sort();
+
+/** The kinds of every record the server holds for this context, sorted: the first project's own record (which
+ *  `storingAccount` sends) and the places. */
+const serverKinds = async (context: BrowserContext): Promise<string[]> =>
+  (await serverRecords(context)).map((r) => r.split("/")[0]);
+
 /** The streets this browser holds edits for. */
 const editedStreets = (page: Page) =>
-  page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("cityloom-edits") ?? '{"streets":{}}').streets));
+  page.evaluate(() =>
+    Object.keys(JSON.parse(localStorage.getItem("cityloom-edits@first") ?? '{"streets":{}}').streets),
+  );
 
 /** What this browser holds as the streets' edits, whole. */
 const streetEdits = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? '{"streets":{}}').streets);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? '{"streets":{}}').streets);
 
 /** Changes the first piece of the street on the page by one step: wider (`+`) or narrower (`-`). */
 async function resize(page: Page, key: "+" | "-") {
@@ -43,7 +56,9 @@ async function storingAccount(page: Page, context: BrowserContext, baseURL: stri
   const sub = unique();
   await newAccount(page, context, baseURL, { sub });
   await page.getByRole("radio", { name: SERVER }).check();
+  // no place waits; only the first project's own record (the fixtures seed it) goes up, and it is no place
   await expect(live(page)).toHaveText("Your work was merged with your account: 0 places sent, 0 places received.");
+  expect(await serverRecords(context)).toEqual(["project/first"]);
   return sub;
 }
 
@@ -72,7 +87,7 @@ test("an edit on one device appears on another when its tab is shown again", asy
   const href = await openStreet(page, 0);
   await phone.page.goto("/" + href);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   expect(await editedStreets(phone.page)).toEqual([]);
   await shown(phone.page);
   await expect(live(phone.page)).toHaveText("Updated from another device.");
@@ -100,7 +115,7 @@ test("an edit made offline is sent when the network returns, and the menu says s
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.locator("#sync-status")).toHaveText("Synced");
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-sync") ?? "{}").records)).toMatchObject({
     [`street/${edited}`]: { pending: false },
   });
@@ -131,7 +146,7 @@ test("the last edit is sent when the page is left, with nothing else to send it"
   // Nothing else can send it: no other page of the app opens to find it marked. Whether the 250 ms debounce had already
   // sent it first is told by the recorded fetches: the test needs a keepalive one.
   await page.goto("about:blank");
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   const reader = await context.newPage();
   await reader.goto("/map.html");
   expect(
@@ -155,7 +170,7 @@ test("when two devices changed the same place the later edit is kept on both and
   await phone.context.setOffline(true);
   await widen(phone.page); // the phone's change comes first ...
   await narrow(page); // ... the laptop's later, and a different one: two equal bodies are no conflict
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   await phone.context.setOffline(false);
   await shown(phone.page);
   await expect(live(phone.page)).toHaveText("Your change to this place was replaced by a later one.");
@@ -174,7 +189,7 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   const phone = await secondDevice(browser, baseURL!, sub);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   await shown(phone.page); // the phone gets the street while the copy is still on the server
   await expect.poll(async () => (await editedStreets(phone.page)).length).toBe(1);
   await page.goto("/account.html");
@@ -185,7 +200,7 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   );
   await page.locator("#stop-no").click();
   await expect(page.getByRole("radio", { name: SERVER })).toBeChecked();
-  expect((await serverWork(context)).body.records.length).toBe(1);
+  expect(await serverKinds(context)).toEqual(["project", "street"]);
   await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
   await page.locator("#stop-yes").click();
   await expect(live(page)).toHaveText(
@@ -223,11 +238,13 @@ test("turning storage on merges the work made while signed out and says how many
   await page.goto("/map.html");
   await newAccount(page, context, baseURL!);
   await page.getByRole("radio", { name: SERVER }).check();
+  // the street; the first project's own record goes up too, but it is no place
   await expect(live(page)).toHaveText("Your work was merged with your account: 1 place sent, 0 places received.");
   await expect(page.locator("#merge-report")).toHaveText(
     "Your work was merged with your account: 1 place sent, 0 places received.",
   );
-  expect((await serverWork(context)).body.records.length).toBe(1);
+  expect(await serverKinds(context)).toEqual(["project", "street"]);
+  expect(await serverRecords(context)).toContain("project/first");
 });
 
 test("a person who never chose server storage sends nothing and the menu shows no status", async ({
@@ -252,7 +269,7 @@ test("deleting the account deletes the server copy and keeps the browser's work"
   await storingAccount(page, context, baseURL!);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   await page.goto("/account.html");
   await expect(page.getByText("including the work you stored there")).toHaveCount(0);
   await page.locator("#delete-btn").click();
@@ -276,7 +293,7 @@ test("a device that signs in to a storing account receives its places and sends 
   const sub = await storingAccount(page, context, baseURL!);
   await openStreet(page, 0);
   await widen(page);
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street"]);
   const [onLaptop] = await editedStreets(page);
   const phone = await anotherBrowser(browser, baseURL!);
   await openStreet(phone.page, 1);
@@ -289,6 +306,187 @@ test("a device that signs in to a storing account receives its places and sends 
   await chooseProvider(phone.page, "fake");
   await expect(phone.page.locator("#session-btn-label")).toHaveText("Ada");
   await expect.poll(async () => (await editedStreets(phone.page)).sort()).toEqual([onLaptop, onPhone].sort()); // received
-  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(2); // sent
+  await expect.poll(async () => await serverKinds(context)).toEqual(["project", "street", "street"]); // sent
   await phone.context.close();
+});
+
+// Projects: each project's places travel under its own keys, the projects' own records carry their names, and a device
+// with a project open learns when it is deleted elsewhere.
+
+/** A browser that has never seen CityLoom: no projects, no work, English. Its page serves the Plateau's tile. */
+async function cleanBrowser(browser: Parameters<typeof anotherBrowser>[0], baseURL: string) {
+  const context = await browser.newContext({ baseURL, locale: "en-CA", viewport: { width: 1440, height: 900 } });
+  await context.addInitScript(() => {
+    try {
+      if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
+    } catch {
+      // storage is blocked: the page falls back to its own default
+    }
+  });
+  const page = await context.newPage();
+  await serveWorld(page);
+  return { context, page };
+}
+
+/** Signs this browser in as `sub` from the home page and comes back to the list. */
+async function signInAtHome(page: Page, context: BrowserContext, baseURL: string, sub: string) {
+  await loginAs(context, baseURL, { sub, name: "Ada", email: "ada@example.org" });
+  await page.goto("/");
+  await chooseProvider(page, "fake");
+  await expect(page.locator("#session-btn-label")).toHaveText("Ada");
+  await page.goto("/");
+  await expect(page.locator("#projects-heading")).toBeVisible();
+}
+
+/** Makes a project from the home page and gives its id. */
+async function createProject(page: Page, name: string) {
+  await page.goto("/");
+  await page.getByLabel("Project name").fill(name);
+  await page.getByRole("button", { name: "Create project" }).click();
+  const href = await page.getByRole("link", { name }).getAttribute("href");
+  return new URL(href!, "http://x/").searchParams.get("project")!;
+}
+
+/** Opens street `n` of project `id` by the address its map gives it, which names the project. */
+async function openStreetIn(page: Page, id: string, n: number) {
+  await page.goto(`/map.html?project=${id}`);
+  const href = (await placesOnMap(page)).streets[n];
+  await page.goto(`/${href}&project=${id}`);
+}
+
+/** The streets this browser holds edits for in project `id`, whole. */
+const projectEdits = (page: Page, id: string) =>
+  page.evaluate((id) => JSON.parse(localStorage.getItem(`cityloom-edits@${id}`) ?? '{"streets":{}}').streets, id);
+
+/** The names of the projects listed on the home page. */
+const listedNames = (page: Page) => page.locator("li.project-row a.project-open").allTextContents();
+
+test("each project's street reaches a clean device in its own project", async ({ page, context, browser, baseURL }) => {
+  test.slow(); // two browser contexts on a shared server
+  const sub = await storingAccount(page, context, baseURL!);
+  const verdun = await createProject(page, "Verdun");
+  // a street of the first project, then one of Verdun
+  await openStreetIn(page, "first", 0);
+  await widen(page);
+  await openStreetIn(page, verdun, 1);
+  await widen(page);
+  await expect.poll(async () => Object.keys(await projectEdits(page, verdun)).length).toBe(1);
+  const [inFirst] = Object.keys(await projectEdits(page, "first"));
+  const [inVerdun] = Object.keys(await projectEdits(page, verdun));
+  await expect
+    .poll(async () => await serverRecords(context))
+    .toEqual(["project/first", `project/${verdun}`, `street/${inFirst}`, `street/${verdun}:${inVerdun}`].sort());
+
+  const tablet = await cleanBrowser(browser, baseURL!);
+  await signInAtHome(tablet.page, tablet.context, baseURL!, sub);
+  await expect.poll(async () => (await listedNames(tablet.page)).sort()).toEqual(["First project", "Verdun"]);
+  expect(await projectEdits(tablet.page, "first")).toEqual(await projectEdits(page, "first"));
+  expect(await projectEdits(tablet.page, verdun)).toEqual(await projectEdits(page, verdun));
+  await tablet.context.close();
+});
+
+test("a project renamed on one device is renamed on the other after a sync", async ({
+  page,
+  context,
+  browser,
+  baseURL,
+}) => {
+  test.slow(); // two browser contexts on a shared server
+  const sub = await storingAccount(page, context, baseURL!);
+  const phone = await secondDevice(browser, baseURL!, sub);
+  await phone.page.goto("/");
+  await expect(phone.page.getByRole("link", { name: "First project" })).toBeVisible();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Rename First project" }).click();
+  await page.locator("#project-rename-field").fill("Plateau study");
+  await page.locator("#project-rename-field").press("Enter");
+  await expect(page.getByRole("link", { name: "Plateau study" })).toBeVisible();
+  await expect
+    .poll(async () => (await serverWork(context)).body.records.find((r: { kind: string }) => r.kind === "project").body)
+    .toMatchObject({ name: "Plateau study" });
+  await shown(phone.page);
+  await expect(phone.page.getByRole("link", { name: "Plateau study" })).toBeVisible();
+  await expect(phone.page.getByRole("link", { name: "First project" })).toHaveCount(0);
+  await phone.context.close();
+});
+
+test("a project deleted on one device sends the other, which has it open, back to the list", async ({
+  page,
+  context,
+  browser,
+  baseURL,
+}) => {
+  test.slow(); // two browser contexts on a shared server
+  const sub = await storingAccount(page, context, baseURL!);
+  const verdun = await createProject(page, "Verdun");
+  await expect.poll(async () => await serverRecords(context)).toContain(`project/${verdun}`);
+  const phone = await secondDevice(browser, baseURL!, sub);
+  await phone.page.goto("/");
+  await phone.page.getByRole("link", { name: "Verdun" }).click();
+  await expect(phone.page).toHaveURL(new RegExp(`/map\\.html\\?project=${verdun}$`));
+  await expect(phone.page.locator("#sync-status")).toHaveText("Synced");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Delete Verdun" }).click();
+  await page.getByRole("button", { name: "Delete the project" }).click();
+  await expect(live(page)).toHaveText("Project Verdun deleted.");
+  await expect.poll(async () => await serverRecords(context)).toEqual(["project/first"]);
+
+  await shown(phone.page);
+  await expect(phone.page).toHaveURL(/\/index\.html\?missing=1$/);
+  await expect(phone.page.getByText("That project is no longer here.")).toBeVisible();
+  await expect(phone.page.getByRole("link", { name: "Verdun" })).toHaveCount(0);
+  await phone.context.close();
+});
+
+test("a device given only rows an older CityLoom wrote, under bare keys, shows them in the first project", async ({
+  browser,
+  baseURL,
+}) => {
+  test.slow(); // three browser contexts on a shared server
+  // what an older CityLoom kept for a street: its edit, under the place's bare key
+  const older = await anotherBrowser(browser, baseURL!);
+  await openStreet(older.page, 0);
+  await widen(older.page);
+  await expect.poll(async () => Object.keys(await projectEdits(older.page, "first")).length).toBe(1);
+  const edits = await projectEdits(older.page, "first");
+  const [key] = Object.keys(edits);
+  await older.context.close();
+
+  // an account storing its work on the server, made on a browser with nothing to send
+  const sub = unique();
+  const seeder = await cleanBrowser(browser, baseURL!);
+  await loginAs(seeder.context, baseURL!, { sub, name: "Ada", email: "ada@example.org" });
+  await seeder.page.goto("/");
+  await chooseProvider(seeder.page, "fake");
+  await expect(seeder.page).toHaveURL(/\/account\.html$/);
+  await seeder.page.getByRole("radio", { name: SERVER }).check();
+  await expect(live(seeder.page)).toHaveText(
+    "Your work was merged with your account: 0 places sent, 0 places received.",
+  );
+  expect(await serverRecords(seeder.context)).toEqual([]);
+  // the older CityLoom's write: the bare key, and no project record
+  const cookie = (await seeder.context.cookies()).map((c) => `${c.name}=${c.value}`).join("; ");
+  const put = await seeder.context.request.put("/api/work", {
+    headers: { cookie, origin: new URL(baseURL!).origin }, // a write needs the site's own Origin
+    data: {
+      records: [
+        { kind: "street", key, base_rev: 0, edited_at: new Date().toISOString(), deleted: false, body: edits[key] },
+      ],
+    },
+  });
+  expect(put.status()).toBe(200);
+  expect((await put.json()).results[0].status).toBe("accepted");
+  expect(await serverRecords(seeder.context)).toEqual([`street/${key}`]);
+  await seeder.context.close();
+
+  const tablet = await cleanBrowser(browser, baseURL!);
+  await signInAtHome(tablet.page, tablet.context, baseURL!, sub);
+  await expect(tablet.page.getByRole("link", { name: "First project" })).toHaveAttribute(
+    "href",
+    "map.html?project=first",
+  );
+  await expect(tablet.page.locator("li.project-row")).toHaveCount(1);
+  expect(await projectEdits(tablet.page, "first")).toEqual(edits);
+  await tablet.context.close();
 });

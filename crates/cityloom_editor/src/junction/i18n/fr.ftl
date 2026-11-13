@@ -287,8 +287,6 @@ jn-part-next = Partie suivante
 
 ## Le balisage de la page (web/intersection.html); le titre de la fenêtre est le jn-title de l’en-tête
 jn-page-description = Modifiez le fonctionnement d’une jonction de rues : coins, passages pour piétons, voies, virages et signalisation.
-jn-page-editors = Éditeurs
-jn-page-map = Carte
 jn-page-details = Détails
 jn-page-details-toggle-title = Afficher ou masquer les détails ( [ )
 jn-page-key-select = sélectionner

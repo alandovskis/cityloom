@@ -43,7 +43,7 @@ impl InProcess {
 impl HttpClient for InProcess {
     async fn send(&self, request: http::Request<Vec<u8>>) -> Result<http::Response<Vec<u8>>, String> {
         let (parts, body) = request.into_parts();
-        let res = self.0.clone().oneshot(http::Request::from_parts(parts, Body::from(body))).await.map_err(|e| e.to_string())?;
+        let res = self.0.clone().oneshot(http::Request::from_parts(parts, Body::from(body))).await.unwrap();
         let (parts, body) = res.into_parts();
         Ok(http::Response::from_parts(parts, body.collect().await.map_err(|e| e.to_string())?.to_bytes().to_vec()))
     }

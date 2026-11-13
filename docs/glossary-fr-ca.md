@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl`, `src/restriction/i18n/fr.ftl`, `src/account/i18n/fr.ftl`, `src/sync/i18n/fr.ftl` and `src/archive/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl`, `src/restriction/i18n/fr.ftl`, `src/account/i18n/fr.ftl`, `src/sync/i18n/fr.ftl`, `src/archive/i18n/fr.ftl` and `src/project/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
 
 ## Style rules
 
@@ -202,12 +202,16 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Place search (home page) | the roads … could not be fetched | les rues … n’ont pas pu être obtenues | The roads are `rues`, as everywhere in the app. The error in brackets is the browser's own, not translated. |
 | Place search (home page) | storage (the browser's) | stockage |  |
 | Place search (home page) | tile index | index des tuiles | Never shown to a person today: the loader goes on without it. |
-| Home page | Redesign the streets of your city | Réaménagez les rues de votre ville | `réaménager` for redesigning a street, `réorganiser` for Arrange. |
-| Home page | rearrange (a street) | réorganiser | As Arrange on the street page. |
-| Home page | Open the city map | Ouvrir la carte de la ville |  |
+| About page | Redesign the streets of your city | Réaménagez les rues de votre ville | `réaménager` for redesigning a street, `réorganiser` for Arrange. |
+| About page | rearrange (a street) | réorganiser | As Arrange on the street page. |
+| About page | About CityLoom | À propos de CityLoom | The page's heading and window title; the top bar's link is `À propos`. |
+| About page | Skip to the introduction | Aller à la présentation | `Aller à`, as the home page's skip link `Aller à vos projets`. |
+| About page | Open your projects | Ouvrir vos projets | The About page's button; it opens the list, never a map. |
+| Top bar | Pages (the bar's links, as a landmark) / Projects / About | Pages / Projets / À propos |  |
 | Home page | home (the brand link) | accueil |  |
-| Home page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
-| Home page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
+| Home page | CityLoom projects (window title) | Projets CityLoom | As `Carte de la ville CityLoom`. |
+| About page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
+| About page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
 | Junction | junction | jonction | As in the city's names (`Jonction 4`); `intersection` only in the Atlas name `L2`. |
 | Junction | arm (one street at a junction) | branche | Not shown alone: an arm is said `Rue (nord)`. |
 | Junction | north, north-east … (in a sentence) | nord, nord-est, est, sud-est, sud, sud-ouest, ouest, nord-ouest | Lowercase in brackets after the street: `Rue Principale (nord)`. |
@@ -314,6 +318,13 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Archive | Design archive / Export design / Import design | Archive de conception / Exporter la conception / Importer une conception | `conception` for design work; `lieu` for a place. |
 | Archive | Keep mine / Use the archive's | Garder les miens / Utiliser ceux de l’archive | Conflict choice. |
 | Sync | merged (your work with your account) | fusionné avec votre compte | `0` and `1` are singular: `1 lieu envoyé`, `0 lieu reçu`. |
+| Home page | project | projet | A named container of the person's work, tied to one area. |
+| Home page | Your projects / New project / First project | Vos projets / Nouveau projet / Premier projet |  |
+| Home page | area (of a project) | lieu | As the place search: not `zone`, which is an area rule's. |
+| Home page | Metropolitan area (the create form's choice and the label before a project's, `project-metro`) | Région métropolitaine | A project's metropolitan area is a `région métropolitaine` in every sentence too (docs included); the place its map opens on stays a `lieu`; `zone` is kept for area rules (`règles de zone`) and the map's drawn areas. |
+| Home page | The metropolitan area cannot be changed once the project is created. (`project-metro-fixed`) | La région métropolitaine ne peut plus être changée une fois le projet créé. |  |
+| Home page | Montréal (a metropolitan area of the catalogue, `place-metro-montreal`) | Montréal | The same in both languages. |
+| Home page | Changed (a date) | Modifié le | Dates read `12 novembre 2026`, `1er mars 2026`. |
 
 ## Terms to confirm
 

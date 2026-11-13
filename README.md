@@ -3,7 +3,7 @@
 # CityLoom
 
 Streetmix at city scale: residents compose and compare whole-city scenarios.
-This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`street.html`) and the intersection editor (`intersection.html`). The home page finds a place by name; its streets come from OpenStreetMap (found through Nominatim, read from network tiles that osm2streets made) and become a city that the map opens the other two surfaces on, a street or junction at a time. What is edited is kept in browser storage.
+This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`street.html`) and the intersection editor (`intersection.html`). The home page lists your projects, each tied to one metropolitan area, and an About page (`about.html`) says what CityLoom is for; every page's top bar links the two, and a map is opened from its project; its streets come from OpenStreetMap (read from network tiles that osm2streets made) and become a city that the map opens the other two surfaces on, a street or junction at a time. What is edited is kept in browser storage.
 
 - `crates/`: every crate. `crates/cityloom_editor/src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
   - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.

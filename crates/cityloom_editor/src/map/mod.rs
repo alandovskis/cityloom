@@ -60,9 +60,9 @@ impl MapPage {
         cb.forget();
     }
 
-    /// The home page's city: its roads have been got (`prepare_city`), so the city behind the hero card and the
-    /// line saying how it stands are drawn. Until then the page shows its search and no city, so the search
-    /// is not kept waiting for the roads.
+    /// The About page's city: its roads have been got (`prepare_city`), so the city behind the About card and the
+    /// line saying how it stands are drawn. Until then the page shows its words and no city, so they are not kept
+    /// waiting for the roads.
     pub fn mount_city(&self) {
         self.0.reopen();
         let vm = self.0.clone();
@@ -77,13 +77,15 @@ impl MapPage {
     }
 }
 
-/// Draws the city map page into the elements it keeps for it, on the map the script made, and hands
-/// back what the script needs to reach it.
+/// Draws the city map page of the page's project (`project::context`) into the elements it keeps for it, on the map
+/// the script made, and hands back what the script needs to reach it. Nothing where the project is not here: the page
+/// has then gone to the list.
 #[wasm_bindgen]
-pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> MapPage {
+pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(canvas)), ..browser_ports() };
+    let ports = crate::project::context::open_page(browser_ports())?;
+    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(canvas)), ..ports };
     // One instance for the page: the shell switches it and the map's words follow.
     let i18n = crate::i18n_browser(&ports);
     let vm = vm::MapVm::new(ports, i18n.clone());
@@ -109,29 +111,21 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> MapPage {
     mount("source-lead", view! { <source_view::SourceLead vm=vm.clone()/> }.into_any());
     mount("source-slot", view! { <source_view::SourceFindings vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/><view::MapTitle vm=vm.clone()/> }.into_any());
-    MapPage(vm, i18n)
+    Some(MapPage(vm, i18n))
 }
 
-/// Draws the home page's search box into the element it keeps for it, and hands back what the script needs to
-/// reach the page. The city behind the hero card and how it stands come later, from `MapPage::mount_city`, once
-/// the area's roads are got.
-#[wasm_bindgen]
-pub fn mount_home() -> MapPage {
-    // Components create effects as they are built, before any is mounted.
-    let _ = any_spawner::Executor::init_wasm_bindgen();
-    let ports = browser_ports();
-    // One instance for the page: the shell switches it, and the hero and the search follow.
-    let i18n = crate::i18n_browser(&ports);
+/// Draws the About page's window title and hands back what the page needs to reach it. The city behind the card and
+/// how it stands come later, from `MapPage::mount_city`, once the area's roads are got. Called by the About page's
+/// entry point (`lib.rs`, `mount_about`) with the page's one set of words, `i18n`.
+pub fn mount_about(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
+    // The About page shows the city of the project opened last (with none, the default area's, only read).
+    let root = browser_ports();
+    let ports = crate::project::context::peek(root.clone()).unwrap_or(root);
     let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
-    let mount = |id: &str, view: AnyView| {
-        leptos::mount::mount_to(at(id), move || view).forget();
-    };
     // The window title is the page's own and does not wait for the city; it renders nothing.
-    mount(
-        "search-slot",
-        view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports(), i18n.clone())/><home::HomeTitle vm=vm.clone()/> }.into_any(),
-    );
+    let title = vm.clone();
+    leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::AboutTitle vm=title.clone()/> }.into_any()).forget();
     MapPage(vm, i18n)
 }

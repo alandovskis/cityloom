@@ -75,16 +75,45 @@ export async function serveWorld(page: Page) {
   await page.route("**/data/metro/0_0.json", (route) => route.fulfill(tileFrom(PLATEAU_TILE)));
 }
 
+/** The project every test works in: the first project, as moving the work from before projects makes it (id
+ *  `first`, the default area, created at the epoch). The map and the editors open inside a project; with none named
+ *  in the address they open the one opened last, which `prepareContext` makes this one. */
+export const FIRST_PROJECT = {
+  id: "first",
+  name: "First project",
+  area: "area=45.5261,-73.5978&name=Plateau%20Mont-Royal%2C%20Montr%C3%A9al",
+  created_at: "1970-01-01T00:00:00.000Z",
+};
+
+/* A page of the first project keeps its edits and area rules under `cityloom-edits@first` and
+ * `cityloom-restrictions@first` (`<key>@<project>`): the specs read and seed those. Its area is the one its record
+ * names, which `setFirstArea` changes. */
+
+/** Makes the first project's record name the area `query` (an `Area::to_query`): its pages open that area. Nothing
+ *  in the app changes a project's area; only the specs that follow an edit into another area do. */
+export async function setFirstArea(page: Page, query: string) {
+  await page.evaluate((query) => {
+    const doc = JSON.parse(localStorage.getItem("cityloom-projects")!);
+    doc.projects.find((p: { id: string }) => p.id === "first").area = query;
+    localStorage.setItem("cityloom-projects", JSON.stringify(doc));
+  }, query);
+}
+
 /** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads
- *  keeps it, because the choice is only stored when there is none), so there is no network. */
+ *  keeps it, because the choice is only stored when there is none), so there is no network; and the first project,
+ *  opened last, unless the browser already has a list of projects. */
 export async function prepareContext(context: BrowserContext) {
-  await context.addInitScript(() => {
+  await context.addInitScript((first) => {
     try {
       if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
+      if (localStorage.getItem("cityloom-projects") === null) {
+        localStorage.setItem("cityloom-projects", JSON.stringify({ version: 1, projects: [first] }));
+        localStorage.setItem("cityloom-project", first.id);
+      }
     } catch {
       // storage is blocked: the page falls back to its own default
     }
-  });
+  }, FIRST_PROJECT);
 }
 
 /** A second browser with its own cookies and storage (another person, or the same one on another device), set up

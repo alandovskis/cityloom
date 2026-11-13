@@ -1,7 +1,5 @@
 # Ce que dit la page de la rue : le balisage de street.html.
 st-page-description = Réorganisez la largeur fixe d’une rue : ajoutez, déplacez et redimensionnez ses éléments et voyez aussitôt si tout y entre.
-st-editors = Éditeurs
-st-map = Carte
 st-piece-details = Détails de l’élément
 st-details-toggle-title = Afficher ou masquer les détails de l’élément ( [ )
 st-key-select = sélectionner

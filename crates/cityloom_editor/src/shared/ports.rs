@@ -28,6 +28,11 @@ pub trait Storage {
     /// `BrowserStorage` is the page's one `localStorage` (each mount makes a handle of its own, so the object behind
     /// a handle cannot name it); a fake gives each instance a number of its own, so two simulated devices stay apart.
     fn identity(&self) -> usize;
+    /// The project this storage is scoped to, or None where it is not scoped to one (the sync then names records by
+    /// their bare keys).
+    fn project(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Runs something after a delay, which can be called off.
@@ -61,6 +66,10 @@ pub trait Downloads {
 /// Opens another page of the site.
 pub trait Navigator {
     fn go(&self, href: &str);
+    /// Goes to `href` in place of this page, so going back does not come here again (a page that cannot open).
+    fn replace(&self, href: &str) {
+        self.go(href);
+    }
 }
 
 /// What a person's account looks like to the page, as the server's `GET /api/me` says it.
@@ -771,18 +780,27 @@ impl Downloads for FakeDownloads {
 #[derive(Default)]
 pub struct RecordingNavigator {
     gone: RefCell<Vec<String>>,
+    replaced: RefCell<Vec<String>>,
 }
 
 impl RecordingNavigator {
-    /// Where it was sent since this was last called.
+    /// Where it was sent (`go`) since this was last called.
     pub fn take(&self) -> Vec<String> {
         std::mem::take(&mut *self.gone.borrow_mut())
+    }
+
+    /// Where it was sent in place of the page (`replace`) since this was last called.
+    pub fn take_replaced(&self) -> Vec<String> {
+        std::mem::take(&mut *self.replaced.borrow_mut())
     }
 }
 
 impl Navigator for RecordingNavigator {
     fn go(&self, href: &str) {
         self.gone.borrow_mut().push(href.to_string());
+    }
+    fn replace(&self, href: &str) {
+        self.replaced.borrow_mut().push(href.to_string());
     }
 }
 

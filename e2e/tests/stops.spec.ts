@@ -41,7 +41,7 @@ async function addStop(page: Page, cell: number, metres: number, kind = "Curb ex
 }
 
 const editsVersion = (page: Page) =>
-  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "{}").version);
+  page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "{}").version);
 
 test.describe("the Stops row", () => {
   test("a stop is added, checked, drawn, kept over a reload and undone", async ({ page }) => {

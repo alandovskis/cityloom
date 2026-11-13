@@ -1,14 +1,92 @@
 //! The area of the world a city is made from: where it is, and what to call it.
 
 use super::Bounds;
+use crate::shared::said::Said;
 
 /// How far either way of its centre an area reaches, in metres.
 pub const HALF_M: f64 = 400.0;
 
-/// The area a visit begins with, before anyone has chosen one. It is made like any other: from
-/// the metro tiles that hold it.
+/// The catalogue id of the metropolitan area of Montréal.
+pub const MONTREAL: &str = "montreal";
+
+/// A metropolitan area a project can be made in: an entry of the catalogue. A project chooses one when it is made and
+/// keeps it. The editor works on one place about 800 m across (`HALF_M`), not on a whole region at once, so a
+/// metropolitan area is the box of degrees it covers and the place inside it that a new project's map opens on.
+#[derive(Debug, PartialEq)]
+pub struct Metro {
+    /// Stable: the value of the create form's option.
+    pub id: &'static str,
+    /// The message that names it (`place/i18n`).
+    name: &'static str,
+    /// What it covers, in degrees: an area whose centre lies in it belongs to it.
+    south: f64,
+    west: f64,
+    north: f64,
+    east: f64,
+    /// The place a new project's map opens on: its name (data, as an area's name is) and centre.
+    start: (&'static str, f64, f64),
+}
+
+/// The metropolitan areas there are, the default first. Adding one is an entry here, the message naming it in both
+/// languages and its tiles in the tile index.
+const METROS: &[Metro] = &[Metro {
+    id: MONTREAL,
+    name: "place-metro-montreal",
+    // the island and its surroundings, from Saint-Jérôme to Saint-Jean-sur-Richelieu
+    south: 45.2,
+    west: -74.3,
+    north: 45.8,
+    east: -73.3,
+    start: ("Plateau Mont-Royal, Montréal", 45.5261, -73.5978),
+}];
+
+impl Metro {
+    /// Its name, in the page's language.
+    pub fn name(&self) -> Said {
+        Said::new(self.name)
+    }
+
+    /// The place a new project's map opens on.
+    pub fn start(&self) -> Area {
+        let (name, lat, lon) = self.start;
+        Area::new(name, lat, lon)
+    }
+
+    /// Whether `area`'s centre lies in it.
+    pub fn holds(&self, area: &Area) -> bool {
+        (self.south..=self.north).contains(&area.lat) && (self.west..=self.east).contains(&area.lon)
+    }
+}
+
+/// Every metropolitan area of the catalogue, the default first.
+pub fn metros() -> &'static [Metro] {
+    METROS
+}
+
+/// The metropolitan area a new project is offered first, and the one that stands in where none can be told.
+pub fn default_metro() -> &'static Metro {
+    &METROS[0]
+}
+
+/// The metropolitan area the catalogue lists as `id`.
+pub fn metro(id: &str) -> Option<&'static Metro> {
+    METROS.iter().find(|m| m.id == id)
+}
+
+/// The metropolitan area `area` lies in, if the catalogue has one.
+pub fn metro_of(area: &Area) -> Option<&'static Metro> {
+    METROS.iter().find(|m| m.holds(area))
+}
+
+/// The area a visit begins with where no project names one: the starting place of the default metropolitan area. It
+/// is made like any other: from the metro tiles that hold it.
 pub fn default_area() -> Area {
-    Area::new("Plateau Mont-Royal, Montréal", 45.5261, -73.5978)
+    default_metro().start()
+}
+
+/// Whether `area` lies in the metropolitan area of Montréal.
+pub fn is_montreal(area: &Area) -> bool {
+    metro(MONTREAL).is_some_and(|m| m.holds(area))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -87,6 +165,48 @@ mod tests {
     fn the_default_area_is_the_plateau() {
         assert_eq!(default_area().key(), "45.5261,-73.5978");
         assert_eq!(default_area(), Area::from_query(&default_area().to_query()).unwrap());
+    }
+
+    #[test]
+    fn the_catalogue_holds_montreal_the_default_metropolitan_area() {
+        assert_eq!(metros().iter().map(|m| m.id).collect::<Vec<_>>(), [MONTREAL]);
+        let montreal = metro(MONTREAL).expect("Montréal is in the catalogue");
+        assert_eq!(default_metro(), montreal);
+        assert_eq!(metro("toronto"), None);
+        assert_eq!(metro(""), None);
+    }
+
+    #[test]
+    fn a_metropolitan_area_opens_on_its_starting_place_which_is_the_default_area() {
+        let montreal = metro(MONTREAL).unwrap();
+        assert_eq!(montreal.start(), default_area());
+        assert_eq!(montreal.start().key(), "45.5261,-73.5978", "the Plateau, as before: kept roads and edits stand");
+        assert_eq!(metro_of(&montreal.start()), Some(montreal), "a metropolitan area holds its own starting place");
+    }
+
+    #[test]
+    fn montreal_is_named_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        let name = |locale| crate::place::say_now(&crate::i18n_for(locale), &metro(MONTREAL).unwrap().name());
+        assert_eq!(name(Locale::En), "Montréal");
+        assert_eq!(name(Locale::FrCa), "Montréal");
+    }
+
+    #[test]
+    fn an_area_belongs_to_the_metropolitan_area_that_holds_its_centre() {
+        let montreal = metro(MONTREAL);
+        for (name, lat, lon) in
+            [("Mile End", 45.5246, -73.6011), ("Laval", 45.5699, -73.7500), ("Longueuil", 45.5312, -73.5181), ("Saint-Jérôme", 45.7800, -74.0030)]
+        {
+            let area = Area::new(name, lat, lon);
+            assert_eq!(metro_of(&area), montreal, "{name}");
+            assert!(is_montreal(&area), "{name}");
+        }
+        for (name, lat, lon) in [("Berlin", 52.5, 13.4), ("Québec", 46.8139, -71.2080), ("Sherbrooke", 45.4042, -71.8929)] {
+            let area = Area::new(name, lat, lon);
+            assert_eq!(metro_of(&area), None, "{name}");
+            assert!(!is_montreal(&area), "{name}");
+        }
     }
 
     #[test]

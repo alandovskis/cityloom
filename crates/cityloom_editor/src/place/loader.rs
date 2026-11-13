@@ -1,4 +1,4 @@
-//! Finding a place by name, and making a city of the roads around it.
+//! Making a city of the roads around a place.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -6,16 +6,10 @@ use std::rc::Rc;
 use cityloom_model::NetworkTile;
 
 use super::area::Area;
-use super::nominatim::{self, Place};
 use super::tiles;
 use crate::city::store::CityStore;
 use crate::shared::ports::{Fetched, Ports};
 use crate::shared::said::{Arg, Said};
-
-/// What the browser said went wrong, passed on in its own words.
-fn problem(e: String) -> Said {
-    Said::new("place-problem").with("e", Arg::Text(e))
-}
 
 /// The roads that were fetched could not be read; `e` says what was wrong with them.
 fn not_understood(e: String) -> Said {
@@ -31,11 +25,6 @@ pub struct Loader {
 impl Loader {
     pub fn new(ports: Ports) -> Loader {
         Loader { ports }
-    }
-
-    /// The places called `text`, best first.
-    pub fn search(&self, text: &str, done: impl FnOnce(Result<Vec<Place>, Said>) + 'static) {
-        self.ports.fetcher.fetch(&nominatim::search_url(text), None, Box::new(move |r| done(r.map_err(problem).and_then(|body| nominatim::parse(&body)))));
     }
 
     /// Makes sure the store holds the street network of its area: the roads are fetched, cut out and kept, unless
@@ -217,28 +206,6 @@ mod tests {
         let r = result.clone();
         Loader::new(ports.clone()).load(&store, move |x| *r.borrow_mut() = Some(x));
         (ports, fetcher, store, result)
-    }
-
-    #[test]
-    fn a_search_asks_nominatim_and_hands_on_the_places() {
-        let (ports, fetcher, ..) = test_ports_with_fetcher();
-        let found = seen();
-        let f = found.clone();
-        Loader::new(ports).search("Kreuzberg", move |r| *f.borrow_mut() = Some(r));
-        assert_eq!(fetcher.asked()[0].0, "https://nominatim.openstreetmap.org/search?q=Kreuzberg&format=jsonv2&limit=5");
-        fetcher.answer(Ok(br#"[{"display_name":"Kreuzberg","lat":"52.5","lon":"13.4","boundingbox":["52.4","52.6","13.3","13.5"]}]"#.to_vec()));
-        let places = found.borrow_mut().take().unwrap().unwrap();
-        assert_eq!(places[0].name, "Kreuzberg");
-    }
-
-    #[test]
-    fn a_search_that_cannot_reach_nominatim_says_why() {
-        let (ports, fetcher, ..) = test_ports_with_fetcher();
-        let found = seen();
-        let f = found.clone();
-        Loader::new(ports).search("x", move |r| *f.borrow_mut() = Some(r));
-        fetcher.answer(Err("the server answered 429".into()));
-        assert_eq!(en(&found.borrow_mut().take().unwrap().unwrap_err()), "the server answered 429");
     }
 
     #[test]

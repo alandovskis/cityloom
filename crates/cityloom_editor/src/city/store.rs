@@ -62,17 +62,24 @@ impl CityStore {
         }
     }
 
-    /// The store of the area the person last chose, or of the default area when none was. Until that
-    /// area's roads are kept (the page loads them before it opens the city) its city has no places.
+    /// The store of the area of the storage's project (`current_area`). Until that area's roads are kept (the page
+    /// loads them before it opens the city) its city has no places.
     pub fn current(storage: Rc<dyn Storage>) -> CityStore {
         let area = CityStore::current_area(&*storage);
         CityStore::for_area(storage, area)
     }
 
-    /// The area `current` would open, whether or not its roads are kept yet: the one last chosen, and the
-    /// default one when none was or what was kept is not an area.
+    /// The project whose edits the store keeps (`Storage::project`); none over the root storage.
+    pub fn project(&self) -> Option<String> {
+        self.storage.project()
+    }
+
+    /// The area `current` would open, whether or not its roads are kept yet: the one the project's record names
+    /// (`project::context::area_of`), fixed when the project was made; where there is no such record (the root
+    /// storage, a project not listed, a placeholder, an area that cannot be read), the one kept under `AREA_KEY`, and
+    /// the default one when none was or what was kept is not an area.
     pub fn current_area(storage: &dyn Storage) -> Area {
-        storage.recall(AREA_KEY).and_then(|v| Area::from_query(&v)).unwrap_or_else(default_area)
+        crate::project::context::area_of(storage).or_else(|| storage.recall(AREA_KEY).and_then(|v| Area::from_query(&v))).unwrap_or_else(default_area)
     }
 
     /// Makes `area` the one every page opens. Says whether that was kept.
@@ -864,6 +871,52 @@ mod tests {
         s.segments[1].width_mm += 100;
         assert!(!area.write_street(street, s), "an edit that could not come back is refused");
         assert_eq!(storage.recall(EDITS_KEY), None, "nothing is written");
+    }
+
+    /// Root storage listing one project, `p1`, whose record names the area `area` (an `Area::to_query`, or anything);
+    /// and that project's storage.
+    fn listed(area: &str, placeholder: bool) -> (Rc<MemoryStorage>, Rc<dyn Storage>) {
+        use crate::project::model::Project;
+        use crate::project::store::PROJECTS_KEY;
+        let (_, _, root) = test_ports();
+        let project = Project { id: "p1".into(), name: "Here".into(), area: area.into(), created_at: "2027-01-15T08:00:00.000Z".into(), placeholder };
+        assert!(root.remember(PROJECTS_KEY, &serde_json::json!({"version": 1, "projects": [project]}).to_string()));
+        let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(root.clone(), "p1"));
+        (root, scoped)
+    }
+
+    fn mile_end() -> Area {
+        Area::new("Mile End, Montréal", 45.5265, -73.597)
+    }
+
+    #[test]
+    fn a_project_s_pages_open_the_area_its_record_names() {
+        // The record names Mile End and the project's own area key was never written: Mile End, not the default.
+        let (root, scoped) = listed(&mile_end().to_query(), false);
+        assert_eq!(scoped.recall(AREA_KEY), None);
+        assert_eq!(CityStore::current_area(&*scoped), mile_end());
+        assert_eq!(CityStore::current(scoped.clone()).area(), &mile_end());
+        // the record wins over an area key that says something else
+        assert!(scoped.remember(AREA_KEY, &Area::new("Elsewhere", 45.4, -73.7).to_query()));
+        assert_eq!(CityStore::current_area(&*scoped), mile_end());
+        // the root storage belongs to no project: it reads its own key, as before
+        let root: Rc<dyn Storage> = root;
+        assert_eq!(CityStore::current_area(&*root), default_area());
+    }
+
+    #[test]
+    fn a_project_whose_record_is_a_placeholder_unreadable_or_gone_opens_its_area_key_else_the_default() {
+        for (area, placeholder) in [(mile_end().to_query(), true), ("area=nonsense".to_string(), false)] {
+            let (_, scoped) = listed(&area, placeholder);
+            assert_eq!(CityStore::current_area(&*scoped), default_area(), "{area} {placeholder}");
+            let kept = Area::new("Verdun", 45.45, -73.57);
+            assert!(scoped.remember(AREA_KEY, &kept.to_query()));
+            assert_eq!(CityStore::current_area(&*scoped), kept, "{area} {placeholder}");
+        }
+        // a project that is not listed (deleted since)
+        let (_, _, root) = test_ports();
+        let scoped: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(root, "gone"));
+        assert_eq!(CityStore::current_area(&*scoped), default_area());
     }
 
     #[test]

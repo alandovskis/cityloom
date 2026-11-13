@@ -17,7 +17,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 ## Fixtures
 
 - The OSM fixtures (`e2e/fixtures/*.osm.pbf`, `open-ends.osm`) are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures` (`citymodel_builder fixture`), which every browser recipe runs first and CI's `build` job runs once and hands on in the `browser-build` artifact. `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`; `tileFrom(file)` answers a request for a tile with one.
-- `home.spec.ts` stubs Nominatim and metro tiles with `page.route` (no Overpass: any other host fails the test) and covers a place no tile holds ("not covered", in both languages, nothing kept); `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
+- `about.spec.ts` checks the city behind the About card is read from the metro tile and no other host is asked (no Overpass), and, on every page, the top bar (Projects and About, the current one `aria-current="page"`, no Map link, the logo to `index.html`); `home.spec.ts` that the list asks for no road tile; `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
 - `junction.spec.ts` turbo tests serve `TURBO_TILE`: no Plateau junction has room for the basic layout. `street.spec.ts` serves `OPEN_ENDS_TILE` for open street ends (its source `open-ends.osm` has a `<bounds>` element: the importer panics inside osm2streets on OSM XML without one).
 - `restrictions.spec.ts`: area by clicks and by keyboard (map focused, Enter places a corner at the centre, Shift+Enter closes).
 - Map page: `mapReady(page)` waits for places; MapLibre is a WebGL canvas (`window.cityloomMap`).
@@ -27,7 +27,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - Run against `cityloom_server --features test-provider`: `playwright.config.ts` starts `target/e2e/cityloom_server`, the copy `scripts/pin-server.sh` makes (a shared target dir cannot swap the binary mid-run), with fixed test keys, `FAKE_PROVIDER=1` and the caller's `DATABASE_URL`.
 - `fixtures.ts` ignores console errors for `/api/me` and `/api/providers` (401/404/503 normal signed out) and lets `/api/work` ones through. A spec that fails `/api/me/*` on purpose annotates `failing-account-api`.
 - `account-server.spec.ts`: fake-provider sign-in, unique `sub` per test, needs `DATABASE_URL`. `account.spec.ts`: stubbed answers, no database.
-- `sync.spec.ts`: two contexts as two devices of one account (`account-helpers.ts`; real server, fake provider, Postgres: needs `DATABASE_URL`); `setOffline`, synthetic `visibilitychange`/`online`. Covers keepalive push on leave, conflict, opt-out reaching the other device, merge at sign-in.
+- `sync.spec.ts`: two contexts as two devices of one account (`account-helpers.ts`; real server, fake provider, Postgres: needs `DATABASE_URL`); `setOffline`, synthetic `visibilitychange`/`online`. Covers keepalive push on leave, conflict, opt-out reaching the other device, merge at sign-in, and projects: each project's street reaching a clean browser (no seeded project: `cleanBrowser`) in its own project, a rename reaching the other device, a delete sending a device with the project open to `index.html?missing=1`, and rows an older CityLoom wrote (bare keys, no project record, `PUT /api/work` with the site's `Origin`) landing in the first project. `openStreetIn` opens a street by an address naming the project (going to `map.html?project=` and leaving at once can beat the page's remembering it).
 
 ## Archive mode
 

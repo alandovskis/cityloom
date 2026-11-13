@@ -37,14 +37,19 @@ pub fn mount_account() -> AccountPage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
     let i18n = crate::i18n_browser(&ports);
+    // This page syncs as soon as its shell knows who is signed in, and a sign-in comes back here: the work from before
+    // projects is moved into the first project first, as on the home page (the archive below then finds it too).
+    crate::project::migrate::move_legacy_work(&ports.storage, &i18n);
     let vm = vm::AccountVm::new(ports.clone(), i18n.clone());
     let slot_id = "account-slot";
     let slot = leptos::prelude::document().get_element_by_id(slot_id).unwrap_or_else(|| panic!("the page has no #{slot_id}"));
     vm.load();
     leptos::mount::mount_to(slot.unchecked_into(), move || view! { <view::AccountView vm=vm/> }).forget();
-    // The design archive works on this device's storage, signed in or not, so it has a slot of its own.
+    // The design archive works on this device's storage, signed in or not, so it has a slot of its own. It holds the
+    // work of the project opened last (the page is in none of its own), and does nothing when there is none; the
+    // account stays the root storage's.
     if let Some(slot) = leptos::prelude::document().get_element_by_id("archive-slot") {
-        let archive = crate::archive::vm::ArchiveVm::new(ports, i18n.clone());
+        let archive = crate::archive::vm::ArchiveVm::for_page(ports, i18n.clone());
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <crate::archive::view::ArchiveView vm=archive/> }).forget();
     }
     AccountPage(i18n)
