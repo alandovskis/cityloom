@@ -865,7 +865,7 @@ impl City {
         if self.today_streets.get(&edge).is_some_and(|today| today.speed == street.speed) {
             street.speed = Speed::Undecided;
         }
-        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street }))
+        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street, scenarios: Default::default() }))
     }
 
     /// The junction at `uid` as first laid out, made now if it was not yet. None for a node that is no junction.
@@ -910,7 +910,7 @@ impl City {
             arm_streets.insert(arm.uid, street);
             arm.edge = 0;
         }
-        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets }))
+        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets, scenarios: Default::default() }))
     }
 
     /// The key of the record street `edge` took its edit from when the city was loaded, if it took one. When the
