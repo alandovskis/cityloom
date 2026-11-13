@@ -2,6 +2,7 @@
   "_comment": "Which browser specs (e2e/tests/*.spec.ts) a pull request runs, by the files it changes. The first rule that matches a file decides it; `all` runs every spec, `none` runs none (the change is covered by the unit tests alone), `docs` marks documentation (a pull request of nothing else skips the Rust and browser jobs), `self` is the changed spec itself, and `@name` is a group below. A file no rule matches runs every spec. `**` crosses folders, `*` does not. Main always runs every spec: this file only narrows a pull request. e2e/tiers.json then gives each chosen spec its tier (ui, integration, e2e), and a tier with no chosen spec does not run: that is how editor code starts no Postgres and no archive. citymodel_builder runs every spec: it packs the archive the E2E tier serves and makes the fixtures' network tiles that every UI and integration spec is served (`just e2e-fixtures`). scripts/include/tests/test_ci_changes.py fails when a spec is in no group or a source folder has no rule.",
   "groups": {
     "street": ["street", "street-iso", "edits", "impact", "speed", "templates", "calming", "curb", "stops", "green"],
+    "standards": ["standards"],
     "junction": ["junction", "junction-a11y"],
     "map": ["map", "network", "source-quality", "restrictions", "world", "report", "search", "webgl"],
     "home": ["home", "projects", "about"],
@@ -16,6 +17,7 @@
     { "paths": ["e2e/tests/*.spec.ts"], "specs": "self" },
     { "paths": ["**/tests.rs", "crates/cityloom_editor/src/i18n_guard.rs", "scripts/include/tests/**", "crates/*/tests/**", ".github/ISSUE_TEMPLATE/**", ".github/labels.yml", ".github/issue-labeler.yml", ".github/issue-flow.json", ".github/dependabot.yml", "sonar-project.properties"], "specs": "none" },
     { "paths": ["crates/cityloom_editor/src/street/**"], "specs": ["@street", "@junction", "@map", "@cross"] },
+    { "paths": ["crates/cityloom_editor/src/standards/**"], "specs": ["@standards", "@street", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/junction/**"], "specs": ["@junction", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/map/**", "crates/cityloom_editor/src/place/**"], "specs": ["@map", "@home", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/project/vm.rs", "crates/cityloom_editor/src/project/view.rs", "crates/cityloom_editor/src/project/text.rs", "crates/cityloom_editor/src/project/i18n/**"], "specs": ["@home", "@cross"] },
