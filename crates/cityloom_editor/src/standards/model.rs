@@ -282,8 +282,8 @@ impl Standards {
     /// Whether every figure is acceptable; the first that is not says why.
     pub fn validate(&self) -> Result<(), Refusal> {
         for field in Field::LENGTHS {
-            let (min_mm, max_mm) = field.range_mm().expect("a length figure has a range");
-            if !(min_mm..=max_mm).contains(&self.length_mm(field).expect("a length figure")) {
+            let (Some((min_mm, max_mm)), Some(value)) = (field.range_mm(), self.length_mm(field)) else { continue };
+            if !(min_mm..=max_mm).contains(&value) {
                 return Err(Refusal::Length { field, min_mm, max_mm });
             }
         }
@@ -310,7 +310,7 @@ impl Standards {
             if range.min_mm > range.max_mm {
                 return Err(Refusal::WidthOrder { kind });
             }
-            let default_mm = KINDS[kind_index(kind).expect("a known kind")].default_mm;
+            let default_mm = kind_index(kind).map_or(0, |k| KINDS[k].default_mm);
             if !(range.min_mm..=range.max_mm).contains(&default_mm) {
                 return Err(Refusal::WidthDefault { kind, default_mm });
             }
@@ -330,7 +330,7 @@ impl Standards {
     pub fn warnings(&self) -> Vec<Said> {
         let mut out = Vec::new();
         for field in Field::LENGTHS {
-            let (value, builtin) = (self.length_mm(field).expect("a length figure"), field.builtin_mm().expect("a length figure"));
+            let (Some(value), Some(builtin)) = (self.length_mm(field), field.builtin_mm()) else { continue };
             if value < builtin {
                 out.push(
                     Said::new("standards-warn-length")

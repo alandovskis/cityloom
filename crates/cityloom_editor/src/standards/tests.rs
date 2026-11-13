@@ -143,10 +143,7 @@ fn widths_are_set_validated_and_reset_for_a_kind() {
     assert!(t.vm.set_widths(&id, "travel", "2.8", "3.6"));
     let widths = t.vm.form().unwrap().widths;
     assert_eq!(widths.len(), 1);
-    assert_eq!(
-        crate::shared::testing::en(&widths[0].said),
-        "Travel lane: 2.8 m to 3.6 m (built-in 2.7 m to 4.0 m)".replace("2.7 m to 4.0 m", &builtin_travel())
-    );
+    assert_eq!(crate::shared::testing::en(&widths[0].said), format!("Driving lane: 2.8 m to 3.6 m (built-in {})", builtin_travel()));
     assert!(!t.vm.set_widths(&id, "travel", "3.6", "2.8"));
     assert_eq!(t.vm.error().as_deref(), Some("The narrowest width of a driving lane must not be over its widest."));
     assert!(!t.vm.set_widths(&id, "travel", "x", "2.8"));

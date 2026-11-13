@@ -490,6 +490,14 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("access-lane", "the end of the id of a standards profile field's input, not a message"),
+    ("crossing-clearance", "the end of the id of a standards profile field's input, not a message"),
+    ("door-buffer", "the end of the id of a standards profile field's input, not a message"),
+    ("patio-walk", "the end of the id of a standards profile field's input, not a message"),
+    ("stop-min", "the end of the id of a standards profile field's input, not a message"),
+    ("speed-choices", "the end of the id of a standards profile field's input, not a message"),
+    ("target-speed", "the end of the id of a standards profile field's input, not a message"),
+    ("speed-target", "the id of a check, not a message"),
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
     ("projects-heading", "the id of the list of projects' heading, where focus goes"),
     ("project-name", "the id of the create form's name field, where focus goes"),
