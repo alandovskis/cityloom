@@ -163,7 +163,8 @@ impl StandardsVm {
 
     /// The sentence saying which standard the checks use; tracked.
     pub fn in_force_text(&self) -> String {
-        match self.store.active().filter(|_| self.in_force().is_some()) {
+        self.version.track();
+        match self.store.active() {
             Some(p) => self.named("standards-active-profile", &p.name),
             None => self.word("standards-active-builtin"),
         }
