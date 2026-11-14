@@ -1,29 +1,29 @@
 $ git rev-parse HEAD
-23cd35f2b8c6e54e229e147c015890a676ec7fd4
-$ cargo test -p cityloom_editor --lib -- street::vm::level_tests street::tests::with_nothing_chosen street::tests::a_chosen_piece street::tests::the_path_is_in_french street::tests::the_street_level_has_a_button street::tests::nothing_selected_the_street_level street::vm::tests::a_sync_reload_keeps_the_chosen
-test street::tests::nothing_selected_the_street_level_says_how_to_begin_and_the_inspector_is_empty ... ok
+3dce1026f00a2b60bdd5c5348947c309c276f40a
+$ cargo test -p cityloom_editor --lib -- street::vm::level_tests street::view::tests::with_nothing_chosen street::view::tests::a_chosen_piece street::view::tests::the_path_is_in_french street::view::tests::the_street_level_has_a_button street::view::tests::nothing_selected_the_street_level street::vm::tests::a_sync_reload_keeps_the_chosen
+test street::view::tests::nothing_selected_the_street_level_says_how_to_begin_and_the_inspector_is_empty ... ok
 test street::vm::level_tests::the_panel_shows_the_street_until_something_is_chosen ... ok
-test street::tests::with_nothing_chosen_the_path_is_the_street_alone ... ok
-test street::vm::level_tests::pressing_a_piece_shows_it_under_its_zone ... ok
 test street::vm::level_tests::a_level_whose_thing_is_let_go_shows_its_parent ... ok
-test street::vm::level_tests::adding_a_piece_shows_the_piece_added ... ok
-test street::tests::the_path_is_in_french_too ... ok
-test street::tests::a_chosen_piece_has_a_path_through_its_zone_whose_steps_are_buttons ... ok
-test street::tests::the_street_level_has_a_button_to_the_selected_zones_commands ... ok
-test street::vm::level_tests::a_step_of_the_path_shows_that_level_and_keeps_what_is_chosen ... ok
+test street::view::tests::with_nothing_chosen_the_path_is_the_street_alone ... ok
+test street::view::tests::the_street_level_has_a_button_to_the_selected_zones_commands ... ok
+test street::view::tests::the_path_is_in_french_too ... ok
+test street::view::tests::a_chosen_piece_has_a_path_through_its_zone_whose_steps_are_buttons ... ok
+test street::vm::level_tests::pressing_a_piece_shows_it_under_its_zone ... ok
 test street::vm::level_tests::choosing_a_zone_shows_the_zone_commands ... ok
+test street::vm::level_tests::adding_a_piece_shows_the_piece_added ... ok
 test street::vm::level_tests::a_curbside_stretch_is_shown_along_the_street_not_under_a_zone ... ok
+test street::vm::level_tests::a_step_of_the_path_shows_that_level_and_keeps_what_is_chosen ... ok
 test street::vm::level_tests::a_stop_a_raised_element_and_a_tree_each_show_their_own_level ... ok
 test street::vm::level_tests::the_zone_commands_are_one_press_from_the_street ... ok
 test street::vm::level_tests::the_path_is_in_french_too ... ok
 test street::vm::level_tests::undo_that_brings_a_strip_back_does_not_show_its_stretch ... ok
 test street::vm::tests::a_sync_reload_keeps_the_chosen_raised_element_stretch_and_the_panel_on_it ... ok
 test street::vm::level_tests::an_edit_of_a_piece_never_moves_the_panel_to_a_stretch_chosen_earlier ... ok
-test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 3202 filtered out; finished in 0.35s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 3205 filtered out; finished in 0.36s
 $ RUSTFLAGS='-D warnings' cargo test -p cityloom_editor --lib
-test result: ok. 3218 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.80s
+test result: ok. 3221 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.77s
 $ RUSTFLAGS='-D warnings' cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.81s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
 $ just test-scripts
 OK
 $ just format-check
