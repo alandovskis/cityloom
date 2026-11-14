@@ -62,20 +62,18 @@ français sont dans `docs/glossary-fr-ca.md`.
 
 ## Modules WebAssembly
 
-L’espace de travail compte six caisses, dans `crates/` (voir [Organisation du dépôt](project-layout.md#les-caisses)) :
+Le navigateur exécute deux modules WebAssembly, tous deux pilotés par `wasm-bindgen` :
 
-- `cityloom_editor` est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
-- `cityloom_model` est le type de réseau simple (serde seulement).
-- `cityloom_report` est le rapport d’examen de la conception sous forme de données simples (serde seulement), que
-  l’éditeur remplit.
-- `cityloom_report_pdf` écrit ce rapport en PDF. C’est un module WebAssembly distinct, chargé la première fois qu’un
-  rapport est demandé, pour que sa lourde dépendance (krilla) reste hors du module de l’éditeur.
-- `citymodel_builder` prépare les données cartographiques. Son importateur exécute
-  [osm2streets](https://github.com/a-b-street/osm2streets) une seule fois sur toute la région métropolitaine et remplit
-  le réseau, qui est découpé en tuiles JSON que l’éditeur télécharge et dans lesquelles il découpe un lieu.
-  osm2streets n’atteint donc jamais le navigateur.
-- `cityloom_server` est le serveur : il sert `web/`, connecte les gens avec OpenStreetMap, Google, Microsoft ou Apple, et
-  conserve les comptes dans Postgres. Il n’est pas construit en WebAssembly.
+- l’éditeur, `cityloom_editor`, que charge chaque page;
+- le générateur de PDF, `cityloom_report_pdf`, chargé seulement la première fois qu’un rapport est demandé, pour que sa
+  lourde dépendance (krilla) reste hors du module de l’éditeur. L’éditeur lui remet le rapport sous forme de données
+  simples (`cityloom_report`).
+
+Le réseau de rues est préparé à l’avance, et non dans le navigateur : `citymodel_builder` exécute
+[osm2streets](https://github.com/a-b-street/osm2streets) une seule fois sur toute la région métropolitaine et découpe le
+réseau (`cityloom_model`) en tuiles JSON que l’éditeur télécharge et dans lesquelles il découpe un lieu. osm2streets
+n’atteint donc jamais le navigateur. Le serveur, `cityloom_server`, n’est pas construit en WebAssembly.
+[Organisation du dépôt](project-layout.md#les-caisses) énumère toutes les caisses.
 
 `city/import.rs` transforme un réseau en disposition de la ville : les routes deviennent des rues, et la rencontre de
 trois à cinq branches que l’éditeur de jonction sait dessiner devient une jonction.

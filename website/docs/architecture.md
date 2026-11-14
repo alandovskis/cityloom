@@ -57,18 +57,17 @@ renders, so a history follows a language switch. Each slice that owns messages h
 
 ## WebAssembly modules
 
-The workspace has six crates, in `crates/` (see [Project layout](project-layout.md#the-crates)):
+The browser runs two WebAssembly modules, both driven by `wasm-bindgen`:
 
-- `cityloom_editor` is the editor, built to WebAssembly and driven by `wasm-bindgen`.
-- `cityloom_model` is the plain network type (serde only).
-- `cityloom_report` is the design-review report as plain data (serde only), which the editor fills.
-- `cityloom_report_pdf` writes that report as a PDF. It is a WebAssembly module of its own, loaded the first time a
-  report is asked for, so that its large dependency (krilla) stays out of the editor's module.
-- `citymodel_builder` prepares the map data. Its importer runs [osm2streets](https://github.com/a-b-street/osm2streets)
-  once over the whole metropolitan area and fills the network, which is cut into JSON tiles the editor fetches and cuts
-  a place out of. osm2streets therefore never reaches the browser.
-- `cityloom_server` is the server: it serves `web/`, signs people in with OpenStreetMap, Google, Microsoft or Apple, and
-  keeps accounts in Postgres. It is not built to WebAssembly.
+- the editor, `cityloom_editor`, which every page loads;
+- the PDF writer, `cityloom_report_pdf`, loaded only the first time a report is asked for, so that its large dependency
+  (krilla) stays out of the editor's module. The editor hands it the report as plain data (`cityloom_report`).
+
+The street network is prepared ahead of time, not in the browser: `citymodel_builder` runs
+[osm2streets](https://github.com/a-b-street/osm2streets) once over the whole metropolitan area and cuts the network
+(`cityloom_model`) into JSON tiles that the editor fetches and cuts a place out of. osm2streets therefore never reaches
+the browser. The server, `cityloom_server`, is not built to WebAssembly. [Project layout](project-layout.md#the-crates)
+lists every crate.
 
 `city/import.rs` turns a network into the city's layout: roads become streets, and a meeting of three to five arms that
 the junction editor can draw becomes a junction.
