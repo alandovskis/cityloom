@@ -46,6 +46,9 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - With server storage the same records are also kept under the account (see `sync/`): `cityloom-sync` (what waits to be sent, the revision pulled up to), `cityloom-sync-damaged`; the edits keep their shape. Per-area saves of earlier builds (`cityloom-city:<area>`) are neither read nor moved.
 - Accepted minors: a second damaged document is dropped when a copy exists; the golden test pins only the fields the sample records write (not `None`-skipped ones); loop halves leaving their first end within one quarter share a key and are refused.
 
+### Scenarios (`city/scenario.rs`)
+- A record's own design (`StreetRecord.street`, `JunctionRecord.state`) is the baseline; `scenarios` (`Scenarios<Street>` / `Scenarios<State>`, absent when empty) are named alternatives beside it, each a whole design with an id unique in its place. A document from before scenarios reads every place as its baseline with none. Per place: at most `MAX_SCENARIOS` (8), names trimmed, 60 characters, unique ignoring case. Actions (`create`, `duplicate`, `rename`, `set_design`, `delete`) refuse with a `Refusal` (no wording; the management UI words it). Not yet: choosing an active scenario, UI, comparison (issue 62 parts b and c).
+
 ### Document version (`Edits::written_version`, `Edits::to_json`)
 - The version is what the features present in some street record need (first matching rule wins; none: `VERSION` 5), so a build without them reads the document as before. Applied also to records this build cannot read.
   - `VERSION` 5: base; adds `State.turbo` (additive, skipped when `None`); a version 4 document is read as is and written as 5.
@@ -57,8 +60,9 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
   - `CALMING_VERSION` 12 (`GREEN_VERSION + 1`): `Street.calming`.
   - `ZONE_SPEED_VERSION` 13: a zone's own `speed_kmh` (`holds_zone_speed`).
   - `CHICANE_VERSION` 14: a chicane (`holds_chicane`).
-  - `FILTER_VERSION` 15: a modal filter (`holds_filter`), the newest and the first rule of `version_for`.
-- `NEWEST` is `FILTER_VERSION` (15). Versions 4 up to `NEWEST` are read; above it is neither read nor written over.
+  - `FILTER_VERSION` 15: a modal filter (`holds_filter`).
+  - `SCENARIO_VERSION` 16: a street or junction record's `scenarios` (`holds_scenarios`), the newest and the first rule of `version_for`.
+- `NEWEST` is `SCENARIO_VERSION` (16). Versions 4 up to `NEWEST` are read; above it is neither read nor written over.
 - An older build meeting a newer document leaves it alone; so does this build's sync (`sync::local` finds that kind not `usable` and says it is paused).
 - Whichever of two open PRs taking the next number merges second renumbers its constant.
 - Speed limit: `Street.speed` (`Speed::Undecided` | `NotSet` | `Kmh(n)`) is saved as `speed_kmh` only when the designer changed it from the import (`City::street_record` compares with `today_streets`): absent when equal (follows OSM `maxspeed` at each import); `null` for Not set against an OSM speed; a number for the designer's.
