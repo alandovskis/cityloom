@@ -1,7 +1,7 @@
 //! Helpers on the outlines of a turbo ring, in millimetres on the plan: where an arm's line meets an outline, the vertex
 //! nearest a point, and the walk along an outline. The ring itself, a spiral, is `turbo_spiral.rs`. No rules here.
 
-use crate::junction::geometry::{P, dir, dist, right};
+use crate::junction::model::geometry::{P, dir, dist, right};
 
 /// The hits of the line `lat` off an arm's axis (the arm at `bearing`) with the segments of `points`, as distances
 /// out along the arm; the farthest. `closed` joins the last point to the first.

@@ -12,9 +12,9 @@ use std::f64::consts::PI;
 
 use serde::Serialize;
 
-use crate::junction::geometry::{P, add, at, dir, dist, right, scale};
-use crate::junction::turbo::{Edge, TurboBlock};
-use crate::junction::turbo_ring::{mouth_on, mouth_on_open, nearest};
+use crate::junction::model::geometry::{P, add, at, dir, dist, right, scale};
+use crate::junction::model::turbo::{Edge, TurboBlock};
+use crate::junction::model::turbo_ring::{mouth_on, mouth_on_open, nearest};
 
 /// Points along each half circle (so an edge has `2 * (STEPS + 1)`). Fine enough that a chord sits within ~11 mm of the arc at 21 m.
 pub const STEPS: usize = 48;
@@ -250,8 +250,8 @@ pub fn spiral_walk(shape: &RingShape, k: usize, enter: (f64, f64), leave: (f64, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::geometry::{add, at, cross, dist, polylines_cross, right, scale, sub};
-    use crate::junction::turbo::BLOCKS;
+    use crate::junction::model::geometry::{add, at, cross, dist, polylines_cross, right, scale, sub};
+    use crate::junction::model::turbo::BLOCKS;
 
     fn near(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-3

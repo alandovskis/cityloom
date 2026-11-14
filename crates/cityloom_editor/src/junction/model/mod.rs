@@ -3,15 +3,25 @@
 //! Pure Rust like `model.rs`, so it is tested natively. Lengths are integer
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
+pub mod beyond;
+pub mod curbside;
+pub mod geometry;
+pub mod read_model;
+pub mod signal;
+pub mod stops;
+pub mod turbo;
+pub mod turbo_ring;
+pub mod turbo_spiral;
+
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
-use crate::junction::geometry::gap;
-use crate::junction::signal::{self, Pattern};
-use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
+use crate::junction::model::geometry::gap;
+use crate::junction::model::signal::Pattern;
+use crate::junction::model::turbo::{BLOCKS, LAYOUTS, Turbo};
 use crate::street::model::{Beyond, Editor, EndStop, EndUse, Street, View, named_said};
 
 #[cfg(test)]
@@ -334,7 +344,7 @@ pub struct State {
     /// The signal plan the person has edited; none means the suggestion (`signal::plan`). Only while `control` is a
     /// signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signal_plan: Option<crate::junction::signal::SignalPlan>,
+    pub signal_plan: Option<crate::junction::model::signal::SignalPlan>,
     /// The OSM nodes it was made from. The sample junctions are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
@@ -682,7 +692,7 @@ pub fn bike_box_blocker(s: &State, i: usize, p: &Profile) -> Option<BikeBoxBlock
         Some(BikeBoxBlocker::NoLane)
     } else if p.enter_x.is_empty() {
         Some(BikeBoxBlocker::NoEntry)
-    } else if crate::junction::read_model::control_role(s, i) == "free" {
+    } else if crate::junction::model::read_model::control_role(s, i) == "free" {
         Some(BikeBoxBlocker::Free)
     } else {
         None
@@ -986,7 +996,7 @@ impl Junction {
     /// Puts `plan` in the current state as the person's own, whatever the lanes say: the tests' way to a plan the editing
     /// cannot reach (several streets' traffic in one phase).
     #[cfg(test)]
-    pub(crate) fn set_plan_for_test(&mut self, plan: crate::junction::signal::SignalPlan) {
+    pub(crate) fn set_plan_for_test(&mut self, plan: crate::junction::model::signal::SignalPlan) {
         self.current_mut().signal_plan = Some(plan);
     }
 
@@ -1939,7 +1949,7 @@ impl Junction {
             }
             // The main road and block `choose_turbo` finds; if none fits, the largest stays and the edit is refused as too big
             // (or, for a main road that does not stand, naming the arm).
-            let Some((turbo, _)) = crate::junction::read_model::choose_turbo(s, region, layout) else { return false };
+            let Some((turbo, _)) = crate::junction::model::read_model::choose_turbo(s, region, layout) else { return false };
             s.turbo = Some(turbo);
             true
         })
@@ -1970,7 +1980,7 @@ impl Junction {
             return self.refuse(Refusal::DoesNotFit);
         }
         // One that stands, else the next in turn, which the edit then refuses by saying why.
-        let Some((next, _)) = crate::junction::read_model::next_main(self.current(), region) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some((next, _)) = crate::junction::model::read_model::next_main(self.current(), region) else { return self.refuse(Refusal::DoesNotFit) };
         let (Some(a), Some(b)) = (self.arm(next[0]), self.arm(next[1])) else { return self.refuse(Refusal::DoesNotFit) };
         let label = Said::new("jn-rev-turbo-main").with("from", Arg::Said(Box::new(arm_name(a)))).with("to", Arg::Said(Box::new(arm_name(b))));
         self.edit_why(Refusal::RoundaboutTooBig, label, move |s| s.turbo.as_mut().map(|t| t.main = next.clone()).is_some())
@@ -2205,7 +2215,7 @@ pub fn valid(s: &State, region: usize) -> bool {
             return false;
         }
     }
-    crate::junction::read_model::layout(s, region).is_some()
+    crate::junction::model::read_model::layout(s, region).is_some()
 }
 
 #[cfg(test)]
@@ -4464,7 +4474,7 @@ mod tests {
         assert_eq!(j.current().ring_extra_mm, 3_000, "kept, not used");
         let mut bare = j.current().clone();
         bare.ring_extra_mm = 0;
-        let radius = |s: &State| crate::junction::read_model::layout(s, 0).and_then(|l| l.ring).map(|r| r.radius);
+        let radius = |s: &State| crate::junction::model::read_model::layout(s, 0).and_then(|l| l.ring).map(|r| r.radius);
         assert_eq!(radius(j.current()), radius(&bare), "the ring of a turbo is its block's, whatever the size kept");
         assert!(j.set_turbo(None));
         assert_eq!(j.current().ring_extra_mm, 3_000, "the earlier size is back");

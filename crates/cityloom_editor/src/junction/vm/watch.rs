@@ -4,10 +4,10 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::keys::{Action, Step};
+use crate::junction::model::read_model::{ArmView, JView};
 use crate::junction::model::{Junction, Target};
-use crate::junction::read_model::{ArmView, JView};
 use crate::junction::vm::JunctionVm;
+use crate::junction::vm::keys::{Action, Step};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
@@ -97,7 +97,7 @@ impl Watch {
 
     /// Gives phase `index` a ready-made pattern as the person does; the pattern it is already is left as it is.
     /// Whether it is that pattern afterwards.
-    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::signal::Pattern) -> bool {
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::model::signal::Pattern) -> bool {
         self.vm.with_value(|v| v.choose_pattern(index, pattern))
     }
 

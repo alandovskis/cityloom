@@ -590,11 +590,11 @@ impl Layout {
     /// Whether a saved junction can stand for this node: the same streets, with
     /// every index and length inside what the editor allows.
     fn junction_fits(&self, s: &State, node: usize) -> bool {
+        use crate::junction::model::turbo::{BLOCKS, LAYOUTS};
         use crate::junction::model::{
             APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, MAX_CORNER_MM, MAX_CROSSING_MM, MAX_RING_MM,
             MAX_SETBACK_MM, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SETBACK_MM, RULES, STOPS,
         };
-        use crate::junction::turbo::{BLOCKS, LAYOUTS};
         let mut want: Vec<u32> = self.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
         let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
         want.sort_unstable();
@@ -987,7 +987,7 @@ impl City {
             let reach_mm = match arm_state {
                 Some((j, Some(arm))) if has_stops => {
                     let open = self.with_streets_of(streets, n, j, region);
-                    crate::junction::read_model::arm_reaches(&open, region).into_iter().find(|&(uid, _)| uid == arm.uid).map_or(0, |(_, r)| r)
+                    crate::junction::model::read_model::arm_reaches(&open, region).into_iter().find(|&(uid, _)| uid == arm.uid).map_or(0, |(_, r)| r)
                 }
                 _ => 0,
             };
@@ -1740,7 +1740,7 @@ mod tests {
 
     #[test]
     fn a_saved_turbo_must_name_a_layout_a_block_and_two_arms_of_the_junction() {
-        use crate::junction::turbo::Turbo;
+        use crate::junction::model::turbo::Turbo;
         let mut city = City::new();
         let state = city.junction(node_uid(1)).unwrap().clone();
         let (a, b) = (state.arms[0].uid, state.arms[1].uid);
@@ -2881,8 +2881,9 @@ mod tests {
         let arm_of = |city: &City| {
             let state = city.with_streets(n, &city.junction(node_uid(n)).unwrap(), 0);
             let arm = state.arms.iter().find(|a| a.edge == 2).unwrap().clone();
-            let mouth =
-                crate::junction::read_model::layout(&state, 0).unwrap().arms[state.arms.iter().position(|a| a.uid == arm.uid).unwrap()].mouth.round() as i32;
+            let mouth = crate::junction::model::read_model::layout(&state, 0).unwrap().arms[state.arms.iter().position(|a| a.uid == arm.uid).unwrap()]
+                .mouth
+                .round() as i32;
             (arm, mouth)
         };
         let (arm, mouth) = arm_of(&city);

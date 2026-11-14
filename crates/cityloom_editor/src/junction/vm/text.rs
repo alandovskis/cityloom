@@ -4,10 +4,10 @@
 //! A view words the status with `arms_text` and `fit_text`, which ask with the tracked `tr` and
 //! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
-use crate::junction::curbside::CurbUseView;
 use crate::junction::model::control_key;
-use crate::junction::read_model::{ArmView, JView};
-use crate::junction::stops::{self, StopView};
+use crate::junction::model::curbside::CurbUseView;
+use crate::junction::model::read_model::{ArmView, JView};
+use crate::junction::model::stops::{self, StopView};
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said, say, say_now};
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn an_arm_with_a_beyond_says_where_its_end_zone_ends_in_both_languages() {
-        let (j, uid) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (j, uid) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let mut j = j;
         j.select(Target::Arm(uid));
         assert_eq!(
@@ -333,7 +333,7 @@ mod tests {
             "Sample Avenue 2 (nord), 0 degré. Sa zone d’extrémité va jusqu’à 20,0\u{a0}m du centre, puis une transition de 10,0\u{a0}m. Zone suivante\u{a0}: zone 2."
         );
         // with no taper the zone across simply follows
-        let (mut j, uid) = crate::junction::tests::junction_with_a_beyond(|_| {}, |b| b.taper = None);
+        let (mut j, uid) = crate::junction::view::tests::junction_with_a_beyond(|_| {}, |b| b.taper = None);
         j.select(Target::Arm(uid));
         assert_eq!(
             selection_text(&j.view(), &en(), Units::Metres).unwrap(),
@@ -351,7 +351,8 @@ mod tests {
 
     #[test]
     fn an_arm_with_a_stop_says_its_lane_in_both_languages() {
-        let (mut j, uid) = crate::junction::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::tests::end_stop(25_000, 33_000, lane, walk)]);
+        let (mut j, uid) =
+            crate::junction::view::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::view::tests::end_stop(25_000, 33_000, lane, walk)]);
         j.select(Target::Arm(uid));
         assert_eq!(
             selection_text(&j.view(), &en(), Units::Metres).unwrap(),
@@ -365,7 +366,7 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_stop_says_nothing_of_one() {
-        let (mut j, uid) = crate::junction::tests::junction_with_stops(|_| {}, |_, _| Vec::new());
+        let (mut j, uid) = crate::junction::view::tests::junction_with_stops(|_| {}, |_, _| Vec::new());
         j.select(Target::Arm(uid));
         assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Sample Avenue 2 (north), 0 degrees");
     }

@@ -10,10 +10,10 @@ use std::fmt::Write;
 
 use serde_json::Value;
 
-use crate::junction::frame::Frame;
-use crate::junction::geometry::{sample_arc, sample_quad};
-use crate::junction::read_model::JView;
-use crate::junction::text::arms_text;
+use crate::junction::model::geometry::{sample_arc, sample_quad};
+use crate::junction::model::read_model::JView;
+use crate::junction::view::frame::Frame;
+use crate::junction::vm::text::arms_text;
 use crate::shared::catalogue::{KINDS, MATERIALS};
 use crate::shared::diagram::render::render;
 use crate::shared::diagram::{Projection, Pt};
@@ -624,7 +624,7 @@ mod tests {
 
     #[test]
     fn a_pocket_arm_draws_the_taper_flat_in_the_iso() {
-        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (j, _) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let v = j.view();
         let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
         let lane = a.beyond.iter().find(|p| p.taper && KINDS[p.kind].id == "travel").expect("the pocket's quad");
@@ -642,7 +642,7 @@ mod tests {
 
     #[test]
     fn a_sidewalk_stands_on_both_sides_of_the_boundary() {
-        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (j, _) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let v = j.view();
         let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
         let more = a.beyond.iter().filter(|p| !p.taper && KINDS[p.kind].id == "sidewalk").count();
@@ -659,7 +659,7 @@ mod tests {
 
     #[test]
     fn the_frame_holds_what_lies_beyond() {
-        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (j, _) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let v = j.view();
         let pts = content_points(&v);
         let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn what_lies_beyond_stays_inside_the_drawing() {
-        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (j, _) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let (v, s) = (j.view(), svg(&j));
         let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
         for p in a.beyond.iter().flat_map(|p| flatten(&p.poly)) {
@@ -759,7 +759,7 @@ mod tests {
         assert_eq!(count(&m, "filter=\"url(#iso-shade-side)\""), count(&m, "class=\"iso-side "));
         assert_eq!(count(&m, "filter=\"url(#iso-shade-ramp)\""), count(&m, "class=\"iso-ramp "));
         assert!(count(&m, "class=\"iso-side ") > 0 && count(&m, "class=\"iso-ramp ") > 0);
-        let css = include_str!("../../../../../web/editor.css");
+        let css = include_str!("../../../../../../web/editor.css");
         assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
     }
 
@@ -857,7 +857,7 @@ mod tests {
                 let role = rest.split('"').next().unwrap();
                 let tag = &rest[..rest.find('>').unwrap()];
                 let number = |name: &str| tag.split(&format!("{name}=\"")).nth(1).and_then(|v| v.split('"').next()).and_then(|v| v.parse::<usize>().ok());
-                crate::junction::drawing::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
+                crate::junction::view::drawing::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
             })
             .collect()
     }
@@ -1092,7 +1092,7 @@ mod tests {
     #[test]
     fn the_drawing_is_as_wide_and_as_tall_as_the_page_leaves_room_for() {
         let f = IsoFrame::fit(&[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
-        let size = crate::junction::frame::Frame::fit(1000.0, 1000.0);
+        let size = crate::junction::view::frame::Frame::fit(1000.0, 1000.0);
         assert_eq!((f.width, f.height), (size.width, size.height));
     }
 

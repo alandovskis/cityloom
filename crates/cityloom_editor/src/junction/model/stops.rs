@@ -6,10 +6,10 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::junction::geometry::{P, at, l as line, m, poly, strip};
+use crate::junction::model::geometry::{P, at, l as line, m, poly, strip};
+use crate::junction::model::read_model::ArmLayout;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::model::{Piece, Profile};
-use crate::junction::read_model::ArmLayout;
 use crate::shared::catalogue::{KINDS, Side, is_roadway};
 use crate::shared::said::{Arg, Said};
 use crate::street::model::{EndStop, StopKind};

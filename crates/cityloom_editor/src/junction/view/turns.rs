@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::junction::model::read_model::JView;
 use crate::junction::model::{LEFT, THROUGH};
-use crate::junction::read_model::JView;
 use crate::junction::vm::JunctionVm;
-use crate::junction::watch::Watch;
+use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::Args;
 
 const COMPASS_KEYS: [&str; 8] = [

@@ -8,18 +8,18 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
-use crate::junction::keys;
+use crate::junction::model::read_model::{CrossingView, JView};
+use crate::junction::model::signal::Pattern;
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
     RULES, STOPS, THROUGH, Target, TimingField,
 };
-use crate::junction::phase_svg::phase_drawings;
-use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::signal::Pattern;
-use crate::junction::turns::{compass_key, turn_glyph};
+use crate::junction::view::phase_svg::phase_drawings;
+use crate::junction::view::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
-use crate::junction::watch::Watch;
+use crate::junction::vm::keys;
+use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::units::{Units, parse_number};
 
@@ -675,7 +675,7 @@ fn junction_panel(w: Watch) -> AnyView {
 }
 
 /// The short tag of the way an arm leaves, or nothing when there is no such arm.
-fn compass_tag(w: Watch, arm: Option<&crate::junction::read_model::ArmView>) -> String {
+fn compass_tag(w: Watch, arm: Option<&crate::junction::model::read_model::ArmView>) -> String {
     arm.map(|a| w.tr(compass_key(a.bearing))).unwrap_or_default()
 }
 
@@ -985,8 +985,8 @@ fn choice(
     key: &'static str,
     label: &'static str,
     items: &'static [Item],
-    current: impl Fn(&crate::junction::read_model::TransitView) -> usize + Send + Sync + Copy + 'static,
-    out: impl Fn(&crate::junction::read_model::TransitView, usize) -> bool + Send + Sync + Copy + 'static,
+    current: impl Fn(&crate::junction::model::read_model::TransitView) -> usize + Send + Sync + Copy + 'static,
+    out: impl Fn(&crate::junction::model::read_model::TransitView, usize) -> bool + Send + Sync + Copy + 'static,
     set: impl Fn(&mut Junction, usize) -> bool + Copy + 'static,
     uid: u32,
 ) -> impl IntoView {

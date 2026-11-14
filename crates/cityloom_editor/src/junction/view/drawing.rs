@@ -8,12 +8,12 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::junction::frame::Frame;
-use crate::junction::iso::{iso_label, iso_svg};
-use crate::junction::keys;
 use crate::junction::model::Target;
+use crate::junction::view::frame::Frame;
+use crate::junction::view::iso::{iso_label, iso_svg};
 use crate::junction::vm::JunctionVm;
-use crate::junction::watch::Watch;
+use crate::junction::vm::keys;
+use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::Args;
 
 /// What pressing something in the drawing selects. A press on nothing clears the selection; a press on a part that
@@ -222,11 +222,15 @@ mod tests {
     #[test]
     fn the_picture_gives_the_shapes_the_attributes_a_press_reads() {
         // `hit_attrs` is the writing of what `pressed` reads.
-        let attrs = crate::junction::iso::hit_attrs("lane", Some(4), Some(2));
+        let attrs = crate::junction::view::iso::hit_attrs("lane", Some(4), Some(2));
         let read = |name: &str| attrs.split(&format!(" {name}=\"")).nth(1).and_then(|v| v.split('"').next()).map(str::to_string);
         assert_eq!(pressed(read), Target::Lane(4, 2));
         let read = |name: &str| {
-            crate::junction::iso::hit_attrs("cycle", None, None).split(&format!(" {name}=\"")).nth(1).and_then(|v| v.split('"').next()).map(str::to_string)
+            crate::junction::view::iso::hit_attrs("cycle", None, None)
+                .split(&format!(" {name}=\""))
+                .nth(1)
+                .and_then(|v| v.split('"').next())
+                .map(str::to_string)
         };
         assert_eq!(pressed(read), Target::Cycle);
     }

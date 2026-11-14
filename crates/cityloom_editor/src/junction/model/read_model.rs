@@ -5,8 +5,8 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::junction::beyond;
-use crate::junction::geometry::{
+use crate::junction::model::beyond;
+use crate::junction::model::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
 use crate::junction::model::{
@@ -16,12 +16,12 @@ use crate::junction::model::{
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
-use crate::junction::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
-use crate::junction::signal::{self, Pattern};
-use crate::junction::stops::{self, StopView};
-use crate::junction::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
-use crate::junction::turbo_ring::{follow, mouth_on};
-use crate::junction::turbo_spiral::{Axes, Mouth, RingLane, RingShape, ring_outline, ring_shape, spiral_walk};
+use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
+use crate::junction::model::signal::{self, Pattern};
+use crate::junction::model::stops::{self, StopView};
+use crate::junction::model::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
+use crate::junction::model::turbo_ring::{follow, mouth_on};
+use crate::junction::model::turbo_spiral::{Axes, Mouth, RingLane, RingShape, ring_outline, ring_shape, spiral_walk};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -732,7 +732,7 @@ pub struct PhaseView {
     /// "Phase 2: Main Street", the streets whose traffic the phase serves.
     pub name: Said,
     /// The vehicle movements the phase serves, by street uid.
-    pub moves: Vec<crate::junction::signal::Move>,
+    pub moves: Vec<crate::junction::model::signal::Move>,
     /// The streets whose crossing is walked, and whose bike movements run, during the phase.
     pub walk_arms: Vec<u32>,
     pub ride_arms: Vec<u32>,
@@ -752,7 +752,7 @@ pub struct PhaseView {
     /// phase is allowed as it is.
     pub conflicts: Vec<Said>,
     /// The vehicle movements that take part in a conflict, to mark on the drawing.
-    pub conflict_moves: Vec<crate::junction::signal::Move>,
+    pub conflict_moves: Vec<crate::junction::model::signal::Move>,
 }
 
 /// One crossing or bike movement a phase can switch: the street (by uid and name) and whether it runs in the phase.
@@ -773,7 +773,7 @@ pub struct PatternView {
 
 /// The compass point an arm leaves by, said in full ("north-east").
 fn compass_said(bearing: i32) -> Said {
-    Said::new(crate::junction::turns::compass_name_key(bearing))
+    Said::new(crate::junction::view::turns::compass_name_key(bearing))
 }
 
 /// "a", "a and b", "a, b and c", each item a `Said`.
@@ -856,7 +856,7 @@ fn move_said(m: signal::Move, arms: &[ArmView]) -> Said {
 }
 
 /// A conflict of phase `n` (from 0) as a sentence: the movement, and what it meets.
-pub(super) fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
+pub(in crate::junction) fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
     let phase = Arg::Num(n as i64 + 1);
     let side = |uid: u32| Arg::Said(Box::new(compass_said(arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing))));
     let said = |m: signal::Move| Arg::Said(Box::new(move_said(m, arms)));
@@ -2216,7 +2216,7 @@ mod tests {
                 let reach = reaches.iter().find(|r| r.0 == arm.uid).unwrap().1;
                 if let Some(c) = &drawn.crossing {
                     // the handle stands on the crossing's far edge: its distance along the arm from the centre
-                    let d = crate::junction::geometry::dir(drawn.bearing as f64);
+                    let d = crate::junction::model::geometry::dir(drawn.bearing as f64);
                     let far = c.handle.0 * d.0 + c.handle.1 * d.1;
                     assert!((far - reach as f64).abs() <= 1.0, "sample {i}: reach {reach}, far edge {far}");
                     crossings += 1;
@@ -2240,7 +2240,7 @@ mod tests {
         assert_eq!(v.arms.iter().filter(|a| a.pedestrian).count(), 1);
         assert_eq!(v.traffic_arms, 3);
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
-        let iso = crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+        let iso = crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
         assert!(iso.markup.contains("iso-"));
         assert!(iso.markup.matches("data-role=\"arm\"").count() >= 4, "every street can be pressed");
     }
@@ -2249,8 +2249,8 @@ mod tests {
 
     #[test]
     fn a_walkway_arm_s_pieces_start_at_its_mouth_with_no_road_before_them_and_no_table_of_its_own() {
-        use crate::junction::iso::flatten;
         use crate::junction::model::junction_with_walkways;
+        use crate::junction::view::iso::flatten;
         let mut j = junction_with_walkways(&[90], &WALKWAY);
         assert!(j.set_raised(true));
         let v = j.view();
@@ -2258,7 +2258,7 @@ mod tests {
         assert!(walk.gaps.is_empty(), "no road lies between the junction and the walkway");
         assert!(walk.raised.is_none(), "a walkway is at sidewalk height already");
         assert!(v.arms.iter().filter(|a| !a.pedestrian).all(|a| a.raised.is_some()), "the other streets are on the table");
-        let h = crate::junction::geometry::dir(90.0);
+        let h = crate::junction::model::geometry::dir(90.0);
         let near = |poly: &[Value]| flatten(poly).iter().map(|p| p.0 * h.0 + p.1 * h.1).fold(f64::MAX, f64::min);
         let mouth = near(&walk.outline);
         assert_eq!(walk.pieces.len(), 3);
@@ -2367,7 +2367,7 @@ mod tests {
         );
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let units = crate::shared::units::Units::Metres;
-        assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+        assert!(!crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
     }
 
     #[test]
@@ -2378,7 +2378,7 @@ mod tests {
         assert_eq!(v.control, "uncontrolled");
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let units = crate::shared::units::Units::Metres;
-        assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+        assert!(!crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
     }
 
     #[test]
@@ -2516,7 +2516,7 @@ mod tests {
 
     /// How far along an arm at `bearing` (its lateral offset 0) a polygon reaches, from the centre of the junction.
     fn along(poly: &[Value], bearing: f64) -> (f64, f64) {
-        let d = crate::junction::geometry::dir(bearing);
+        let d = crate::junction::model::geometry::dir(bearing);
         let ts: Vec<f64> = poly.iter().filter_map(|v| Some(v.get(1)?.as_f64()? * d.0 + v.get(2)?.as_f64()? * d.1)).collect();
         (ts.iter().cloned().fold(f64::MAX, f64::min), ts.iter().cloned().fold(f64::MIN, f64::max))
     }
@@ -2624,7 +2624,7 @@ mod tests {
         let far = mouth + (setback + width) as f64;
         let (t0, t1) = along(&boxed.unwrap(), 0.0);
         assert!((t0 - (far + 600.0)).abs() < 2.0 && (t1 - (far + 3_600.0)).abs() < 2.0, "{t0}..{t1} from {far}");
-        let d = crate::junction::geometry::dir(0.0);
+        let d = crate::junction::model::geometry::dir(0.0);
         let t = |s: Option<[P; 2]>| {
             let p = s.unwrap()[0];
             p.0 * d.0 + p.1 * d.1
@@ -2794,7 +2794,7 @@ mod tests {
         let arm = v.arms.iter().find(|a| a.uid == n).unwrap();
         assert_eq!(arm.core_bike.len(), 2, "the left stub, and a lead-in where the right one was");
         let f = lay.corners[0].fillet.as_ref().unwrap();
-        let d = crate::junction::geometry::dir(0.0);
+        let d = crate::junction::model::geometry::dir(0.0);
         let tangent = f.a.0 * d.0 + f.a.1 * d.1;
         assert!(mouth - tangent > 500.0, "the corners differ: tangent {tangent}, mouth {mouth}");
         let lead = arm.core_bike.iter().map(|s| along(s, 0.0)).find(|(lo, _)| (lo - tangent).abs() < 2.0).expect("a lead-in from the tangent point");
@@ -2852,7 +2852,7 @@ mod tests {
         let stop = stop.unwrap();
         let (a, b) = (stop[0].0.min(stop[1].0), stop[0].0.max(stop[1].0));
         assert!((lo - a).abs() < 2.0 && (hi - b).abs() < 2.0, "box {lo}..{hi}, stop line {a}..{b}");
-        let d = crate::junction::geometry::dir(0.0);
+        let d = crate::junction::model::geometry::dir(0.0);
         let moved = (arrow1.0 - arrow0.0) * d.0 + (arrow1.1 - arrow0.1) * d.1;
         assert!((moved - 3_000.0).abs() < 2.0, "the entering arrows move back with the stop line: {moved}");
     }
@@ -3467,7 +3467,7 @@ mod tests {
 
     #[test]
     fn two_movements_that_cross_are_a_warning_in_both_languages() {
-        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        use crate::junction::model::signal::{Move, SignalPlan, StoredPhase};
         let mut j = Junction::new(0);
         let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
         let moves = vec![Move { from: n, to: so }, Move { from: e, to: w }];
@@ -3483,7 +3483,7 @@ mod tests {
 
     #[test]
     fn the_check_lists_only_the_first_few_warnings() {
-        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        use crate::junction::model::signal::{Move, SignalPlan, StoredPhase};
         let mut j = Junction::new(0);
         let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
         let moves = vec![Move { from: n, to: so }, Move { from: so, to: n }, Move { from: e, to: w }, Move { from: w, to: e }];
@@ -3670,15 +3670,15 @@ mod tests {
         let offered: Vec<Pattern> = p.patterns.iter().map(|o| o.pattern).collect();
         assert_eq!(offered, vec![Pattern::ThroughOnly, Pattern::All, Pattern::ProtectedLeftThenThrough, Pattern::Scramble]);
         assert_eq!((p.patterns[0].name, p.patterns[0].description), ("jn-pattern-through", "jn-pattern-through-desc"));
-        let drawings = crate::junction::phase_svg::phase_drawings(&v);
+        let drawings = crate::junction::view::phase_svg::phase_drawings(&v);
         assert!(j.set_phase_pattern(0, Pattern::Scramble));
         let v2 = j.view();
         let p2 = &v2.signal.as_ref().unwrap().phases[0];
         assert_eq!(p2.pattern, Pattern::Scramble);
         assert!(p2.moves.is_empty());
         assert_eq!(en(&p2.summary), "People cross: north, east, south and west.");
-        assert_ne!(crate::junction::phase_svg::phase_drawings(&v2)[0], drawings[0], "the drawing follows the choice");
-        assert_eq!(crate::junction::phase_svg::phase_drawings(&v2)[1], drawings[1], "the other phases are drawn as they were");
+        assert_ne!(crate::junction::view::phase_svg::phase_drawings(&v2)[0], drawings[0], "the drawing follows the choice");
+        assert_eq!(crate::junction::view::phase_svg::phase_drawings(&v2)[1], drawings[1], "the other phases are drawn as they were");
         // Taking a street's straight-on movement away leaves a stored phase that matches no pattern: Custom, never offered.
         let mut k = Junction::new(0);
         assert!(k.set_phase_pattern(0, Pattern::ProtectedLeftThenThrough));
@@ -3746,7 +3746,7 @@ mod tests {
 
     // ---- turbo ring ----
 
-    use crate::junction::turbo::Turbo;
+    use crate::junction::model::turbo::Turbo;
 
     /// The Avenue and street (sample 0) as a roundabout with a turbo: uids 1 and 3 are the avenue (north, south), 2 and 4 the street.
     fn turbo_state(layout: usize, size: usize) -> State {
@@ -3780,7 +3780,7 @@ mod tests {
             assert_eq!((ring.radius, ring.floor as f64), (outer, outer), "block {size}");
             let turbo = ring.turbo.expect("a turbo ring");
             assert_eq!((turbo.block, turbo.lanes, turbo.axis_deg), (size, 2, 57.5));
-            assert_eq!(turbo.outline.len(), 2 * (crate::junction::turbo_spiral::STEPS + 1));
+            assert_eq!(turbo.outline.len(), 2 * (crate::junction::model::turbo_spiral::STEPS + 1));
         }
     }
 
@@ -4152,7 +4152,7 @@ mod tests {
 
     #[test]
     fn a_street_at_bearing_zero_is_walked_to_the_same_as_one_at_bearing_360() {
-        use crate::junction::turbo_spiral::{Axes, Mouth, ring_shape, spiral_walk};
+        use crate::junction::model::turbo_spiral::{Axes, Mouth, ring_shape, spiral_walk};
         let block = &BLOCKS[1];
         let axes = Axes::new(57.5, true);
         let mouths = |north: f64| -> Vec<Mouth> { [north, 90.0, 180.0, 270.0].iter().map(|&bearing| Mouth { bearing, cl: -3_500.0, cr: 3_500.0 }).collect() };

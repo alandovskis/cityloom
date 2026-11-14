@@ -3,9 +3,9 @@
 //! (where the boundary stands, how long the taper is, which pieces differ) is `street::model::beyond`'s, and this
 //! only draws it, at true scale, cut where the arm ends.
 
-use crate::junction::geometry::{P, at, poly, strip};
+use crate::junction::model::geometry::{P, at, poly, strip};
+use crate::junction::model::read_model::PieceView;
 use crate::junction::model::{Piece, Profile};
-use crate::junction::read_model::PieceView;
 use crate::street::model::{Beyond, TaperPiece};
 
 /// What an arm draws for its boundary.

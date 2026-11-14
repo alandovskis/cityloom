@@ -5,8 +5,8 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::junction::geometry::{poly, strip};
-use crate::junction::read_model::ArmLayout;
+use crate::junction::model::geometry::{poly, strip};
+use crate::junction::model::read_model::ArmLayout;
 use crate::shared::catalogue::{KINDS, Side, kind_index};
 use crate::street::model::{EndUse, Use};
 

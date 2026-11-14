@@ -296,16 +296,16 @@ fn junction_page(city: &City, uid: u32, name: &str, failing: &[crate::shared::sa
         return page;
     };
     let (before, after) = (before.view(), after.view());
-    let control = |v: &crate::junction::read_model::JView| tr(crate::junction::model::control_key(v.control_index), &Args::new());
+    let control = |v: &crate::junction::model::read_model::JView| tr(crate::junction::model::control_key(v.control_index), &Args::new());
     let key = if before.control_index == after.control_index { "map-report-place-control-same" } else { "map-report-place-control" };
     page.push(Block::Paragraph { text: tr(key, &Args::new().str("before", control(&before)).str("after", control(&after))) });
-    let (figure_before, figure_after) = crate::junction::figure::figures(&before, &after, i18n, units, FIGURE_W, FIGURE_H);
+    let (figure_before, figure_after) = crate::junction::view::figure::figures(&before, &after, i18n, units, FIGURE_W, FIGURE_H);
     let items = [
-        captioned("map-report-place-before", crate::junction::figure::alt(&before, i18n), figure_before, i18n),
-        captioned("map-report-place-after", crate::junction::figure::alt(&after, i18n), figure_after, i18n),
+        captioned("map-report-place-before", crate::junction::view::figure::alt(&before, i18n), figure_before, i18n),
+        captioned("map-report-place-after", crate::junction::view::figure::alt(&after, i18n), figure_after, i18n),
     ];
     page.push(Block::Figures { items: items.to_vec() });
-    fn read(c: &crate::junction::read_model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
+    fn read(c: &crate::junction::model::read_model::Check) -> (&str, bool, &crate::shared::said::Said, &crate::shared::said::Said) {
         (c.id, c.ok, &c.label, &c.detail)
     }
     page.extend(checks_block(&pair_checks(&before.checks, &after.checks, read), i18n, units));

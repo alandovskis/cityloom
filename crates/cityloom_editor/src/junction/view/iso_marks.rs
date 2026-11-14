@@ -2,10 +2,10 @@
 //! small arrows where traffic leaves, the circulation arrows on a roundabout. Pure geometry in millimetres on the
 //! plan, as polylines; `iso.rs` projects them. Nothing here knows the screen or a colour.
 
-use crate::junction::geometry::{dir, sample_quad};
+use crate::junction::model::geometry::{dir, sample_quad};
+use crate::junction::model::read_model::{JView, LaneView, RingView};
+use crate::junction::model::turbo_ring::mouth_on_open;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
-use crate::junction::read_model::{JView, LaneView, RingView};
-use crate::junction::turbo_ring::mouth_on_open;
 
 type P = (f64, f64);
 
@@ -360,8 +360,8 @@ mod tests {
 
     // ---- what the 2.5D draws of them ----------------------------------------------------------------------------
 
-    use crate::junction::iso::{flatten, iso_svg};
-    use crate::junction::tests::{end_stop, end_use, junction_with_a_pocket, junction_with_stops, junction_with_uses};
+    use crate::junction::view::iso::{flatten, iso_svg};
+    use crate::junction::view::tests::{end_stop, end_use, junction_with_a_pocket, junction_with_stops, junction_with_uses};
     use crate::shared::units::Units;
 
     fn svg(j: &Junction) -> String {

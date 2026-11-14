@@ -1325,9 +1325,9 @@ mod tests {
         let before = e.to_json();
         // Edited: the version is raised so that an older build leaves the document alone.
         let uid = record.state.arms[0].uid;
-        record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
-            phases: vec![crate::junction::signal::StoredPhase {
-                moves: vec![crate::junction::signal::Move { from: uid, to: record.state.arms[1].uid }],
+        record.state.signal_plan = Some(crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: uid, to: record.state.arms[1].uid }],
                 walks: vec![uid],
                 rides: vec![],
                 arm: None,
@@ -1393,10 +1393,10 @@ mod tests {
         e.streets.insert("w8~n1~n2".into(), pedestrian);
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
-        record.state.turbo = Some(crate::junction::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
-        record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
-            phases: vec![crate::junction::signal::StoredPhase {
-                moves: vec![crate::junction::signal::Move { from: 1, to: 2 }],
+        record.state.turbo = Some(crate::junction::model::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
+        record.state.signal_plan = Some(crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: 1, to: 2 }],
                 walks: vec![2],
                 rides: vec![1],
                 arm: None,

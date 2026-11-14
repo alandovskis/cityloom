@@ -3,8 +3,8 @@
 
 use cityloom_report::Figure;
 
-use crate::junction::iso::{build_diagram, iso_label};
-use crate::junction::read_model::JView;
+use crate::junction::model::read_model::JView;
+use crate::junction::view::iso::{build_diagram, iso_label};
 use crate::shared::flat::{flatten_fit, flatten_fit_pair};
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;

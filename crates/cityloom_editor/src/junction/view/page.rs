@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::read_model::JView;
-use crate::junction::text::{arms_text, fit_text};
+use crate::junction::model::read_model::JView;
 use crate::junction::vm::JunctionVm;
-use crate::junction::watch::Watch;
+use crate::junction::vm::text::{arms_text, fit_text};
+use crate::junction::vm::watch::Watch;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;

@@ -4,10 +4,10 @@
 
 use super::scene::Scene;
 use super::{IsoFrame, circle, content_points, flatten, height_of, hit_attrs, shades};
-use crate::junction::iso_marks::{
+use crate::junction::model::read_model::{ArmView, JView};
+use crate::junction::view::iso_marks::{
     LEAVE_ARROW_MM, Spot, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows, spread_labels,
 };
-use crate::junction::read_model::{ArmView, JView};
 use crate::shared::catalogue::KINDS;
 use crate::shared::diagram::Diagram;
 use crate::shared::i18n::{Args, I18n};

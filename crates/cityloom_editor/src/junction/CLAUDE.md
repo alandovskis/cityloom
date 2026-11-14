@@ -20,7 +20,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - `read_model::choose_turbo` is the one test both `set_turbo` and `turbo_options` use.
 - Inspector layout choice: WAI-ARIA radio group (one tab stop; pure `keys::radio_choice` / `radio_tab_stop`); re-choosing the chosen layout is a silent no-op.
 
-## The 2.5D diagram (`junction/iso/`, #140)
+## The 2.5D diagram (`junction/view/iso/`, #140)
 
 - `IsoFrame` (plan turned 30 degrees, depth 0.55, height x3) implements `shared::diagram::Projection` (`Pt` = plan x, height, plan y); affine, so `ground_at` is the one matrix for every texture. `build.rs` makes each part's shapes; `scene.rs` (`Scene`) gathers layers into a `Diagram`; `shared::diagram::render` writes it (defs, then one group `iso iso-junction`).
 - Layers bottom to top: `Ground`, `Surface` (laid order, places to press among it: order decides a press), `Raised` (far to near), `Markings`, `Objects`, `Signs`, `Outline` (selection). `Hit` stays empty: a place to press lies with what it is on.
@@ -33,26 +33,26 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - Selection outline: `iso-sel-casing` under `sel-box iso-sel`, over the solids (a cycle track has two), at the height it stands. Nothing is dragged: inspector fields with steppers (`i-h-bearing`, `i-h-corner`, `i-h-setback`) and a key (Shift+Arrow, `+`, `-`).
 - `iso_label` names the junction in 2.5D with its streets, and a roundabout, turbo layout or raised table (`jn-iso-label*`).
 
-### Ground marks (`junction/iso_marks.rs`, #140 stage 2)
+### Ground marks (`junction/view/iso_marks.rs`, #140 stage 2)
 
 - Pure geometry in ground mm, projected through `IsoFrame::at`. Each line lies on a casing (`iso-casing`; `iso-casing warn` in `--iso-sel-casing` under a warning).
 - Drawn: `lane-arrow` on entering lanes (`bad` when only banned turns), `out` where traffic leaves; a roundabout's arrows and "Bus only"; turns of the selected street, lane, crossing or corner (`mv`, banned `no` with a cross, no lane `bad`, `indirect`); `stop-pad`, dwell, run, post; `approach-mark`; a virtual queue jump's loop; a bus gate's line; a dead end's cap; `measure-tag` (Atlas code); `iso-queue`; a failing curbside use's outline and failing corner's curb; a turbo entry's widened road.
 - A crossing's length: `dim`, `dim-warn`; overlapping figures move apart by whole lines, the longer crossing keeping its place (`iso_marks::spread_labels`).
 - Not drawn: north mark, scale bar, the street's width and compass line, a dead-end arm's fade and hatching, conflict points, a lane's destinations.
 
-## Junction approaches (`street/model/beyond.rs`, `junction/beyond.rs`)
+## Junction approaches (`street/model/beyond.rs`, `junction/model/beyond.rs`)
 
 - Derived, never saved: no change to `Street`, `State`'s serde or the edits document; `city::edits::VERSION` stays 5.
 - `Street::beyond(first_end, frame)` gives an arm `Beyond { boundary_mm, next, zone, taper }`: the first zone boundary going out, the section across it (looking outward), and the `BeyondTaper` (`from_mm`, `to_mm`, `need_mm`, `room_mm`, `merges`, `TaperPiece`s), all from `transition()`; the junction never recomputes a length, host or merge. Distances are from the junction's centre.
 - `Arm.beyond: Option<Beyond>` is `#[serde(skip)]` like `Arm.section`, set where `section` is (`City::with_streets_of`, `beyond_from`). Movements, lanes and crossings still read the end zone only.
 - `None` for: one zone, no frame, drawn elsewhere (the page's notice), boundary at or past the road's end, same pieces on both sections, or either section wider than `row_mm` (a street failing `fits` draws as before). A section narrower than the street ("left to use") has its beyond: pieces are laid from the left edge, so a mirrored span flips by its own section's total, not `row_mm`.
-- `junction/beyond.rs` (pure, mm): end-zone pieces stop at the taper's start (a moving piece) or the boundary; one quadrilateral per moving piece at true scale; then the next zone's strips to `ARM_LENGTH_MM` (36 m); two `.approach-mark` lines at the taper's ends (the boundary alone for a jog), dashed, no press, `var(--ink-2)`, `CanvasText` in forced colours, 3:1 on road, sidewalk and planting (`shared/contrast.rs`).
+- `junction/model/beyond.rs` (pure, mm): end-zone pieces stop at the taper's start (a moving piece) or the boundary; one quadrilateral per moving piece at true scale; then the next zone's strips to `ARM_LENGTH_MM` (36 m); two `.approach-mark` lines at the taper's ends (the boundary alone for a jog), dashed, no press, `var(--ink-2)`, `CanvasText` in forced colours, 3:1 on road, sidewalk and planting (`shared/contrast.rs`).
 - A taper cut short by its host zone is drawn over the room there is and ends in a jog. A boundary or taper start at or past `ARM_LENGTH_MM` draws nothing new and is neither judged by `approach` nor described in the arm's sentence (`Drawn.shown`). The 2.5D draws the same pieces and counts them in its frame (`content_points`). Arm text: `jn-sel-arm-approach` / `jn-sel-arm-jog`.
 - Check `approach` ("Approaches", `jn-check-approach*`; not `Arm.approach` / `APPROACHES`, the transit measures) fails, naming the arm: a steady end zone (to the taper's start, else the boundary) short of its arrows plus a stop line (`ARROW_CLEAR_MM`, 3 m); a host zone shorter than the taper needs; a lane that drops with nothing to merge into.
 - Known limits: one boundary per arm (the first); transit measures (`Arm.approach`) are not moved to the boundary; turbo and pedestrian arms draw as before; the zone's start under the mouth is hidden; marks and taper pieces are all that is drawn beyond.
 - `e2e/tests/junction.spec.ts` covers the drawing, the check and its failure on a street divided in two.
 
-## Stops at junctions (`street/model/stop_end.rs`, `junction/stops.rs`, PR 2 of #70)
+## Stops at junctions (`street/model/stop_end.rs`, `junction/model/stops.rs`, PR 2 of #70)
 
 - Derived, never saved (no change to `Street`, `State`'s serde, the edits document or `VERSION` 5); `Arm.stops` is read from the street.
 - `Street::end_stops(first_end, frame, driving)` reads the street under the side `driving` names (`for_side`, as `Editor::from_street` and `profile_of`; an imported street keeps traffic on the right whatever the region, so `enters`, `lane`, `pad` are as the region's junction reads it; `stops_from` and `City::with_streets` take the region's side).
@@ -63,7 +63,7 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - Checks: street page row `stop-junction` (`check-label-stop-junction`, only once an end has a reach); junction `stop-clear` (`jn-check-stop-clear*`) and `stop-lane` (`jn-check-stop-lane*`), each naming stop and arm.
 - A lane belongs to a stop only through `junction::stops::lane_of`: the section's `travel` piece with direction `toward`, counted from the driver's left. A `bus` piece has no lane or destinations, so a stop in a bus lane is exempt, as is an arm of one entering lane.
 - Only an entering stop draws a run (down its lane to the stop line, else the mouth) and is judged for lanes: a lane not going straight on, at a junction with a straight-on movement, fails (`jn-stop-turn-only`); a straight-on lane that also turns toward the kerb fails (`jn-stop-shared-turn`). A transit measure's bus stop (`Arm.stop`, M1/M2) plus a street stop on the same kerb side raise `jn-problem-stop-twice`.
-- Drawing: `junction/stops.rs::draw` (pure polygons in mm, cut to the drawn arm and `beyond::Drawn.cuts`): `.stop-pad` (+ `.stop-bulb` / `.stop-island`, so kind shows without colour), `.stop-dwell`, `.stop-run`, `.stop-post` (with `.stop-shelter`), `.stop-bad`; on a casing, no press. Arm text `jn-sel-arm-stop*`. Colours and forced-colours rule in `web/editor.css`, contrast pair in `shared/contrast.rs`.
+- Drawing: `junction/model/stops.rs::draw` (pure polygons in mm, cut to the drawn arm and `beyond::Drawn.cuts`): `.stop-pad` (+ `.stop-bulb` / `.stop-island`, so kind shows without colour), `.stop-dwell`, `.stop-run`, `.stop-post` (with `.stop-shelter`), `.stop-bad`; on a casing, no press. Arm text `jn-sel-arm-stop*`. Colours and forced-colours rule in `web/editor.css`, contrast pair in `shared/contrast.rs`.
 - Known limits: end zone only; a stop straddling the end zone's boundary is not an `EndStop` (judged on the street page only, against the reach; the junction neither draws nor judges it); no routes; turbo and pedestrian arms skip stops; figures are placeholders.
 - `e2e/tests/junction.spec.ts` covers a stop too near (drawn, both checks fail, passes 20 m out) and the turning lane (finds the arm with two entering lanes and the side by the street page's "Measured from" end).
 

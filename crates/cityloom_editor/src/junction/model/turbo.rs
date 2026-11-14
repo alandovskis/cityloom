@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::geometry::gap;
+use crate::junction::model::geometry::gap;
 use crate::junction::model::{Arm, LEFT, Profile, RIGHT, THROUGH};
 use crate::shared::catalogue::StreetClass;
 

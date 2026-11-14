@@ -646,7 +646,7 @@ svg pattern circle {
   stroke-width: 0.6;
   stroke-opacity: 0.55;
 }
-/* The junction in 2.5D is pressed to select (junction/iso/ `hit_attrs`): a shape with a data-role selects what the
+/* The junction in 2.5D is pressed to select (junction/view/iso/ `hit_attrs`): a shape with a data-role selects what the
    keys would, and everything else is looked at and lets the press through to what lies under it. A tap is the whole
    gesture, so the targets ask for no double-tap zoom; the 2.5D has no grips, so nothing here is dragged. */
 #drawing .iso-junction * {
@@ -660,7 +660,7 @@ svg pattern circle {
   cursor: pointer;
   touch-action: manipulation;
 }
-/* A place to press that is narrower than a finger carries a stroke-width (junction/iso.rs `target_growth_px`) that
+/* A place to press that is narrower than a finger carries a stroke-width (junction/view/iso/mod.rs `target_growth_px`) that
    brings it to 24 px; the stroke is not painted, but a press lands on it. */
 #drawing .iso-junction .iso-hit {
   fill: transparent;
@@ -679,7 +679,7 @@ svg pattern circle {
   gap: 8px;
   padding-block: 6px;
 }
-/* What the plan draws on the ground and the 2.5D draws after it (junction/iso_marks.rs; #140): the marks keep the
+/* What the plan draws on the ground and the 2.5D draws after it (junction/view/iso_marks.rs; #140): the marks keep the
    plan's own classes and so its colours (stop-*, mv, approach-mark, dim, measure-loop, dead-cap, lane-arrow, curb-line),
    and lie on a surface that can be anything from dark asphalt to pale concrete, so each line has a casing under it
    in the panel's colour (a dark one under a warning, which the panel's colour does not clear 3:1). */

@@ -2,15 +2,18 @@
 //! it changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
+pub mod keys;
+pub mod text;
+pub mod watch;
+
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
+use crate::junction::model::read_model::JView;
+use crate::junction::model::signal;
 use crate::junction::model::{Junction, Refusal, State, Target};
-use crate::junction::read_model::JView;
-use crate::junction::signal;
-use crate::junction::text;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -36,7 +39,7 @@ pub struct JunctionVm {
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
-type Meeting = (usize, u32, crate::junction::signal::Conflict);
+type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 
 /// Whether an edit says which phases it took off their ready-made pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -163,7 +166,7 @@ impl JunctionVm {
     /// The phases (from 0) that were on a ready-made pattern in `before` and are on none now.
     fn lost_since(&self, before: Option<(State, usize)>) -> Vec<usize> {
         let Some((state, region)) = before else { return Vec::new() };
-        self.read(|j| crate::junction::signal::patterns_lost_across(&state, region, j.current(), j.region))
+        self.read(|j| crate::junction::model::signal::patterns_lost_across(&state, region, j.current(), j.region))
     }
 
     /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
@@ -179,11 +182,11 @@ impl JunctionVm {
 
     /// The person gives phase `index` a ready-made pattern. Choosing the pattern it is already changes nothing, so it
     /// is neither refused nor announced and leaves no history. Whether the phase is that pattern afterwards.
-    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::signal::Pattern) -> bool {
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::model::signal::Pattern) -> bool {
         let chosen = || {
             self.read(|j| {
-                let phase = crate::junction::signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
-                phase.is_some_and(|ph| crate::junction::signal::pattern_of(j.current(), j.region, &ph) == pattern)
+                let phase = crate::junction::model::signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.is_some_and(|ph| crate::junction::model::signal::pattern_of(j.current(), j.region, &ph) == pattern)
             })
         };
         if !chosen() {
@@ -349,7 +352,7 @@ impl JunctionVm {
         let v = self.view_now();
         let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
         let (first, rest) = new.split_first()?;
-        let first_said = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
+        let first_said = say_now(&self.i18n, self.units_now(), &crate::junction::model::read_model::conflict_said(first.0, &first.2, &v.arms));
         if rest.is_empty() {
             return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", first_said)));
         }

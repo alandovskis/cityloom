@@ -9,7 +9,7 @@ use std::fmt::Write;
 use serde_json::Value;
 
 use crate::junction::model::THROUGH;
-use crate::junction::read_model::{ArmView, JView, PhaseView};
+use crate::junction::model::read_model::{ArmView, JView, PhaseView};
 use crate::shared::catalogue::KINDS;
 use crate::shared::iso::format::f1;
 use crate::shared::symbols;

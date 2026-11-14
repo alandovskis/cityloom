@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::read_model::Check;
-use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::turns::compass_key;
+use crate::junction::model::read_model::Check;
+use crate::junction::model::read_model::{CrossingView, JView};
+use crate::junction::view::turns::compass_key;
 use crate::junction::vm::JunctionVm;
-use crate::junction::watch::Watch;
+use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::said::say;
 use crate::shared::units::Units;
@@ -204,14 +204,14 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
+    use crate::junction::model::read_model::Check;
     use crate::junction::model::*;
-    use crate::junction::read_model::Check;
     use crate::shared::said::Said;
     use crate::shared::units::Units;
 
     use super::*;
 
-    fn arm_view(j: &Junction, bearing: i32) -> crate::junction::read_model::ArmView {
+    fn arm_view(j: &Junction, bearing: i32) -> crate::junction::model::read_model::ArmView {
         j.view().arms.into_iter().find(|a| a.bearing == bearing).unwrap()
     }
 
