@@ -10,6 +10,8 @@ use serde_json::{Map, Value};
 use crate::junction::model::State;
 use crate::street::model::Street;
 
+use super::scenario::Scenarios;
+
 /// The shape of the document. Raised when the shape changes. What a document with no zone is written as.
 pub const VERSION: u32 = 5;
 /// What a document is written as while a street record holds zones: a build that does not know zones treats it as
@@ -48,7 +50,11 @@ pub const CHICANE_VERSION: u32 = ZONE_SPEED_VERSION + 1;
 /// `modal_filter`): a build before it fails to read the kind, so it must treat the document as a newer one. Chicanes,
 /// tables and crossings alone keep their own versions.
 pub const FILTER_VERSION: u32 = CHICANE_VERSION + 1;
-pub const NEWEST: u32 = FILTER_VERSION;
+/// What a document is written as while a street or junction record keeps scenarios (`scenarios`, named alternative
+/// designs beside the record's own, the baseline): a build that does not know them would drop them on its next write,
+/// so it must treat the document as a newer one. A record without them is as before.
+pub const SCENARIO_VERSION: u32 = FILTER_VERSION + 1;
+pub const NEWEST: u32 = SCENARIO_VERSION;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -65,6 +71,9 @@ pub struct StreetRecord {
     /// leaves it in whole degrees clockwise from north: which piece of a way the edit was made on.
     pub leaving: BTreeMap<i64, i32>,
     pub street: Street,
+    /// Alternative designs of the street; `street` is the baseline.
+    #[serde(default, skip_serializing_if = "Scenarios::is_empty")]
+    pub scenarios: Scenarios<Street>,
 }
 
 /// The street at an arm of a junction, as the record names it: its key where it has one, the ways it was made
@@ -85,6 +94,9 @@ pub struct JunctionRecord {
     pub state: State,
     /// Arm uid to the street it carries.
     pub arm_streets: BTreeMap<u32, ArmStreet>,
+    /// Alternative states of the junction; `state` is the baseline.
+    #[serde(default, skip_serializing_if = "Scenarios::is_empty")]
+    pub scenarios: Scenarios<State>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -120,7 +132,8 @@ impl Edits {
         let zone_speed = self.streets.values().any(|r| r.street.zones.iter().any(|z| !z.speed.is_undecided()));
         let chicane = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::Chicane));
         let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
-        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter)
+        let scenarios = self.streets.values().any(|r| !r.scenarios.is_empty()) || self.junctions.values().any(|r| !r.scenarios.is_empty());
+        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
     }
 
     pub fn to_json(&self) -> String {
@@ -142,8 +155,11 @@ fn version_for(
     zone_speed: bool,
     chicane: bool,
     filter: bool,
+    scenarios: bool,
 ) -> u32 {
-    if filter {
+    if scenarios {
+        SCENARIO_VERSION
+    } else if filter {
         FILTER_VERSION
     } else if chicane {
         CHICANE_VERSION
@@ -221,6 +237,14 @@ fn holds_filter(doc: &Map<String, Value>) -> bool {
     })
 }
 
+/// Whether any street or junction record holds a non-empty `scenarios` list (decided on the raw JSON).
+fn holds_scenarios(doc: &Map<String, Value>) -> bool {
+    [STREETS, JUNCTIONS].iter().any(|section| {
+        let mut records = doc.get(*section).and_then(Value::as_object).into_iter().flatten();
+        records.any(|(_, r)| r.get("scenarios").and_then(Value::as_array).is_some_and(|l| !l.is_empty()))
+    })
+}
+
 /// Whether any record of the streets section holds a non-empty list of raised elements (decided on the raw JSON).
 fn holds_calming(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
@@ -255,7 +279,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
-        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes and 15 with modal filters.
+        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters and 16 with scenarios.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
@@ -271,6 +295,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_zone_speed(&doc),
         holds_chicane(&doc),
         holds_filter(&doc),
+        holds_scenarios(&doc),
     );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
@@ -394,6 +419,7 @@ impl Draft {
             holds_zone_speed(&doc),
             holds_chicane(&doc),
             holds_filter(&doc),
+            holds_scenarios(&doc),
         );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
@@ -532,6 +558,7 @@ mod tests {
                 ways: [1].into(),
                 nodes: [2, 3].into(),
                 leaving: [(2, 90)].into(),
+                scenarios: Default::default(),
                 street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
             },
         );
@@ -581,6 +608,65 @@ mod tests {
         assert_eq!(back["junctions"][&key], value["junctions"][&key]);
     }
 
+    fn scenario_record() -> StreetRecord {
+        let mut record = street_record();
+        let mut wider = record.street.clone();
+        wider.segments[0].width_mm += 100;
+        record.scenarios.create("Wider", wider).unwrap();
+        record.scenarios.create("As is", record.street.clone()).unwrap();
+        record
+    }
+
+    #[test]
+    fn scenarios_are_kept_with_their_record_and_make_it_version_16() {
+        assert_eq!(SCENARIO_VERSION, 16);
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), scenario_record());
+        assert_eq!(e.written_version(), SCENARIO_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.version, SCENARIO_VERSION);
+        assert_eq!(back, Edits { version: SCENARIO_VERSION, ..e });
+    }
+
+    #[test]
+    fn a_record_without_scenarios_is_written_as_before() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        let json = e.to_json();
+        assert!(!json.contains("scenarios"));
+        assert_eq!(e.written_version(), VERSION);
+    }
+
+    #[test]
+    fn a_document_from_before_scenarios_reads_every_place_as_its_baseline() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read") };
+        assert!(back.streets["w7~n1~n2"].scenarios.is_empty());
+        assert_eq!(back.streets["w7~n1~n2"].street, street_record().street);
+    }
+
+    #[test]
+    fn a_draft_holding_scenarios_is_written_as_16_and_a_junction_counts_too() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), scenario_record());
+        let Ok(mut draft) = draft(Some(&e.to_json())) else { panic!("a draft") };
+        assert!(draft.put_street("w8~n3~n4", &street_record()));
+        let back: serde_json::Value = serde_json::from_str(&draft.to_json()).unwrap();
+        assert_eq!(back["version"], SCENARIO_VERSION);
+        assert_eq!(back["streets"]["w7~n1~n2"]["scenarios"].as_array().unwrap().len(), 2);
+        let junction_only = r#"{"version":5,"streets":{},"junctions":{"n1":{"scenarios":[{"id":1,"name":"A","design":{}}]}}}"#;
+        let Ok(draft) = super::draft(Some(junction_only)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":16"#));
+    }
+
+    #[test]
+    fn a_build_before_scenarios_leaves_a_document_with_them_alone() {
+        assert_eq!(NEWEST, SCENARIO_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, SCENARIO_VERSION + 1);
+        assert!(matches!(parse(Some(&newer)), Document::Future));
+    }
+
     fn pedestrian_record() -> StreetRecord {
         use crate::shared::catalogue::{Side, StreetClass, kind_index};
         use crate::street::model::{Piece, Street};
@@ -589,6 +675,7 @@ mod tests {
             ways: [8].into(),
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
+            scenarios: Default::default(),
             street: Street::imported(StreetClass::Local, Side::Right, &[walk]).named("Rue Piétonne"),
         }
     }
@@ -611,6 +698,7 @@ mod tests {
             ways: [7].into(),
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
+            scenarios: Default::default(),
             street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
         }
     }
@@ -639,7 +727,7 @@ mod tests {
         assert_eq!(ZONE_SPEED_VERSION, 13);
         assert_eq!(CHICANE_VERSION, 14);
         assert_eq!(FILTER_VERSION, 15);
-        assert_eq!(NEWEST, FILTER_VERSION);
+        assert_eq!(NEWEST, SCENARIO_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -869,7 +957,7 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, FILTER_VERSION);
+        assert_eq!(NEWEST, SCENARIO_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
@@ -1542,11 +1630,13 @@ mod tests {
             ways: [7].into(),
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
+            scenarios: Default::default(),
             street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
         };
         assert_eq!(Ids::from_street_record("w7~n1~n2", &street), leaving(ids(Some("w7~n1~n2"), &[7], &[1, 2]), 1, 90));
         let junction = JunctionRecord {
             nodes: [4, 5].into(),
+            scenarios: Default::default(),
             state: State {
                 label: crate::junction::model::unlabelled(),
                 arms: vec![],

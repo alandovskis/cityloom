@@ -373,7 +373,8 @@ mod tests {
     fn a_record_that_matches_no_place_survives_a_write_of_another_place() {
         let (store, storage) = store();
         let mut stranger = Edits::new();
-        let record = StreetRecord { ways: [77].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street: narrowed(&store, 3) };
+        let record =
+            StreetRecord { ways: [77].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street: narrowed(&store, 3), scenarios: Default::default() };
         stranger.streets.insert("w77~n1~n2".into(), record.clone());
         storage.remember(EDITS_KEY, &stranger.to_json());
         assert!(store.write_street(1, narrowed(&store, 1)));
@@ -390,6 +391,7 @@ mod tests {
             ways: [500].into(),
             nodes: [8, 9].into(),
             leaving: [(8, 90)].into(),
+            scenarios: Default::default(),
             street: CityStore::sample(ports.storage).open().street_editor(1, 0).unwrap().snapshot(),
         };
         elsewhere.streets.insert("w500~n8~n9".into(), record.clone());
