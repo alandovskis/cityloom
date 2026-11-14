@@ -93,4 +93,5 @@ timeline-gone = Ce jalon n’est plus ici.
 timeline-refused-empty = Donnez un nom au jalon.
 timeline-refused-long = Le nom d’un jalon compte au plus 80 caractères.
 timeline-refused-large = Le travail est trop volumineux pour être conservé dans un seul jalon.
+timeline-refused-full = Les jalons de ce projet occupent toute la place permise sur cet appareil. Supprimez-en un pour faire de la place.
 timeline-refused-unusable = Les jalons ou le travail sur cet appareil n’ont pas pu être lus ou modifiés.

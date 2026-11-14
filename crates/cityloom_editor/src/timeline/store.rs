@@ -5,12 +5,13 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::shared::ports::Storage;
 use crate::shared::project_id::{FIRST, split_key};
 use crate::sync::model::{Id, Kind, Loaded, load, mark, stamp};
-use crate::timeline::model::{Draft, MAX_BYTES, Milestone, Refused, Snapshot, clean_name};
+use crate::timeline::model::{Draft, MAX_BYTES, MAX_TOTAL_BYTES, Milestone, Refused, Snapshot, clean_name};
 
 /// The shape of the document. Raised when the shape changes.
 pub const VERSION: u32 = 1;
@@ -58,7 +59,7 @@ fn parse(stored: Option<&str>) -> Document {
 
 /// The header of a record, read as the timeline lists it; the key names the milestone.
 fn header(id: &str, record: &Value) -> Option<Milestone> {
-    let mut m: Milestone = serde_json::from_value(record.clone()).ok()?;
+    let mut m = Milestone::deserialize(record).ok()?;
     m.id = id.to_string();
     Some(m)
 }
@@ -174,8 +175,14 @@ impl MilestoneStore {
                 summary: draft.summary,
             };
             let record = record_of(&m, &draft.snapshot);
-            if record.to_string().len() > MAX_BYTES {
+            let size = record.to_string().len();
+            if size > MAX_BYTES {
                 return Err(Refused::TooLarge);
+            }
+            // What the project holds already, and this: the device's storage is shared with the work itself.
+            let held: usize = doc.records.values().map(|r| r.to_string().len()).sum();
+            if held + size > MAX_TOTAL_BYTES {
+                return Err(Refused::Full);
             }
             doc.records.insert(m.id.clone(), record);
             Ok(m)
@@ -300,6 +307,24 @@ mod tests {
         big.snapshot.edits = Some(json!({ "x": "y".repeat(MAX_BYTES) }));
         assert_eq!(s.create(big), Err(Refused::TooLarge));
         assert!(s.list().is_empty() && storage.recall(MILESTONES_KEY).is_none() && open(&*storage).is_none_or(|d| d.records.is_empty()));
+    }
+
+    #[test]
+    fn a_project_keeps_milestones_only_up_to_a_total_size_and_a_deleted_one_makes_room() {
+        let (s, _) = store();
+        let weighing = |name: &str| {
+            let mut d = draft(name);
+            d.snapshot.edits = Some(json!({ "x": "y".repeat(MAX_BYTES / 2) }));
+            d
+        };
+        let kept: Vec<_> = (0..MAX_TOTAL_BYTES / (MAX_BYTES / 2) - 1).map(|n| s.create(weighing(&format!("M{n}"))).unwrap()).collect();
+        let before = s.list();
+        assert_eq!(s.create(weighing("One too many")), Err(Refused::Full));
+        assert_eq!(s.list(), before, "nothing was kept");
+        s.delete(&kept[0].id).unwrap();
+        assert!(s.create(weighing("Room again")).is_ok());
+        // The room it made is taken again.
+        assert_eq!(s.create(weighing("Too big")), Err(Refused::Full));
     }
 
     #[test]

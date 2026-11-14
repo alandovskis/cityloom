@@ -46,6 +46,7 @@ pub fn refused_key(refused: Refused) -> &'static str {
         Refused::Empty => "timeline-refused-empty",
         Refused::TooLong => "timeline-refused-long",
         Refused::TooLarge => "timeline-refused-large",
+        Refused::Full => "timeline-refused-full",
         Refused::Unknown => "timeline-gone",
         Refused::Unusable => "timeline-refused-unusable",
     }

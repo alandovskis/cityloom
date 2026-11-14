@@ -8,6 +8,9 @@ use serde_json::Value;
 pub const MAX_NAME_CHARS: usize = 80;
 /// The most one milestone may weigh as JSON: what the server takes of one record (`cityloom_server::work::MAX_RECORD_BYTES`).
 pub const MAX_BYTES: usize = 1024 * 1024;
+/// The most a project's milestones may weigh together on a device. The browser's storage (about 5 MiB for the whole
+/// site) also holds every project's work, so history must not crowd the work out.
+pub const MAX_TOTAL_BYTES: usize = 3 * 1024 * 1024;
 
 fn is_false(b: &bool) -> bool {
     !*b
@@ -71,6 +74,8 @@ pub enum Refused {
     TooLong,
     /// The snapshot is more than one record can hold.
     TooLarge,
+    /// The project's milestones already weigh as much as they may (`MAX_TOTAL_BYTES`): one has to go first.
+    Full,
     Unknown,
     /// The document is damaged or a newer build's, or storage refused.
     Unusable,

@@ -76,6 +76,33 @@ fn a_bad_name_is_refused_beside_the_field_and_said_and_nothing_is_kept() {
 }
 
 #[test]
+fn milestones_stop_where_they_would_crowd_the_device_and_a_restore_that_cannot_keep_its_backup_is_refused() {
+    let (vm, said, storage) = en();
+    let big = "y".repeat(700_000);
+    keep(&storage, &[("w1", &big, 9000)]);
+    for name in ["A", "B", "C", "D"] {
+        assert!(vm.create(name), "{name}");
+    }
+    assert!(!vm.create("E"));
+    let full = "The milestones of this project take all the room they may on this device. Delete one to make room.";
+    assert_eq!(vm.create_error().as_deref(), Some(full));
+    keep(&storage, &[("w1", &big, 12000)]);
+    let work = storage.recall(EDITS_KEY);
+    let id = vm.rows()[0].id.clone();
+    said.take();
+    vm.ask_restore(&id);
+    assert!(!vm.confirm_restore());
+    assert_eq!(said.take(), [full]);
+    assert_eq!(storage.recall(EDITS_KEY), work, "the work stands");
+    assert_eq!(vm.rows().len(), 4);
+    // Deleting one makes room for the backup.
+    vm.ask_delete(&vm.rows()[1].id.clone());
+    vm.confirm_delete();
+    vm.ask_restore(&id);
+    assert!(vm.confirm_restore());
+}
+
+#[test]
 fn work_that_cannot_be_read_is_refused() {
     let (vm, _, storage) = en();
     storage.remember(EDITS_KEY, "garbage");
