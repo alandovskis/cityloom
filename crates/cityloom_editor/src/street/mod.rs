@@ -59,6 +59,12 @@ impl Sheet {
     pub fn vm(&self) -> Rc<vm::StreetVm> {
         self.0.clone()
     }
+
+    /// The view-model behind the page, for the composition root (`lib.rs`), which hands what it reads to the sections
+    /// of other slices.
+    pub(crate) fn view_model(&self) -> Rc<vm::StreetVm> {
+        self.0.clone()
+    }
 }
 
 #[wasm_bindgen]
@@ -144,6 +150,9 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
 /// `open_street` from the page's own ports (root storage).
 pub fn open_street_in(ports: Ports, edge: u32) -> Option<Sheet> {
     let ports = crate::project::context::open_page(ports)?;
+    // The standards the browser chose are in force before the street is read: the checks and the widths a piece may
+    // take follow them (none chosen: the built-in standards).
+    crate::standards::store::activate(ports.storage.clone());
     let store = CityStore::current(ports.storage.clone());
     // No street is numbered 0: the page's script gives 0 for an address with no street.
     let Some(street) = (edge != 0).then(|| store.open().street_editor(edge, store.region())).flatten() else {

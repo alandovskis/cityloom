@@ -739,3 +739,9 @@ src-applies-raised-crossing = Raised crossing at a minor intersection: the Ville
 src-applies-atlas = Transit priority measures: the Transform menu takes the codes and names of its measures from the Atlas toolbox. What each one does here (the lanes it needs, the widths it checks) is CityLoom's own placeholder, not the Atlas's guidance.
 src-atlas-junction-label = Transit priority at junctions
 src-applies-atlas-junction = Transit priority measures at a junction: the codes and names of the measures an approach can have (queue-jump lanes, bus gates and the like) come from the Atlas toolbox. What each one does here is CityLoom's own placeholder, not the Atlas's guidance.
+
+# A speed target a standards profile sets for the street's class (#79); the check exists only with such a profile.
+check-label-speed-target = Speed limit within the target for its class
+check-detail-speed-target-over = The highest speed limit, { $kmh } km/h, is over the { $target } km/h target for a { $class } street.
+check-detail-speed-target-ok = The highest speed limit, { $kmh } km/h, is within the { $target } km/h target for a { $class } street.
+check-detail-speed-target-none = No speed limit is set; the target for a { $class } street is { $target } km/h.

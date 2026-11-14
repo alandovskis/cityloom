@@ -8,6 +8,7 @@ pub mod import;
 pub mod keys;
 pub mod model;
 pub mod projection;
+pub mod scenario;
 pub mod store;
 
 use crate::shared::i18n::Resources;

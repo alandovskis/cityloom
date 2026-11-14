@@ -10,18 +10,8 @@ use serde::{Deserialize, Serialize};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, Side};
 
-/// How near a pedestrian crossing parking or loading may stand, in millimetres. The Code de la sécurité routière of
-/// Québec forbids stopping within 5 m of a crosswalk; the article is UNVERIFIED.
-pub const CROSSING_CLEARANCE_MM: i32 = 5_000;
-
-/// The buffer a bike lane needs between it and the parking beside it, so that opening a door does not open it into
-/// the lane, in millimetres: 500 mm, as the MTQ (Tome I, ch. 15, § 15.4.2.2) and the Ville de Montréal's lane-width
-/// tool have it (the vélorue sheet suggests 1 m ideally beside a contra-flow lane, which is not modelled).
-pub const DOOR_BUFFER_MM: i32 = 500;
-
-/// The walkway a patio leaves on its sidewalk, in millimetres: 1 800 mm, the Ville de Montréal's café-terrasse sheet
-/// for a local street (2 100 mm on a collector or an arterial, which is not modelled).
-pub const PATIO_WALK_MM: i32 = 1_800;
+use crate::standards::model as standards;
+pub use crate::standards::model::CROSSING_CLEARANCE_MM;
 
 /// What the city says of one end of a street.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -628,8 +618,8 @@ pub(super) fn check_rows(rows: &[(&'static str, &'static str, &'static str)], fa
     rows.iter()
         .enumerate()
         .map(|(rule, &(id, label, ok_detail))| match failures.iter().find(|f| f.rule == rule) {
-            None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
-            Some(f) => Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(named(f.instance)) },
+            None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None, standard: None },
+            Some(f) => Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(named(f.instance)), standard: None },
         })
         .collect()
 }
@@ -675,9 +665,9 @@ impl Editor {
                 );
             }
             let stops = matches!(i.use_, Use::Parking | Use::Loading);
-            let clear = |from_end: i32| from_end >= CROSSING_CLEARANCE_MM;
+            let clear = |from_end: i32| from_end >= standards::crossing_clearance_mm();
             if stops && ((near.crossing && !clear(i.from_mm)) || (far.crossing && !clear(length_mm.saturating_sub(i.to_mm())))) {
-                fail(2, Said::new("check-detail-curb-crossing").with("amount", Arg::Length(CROSSING_CLEARANCE_MM)));
+                fail(2, Said::new("check-detail-curb-crossing").with("amount", Arg::Length(standards::crossing_clearance_mm())));
             }
             for segs in content.sections_over(i.from_mm, i.to_mm(), length_mm) {
                 let Some(c) = curbside(segs, i.side) else {
@@ -691,8 +681,8 @@ impl Editor {
                         for s in toward_edge(segs, c, i.side) {
                             match KINDS[s.kind].id {
                                 "buffer" => buffer_mm += s.width_mm,
-                                "bike" if buffer_mm < DOOR_BUFFER_MM => {
-                                    fail(3, Said::new("check-detail-curb-bike-door").with("amount", Arg::Length(DOOR_BUFFER_MM)));
+                                "bike" if buffer_mm < standards::door_buffer_mm() => {
+                                    fail(3, Said::new("check-detail-curb-bike-door").with("amount", Arg::Length(standards::door_buffer_mm())));
                                     break;
                                 }
                                 _ => break,
@@ -717,8 +707,11 @@ impl Editor {
                             Side::Right => &segs[c + 1..],
                         };
                         let have = widest_walkway_mm(between);
-                        if have < PATIO_WALK_MM {
-                            fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(PATIO_WALK_MM)));
+                        if have < standards::patio_walk_mm() {
+                            fail(
+                                4,
+                                Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(standards::patio_walk_mm())),
+                            );
                         }
                     }
                     _ => {}

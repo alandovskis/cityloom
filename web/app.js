@@ -14,7 +14,7 @@ try {
 }
 await start(wasm);
 
-async function start({ hatches, mount_street_page, open_street, prepare_city }) {
+async function start({ hatches, mount_standards, mount_street_page, open_street, prepare_city }) {
   await prepare_city();
 
   const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
@@ -32,6 +32,7 @@ async function start({ hatches, mount_street_page, open_street, prepare_city }) 
   addEventListener("pagehide", () => sheet.flush());
 
   mount_street_page(sheet, placeId);
+  mount_standards(sheet);
 
   sheet.mount_shell();
 }

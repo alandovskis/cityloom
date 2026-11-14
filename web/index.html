@@ -6,7 +6,7 @@
   <title>CityLoom projects</title>
   <meta name="description" data-i18n-content="map-home-description" content="Pick any street or junction of the city, rearrange it, and see at once what still works.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var l=localStorage.getItem("cityloom-lang");if(l!=="en"&&l!=="fr-CA"){l=null;var n=navigator.languages||[];for(var i=0;i<n.length&&!l;i++){var m=/^(en|fr)(-|_|$)/i.exec(n[i]);if(m)l=m[1].toLowerCase()==="fr"?"fr-CA":"en"}}if(l)document.documentElement.lang=l}catch(e){}</script>
   <link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">
   <link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">

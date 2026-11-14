@@ -33,6 +33,11 @@ pub fn width_range(s: &SegView, i18n: &I18n, units: Units) -> String {
     i18n.tr("inspector-allowed", &args)
 }
 
+/// Which standard the range of widths comes from, when a standards profile in force sets it for this kind of piece.
+pub fn width_standard(s: &SegView, i18n: &I18n, units: Units) -> Option<String> {
+    crate::standards::model::note_width(s.kind).map(|said| crate::shared::said::say(i18n, units, &said))
+}
+
 /// Where the piece is, and how wide, under its name.
 pub fn piece_sub(v: &View, s: &SegView, i18n: &I18n, units: Units) -> String {
     let i = v.segments.iter().position(|x| x.uid == s.uid).unwrap_or(0);
@@ -210,6 +215,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
         w.segment(uid, |s| w.units().fixed_in(s.width_mm, 2, locale)).unwrap_or_default()
     };
     let range = move || w.segment(uid, |s| width_range(s, &w.i18n(), w.units())).unwrap_or_default();
+    let standard = move || w.segment(uid, |s| width_standard(s, &w.i18n(), w.units())).flatten();
     let nudge = move |dir: i32| {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
     };
@@ -260,7 +266,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 </span>
                 <button type="button" class="ico" aria-label=move || step_label(true, &w.i18n(), w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
             </div>
-            <p class="insp-range" id="i-width-range">{range}</p>
+            <p class="insp-range" id="i-width-range">{range}{move || standard().map(|s| view! { " " <span class="check-standard">{s}</span> })}</p>
         </section>
     }
 }

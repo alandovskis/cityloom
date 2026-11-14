@@ -132,6 +132,26 @@ typography:
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.45
+  section:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "17px"
+    fontWeight: 700
+    lineHeight: 1.3
+  reading-lead:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.45
+  name:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "20px"
+    fontWeight: 700
+    lineHeight: 1.15
+  chip:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "12px"
+    fontWeight: 600
+    lineHeight: 1.45
 rounded:
   card: "16px"
   search: "14px"
@@ -277,11 +297,11 @@ Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bik
 ### Hierarchy
 - **Display** (700, clamp(34px, 5vw, 56px), 1.04, -0.03em): the home headline only.
 - **Headline** (700, 36px, 1.1, -0.02em): the headline of a page to read (credits).
-- **Title** (700, 24px, 1.15, -0.015em): the place or street name in a title card or panel head. 20px/700 for the piece name in the inspector.
-- **Section** (700, 15px; 14px in the inspector with a hairline beneath): note headings.
-- **Body** (400, 15px, 1.45): rows, notes, fields. Lead copy 17 to 20px in `ink-2`; reading text capped at 62 to 72ch.
+- **Title** (700, 24px, 1.15, -0.015em): the place or street name in a title card or panel head. The piece name in the inspector, and the stepper's value, is `typography.name` (20px).
+- **Section** (700, 15px; 14px in the inspector with a hairline beneath): note headings. In a read card and in the stuck note heading it is `typography.section` (700, 17px).
+- **Body** (400, 15px, 1.45): rows, notes, fields. Reading text capped at 62 to 72ch. The lede of a read card is `typography.reading-lead` (18px, `ink-2`).
 - **Control** (600, 14px) and **Lead** (400, 16px): button and menu text, and the inspector's reading text.
-- **Label** (600, 13px; 12px for chips and table cells): sub-lines, hints, keys, status pills. Secondary text is 13 to 14px in `ink-2` or `ink-3`.
+- **Label** (600, 13px; `typography.chip`, 12px, for chips and table cells): sub-lines, hints, keys, status pills. Secondary text is 13 to 14px in `ink-2` or `ink-3`.
 - Drawing text uses the same stack: 13px/600 labels, 15px dimensions and marks, with a panel-coloured halo where it crosses linework.
 
 ### Named Rules
@@ -405,5 +425,5 @@ A page to read (credits) is one white 16px card, 720px wide, on the land, with a
 - **Don't** reintroduce the old `sheet`, `blue-pencil`, `warning` and `mark-1..5` tokens; they no longer exist in the build.
 
 ### Recorded, not canonized
-The footer (`.site-foot`) carries the product's version (`data-version`, from `Cargo.toml`), in `ink-3` 12px: fixed in the 16px gutter at the bottom left on wide screens (the map's scale stands above it), and the last thing on the page under 900px. The `#000` in the editors' mask gradient is a mask value, not a colour on screen. The credits headline keeps the 1.1 headline leading above; the detector's tight-leading note on `credits.html` could not be traced to any other text (every other line there computes at 1.3 or more).
+The footer (`.site-foot`) carries the product's version (`data-version`, from `Cargo.toml`), in `ink-3` 12px: fixed in the 16px gutter at the bottom left on wide screens (the map's scale stands above it), and the last thing on the page under 900px. The `#000` in the editors' mask gradient is a mask value, not a colour on screen. Four colours are fixed in both themes on purpose and named in `app.css`: `--attrib-ring` (#0b1220) and `--attrib-halo` (#ffffff), the focus ring on MapLibre's pale attribution box, and `--dot-core` (#ffffff) and `--dot-core-bad` (#111827), the centres of the key's dots, which repeat the map's own marks. The detector reads the pages without their stylesheets (the links carry a `{{build}}` placeholder), so its flat-type-hierarchy warnings on `credits.html` and `map.html` are false: the credits headline is 36px, and the map's `h1` is screen-reader only.
 The surface briefs quote an older land value (#e9edf0); the build's `land` (#e2e7ec) governs.
