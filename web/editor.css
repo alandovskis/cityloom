@@ -1893,6 +1893,11 @@ svg pattern circle {
   grid-template-columns: minmax(0, 1fr) 16px;
   padding-left: 8px;
 }
+/* A choice drawn with a swatch (a surface, a curb) keeps the swatch's column: its name is in the middle one. */
+.opt[role="radio"]:has(.swatch) {
+  grid-template-columns: 44px minmax(0, 1fr) 16px;
+  padding-left: 4px;
+}
 .opt[role="checkbox"]:has(.turn-ico) {
   grid-template-columns: 26px minmax(0, 1fr) 16px;
   padding-left: 4px;
