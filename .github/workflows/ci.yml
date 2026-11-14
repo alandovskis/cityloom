@@ -287,7 +287,6 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # The documentation site (website/) builds in both languages; a broken link fails the build.
   # Every pull request raises the version in crates/cityloom_editor/Cargo.toml (semantic versioning); the pages show it in the menu. A change
   # to documentation alone does not need one: it changes nothing the pages show.
   version:

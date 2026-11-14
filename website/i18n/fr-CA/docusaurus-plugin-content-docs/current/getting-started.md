@@ -65,7 +65,7 @@ just format-check  # la même vérification, sans rien modifier
 ```
 
 L’intégration continue exécute `just format-check`, `just test` et `just e2e` avec `RUSTFLAGS=-D warnings`; un nouvel
-avertissement du compilateur la fait donc échouer. Un flux de travail distinct, `.github/workflows/docs.yml`, construit cette documentation avec `just docs-build` quand un
+avertissement du compilateur la fait donc échouer. Un flux de travail distinct, `.github/workflows/docs.yml`, construit cette documentation (ce qu’exécute `just docs-build`) quand un
 changement touche `website/`, et la publie sur GitHub Pages depuis main. Les tâches `test` et d’intégration de l’intégration continue
 exécutent un service Postgres; les tâches de tests de l’interface et de bout en bout n’en ont pas besoin. Chaque demande de fusion augmente la version dans `crates/cityloom_editor/Cargo.toml`.
 
