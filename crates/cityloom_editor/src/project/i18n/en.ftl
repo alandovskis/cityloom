@@ -25,6 +25,8 @@ project-date = { $month ->
     [11] November
    *[12] December
 } { $day }, { $year }
+project-timeline = Timeline
+project-timeline-named = Timeline of { $name }
 project-rename = Rename
 project-rename-named = Rename { $name }
 project-rename-save = Save the name

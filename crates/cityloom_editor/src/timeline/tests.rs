@@ -238,3 +238,61 @@ fn the_words_follow_the_language() {
     assert_eq!(row.summary, "1 rue, 0 jonction, 0 règle");
     assert!(row.when.contains("novembre 2026"), "{}", row.when);
 }
+
+mod view {
+    use super::*;
+    use crate::shared::testing::{button_tag, count, html};
+    use crate::timeline::view::TimelineView;
+    use leptos::prelude::*;
+
+    fn draw(vm: &Rc<TimelineVm>) -> String {
+        let vm = vm.clone();
+        html(move || view! { <TimelineView vm=vm/> }.into_any())
+    }
+
+    #[test]
+    fn an_empty_timeline_has_a_heading_the_form_and_a_word_about_having_none() {
+        let (vm, _, _) = en();
+        let page = draw(&vm);
+        assert!(page.contains("Timeline of Plateau"), "{page}");
+        assert!(page.contains("No milestones yet"), "{page}");
+        assert_eq!(count(&page, "<form"), 1);
+        assert!(page.contains("class=\"timeline-back\"") && page.contains("Back to the map"), "{page}");
+        assert!(page.contains("aria-invalid=\"false\""), "{page}");
+        assert!(page.contains("id=\"timeline-heading\"") && page.contains("tabindex=\"-1\""), "{page}");
+    }
+
+    #[test]
+    fn each_milestone_is_an_item_named_by_its_name_and_its_details_with_buttons_named_after_it() {
+        let (vm, _, storage) = en();
+        keep(&storage, &[("w1", "Rue A", 9000)]);
+        vm.set_author(Some("Ada".into()));
+        vm.create("Base");
+        let id = vm.rows()[0].id.clone();
+        let page = draw(&vm);
+        assert_eq!(count(&page, "class=\"timeline-row\""), 1, "{page}");
+        assert!(page.contains(&format!("aria-labelledby=\"timeline-name-{id} timeline-meta-{id}\"")), "{page}");
+        assert!(page.contains("By Ada") && page.contains("CityLoom 0.70.0") && page.contains("1 street"), "{page}");
+        assert!(button_tag(&page, &format!("timeline-restore-{id}")).contains("aria-label=\"Restore Base\""));
+        assert!(button_tag(&page, &format!("timeline-delete-{id}")).contains("aria-label=\"Delete Base\""));
+        assert!(button_tag(&page, &format!("timeline-compare-{id}")).contains("aria-label=\"Compare Base with now\""));
+    }
+
+    #[test]
+    fn a_question_is_a_group_with_the_safe_button_first_and_a_comparison_is_a_named_section() {
+        let (vm, _, storage) = en();
+        keep(&storage, &[("w1", "Rue A", 9000)]);
+        vm.create("Base");
+        let id = vm.rows()[0].id.clone();
+        keep(&storage, &[("w1", "Rue A", 12000)]);
+        vm.ask_restore(&id);
+        let page = draw(&vm);
+        assert!(page.contains("role=\"group\"") && page.contains("id=\"timeline-restore-safe\""), "{page}");
+        assert!(page.find("timeline-restore-safe").unwrap() < page.find("timeline-restore-yes").unwrap());
+        vm.cancel_restore();
+        vm.compare(&id);
+        let page = draw(&vm);
+        assert!(page.contains("class=\"timeline-compare\"") && page.contains("Since Base") && page.contains("1 place differs from Base."), "{page}");
+        assert!(page.contains("width"), "{page}");
+    }
+}

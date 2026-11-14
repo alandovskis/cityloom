@@ -28,6 +28,8 @@ project-date = { $day ->
     [11] novembre
    *[12] décembre
 } { $year }
+project-timeline = Chronologie
+project-timeline-named = Chronologie de { $name }
 project-rename = Renommer
 project-rename-named = Renommer { $name }
 project-rename-save = Enregistrer le nom

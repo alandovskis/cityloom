@@ -1557,6 +1557,9 @@ mod page {
         assert!(out.contains(&format!(r#"id="project-area-{id}""#)));
         assert!(out.contains(&format!(r#"<span id="project-area-{id}">Montréal</span>"#)), "{out}");
         assert!(out.contains(&format!(r#"href="map.html?project={id}""#)));
+        // Its timeline is one link away, named for the project.
+        assert!(out.contains(&format!(r#"id="project-timeline-{id}""#)) && out.contains(&format!(r#"href="timeline.html?project={id}""#)), "{out}");
+        assert!(out.contains(r#"aria-label="Timeline of Plateau""#), "{out}");
         assert!(out.contains(r#"aria-label="Rename Plateau""#) && out.contains(r#"aria-label="Delete Plateau""#));
         assert!(out.contains("Verdun &lt;b&gt;"), "a name is text, not markup");
         assert!(!out.contains("project-empty"));

@@ -1,0 +1,223 @@
+/* The timeline page: one card under the bar, which floats over the page on a wide screen. Its colours are the home
+   page's (the same tokens, so the pairs `shared/contrast.rs` measures are the ones used here). */
+
+.timeline-page {
+  position: relative;
+  z-index: 5;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 24px;
+}
+@media (max-width: 899px) {
+  .timeline-page {
+    padding-top: 16px;
+  }
+}
+#timeline-slot {
+  width: min(780px, 100%);
+  padding: 36px 40px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+@media (max-width: 520px) {
+  #timeline-slot {
+    padding: 24px 18px;
+  }
+}
+#timeline-slot h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+#timeline-slot h1:focus {
+  outline: none;
+}
+#timeline-slot h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+#timeline-slot h2 {
+  margin-top: 28px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.timeline-create {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+.timeline-create h2 {
+  margin-top: 0;
+}
+.timeline-field {
+  display: grid;
+  gap: 6px;
+}
+.timeline-field label {
+  font-weight: 600;
+}
+.timeline-create input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+}
+.timeline-create input:focus-visible {
+  border-color: var(--accent);
+}
+.timeline-create input[aria-invalid="true"] {
+  border-color: var(--warn);
+}
+.timeline-hint {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.timeline-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+.timeline-error:empty {
+  display: none;
+}
+.timeline-create-go {
+  justify-self: start;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.timeline-create-go:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.timeline-empty {
+  margin-top: 24px;
+  color: var(--ink-2);
+  font-size: 17px;
+}
+
+/* The milestones, oldest first, on a rule that runs down the left of the list. */
+.timeline-list {
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+  list-style: none;
+  border-left: 2px solid var(--rule);
+}
+.timeline-row {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 14px 0 14px 4px;
+}
+.timeline-row + .timeline-row {
+  border-top: 1px solid var(--rule);
+}
+.timeline-row::before {
+  content: "";
+  position: absolute;
+  left: -25px;
+  top: 22px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.timeline-name {
+  font-size: 19px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.timeline-auto {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-style: italic;
+}
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.timeline-summary {
+  font-size: 15px;
+}
+.timeline-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.timeline-compare,
+.timeline-row > .confirm {
+  margin-top: 8px;
+}
+.timeline-compare {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+}
+.timeline-compare > .btn {
+  justify-self: start;
+}
+.timeline-compare h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.timeline-diff {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timeline-diff > li {
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+}
+.timeline-diff-how {
+  font-weight: 700;
+}
+.timeline-aspects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.confirm {
+  padding: 14px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+}
+.confirm > * + * {
+  margin-top: 10px;
+}
+.btn.danger {
+  border-color: var(--map-bad);
+}
+
+/* The page scrolls when its card is long: the version ends it instead of floating over the card. */
+.site-foot {
+  position: relative;
+  height: auto;
+  padding: 0 clamp(16px, 5vw, 80px) 16px;
+  left: 0;
+}
+
+.timeline-back-row {
+  margin-bottom: 14px;
+}
+.timeline-back {
+  color: var(--accent);
+  font-weight: 600;
+}
