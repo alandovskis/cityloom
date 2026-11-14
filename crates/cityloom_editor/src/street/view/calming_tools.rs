@@ -1,0 +1,135 @@
+//! The settings of the chosen raised element, shown only while one is chosen (like a piece's): its kind, its length
+//! and, for a chicane, the side it starts on, and remove it. An element is added from the Add a piece menu. One named group, like the curbside commands; every control is a tab
+//! stop.
+
+use std::rc::Rc;
+
+use leptos::prelude::*;
+use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
+
+use crate::shared::catalogue::Side;
+use crate::shared::i18n::Args;
+use crate::street::model::CalmingKind;
+use crate::street::view::curb_tools::typed_length;
+use crate::street::view::zone_tools::focus_later;
+use crate::street::vm::StreetVm;
+use crate::street::vm::row::CalmingRow;
+use crate::street::vm::watch::SheetWatch;
+
+/// The kind the select shows as a value, and reads back.
+fn kind_value(k: CalmingKind) -> String {
+    CalmingKind::ALL.iter().position(|x| *x == k).unwrap_or(0).to_string()
+}
+
+fn kind_of(value: &str) -> CalmingKind {
+    value.parse::<usize>().ok().and_then(|n| CalmingKind::ALL.get(n).copied()).unwrap_or(CalmingKind::Table)
+}
+
+fn side_value(side: Side) -> &'static str {
+    if side == Side::Left { "left" } else { "right" }
+}
+
+fn side_of(value: &str) -> Side {
+    if value == "left" { Side::Left } else { Side::Right }
+}
+
+/// The chosen cell: where it starts and ends and whether it is an element (else a free stretch).
+fn chosen(w: SheetWatch) -> Option<(i32, i32, bool)> {
+    let v = w.view();
+    let c = v.calming_strip.cells.get(v.calming_strip.selected?)?;
+    Some((c.from_mm, c.to_mm, c.element.is_some()))
+}
+
+/// Gives the chosen element the length that was typed.
+pub fn commit_length(w: SheetWatch, typed: &str) -> bool {
+    typed_length(w, typed, None).is_some_and(|mm| w.set_calming_length(mm))
+}
+
+#[component]
+pub fn CalmingTools(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
+    let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
+    let is_element = move || chosen(w).is_some_and(|c| c.2);
+    // The length shown: the chosen element's.
+    let length_value = move || match chosen(w) {
+        Some((from, to, true)) => w.units().number_in(to - from, w.i18n().locale()),
+        _ => String::new(),
+    };
+    let is_chicane = move || w.calming_kind_shown() == CalmingKind::Chicane;
+    let options = move || {
+        CalmingKind::ALL
+            .iter()
+            .map(|k| {
+                let k = *k;
+                view! {
+                    <option value=kind_value(k)>{move || w.i18n().tr(k.name_key(), &Args::new())}</option>
+                }
+            })
+            .collect_view()
+    };
+    view! {
+        <Show when=is_element>
+            <section class="insp-sec" aria-labelledby="h-calming-tools">
+                <h3 class="note-h" id="h-calming-tools">{move || text("st-calming-tools")}</h3>
+                <div class="zone-tools calming-tools" role="group" aria-label=move || text("st-calming-tools")>
+                    <div class="zone-tool">
+                        <label for="calming-kind">{move || text("st-calming-kind")}</label>
+                        <select
+                            id="calming-kind"
+                            prop:value=move || kind_value(w.calming_kind_shown())
+                            on:change=move |e| w.pick_calming_kind(kind_of(&event_target::<HtmlSelectElement>(&e).value()))
+                        >
+                            {options}
+                        </select>
+                    </div>
+                    <Show when=is_chicane>
+                        <div class="zone-tool">
+                            <label for="calming-first">{move || text("st-calming-first")}</label>
+                            <select
+                                id="calming-first"
+                                prop:value=move || side_value(w.calming_first_shown())
+                                on:change=move |e| w.pick_calming_first(side_of(&event_target::<HtmlSelectElement>(&e).value()))
+                            >
+                                <option value="left">{move || text("st-calming-first-left")}</option>
+                                <option value="right">{move || text("st-calming-first-right")}</option>
+                            </select>
+                        </div>
+                    </Show>
+                    <div class="zone-tool">
+                        <label for="calming-length">{move || unit_text("st-calming-length")}</label>
+                        <input
+                            id="calming-length"
+                            type="text"
+                            inputmode="decimal"
+                            autocomplete="off"
+                            prop:value=length_value
+                            on:keydown=move |e| {
+                                if e.key() == "Enter" {
+                                    e.prevent_default();
+                                    let input = event_target::<HtmlInputElement>(&e);
+                                    if is_element() && !commit_length(w, &input.value()) {
+                                        input.set_value(&length_value());
+                                    }
+                                }
+                            }
+                        />
+                    </div>
+                    <div class="zone-tool">
+                        <button
+                            type="button"
+                            id="calming-remove"
+                            on:click=move |_| {
+                                if w.remove_calming() {
+                                    focus_later(CalmingRow::STRIP_ID);
+                                }
+                            }
+                        >
+                            {move || text("st-calming-remove")}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </Show>
+    }
+}

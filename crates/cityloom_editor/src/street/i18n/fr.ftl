@@ -102,7 +102,7 @@ failing =
     }
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 
-# Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/page.rs).
+# Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/view/page.rs).
 header-between = entre
 header-and = et
 header-steps = Le long de la rue
@@ -142,9 +142,9 @@ day-su = dim.
 welcome-text = Ajoutez un élément, puis faites-le glisser pour le réorganiser. La largeur est fixe; un élément qui ne rentre pas devient orange.
 welcome-dismiss = Compris
 
-# Le dessin de la coupe (src/street/view.rs).
+# Le dessin de la coupe (src/street/view/mod.rs).
 view-iso-label = Éditeur de la rue, vue 2,5D
-# La vue du dessin, la coupe ou la rue en 2,5D (src/street/vm.rs, src/street/page.rs).
+# La vue du dessin, la coupe ou la rue en 2,5D (src/street/vm/mod.rs, src/street/view/page.rs).
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Rues de transport en commun
@@ -182,7 +182,7 @@ atlas-w-d-note = L’Atlas la présente comme étant en développement, et un pr
 atlas-w-f-name = Tarification routière à tarif fixe
 atlas-w-f-note = L’Atlas la présente comme étant en développement, et un prix a besoin d’une ville et d’une demande pour agir.
 
-# Ce qui manque à une mesure reconnue (src/street/measures.rs).
+# Ce qui manque à une mesure reconnue (src/street/model/measures.rs).
 problem-narrow-lane = Une voie d’autobus mesure { $width }{ "\u00A0" }mm de large, alors qu’une voie de transport en commun en exige { $min }{ "\u00A0" }mm
 problem-no-platform = Les voies centrales ont besoin d’un terre-plein ou d’un quai à côté pour les arrêts
 
@@ -206,7 +206,7 @@ curb-island = Îlot d’embarquement d’autobus
 direction-away = S’éloigne de vous
 direction-toward = Vient vers vous
 
-# Le panneau de l’élément sélectionné (src/street/inspector.rs).
+# Le panneau de l’élément sélectionné (src/street/view/inspector.rs).
 inspector-empty = Sélectionnez un élément pour modifier sa largeur et son revêtement.
 inspector-sub = { $width } de large · { $at } sur { $total }
 inspector-sub-timed = { $width } de large · { $at } sur { $total } · { $time }
@@ -254,7 +254,7 @@ svg-iso-label-joint = { $name } en 2,5D, sur un tronçon de { $length } centré 
        *[other] { $count } éléments
     }.
 
-# Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model.rs) : la liste des modifications et ce qui est annoncé après une modification.
+# Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model/mod.rs) : la liste des modifications et ce qui est annoncé après une modification.
 rev-earlier = Modifications antérieures
 rev-reset = Retour à l’état existant
 rev-add = Ajout : { $kind }
@@ -287,7 +287,7 @@ check-detail-side-bad = Une voie circule à contre-sens de la circulation, qui s
 side-word-right = à droite
 side-word-left = à gauche
 
-# Une rue piétonne (src/street/model.rs, page.rs, vm.rs).
+# Une rue piétonne (src/street/model/mod.rs, src/street/view/page.rs, src/street/vm/mod.rs).
 make-pedestrian-button = Rendre piétonne
 make-pedestrian-hint = Chaque voie de circulation, espace de stationnement, zone de chargement, voie réservée ou accotement devient le genre d’élément choisi.
 transform-button = Transformer
@@ -331,18 +331,18 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
 
-# La liste des éléments (src/street/piece_list.rs).
+# La liste des éléments (src/street/view/piece_list.rs).
 st-pieces-heading = Éléments de la rue
 st-pieces-label = Éléments, de gauche à droite
 
-# La bande des zones (src/street/strip.rs).
+# La bande des zones (src/street/view/strip.rs).
 st-zones-heading = Zones le long de la rue
 st-zones-strip-label = Zones de la rue, du début à la fin
 st-zones-from = Origine des mesures : { $end }
 st-zones-end-first = la première extrémité
 st-zones-end-second = la seconde extrémité
 
-# The commands beside the zone strip (src/street/zone_tools.rs).
+# The commands beside the zone strip (src/street/view/zone_tools.rs).
 zone-bad-number = Ce n’est pas un nombre.
 st-zone-tools = Commandes des zones
 st-zone-split = Diviser
@@ -433,7 +433,7 @@ check-detail-curb-bike-ok = Aucun usage ne donne sur une piste cyclable.
 check-detail-curb-sidewalk = La terrasse laisse { $have } de trottoir; il en faut { $need } ou plus.
 check-detail-curb-sidewalk-ok = Chaque terrasse laisse de la place sur le trottoir.
 
-# Les bandes du bord de rue et leurs commandes (src/street/curb_strip.rs, src/street/curb_tools.rs).
+# Les bandes du bord de rue et leurs commandes (src/street/view/curb_strip.rs, src/street/view/curb_tools.rs).
 curb-gap = Libre
 curb-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
 curb-cell-failing = Ne passe pas une vérification. Voir les vérifications.
@@ -496,7 +496,7 @@ check-detail-stop-junction-mouth = Un autobus à l’arrêt se trouverait à { $
 check-detail-stop-junction-inside = L’arrêt empiète sur l’intersection.
 check-detail-stop-junction-ok = Chaque arrêt est dégagé de l’intersection.
 
-# Les rangées d’arrêts et leurs commandes (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+# Les rangées d’arrêts et leurs commandes (src/street/vm/row.rs, src/street/view/stop_tools.rs, src/street/model/stop.rs).
 stop-label = { $kind }
 stop-label-named = { $name } ({ $kind })
 stop-label-sheltered = { $label }, avec abribus
@@ -564,7 +564,7 @@ check-detail-green-continuity-ok = Chaque noue végétalisée est continue.
 check-detail-green-stop = Il se trouve sur le quai de cet arrêt : { $stop }. Les arbres et les plantations restent à l’écart de l’endroit où l’on embarque.
 check-detail-green-stop-ok = Aucun arbre ni aucune plate-bande ne se trouve sur le quai d’un arrêt.
 
-# La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/green_strip.rs, src/street/green_tools.rs).
+# La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/view/green_strip.rs, src/street/view/green_tools.rs).
 green-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
 green-choose-element = Choisissez d’abord un arbre ou une plantation.
 green-host-choice = { $kind }, { $width }
@@ -606,7 +606,7 @@ rev-calming-resize = Longueur modifiée à { $at } : { $kind }
 rev-calming-move = Déplacement : { $kind } à { $at }
 rev-calming-remove = Retrait : { $kind } à { $at }
 rev-chicane-first = Côté de départ modifié : { $kind } à { $at }
-# Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
+# Ce que la dernière modification a changé à la rue (src/street/vm/impact.rs et la fiche de l’onglet Incidence).
 st-impact-heading = Dernière modification
 st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
 impact-no-effect = Aucun effet sur l’espace ni sur les vérifications
@@ -639,7 +639,7 @@ impact-verdict-mixed =
     }.
 impact-verdict-unchanged = Aucun changement dans les vérifications.
 
-# Modèles de rue (src/street/model/templates.rs, page.rs, vm.rs).
+# Modèles de rue (src/street/model/templates.rs, src/street/view/page.rs, src/street/vm/mod.rs).
 rev-template = Modèle : { $name }
 template-commercial = Rue commerciale
 template-school = Rue scolaire
@@ -685,7 +685,7 @@ check-detail-chicane-length = Une chicane de { $length } est trop courte : il lu
 check-label-calming-lane = Chicanes sans voie d’autobus ni piste cyclable
 check-detail-calming-lane = Une chicane rétrécit la chaussée à un seul passage : une voie d’autobus ou une piste cyclable ne peut pas la traverser.
 check-detail-calming-lane-ok = Aucune chicane ne traverse une voie d’autobus ou une piste cyclable.
-# La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/calming_strip.rs, calming_tools.rs).
+# La bande, les commandes et les mots dits en choisissant un élément surélevé (src/street/view/calming_strip.rs, calming_tools.rs).
 check-detail-filter-length = Un filtre modal de { $length } est trop court : il lui faut { $min } ou plus.
 check-label-calming-filter-bus = Filtres modaux sans voie d’autobus
 check-detail-filter-bus = Un filtre modal bloque la circulation motorisée : une voie d’autobus ne peut pas le traverser.

@@ -1361,7 +1361,7 @@ mod tests {
                     let text = crate::shared::said::say_now(&i18n, units, said);
                     assert!(!text.is_empty() && !text.contains("calming"), "{}: {text}", c.id);
                 }
-                let label = crate::street::text::check_label(c);
+                let label = crate::street::vm::text::check_label(c);
                 let text = crate::shared::said::say_now(&i18n, units, &label);
                 assert!(!text.contains("calming-"), "{text}");
             }
@@ -1372,8 +1372,8 @@ mod tests {
         let junction = check(&e, "calming-junction");
         assert!(!stop.ok && !junction.ok);
         let say = |i: &std::rc::Rc<crate::shared::i18n::I18n>, s: &Said| crate::shared::said::say_now(i, Units::default(), s);
-        assert_eq!(say(&en, &crate::street::text::check_label(&stop)), "Raised elements clear of transit stops: raised table at 20.0 m");
-        assert!(say(&fr, &crate::street::text::check_label(&stop)).starts_with("Éléments surélevés dégagés des arrêts"));
+        assert_eq!(say(&en, &crate::street::vm::text::check_label(&stop)), "Raised elements clear of transit stops: raised table at 20.0 m");
+        assert!(say(&fr, &crate::street::vm::text::check_label(&stop)).starts_with("Éléments surélevés dégagés des arrêts"));
         assert!(say(&en, &junction.detail).contains("pedestrian crossing"));
         assert!(say(&fr, &junction.detail).contains("passage pour piétons"));
     }

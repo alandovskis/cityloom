@@ -33,11 +33,11 @@
   --ph-lit: light-dark(#1b4fc0, #8ab4ff);
   --ph-muted: light-dark(#5d6875, #8d98a5);
   /* The speed limit sign in 2.5D: a white panel with black text, the same in both themes like the materials (a test
-     in street/iso/sign.rs measures the text on the panel). */
+     in street/view/iso/sign.rs measures the text on the panel). */
   --iso-sign-panel: #fbfbf8;
   --iso-sign-ink: #10151a;
   /* The selection outline in 2.5D: a light line on a dark casing, the same in both themes like the materials, so
-     that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
+     that one of the two is 3:1 against any of them (a test in street/view/iso/surface.rs). */
   --iso-sel: #8ab4ff;
   --iso-sel-casing: #0b1220;
   /* The outline of a rain garden or a bioswale in 2.5D, drawn inside its dark fill: the same in both themes like the
@@ -248,7 +248,7 @@
 .plan-drawing > .scroll {
   overflow: hidden;
 }
-/* The street's group is as tall as the taller of its two views (street/view.rs); the shorter is centred. */
+/* The street's group is as tall as the taller of its two views (street/view/mod.rs); the shorter is centred. */
 .wrap.views {
   display: flex;
   flex-direction: column;
@@ -864,7 +864,7 @@ svg pattern circle {
   stroke: var(--panel);
   stroke-width: 7;
 }
-/* ---- the street in 2.5D (street/iso/) ---- */
+/* ---- the street in 2.5D (street/view/iso/) ---- */
 .iso-ground {
   fill: var(--fill);
   stroke: none;
@@ -878,7 +878,7 @@ svg pattern circle {
   stroke-linejoin: round;
 }
 /* Each face keeps its piece's tint; the faces turned from the eye are shaded darker by the drawing's own
-   SVG filters (street/iso/raised.rs, `SHADES`). A curb is a light tone, not ink, so that a curb block on a narrow
+   SVG filters (street/view/iso/raised.rs, `SHADES`). A curb is a light tone, not ink, so that a curb block on a narrow
    bike lane does not bury the lane. */
 .iso-curb {
   fill: var(--iso-curb);
@@ -932,11 +932,11 @@ svg pattern circle {
    theme, and kept faint so that the paint, the symbols and the outlines read over them. */
 .hatch[fill^="url(#iso-m-"] {
   opacity: 0.8;
-  /* The texture is cut into bands along the street (street/iso/raised.rs): no anti-aliasing at a seam, where two
+  /* The texture is cut into bands along the street (street/view/iso/raised.rs): no anti-aliasing at a seam, where two
      partly covered edges would leave a faint line. */
   shape-rendering: crispEdges;
 }
-/* The joints of the 2.5D's textures that have regular ones (street/iso/joints.rs): lines in the material's own tones, as wide
+/* The joints of the 2.5D's textures that have regular ones (street/view/iso/joints.rs): lines in the material's own tones, as wide
    as ground.rs says (px), over the grain. */
 .joints {
   fill: none;
@@ -963,7 +963,7 @@ svg pattern circle {
 .iso-solid {
   pointer-events: none;
 }
-/* The outline of a rain garden or a bioswale (street/iso/green.rs): a line inside the patch, over its fill. */
+/* The outline of a rain garden or a bioswale (street/view/iso/green.rs): a line inside the patch, over its fill. */
 .iso-green-edge {
   fill: none;
   stroke: var(--iso-green-edge);
@@ -994,7 +994,7 @@ svg pattern circle {
 .s-post {
   fill: var(--ink-2);
 }
-/* Pavement paint (street/iso/paint.rs): flat shapes on the roadway with a 0.5 px edge (--iso-paint-edge) and no
+/* Pavement paint (street/view/iso/paint.rs): flat shapes on the roadway with a 0.5 px edge (--iso-paint-edge) and no
    pointer events, so the piece under them is the one hovered (its hover outline is hidden where paint covers its
    edge). In forced colours it is drawn in the text colour. */
 .iso-markings,
@@ -1020,7 +1020,7 @@ svg pattern circle {
     stroke: none;
   }
 }
-/* A sign's panel (street/iso/sign.rs): the stop sign's white panel, with no pointer events. */
+/* A sign's panel (street/view/iso/sign.rs): the stop sign's white panel, with no pointer events. */
 .iso-stop-sign {
   pointer-events: none;
 }
@@ -1030,7 +1030,7 @@ svg pattern circle {
   stroke-width: 1px;
   stroke-linejoin: round;
 }
-/* The stop sign's bus (street/iso/stops.rs): the ink on the panel, its windows the panel's colour. */
+/* The stop sign's bus (street/view/iso/stops.rs): the ink on the panel, its windows the panel's colour. */
 .iso-sign-glyph {
   fill: var(--iso-sign-ink);
 }
@@ -1066,7 +1066,7 @@ svg pattern circle {
   stroke: var(--iso-sel);
   stroke-width: 2.5;
 }
-/* The press targets (street/iso/scene/hits.rs): each piece's silhouette over the whole drawing, with no paint of its own.
+/* The press targets (street/view/iso/scene/hits.rs): each piece's silhouette over the whole drawing, with no paint of its own.
    The stroke makes the target wider than the piece by 5 px a side, which is what lets a far, narrow piece be pressed;
    narrower pieces are drawn last, so they win where targets overlap. The hover and pressed states are a tint of the
    selection's blue with the selection's dark casing round it (a test in shared/contrast.rs reads the opacities). A tap selects and a drag scrolls the

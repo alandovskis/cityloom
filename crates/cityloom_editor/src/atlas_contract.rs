@@ -12,7 +12,7 @@ use crate::shared::catalogue::StreetClass;
 use crate::shared::i18n::{Args, Locale};
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
-use crate::street::measures::DEFS;
+use crate::street::model::measures::DEFS;
 use crate::street::model::{Editor, SAMPLES};
 
 fn listed(place: Where) -> BTreeSet<&'static str> {

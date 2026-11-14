@@ -11,7 +11,7 @@ pub struct Style {
     pub stroke: Option<(Rgb, f32)>,
 }
 
-/// How much of its colour the face turned from the eye keeps (the 2.5D's `SHADES`, `street/iso/raised.rs`; a ramp is
+/// How much of its colour the face turned from the eye keeps (the 2.5D's `SHADES`, `street/view/iso/raised.rs`; a ramp is
 /// between the two).
 pub const FRONT_SHADE: f32 = 0.9;
 pub const SIDE_SHADE: f32 = 0.78;

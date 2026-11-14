@@ -1,35 +1,9 @@
 //! The street page: a street's cross-section edited as a row of pieces. Its
 //! model, view-model, words and views live together.
 
-pub mod calming_strip;
-pub mod calming_tools;
-pub mod curb_strip;
-pub mod curb_tools;
-pub mod drawing;
-pub mod green_strip;
-pub mod green_tools;
-pub mod impact;
-pub mod inspector;
-pub mod iso;
-pub mod keys;
-pub mod measures;
 pub mod model;
-pub mod notes;
-pub mod page;
-pub mod panel_tabs;
-pub mod piece_list;
-pub mod pieces;
-pub mod row;
-pub mod speed_view;
-pub mod stop_tools;
-pub mod strip;
-#[cfg(test)]
-mod tests;
-pub mod text;
 pub mod view;
 pub mod vm;
-pub mod watch;
-pub mod zone_tools;
 
 use std::rc::Rc;
 
@@ -105,39 +79,39 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
-    mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
-    mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone() neighbours=neighbours/> }.into_any());
-    mount("pieces-slot", view! { <piece_list::PieceList vm=vm.clone()/> }.into_any());
-    mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
-    mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
-    mount("panel-tabs-slot", view! { <panel_tabs::PanelTabs vm=vm.clone()/> }.into_any());
-    mount("calming-slot", view! { <calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
-    mount("green-slot", view! { <green_strip::GreenStrip vm=vm.clone()/> }.into_any());
-    mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
-    mount("zone-tools-slot", view! { <zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
-    mount("curb-tools-slot", view! { <curb_tools::CurbTools vm=vm.clone()/> }.into_any());
-    mount("stop-tools-slot", view! { <stop_tools::StopTools vm=vm.clone()/> }.into_any());
-    mount("calming-tools-slot", view! { <calming_tools::CalmingTools vm=vm.clone()/> }.into_any());
-    mount("green-tools-slot", view! { <green_tools::GreenTools vm=vm.clone()/> }.into_any());
-    mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
-    mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
-    mount("fit-checks-slot", view! { <notes::FitChecks vm=vm.clone()/> }.into_any());
-    mount("checks-n-slot", view! { <notes::ChecksBadge vm=vm.clone()/> }.into_any());
-    mount("history", view! { <page::History vm=vm.clone()/> }.into_any());
-    mount("add", view! { <page::AddMenu vm=vm.clone()/> }.into_any());
-    mount("transform-slot", view! { <page::Transform vm=vm.clone()/> }.into_any());
-    mount("clock-slot", view! { <page::Clock vm=vm.clone()/> }.into_any());
-    mount("time-note", view! { <page::TimeNote vm=vm.clone()/> }.into_any());
-    mount("welcome-slot", view! { <page::Welcome vm=vm.clone()/> }.into_any());
-    mount("inspector", view! { <inspector::StreetInspector vm=vm.clone()/> }.into_any());
-    mount("impact", view! { <notes::LastChange vm=vm.clone()/> }.into_any());
-    mount("space", view! { <notes::Space vm=vm.clone()/> }.into_any());
-    mount("cap", view! { <notes::Capacity vm=vm.clone()/> }.into_any());
-    mount("goal-slot", view! { <notes::GoalGuide vm=vm.clone()/> }.into_any());
-    mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
-    mount("atlas-source", view! { <notes::AtlasSource vm=vm.clone()/> }.into_any());
-    mount("revs", view! { <notes::Revisions vm=vm.clone()/> }.into_any());
-    mount("provenance", view! { <page::Provenance vm=vm/> }.into_any());
+    mount("h-drawing", view! { <view::page::DrawingHeading vm=vm.clone()/> }.into_any());
+    mount("street", view! { <view::page::StreetHeader vm=vm.clone() ends=ends.clone() neighbours=neighbours/> }.into_any());
+    mount("pieces-slot", view! { <view::piece_list::PieceList vm=vm.clone()/> }.into_any());
+    mount("zones-slot", view! { <view::strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("curb-slot", view! { <view::curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
+    mount("panel-tabs-slot", view! { <view::panel_tabs::PanelTabs vm=vm.clone()/> }.into_any());
+    mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
+    mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
+    mount("speed-slot", view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
+    mount("zone-tools-slot", view! { <view::zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
+    mount("curb-tools-slot", view! { <view::curb_tools::CurbTools vm=vm.clone()/> }.into_any());
+    mount("stop-tools-slot", view! { <view::stop_tools::StopTools vm=vm.clone()/> }.into_any());
+    mount("calming-tools-slot", view! { <view::calming_tools::CalmingTools vm=vm.clone()/> }.into_any());
+    mount("green-tools-slot", view! { <view::green_tools::GreenTools vm=vm.clone()/> }.into_any());
+    mount("title-block", view! { <view::page::TitleBlock vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <view::page::Fit vm=vm.clone()/> }.into_any());
+    mount("fit-checks-slot", view! { <view::notes::FitChecks vm=vm.clone()/> }.into_any());
+    mount("checks-n-slot", view! { <view::notes::ChecksBadge vm=vm.clone()/> }.into_any());
+    mount("history", view! { <view::page::History vm=vm.clone()/> }.into_any());
+    mount("add", view! { <view::page::AddMenu vm=vm.clone()/> }.into_any());
+    mount("transform-slot", view! { <view::page::Transform vm=vm.clone()/> }.into_any());
+    mount("clock-slot", view! { <view::page::Clock vm=vm.clone()/> }.into_any());
+    mount("time-note", view! { <view::page::TimeNote vm=vm.clone()/> }.into_any());
+    mount("welcome-slot", view! { <view::page::Welcome vm=vm.clone()/> }.into_any());
+    mount("inspector", view! { <view::inspector::StreetInspector vm=vm.clone()/> }.into_any());
+    mount("impact", view! { <view::notes::LastChange vm=vm.clone()/> }.into_any());
+    mount("space", view! { <view::notes::Space vm=vm.clone()/> }.into_any());
+    mount("cap", view! { <view::notes::Capacity vm=vm.clone()/> }.into_any());
+    mount("goal-slot", view! { <view::notes::GoalGuide vm=vm.clone()/> }.into_any());
+    mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
+    mount("atlas-source", view! { <view::notes::AtlasSource vm=vm.clone()/> }.into_any());
+    mount("revs", view! { <view::notes::Revisions vm=vm.clone()/> }.into_any());
+    mount("provenance", view! { <view::page::Provenance vm=vm/> }.into_any());
 }
 
 /// The street editor on one street of the city of the page's project (`project::context`), which writes what is

@@ -102,7 +102,7 @@ failing =
     }
 measure-arrange-label = Arrange the street as { $code } { $name }
 
-# The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/page.rs).
+# The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/view/page.rs).
 header-between = between
 header-and = and
 header-steps = Along the street
@@ -142,9 +142,9 @@ day-su = Su
 welcome-text = Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange.
 welcome-dismiss = Got it
 
-# The drawing of the section (src/street/view.rs).
+# The drawing of the section (src/street/view/mod.rs).
 view-iso-label = Street editor, 2.5D view
-# The view of the drawing, the section or the street in 2.5D (src/street/vm.rs, src/street/page.rs).
+# The view of the drawing, the section or the street in 2.5D (src/street/vm/mod.rs, src/street/view/page.rs).
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Transit Streets
@@ -182,7 +182,7 @@ atlas-w-d-note = The Atlas lists it as in development, and a price needs a city 
 atlas-w-f-name = Fixed-Fee Road Pricing
 atlas-w-f-note = The Atlas lists it as in development, and a price needs a city and demand to act on.
 
-# What a recognised measure is missing (src/street/measures.rs).
+# What a recognised measure is missing (src/street/model/measures.rs).
 problem-narrow-lane = A bus lane is { $width } mm wide, and a transit lane wants { $min } mm
 problem-no-platform = Center-running lanes need a median or platform beside them for stops
 
@@ -206,7 +206,7 @@ curb-island = Bus boarding island
 direction-away = Away from you
 direction-toward = Toward you
 
-# The panel of the selected piece (src/street/inspector.rs).
+# The panel of the selected piece (src/street/view/inspector.rs).
 inspector-empty = Select a piece to change its width and surface.
 inspector-sub = { $width } wide · { $at } of { $total }
 inspector-sub-timed = { $width } wide · { $at } of { $total } · { $time }
@@ -254,7 +254,7 @@ svg-iso-label-joint = { $name } in 2.5D, along a { $length } stretch centred on 
        *[other] { $count } segments
     }.
 
-# What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
+# What the model says it did, put into words by `text::say` (src/street/model/mod.rs): the list of changes and what is announced after an edit.
 rev-earlier = Earlier changes
 rev-reset = Reset to existing
 rev-add = Add { $kind }
@@ -287,7 +287,7 @@ check-detail-side-bad = A lane runs against traffic that keeps { $side }
 side-word-right = right
 side-word-left = left
 
-# A pedestrian street (src/street/model.rs, page.rs, vm.rs).
+# A pedestrian street (src/street/model/mod.rs, src/street/view/page.rs, src/street/vm/mod.rs).
 make-pedestrian-button = Make pedestrian
 make-pedestrian-hint = Every driving, parking, loading, bus and shoulder piece becomes the kind you pick.
 transform-button = Transform
@@ -331,18 +331,18 @@ zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
     }, { $n } of { $total }
 zone-cut-off = Cut off by the edge of the map
 
-# The piece list (src/street/piece_list.rs).
+# The piece list (src/street/view/piece_list.rs).
 st-pieces-heading = Pieces of the street
 st-pieces-label = Pieces, left to right
 
-# The zone strip (src/street/strip.rs).
+# The zone strip (src/street/view/strip.rs).
 st-zones-heading = Zones along the street
 st-zones-strip-label = Zones of the street, from start to end
 st-zones-from = Measured from { $end }
 st-zones-end-first = the first end
 st-zones-end-second = the second end
 
-# The commands beside the zone strip (src/street/zone_tools.rs).
+# The commands beside the zone strip (src/street/view/zone_tools.rs).
 zone-bad-number = That is not a number.
 st-zone-tools = Zone commands
 st-zone-split = Split
@@ -433,7 +433,7 @@ check-detail-curb-bike-ok = No use opens onto a bike lane.
 check-detail-curb-sidewalk = The patio leaves { $have } of sidewalk; { $need } or more is needed.
 check-detail-curb-sidewalk-ok = Every patio leaves room on the sidewalk.
 
-# The curbside strips and their commands (src/street/curb_strip.rs, src/street/curb_tools.rs).
+# The curbside strips and their commands (src/street/view/curb_strip.rs, src/street/view/curb_tools.rs).
 curb-gap = Free
 curb-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
 curb-cell-failing = Fails a check. See the checks.
@@ -496,7 +496,7 @@ check-detail-stop-junction-mouth = A stopped bus would stand { $gap } from where
 check-detail-stop-junction-inside = The stop reaches into the junction.
 check-detail-stop-junction-ok = Every stop stands clear of the junction.
 
-# The stops rows and their commands (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+# The stops rows and their commands (src/street/vm/row.rs, src/street/view/stop_tools.rs, src/street/model/stop.rs).
 stop-label = { $kind }
 stop-label-named = { $name } ({ $kind })
 stop-label-sheltered = { $label }, with a shelter
@@ -564,7 +564,7 @@ check-detail-green-continuity-ok = Every bioswale runs unbroken.
 check-detail-green-stop = It stands on the platform of this stop: { $stop }. Trees and planting keep clear of where people board.
 check-detail-green-stop-ok = No tree or bed stands on the platform of a stop.
 
-# The Green row, its commands and what the section says (src/street/green_strip.rs, src/street/green_tools.rs).
+# The Green row, its commands and what the section says (src/street/view/green_strip.rs, src/street/view/green_tools.rs).
 green-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
 green-choose-element = Choose a tree or planting first.
 green-host-choice = { $kind }, { $width }
@@ -606,7 +606,7 @@ rev-calming-resize = Resize the { $kind } at { $at }
 rev-calming-move = Move the { $kind } to { $at }
 rev-calming-remove = Remove the { $kind } at { $at }
 rev-chicane-first = Change the side the { $kind } at { $at } starts on
-# What the last change did to the street (src/street/impact.rs and the Impact tab's card).
+# What the last change did to the street (src/street/vm/impact.rs and the Impact tab's card).
 st-impact-heading = Last change
 st-impact-empty = No change yet. Edit the street to see what it did to the space and the checks.
 impact-no-effect = No effect on space or checks
@@ -639,7 +639,7 @@ impact-verdict-mixed =
     }.
 impact-verdict-unchanged = No change in the checks.
 
-# Street templates (src/street/model/templates.rs, page.rs, vm.rs).
+# Street templates (src/street/model/templates.rs, src/street/view/page.rs, src/street/vm/mod.rs).
 rev-template = { $name } template
 template-commercial = Commercial main street
 template-school = School street
@@ -692,7 +692,7 @@ check-detail-filter-bus-ok = No modal filter crosses a bus lane.
 check-label-calming-passage = Modal filters passable on foot and by bike
 check-detail-filter-passage = A modal filter needs a sidewalk or a bike lane beside it so that people on foot or on bikes can get past it.
 check-detail-filter-passage-ok = Every modal filter has a sidewalk or a bike lane to get past it.
-# The raised elements' strip, tools and the words said on choosing one (src/street/calming_strip.rs, calming_tools.rs).
+# The raised elements' strip, tools and the words said on choosing one (src/street/view/calming_strip.rs, calming_tools.rs).
 calming-gap = Free
 calming-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
 calming-cell-failing = Fails a check. See the checks.
