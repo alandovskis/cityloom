@@ -1,0 +1,9 @@
+1440x900 closed: {"notes":"closed","drawing":"26,297 1008x465","viewBox":"0 0 1008 465","details":"1084,92 340x792","tray":"18,814 1024x66","headTop":"18,94 1024x119"}
+1440x900 after an edit, Impact tab clicked: {"notes":"open","drawing":"60,225 941x434","viewBox":"0 0 1008 465","details":"1084,92 340x792","tray":"18,691 1024x189","headTop":"18,94 1024x119"}
+1440x900 column scrolled to its end, the head stays: {"notes":"open","drawing":"60,-185 941x434","viewBox":"0 0 1008 465","details":"1084,92 340x792","tray":"18,691 1024x189","headTop":"18,94 1024x119"}
+document (focus) order of drawing, tray toggle, details toggle, details: wrap < notes-toggle < inspector-toggle < details-panel
+after ]: notes=closed
+after [: inspector=closed {"notes":"closed","drawing":"26,-62 1364x532","viewBox":"0 0 1364 532","details":"0,0 0x0","tray":"18,814 1380x66","headTop":"18,94 1380x119"}
+1280x800 closed: {"notes":"closed","drawing":"123,357 655x337","viewBox":"0 0 848 436","details":"924,92 340x692","tray":"18,714 864x66","headTop":"18,94 864x179"}
+1280x800 after an edit, Impact tab clicked: {"notes":"open","drawing":"160,285 580x298","viewBox":"0 0 848 436","details":"924,92 340x692","tray":"18,615 864x165","headTop":"18,94 864x179"}
+1280x800 column scrolled to its end, the head stays: {"notes":"open","drawing":"160,-125 580x298","viewBox":"0 0 848 436","details":"924,92 340x692","tray":"18,615 864x165","headTop":"18,94 864x179"}
