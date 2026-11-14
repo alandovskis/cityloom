@@ -308,8 +308,8 @@ mod tests {
     #[test]
     fn the_streets_are_named_at_the_zoom_that_fits_the_city_in_a_laptop_window() {
         let v = view();
-        let world = crate::map::camera::World::round(v.bounds_mm);
-        let camera = crate::map::camera::Camera::new(world, 650.0, 800.0);
+        let world = crate::map::vm::camera::World::round(v.bounds_mm);
+        let camera = crate::map::vm::camera::Camera::new(world, 650.0, 800.0);
         let at_fit = map_svg(&v, camera.k, Units::Metres, &en());
         assert!(count(&at_fit, "class=\"m-name\"") >= 6, "{}", count(&at_fit, "class=\"m-name\""));
     }

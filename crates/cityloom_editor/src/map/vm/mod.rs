@@ -2,6 +2,14 @@
 //! attention and what has changed, where the camera is, and what pressing
 //! "start over" means. The view binds to its properties and sends it commands.
 
+pub mod areas;
+pub mod camera;
+pub mod overlay;
+pub(in crate::map) mod report;
+pub(in crate::map) mod report_review;
+pub mod selection;
+pub mod style;
+
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::{Rc, Weak};
@@ -11,17 +19,13 @@ use leptos::prelude::*;
 use crate::city::model::{City, CityView, EdgeView, NodeView, street_note};
 use crate::city::projection::Projection;
 use crate::city::store::CityStore;
-use crate::map::areas::AreasVm;
-use crate::map::camera::{Camera, Insets, World};
-use crate::map::corridor::{self, Op, Outcome, Plan, Report};
-use crate::map::editable;
-use crate::map::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-use crate::map::overlay;
-use crate::map::report;
-use crate::map::report_review;
-use crate::map::selection::SelectionVm;
-use crate::map::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
-use crate::map::style;
+use crate::map::model::corridor::{self, Op, Outcome, Plan, Report};
+use crate::map::model::editable;
+use crate::map::model::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
+use crate::map::model::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
+use crate::map::vm::areas::AreasVm;
+use crate::map::vm::camera::{Camera, Insets, World};
+use crate::map::vm::selection::SelectionVm;
 use crate::restriction::draw::Draw;
 use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, speed_unknown};
 use crate::shared::core::{Core, Presents};
@@ -1622,7 +1626,7 @@ impl crate::shell::Target for MapVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::camera::Insets;
+    use crate::map::vm::camera::Insets;
     use crate::place::area::Area;
     use crate::restriction::draw::Draw;
     use crate::restriction::fixtures::{bent_midpoint, square};

@@ -1,7 +1,7 @@
 //! The large slices keep their files in `model/`, `vm/` and `view/`: at a slice's root only `mod.rs`, `i18n/` and
 //! `CLAUDE.md`.
 
-const LAYERED: &[&str] = &["street", "junction"];
+const LAYERED: &[&str] = &["street", "junction", "map"];
 const ROOT_DIRS: &[&str] = &["model", "vm", "view", "i18n"];
 const ROOT_FILES: &[&str] = &["mod.rs", "CLAUDE.md"];
 

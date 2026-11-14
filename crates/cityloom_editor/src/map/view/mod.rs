@@ -1,6 +1,16 @@
 //! The city map page: views bound to the map's view-model. They show what it
 //! says and send it what the person does; nothing here decides anything.
 
+pub mod areas_view;
+pub mod goal_view;
+pub mod home;
+pub mod network_view;
+pub mod selection_view;
+pub mod source_view;
+pub mod svg;
+#[cfg(test)]
+mod tests;
+
 use std::rc::Rc;
 
 use leptos::prelude::*;
@@ -11,7 +21,7 @@ use leptos::web_sys::Element;
 use leptos::web_sys::KeyboardEvent;
 
 #[cfg(target_arch = "wasm32")]
-use crate::map::camera::Insets;
+use crate::map::vm::camera::Insets;
 use crate::map::vm::{CanvasState, MapVm, NoteItem, PlaceRow, StateTag};
 use crate::shared::bind::Bound;
 use crate::shared::said::Said;

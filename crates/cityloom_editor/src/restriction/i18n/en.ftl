@@ -1,4 +1,4 @@
-# What an area restriction says (src/restriction, and the map's Area rules panel: src/map/areas.rs, src/map/areas_view.rs).
+# What an area restriction says (src/restriction, and the map's Area rules panel: src/map/vm/areas.rs, src/map/view/areas_view.rs).
 
 ## Refusals of an outline
 restriction-refused-too-few = An area needs at least three corners, not all in a line.
@@ -99,7 +99,7 @@ restriction-row-sub = { $rule } · { $summary }
 restriction-street-keeps = Keeps to the rule.
 restriction-legend-conflict = Conflicts with an area rule
 
-## The panel (web/map.html and src/map/areas_view.rs)
+## The panel (web/map.html and src/map/view/areas_view.rs)
 restriction-panel = Area rules
 restriction-toggle-title = Show or hide the area rules ( [ )
 restriction-heading = Rules over an area

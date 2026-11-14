@@ -1,4 +1,4 @@
-# What the city map page says (src/map/vm.rs, src/map/view.rs) and its markup (web/map.html).
+# What the city map page says (src/map/vm/mod.rs, src/map/view/mod.rs) and its markup (web/map.html).
 
 ## The page's markup
 map-page-title = CityLoom city map
@@ -162,7 +162,7 @@ map-home-streets-by = Streets ©
 map-home-osm-contributors = OpenStreetMap contributors
 map-home-placeholders = The widths and rules the checks use are placeholders.
 
-## The About page's city (src/map/home.rs, src/map/svg.rs)
+## The About page's city (src/map/view/home.rs, src/map/view/svg.rs)
 # `city` is the city's name (data), `counts` is map-counts.
 map-hero-facts = { $city }: { $counts }.
 # The name of a changed street on the drawing; `name` is the street's.
@@ -174,7 +174,7 @@ map-svg-changed = changed
 map-canvas-missing = The map could not be started. Your browser may not support WebGL. Reload the page to try again.
 map-no-roads = The roads of this place could not be loaded, so there is no map to show.
 
-## Network checks (src/map/network.rs, src/map/vm.rs)
+## Network checks (src/map/model/network.rs, src/map/vm/mod.rs)
 net-heading = Network checks
 net-no-places = There is no network to check.
 net-lead-none = The network checks found nothing across the streets and junctions.
@@ -227,7 +227,7 @@ net-more-places = { $n ->
    *[other] and { $n } more places
 }
 
-## Source data, the Provenance tab (src/map/source_quality.rs, src/map/vm.rs)
+## Source data, the Provenance tab (src/map/model/source_quality.rs, src/map/vm/mod.rs)
 prov-heading = Source data
 prov-note = These show where the OpenStreetMap data behind the map may be missing or wrong. They are not design failures: they are counted apart from the checks on each place and from the network checks, and a street with a finding here can still pass every rule. The importer cannot tell a width the road is tagged with from the one it assumes, so a width finding may be only the default.
 prov-no-places = There is no source data to inspect.
@@ -352,7 +352,7 @@ map-report-sources-placeholders = Every other rule and recommendation in CityLoo
 map-report-sources-continued = Sources (continued)
 map-report-source-line = { $status }. { $applies }
 
-## The report's review pages and appendix (src/map/report_review.rs)
+## The report's review pages and appendix (src/map/vm/report_review.rs)
 map-report-network = Network effects
 map-report-network-caption = The network checks and their results
 map-report-col-check = Check

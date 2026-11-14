@@ -1,4 +1,4 @@
-# Ce que dit la page de la carte de la ville (src/map/vm.rs, src/map/view.rs) et son balisage (web/map.html).
+# Ce que dit la page de la carte de la ville (src/map/vm/mod.rs, src/map/view/mod.rs) et son balisage (web/map.html).
 
 ## Le balisage de la page
 map-page-title = Carte de la ville CityLoom
@@ -162,7 +162,7 @@ map-home-streets-by = Rues ©
 map-home-osm-contributors = les contributeurs d’OpenStreetMap
 map-home-placeholders = Les largeurs et les règles qu’utilisent les vérifications sont provisoires.
 
-## La ville de la page À propos (src/map/home.rs, src/map/svg.rs)
+## La ville de la page À propos (src/map/view/home.rs, src/map/view/svg.rs)
 # `city` est le nom de la ville (une donnée), `counts` est map-counts.
 map-hero-facts = { $city } : { $counts }.
 # Le nom d’une rue modifiée sur le dessin ; `name` est celui de la rue. « Modifié » s’accorde avec « lieu ».
@@ -174,7 +174,7 @@ map-svg-changed = modifié
 map-canvas-missing = La carte n’a pas pu être démarrée. Votre navigateur ne prend peut-être pas en charge WebGL. Rechargez la page pour réessayer.
 map-no-roads = Les rues de ce lieu n’ont pas pu être chargées, il n’y a donc pas de carte à afficher.
 
-## Vérifications du réseau (src/map/network.rs, src/map/vm.rs)
+## Vérifications du réseau (src/map/model/network.rs, src/map/vm/mod.rs)
 net-heading = Vérifications du réseau
 net-no-places = Il n’y a pas de réseau à vérifier.
 net-lead-none = Les vérifications du réseau n’ont rien trouvé dans l’ensemble des rues et des jonctions.
@@ -227,7 +227,7 @@ net-more-places = { $n ->
    *[other] et { $n } autres lieux
 }
 
-## Données sources, l’onglet Provenance (src/map/source_quality.rs, src/map/vm.rs)
+## Données sources, l’onglet Provenance (src/map/model/source_quality.rs, src/map/vm/mod.rs)
 prov-heading = Données sources
 prov-note = Ces constats montrent où les données OpenStreetMap derrière la carte peuvent être manquantes ou erronées. Ce ne sont pas des échecs de conception : ils sont comptés à part des vérifications de chaque lieu et des vérifications du réseau, et une rue visée ici peut quand même respecter toutes les règles. L’importateur ne peut pas distinguer une largeur indiquée sur la route de celle qu’il suppose; un constat sur une largeur peut donc n’être que la valeur par défaut.
 prov-no-places = Il n’y a pas de données sources à examiner.
@@ -352,7 +352,7 @@ map-report-sources-placeholders = Toutes les autres règles et recommandations d
 map-report-sources-continued = Sources (suite)
 map-report-source-line = { $status }. { $applies }
 
-## Les pages d’examen et l’annexe du rapport (src/map/report_review.rs)
+## Les pages d’examen et l’annexe du rapport (src/map/vm/report_review.rs)
 map-report-network = Effets sur le réseau
 map-report-network-caption = Les vérifications du réseau et leurs résultats
 map-report-col-check = Vérification

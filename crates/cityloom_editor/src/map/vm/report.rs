@@ -5,7 +5,7 @@
 use cityloom_report::{Block, Captioned, ReportData};
 
 use crate::city::model::{City, CityView, street_note};
-use crate::map::report_review;
+use crate::map::vm::report_review;
 use crate::shared::catalogue::{Mode, class_key, mode_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say_now;

@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::map::{overlay, style};
+use crate::map::vm::{overlay, style};
 use crate::restriction::draw::{Draw, Outcome, Step};
 use crate::restriction::model::{LonLat, Restriction, Rule, valid};
 use crate::restriction::store::RestrictionStore;

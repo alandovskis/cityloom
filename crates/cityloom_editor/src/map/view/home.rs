@@ -9,7 +9,7 @@ use leptos::wasm_bindgen::JsCast;
 #[cfg(target_arch = "wasm32")]
 use leptos::web_sys::Element;
 
-use crate::map::svg::map_svg;
+use crate::map::view::svg::map_svg;
 use crate::map::vm::MapVm;
 use crate::shared::bind::Bound;
 use crate::shared::i18n::Args;

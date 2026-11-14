@@ -4,8 +4,8 @@
 
 use cityloom_report::Block;
 
-use crate::map::network::{Check, NetworkFinding, NetworkReport, Place, Severity};
-use crate::map::source_quality::{Kind as SourceKind, SourceReport};
+use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, Severity};
+use crate::map::model::source_quality::{Kind as SourceKind, SourceReport};
 use crate::map::vm::AreaStreet;
 use crate::restriction::model::Restriction;
 use crate::shared::i18n::{Args, I18n};
@@ -227,8 +227,8 @@ pub fn appendix(i18n: &I18n) -> Vec<Block> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-    use crate::map::source_quality::{Kind as SourceKind, SourceFinding, SourceReport};
+    use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
+    use crate::map::model::source_quality::{Kind as SourceKind, SourceFinding, SourceReport};
     use crate::map::vm::AreaStreet;
     use crate::restriction::model::{Conflict, Restriction, Rule};
     use crate::shared::i18n::Locale;

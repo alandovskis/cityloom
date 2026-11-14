@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::map::corridor::Op;
+use crate::map::model::corridor::Op;
 use crate::map::vm::{MapVm, Stage};
 use crate::shared::bind::Bound;
 

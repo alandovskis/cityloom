@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::city::model::SourceRead;
-use crate::map::network::{Place, PlaceKind};
+use crate::map::model::network::{Place, PlaceKind};
 use crate::shared::catalogue::{KINDS, is_roadway};
 use crate::shared::said::{Arg, Said};
 

@@ -3,26 +3,7 @@
 //! pointer (`web/mapcanvas.js`, reached through the `Mapper` port); the view-model,
 //! the places it hands the map, and the views around the map live here.
 
-pub mod areas;
-pub mod areas_view;
-pub mod camera;
-pub mod corridor;
-pub mod editable;
-pub mod goal_view;
-pub mod home;
-pub mod network;
-pub mod network_view;
-pub mod overlay;
-mod report;
-mod report_review;
-pub mod selection;
-pub mod selection_view;
-pub mod source_quality;
-pub mod source_view;
-pub mod style;
-pub mod svg;
-#[cfg(test)]
-mod tests;
+pub mod model;
 pub mod view;
 pub mod vm;
 
@@ -71,10 +52,10 @@ impl MapPage {
             |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
         leptos::mount::mount_to(at("hero-map-slot"), {
             let vm = vm.clone();
-            move || view! { <home::HeroMap vm=vm.clone()/> }.into_any()
+            move || view! { <view::home::HeroMap vm=vm.clone()/> }.into_any()
         })
         .forget();
-        leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::HeroFacts vm=vm.clone()/> }.into_any()).forget();
+        leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <view::home::HeroFacts vm=vm.clone()/> }.into_any()).forget();
     }
 }
 
@@ -105,13 +86,13 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
-    mount("goal-slot", view! { <goal_view::GoalGuide vm=vm.clone()/> }.into_any());
-    mount("selection-slot", view! { <selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
-    mount("areas-slot", view! { <areas_view::Areas vm=vm.clone()/> }.into_any());
-    mount("network-lead", view! { <network_view::NetworkLead vm=vm.clone()/> }.into_any());
-    mount("network-slot", view! { <network_view::NetworkChecks vm=vm.clone()/> }.into_any());
-    mount("source-lead", view! { <source_view::SourceLead vm=vm.clone()/> }.into_any());
-    mount("source-slot", view! { <source_view::SourceFindings vm=vm.clone()/> }.into_any());
+    mount("goal-slot", view! { <view::goal_view::GoalGuide vm=vm.clone()/> }.into_any());
+    mount("selection-slot", view! { <view::selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
+    mount("areas-slot", view! { <view::areas_view::Areas vm=vm.clone()/> }.into_any());
+    mount("network-lead", view! { <view::network_view::NetworkLead vm=vm.clone()/> }.into_any());
+    mount("network-slot", view! { <view::network_view::NetworkChecks vm=vm.clone()/> }.into_any());
+    mount("source-lead", view! { <view::source_view::SourceLead vm=vm.clone()/> }.into_any());
+    mount("source-slot", view! { <view::source_view::SourceFindings vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/><view::MapTitle vm=vm.clone()/> }.into_any());
     Some(MapPage(vm, i18n))
 }
@@ -128,6 +109,6 @@ pub fn mount_about(i18n: std::rc::Rc<crate::shared::i18n::I18n>) -> MapPage {
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     // The window title is the page's own and does not wait for the city; it renders nothing.
     let title = vm.clone();
-    leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::AboutTitle vm=title.clone()/> }.into_any()).forget();
+    leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <view::home::AboutTitle vm=title.clone()/> }.into_any()).forget();
     MapPage(vm, i18n)
 }

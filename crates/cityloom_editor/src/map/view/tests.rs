@@ -191,7 +191,7 @@ fn a_search_that_finds_nothing_says_so_and_how_to_get_the_places_back() {
     assert!(h.contains("No places match") && h.contains("Clear the search to see all 32."));
 }
 
-use crate::map::home;
+use crate::map::view::home;
 
 #[test]
 fn the_hero_map_draws_every_junction_but_cannot_be_reached_or_read_out() {
@@ -417,7 +417,7 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
 
 // ---- the page's markup ----------------------------------------------------------------------
 
-const MAP_HTML: &str = include_str!("../../../../web/map.html");
+const MAP_HTML: &str = include_str!("../../../../../web/map.html");
 
 #[test]
 fn every_data_i18n_key_in_map_html_exists_in_both_languages() {
@@ -459,7 +459,7 @@ fn the_window_title_of_the_map_page_is_its_header_s_message_in_english() {
 
 // ---- the About page's markup ----------------------------------------------------------------
 
-const ABOUT_HTML: &str = include_str!("../../../../web/about.html");
+const ABOUT_HTML: &str = include_str!("../../../../../web/about.html");
 
 #[test]
 fn every_data_i18n_key_in_about_html_exists_in_both_languages() {
@@ -532,14 +532,14 @@ fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages()
 
 #[test]
 fn map_html_has_one_h1_the_city_map() {
-    let html = include_str!("../../../../web/map.html");
+    let html = include_str!("../../../../../web/map.html");
     assert_eq!(html.matches("<h1").count(), 1);
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
 
 // ---- the Area rules panel ------------------------------------------------------------------
 
-use crate::map::areas_view::Areas;
+use crate::map::view::areas_view::Areas;
 use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
 use crate::restriction::model::Rule;
 use crate::restriction::store::RestrictionStore;
@@ -759,7 +759,7 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 
 #[test]
 fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() {
-    use crate::map::areas_view::reveal_clicks;
+    use crate::map::view::areas_view::reveal_clicks;
     assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
     assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
@@ -807,7 +807,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
 
 // ---- the network checks ---------------------------------------------------------------------
 
-use crate::map::network_view;
+use crate::map::view::network_view;
 
 /// Another page takes a crossing off one arm of a junction of the city, and the map reads the city again.
 fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
@@ -878,7 +878,7 @@ fn the_network_checks_are_worded_in_french() {
 
 #[test]
 fn the_provenance_tab_lists_a_group_per_kind_with_its_count_source_and_impact() {
-    use crate::map::source_view;
+    use crate::map::view::source_view;
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
     assert_eq!(count(&h, "<h3"), 5, "{h}");
@@ -914,7 +914,7 @@ fn source_findings_do_not_reach_the_status_line_the_checks_lead_or_the_network_c
 
 #[test]
 fn the_provenance_tab_is_worded_in_french() {
-    use crate::map::source_view;
+    use crate::map::view::source_view;
     let (vm, _) = map_vm_in(Locale::FrCa);
     let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
     assert!(h.contains("Noms de rues") && h.contains("lacune") && h.contains("Effet sur la conception") && h.contains("n’a pas d’étiquette de nom"), "{h}");
@@ -1115,8 +1115,12 @@ mod report {
     #[test]
     fn a_long_area_name_is_kept_whole() {
         let name = "A very long area name that goes on and on past any sensible width, Saint-Jean-Baptiste-de-la-Salle-des-Neiges, Québec, Canada";
-        let built =
-            crate::map::report::build(&crate::map::report::Facts { area: name.to_string(), ..Default::default() }, "1.0.0", 0, &crate::i18n_for(Locale::En));
+        let built = crate::map::vm::report::build(
+            &crate::map::vm::report::Facts { area: name.to_string(), ..Default::default() },
+            "1.0.0",
+            0,
+            &crate::i18n_for(Locale::En),
+        );
         assert!(matches!(&built.pages[0][0], Block::Heading { level: 1, text } if text == name));
     }
 
@@ -1239,15 +1243,15 @@ mod report {
         assert!(texts(page).join("\n").contains("pass: Pass."), "{:?}", texts(page));
     }
 
-    fn pairs<'a>(said: &'a crate::shared::said::Said, states: &[(Option<bool>, Option<bool>)]) -> Vec<crate::map::report::CheckPair<'a>> {
-        states.iter().map(|&(before, after)| crate::map::report::CheckPair { id: "x", before, after, label: said, detail: said }).collect()
+    fn pairs<'a>(said: &'a crate::shared::said::Said, states: &[(Option<bool>, Option<bool>)]) -> Vec<crate::map::vm::report::CheckPair<'a>> {
+        states.iter().map(|&(before, after)| crate::map::vm::report::CheckPair { id: "x", before, after, label: said, detail: said }).collect()
     }
 
     #[test]
     fn more_than_eight_failing_checks_are_cut_with_a_count() {
         let said = crate::shared::said::Said::new("map-report-pass");
         let checks = pairs(&said, &[(Some(true), Some(false)); 11]);
-        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let blocks = crate::map::vm::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
         let (_, rows) = tables(&blocks)[0];
         assert_eq!(rows.len(), 9);
         assert_eq!(rows[8][0], "3 more failing checks");
@@ -1259,7 +1263,7 @@ mod report {
         let said = crate::shared::said::Said::new("map-report-pass");
         let checks =
             pairs(&said, &[(Some(false), Some(true)), (Some(true), Some(false)), (Some(false), Some(false)), (Some(true), Some(true)), (Some(false), None)]);
-        let blocks = crate::map::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
+        let blocks = crate::map::vm::report::checks_block(&checks, &crate::i18n_for(Locale::En), crate::shared::units::Units::Metres);
         let (_, rows) = tables(&blocks)[0];
         let states: Vec<(&str, &str)> = rows.iter().map(|r| (r[1].as_str(), r[2].as_str())).collect();
         // those failing now first, then those that only failed before; the passing one is not listed
@@ -1293,7 +1297,7 @@ mod report {
         let plain = view.nodes.iter().position(|n| !n.junction).expect("a node that is no junction");
         view.nodes[plain].junction = true;
         view.nodes[plain].edited = true;
-        let (pages, left) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        let (pages, left) = crate::map::vm::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
         assert_eq!(left, 0);
         let undrawn = pages.iter().find(|p| texts(p).join("\n").contains("could not be drawn")).expect("a text page");
         assert!(matches!(&undrawn[0], Block::Heading { .. }));
@@ -1320,13 +1324,13 @@ mod report {
         let long = |n: usize| {
             Said::new("city-name").with("name", Arg::Text(format!("Détail {n}\u{a0}: ").to_string() + &"un texte très long qui continue ".repeat(8)))
         };
-        let (label, detail): (Vec<Said>, Vec<Said>) = (0..crate::map::report::MAX_FAILING_ROWS + 3).map(|n| (long(n), long(n))).unzip();
+        let (label, detail): (Vec<Said>, Vec<Said>) = (0..crate::map::vm::report::MAX_FAILING_ROWS + 3).map(|n| (long(n), long(n))).unzip();
         let checks: Vec<_> = label
             .iter()
             .zip(&detail)
-            .map(|(l, d)| crate::map::report::CheckPair { id: "x", before: Some(true), after: Some(false), label: l, detail: d })
+            .map(|(l, d)| crate::map::vm::report::CheckPair { id: "x", before: Some(true), after: Some(false), label: l, detail: d })
             .collect();
-        page.extend(crate::map::report::checks_block(&checks, i18n, crate::shared::units::Units::Metres));
+        page.extend(crate::map::vm::report::checks_block(&checks, i18n, crate::shared::units::Units::Metres));
         page
     }
 
@@ -1334,8 +1338,8 @@ mod report {
         let data = ReportData { lang: lang.to_string(), title: "Rapport".to_string(), pages };
         let bytes = cityloom_report_pdf::write_pdf(
             &data,
-            include_bytes!("../../../../web/fonts/NotoSans-Regular.ttf"),
-            include_bytes!("../../../../web/fonts/NotoSans-Bold.ttf"),
+            include_bytes!("../../../../../web/fonts/NotoSans-Regular.ttf"),
+            include_bytes!("../../../../../web/fonts/NotoSans-Bold.ttf"),
         )
         .expect("a place page is written whole: the writer fails on a line it would cut");
         let doc = lopdf::Document::load_mem(&bytes).unwrap();
@@ -1354,8 +1358,8 @@ mod report {
 
     #[test]
     fn review_pages_full_of_findings_are_written_whole_in_both_languages() {
-        use crate::map::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-        use crate::map::source_quality::{Kind, SourceFinding, SourceReport};
+        use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
+        use crate::map::model::source_quality::{Kind, SourceFinding, SourceReport};
         use crate::map::vm::AreaStreet;
         use crate::restriction::model::{Conflict, Restriction};
         use crate::shared::said::Said;
@@ -1366,7 +1370,7 @@ mod report {
                 findings: Check::ALL
                     .iter()
                     .flat_map(|&rule| {
-                        (0..crate::map::report_review::MAX_ROWS + 3).map(move |_| NetworkFinding {
+                        (0..crate::map::vm::report_review::MAX_ROWS + 3).map(move |_| NetworkFinding {
                             rule,
                             severity: Severity::Problem,
                             said: Said::new("net-crossing-missing"),
@@ -1380,7 +1384,7 @@ mod report {
                 findings: Kind::ALL
                     .iter()
                     .flat_map(|&kind| {
-                        (0..crate::map::report_review::MAX_ROWS + 3).map(move |_| SourceFinding {
+                        (0..crate::map::vm::report_review::MAX_ROWS + 3).map(move |_| SourceFinding {
                             kind,
                             said: Said::new("prov-ends").with("street", crate::shared::said::Arg::Text("Rue Très Longue-Saint-Jean-Baptiste".into())),
                             source: Said::new("prov-source-width"),
@@ -1393,7 +1397,7 @@ mod report {
             let rule = Rule::SpeedLimit { kmh: 30 };
             let areas: Vec<_> = (0..5)
                 .map(|i| {
-                    let streets = (0..crate::map::report_review::MAX_AREA_STREETS as u32 + 4)
+                    let streets = (0..crate::map::vm::report_review::MAX_AREA_STREETS as u32 + 4)
                         .map(|u| AreaStreet {
                             area: format!("r{i}"),
                             uid: u,
@@ -1409,9 +1413,9 @@ mod report {
                 .collect();
             let units = crate::shared::units::Units::Metres;
             let pages = vec![
-                [crate::map::report_review::network_page(&network, &i18n, units), crate::map::report_review::area_page(&areas, &i18n, units)].concat(),
-                crate::map::report_review::limits_page(&source, &i18n, units),
-                crate::map::report_review::appendix(&i18n),
+                [crate::map::vm::report_review::network_page(&network, &i18n, units), crate::map::vm::report_review::area_page(&areas, &i18n, units)].concat(),
+                crate::map::vm::report_review::limits_page(&source, &i18n, units),
+                crate::map::vm::report_review::appendix(&i18n),
             ];
             let text = written_text(pages, tag);
             assert!(!text.is_empty());
@@ -1427,7 +1431,7 @@ mod report {
         let city = CityStore::sample(storage.clone()).open();
         let mut view = city.view(0);
         view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
-        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        let (pages, _) = crate::map::vm::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
         assert_eq!(pages.len(), 2);
         let i18n = vm.i18n();
         let worst: Vec<Vec<Block>> = pages.into_iter().map(|p| with_worst_checks(p, &i18n)).collect();
@@ -1441,7 +1445,7 @@ mod report {
 
     #[test]
     fn more_than_forty_edited_places_give_forty_pages_and_a_note() {
-        assert_eq!(crate::map::report::MAX_PLACES, 40);
+        assert_eq!(crate::map::vm::report::MAX_PLACES, 40);
         let (vm, _, _, storage) = sample_in(Locale::En);
         let streets: Vec<u32> = vm.view().edges.iter().take(3).map(|e| e.uid).collect();
         for s in &streets {
@@ -1450,10 +1454,10 @@ mod report {
         vm.reload();
         let city = CityStore::sample(storage.clone()).open();
         let view = city.view(0);
-        let (pages, left) = crate::map::report::place_pages_up_to(2, &city, &view, 0, &vm.i18n(), vm.units());
+        let (pages, left) = crate::map::vm::report::place_pages_up_to(2, &city, &view, 0, &vm.i18n(), vm.units());
         assert_eq!((pages.len(), left), (2, view.edited - 2));
-        let facts = crate::map::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
-        let data = crate::map::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
+        let facts = crate::map::vm::report::Facts { places: 5, edited: 3, place_pages: pages, left_out: left, ..Default::default() };
+        let data = crate::map::vm::report::build(&facts, "1.0.0", 0, &crate::i18n_for(Locale::En));
         // The facts carry no review pages, so only the appendix follows the two changed places.
         assert_eq!(without_sources(data.pages.clone()).len(), 4 + 1);
         assert!(texts(&data.pages[1]).join("\n").contains("not shown"), "{:?}", texts(&data.pages[1]));
@@ -1467,9 +1471,9 @@ mod report {
         let city = CityStore::sample(storage.clone()).open();
         let mut view = city.view(0);
         view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
-        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        let (pages, _) = crate::map::vm::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
         assert!(texts(&pages[0]).join("\n").contains("drawn at its first zone"));
-        let (pages, _) = crate::map::report::place_pages(&city, &city.view(0), 0, &vm.i18n(), vm.units());
+        let (pages, _) = crate::map::vm::report::place_pages(&city, &city.view(0), 0, &vm.i18n(), vm.units());
         assert!(!texts(&pages[0]).join("\n").contains("first zone"));
     }
 
@@ -1483,7 +1487,7 @@ mod report {
         let long = "Avenue du Très Long Nom de Rue Qui Continue Encore et Encore Jusqu’à Dépasser La Largeur De La Page";
         view.edges.iter_mut().find(|e| e.uid == street).unwrap().called =
             crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text(long.to_string()));
-        let (pages, _) = crate::map::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
+        let (pages, _) = crate::map::vm::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
         assert!(matches!(&pages[0][0], Block::Heading { text, .. } if text.contains(long)), "{:?}", pages[0][0]);
     }
 
@@ -1609,12 +1613,12 @@ mod report {
         assert_eq!(downloads.saved().len(), 1);
     }
 
-    fn facts() -> crate::map::report::Facts {
-        crate::map::report::Facts { area: "Bendville".into(), streets: 2, junctions: 1, places: 3, problems: 2, notices: 3, ..Default::default() }
+    fn facts() -> crate::map::vm::report::Facts {
+        crate::map::vm::report::Facts { area: "Bendville".into(), streets: 2, junctions: 1, places: 3, problems: 2, notices: 3, ..Default::default() }
     }
 
-    fn built(facts: &crate::map::report::Facts, locale: Locale) -> ReportData {
-        crate::map::report::build(facts, "1.0.0", 0, &crate::i18n_for(locale))
+    fn built(facts: &crate::map::vm::report::Facts, locale: Locale) -> ReportData {
+        crate::map::vm::report::build(facts, "1.0.0", 0, &crate::i18n_for(locale))
     }
 
     #[test]
@@ -1631,7 +1635,7 @@ mod report {
 
     #[test]
     fn the_city_figure_uses_singular_and_plural() {
-        let one = crate::map::report::Facts { streets: 1, junctions: 1, ..facts() };
+        let one = crate::map::vm::report::Facts { streets: 1, junctions: 1, ..facts() };
         assert_eq!(table(&built(&one, Locale::En))[0][1], "1 street, 1 junction");
         assert_eq!(table(&built(&facts(), Locale::En))[0][1], "2 streets, 1 junction");
     }
@@ -1642,7 +1646,7 @@ mod selection {
     #[test]
     fn the_selected_streets_panel_says_none_are_selected_and_how_to_select() {
         let (vm, _) = map_vm();
-        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("No streets selected. Shift-click a street on the map, or press Shift+Enter on a search result."), "{h}");
         assert!(!h.contains("<button"), "nothing to remove or clear: {h}");
     }
@@ -1652,14 +1656,14 @@ mod selection {
         let (vm, _) = map_vm();
         vm.toggle_selected(Some("s-1"));
         vm.toggle_selected(Some("s-2"));
-        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("2 streets selected."), "{h}");
         assert_eq!(count(&h, "<li"), 2, "{h}");
         assert!(h.contains(&format!("aria-label=\"Remove {}\"", vm.street_label(1))), "{h}");
         assert!(h.contains(&format!(">{}</span>", vm.street_label(2))), "{h}");
         assert!(h.contains("Clear the selection"), "{h}");
         vm.deselect(1);
-        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("1 street selected.") && count(&h, "<li") == 1, "{h}");
     }
 
@@ -1667,12 +1671,12 @@ mod selection {
     fn the_selected_streets_panel_follows_the_language() {
         let (vm, _) = map_vm_in(Locale::FrCa);
         vm.toggle_selected(Some("s-1"));
-        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("1 rue sélectionnée.") && h.contains("Effacer la sélection") && h.contains("aria-label=\"Retirer "), "{h}");
     }
 
     fn panel(vm: &Rc<MapVm>) -> String {
-        map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> })
+        map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> })
     }
 
     #[test]
@@ -1735,7 +1739,7 @@ mod corridor_undo {
     use super::*;
 
     fn panel(vm: &Rc<MapVm>) -> String {
-        map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> })
+        map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> })
     }
 
     #[test]
@@ -1774,7 +1778,7 @@ mod corridor_words {
         vm.toggle_selected(Some("s-23"));
         vm.set_corridor_op("greenway");
         vm.review_corridor();
-        let h = map_html(|| view! { <crate::map::selection_view::SelectedStreets vm=vm.clone()/> });
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("Modifier 0 rue"), "{h}");
         let said = vm.i18n().tr_now("corridor-review", &Args::new().str("name", "X").num("ready", 0).num("refused", 1));
         assert!(said.contains("0 rue peut être modifiée"), "{said}");
@@ -1783,16 +1787,16 @@ mod corridor_words {
 
 mod goals {
     use super::*;
-    use crate::map::corridor::Op;
+    use crate::map::model::corridor::Op;
     use crate::shared::goals::Goal;
 
     fn guide(vm: &Rc<MapVm>) -> String {
-        map_html(|| view! { <crate::map::goal_view::GoalGuide vm=vm.clone()/> })
+        map_html(|| view! { <crate::map::view::goal_view::GoalGuide vm=vm.clone()/> })
     }
 
     #[test]
     fn every_network_check_a_goal_names_is_one_of_the_maps_and_every_change_is_one_the_panel_offers() {
-        let rules: Vec<_> = crate::map::network::Check::ALL.iter().map(|c| c.id()).collect();
+        let rules: Vec<_> = crate::map::model::network::Check::ALL.iter().map(|c| c.id()).collect();
         for g in Goal::ALL {
             for r in g.networks() {
                 assert!(rules.contains(r), "{r} of {} is not a network check", g.id());
