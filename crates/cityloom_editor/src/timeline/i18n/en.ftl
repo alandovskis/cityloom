@@ -42,7 +42,7 @@ timeline-summary = { $streets ->
 }
 timeline-summary-empty = No streets, junctions or rules edited
 timeline-compare = Compare with now
-timeline-compare-named = Compare { $name } with now
+timeline-compare-named = Compare with now: { $name }
 timeline-compare-close = Close the comparison
 timeline-compare-heading = Since { $name }
 timeline-compare-none = The work is the same as in { $name }.

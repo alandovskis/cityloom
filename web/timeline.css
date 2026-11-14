@@ -221,3 +221,20 @@
   color: var(--accent);
   font-weight: 600;
 }
+
+/* The bar of a page with no search: brand, pages, account (as the home page's, whose rules these are). */
+.bar {
+  grid-template-columns: auto 1fr auto;
+}
+.bar .surfaces {
+  justify-self: start;
+}
+@media (max-width: 899px) {
+  .bar {
+    grid-template-columns: 1fr auto;
+  }
+  .bar .surfaces {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

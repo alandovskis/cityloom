@@ -112,12 +112,14 @@ fn work_that_cannot_be_read_is_refused() {
 
 #[test]
 fn comparing_lists_the_places_that_differ_with_names_and_what_changed() {
-    let (vm, _, storage) = en();
+    let (vm, said, storage) = en();
     keep(&storage, &[("w1", "Rue A", 9000), ("w2", "Rue B", 9000), ("w3", "Rue C", 9000)]);
     vm.create("Base");
     let id = vm.rows()[0].id.clone();
     keep(&storage, &[("w1", "Rue A", 9000), ("w2", "Rue B", 12000), ("w4", "Rue D", 9000)]);
+    said.take();
     assert!(vm.compare(&id));
+    assert_eq!(said.take(), ["3 places differ from Base."], "opening the comparison is said: focus stays on the button");
     let c = vm.comparison().unwrap();
     assert_eq!(c.heading, "Since Base");
     assert_eq!(c.summary, "3 places differ from Base.");
@@ -302,7 +304,7 @@ mod view {
         assert!(page.contains("By Ada") && page.contains("CityLoom 0.70.0") && page.contains("1 street"), "{page}");
         assert!(button_tag(&page, &format!("timeline-restore-{id}")).contains("aria-label=\"Restore Base\""));
         assert!(button_tag(&page, &format!("timeline-delete-{id}")).contains("aria-label=\"Delete Base\""));
-        assert!(button_tag(&page, &format!("timeline-compare-{id}")).contains("aria-label=\"Compare Base with now\""));
+        assert!(button_tag(&page, &format!("timeline-compare-{id}")).contains("aria-label=\"Compare with now: Base\""));
     }
 
     #[test]

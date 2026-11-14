@@ -248,6 +248,11 @@ impl TimelineVm {
             return false;
         }
         self.comparing.set(Some(id.to_string()));
+        // The comparison opens below the button, where focus stays: say what it found.
+        if let Some(name) = self.name_of(id) {
+            let count = capture(&self.ports.storage).ok().and_then(|now| self.store.snapshot(id).map(|then| work::compare(&then, &now).len()));
+            self.ports.announcer.say(&self.compare_summary(&name, count, true));
+        }
         true
     }
 
@@ -289,12 +294,20 @@ impl TimelineVm {
                 }
             })
             .collect();
-        let summary = if rows.is_empty() {
-            self.i18n.tr("timeline-compare-none", &name)
-        } else {
-            self.i18n.tr("timeline-compare-count", &name.num("n", rows.len() as i64))
-        };
+        let summary = self.compare_summary(&milestone.name, Some(rows.len()), false);
         Some(Comparison { id, heading, summary, rows })
+    }
+
+    /// How a comparison came out: `count` places differ (none, or the work could not be read). Said in the page's
+    /// language: `now` for a command (nothing watched), else tracked.
+    fn compare_summary(&self, name: &str, count: Option<usize>, now: bool) -> String {
+        let say = |key: &str, args: &Args| if now { self.i18n.tr_now(key, args) } else { self.i18n.tr(key, args) };
+        let args = Args::new().str("name", name.to_string());
+        match count {
+            None => say("timeline-compare-unusable", &Args::new()),
+            Some(0) => say("timeline-compare-none", &args),
+            Some(n) => say("timeline-compare-count", &args.num("n", n as i64)),
+        }
     }
 
     // ---- restore ----

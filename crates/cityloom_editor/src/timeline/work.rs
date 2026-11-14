@@ -430,7 +430,8 @@ mod tests {
         memory.refuse_nothing();
         assert!(storage.recall(RESTRICTIONS_KEY).is_none_or(|text| text.trim().is_empty()), "the rules the restore began to put back are gone again");
         assert_eq!(MilestoneStore::new(storage.clone()).list().len(), 1, "no backup is kept");
-        let any_backup_mark = open(&*memory).is_some_and(|doc| doc.records.keys().any(|name| name.starts_with("milestone/") && name != &format!("milestone/{}", before.id)));
+        let any_backup_mark =
+            open(&*memory).is_some_and(|doc| doc.records.keys().any(|name| name.starts_with("milestone/") && name != &format!("milestone/{}", before.id)));
         assert!(!any_backup_mark, "no mark is left for the backup that was dropped");
     }
 

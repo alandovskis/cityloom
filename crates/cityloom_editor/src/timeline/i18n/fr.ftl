@@ -45,7 +45,7 @@ timeline-summary = { $streets ->
 }
 timeline-summary-empty = Aucune rue, jonction ni règle modifiée
 timeline-compare = Comparer avec maintenant
-timeline-compare-named = Comparer { $name } avec maintenant
+timeline-compare-named = Comparer avec maintenant : { $name }
 timeline-compare-close = Fermer la comparaison
 timeline-compare-heading = Depuis { $name }
 timeline-compare-none = Le travail est identique à celui de { $name }.

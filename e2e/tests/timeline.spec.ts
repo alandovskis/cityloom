@@ -67,16 +67,16 @@ test.describe("the timeline page", () => {
     await page.getByLabel("Milestone name").fill("Base");
     await page.keyboard.press("Enter");
     await expect(rows(page)).toHaveCount(1);
-    await page.getByRole("button", { name: "Compare Base with now" }).click();
+    await page.getByRole("button", { name: "Compare with now: Base" }).click();
     await expect(page.locator(".timeline-compare-summary")).toHaveText("The work is the same as in Base.");
     await page.getByRole("button", { name: "Close the comparison" }).click();
-    await expect(page.getByRole("button", { name: "Compare Base with now" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Compare with now: Base" })).toBeFocused();
 
     await keepStreets(page, [
       ["w1", "Rue A", 12000],
       ["w3", "Rue C", 9000],
     ]);
-    await page.getByRole("button", { name: "Compare Base with now" }).click();
+    await page.getByRole("button", { name: "Compare with now: Base" }).click();
     const compare = page.getByRole("region", { name: "Since Base" });
     await expect(compare).toContainText("3 places differ from Base.");
     await expect(compare.locator(".timeline-diff > li")).toHaveText([
