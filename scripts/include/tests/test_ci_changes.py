@@ -34,12 +34,12 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.browser)
 
     def test_documentation_with_code_is_code(self):
-        s = pick("README.md", "crates/cityloom_editor/src/junction/model.rs")
+        s = pick("README.md", "crates/cityloom_editor/src/junction/model/mod.rs")
         self.assertFalse(s.docs_only)
         self.assertTrue(s.ui)
 
     def test_one_slice_runs_its_specs_and_the_cross_ones(self):
-        s = pick("crates/cityloom_editor/src/junction/vm.rs")
+        s = pick("crates/cityloom_editor/src/junction/vm/mod.rs")
         self.assertIn("junction", s.specs)
         self.assertIn("a11y", s.specs)
         self.assertNotIn("street", s.specs)
@@ -47,7 +47,7 @@ class Selection(unittest.TestCase):
         self.assertFalse(s.all)
 
     def test_editor_code_starts_neither_a_database_nor_the_archive(self):
-        for f in ("street/vm.rs", "junction/vm.rs", "map/vm.rs", "restriction/model.rs"):
+        for f in ("street/vm/mod.rs", "junction/view/iso/mod.rs", "map/model/network.rs", "restriction/model.rs"):
             with self.subTest(f):
                 s = pick(f"crates/cityloom_editor/src/{f}")
                 self.assertTrue(s.ui)
@@ -88,7 +88,7 @@ class Selection(unittest.TestCase):
                 self.assertTrue(s.ui and s.integration and s.e2e)
 
     def test_a_unit_test_file_runs_no_browser_test(self):
-        s = pick("crates/cityloom_editor/src/street/tests.rs", "crates/cityloom_editor/src/map/tests.rs")
+        s = pick("crates/cityloom_editor/src/street/view/tests.rs", "crates/cityloom_editor/src/map/view/tests.rs")
         self.assertFalse(s.docs_only)
         self.assertEqual(s.specs, [])
         self.assertFalse(s.browser)
@@ -116,12 +116,12 @@ class Selection(unittest.TestCase):
         self.assertTrue(pick("crates/cityloom_editor/src/brand_new/mod.rs").all)
 
     def test_slices_union(self):
-        s = pick("crates/cityloom_editor/src/junction/vm.rs", "crates/cityloom_editor/src/account/vm.rs")
+        s = pick("crates/cityloom_editor/src/junction/vm/mod.rs", "crates/cityloom_editor/src/account/vm.rs")
         self.assertIn("junction", s.specs)
         self.assertIn("account-server", s.specs)
 
     def test_all_wins_over_a_narrow_file(self):
-        s = pick("crates/cityloom_editor/src/junction/vm.rs", "web/app.css")
+        s = pick("crates/cityloom_editor/src/junction/vm/mod.rs", "web/app.css")
         self.assertTrue(s.all)
 
     def test_shared_code_and_main_run_every_tier(self):
@@ -160,7 +160,7 @@ class Globs(unittest.TestCase):
         self.assertFalse(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/sub/a.spec.ts"))
         self.assertTrue(ci_changes.glob("**/*.md", "README.md"))
         self.assertTrue(ci_changes.glob("**/*.md", "a/b/c.md"))
-        self.assertTrue(ci_changes.glob("**/tests.rs", "crates/cityloom_editor/src/street/tests.rs"))
+        self.assertTrue(ci_changes.glob("**/tests.rs", "crates/cityloom_editor/src/street/view/tests.rs"))
         self.assertTrue(ci_changes.glob("website/**", "website/docs/a.md"))
         self.assertFalse(ci_changes.glob("website/**", "websites/a"))
 
