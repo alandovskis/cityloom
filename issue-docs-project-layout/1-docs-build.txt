@@ -1,0 +1,17 @@
+$ git rev-parse HEAD
+afcb9e4b67c1a0b246da6919a061af24d59b466a
+$ just docs-build
+cd website && npm run build
+
+> cityloom-website@0.0.0 build
+> docusaurus build
+
+[INFO] Website will be built for all these locales: 
+- en
+- fr-CA
+[INFO] [en] Creating an optimized production build...
+[SUCCESS] Generated static files in "build".
+[INFO] [fr-CA] Creating an optimized production build...
+[SUCCESS] Generated static files in "build/fr-CA".
+[INFO] Use `npm run serve` command to test your build locally.
+exit: 0

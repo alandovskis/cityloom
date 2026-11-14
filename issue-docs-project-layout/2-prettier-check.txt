@@ -1,0 +1,4 @@
+$ npx prettier --ignore-path ../.prettierignore --check ../website  (Prettier part of just format-check, run from e2e/)
+Checking formatting...
+All matched files use Prettier code style!
+exit: 0
