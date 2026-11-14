@@ -22,7 +22,6 @@ use crate::city::store::CityStore;
 use crate::map::model::corridor::{self, Op, Outcome, Plan, Report};
 use crate::map::model::editable;
 use crate::map::model::network::{self, Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-use crate::map::model::source_quality::{self, Kind as SourceKind, SourceFinding, SourceReport};
 use crate::map::vm::areas::AreasVm;
 use crate::map::vm::camera::{Camera, Insets, World};
 use crate::map::vm::selection::SelectionVm;
@@ -292,35 +291,6 @@ pub struct NetworkCheck {
     pub more: Option<String>,
 }
 
-/// A source-data finding as the Provenance tab lists it, worded. It has no severity: it is not a design failure.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SourceItem {
-    pub kind: &'static str,
-    /// What looks missing or doubtful.
-    pub text: String,
-    /// The words `Source` and `Design impact`, so the two lines are told apart by more than their place.
-    pub source_label: String,
-    pub impact_label: String,
-    /// Where the doubt comes from.
-    pub source: String,
-    /// Which design reading it could mislead.
-    pub impact: String,
-    pub places: Vec<NetworkPlace>,
-    pub more_places: Option<String>,
-}
-
-/// One kind of source-data finding and what it found.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SourceGroup {
-    pub id: &'static str,
-    pub label: String,
-    pub count: usize,
-    /// `nothing found`, `1 possible gap`, `3 possible gaps`.
-    pub count_text: String,
-    pub items: Vec<SourceItem>,
-    pub more: Option<String>,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Status {
     pub text: String,
@@ -373,8 +343,6 @@ pub struct MapVm {
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
-    /// The source-data findings, likewise; they are read from the city as the importer laid it out.
-    source: RefCell<Option<(Rc<CityView>, Rc<SourceReport>)>>,
     /// Whether a report is being written: a second request meanwhile is ignored.
     report_running: Cell<bool>,
     /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
@@ -433,7 +401,6 @@ impl MapVm {
             network: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
-            source: RefCell::new(None),
             #[cfg(test)]
             editors_read: Cell::new(0),
         })
@@ -736,7 +703,7 @@ impl MapVm {
         let areas: Vec<_> = self.areas.list_now().into_iter().map(|r| (r.clone(), self.findings_in(&v, &[r]))).collect();
         // The area rules follow the network checks on one page: a city with none declared would leave a page nearly empty.
         let network_and_areas = [report_review::network_page(&network, &self.i18n, units), report_review::area_page(&areas, &self.i18n, units)].concat();
-        let review_pages = vec![network_and_areas, report_review::limits_page(&self.source_report_of(v.clone()), &self.i18n, units)];
+        let review_pages = vec![network_and_areas];
         let facts = report::Facts { place_pages, left_out, review_pages, ..facts };
         report::build(&facts, env!("CARGO_PKG_VERSION"), self.ports.storage.now_ms(), &self.i18n)
     }
@@ -893,88 +860,6 @@ impl MapVm {
             })
             .collect();
         (links, (hidden > 0).then(|| self.i18n.tr("net-more-places", &Args::new().num("n", hidden as i64))))
-    }
-
-    // ---- the source-data inspector (the Provenance tab) ----
-    //
-    // Where the imported OpenStreetMap data may be missing or wrong. Counted apart from the places' own checks and
-    // from the network checks: nothing here reaches the status line, the checks lead or the area rules' counts.
-
-    fn source_report(&self) -> Rc<SourceReport> {
-        self.source_report_of(self.view())
-    }
-
-    /// The same for a view already in hand (a command reads it untracked).
-    fn source_report_of(&self, view: Rc<CityView>) -> Rc<SourceReport> {
-        if let Some((seen, found)) = &*self.source.borrow()
-            && Rc::ptr_eq(seen, &view)
-        {
-            return found.clone();
-        }
-        let found = Rc::new(source_quality::inspect(&self.core.read(|m| m.city.source_read())));
-        *self.source.borrow_mut() = Some((view, found.clone()));
-        found
-    }
-
-    /// How many possible gaps the source-data inspector found in all.
-    pub fn source_count(&self) -> usize {
-        self.source_report().findings.len()
-    }
-
-    fn source_count_text(&self, n: usize) -> String {
-        let key = match n {
-            0 => "prov-count-none",
-            1 => "prov-count-one",
-            _ => "prov-count",
-        };
-        self.i18n.tr(key, &Args::new().num("n", n as i64))
-    }
-
-    /// The line above the source findings.
-    pub fn source_lead(&self) -> String {
-        if self.has_no_places() {
-            return self.word("prov-no-places");
-        }
-        match self.source_count() {
-            0 => self.word("prov-lead-none"),
-            n => self.i18n.tr("prov-lead", &Args::new().num("n", n as i64)),
-        }
-    }
-
-    /// The kinds of finding, in a fixed order, each with its count and its findings (the first `NETWORK_SHOWN`).
-    /// None when the city has no places.
-    pub fn source_groups(&self) -> Vec<SourceGroup> {
-        if self.has_no_places() {
-            return Vec::new();
-        }
-        let report = self.source_report();
-        SourceKind::ALL.into_iter().map(|kind| self.source_group(kind, report.findings.iter().filter(|f| f.kind == kind).collect())).collect()
-    }
-
-    fn source_group(&self, kind: SourceKind, found: Vec<&SourceFinding>) -> SourceGroup {
-        let hidden = found.len().saturating_sub(NETWORK_SHOWN);
-        SourceGroup {
-            id: kind.id(),
-            label: self.word(&format!("prov-kind-{}", kind.id())),
-            count: found.len(),
-            count_text: self.source_count_text(found.len()),
-            items: found.iter().take(NETWORK_SHOWN).map(|f| self.source_item(f)).collect(),
-            more: (hidden > 0).then(|| self.i18n.tr("prov-more-findings", &Args::new().num("n", hidden as i64))),
-        }
-    }
-
-    fn source_item(&self, f: &SourceFinding) -> SourceItem {
-        let (places, more_places) = self.place_links(&f.places);
-        SourceItem {
-            kind: f.kind.id(),
-            text: self.say(&f.said),
-            source_label: self.word("prov-label-source"),
-            impact_label: self.word("prov-label-impact"),
-            source: self.say(&f.source),
-            impact: self.say(&f.impact),
-            places,
-            more_places,
-        }
     }
 
     /// How many streets break the rule of an area they are inside (a speed limit never does).

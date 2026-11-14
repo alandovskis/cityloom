@@ -1,18 +1,17 @@
-//! The report's review pages, after the pages of the changed places: the network effects, the area rules, the limits
-//! of the OpenStreetMap data, and the appendix. Pure: each takes what the checks found and words it in the interface
-//! language. A page may run past one sheet; the writer continues it on the next.
+//! The report's review pages, after the pages of the changed places: the network effects, the area rules and the
+//! appendix. Pure: each takes what the checks found and words it in the interface language. A page may run past one
+//! sheet; the writer continues it on the next.
 
 use cityloom_report::Block;
 
 use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, Severity};
-use crate::map::model::source_quality::{Kind as SourceKind, SourceReport};
 use crate::map::vm::AreaStreet;
 use crate::restriction::model::Restriction;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
 
-/// The most findings listed for one check or kind of source gap; the rest are counted.
+/// The most findings listed for one check; the rest are counted.
 pub const MAX_ROWS: usize = 10;
 /// The most places named for one finding; the rest are counted.
 pub const MAX_PLACE_NAMES: usize = 2;
@@ -152,48 +151,6 @@ pub fn area_page(areas: &[(Restriction, Vec<AreaStreet>)], i18n: &I18n, units: U
     page
 }
 
-/// Where the OpenStreetMap data behind the city may be missing or wrong, by kind, each with its source and the
-/// design reading it could mislead.
-pub fn limits_page(report: &SourceReport, i18n: &I18n, units: Units) -> Vec<Block> {
-    let mut page = vec![Block::Heading { level: 2, text: say(i18n, "map-report-limits") }];
-    page.push(Block::Paragraph { text: say(i18n, "prov-note") });
-    let n = report.findings.len();
-    page.push(Block::Paragraph { text: if n == 0 { say(i18n, "prov-lead-none") } else { count(i18n, "prov-lead", n) } });
-    for kind in SourceKind::ALL {
-        let found: Vec<_> = report.findings.iter().filter(|f| f.kind == kind).collect();
-        if found.is_empty() {
-            continue;
-        }
-        let said = |s: &crate::shared::said::Said| say_now(i18n, units, s);
-        let (source, impact) = (said(&found[0].source), said(&found[0].impact));
-        // What a kind of gap rests on is mostly one thing: say it once, and only repeat it where findings differ.
-        let alike = found.iter().all(|f| said(&f.source) == source && said(&f.impact) == impact);
-        let caption = say(i18n, &format!("prov-kind-{}", kind.id()));
-        if alike {
-            page.push(Block::Table {
-                caption,
-                head: vec![say(i18n, "map-report-col-finding")],
-                rows: found.iter().take(MAX_ROWS).map(|f| vec![said(&f.said)]).collect(),
-            });
-        } else {
-            page.push(Block::Table {
-                caption,
-                head: ["map-report-col-finding", "map-report-col-source", "map-report-col-impact"].iter().map(|k| say(i18n, k)).collect(),
-                rows: found.iter().take(MAX_ROWS).map(|f| vec![said(&f.said), said(&f.source), said(&f.impact)]).collect(),
-            });
-        }
-        if found.len() > MAX_ROWS {
-            page.push(Block::Paragraph { text: count(i18n, "prov-more-findings", found.len() - MAX_ROWS) });
-        }
-        if alike {
-            for (label, text) in [("prov-label-source", source), ("prov-label-impact", impact)] {
-                page.push(Block::Paragraph { text: i18n.tr_now("map-report-labelled", &Args::new().str("label", say(i18n, label)).str("text", text)) });
-            }
-        }
-    }
-    page
-}
-
 /// The words the report uses and what its checks rest on: a glossary, the status of the thresholds, the credits.
 pub fn appendix(i18n: &I18n) -> Vec<Block> {
     let terms: [(&str, &str); 8] = [
@@ -228,11 +185,10 @@ pub fn appendix(i18n: &I18n) -> Vec<Block> {
 mod tests {
     use super::*;
     use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-    use crate::map::model::source_quality::{Kind as SourceKind, SourceFinding, SourceReport};
     use crate::map::vm::AreaStreet;
     use crate::restriction::model::{Conflict, Restriction, Rule};
     use crate::shared::i18n::Locale;
-    use crate::shared::said::{Arg, Said};
+    use crate::shared::said::Said;
     use crate::shared::units::Units;
 
     fn en() -> std::rc::Rc<I18n> {
@@ -346,36 +302,6 @@ mod tests {
         let (_, _, streets) = tables(&page)[1];
         assert_eq!(streets.len(), 1, "only the street that conflicts");
         assert!(streets[0][1].contains("Old town"), "{streets:?}");
-    }
-
-    #[test]
-    fn the_source_data_page_lists_each_kind_with_its_source_and_design_impact() {
-        let finding = |kind| SourceFinding {
-            kind,
-            said: Said::new("prov-ends").with("street", Arg::Text("Rue Laurier".into())),
-            source: Said::new("prov-source-ends"),
-            impact: Said::new("prov-impact-ends"),
-            places: vec![place(1)],
-        };
-        let report = SourceReport { findings: (0..MAX_ROWS + 2).map(|_| finding(SourceKind::DeadEnd)).collect() };
-        let page = limits_page(&report, &en(), Units::Metres);
-        let all = texts(&page).join("\n");
-        assert!(all.contains("Limits of the OpenStreetMap data") && all.contains("not design failures"), "{all}");
-        let found = tables(&page);
-        assert_eq!(found.len(), 1, "only the kinds that found something");
-        assert_eq!(found[0].1, &vec!["Finding".to_string()], "findings that share a source and an impact state them once, below");
-        assert_eq!(found[0].2.len(), MAX_ROWS);
-        assert_eq!(texts(&page).iter().filter(|t| t.starts_with("Source: ")).count(), 1);
-        assert_eq!(texts(&page).iter().filter(|t| t.starts_with("Design impact: ")).count(), 1);
-        assert!(found[0].2[0][0].contains("Rue Laurier"));
-        assert!(all.contains("2 more"), "{all}");
-        // Findings of one kind whose source differs keep a Source and a Design impact column.
-        let mut mixed = report.findings.clone();
-        mixed[0].source = Said::new("prov-source-width");
-        let page = limits_page(&SourceReport { findings: mixed }, &en(), Units::Metres);
-        assert_eq!(tables(&page)[0].1.len(), 3);
-        let none = texts(&limits_page(&SourceReport::default(), &en(), Units::Metres)).join("\n");
-        assert!(none.contains("Nothing looks missing"), "{none}");
     }
 
     #[test]

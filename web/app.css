@@ -1661,15 +1661,6 @@ a.btn {
 .net-more {
   margin: 0 8px 4px;
 }
-/* The Provenance tab of the map's Notes panel: each finding says where its doubt comes from and what it could mislead. */
-.src-line {
-  margin: 2px 0;
-  font-size: 13px;
-}
-.src-label {
-  color: var(--ink-2);
-  font-weight: 600;
-}
 /* The sources behind a rule, under its check, network check or area rule (shared/sources_view.rs): a disclosure, so the list stays out of the way. */
 details.src {
   margin-top: 4px;

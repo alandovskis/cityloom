@@ -27,7 +27,7 @@ pub struct Facts {
     pub place_pages: Vec<Vec<Block>>,
     /// How many changed places `place_pages` left out, said at the end of the summary.
     pub left_out: usize,
-    /// The network effects, the area rules and the limits of the data (`report_review`), after the changed places.
+    /// The network effects and the area rules (`report_review`), after the changed places.
     pub review_pages: Vec<Vec<Block>>,
 }
 

@@ -531,6 +531,16 @@ fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages()
 }
 
 #[test]
+fn the_map_notes_have_only_the_checks_and_changes_tabs() {
+    let tabs: Vec<&str> =
+        MAP_HTML.match_indices(r#"role="tab""#).map(|(i, _)| &MAP_HTML[i..]).map(|s| s.split(" id=\"").nth(1).unwrap().split('"').next().unwrap()).collect();
+    assert_eq!(tabs, ["t-checks", "t-changes"]);
+    for gone in ["provenance", "source-slot", "source-lead", "h-source", "prov-"] {
+        assert!(!MAP_HTML.contains(gone), "{gone} is still on the map page");
+    }
+}
+
+#[test]
 fn map_html_has_one_h1_the_city_map() {
     let html = include_str!("../../../../../web/map.html");
     assert_eq!(html.matches("<h1").count(), 1);
@@ -876,50 +886,6 @@ fn the_network_checks_are_worded_in_french() {
     assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
 }
 
-#[test]
-fn the_provenance_tab_lists_a_group_per_kind_with_its_count_source_and_impact() {
-    use crate::map::view::source_view;
-    let (vm, _) = map_vm();
-    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
-    assert_eq!(count(&h, "<h3"), 5, "{h}");
-    for (id, label) in
-        [("name", "Street names"), ("disconnected", "Disconnected streets"), ("ends", "Dead ends"), ("width", "Widths"), ("speed", "Speed limits")]
-    {
-        assert!(h.contains(&format!("id=\"src-h-{id}\"")) && h.contains(&format!("data-kind=\"{id}\"")) && h.contains(label), "{id}: {h}");
-    }
-    // the sample city's streets have no name from OpenStreetMap: each finding says so, where it comes from and what it could mislead
-    assert!(h.contains("is not in OpenStreetMap") && h.contains("Source:") && h.contains("Design impact:") && h.contains("The road has no name tag."), "{h}");
-    assert!(h.contains("href=\"street.html?street="), "{h}");
-    // a count in the heading, read apart from the name, and no mark or word of a design failure
-    assert!(h.contains("Street names</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">"), "{h}");
-    assert!(!h.contains("class=\"bad\"") && !h.contains("data-severity") && !h.contains("Problem"), "{h}");
-    let lead = map_html(|| view! { <source_view::SourceLead vm=vm.clone()/> });
-    assert!(lead.contains("may be missing or wrong"), "{lead}");
-}
-
-#[test]
-fn source_findings_do_not_reach_the_status_line_the_checks_lead_or_the_network_checks() {
-    let (vm, _) = map_vm();
-    assert!(vm.source_count() > 0, "the sample city has unnamed streets");
-    // the same numbers as a city whose findings were never worked out
-    let status = vm.status();
-    let lead = vm.checks_lead();
-    let network = vm.network_count();
-    let _ = vm.source_groups();
-    assert_eq!((vm.status(), vm.checks_lead(), vm.network_count()), (status.clone(), lead.clone(), network));
-    assert!(!status.bad || !status.text.contains("source"), "{status:?}");
-    assert!(!lead.contains("possible gap") && !lead.contains("source data"), "{lead}");
-    assert!(vm.network_rules().iter().all(|c| c.items.iter().all(|i| !i.text.contains("OpenStreetMap"))));
-}
-
-#[test]
-fn the_provenance_tab_is_worded_in_french() {
-    use crate::map::view::source_view;
-    let (vm, _) = map_vm_in(Locale::FrCa);
-    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
-    assert!(h.contains("Noms de rues") && h.contains("lacune") && h.contains("Effet sur la conception") && h.contains("n’a pas d’étiquette de nom"), "{h}");
-}
-
 // ---- the design review report ----------------------------------------------------------------
 
 mod report {
@@ -986,25 +952,26 @@ mod report {
         assert_eq!(rows[2][1], v.failing.to_string());
     }
 
-    /// The network effects with the area rules, the limits of the data and the appendix, after the changed places.
-    const REVIEW_PAGES: usize = 3;
+    /// The network effects with the area rules, and the appendix, after the changed places.
+    const REVIEW_PAGES: usize = 2;
 
     fn headings(data: &ReportData) -> Vec<String> {
         data.pages.iter().flatten().filter_map(|b| if let Block::Heading { level: 2, text } = b { Some(text.clone()) } else { None }).collect()
     }
 
     #[test]
-    fn the_report_ends_with_the_network_the_areas_the_data_limits_and_the_appendix() {
-        for (locale, last) in [
-            (Locale::En, ["Network effects", "Area rules", "Limits of the OpenStreetMap data", "Appendix"]),
-            (Locale::FrCa, ["Effets sur le réseau", "Règles de zone", "Limites des données OpenStreetMap", "Annexe"]),
+    fn the_report_ends_with_the_network_the_areas_and_the_appendix() {
+        for (locale, last, limits) in [
+            (Locale::En, ["Network effects", "Area rules", "Appendix"], "OpenStreetMap data"),
+            (Locale::FrCa, ["Effets sur le réseau", "Règles de zone", "Annexe"], "données OpenStreetMap"),
         ] {
             let (vm, ..) = sample_in(locale);
             let mut data = vm.report_data();
             data.pages = without_sources(data.pages);
             assert_eq!(data.pages.len(), 2 + REVIEW_PAGES);
             let heads = headings(&data);
-            assert_eq!(&heads[heads.len() - 4..], &last.map(String::from), "{heads:?}");
+            assert_eq!(&heads[heads.len() - 3..], &last.map(String::from), "{heads:?}");
+            assert!(!heads.iter().any(|h| h.contains(limits)), "no page on the limits of the source data: {heads:?}");
         }
     }
 
@@ -1359,7 +1326,6 @@ mod report {
     #[test]
     fn review_pages_full_of_findings_are_written_whole_in_both_languages() {
         use crate::map::model::network::{Check, NetworkFinding, NetworkReport, Place, PlaceKind, Severity};
-        use crate::map::model::source_quality::{Kind, SourceFinding, SourceReport};
         use crate::map::vm::AreaStreet;
         use crate::restriction::model::{Conflict, Restriction};
         use crate::shared::said::Said;
@@ -1379,20 +1345,6 @@ mod report {
                     })
                     .collect(),
                 unreadable: 7,
-            };
-            let source = SourceReport {
-                findings: Kind::ALL
-                    .iter()
-                    .flat_map(|&kind| {
-                        (0..crate::map::vm::report_review::MAX_ROWS + 3).map(move |_| SourceFinding {
-                            kind,
-                            said: Said::new("prov-ends").with("street", crate::shared::said::Arg::Text("Rue Très Longue-Saint-Jean-Baptiste".into())),
-                            source: Said::new("prov-source-width"),
-                            impact: Said::new("prov-impact-width"),
-                            places: vec![place(1)],
-                        })
-                    })
-                    .collect(),
             };
             let rule = Rule::SpeedLimit { kmh: 30 };
             let areas: Vec<_> = (0..5)
@@ -1414,7 +1366,6 @@ mod report {
             let units = crate::shared::units::Units::Metres;
             let pages = vec![
                 [crate::map::vm::report_review::network_page(&network, &i18n, units), crate::map::vm::report_review::area_page(&areas, &i18n, units)].concat(),
-                crate::map::vm::report_review::limits_page(&source, &i18n, units),
                 crate::map::vm::report_review::appendix(&i18n),
             ];
             let text = written_text(pages, tag);

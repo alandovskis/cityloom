@@ -6,7 +6,6 @@ pub mod goal_view;
 pub mod home;
 pub mod network_view;
 pub mod selection_view;
-pub mod source_view;
 pub mod svg;
 #[cfg(test)]
 mod tests;
