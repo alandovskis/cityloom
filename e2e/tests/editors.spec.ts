@@ -99,6 +99,15 @@ test.describe("the street editor's panel and tray", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
+  test("the open tray takes no more than a quarter of the column's height", async ({ page }) => {
+    await page.locator("#t-space").click();
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "open");
+    const column = await box(page, ".stage-main");
+    const tray = await box(page, "#notes");
+    expect(tray.height).toBeLessThanOrEqual(column.height * 0.24 + 1);
+    await expect(page.locator("#notes #notes-toggle")).toBeInViewport();
+  });
+
   test("the details' edge tab is at the panel's left edge and goes to the window's edge when it collapses", async ({
     page,
   }) => {

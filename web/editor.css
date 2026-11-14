@@ -319,10 +319,10 @@
   .street-page .stage-head {
     flex: none;
   }
-  /* The tray never takes more than about half the column, so the drawing keeps the rest; its body scrolls. */
+  /* The tray never takes more than about a quarter of the column, so the drawing keeps the rest; its body scrolls. */
   .tray {
     flex: none;
-    max-height: 48%;
+    max-height: 24%;
   }
   .tray-body {
     flex: 1 1 auto;

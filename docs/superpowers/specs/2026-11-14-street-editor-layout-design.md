@@ -64,6 +64,8 @@ drawing, the details and the notes stack, so a change and its effect are never i
 - The tray starts closed to its handle (builder's call: open, it takes room from the drawing at 1440 by 900); a
   remembered choice wins, and choosing a tab opens it. The drawing is laid out to fit the room the column leaves it,
   narrower and centred when a long title, the welcome or the open tray leave less.
+- The open tray takes at most a quarter of the column's height (asked for after review: half was too tall); its body
+  scrolls.
 - Scoped to the street page (the junction page shares the shell and `editor.css` and keeps its layout).
 
 ### 3. The phone
