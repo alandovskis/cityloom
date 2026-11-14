@@ -4,7 +4,7 @@
 //! drawn in millimetres of ground (a brick is 200 by 100 mm), laid on the ground by an affine map so that the texture
 //! lies on the pavement and recedes with it. The junction's oblique projection is affine, so `patterns` gets that map
 //! as one `patternTransform`; the street's perspective is not, so its patterns carry the identity and each textured
-//! top is cut into bands along the street, each laid by its own matrix (`street/iso/raised.rs`). Colours are the
+//! top is cut into bands along the street, each laid by its own matrix (`street/view/iso/raised.rs`). Colours are the
 //! material's own, from the `--mat-*` tokens, and do not change with the theme.
 //!
 //! At the 2.5D's scale (about 0.03 px to the millimetre for a street) the finest grain of a material cannot be
@@ -32,7 +32,7 @@ pub fn tile_mm(material: &str) -> (f64, f64) {
 }
 
 /// The regular joints of a material that is laid as units: where they run, and how they are drawn. A street's 2.5D
-/// draws them as geometry (`street/iso/joints.rs`) because a pattern laid on a perspective by affine bands steps at
+/// draws them as geometry (`street/view/iso/joints.rs`) because a pattern laid on a perspective by affine bands steps at
 /// every seam; the junction's, which is laid by one affine map, keeps them in the pattern.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Joints {

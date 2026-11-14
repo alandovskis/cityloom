@@ -33,7 +33,7 @@ pub enum Place {
 #[derive(Clone, Copy, Debug)]
 pub struct Pick {
     /// The Atlas code (`shared::atlas`), named by `atlas::name_key`; on the map, the id of the change to the selected
-    /// streets (`map::corridor::Op::id`), named by `name`.
+    /// streets (`map::model::corridor::Op::id`), named by `name`.
     pub code: &'static str,
     /// The message that names a pick that is not an Atlas measure.
     pub name: Option<&'static str>,
@@ -96,7 +96,7 @@ impl Goal {
         }
     }
 
-    /// The network checks of the map (`map::network::Check::id`) the goal bears on.
+    /// The network checks of the map (`map::model::network::Check::id`) the goal bears on.
     pub fn networks(self) -> &'static [&'static str] {
         match self {
             Goal::ThroughTraffic => &["lanes"],

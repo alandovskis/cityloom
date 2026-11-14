@@ -26,7 +26,7 @@
   --warn-line: #f59e0b;
   --ok: light-dark(#166534, #86efac);
   --ok-wash: light-dark(#dcfce7, rgb(34 197 94 / 0.16));
-  /* The map's place colours, the same in both themes: src/map/style.rs paints them in
+  /* The map's place colours, the same in both themes: src/map/vm/style.rs paints them in
      MapLibre, where a CSS variable cannot reach, so the key repeats them here. */
   --map-ok: #4b6b8a;
   --map-changed: #2563eb;
@@ -76,9 +76,9 @@
   --k-terrace: light-dark(#f1dca0, #7d6a30);
   --k-buffer: light-dark(#bdb8ae, #4d4a45);
   --k-streetlamp: light-dark(#d9dcc0, #5d6148);
-  /* The surface materials in 2.5D (street/iso/, junction/iso/): the typical colour of each material, the same in
+  /* The surface materials in 2.5D (street/view/iso/, junction/view/iso/): the typical colour of each material, the same in
      both themes (a material looks like itself), and the two tones of its texture (`-line`, `-alt`). The pavement paint keeps
-     its 3:1 against each through its edge (a test in street/iso/surface.rs reads these). */
+     its 3:1 against each through its edge (a test in street/view/iso/surface.rs reads these). */
   --mat-asphalt: #3b3f43; /* weathered asphalt, dark grey */
   --mat-asphalt-line: #8a9096;
   --mat-asphalt-alt: #1f2225;
@@ -972,7 +972,7 @@ a.btn {
 .dot-conflict {
   background: var(--map-conflict);
 }
-/* The marks the map draws besides the colour (src/map/style.rs): a light dot in a changed junction, a dark one in
+/* The marks the map draws besides the colour (src/map/vm/style.rs): a light dot in a changed junction, a dark one in
    one that needs attention. */
 .dot-changed,
 .dot-bad {

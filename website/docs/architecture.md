@@ -39,6 +39,11 @@ Each editing slice holds:
 - The Leptos views, which bind to a view-model and forward events. They decide nothing.
 - `tests.rs`.
 
+In the three largest slices, `street/`, `junction/` and `map/`, each layer is a folder: `model/` (the rules and any pure
+computation over them, with no Leptos and no wording), `vm/` (the view-model and what it owns: the words, the key state
+machines, the handle the views take) and `view/` (the Leptos views, the SVG drawing and the component tests). Another
+slice uses only what is under `model/`.
+
 Drawing is done by pure functions that return SVG strings, set with `inner_html`. Pointer and keyboard logic are pure
 state machines with tests. The map page is the exception: it draws with MapLibre and no SVG.
 

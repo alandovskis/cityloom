@@ -1243,7 +1243,7 @@ mod tests {
     }
 
     fn say_in(locale: crate::shared::i18n::Locale, said: &Said) -> String {
-        crate::street::text::say_now(&crate::i18n_for(locale), crate::shared::units::Units::Metres, said)
+        crate::street::vm::text::say_now(&crate::i18n_for(locale), crate::shared::units::Units::Metres, said)
     }
 
     /// Two zones split at `first_zone_mm`, the far one given a travel lane at the street's edge.

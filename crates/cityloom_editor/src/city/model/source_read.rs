@@ -1,6 +1,6 @@
 //! What the source-data quality inspector reads of the city: plain data about each street and node *as the importer
 //! laid them out*, before any edit, with no wording and no editor. `City::source_read` makes it from the layout; the
-//! rules that judge it are the map's (`map::source_quality`). It is kept apart from `NetworkRead`, which describes the
+//! rules that judge it are the map's (`map::model::source_quality`). It is kept apart from `NetworkRead`, which describes the
 //! streets as they stand now for the design checks.
 
 use super::{City, node_uid, street_note};

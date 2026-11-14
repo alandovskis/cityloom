@@ -16,7 +16,7 @@
   "rules": [
     { "paths": ["website/**", "docs/**", "**/*.md", "LICENSE*"], "docs": true },
     { "paths": ["e2e/tests/*.spec.ts"], "specs": "self" },
-    { "paths": ["**/tests.rs", "crates/cityloom_editor/src/i18n_guard.rs", "scripts/include/tests/**", "crates/*/tests/**", ".github/ISSUE_TEMPLATE/**", ".github/labels.yml", ".github/issue-labeler.yml", ".github/issue-flow.json", ".github/dependabot.yml", "sonar-project.properties"], "specs": "none" },
+    { "paths": ["**/tests.rs", "crates/cityloom_editor/src/i18n_guard.rs", "crates/cityloom_editor/src/layout_guard.rs", "scripts/include/tests/**", "crates/*/tests/**", ".github/ISSUE_TEMPLATE/**", ".github/labels.yml", ".github/issue-labeler.yml", ".github/issue-flow.json", ".github/dependabot.yml", "sonar-project.properties"], "specs": "none" },
     { "paths": ["crates/cityloom_editor/src/street/**"], "specs": ["@street", "@junction", "@map", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/standards/**"], "specs": ["@standards", "@street", "@cross"] },
     { "paths": ["crates/cityloom_editor/src/junction/**"], "specs": ["@junction", "@cross"] },

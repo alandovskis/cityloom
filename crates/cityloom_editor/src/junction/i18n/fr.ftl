@@ -1,5 +1,5 @@
-# Ce que dit la jonction : son modèle (src/junction/model.rs, read_model.rs), ses annonces
-# (src/junction/text.rs), le tableau des virages (src/junction/turns.rs) et les vues de la page.
+# Ce que dit la jonction : son modèle (src/junction/model/mod.rs, read_model.rs), ses annonces
+# (src/junction/vm/text.rs), le tableau des virages (src/junction/view/turns.rs) et les vues de la page.
 
 ## Comment la jonction est réglée
 jn-control-uncontrolled = Aucune signalisation
@@ -237,7 +237,7 @@ jn-turn-banned = { $turn }, interdit
 jn-turn-unserved = { $turn }, permis, aucune voie ne le dessert
 jn-turn-allowed = { $turn }, permis
 
-## La page autour du plan : en-tête, titre de la fenêtre, cartouche et historique (src/junction/page.rs)
+## La page autour du plan : en-tête, titre de la fenêtre, cartouche et historique (src/junction/view/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = Carte de la ville
 jn-heading = Jonction en 2,5D
@@ -252,7 +252,7 @@ jn-undo = Annuler
 jn-redo = Rétablir
 jn-reset = Recommencer
 
-## Les notes à côté du plan (src/junction/notes.rs)
+## Les notes à côté du plan (src/junction/view/notes.rs)
 jn-across-caption = La distance à traverser sur chaque rue, et le nombre de voies entrantes
 jn-across-street = Rue
 jn-across-to-cross = À traverser
@@ -274,7 +274,7 @@ jn-check-length = { $detail } : { $length }
 jn-col-step = Étape
 jn-col-what-changed = Ce qui a changé
 
-## Le dessin (src/junction/drawing.rs, iso/)
+## Le dessin (src/junction/view/drawing.rs, iso/)
 jn-editor = Éditeur de la jonction
 jn-iso-label = Vue en 2,5D de la jonction. { $arms }.
 jn-iso-label-roundabout = Vue en 2,5D de la jonction. { $arms }. Carrefour giratoire.
@@ -309,11 +309,11 @@ jn-page-about = À propos de cette jonction
 jn-provenance-heading = D’où vient cette jonction
 jn-no-source = Cette jonction ne vient pas d’OpenStreetMap.
 
-## La page d’une jonction qui ne peut pas être dessinée (src/junction/page.rs : Stuck)
+## La page d’une jonction qui ne peut pas être dessinée (src/junction/view/page.rs : Stuck)
 jn-stuck-title = Cette jonction ne peut pas être dessinée
 jn-stuck-text = Les rues qui se rencontrent ici ont été modifiées de sorte qu’elles ne forment plus une jonction. Redonnez de la place aux rues, ou recommencez la ville à partir de la carte.
 
-## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/inspector.rs)
+## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/view/inspector.rs)
 jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
 jn-insp-control = Signalisation de la jonction
 jn-insp-ring-size = Taille du carrefour giratoire
@@ -446,7 +446,7 @@ jn-insp-min-arms = { $n ->
 jn-insp-lanes-in = Voies entrantes
 jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.
 
-# Une rue piétonne à une jonction (src/junction/model.rs, inspector.rs).
+# Une rue piétonne à une jonction (src/junction/model/mod.rs, src/junction/view/inspector.rs).
 jn-refusal-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser; elle n’a donc pas de passage pour piétons.
 jn-refusal-measure-pedestrian = Une rue piétonne n’accueille pas de circulation; elle ne prend donc aucune mesure de circulation.
 jn-insp-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser.
@@ -488,7 +488,7 @@ jn-sig-shorter = Plus court de { $seconds } s
 jn-sig-longer = Plus long de { $seconds } s
 jn-sig-range = De { $min } à { $max } s
 
-## Giratoires turbo : les dispositions et les tailles (src/junction/turbo.rs)
+## Giratoires turbo : les dispositions et les tailles (src/junction/model/turbo.rs)
 jn-turbo-basic = De base
 jn-turbo-egg = En œuf
 jn-turbo-knee = En genou
@@ -541,7 +541,7 @@ jn-ph-timing-lead = Avance { $lead } s, vert { $green } s, jaune { $yellow } s, 
 jn-rev-plan-lost = { $change }; plan de feux modifié retiré
 jn-refusal-too-many-phases = Le plan a déjà le nombre maximal de phases.
 
-## Modèles de phase prêts à l’emploi (src/junction/signal.rs)
+## Modèles de phase prêts à l’emploi (src/junction/model/signal.rs)
 jn-pattern-through = Tout droit seulement
 jn-pattern-through-desc = Seule la circulation qui va tout droit passe; les traverses à côté sont franchies à pied.
 jn-pattern-all = Tous les mouvements
@@ -575,7 +575,7 @@ jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
 
-## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/signal.rs `conflicts`)
+## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
 jn-conflict-vehicles = Phase { $n } : { $a } croisent { $b }.
 jn-conflict-walk = Phase { $n } : { $mv } rencontrent les piétons qui traversent du côté { $side }.

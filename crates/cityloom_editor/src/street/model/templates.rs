@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use super::{Arg, Said, Segment};
 use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
-use crate::street::measures::{Dir, Spec, lay_out, sp};
+use crate::street::model::measures::{Dir, Spec, lay_out, sp};
 
 /// The templates, in the order the Transform menu lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]

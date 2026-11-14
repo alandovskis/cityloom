@@ -1158,7 +1158,7 @@ mod tests {
         let c = check(&e, "curb-length");
         assert!(!c.ok);
         let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
-        let say = |i18n, said: &Said| crate::street::text::say_now(i18n, Units::Metres, said);
+        let say = |i18n, said: &Said| crate::street::vm::text::say_now(i18n, Units::Metres, said);
         assert_eq!(say(&en, c.zone.as_ref().unwrap()), "Loading at 42.0 m, right");
         assert_eq!(say(&fr, c.zone.as_ref().unwrap()), "Zone de chargement à 42,0\u{a0}m, à droite");
         assert_eq!(say(&en, &c.detail), "Loading is 4.0 m long, under the 9.0 m it needs.");

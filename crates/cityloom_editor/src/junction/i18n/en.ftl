@@ -1,5 +1,5 @@
-# What the junction says: its model (src/junction/model.rs, read_model.rs), its announcements
-# (src/junction/text.rs), the turns table (src/junction/turns.rs) and the page's views.
+# What the junction says: its model (src/junction/model/mod.rs, read_model.rs), its announcements
+# (src/junction/vm/text.rs), the turns table (src/junction/view/turns.rs) and the page's views.
 
 ## How a junction is run
 jn-control-uncontrolled = No control
@@ -237,7 +237,7 @@ jn-turn-banned = { $turn }, not allowed
 jn-turn-unserved = { $turn }, allowed, no lane serves it
 jn-turn-allowed = { $turn }, allowed
 
-## The page around the plan: heading, window title, title block and history (src/junction/page.rs)
+## The page around the plan: heading, window title, title block and history (src/junction/view/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = City map
 jn-heading = Junction in 2.5D
@@ -252,7 +252,7 @@ jn-undo = Undo
 jn-redo = Redo
 jn-reset = Start over
 
-## The notes beside the plan (src/junction/notes.rs)
+## The notes beside the plan (src/junction/view/notes.rs)
 jn-across-caption = How far it is to cross each street, and how many lanes come in
 jn-across-street = Street
 jn-across-to-cross = To cross
@@ -274,7 +274,7 @@ jn-check-length = { $detail }: { $length }
 jn-col-step = Step
 jn-col-what-changed = What changed
 
-## The drawing (src/junction/drawing.rs, iso/)
+## The drawing (src/junction/view/drawing.rs, iso/)
 jn-editor = Junction editor
 jn-iso-label = 2.5D view of the junction. { $arms }.
 jn-iso-label-roundabout = 2.5D view of the junction. { $arms }. Roundabout.
@@ -309,11 +309,11 @@ jn-page-about = About this junction
 jn-provenance-heading = Where this junction came from
 jn-no-source = This junction was not made from OpenStreetMap.
 
-## The page of a junction that cannot be drawn (src/junction/page.rs: Stuck)
+## The page of a junction that cannot be drawn (src/junction/view/page.rs: Stuck)
 jn-stuck-title = This junction cannot be drawn
 jn-stuck-text = The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.
 
-## The panel beside the plan: what is selected and the controls to change it (src/junction/inspector.rs)
+## The panel beside the plan: what is selected and the controls to change it (src/junction/view/inspector.rs)
 jn-insp-empty = Select a street, corner or crossing to change it.
 jn-insp-control = Junction control
 jn-insp-ring-size = Size of the roundabout
@@ -446,7 +446,7 @@ jn-insp-min-arms = { $n ->
 jn-insp-lanes-in = Lanes coming in
 jn-insp-one-way-out = One way out. No lanes come in.
 
-# A pedestrian street at a junction (src/junction/model.rs, inspector.rs).
+# A pedestrian street at a junction (src/junction/model/mod.rs, src/junction/view/inspector.rs).
 jn-refusal-crossing-pedestrian = A pedestrian street has no roadway to cross, so it takes no crossing.
 jn-refusal-measure-pedestrian = A pedestrian street carries no traffic, so it takes no traffic measures.
 jn-insp-crossing-pedestrian = A pedestrian street has no roadway to cross.
@@ -488,7 +488,7 @@ jn-sig-shorter = Shorter by { $seconds } s
 jn-sig-longer = Longer by { $seconds } s
 jn-sig-range = { $min } to { $max } s
 
-## Turbo roundabouts: the layouts and the sizes (src/junction/turbo.rs)
+## Turbo roundabouts: the layouts and the sizes (src/junction/model/turbo.rs)
 jn-turbo-basic = Basic
 jn-turbo-egg = Egg
 jn-turbo-knee = Knee
@@ -541,7 +541,7 @@ jn-ph-timing-lead = Early green { $lead } s, green { $green } s, yellow { $yello
 jn-rev-plan-lost = { $change }; edited signal plan removed
 jn-refusal-too-many-phases = The plan has as many phases as it can hold.
 
-## Ready-made patterns for a phase (src/junction/signal.rs)
+## Ready-made patterns for a phase (src/junction/model/signal.rs)
 jn-pattern-through = Through only
 jn-pattern-through-desc = Only the traffic going straight on moves; the crossings beside it are walked.
 jn-pattern-all = All movements
@@ -575,7 +575,7 @@ jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
 jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.
 
-## Warnings: movements of a phase that meet (src/junction/signal.rs `conflicts`)
+## Warnings: movements of a phase that meet (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = cars from the { $from } side going { $turn }
 jn-conflict-vehicles = Phase { $n }: { $a } cross { $b }.
 jn-conflict-walk = Phase { $n }: { $mv } meet people walking across on the { $side } side.

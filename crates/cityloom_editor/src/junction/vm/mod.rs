@@ -1,0 +1,741 @@
+//! The junction page's view-model: the junction being edited, what is said when
+//! it changes, and keeping what is made in the city. The views read its view and
+//! send it what the person does.
+
+pub mod keys;
+pub mod text;
+pub mod watch;
+
+use std::rc::Rc;
+
+use leptos::prelude::*;
+
+use crate::city::binding::{CityBinding, Place};
+use crate::junction::model::read_model::JView;
+use crate::junction::model::signal;
+use crate::junction::model::{Junction, Refusal, State, Target};
+use crate::shared::core::{Core, Presents};
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::keeper::Keeper;
+use crate::shared::ports::Ports;
+use crate::shared::said::say_now;
+use crate::shared::units::Units;
+use crate::sync::model::{Change, Kind, Origin};
+
+impl Presents for Junction {
+    type View = JView;
+    fn present(&self) -> JView {
+        self.view()
+    }
+}
+
+pub struct JunctionVm {
+    core: Core<Junction>,
+    ports: Ports,
+    i18n: Rc<I18n>,
+    keeper: Option<Rc<Keeper>>,
+    binding: Option<CityBinding>,
+    goal: crate::shared::goals::GoalChoice,
+}
+
+/// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
+type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
+
+/// Whether an edit says which phases it took off their ready-made pattern.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatternNote {
+    Report,
+    Skip,
+}
+
+impl JunctionVm {
+    /// A junction to edit, saying what it says in the language of `i18n`. Bound to a place in the
+    /// city, what is made is written back to it; otherwise it is a sandbox.
+    pub fn new(ports: Ports, i18n: Rc<I18n>, junction: Junction, binding: Option<CityBinding>) -> Rc<JunctionVm> {
+        Rc::new_cyclic(|me: &std::rc::Weak<JunctionVm>| {
+            let keeper = binding.is_some().then(|| {
+                let (keep, told) = (me.clone(), me.clone());
+                Keeper::new(
+                    ports.scheduler.clone(),
+                    move || keep.upgrade().is_some_and(|vm| vm.keep_now()),
+                    move || {
+                        if let Some(vm) = told.upgrade() {
+                            vm.ports.announcer.say(&vm.i18n.tr_now("not-kept", &Args::new()));
+                        }
+                    },
+                )
+            });
+            let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal }
+        })
+    }
+
+    // ---- what the views read ----
+
+    /// The planning goal chosen (#72): it marks checks and lists measures, and changes nothing in the junction.
+    pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
+        &self.goal
+    }
+
+    /// The words of the page, in its language.
+    pub fn i18n(&self) -> &Rc<I18n> {
+        &self.i18n
+    }
+
+    /// The project the junction is edited in; none outside a project.
+    pub fn project(&self) -> Option<String> {
+        self.ports.storage.project()
+    }
+
+    /// `href` to another page of the junction's project (`shared::project_id::link`).
+    pub fn link(&self, href: &str) -> String {
+        crate::shared::project_id::link(href, self.project().as_deref())
+    }
+
+    /// The view, which a view that reads it draws again when the junction changes.
+    pub fn view(&self) -> Rc<JView> {
+        self.core.view()
+    }
+
+    /// The same, for a command: nothing is watched.
+    pub fn view_now(&self) -> Rc<JView> {
+        self.core.view_now()
+    }
+
+    pub fn units(&self) -> Units {
+        self.core.units()
+    }
+
+    pub fn units_now(&self) -> Units {
+        self.core.units_now()
+    }
+
+    pub fn version(&self) -> RwSignal<u32> {
+        self.core.version()
+    }
+
+    pub fn read<R>(&self, f: impl FnOnce(&Junction) -> R) -> R {
+        self.core.read(f)
+    }
+
+    // ---- what the views do ----
+
+    pub fn set_units(&self, units: Units) {
+        self.core.set_units(units);
+    }
+
+    /// Changes the junction, tells whatever watches it, and sees that it is kept.
+    pub fn edit<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        let r = self.core.edit(f);
+        if let Some(k) = &self.keeper {
+            k.touch();
+        }
+        r
+    }
+
+    /// An edit the person made: it is announced by what it was, and a refusal by
+    /// its reason. A phase it takes off its ready-made pattern is said too.
+    pub fn apply<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_with(f, PatternNote::Report)
+    }
+
+    /// `apply` for a choice of pattern, which says nothing of the phases' patterns: changing one is what it is for.
+    fn apply_choosing_pattern<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_with(f, PatternNote::Skip)
+    }
+
+    fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
+        let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
+        let meeting = self.meetings();
+        let r = self.edit(f);
+        if r.into() {
+            let lost = self.lost_since(before);
+            self.say_edit_with(&lost, &meeting);
+        } else {
+            self.say_refusal();
+        }
+        r
+    }
+
+    /// The state and region, to compare patterns against later; None when the junction has no plan of the person's own
+    /// (nothing there can be lost).
+    fn pattern_state(&self) -> Option<(State, usize)> {
+        self.read(|j| j.current().signal_plan.is_some().then(|| (j.current().clone(), j.region)))
+    }
+
+    /// The phases (from 0) that were on a ready-made pattern in `before` and are on none now.
+    fn lost_since(&self, before: Option<(State, usize)>) -> Vec<usize> {
+        let Some((state, region)) = before else { return Vec::new() };
+        self.read(|j| crate::junction::model::signal::patterns_lost_across(&state, region, j.current(), j.region))
+    }
+
+    /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
+    /// is neither refused nor announced and leaves no history.
+    /// Whether the layout is the one chosen afterwards (it is not when the choice was refused).
+    pub fn choose_turbo(&self, layout: Option<usize>) -> bool {
+        let chosen = || self.read(|j| j.current().turbo.as_ref().map(|t| t.layout));
+        if chosen() != layout {
+            self.apply(|j| j.set_turbo(layout));
+        }
+        chosen() == layout
+    }
+
+    /// The person gives phase `index` a ready-made pattern. Choosing the pattern it is already changes nothing, so it
+    /// is neither refused nor announced and leaves no history. Whether the phase is that pattern afterwards.
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::model::signal::Pattern) -> bool {
+        let chosen = || {
+            self.read(|j| {
+                let phase = crate::junction::model::signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.is_some_and(|ph| crate::junction::model::signal::pattern_of(j.current(), j.region, &ph) == pattern)
+            })
+        };
+        if !chosen() {
+            self.apply_choosing_pattern(|j| j.set_phase_pattern(index, pattern));
+        }
+        chosen()
+    }
+
+    /// The person switches the crossing of street `uid` in phase `index`: on if it is off there, else off. Announced by what
+    /// was done, with a sentence when that takes the phase off its ready-made pattern; a refusal is said with its reason.
+    pub fn toggle_phase_walk(&self, index: usize, uid: u32) -> bool {
+        self.toggle_phase_movement(index, uid, false)
+    }
+
+    /// `toggle_phase_walk` for the bike movements of street `uid`.
+    pub fn toggle_phase_ride(&self, index: usize, uid: u32) -> bool {
+        self.toggle_phase_movement(index, uid, true)
+    }
+
+    fn toggle_phase_movement(&self, index: usize, uid: u32, ride: bool) -> bool {
+        // The pattern of the phase, as the suggestion or the person's plan has it.
+        let pattern = || {
+            self.read(|j| {
+                let phase = signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.map(|ph| (signal::pattern_of(j.current(), j.region, &ph), if ride { ph.rides.contains(&uid) } else { ph.walks.contains(&uid) }))
+            })
+        };
+        let Some((before, on)) = pattern() else {
+            self.edit(|j| if ride { j.set_phase_ride(index, uid, true) } else { j.set_phase_walk(index, uid, true) });
+            self.say_refusal();
+            return false;
+        };
+        let meeting = self.meetings();
+        let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
+        if done {
+            let lost: Vec<usize> = match pattern() {
+                Some((after, _)) if before != signal::Pattern::Custom && after == signal::Pattern::Custom => vec![index],
+                _ => Vec::new(),
+            };
+            self.say_edit_with(&lost, &meeting);
+        } else {
+            self.say_refusal();
+        }
+        done
+    }
+
+    /// A selection the person made, announced by what is selected.
+    pub fn select(&self, target: Target) {
+        self.edit(|j| j.select(target));
+        self.say_selection();
+    }
+
+    /// Moves the selection to the next thing round the junction, and says what.
+    pub fn select_relative(&self, dir: i32) {
+        self.edit(|j| j.select_relative(dir));
+        self.say_selection();
+    }
+
+    pub fn undo(&self) -> bool {
+        let meeting = self.meetings();
+        let done = self.edit(|j| j.undo());
+        if done {
+            self.say_with_meetings(self.i18n.tr_now("jn-undone", &Args::new()), &meeting);
+        }
+        done
+    }
+
+    pub fn redo(&self) -> bool {
+        let meeting = self.meetings();
+        let done = self.edit(|j| j.redo());
+        if done {
+            self.say_edit_with(&[], &meeting);
+        }
+        done
+    }
+
+    pub fn reset(&self) -> bool {
+        let meeting = self.meetings();
+        let done = self.edit(|j| j.reset());
+        if done {
+            self.say_with_meetings(self.i18n.tr_now("jn-started-over", &Args::new()), &meeting);
+        }
+        done
+    }
+
+    #[cfg(test)]
+    pub fn load_sample(&self, sample: usize) {
+        self.edit(|j| j.load_sample(sample));
+        self.ports.announcer.say(&text::sample_text(&self.view_now(), &self.i18n));
+    }
+
+    /// As `StreetVm::watch_sync`.
+    pub fn watch_sync(self: &Rc<Self>) {
+        crate::sync::hub::watch(self, Self::flush, Self::on_synced);
+    }
+
+    /// A sync changed junctions or streets: the junction is drawn from both, so it is read again, and shown if it
+    /// differs (the selection stays if it is still there).
+    fn on_synced(&self, changes: &[Change]) {
+        let Some(binding) = &self.binding else { return };
+        let Place::Junction(node) = binding.place else { return };
+        if !changes.iter().any(|c| matches!(c.id.kind, Kind::Junction | Kind::Street)) {
+            return;
+        }
+        // As the street's: a later edit still waiting in the keeper is written first and wins.
+        self.flush();
+        let Some(mut fresh) = binding.store.open().junction_editor(node, binding.store.region()) else { return };
+        // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
+        if self.core.read(|j| j.drawn_as(&fresh)) {
+            return;
+        }
+        fresh.select(self.core.read(|j| j.selected));
+        let own = binding.record();
+        let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        self.core.edit(|j| *j = fresh);
+        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
+    /// The page is being left: what is waiting to be kept is kept now.
+    pub fn flush(&self) {
+        if let Some(k) = &self.keeper {
+            k.flush();
+        }
+    }
+
+    /// Writes the junction as it now is back to its place in the city.
+    fn keep_now(&self) -> bool {
+        let Some(binding) = &self.binding else { return true };
+        binding.keep_junction(self.core.read(|j| j.snapshot()))
+    }
+
+    /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
+    /// phase (from 0) the edit took off its ready-made pattern.
+    fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
+        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+            self.say_parts(std::iter::once(t).chain(self.notes(meeting, lost)));
+        }
+    }
+
+    /// Says `text`, then the sentence for the movements that meet now and did not before.
+    fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)));
+    }
+
+    /// The sentences that follow an edit's text: the movements that now meet, then the phases off their pattern.
+    fn notes(&self, meeting: &[Meeting], lost: &[usize]) -> Vec<String> {
+        self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)).collect()
+    }
+
+    /// Announces the parts as one text.
+    fn say_parts(&self, parts: impl Iterator<Item = String>) {
+        self.ports.announcer.say(&parts.collect::<Vec<String>>().join(" "));
+    }
+
+    /// The movements that meet in the signal plan now, each with its phase's street.
+    fn meetings(&self) -> Vec<Meeting> {
+        self.read(|j| signal::meetings(j.current(), j.region))
+    }
+
+    /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
+    /// phases (and the first of them) when there are several. None when none arose (one that was there already is not said again).
+    fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
+        let v = self.view_now();
+        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
+        let (first, rest) = new.split_first()?;
+        let first_said = say_now(&self.i18n, self.units_now(), &crate::junction::model::read_model::conflict_said(first.0, &first.2, &v.arms));
+        if rest.is_empty() {
+            return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", first_said)));
+        }
+        let mut phases: Vec<usize> = new.iter().map(|m| m.0).collect();
+        phases.dedup();
+        let list = self.number_list(&phases);
+        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list).str("first", first_said);
+        Some(self.i18n.tr_now("jn-conflict-heard-many", &args))
+    }
+
+    /// "1", "1 and 2", "1, 2 and 3": the places (from 0) as phase numbers.
+    fn number_list(&self, places: &[usize]) -> String {
+        let numbers: Vec<String> = places.iter().map(|&i| (i + 1).to_string()).collect();
+        let Some((last, rest)) = numbers.split_last() else { return String::new() };
+        if rest.is_empty() {
+            return last.clone();
+        }
+        let head =
+            rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
+        self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()))
+    }
+
+    /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
+    /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
+    pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
+        match lost {
+            [] => None,
+            [one] => Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", (one + 1).to_string()))),
+            _ => Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", self.number_list(lost)))),
+        }
+    }
+
+    fn say_refusal(&self) {
+        let (why, arm) = self.core.read(|j| (j.refusal().unwrap_or(Refusal::DoesNotFit), j.refusal_arm().cloned()));
+        let mut said = self.i18n.tr_now(why.key(), &Args::new());
+        // A turbo refusal that is about one street (off square, or too narrow to widen) names it in a sentence of its own.
+        let about_the_arm = match why {
+            Refusal::TurboArmSkewed => Some("jn-refusal-turbo-skewed-arm"),
+            Refusal::TurboEntryTooNarrow => Some("jn-refusal-turbo-entry-too-narrow-arm"),
+            _ => None,
+        };
+        if let (Some(key), Some(arm)) = (about_the_arm, arm) {
+            let arm = say_now(&self.i18n, self.units_now(), &arm);
+            said = format!("{said} {}", self.i18n.tr_now(key, &Args::new().str("arm", arm)));
+        }
+        self.ports.announcer.say(&said);
+    }
+
+    fn say_selection(&self) {
+        if let Some(t) = text::selection_text(&self.view_now(), &self.i18n, self.units_now()) {
+            self.ports.announcer.say(&t);
+        }
+    }
+}
+
+impl crate::shell::Target for JunctionVm {
+    fn set_units(&self, units: Units) {
+        JunctionVm::set_units(self, units);
+    }
+    fn project(&self) -> Option<String> {
+        JunctionVm::project(self)
+    }
+
+    fn apply_region(&self, region: usize) -> bool {
+        let before = self.pattern_state();
+        let meeting = self.meetings();
+        let changed = self.edit(|j| j.set_region(region));
+        if changed {
+            let notes = self.notes(&meeting, &self.lost_since(before));
+            if !notes.is_empty() {
+                self.say_parts(notes.into_iter());
+            }
+        }
+        changed
+    }
+
+    fn region_id(&self) -> String {
+        self.view_now().region.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::city::binding::Place;
+    use crate::city::store::CityStore;
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
+
+    struct Rig {
+        vm: Rc<JunctionVm>,
+        said: Rc<RecordingAnnouncer>,
+        time: Rc<ManualScheduler>,
+        storage: Rc<MemoryStorage>,
+    }
+
+    fn rig(sample: usize) -> Rig {
+        let (ports, said, storage, time) = test_ports_with_time();
+        Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None), said, time, storage }
+    }
+
+    #[test]
+    fn a_junction_changed_by_a_sync_is_reloaded_and_announced() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 7_000));
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.core.read(|j| j.current().arms[0].corner_mm), 7_000);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty(), "nothing differs now");
+    }
+
+    #[test]
+    fn a_junction_edit_made_a_moment_before_a_sync_is_not_lost() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let arm = r.vm.edit(|j| j.current().arms[0].uid);
+        assert!(r.vm.edit(|j| j.set_corner(arm, 7_000)));
+        assert_eq!(binding.store.open().view(0).edited, 0, "still waiting in the keeper");
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.core.read(|j| j.current().arms[0].corner_mm), 7_000);
+        assert!(r.said.take().is_empty());
+        assert_eq!(binding.store.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn a_junction_whose_own_change_lost_says_so_and_keeps_its_selection() {
+        use crate::junction::model::Target;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let arm = r.vm.edit(|j| j.current().arms[0].uid);
+        r.vm.edit(|j| j.select(Target::Arm(arm)));
+        r.time.advance(1_000);
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(arm, 7_000));
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Replaced }]);
+        assert_eq!(r.said.take(), ["Your change to this place was replaced by a later one."]);
+        assert_eq!(r.vm.core.read(|j| j.selected), Target::Arm(arm), "the selection survives the reload");
+    }
+
+    #[test]
+    fn a_change_to_an_arms_street_reloads_the_junction() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let city = binding.store.open();
+        let edge = city.view(0).edges.iter().find(|e| e.a == node || e.b == node).expect("an arm's street").uid;
+        let mut s = city.street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        let sections = |r: &Rig| r.vm.core.read(|j| j.current().arms.iter().map(|a| a.section.clone()).collect::<Vec<_>>());
+        let before = sections(&r);
+        assert!(binding.store.write_street(edge, s));
+        r.said.take();
+        let key = binding.store.open().street_key(edge).unwrap();
+        hub::publish(&[Change { id: crate::sync::model::Id::new(crate::sync::model::Kind::Street, &key), origin: Origin::Remote }]);
+        assert_ne!(sections(&r), before, "the junction read its arm's street again");
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+    }
+
+    fn city_rig() -> (Rig, CityBinding) {
+        let (ports, said, storage, time) = test_ports_with_time();
+        let store = CityStore::sample(ports.storage.clone());
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let junction = store.open().junction_editor(node, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Junction(node) };
+        (Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    #[test]
+    fn a_refusal_for_an_arm_off_square_names_the_arm_in_a_second_sentence() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        assert!(r.vm.apply(|j| j.set_turbo(Some(0))));
+        r.said.take();
+        let east = arm(&r.vm, 90);
+        assert!(!r.vm.apply(|j| j.set_bearing(east, 115)));
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("A street would be more than 20° off the square a turbo roundabout needs. Sample Street 1 ("), "{said:?}");
+        assert!(said[0].ends_with(") is the one that would be off."), "{said:?}");
+    }
+
+    #[test]
+    fn a_refusal_for_an_entry_too_narrow_to_widen_names_the_street_in_a_second_sentence() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        r.said.take();
+        assert!(!r.vm.apply(|j| j.set_turbo(Some(4))), "a rotor wants three entry lanes on Sample Street 1, which has not the room");
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("This street is too narrow to widen for the entry lanes this layout needs. Sample Street 1 ("), "{said:?}");
+        assert!(said[0].ends_with(") is the one that is too narrow."), "{said:?}");
+    }
+
+    #[test]
+    fn choosing_the_turbo_layout_already_chosen_changes_nothing_and_says_nothing() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        r.said.take();
+        r.vm.choose_turbo(Some(0));
+        let (said, version) = (r.said.take(), r.vm.version().get_untracked());
+        assert_eq!(said.len(), 1, "the real choice is announced: {said:?}");
+        r.vm.choose_turbo(Some(0));
+        assert!(r.said.take().is_empty(), "no refusal and no edit is announced");
+        assert_eq!(r.vm.version().get_untracked(), version, "nothing changed");
+        assert!(r.vm.undo() && r.vm.read(|j| j.current().turbo.is_none()), "one undo takes the real choice back, so the repeat added no entry");
+        r.said.take();
+        r.vm.choose_turbo(None);
+        assert!(r.said.take().is_empty(), "the single lane, chosen again, is the same");
+    }
+
+    fn arm(vm: &JunctionVm, bearing: i32) -> u32 {
+        vm.read(|j| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid)
+    }
+
+    #[test]
+    fn an_edit_changes_the_view_and_the_version_and_a_view_is_built_once_per_edit() {
+        let r = rig(0);
+        let (a, version) = (r.vm.view_now(), r.vm.version());
+        assert!(Rc::ptr_eq(&a, &r.vm.view_now()));
+        assert_eq!(version.get_untracked(), 0);
+        let n = arm(&r.vm, 0);
+        assert!(r.vm.edit(|j| j.set_corner(n, 7_000)));
+        assert_eq!(version.get_untracked(), 1);
+        let b = r.vm.view_now();
+        assert!(!Rc::ptr_eq(&a, &b));
+        assert_eq!(b.arms.iter().find(|x| x.uid == n).unwrap().corner_mm, 7_000);
+    }
+
+    #[test]
+    fn the_units_start_in_metres_and_changing_them_is_not_an_edit() {
+        let r = rig(0);
+        assert_eq!(r.vm.units_now(), Units::Metres);
+        let a = r.vm.view_now();
+        r.vm.set_units(Units::Feet);
+        assert_eq!(r.vm.units_now(), Units::Feet);
+        assert_eq!(r.vm.version().get_untracked(), 0);
+        assert!(Rc::ptr_eq(&a, &r.vm.view_now()));
+    }
+
+    #[test]
+    fn an_edit_is_announced_by_its_label_and_a_refusal_by_its_reason() {
+        let r = rig(0);
+        let n = arm(&r.vm, 0);
+        assert!(r.vm.apply(|j| j.set_corner(n, 7_000)));
+        assert_eq!(r.said.take(), vec!["Corner after Sample Avenue 2 (north): 7.0 m radius. 4 streets, traffic signal. Every check passes."]);
+        assert!(!r.vm.apply(|j| j.set_corner(n, 99_000)));
+        assert_eq!(r.said.take(), vec!["That change does not fit."]);
+        assert_eq!(r.vm.version().get_untracked(), 2, "a refused edit still asks the views to look again");
+    }
+
+    #[test]
+    fn the_phase_commands_are_announced_and_refused_in_english_and_in_french() {
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.remove_phase(0)));
+        assert!(r.said.take()[0].starts_with("Phase 1 for Sample Avenue 2 (north) removed."), "english");
+        assert!(r.vm.apply(|j| j.restore_suggestion()));
+        assert!(r.said.take()[0].starts_with("Signal plan restored to the suggestion."));
+        assert!(!r.vm.apply(|j| j.restore_suggestion()));
+        assert_eq!(r.said.take(), vec!["The signal plan is already the suggested one."]);
+        assert!(!r.vm.apply(|j| j.move_phase(0, -1)));
+        assert_eq!(r.said.take(), vec!["That phase cannot move any further that way."]);
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.apply(|j| j.move_phase(0, 1)));
+        let t = said.take();
+        assert!(t[0].contains("reculée, maintenant 2 sur 4"), "{t:?}");
+        assert!(fr.apply(|j| j.restore_suggestion()));
+        assert!(said.take()[0].starts_with("Plan des feux rétabli à la suggestion."));
+        assert!(!fr.apply(|j| j.move_phase(0, -1)));
+        assert_eq!(said.take(), vec!["Cette phase ne peut pas aller plus loin dans ce sens."]);
+    }
+
+    #[test]
+    fn a_selection_is_announced_and_clearing_it_says_nothing() {
+        let r = rig(0);
+        let n = arm(&r.vm, 0);
+        r.vm.select(Target::Arm(n));
+        assert_eq!(r.said.take(), vec!["Sample Avenue 2 (north), 0 degrees"]);
+        assert_eq!(r.vm.read(|j| j.selected), Target::Arm(n));
+        r.vm.select(Target::None);
+        assert!(r.said.take().is_empty());
+        r.vm.select_relative(1);
+        assert_eq!(r.said.take().len(), 1);
+    }
+
+    #[test]
+    fn undo_redo_start_over_and_a_sample_are_announced() {
+        let r = rig(0);
+        let n = arm(&r.vm, 0);
+        r.vm.edit(|j| j.set_corner(n, 7_000));
+        assert!(r.vm.undo());
+        assert_eq!(r.said.take(), vec!["Undone."]);
+        assert!(r.vm.redo());
+        assert!(r.said.take()[0].starts_with("Corner after"));
+        assert!(r.vm.reset());
+        assert_eq!(r.said.take(), vec!["Started over from the junction as it is today."]);
+        assert!(!r.vm.undo());
+        assert!(r.said.take().is_empty());
+        r.vm.load_sample(1);
+        assert_eq!(r.said.take(), vec!["Street and lane. 3 streets, side streets stop. Every check passes."]);
+    }
+
+    #[test]
+    fn a_sandbox_keeps_nothing_in_storage() {
+        let r = rig(0);
+        let n = arm(&r.vm, 0);
+        r.vm.edit(|j| j.set_corner(n, 7_000));
+        r.time.advance(1_000);
+        assert_eq!(r.time.pending(), 0);
+        assert_eq!(r.storage.recall(crate::city::edits::EDITS_KEY), None);
+    }
+
+    #[test]
+    fn what_is_made_of_a_city_junction_is_kept_in_the_city_a_moment_after_the_last_change() {
+        let (r, binding) = city_rig();
+        let n = r.vm.view_now().arms[0].uid;
+        assert!(r.vm.edit(|j| j.set_corner(n, 7_000)));
+        r.time.advance(200);
+        assert_eq!(binding.store.open().view(0).edited, 0, "not yet");
+        assert!(r.vm.edit(|j| j.set_corner(n, 7_500)));
+        r.time.advance(200);
+        assert_eq!(binding.store.open().view(0).edited, 0);
+        r.time.advance(100);
+        assert_eq!(binding.store.open().view(0).edited, 1);
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn leaving_the_page_keeps_what_is_waiting_at_once() {
+        let (r, binding) = city_rig();
+        let n = r.vm.view_now().arms[0].uid;
+        r.vm.edit(|j| j.set_corner(n, 7_000));
+        r.vm.flush();
+        assert_eq!(binding.store.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn a_city_that_cannot_be_written_is_said_once_and_the_page_goes_on() {
+        let (r, _) = city_rig();
+        r.storage.blocked(true);
+        let n = r.vm.view_now().arms[0].uid;
+        r.vm.edit(|j| j.set_corner(n, 7_000));
+        r.time.advance(300);
+        r.vm.edit(|j| j.set_corner(n, 7_500));
+        r.time.advance(300);
+        assert_eq!(r.said.take(), vec![crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
+        assert_eq!(r.vm.read(|j| j.arm(n).unwrap().corner_mm), 7_500);
+    }
+
+    #[test]
+    fn only_selecting_on_a_place_never_edited_marks_nothing_for_the_sync() {
+        let (r, _) = city_rig();
+        let arm = r.vm.read(|j| j.current().arms[0].uid);
+        r.vm.select(crate::junction::model::Target::Arm(arm));
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(r.storage.recall(crate::sync::model::SYNC_KEY), None, "looking is not editing");
+    }
+}

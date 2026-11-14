@@ -372,7 +372,7 @@ mod tests {
     fn curb_sides(lanes: &[Lane], i: usize) -> Vec<bool> {
         let street = Street::imported(StreetClass::Local, Side::Right, &pieces(lanes));
         let editor = crate::street::model::Editor::from_street(&street, &street, 0);
-        crate::street::pieces::curb_edges(&editor.view().segments, i)
+        crate::street::model::pieces::curb_edges(&editor.view().segments, i)
     }
 
     #[test]

@@ -1,32 +1,9 @@
 //! The junction page: a junction of streets edited in 2.5D. Its model, view-model,
 //! words and views live together.
 
-pub mod beyond;
-pub mod curbside;
-pub mod drawing;
-pub mod figure;
-pub mod frame;
-pub mod geometry;
-pub mod inspector;
-pub mod iso;
-pub mod iso_marks;
-pub mod keys;
 pub mod model;
-pub mod notes;
-pub mod page;
-pub mod phase_svg;
-pub mod read_model;
-pub mod signal;
-pub mod stops;
-#[cfg(test)]
-mod tests;
-pub mod text;
-pub mod turbo;
-pub mod turbo_ring;
-pub mod turbo_spiral;
-pub mod turns;
+pub mod view;
 pub mod vm;
-pub mod watch;
 
 use std::rc::Rc;
 
@@ -81,22 +58,22 @@ pub fn mount_page(editor: &Editor) {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
-    mount("scroll", view! { <drawing::Drawing vm=vm.clone()/> }.into_any());
-    mount("street", view! { <page::Header vm=vm.clone()/> }.into_any());
-    mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
-    mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
-    mount("history", view! { <page::History vm=vm.clone()/> }.into_any());
-    mount("plan-key", view! { <page::Key vm=vm.clone()/> }.into_any());
-    mount("turns", view! { <turns::Turns vm=vm.clone()/> }.into_any());
-    mount("inspector", view! { <inspector::Inspector vm=vm.clone()/> }.into_any());
-    mount("across", view! { <notes::Across vm=vm.clone()/> }.into_any());
-    mount("conflicts", view! { <notes::Conflicts vm=vm.clone()/> }.into_any());
-    mount("conflict-note", view! { <notes::ConflictNote vm=vm.clone()/> }.into_any());
-    mount("goal-slot", view! { <notes::GoalGuide vm=vm.clone()/> }.into_any());
-    mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
-    mount("atlas-source", view! { <notes::AtlasSource vm=vm.clone()/> }.into_any());
-    mount("provenance", view! { <page::Provenance vm=vm.clone()/> }.into_any());
-    mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
+    mount("scroll", view! { <view::drawing::Drawing vm=vm.clone()/> }.into_any());
+    mount("street", view! { <view::page::Header vm=vm.clone()/> }.into_any());
+    mount("title-block", view! { <view::page::TitleBlock vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <view::page::Fit vm=vm.clone()/> }.into_any());
+    mount("history", view! { <view::page::History vm=vm.clone()/> }.into_any());
+    mount("plan-key", view! { <view::page::Key vm=vm.clone()/> }.into_any());
+    mount("turns", view! { <view::turns::Turns vm=vm.clone()/> }.into_any());
+    mount("inspector", view! { <view::inspector::Inspector vm=vm.clone()/> }.into_any());
+    mount("across", view! { <view::notes::Across vm=vm.clone()/> }.into_any());
+    mount("conflicts", view! { <view::notes::Conflicts vm=vm.clone()/> }.into_any());
+    mount("conflict-note", view! { <view::notes::ConflictNote vm=vm.clone()/> }.into_any());
+    mount("goal-slot", view! { <view::notes::GoalGuide vm=vm.clone()/> }.into_any());
+    mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
+    mount("atlas-source", view! { <view::notes::AtlasSource vm=vm.clone()/> }.into_any());
+    mount("provenance", view! { <view::page::Provenance vm=vm.clone()/> }.into_any());
+    mount("revs", view! { <view::notes::Revisions vm=vm/> }.into_any());
 }
 
 /// The words of the junction page, and of the page of a junction that cannot be drawn: the stored language, or
@@ -148,11 +125,11 @@ pub fn mount_bare_shell(node: u32) {
     }
     if let (Some(at), Some(name)) = (find("#street"), name) {
         let i18n = i18n.clone();
-        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::StuckHeader i18n=i18n name=name/> }).forget();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::StuckHeader i18n=i18n name=name/> }).forget();
     }
     if let Some(at) = find(".stage-main") {
         let i18n = i18n.clone();
-        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::Stuck i18n=i18n map=map/> }).forget();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::Stuck i18n=i18n map=map/> }).forget();
     }
     crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", true);
 }
