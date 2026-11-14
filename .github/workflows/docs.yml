@@ -1,10 +1,11 @@
 name: Documentation
 
-# The documentation site (website/) on its own: built for every change to it, and published to GitHub Pages
-# (https://alandovskis.github.io/cityloom/) from main. The build reads nothing outside website/ (it runs the same
-# command as `just docs-build`, without just), so it does not wait for ci.yml, whose jobs a change to documentation
-# alone skips. ci.yml's `CI` check does not cover the documentation: a broken build shows only in this workflow's
-# Documentation check, on the pull requests that change website/. No check is required on main, so a path filter is safe.
+# The documentation site (website/) on its own: checked and built for every change to it, and published to GitHub
+# Pages (https://alandovskis.github.io/cityloom/) from main. ci.yml does not start for a change to documentation alone,
+# and its `CI` check does not cover the build: a broken build shows only in this workflow's Documentation check, on the
+# pull requests that change website/. The build reads nothing outside website/ (the same command as `just docs-build`,
+# without just); the formatting check uses e2e/'s Prettier and the root's rules, whose own changes ci.yml's Format job
+# checks against website/ too. No check is required on main, so a path filter is safe.
 on:
   push:
     branches: [main]
@@ -39,7 +40,14 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: website/package-lock.json
+          cache-dependency-path: |
+            website/package-lock.json
+            e2e/package-lock.json
+      # The Prettier check of `just format-check`, for website/ (the same Prettier version, from e2e/).
+      - run: npm ci
+        working-directory: e2e
+      - run: npx prettier --ignore-path ../.prettierignore --check ../website
+        working-directory: e2e
       - run: npm ci
         working-directory: website
       # Builds English and fr-CA, and fails on a broken link (what `just docs-build` runs).

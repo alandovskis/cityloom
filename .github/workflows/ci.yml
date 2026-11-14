@@ -1,9 +1,22 @@
 name: CI
 
+# A change to documentation alone (the `docs` rule of scripts/ci/spec-map.json) does not start this workflow: it changes
+# nothing the site serves, and .github/workflows/docs.yml builds, checks and publishes the documentation. No check is
+# required on main, so a path filter is safe; keep the list in step with that rule.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "website/**"
+      - "docs/**"
+      - "**/*.md"
+      - "LICENSE*"
   pull_request:
+    paths-ignore:
+      - "website/**"
+      - "docs/**"
+      - "**/*.md"
+      - "LICENSE*"
   workflow_dispatch:
 
 # A newer push to the same pull request supersedes the run in progress; runs on main always finish.
@@ -22,17 +35,16 @@ env:
 
 # Actions are pinned to a commit; Dependabot proposes the updates.
 jobs:
-  # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a change to
-  # documentation alone skips the Rust, browser and Railway jobs; a pull request runs every unit test but only the
-  # browser specs its files can affect, in the tiers that own them (e2e/tiers.json). A push to main and a manual run always
+  # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a pull
+  # request runs every unit test but only the browser specs its files can affect, in the tiers that own them (e2e/tiers.json). A push to main and a manual run always
   # run every spec; anything doubtful does too.
   changes:
     name: Changes
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
-      docs_only: ${{ steps.select.outputs.docs_only }}
       unit: ${{ steps.select.outputs.unit }}
+      version: ${{ steps.select.outputs.version }}
       browser: ${{ steps.select.outputs.browser }}
       ui: ${{ steps.select.outputs.ui }}
       ui_specs: ${{ steps.select.outputs.ui_specs }}
@@ -288,11 +300,12 @@ jobs:
           if-no-files-found: ignore
 
   # Every pull request raises the version in crates/cityloom_editor/Cargo.toml (semantic versioning); the pages show it in the menu. A change
-  # to documentation alone does not need one: it changes nothing the pages show.
+  # made only of documentation and CI configuration (CI_CONFIGURATION in scripts/ci/ci_changes.py) does not need one: it
+  # changes nothing the pages show.
   version:
     name: Version bump
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.version == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -328,8 +341,7 @@ jobs:
   # production environment) in the `production` environment.
   deploy:
     name: Deploy to Railway
-    # Documentation alone changes nothing the site serves.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.docs_only != 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [ci, changes]
     runs-on: ubuntu-26.04
     timeout-minutes: 90

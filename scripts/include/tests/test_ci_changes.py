@@ -33,6 +33,38 @@ class Selection(unittest.TestCase):
         self.assertEqual(s.specs, [])
         self.assertFalse(s.browser)
 
+    def test_documentation_and_ci_configuration_need_no_version_bump(self):
+        # Neither changes anything the pages show (the version is in their menu).
+        for files in (
+            ["website/docs/intro.md"],
+            [".github/workflows/ci.yml"],
+            [".github/workflows/docs.yml", "website/docs/intro.md", "CLAUDE.md"],
+            [".github/labels.yml", ".github/ISSUE_TEMPLATE/bug.yml"],
+            ["scripts/ci/ci_changes.py", "scripts/ci/spec-map.json", "scripts/include/tests/test_ci_changes.py"],
+            [".claude/agents/deploy.md", ".github/workflows/ci.yml"],
+        ):
+            with self.subTest(files):
+                self.assertFalse(pick(*files).version)
+
+    def test_ci_configuration_alone_still_runs_every_test(self):
+        s = pick(".github/workflows/ci.yml", "website/docs/intro.md")
+        self.assertFalse(s.version)
+        self.assertTrue(s.all)
+        self.assertTrue(s.unit)
+
+    def test_anything_else_needs_a_version_bump(self):
+        for files in (
+            ["crates/cityloom_editor/src/junction/model.rs"],
+            [".github/workflows/ci.yml", "web/app.css"],
+            ["scripts/build.sh"],
+            ["something-new/file.rs"],
+        ):
+            with self.subTest(files):
+                self.assertTrue(pick(*files).version)
+
+    def test_an_unknown_change_needs_a_version_bump(self):
+        self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).version)
+
     def test_documentation_with_code_is_code(self):
         s = pick("README.md", "crates/cityloom_editor/src/junction/model/mod.rs")
         self.assertFalse(s.docs_only)
