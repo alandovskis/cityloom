@@ -119,7 +119,7 @@ pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn GoalGuide(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    move || crate::shared::goals_view::goal_guide(watch.goal(), crate::shared::goals::Place::Junction, &watch.i18n())
+    move || crate::shared::goals_view::goal_guide(watch.goal(), crate::shared::goals::Place::Junction, &watch.i18n(), None)
 }
 
 #[component]

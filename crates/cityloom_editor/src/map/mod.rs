@@ -8,6 +8,7 @@ pub mod areas_view;
 pub mod camera;
 pub mod corridor;
 pub mod editable;
+pub mod goal_view;
 pub mod home;
 pub mod network;
 pub mod network_view;
@@ -104,6 +105,7 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
+    mount("goal-slot", view! { <goal_view::GoalGuide vm=vm.clone()/> }.into_any());
     mount("selection-slot", view! { <selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
     mount("areas-slot", view! { <areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <network_view::NetworkLead vm=vm.clone()/> }.into_any());

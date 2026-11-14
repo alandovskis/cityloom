@@ -1776,3 +1776,16 @@ details.src ul {
 .standards textarea {
   width: 100%;
 }
+
+/* A network check that bears on the chosen goal (#72), marked as the street page's checks are. */
+.net-rule.goal {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+.goal-use {
+  margin-top: 4px;
+}
+.goal-select {
+  display: block;
+  color: var(--ink-2);
+}
