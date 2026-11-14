@@ -1,6 +1,6 @@
 //! A sign's post and panel, placed: the geometry the stop sign (`stops.rs`) is built from, a post that stands on a piece
-//! and a white panel facing the eye on it. (The speed limit has no sign in the drawing: it is set on the street page's
-//! Street tab.)
+//! and a white panel facing the eye on it. (The speed limit has no sign in the drawing: it is set at the street page's
+//! details panel's Street level.)
 
 use crate::shared::diagram::{Pt, Shape};
 
@@ -86,7 +86,7 @@ mod tests {
         assert!(e.set_speed(Some(50)));
         let m = iso_svg(&e.view(), &en(), 1050.0).markup;
         assert_eq!(count(&m, "class=\"iso-sign\""), 0, "{m}");
-        assert!(!m.contains("MAXIMUM") && !m.contains("iso-sign-text"), "the speed limit is set on the Street tab, not drawn");
+        assert!(!m.contains("MAXIMUM") && !m.contains("iso-sign-text"), "the speed limit is set at the details panel's Street level, not drawn");
         // Nor does the drawing's label say it: the label says what is drawn.
         let label = crate::street::view::iso::iso_label(&e.view(), &en(), crate::shared::units::Units::Metres);
         assert!(!label.contains("Speed"), "{label}");

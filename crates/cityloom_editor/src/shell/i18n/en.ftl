@@ -8,7 +8,6 @@ not-kept = This browser is not keeping your changes, so other pages will not see
 notes-hidden = Notes hidden.
 details-shown = { $what } shown.
 details-hidden = { $what } hidden.
-details-piece = piece details
 details-details = details
 details-places = places
 details-areas = area rules

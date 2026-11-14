@@ -758,6 +758,16 @@ impl Editor {
         self.zone
     }
 
+    /// Takes the stretches chosen on `from`'s strips (curbside, stops, raised elements, green), as a reload of the same
+    /// street keeps them; a move under way belongs to `from`'s history and is not taken. A place no longer on a
+    /// strip simply finds no cell.
+    pub fn keep_choices(&mut self, from: &Editor) {
+        self.curb_choice.at = from.curb_choice.at;
+        self.stop_choice.at = from.stop_choice.at;
+        self.calming_choice.at = from.calming_choice.at;
+        self.green_choice = from.green_choice.chosen_only();
+    }
+
     /// Chooses the zone the edits act on. Refused when there is no such zone, or it lies beyond the loaded end. The selected piece is cleared when
     /// the zone changes.
     pub fn select_zone(&mut self, zone: usize) -> bool {

@@ -46,7 +46,7 @@ impl Sheet {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-piece", true);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -84,7 +84,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("pieces-slot", view! { <view::piece_list::PieceList vm=vm.clone()/> }.into_any());
     mount("zones-slot", view! { <view::strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <view::curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
-    mount("panel-tabs-slot", view! { <view::panel_tabs::PanelTabs vm=vm.clone()/> }.into_any());
+    mount("panel-path-slot", view! { <view::panel_path::PanelPath vm=vm.clone()/> }.into_any());
+    mount("zone-entry-slot", view! { <view::panel_path::ZoneEntry vm=vm.clone()/> }.into_any());
     mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("speed-slot", view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }.into_any());

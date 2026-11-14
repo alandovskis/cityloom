@@ -1,7 +1,7 @@
 # Ce que dit la page de la rue : le balisage de street.html.
 st-page-description = Réorganisez la largeur fixe d’une rue : ajoutez, déplacez et redimensionnez ses éléments et voyez aussitôt si tout y entre.
-st-piece-details = Détails de l’élément
-st-details-toggle-title = Afficher ou masquer les détails de l’élément ( [ )
+st-details = Détails
+st-details-toggle-title = Afficher ou masquer les détails ( [ )
 st-key-select = sélectionner
 st-key-reorder = réordonner
 st-key-resize = redimensionner
@@ -207,7 +207,6 @@ direction-away = S’éloigne de vous
 direction-toward = Vient vers vous
 
 # Le panneau de l’élément sélectionné (src/street/view/inspector.rs).
-inspector-empty = Sélectionnez un élément pour modifier sa largeur et son revêtement.
 inspector-sub = { $width } de large · { $at } sur { $total }
 inspector-sub-timed = { $width } de large · { $at } sur { $total } · { $time }
 inspector-width = Largeur
@@ -356,9 +355,14 @@ st-zone-keep-cancel = Annuler la fusion
 st-zone-name = Nom de la zone
 st-zone-reset = Revenir à la coupe de la rue
 st-zone-use = Utiliser cette coupe pour toute la rue
-st-panel-tabs-label = Sections des détails
-st-panel-tab-piece = Élément
-st-panel-tab-street = Rue
+st-path-label = Ce que montrent les détails
+st-path-street = Rue
+st-path-gap = Tronçon libre
+# `name` est un type d’élément, ou le nom propre d’un arrêt.
+st-path-step = { $name }
+st-path-hint = Choisissez un élément, une zone ou un tronçon le long de la rue pour le modifier.
+# `zone` est le nom de la zone sélectionnée (Zone 1, ou le nom qu’on lui a donné).
+st-path-zone-entry = Commandes de zone : { $zone }
 st-speed-label = Limite de vitesse
 st-speed-not-set = Non indiquée
 st-speed-kmh = { $kmh }{" "}km/h

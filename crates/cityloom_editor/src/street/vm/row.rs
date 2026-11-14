@@ -4,6 +4,7 @@
 
 use crate::shared::catalogue::Side;
 use crate::street::model::{CurbCell, CurbRefusal, Editor, StopCell, StripCell, StripView, Subject, View};
+use crate::street::vm::level::Level;
 
 pub trait Row: 'static {
     type Cell: StripCell + 'static;
@@ -18,6 +19,8 @@ pub trait Row: 'static {
     /// The messages said when a command needs a gap, or a thing, chosen first.
     const CHOOSE_GAP_KEY: &'static str;
     const CHOOSE_THING_KEY: &'static str;
+    /// The level of the details panel that shows the row's chosen cell.
+    const LEVEL: Level;
 
     fn strips(v: &View) -> &StripView<Self::Cell>;
     fn select(e: &mut Editor, side: Side, at_mm: i32);
@@ -29,6 +32,7 @@ pub trait Row: 'static {
 pub struct CurbRow;
 
 impl Row for CurbRow {
+    const LEVEL: Level = Level::Curb;
     type Cell = CurbCell;
     const SUBJECT: Subject = Subject::Use;
     const ID: &'static str = "curb";
@@ -55,6 +59,7 @@ impl Row for CurbRow {
 pub struct StopRow;
 
 impl Row for StopRow {
+    const LEVEL: Level = Level::Stop;
     type Cell = StopCell;
     const SUBJECT: Subject = Subject::Stop;
     const ID: &'static str = "stop";

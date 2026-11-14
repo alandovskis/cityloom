@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, openStreet, showStreetLevel, test } from "./fixtures";
 
 // The Impact tab's "Last change" card (#64): what the last edit did to the street's space and checks.
 
@@ -76,7 +76,7 @@ test.describe("the summary of the last change", () => {
   });
 
   test("a change to neither space nor checks says so", async ({ page }) => {
-    await page.locator("#t-street").click();
+    await showStreetLevel(page);
     const current = await page.locator("#speed-limit").inputValue();
     await page.locator("#speed-limit").selectOption(current === "30" ? "40" : "30");
     await expect(body(page)).toContainText("No effect on space or checks");

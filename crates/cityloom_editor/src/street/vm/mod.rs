@@ -4,6 +4,7 @@
 
 pub mod impact;
 pub mod keys;
+pub mod level;
 pub mod row;
 pub mod text;
 pub mod watch;
@@ -22,13 +23,14 @@ use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
-use crate::shared::said::{Said, say_now};
+use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::{
     CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View,
     ZoneRefusal,
 };
 use crate::street::vm::impact::{Cause, Impact, Input};
+use crate::street::vm::level::Level;
 use crate::street::vm::row::{CurbRow, Row, StopRow};
 use crate::sync::model::{Change, Origin};
 
@@ -39,32 +41,12 @@ impl Presents for Editor {
     }
 }
 
-/// The key the left panel's tab is remembered under.
-pub const PANEL_TAB_KEY: &str = "cityloom-street-panel";
-
-/// A tab of the street page's left panel: the details of the selected piece and the tools that edit the street's
-/// sections, or what is set for the street as a whole (its speed limit).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PanelTab {
-    Piece,
-    Street,
-}
-
-impl PanelTab {
-    /// The tabs in the order they are shown.
-    pub const ALL: [PanelTab; 2] = [PanelTab::Piece, PanelTab::Street];
-
-    /// The word the choice is kept as.
-    pub fn id(self) -> &'static str {
-        match self {
-            PanelTab::Piece => "piece",
-            PanelTab::Street => "street",
-        }
-    }
-
-    fn from_id(id: &str) -> Option<PanelTab> {
-        PanelTab::ALL.into_iter().find(|t| t.id() == id)
-    }
+/// A step of the details panel's path: the level it shows, worded, and whether it is the level shown.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Crumb {
+    pub level: Level,
+    pub label: String,
+    pub current: bool,
 }
 
 /// One choice of the Speed limit control.
@@ -99,8 +81,8 @@ pub struct StreetVm {
     stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
     /// The name typed for the chosen free stretch, which the stop added there starts with.
     stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
-    /// The tab of the left panel showing.
-    panel_tab: ArcRwSignal<PanelTab>,
+    /// The level of the details panel the person reached last (see `level`).
+    asked: ArcRwSignal<Level>,
     goal: crate::shared::goals::GoalChoice,
     /// What the last change did to the street, as shown.
     impact: ArcRwSignal<Option<Impact>>,
@@ -156,7 +138,6 @@ impl StreetVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
         let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
-        let panel_tab = ports.storage.recall(PANEL_TAB_KEY).and_then(|id| PanelTab::from_id(&id)).unwrap_or(PanelTab::Piece);
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
@@ -184,7 +165,7 @@ impl StreetVm {
                 calming_drag: Cell::new(false),
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
-                panel_tab: ArcRwSignal::new(panel_tab),
+                asked: ArcRwSignal::new(Level::Street),
                 goal,
                 impact: ArcRwSignal::new(None),
                 impact_pending: RefCell::new(None),
@@ -261,9 +242,21 @@ impl StreetVm {
         self.core.set_units(units);
     }
 
+    /// Every change of the editor goes through here: an edit that chose a piece the section did not have (one just
+    /// added) shows it in the details panel. The commands that add to a strip ask for their level themselves (see
+    /// `level::new_piece` for why a strip is not read here).
+    fn core_edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
+        let before = self.view_now();
+        let r = self.core.edit(f);
+        if level::new_piece(&before, &self.view_now()).is_some() {
+            self.ask(Level::Piece);
+        }
+        r
+    }
+
     /// Changes the street, tells whatever watches it, and sees that it is kept.
     pub fn edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
-        let r = self.core.edit(f);
+        let r = self.core_edit(f);
         // A choice of the section to keep was asked about the zones as they stood: any other change withdraws it.
         if self.merge.get_untracked().is_some() {
             self.merge.set(None);
@@ -295,31 +288,65 @@ impl StreetVm {
         &self.goal
     }
 
-    /// The tab of the left panel showing, which a view that reads it draws again when another is chosen.
-    pub fn panel_tab(&self) -> PanelTab {
-        self.panel_tab.get()
+    /// The level the details panel shows: the one the person reached last while something is chosen there, else the
+    /// nearest above it that has (`level::shown`). Watched.
+    pub fn level(&self) -> Level {
+        let asked = self.asked.get();
+        level::shown(asked, &self.view())
     }
 
-    /// Shows a tab of the left panel and keeps the choice.
-    pub fn show_panel_tab(&self, tab: PanelTab) {
-        self.panel_tab.set(tab);
-        self.ports.storage.remember(PANEL_TAB_KEY, tab.id());
+    /// The path to the level shown, from the street down, worded; the last step is the current one. Watched.
+    pub fn path(&self) -> Vec<Crumb> {
+        let v = self.view();
+        let shown = level::shown(self.asked.get(), &v);
+        let steps = level::path(shown, &v);
+        let last = steps.len().saturating_sub(1);
+        let units = self.units();
+        steps
+            .into_iter()
+            .enumerate()
+            .map(|(i, (level, said))| Crumb { level, label: crate::shared::said::say(&self.i18n, units, &said), current: i == last })
+            .collect()
     }
 
-    /// A selection the person made, announced by what is selected. Pressing a piece shows its details, which are on
-    /// the Piece tab (the choice kept is not changed); letting go of the selection leaves the tab as it is.
+    /// Shows a level of the details panel, from its path; what is chosen stays chosen.
+    pub fn show_level(&self, level: Level) {
+        self.ask(level);
+    }
+
+    fn ask(&self, level: Level) {
+        if self.asked.get_untracked() != level {
+            self.asked.set(level);
+        }
+    }
+
+    /// A command that added a thing to a strip, which is then the chosen one: its level shows when it was added.
+    fn added(&self, level: Level, done: bool) -> bool {
+        if done {
+            self.ask(level);
+        }
+        done
+    }
+
+    /// The button at the Street level that shows the selected zone's commands, worded with the zone. Watched.
+    pub fn zone_entry(&self) -> String {
+        let v = self.view();
+        let Some(zone) = v.zones.zones.iter().find(|z| z.index == v.zones.selected).map(|z| z.label.clone()) else { return String::new() };
+        crate::shared::said::say(&self.i18n, self.units(), &Said::new("st-path-zone-entry").with("zone", Arg::Said(Box::new(zone))))
+    }
+
+    /// A selection the person made, announced by what is selected. Pressing a piece shows its details; letting go of
+    /// the selection shows the zone it belonged to.
     pub fn select(&self, uid: Option<u32>) {
-        if uid.is_some() && self.panel_tab.get_untracked() != PanelTab::Piece {
-            self.panel_tab.set(PanelTab::Piece);
+        if uid.is_some() {
+            self.ask(Level::Piece);
         }
         self.edit(|e| e.select(uid));
         self.say_selection();
     }
 
     pub fn select_relative(&self, delta: i32) {
-        if self.panel_tab.get_untracked() != PanelTab::Piece {
-            self.panel_tab.set(PanelTab::Piece);
-        }
+        self.ask(Level::Piece);
         self.edit(|e| e.select_relative(delta));
         self.say_selection();
     }
@@ -384,7 +411,7 @@ impl StreetVm {
     /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
     pub fn apply_template(&self, template: Template) -> bool {
         let before = self.before();
-        let result = self.core.edit(|e| e.apply_template(template));
+        let result = self.core_edit(|e| e.apply_template(template));
         match result {
             Ok(report) => {
                 if let Some(k) = &self.keeper {
@@ -422,7 +449,7 @@ impl StreetVm {
     /// changes nothing (not even what is kept).
     fn zone_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), ZoneRefusal>) -> bool {
         let before = self.before();
-        match self.core.edit(f) {
+        match self.core_edit(f) {
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
@@ -440,6 +467,7 @@ impl StreetVm {
 
     /// Chooses a zone, announcing it. A zone that is not there, or is cut off, is left alone and nothing is said.
     pub fn select_zone(&self, zone: usize) {
+        self.ask(Level::Zone);
         if self.edit(|e| e.select_zone(zone)) {
             self.merge.set(None);
             self.say_zone();
@@ -539,7 +567,7 @@ impl StreetVm {
     /// and changes nothing.
     fn row_edit(&self, subject: Subject, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
         let before = self.before();
-        match self.core.edit(f) {
+        match self.core_edit(f) {
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
@@ -582,6 +610,7 @@ impl StreetVm {
         let Some(s) = R::strips(&v).sides.iter().find(|s| s.side == side) else { return };
         let Some(c) = s.cells.get(cell) else { return };
         let at = c.from_mm();
+        self.ask(R::LEVEL);
         self.edit(|e| R::select(e, side, at));
         self.ports.announcer.say(&text::cell_text(R::CELL_KEY, s, cell, &self.i18n, self.units_now()));
     }
@@ -673,7 +702,7 @@ impl StreetVm {
     /// it was refused.
     pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
         match self.chosen::<CurbRow>() {
-            Some((side, None, from_mm)) => self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_)),
+            Some((side, None, from_mm)) => self.added(Level::Curb, self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_))),
             _ => {
                 self.say_now_key(CurbRow::CHOOSE_GAP_KEY);
                 false
@@ -727,7 +756,7 @@ impl StreetVm {
     /// changes nothing.
     fn calming_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), CalmingRefusal>) -> bool {
         let before = self.before();
-        match self.core.edit(f) {
+        match self.core_edit(f) {
             Ok(()) => {
                 if let Some(k) = &self.keeper {
                     k.touch();
@@ -762,6 +791,7 @@ impl StreetVm {
         let v = self.view_now();
         let Some(c) = v.calming_strip.cells.get(cell) else { return };
         let at = c.from_mm;
+        self.ask(Level::Calming);
         self.edit(|e| e.select_calming_at(at));
         self.ports.announcer.say(&text::calming_text(&v.calming_strip, cell, &self.i18n, self.units_now()));
     }
@@ -834,7 +864,7 @@ impl StreetVm {
         match self.calming_chosen() {
             Some((None, from_mm)) => {
                 let first = Some(self.calming_first_pick.get_untracked());
-                self.calming_edit(|e| e.add_calming_first(kind, from_mm, length_mm, first).map(|_| ()))
+                self.added(Level::Calming, self.calming_edit(|e| e.add_calming_first(kind, from_mm, length_mm, first).map(|_| ())))
             }
             _ => {
                 self.say_now_key("calming-choose-gap");
@@ -998,7 +1028,7 @@ impl StreetVm {
                     self.stop_shelter_pick.set(None);
                     self.stop_name_pick.set(None);
                 }
-                added
+                self.added(Level::Stop, added)
             }
             _ => {
                 self.say_now_key(StopRow::CHOOSE_GAP_KEY);
@@ -1087,7 +1117,7 @@ impl StreetVm {
             return false;
         }
         let (before, revisions) = (self.before(), self.view_now().revisions.len());
-        match self.core.edit(f) {
+        match self.core_edit(f) {
             Ok(()) if self.view_now().revisions.len() == revisions => false,
             Ok(()) => {
                 if let Some(k) = &self.keeper {
@@ -1124,6 +1154,7 @@ impl StreetVm {
         if self.core.read(|e| e.dragging()) || i >= self.view_now().green.cells.len() {
             return;
         }
+        self.ask(Level::Green);
         self.edit(|e| e.select_green(i));
         self.ports.announcer.say(&text::green_cell_text(&self.view_now().green, i, &self.i18n, self.units_now()));
     }
@@ -1185,12 +1216,12 @@ impl StreetVm {
 
     /// Adds the element `form` asks for, the defaults filling what it leaves open.
     pub fn add_green(&self, form: GreenForm) -> bool {
-        self.green_edit(|e| e.add_green_from(&form))
+        self.added(Level::Green, self.green_edit(|e| e.add_green_from(&form)))
     }
 
     /// Adds the element `form` asks for at the first place from its start where it overlaps no other.
     pub fn add_green_clear(&self, form: GreenForm) -> bool {
-        self.green_edit(|e| e.add_green_clear(&form))
+        self.added(Level::Green, self.green_edit(|e| e.add_green_clear(&form)))
     }
 
     /// Changes the chosen element as `form` says, what it leaves open staying as it is.
@@ -1331,6 +1362,8 @@ impl StreetVm {
         let zone = self.core.read(|e| e.zone());
         fresh.select_zone(zone);
         fresh.select(self.view_now().selected);
+        // So are the stretches chosen on the strips, which the details panel may be showing.
+        self.core.read(|e| fresh.keep_choices(e));
         self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
@@ -1450,7 +1483,7 @@ mod tests {
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
     use crate::shared::i18n::Locale;
-    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
 
     struct Rig {
         vm: Rc<StreetVm>,
@@ -1462,46 +1495,6 @@ mod tests {
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
         Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(sample), None), said, time, storage }
-    }
-
-    // ---- the left panel's tabs ----
-
-    #[test]
-    fn the_left_panel_opens_on_the_piece_tab() {
-        let r = rig(0);
-        assert_eq!(r.vm.panel_tab(), PanelTab::Piece);
-    }
-
-    #[test]
-    fn the_panel_tab_chosen_is_remembered_and_comes_back() {
-        let r = rig(0);
-        r.vm.show_panel_tab(PanelTab::Street);
-        assert_eq!(r.vm.panel_tab(), PanelTab::Street);
-        assert_eq!(r.storage.recall(PANEL_TAB_KEY).as_deref(), Some("street"));
-        let (ports, _, _, _) = test_ports_with_time();
-        ports.storage.remember(PANEL_TAB_KEY, "street");
-        let again = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(again.panel_tab(), PanelTab::Street);
-    }
-
-    #[test]
-    fn a_stored_panel_tab_that_is_not_one_is_ignored() {
-        let (ports, _, _, _) = test_ports_with_time();
-        ports.storage.remember(PANEL_TAB_KEY, "elsewhere");
-        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(vm.panel_tab(), PanelTab::Piece);
-    }
-
-    #[test]
-    fn selecting_a_piece_shows_the_piece_tab() {
-        let r = rig(0);
-        let uid = r.vm.view_now().segments[0].uid;
-        r.vm.show_panel_tab(PanelTab::Street);
-        r.vm.select(Some(uid));
-        assert_eq!(r.vm.panel_tab(), PanelTab::Piece, "the details of what was pressed are what the person asked for");
-        r.vm.show_panel_tab(PanelTab::Street);
-        r.vm.select(None);
-        assert_eq!(r.vm.panel_tab(), PanelTab::Street, "letting go of the selection leaves the tab alone");
     }
 
     fn rig_on(street: crate::street::model::Street) -> Rig {
@@ -2541,6 +2534,28 @@ mod tests {
         assert!(binding.store.write_street(edge, s));
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.read(|e| e.zone()), 0);
+    }
+
+    #[test]
+    fn a_sync_reload_keeps_the_chosen_raised_element_stretch_and_the_panel_on_it() {
+        use crate::street::vm::level::Level;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        r.vm.select_calming(0);
+        assert_eq!(r.vm.level(), Level::Calming);
+        r.vm.flush();
+        // another device changed a width
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(binding.store.write_street(edge, s));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(0), "the stretch stays chosen");
+        assert_eq!(r.vm.level(), Level::Calming, "and the panel stays on it");
     }
 
     #[test]
@@ -3890,5 +3905,182 @@ mod green_tests {
         assert!(!r.vm.add_green(GreenForm { at_mm: Some(10_000), host: Some(1), ..GreenForm::new(GreenKind::Bed) }), "piece 1 is a roadway");
         assert_eq!(r.said.take(), ["That cannot stand on the roadway."]);
         assert_eq!(r.vm.view_now().green.cells.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    //! The details panel shows one level at a time, the one the person reached last, under a path to it.
+    use super::*;
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::test_ports_with_time;
+    use crate::street::model::{CalmingKind, GreenForm, GreenKind, StopKind, Street, Use, ZoneEnd, ZoneFrame};
+    use crate::street::vm::level::Level;
+
+    /// The sample street (parking on both sides), 60 m long and anchored, so its strips can hold things.
+    fn vm_in(locale: Locale) -> Rc<StreetVm> {
+        let street = Street::sample(0, Side::Right);
+        let (ports, _, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        StreetVm::new(ports, crate::i18n_for(locale), editor, None)
+    }
+
+    fn vm() -> Rc<StreetVm> {
+        vm_in(Locale::En)
+    }
+
+    /// The path's steps as words, the current one marked with a star.
+    fn path(vm: &StreetVm) -> Vec<String> {
+        vm.path().into_iter().map(|c| if c.current { format!("*{}", c.label) } else { c.label }).collect()
+    }
+
+    fn first_piece(vm: &StreetVm) -> u32 {
+        vm.view_now().segments[0].uid
+    }
+
+    #[test]
+    fn the_panel_shows_the_street_until_something_is_chosen() {
+        let vm = vm();
+        assert_eq!(vm.level(), Level::Street);
+        assert_eq!(path(&vm), ["*Street"]);
+    }
+
+    #[test]
+    fn pressing_a_piece_shows_it_under_its_zone() {
+        let vm = vm();
+        vm.select(Some(first_piece(&vm)));
+        assert_eq!(vm.level(), Level::Piece);
+        assert_eq!(path(&vm), ["Street", "Zone 1", "*Sidewalk"]);
+    }
+
+    #[test]
+    fn choosing_a_zone_shows_the_zone_commands() {
+        let vm = vm();
+        vm.select(Some(first_piece(&vm)));
+        vm.select_zone(0);
+        assert_eq!(vm.level(), Level::Zone);
+        assert_eq!(path(&vm), ["Street", "*Zone 1"]);
+    }
+
+    #[test]
+    fn a_curbside_stretch_is_shown_along_the_street_not_under_a_zone() {
+        let vm = vm();
+        vm.select_curb(Side::Right, 0);
+        assert_eq!(vm.level(), Level::Curb);
+        assert_eq!(path(&vm), ["Street", "*Free stretch"]);
+        assert!(vm.add_curb(Use::Parking, 6_000));
+        assert_eq!(path(&vm), ["Street", "*Parking"], "the use just added is the one chosen");
+    }
+
+    #[test]
+    fn a_stop_a_raised_element_and_a_tree_each_show_their_own_level() {
+        let vm = vm();
+        vm.select_stop(Side::Right, 0);
+        assert_eq!(vm.level(), Level::Stop);
+        assert!(vm.add_stop(StopKind::Bulb, 8_000));
+        assert_eq!(vm.level(), Level::Stop);
+        assert_eq!(path(&vm), ["Street", "*Curb extension"]);
+
+        vm.select_calming(0);
+        assert_eq!(vm.level(), Level::Calming);
+        assert!(vm.add_calming(CalmingKind::Table, 7_000));
+        assert_eq!(path(&vm), ["Street", "*Raised table"]);
+
+        assert!(vm.add_green_clear(GreenForm::new(GreenKind::Tree)), "adding a tree chooses it");
+        assert_eq!(vm.level(), Level::Green);
+        assert_eq!(path(&vm), ["Street", "*Tree"]);
+    }
+
+    #[test]
+    fn adding_a_piece_shows_the_piece_added() {
+        let vm = vm();
+        assert!(vm.apply(|e| e.add(kind_index("travel").unwrap(), 1) != 0));
+        assert_eq!(vm.level(), Level::Piece);
+        assert_eq!(path(&vm).last().map(String::as_str), Some("*Driving lane"));
+    }
+
+    #[test]
+    fn a_step_of_the_path_shows_that_level_and_keeps_what_is_chosen() {
+        let vm = vm();
+        let uid = first_piece(&vm);
+        vm.select(Some(uid));
+        vm.show_level(Level::Street);
+        assert_eq!(vm.level(), Level::Street);
+        assert_eq!(vm.view_now().selected, Some(uid), "the piece stays chosen");
+        vm.show_level(Level::Zone);
+        assert_eq!(path(&vm), ["Street", "*Zone 1"]);
+        vm.select(Some(uid));
+        assert_eq!(vm.level(), Level::Piece, "pressing the same piece again shows it");
+    }
+
+    #[test]
+    fn a_level_whose_thing_is_let_go_shows_its_parent() {
+        let vm = vm();
+        vm.select(Some(first_piece(&vm)));
+        vm.select(None);
+        assert_eq!(vm.level(), Level::Zone, "a piece belongs to its zone");
+        vm.show_level(Level::Piece);
+        assert_eq!(vm.level(), Level::Zone, "nothing to show at the piece level");
+        vm.show_level(Level::Green);
+        assert_eq!(vm.level(), Level::Street, "a tree runs along the street");
+    }
+
+    #[test]
+    fn an_edit_of_a_piece_never_moves_the_panel_to_a_stretch_chosen_earlier() {
+        // A strip keeps its choice while its row comes and goes with the pieces: a direction, curb or width that brings
+        // a row back must not take the panel (and the focus in it) away from the piece being edited.
+        for sample in 0..6 {
+            for side in [Side::Left, Side::Right] {
+                let street = Street::sample(sample, Side::Right);
+                let (ports, _, _, _) = test_ports_with_time();
+                let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+                let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None);
+                vm.select_stop(side, 0);
+                vm.select_curb(side, 0);
+                vm.select_calming(0);
+                let uids: Vec<u32> = vm.view_now().segments.iter().map(|s| s.uid).collect();
+                for uid in uids {
+                    for dir in [None, Some(0usize), Some(1), Some(2)] {
+                        vm.select(Some(uid));
+                        vm.edit(|e| e.set_direction(uid, dir));
+                        assert_eq!(vm.level(), Level::Piece, "sample {sample}, {side:?}, piece {uid}, direction {dir:?}");
+                    }
+                    for curb in [None, Some(0usize), Some(1), Some(2)] {
+                        vm.select(Some(uid));
+                        vm.edit(|e| e.set_curb(uid, curb));
+                        assert_eq!(vm.level(), Level::Piece, "sample {sample}, {side:?}, piece {uid}, curb {curb:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn undo_that_brings_a_strip_back_does_not_show_its_stretch() {
+        let vm = vm();
+        vm.select_curb(Side::Right, 0);
+        let parking = vm.view_now().segments.iter().rev().find(|s| crate::shared::catalogue::KINDS[s.kind].id == "parking").unwrap().uid;
+        vm.select(Some(parking));
+        assert!(vm.apply(|e| e.remove(parking)));
+        assert!(vm.undo());
+        assert_ne!(vm.level(), Level::Curb, "nothing on the curb was chosen by the undo");
+    }
+
+    #[test]
+    fn the_zone_commands_are_one_press_from_the_street() {
+        let vm = vm();
+        assert_eq!(vm.level(), Level::Street);
+        assert_eq!(vm.zone_entry(), "Zone commands: Zone 1");
+        vm.show_level(Level::Zone);
+        assert_eq!(path(&vm), ["Street", "*Zone 1"]);
+    }
+
+    #[test]
+    fn the_path_is_in_french_too() {
+        let vm = vm_in(Locale::FrCa);
+        vm.select(Some(first_piece(&vm)));
+        assert_eq!(path(&vm), ["Rue", "Zone 1", "*Trottoir"]);
+        vm.select_curb(Side::Right, 0);
+        assert_eq!(path(&vm), ["Rue", "*Tronçon libre"]);
     }
 }

@@ -1,16 +1,15 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openAnchoredStreet, openStreet, placesOnMap, test } from "./fixtures";
+import { expect, live, openAnchoredStreet, openStreet, placesOnMap, showStreetLevel, test } from "./fixtures";
 
 const names = (page: Page) => page.locator("#piece-list .piece-name").allTextContents();
 const template = (page: Page, id: string) => page.locator(`#transform-menu [data-template="${id}"]`);
 
-/** Gives the street a speed limit above a school zone's, which the Plateau's streets may not have, and goes back to
- *  the Piece tab; the Undo it leaves is the first of the street's history. */
+/** Gives the street a speed limit above a school zone's, which the Plateau's streets may not have; the Undo it
+ *  leaves is the first of the street's history. */
 async function fasterThanSchool(page: Page) {
-  await page.locator("#t-street").click();
+  await showStreetLevel(page);
   await page.locator("#speed-limit").selectOption("50");
-  await page.locator("#t-piece").click();
 }
 
 // Street templates (#65): ready-made cross-sections in the Transform menu. Applying one lays out ordinary pieces in
@@ -88,8 +87,8 @@ test.describe("street templates", () => {
       await expect(live(page)).toContainText("The speed limit there is 30 km/h.");
       await expect(live(page)).toContainText("A raised table is at");
 
-      // The zone's speed is the Street tab's, for the selected zone; the other zones follow the street.
-      await page.locator("#t-street").click();
+      // The zone's speed is the Street level's, for the selected zone; the other zones follow the street.
+      await showStreetLevel(page);
       await expect(page.locator("#speed-limit")).toHaveValue("30");
       await page.locator("#zone-0").click();
       await expect(page.locator("#speed-limit")).toHaveValue("street");
@@ -98,7 +97,7 @@ test.describe("street templates", () => {
       await page.locator("#undo").click();
       await expect(zones).toHaveCount(1);
       await expect(table).toHaveCount(1);
-      await page.locator("#t-street").click();
+      await showStreetLevel(page);
       await expect(page.locator("#speed-limit")).toHaveValue("50");
     });
   });

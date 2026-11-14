@@ -110,7 +110,7 @@ pub struct ShellVm {
     ports: Ports,
     i18n: Rc<I18n>,
     target: Rc<dyn Target>,
-    /// The message that names what the left sidebar holds on this page: `details-piece`, `details-details`, `details-places`, `details-areas`.
+    /// The message that names what the left sidebar holds on this page: `details-details`, `details-places`, `details-areas`.
     details_word: &'static str,
     tabs: Vec<String>,
     units: ArcRwSignal<Units>,
@@ -505,7 +505,7 @@ mod tests {
         let (ports, said, storage, doc) = ports_for_test();
         prepare(&storage);
         let page = new_page();
-        let vm = ShellVm::new(ports, I18n::new(locale, &[crate::shell::RESOURCES]), Rc::new(Fake(page.clone())), "details-piece", tabs(), false);
+        let vm = ShellVm::new(ports, I18n::new(locale, &[crate::shell::RESOURCES]), Rc::new(Fake(page.clone())), "details-details", tabs(), false);
         Rig { vm, page, said, storage, doc }
     }
 
@@ -564,10 +564,7 @@ mod tests {
         r.vm.toggle_inspector();
         r.vm.choose_theme(Theme::Dark);
         r.vm.choose_region("united-kingdom");
-        assert_eq!(
-            r.said.take(),
-            vec!["Notes masquées.", "Détails des éléments masqués.", "Thème sombre.", "Royaume-Uni\u{a0}: la circulation se fait à gauche."]
-        );
+        assert_eq!(r.said.take(), vec!["Notes masquées.", "Détails masqués.", "Thème sombre.", "Royaume-Uni\u{a0}: la circulation se fait à gauche."]);
     }
 
     #[test]
@@ -741,7 +738,7 @@ mod tests {
         assert!(!r.vm.notes_open());
         r.vm.toggle_notes();
         assert_eq!(r.storage.recall(NOTES_KEY).as_deref(), Some("open"));
-        assert_eq!(r.said.take(), vec!["Piece details hidden.", "Piece details shown.", "Notes hidden.", "Notes shown."]);
+        assert_eq!(r.said.take(), vec!["Details hidden.", "Details shown.", "Notes hidden.", "Notes shown."]);
     }
 
     fn rig_notes(default_open: bool, prepare: impl FnOnce(&MemoryStorage)) -> Rig {

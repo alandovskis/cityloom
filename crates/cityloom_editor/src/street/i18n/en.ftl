@@ -1,7 +1,7 @@
 # What the street page says: the markup of street.html.
 st-page-description = Rearrange a street's fixed width: add, move and resize its pieces and see at once whether it fits.
-st-piece-details = Piece details
-st-details-toggle-title = Show or hide the piece details ( [ )
+st-details = Details
+st-details-toggle-title = Show or hide the details ( [ )
 st-key-select = select
 st-key-reorder = reorder
 st-key-resize = resize
@@ -207,7 +207,6 @@ direction-away = Away from you
 direction-toward = Toward you
 
 # The panel of the selected piece (src/street/view/inspector.rs).
-inspector-empty = Select a piece to change its width and surface.
 inspector-sub = { $width } wide · { $at } of { $total }
 inspector-sub-timed = { $width } wide · { $at } of { $total } · { $time }
 inspector-width = Width
@@ -356,9 +355,14 @@ st-zone-keep-cancel = Cancel the merge
 st-zone-name = Zone name
 st-zone-reset = Reset to the street's section
 st-zone-use = Use this section for the whole street
-st-panel-tabs-label = Details sections
-st-panel-tab-piece = Piece
-st-panel-tab-street = Street
+st-path-label = What the details are of
+st-path-street = Street
+st-path-gap = Free stretch
+# `name` is a kind of piece, or a stop's own name.
+st-path-step = { $name }
+st-path-hint = Choose a piece, a zone or a stretch along the street to change it.
+# `zone` is the selected zone's name (Zone 1, or the name it was given).
+st-path-zone-entry = Zone commands: { $zone }
 st-speed-label = Speed limit
 st-speed-not-set = Not set
 st-speed-kmh = { $kmh } km/h

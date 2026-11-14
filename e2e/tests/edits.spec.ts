@@ -1,4 +1,4 @@
-import { expect, mapReady, openStreet, placesOnMap, setFirstArea, test } from "./fixtures";
+import { expect, mapReady, openStreet, placesOnMap, setFirstArea, showStreetLevel, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 // What a resident edits is kept in one document per project (`cityloom-edits@first` for the first project the
@@ -105,7 +105,7 @@ test("an edit is kept under the street's OSM key", async ({ page }) => {
 
 test("a speed the designer changed is kept with the record: version 7", async ({ page }) => {
   const href = await openStreet(page, 0);
-  await page.locator("#t-street").click();
+  await showStreetLevel(page);
   const speed = page.locator("#speed-limit");
   const chosen = (await speed.inputValue()) === "10" ? "20" : "10";
   await speed.selectOption(chosen);

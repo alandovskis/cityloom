@@ -6,6 +6,7 @@ import {
   mapReady,
   OPEN_ENDS_TILE,
   openStreet,
+  showZoneLevel,
   splitInto,
   streetLengthM,
   test,
@@ -63,12 +64,14 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("a piece is selected with the arrow keys, announced, and shown in the details", async ({ page }) => {
-    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+    await expect(page.locator("#p-street")).toBeVisible();
     await selectFirstPiece(page);
     await expect(live(page)).toHaveText(/^.+, [\d.]+ m, 1 of \d+$/);
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#p-piece")).toBeVisible();
+    // Letting go of the piece shows the zone it belonged to.
     await page.keyboard.press("Escape");
-    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+    await expect(page.locator("#p-zone")).toBeVisible();
+    await expect(page.locator("#p-piece")).toBeHidden();
   });
 
   test("a buffer as narrow as an imported curb's is selected with the arrow keys and announced", async ({ page }) => {
@@ -81,7 +84,7 @@ test.describe("the street editor on a street of the city", () => {
     await page.locator("#wrap").focus();
     for (let k = 0; k <= last; k++) await page.keyboard.press("ArrowRight");
     await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${last + 1} of ${last + 1}$`));
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#p-piece")).toBeVisible();
   });
 
   test("a piece is pressed to select it", async ({ page }) => {
@@ -487,9 +490,10 @@ test.describe("the zones of a street", () => {
   test.beforeEach(async ({ page }) => {
     await openStreet(page);
     await expect(page.locator("#zone-strip")).toBeVisible();
+    await showZoneLevel(page);
   });
 
-  test("the zone strip is one line, at most 48 px, and the commands sit in the left panel", async ({ page }) => {
+  test("the zone strip is one line, at most 48 px, and the commands sit in the details panel", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const slot = await page.locator("#zones-slot").evaluate((e) => {
       const kids = [...e.children].map((c) => c.getBoundingClientRect());
@@ -503,7 +507,7 @@ test.describe("the zones of a street", () => {
 
   test("splits a street by keyboard and moves the boundary with Alt and the arrows", async ({ page }) => {
     const url = page.url();
-    await page.locator("#zone-split-at").focus(); // the commands are in the left panel
+    await page.locator("#zone-split-at").focus(); // the commands are in the details panel
     await page.keyboard.press("Tab"); // Split
     await expect(page.locator("#zone-split")).toBeFocused();
     await page.keyboard.press("Enter");
@@ -726,6 +730,8 @@ test.describe("the zones of a street", () => {
     await page.locator("#zone-1").click();
     await selectFirstPiece(page);
     await page.keyboard.press("-");
+    // the piece's details show: the zone's commands are one step up the panel's path
+    await page.locator('.panel-path .path-step[data-level="zone"]').click();
     await page.locator("#zone-merge-prev").click();
     await expect(page.locator("#zone-keep-this")).toBeFocused();
     await page.locator("#zone-keep-this").click();
