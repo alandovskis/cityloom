@@ -6,7 +6,7 @@
   <title>CityLoom intersection editor</title>
   <meta name="description" data-i18n-content="jn-page-description" content="Change how a junction of streets works: corners, crossings, lanes, turns and control.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l!=="en"&&l!=="fr-CA"){l=null;var n=navigator.languages||[];for(var i=0;i<n.length&&!l;i++){var m=/^(en|fr)(-|_|$)/i.exec(n[i]);if(m)l=m[1].toLowerCase()==="fr"?"fr-CA":"en"}}if(l)document.documentElement.lang=l}catch(e){}</script>
   <link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">
   <link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">
   <link rel="preload" as="fetch" crossorigin href="data/metro/index.json">

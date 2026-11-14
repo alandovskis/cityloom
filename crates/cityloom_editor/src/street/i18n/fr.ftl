@@ -785,3 +785,10 @@ goal-conflict-n1-school-buses = un filtre qui arrête les autobus coupe leur tra
 goal-conflict-e1-buses-school = la voie contiguë au trottoir est l’endroit où les parents arrêtent pour déposer les enfants.
 goal-conflict-h1-buses-through = une barrière pour autobus incite les conducteurs à chercher un autre chemin, soit la circulation que cet objectif veut réduire ailleurs.
 goal-conflict-m1-buses-school = une avancée prend de l’espace de bordure dont la dépose ou une traversée scolaire peut avoir besoin.
+
+
+# A speed target a standards profile sets for the street's class (#79); the check exists only with such a profile.
+check-label-speed-target = Limite de vitesse sous la cible de sa catégorie
+check-detail-speed-target-over = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, dépasse la cible de { $target }{" "}km/h pour une rue de type { $class }.
+check-detail-speed-target-ok = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, respecte la cible de { $target }{" "}km/h pour une rue de type { $class }.
+check-detail-speed-target-none = Aucune limite de vitesse n’est fixée; la cible pour une rue de type { $class } est de { $target }{" "}km/h.

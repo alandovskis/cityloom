@@ -785,3 +785,10 @@ goal-conflict-n1-school-buses = a filter that stops buses cuts their route; keep
 goal-conflict-e1-buses-school = the curb lane is where parents stop to drop children off.
 goal-conflict-h1-buses-through = a bus gate invites drivers to look for another way, which is the traffic this goal wants to reduce elsewhere.
 goal-conflict-m1-buses-school = a bulb takes curb space that drop-off or a school crossing may need.
+
+
+# A speed target a standards profile sets for the street's class (#79); the check exists only with such a profile.
+check-label-speed-target = Speed limit within the target for its class
+check-detail-speed-target-over = The highest speed limit, { $kmh } km/h, is over the { $target } km/h target for a { $class } street.
+check-detail-speed-target-ok = The highest speed limit, { $kmh } km/h, is within the { $target } km/h target for a { $class } street.
+check-detail-speed-target-none = No speed limit is set; the target for a { $class } street is { $target } km/h.

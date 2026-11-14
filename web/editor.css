@@ -196,7 +196,7 @@
 }
 .stuck .note-h {
   padding: 0 0 8px;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 /* Under 1360px there is not room for the notes beside the drawing until they are asked for. */
@@ -1532,7 +1532,7 @@ svg pattern circle {
   width: 44px;
   height: 22px;
   border: 1px solid var(--field-line);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--panel);
 }
 .swatch .k-sidewalk,
@@ -2194,8 +2194,6 @@ svg pattern circle {
 }
 .impact-verdict {
   margin: 8px 8px 0;
-  padding-inline-start: 8px;
-  border-inline-start: 4px solid currentColor;
   color: var(--ink-2);
   font-weight: 600;
 }
@@ -2214,7 +2212,6 @@ svg pattern circle {
   .impact-verdict.regressed,
   .impact-verdict.mixed {
     color: CanvasText;
-    border-inline-start-color: CanvasText;
   }
 }
 .revs {
