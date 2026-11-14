@@ -1,0 +1,7 @@
+test shell::vm::tests::where_the_notes_start_open_follows_the_page ... ok
+test street::view::iso::projection::tests::a_drawing_fits_its_room_narrower_first_and_scaled_down_only_below_the_shortest_height ... ok
+test shell::tests::the_street_page_s_details_come_after_the_drawing_in_reading_and_focus_order ... ok
+test street::view::iso::projection::tests::the_widest_drawing_that_fits_a_height_is_the_inverse_of_its_height ... ok
+test shell::vm::tests::choosing_a_tab_while_the_notes_are_closed_opens_them_on_it ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 3223 filtered out; finished in 0.04s
+test result: ok. 3226 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 21.47s
