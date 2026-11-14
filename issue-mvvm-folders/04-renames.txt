@@ -1,0 +1,32 @@
+$ git diff -M --summary origin/main...HEAD | grep -c '^ rename'
+100
+$ git diff -M --name-status origin/main...HEAD | cut -c1 | sort | uniq -c   # A added, M modified, R renamed; no D
+   5 A
+  38 M
+ 100 R
+$ git diff -M --name-status origin/main...HEAD | grep '^A'
+A	crates/cityloom_editor/src/junction/view/mod.rs
+A	crates/cityloom_editor/src/layout_guard.rs
+A	crates/cityloom_editor/src/map/model/mod.rs
+A	docs/superpowers/plans/2026-11-14-mvvm-folders.md
+A	docs/superpowers/specs/2026-11-14-mvvm-folders-design.md
+$ git log --follow --oneline -- crates/cityloom_editor/src/junction/model/read_model.rs | tail -3   # history reaches before the move
+4c24e245 feat(web): intersection editor review fixes
+5b40bbb0 feat: junction samples start sound and new streets find a corner that fits
+00e13559 feat: junction model with plan geometry, checks and wasm exports
+$ git log --follow --oneline -- crates/cityloom_editor/src/street/vm/impact.rs | wc -l; ... | tail -2   # commits, and the oldest two (before the move)
+       3
+13da55f9 Move the crates into crates/ and rename cityloom_prepare to citymodel_builder (#164)
+e5d2fa30 Summarize the impact of an edit: the Impact tab's Last change card (#64, 0.45.0) (#143)
+$ git log --follow --oneline -- crates/cityloom_editor/src/street/view/iso/scene/signs.rs | wc -l; ... | tail -2   # commits, and the oldest two (before the move)
+       4
+21cc537d A Street tab for the speed limit in the left panel; no speed limit sign in the 2.5D (0.51.0) (#154)
+319ff63e The street page draws the 2.5D only, as a layered diagram (#137, #139) (#142)
+$ git log --follow --oneline -- crates/cityloom_editor/src/map/model/network.rs | wc -l; ... | tail -2   # commits, and the oldest two (before the move)
+       5
+68b163ce Check walking routes across the network (0.42.0) (#126)
+8ffd5d4b Add network-level design checks (0.40.0) (#124)
+$ git log --follow --oneline -- crates/cityloom_editor/src/map/vm/report.rs | wc -l; ... | tail -2   # commits, and the oldest two (before the move)
+       8
+13da55f9 Move the crates into crates/ and rename cityloom_prepare to citymodel_builder (#164)
+b6ce29d3 Download a design review PDF from the map's Share menu (#68, PR 1 of 3, 0.48.0) (#146)

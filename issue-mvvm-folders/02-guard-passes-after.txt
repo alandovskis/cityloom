@@ -1,0 +1,8 @@
+$ git rev-parse --short HEAD
+9d09e08e
+$ cargo test -p cityloom_editor layout_guard -- --nocapture
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3203 filtered out; finished in 0.00s
+test layout_guard::layered_slices_keep_their_files_in_model_vm_and_view ... ok
+test layout_guard::a_hidden_file_at_a_slice_root_is_not_a_stray ... ok
+test layout_guard::a_file_at_a_slice_root_is_a_stray ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3203 filtered out; finished in 0.00s

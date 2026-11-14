@@ -1,0 +1,27 @@
+$ git rev-parse --short HEAD   # origin/main, before the move, with only layout_guard.rs added
+91fab287
+$ cargo test -p cityloom_editor layout_guard
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+
+running 3 tests
+.. 2/3
+layout_guard::layered_slices_keep_their_files_in_model_vm_and_view --- FAILED
+
+failures:
+
+---- layout_guard::layered_slices_keep_their_files_in_model_vm_and_view stdout ----
+
+thread 'layout_guard::layered_slices_keep_their_files_in_model_vm_and_view' (23277808) panicked at crates/cityloom_editor/src/layout_guard.rs:33:9:
+street/ holds ["calming_strip.rs", "calming_tools.rs", "curb_strip.rs", "curb_tools.rs", "drawing.rs", "green_strip.rs", "green_tools.rs", "impact.rs", "inspector.rs", "iso", "keys.rs", "measures.rs", "model.rs", "notes.rs", "page.rs", "panel_tabs.rs", "piece_list.rs", "pieces.rs", "row.rs", "speed_view.rs", "stop_tools.rs", "strip.rs", "tests.rs", "text.rs", "view.rs", "vm.rs", "watch.rs", "zone_tools.rs"] at its root; each belongs in model/, vm/ or view/
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    layout_guard::layered_slices_keep_their_files_in_model_vm_and_view
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 3203 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p cityloom_editor --lib`

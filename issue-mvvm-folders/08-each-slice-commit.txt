@@ -1,0 +1,28 @@
+$ git log --oneline -1
+4a105b33 Put the street slice's files in model, vm and view folders
+$ cargo fmt --check
+exit=0
+$ RUSTFLAGS='-D warnings' just test
+exit=0
+test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 17.37s
+cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+
+
+$ git log --oneline -1
+22b7bb8c Put the junction slice's files in model, vm and view folders
+$ cargo fmt --check
+exit=0
+$ RUSTFLAGS='-D warnings' just test
+exit=0
+test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 10.51s
+cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+
+$ git log --oneline -1
+f7d34f9f Put the map slice's files in model, vm and view folders
+$ cargo fmt --check
+exit=0
+$ RUSTFLAGS='-D warnings' just test
+exit=0
+test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 18.77s
+cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+
