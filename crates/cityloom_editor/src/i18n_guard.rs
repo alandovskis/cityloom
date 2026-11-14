@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync` and `project` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync`, `project` and `timeline` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -20,6 +20,8 @@ const LEFT_OUT: &[(&str, &str)] = &[
         "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
     ),
     ("src/project/tests.rs", "test-only"),
+    ("src/timeline/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/timeline/tests.rs", "test-only"),
     ("src/archive/tests.rs", "test-only"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
@@ -171,6 +173,11 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/project/text.rs", include_str!("project/text.rs")),
     ("src/project/view.rs", include_str!("project/view.rs")),
     ("src/project/vm.rs", include_str!("project/vm.rs")),
+    ("src/timeline/mod.rs", include_str!("timeline/mod.rs")),
+    ("src/timeline/model.rs", include_str!("timeline/model.rs")),
+    ("src/timeline/text.rs", include_str!("timeline/text.rs")),
+    ("src/timeline/vm.rs", include_str!("timeline/vm.rs")),
+    ("src/timeline/work.rs", include_str!("timeline/work.rs")),
     ("src/city/projection.rs", include_str!("city/projection.rs")),
 ];
 
@@ -795,7 +802,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project", "timeline"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

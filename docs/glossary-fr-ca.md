@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl`, `src/restriction/i18n/fr.ftl`, `src/account/i18n/fr.ftl`, `src/sync/i18n/fr.ftl`, `src/archive/i18n/fr.ftl` and `src/project/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl`, `src/restriction/i18n/fr.ftl`, `src/account/i18n/fr.ftl`, `src/sync/i18n/fr.ftl`, `src/archive/i18n/fr.ftl`, `src/project/i18n/fr.ftl` and `src/timeline/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
 
 ## Style rules
 
@@ -325,6 +325,11 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Home page | The metropolitan area cannot be changed once the project is created. (`project-metro-fixed`) | La région métropolitaine ne peut plus être changée une fois le projet créé. |  |
 | Home page | Montréal (a metropolitan area of the catalogue, `place-metro-montreal`) | Montréal | The same in both languages. |
 | Home page | Changed (a date) | Modifié le | Dates read `12 novembre 2026`, `1er mars 2026`. |
+| Timeline page | Timeline (the page of a project's milestones) | Chronologie | `Chronologie de Plateau`. |
+| Timeline page | Milestone (a named snapshot of a project's work) | Jalon | `Enregistrer un jalon`; `jalon` is also the project-management word, which is the sense kept. To confirm, see below. |
+| Timeline page | Restore (put the work back as a milestone had it) | Restaurer | `Restaurer ce jalon`; the work now is first saved as a milestone, `Avant la restauration de …`. |
+| Timeline page | Compare with now | Comparer avec maintenant | A place that differs is `Ajouté depuis`, `Retiré depuis` or `Modifié`. |
+| Timeline page | rule (of an area, in a milestone's count) | règle | `2 rues, 0 jonction, 1 règle`; the area rule itself is `Règle de zone`. |
 
 ## Terms to confirm
 
@@ -418,3 +423,4 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | build-out (of a chicane) | `avancée` | `saillie`, `avancée de trottoir` (a curb extension; to confirm) |
 | ramp (of a raised table) | `rampe` | `pente` (the slope, not the thing) |
 | boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is the app's lengthways zone) |
+| Timeline page | Milestone | `jalon` | `point de repère`, `version enregistrée`, `instantané` (a snapshot, but it reads as a photo) |
