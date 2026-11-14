@@ -22,7 +22,7 @@ just setup
 ```
 
 It runs `npm ci` at the root (the map's runtime library, MapLibre) and in `e2e` (Playwright), installs
-`wasm-bindgen-cli` at the version pinned in `Cargo.toml` into `.tools`, and installs Playwright's Chromium.
+`wasm-bindgen-cli` at the version pinned in `crates/cityloom_editor/Cargo.toml` into `.tools`, and installs Playwright's Chromium.
 
 ## Build and serve
 
@@ -66,7 +66,7 @@ just format-check  # the same, without changing anything
 
 CI runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
 it, and builds this documentation with `just docs-build`. CI's `test` and integration jobs run a Postgres service; the UI and E2E browser jobs need none. Every pull
-request raises the version in the root `Cargo.toml`.
+request raises the version in `crates/cityloom_editor/Cargo.toml`.
 
 `just db` starts the Postgres in a container named `cityloom-db` on 127.0.0.1:55432 and prints the line to run:
 `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. The server's tests and the account spec
