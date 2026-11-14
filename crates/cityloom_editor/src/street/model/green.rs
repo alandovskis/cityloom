@@ -245,6 +245,11 @@ pub(super) struct GreenChoice {
 }
 
 impl GreenChoice {
+    /// The choice alone, without a move that belongs to another history.
+    pub(super) fn chosen_only(self) -> GreenChoice {
+        GreenChoice { at: self.at, moved: None }
+    }
+
     fn pick(&mut self, at: Place) {
         self.at = Some(at);
     }

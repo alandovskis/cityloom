@@ -1,26 +1,26 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openAnchoredStreet, placesOnMap, splitInto, test } from "./fixtures";
+import { expect, openAnchoredStreet, placesOnMap, showStreetLevel, splitInto, test } from "./fixtures";
 
 const speed = (page: Page) => page.locator("#speed-limit");
-/** The speed limit sign the 2.5D used to draw: it is gone, the limit is set on the Street tab. */
+/** The speed limit sign the 2.5D used to draw: it is gone, the limit is set at the details panel's Street level. */
 const sign = (page: Page) => page.locator("#drawing .iso-sign");
 
 /** Opens the first street of the city whose Speed limit control shows `value` ("" is Not set): the Plateau's
  *  streets carry the speeds OpenStreetMap gives them, and the test does not know which is which by number. The
- *  control is on the left panel's Street tab, which this shows. */
+ *  control is at the details panel's Street level, which this shows. */
 async function openStreetWithSpeed(page: Page, value: string) {
   await page.goto("/map.html");
   for (const href of (await placesOnMap(page)).streets) {
     await page.goto("/" + href);
-    await page.locator("#t-street").click();
+    await showStreetLevel(page);
     await expect(speed(page)).toBeVisible();
     if ((await speed(page).inputValue()) === value) return href;
   }
   throw new Error(`no street whose speed limit is ${JSON.stringify(value)}`);
 }
 
-// A street's speed limit: imported from OpenStreetMap's maxspeed, changed on the left panel's Street tab. The 2.5D
+// A street's speed limit: imported from OpenStreetMap's maxspeed, changed at the details panel's Street level. The 2.5D
 // draws no sign for it.
 
 test.describe("a street's speed limit", () => {
@@ -67,7 +67,7 @@ test.describe("a street's speed limit", () => {
     await speed(page).selectOption("30");
     await expect(speed(page)).toHaveValue("30");
     await page.reload();
-    // The Street tab was the one showing, and it is remembered.
+    // Nothing is chosen after a reload, so the panel shows the street again.
     await expect(speed(page)).toBeVisible();
     await expect(speed(page)).toHaveValue("30");
   });
@@ -96,60 +96,75 @@ test.describe("a street's speed limit", () => {
   });
 });
 
-test.describe("the left panel's tabs", () => {
-  test("Piece is the tab that opens; Street holds the speed limit and the choice is remembered", async ({ page }) => {
+test.describe("the details panel's path", () => {
+  const path = (page: Page) => page.locator(".panel-path");
+  const step = (page: Page, level: string) => path(page).locator(`.path-step[data-level="${level}"]`);
+  const here = (page: Page) => path(page).locator('[aria-current="location"]');
+
+  test("with nothing chosen it shows the street, which holds the speed limit", async ({ page }) => {
     await page.goto("/map.html");
     await page.goto("/" + (await placesOnMap(page)).streets[0]);
-    const piece = page.locator("#t-piece");
-    const street = page.locator("#t-street");
-    await expect(piece).toHaveAttribute("aria-selected", "true");
+    await expect(here(page)).toHaveText("Street");
+    await expect(path(page).locator("button")).toHaveCount(0);
+    await expect(page.locator("#p-street")).toBeVisible();
+    await expect(speed(page)).toBeVisible();
+    await expect(page.locator("#p-piece")).toBeHidden();
+  });
+
+  test("a pressed piece shows under its zone, and the path's steps go back up with the piece still chosen", async ({
+    page,
+  }) => {
+    await page.goto("/map.html");
+    await page.goto("/" + (await placesOnMap(page)).streets[0]);
+    const first = page.locator("#piece-list [role=option]").first();
+    await first.click();
     await expect(page.locator("#p-piece")).toBeVisible();
     await expect(page.locator("#p-street")).toBeHidden();
-    await expect(speed(page)).toBeHidden();
+    await expect(path(page).locator("li")).toHaveCount(3);
+    await expect(step(page, "zone")).toHaveText("Zone 1");
 
-    await street.click();
-    await expect(street).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#p-street")).toBeVisible();
-    await expect(page.locator("#p-piece")).toBeHidden();
+    await step(page, "zone").click();
+    await expect(page.locator("#p-zone")).toBeVisible();
+    await expect(page.locator("#zone-split")).toBeVisible();
+    await expect(here(page)).toHaveText("Zone 1");
+    await expect(here(page)).toBeFocused();
+    await expect(first).toHaveAttribute("aria-selected", "true");
+
+    await step(page, "street").click();
     await expect(speed(page)).toBeVisible();
+    await expect(here(page)).toBeFocused();
 
-    await page.reload();
-    await expect(street).toHaveAttribute("aria-selected", "true");
-    await expect(speed(page)).toBeVisible();
-  });
-
-  test("the arrows, Home and End move between the tabs, with one tab stop", async ({ page }) => {
-    await page.goto("/map.html");
-    await page.goto("/" + (await placesOnMap(page)).streets[0]);
-    const piece = page.locator("#t-piece");
-    const street = page.locator("#t-street");
-    await expect(street).toHaveAttribute("tabindex", "-1");
-    await piece.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(street).toBeFocused();
-    await expect(street).toHaveAttribute("aria-selected", "true");
-    await expect(piece).toHaveAttribute("tabindex", "-1");
-    await page.keyboard.press("Home");
-    await expect(piece).toBeFocused();
-    await expect(piece).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("End");
-    await expect(street).toBeFocused();
-    await page.keyboard.press("ArrowRight");
-    await expect(piece).toBeFocused();
-  });
-
-  test("pressing a piece of the drawing shows its details", async ({ page }) => {
-    await page.goto("/map.html");
-    await page.goto("/" + (await placesOnMap(page)).streets[0]);
-    await page.locator("#t-street").click();
-    await expect(page.locator("#p-street")).toBeVisible();
-    await page.locator("#piece-list [role=option]").first().click();
-    await expect(page.locator("#t-piece")).toHaveAttribute("aria-selected", "true");
+    await first.click();
     await expect(page.locator("#p-piece")).toBeVisible();
+  });
+
+  test("from the street, one button shows the selected zone's commands", async ({ page }) => {
+    await page.goto("/map.html");
+    await page.goto("/" + (await placesOnMap(page)).streets[0]);
+    await expect(page.locator("#zone-split")).toBeHidden();
+    await page.locator("#zone-entry").click();
+    await expect(page.locator("#p-zone")).toBeVisible();
+    await expect(page.locator("#zone-split")).toBeVisible();
+    await expect(here(page)).toHaveText("Zone 1");
+    await expect(here(page)).toBeFocused();
+  });
+
+  test("a stretch of the curbside shows along the street, not under a zone", async ({ page }) => {
+    await page.goto("/map.html");
+    for (const href of (await placesOnMap(page)).streets) {
+      await page.goto("/" + href);
+      await expect(page.locator("#zone-0")).toBeVisible();
+      if ((await page.locator("#curb-strip-right").count()) > 0) break;
+    }
+    await page.locator("#curb-right-0").click();
+    await expect(page.locator("#p-curb")).toBeVisible();
+    await expect(page.locator("#curb-use")).toBeVisible();
+    await expect(path(page).locator("li")).toHaveCount(2);
+    await expect(here(page)).toHaveText("Free stretch");
   });
 });
 
-// A zone has a speed limit of its own (#148): the select on the Street tab sets the selected zone's, and a zone may
+// A zone has a speed limit of its own (#148): the select at the Street level sets the selected zone's, and a zone may
 // follow the street's again.
 test.describe("a zone's speed limit", () => {
   test.describe.configure({ timeout: 120_000 });
@@ -157,7 +172,7 @@ test.describe("a zone's speed limit", () => {
   test("is set for the selected zone only, the others follow the street, and Undo takes it back", async ({ page }) => {
     await openAnchoredStreet(page, 30);
     await splitInto(page, 2);
-    await page.locator("#t-street").click();
+    await showStreetLevel(page);
     await expect(speed(page).locator("option").first()).toHaveText(/^Same as the street/);
     await expect(speed(page)).toHaveValue("street");
     const own = await speed(page).locator("option").first().textContent();
@@ -172,6 +187,8 @@ test.describe("a zone's speed limit", () => {
     await page.locator("#zone-1").click();
     await expect(speed(page)).toHaveValue(chosen);
 
+    // Choosing a zone shows its commands; the speed limit is the street level's, for the selected zone.
+    await showStreetLevel(page);
     await speed(page).selectOption("street");
     await expect(speed(page)).toHaveValue("street");
     await page.locator("#undo").click();

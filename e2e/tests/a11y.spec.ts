@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openJunction, openLongStreet, openStreet, splitInto, test } from "./fixtures";
+import { expect, openJunction, openLongStreet, openStreet, showZoneLevel, splitInto, test } from "./fixtures";
 
 // Keyboard and small-window behaviour that the audit (WCAG 2.2 AA) found wanting.
 
@@ -124,12 +124,13 @@ test("at 320 px a boundary dragged between a floored cell and the rest is droppe
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await openLongStreet(page, 60);
+  await showZoneLevel(page);
   // a 5 m first zone: its share of the strip is under the cell's 24 px minimum, so the cell is floored
   await page.locator("#zone-split-at").fill("5");
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   const handle = page.locator(".zone-handle");
-  // the commands are in the left panel, below the strip on a phone: bring the strip back into the window
+  // the commands are in the details panel, below the strip on a phone: bring the strip back into the window
   await page.locator("#zone-strip").scrollIntoViewIfNeeded();
   const before = (await handle.boundingBox())!;
   const x = before.x + before.width / 2;
@@ -180,6 +181,7 @@ test("the zone strip is one tab stop under the drawing and is named", async ({ p
 
 test("Alt and the arrows on the strip do not leave the page", async ({ page }) => {
   await openStreet(page);
+  await showZoneLevel(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   await page.locator("#zone-strip").focus();
@@ -194,6 +196,7 @@ test("Alt and the arrows on the strip do not leave the page", async ({ page }) =
 
 test("the arrow keys still work after the strip had focus, and V changes nothing", async ({ page }) => {
   await openStreet(page);
+  await showZoneLevel(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   await page.locator("#zone-strip").focus();

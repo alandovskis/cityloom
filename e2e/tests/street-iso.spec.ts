@@ -38,11 +38,11 @@ test.describe("the street in 2.5D", () => {
   });
 
   test("a press on a piece selects it, outlines it, announces it and shows its details", async ({ page }) => {
-    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+    await expect(page.locator("#p-street")).toBeVisible();
     await pressPiece(page, 0);
     await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
     await expect(live(page)).toHaveText(/, [\d.]+ m, \d+ of \d+$/);
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#p-piece")).toBeVisible();
     await expect(page.locator("#wrap")).toBeFocused();
   });
 
@@ -204,7 +204,7 @@ test.describe("with a coarse pointer", () => {
     expect(landed).toBe(narrowest.uid);
     await page.touchscreen.tap(at.x, at.y);
     await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#p-piece")).toBeVisible();
     await expect(live(page)).toHaveText(/, [\d.]+ m, \d+ of \d+$/);
   });
 });
@@ -247,7 +247,7 @@ test.describe("the piece list", () => {
     await expect(page.locator("[aria-selected=true]", { has: page.locator(".piece-name") })).toHaveCount(1);
     await page.keyboard.press("Home");
     await expect(cells(page).first()).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#p-piece")).toBeVisible();
     // The drawing's own selection is the list's.
     await page.keyboard.press("Escape");
     await pressPiece(page, 1);

@@ -244,7 +244,7 @@ fn exported_file(vm: Vm, name: String, text: String) -> impl IntoView {
     }
 }
 
-/// The Profiles section of the street page's Street tab.
+/// The Profiles section of the street page's details panel, at its Street level.
 #[component]
 pub fn Profiles(vm: Rc<StandardsVm>) -> impl IntoView {
     let vm: Vm = StoredValue::new_local(vm);

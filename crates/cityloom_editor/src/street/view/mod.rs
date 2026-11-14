@@ -13,7 +13,7 @@ pub mod inspector;
 pub mod iso;
 pub mod notes;
 pub mod page;
-pub mod panel_tabs;
+pub mod panel_path;
 pub mod piece_list;
 pub mod speed_view;
 pub mod stop_tools;

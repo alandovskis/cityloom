@@ -19,7 +19,7 @@ const PAGES = [
     open: (page: Page) => openStreet(page),
     firstTab: "t-space",
     secondTab: "t-checks",
-    details: "Piece details hidden.",
+    details: "Details hidden.",
   },
   {
     name: "junction",

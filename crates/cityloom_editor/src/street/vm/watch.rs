@@ -359,13 +359,22 @@ impl SheetWatch {
         self.vm.with_value(|v| v.speed_options())
     }
 
-    /// The tab of the left panel showing, drawing again when another is chosen.
-    pub fn panel_tab(&self) -> crate::street::vm::PanelTab {
-        self.vm.with_value(|v| v.panel_tab())
+    /// The level of the details panel shown, drawing again when another is.
+    pub fn level(&self) -> super::level::Level {
+        self.vm.with_value(|v| v.level())
     }
 
-    pub fn show_panel_tab(&self, tab: crate::street::vm::PanelTab) {
-        self.vm.with_value(|v| v.show_panel_tab(tab))
+    /// The path to the level shown, worded.
+    pub fn path(&self) -> Vec<super::Crumb> {
+        self.vm.with_value(|v| v.path())
+    }
+
+    pub fn zone_entry(&self) -> String {
+        self.vm.with_value(|v| v.zone_entry())
+    }
+
+    pub fn show_level(&self, level: super::level::Level) {
+        self.vm.with_value(|v| v.show_level(level))
     }
 
     pub fn set_speed(&self, kmh: Option<u16>) -> bool {

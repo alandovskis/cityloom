@@ -739,7 +739,8 @@ a.btn {
   color: var(--ink);
   box-shadow: var(--shadow-soft);
 }
-.panel-tab[hidden] {
+.panel-tab[hidden],
+.panel-level[hidden] {
   display: none;
 }
 .hint {

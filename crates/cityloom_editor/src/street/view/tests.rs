@@ -590,10 +590,13 @@ fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
 }
 
 #[test]
-fn nothing_selected_the_street_panel_says_how_to_begin() {
+fn nothing_selected_the_street_level_says_how_to_begin_and_the_inspector_is_empty() {
     let s = street_shared(0);
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("Select a piece to change its width and surface."));
+    assert!(!h.contains("<p"), "the inspector shows only at the piece level, with a piece: {h}");
+    let page = include_str!("../../../../../web/street.html");
+    let street = &page[page.find("id=\"p-street\"").unwrap()..];
+    assert!(street[..street.find("</div>").unwrap()].contains("data-i18n=\"st-path-hint\""), "the hint is the Street level's");
 }
 
 #[test]
@@ -986,10 +989,7 @@ fn the_width_field_and_its_range_follow_the_decimal_mark_of_the_language_and_rou
 }
 
 #[test]
-fn the_empty_panel_the_vehicle_and_the_other_settings_are_in_french() {
-    let s = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("Sélectionnez un élément pour modifier sa largeur et son revêtement.") && !h.contains("Select a piece"), "{h}");
+fn the_vehicle_and_the_other_settings_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     assert!(s.edit(|e| e.apply_measure("B1")));
     let bus = s.view().segments.iter().find(|x| KINDS[x.kind].id == "bus").unwrap().uid;
@@ -1557,41 +1557,48 @@ fn the_zone_commands_are_worded_in_both_languages() {
     assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
 }
 
-// ---- the left panel's tabs ---------------------------------------------------------
+// ---- the details panel's path ------------------------------------------------------
 
-#[test]
-fn the_left_panel_has_a_piece_tab_and_a_street_tab() {
-    let vm = street_in(Locale::En);
-    let h = street_html(|| view! { <crate::street::view::panel_tabs::PanelTabs vm=vm.clone()/> });
-    assert!(h.contains("role=\"tablist\"") && h.contains("aria-label=\"Details sections\""), "{h}");
-    assert_eq!(count(&h, "role=\"tab\""), 2, "{h}");
-    assert!(h.contains("id=\"t-piece\"") && h.contains("aria-controls=\"p-piece\"") && h.contains(">Piece</button>"), "{h}");
-    assert!(h.contains("id=\"t-street\"") && h.contains("aria-controls=\"p-street\"") && h.contains(">Street</button>"), "{h}");
-    // One tab stop: the chosen tab is in the order of the page, the other is reached by the arrows.
-    let street_tab = &h[h.find("id=\"t-street\"").unwrap()..];
-    assert!(street_tab.split('>').next().unwrap().contains("tabindex=\"-1\""), "{h}");
-    let piece_tab = &h[h.find("id=\"t-piece\"").unwrap()..];
-    assert!(piece_tab.split('>').next().unwrap().contains("aria-selected=\"true\""), "{h}");
+fn path_html(vm: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::view::panel_path::PanelPath vm=vm.clone()/> })
 }
 
 #[test]
-fn the_left_panel_tabs_follow_the_choice() {
-    use crate::street::vm::PanelTab;
+fn with_nothing_chosen_the_path_is_the_street_alone() {
     let vm = street_in(Locale::En);
-    vm.show_panel_tab(PanelTab::Street);
-    let h = street_html(|| view! { <crate::street::view::panel_tabs::PanelTabs vm=vm.clone()/> });
-    let street_tab = &h[h.find("id=\"t-street\"").unwrap()..];
-    assert!(street_tab.split('>').next().unwrap().contains("aria-selected=\"true\""), "{h}");
-    let piece_tab = &h[h.find("id=\"t-piece\"").unwrap()..];
-    let attrs = piece_tab.split('>').next().unwrap();
-    assert!(attrs.contains("aria-selected=\"false\"") && attrs.contains("tabindex=\"-1\""), "{h}");
+    let h = path_html(&vm);
+    assert!(h.contains("<nav") && h.contains("aria-label=\"What the details are of\""), "{h}");
+    assert_eq!(count(&h, "<li"), 1, "{h}");
+    assert!(h.contains("aria-current=\"location\"") && h.contains(">Street</span>"), "{h}");
+    assert!(!h.contains("<button"), "the level shown is no button: {h}");
 }
 
 #[test]
-fn the_left_panel_tabs_are_in_french_too() {
+fn a_chosen_piece_has_a_path_through_its_zone_whose_steps_are_buttons() {
+    let vm = street_in(Locale::En);
+    vm.select(Some(vm.view_now().segments[0].uid));
+    let h = path_html(&vm);
+    assert_eq!(count(&h, "<li"), 3, "{h}");
+    assert_eq!(count(&h, "<button"), 2, "{h}");
+    assert!(h.contains("data-level=\"street\"") && h.contains(">Street</button>"), "{h}");
+    assert!(h.contains("data-level=\"zone\"") && h.contains(">Zone 1</button>"), "{h}");
+    let current = &h[h.find("aria-current").unwrap()..];
+    assert!(current.contains(">Sidewalk</span>"), "{h}");
+}
+
+#[test]
+fn the_street_level_has_a_button_to_the_selected_zones_commands() {
+    let vm = street_in(Locale::En);
+    let h = street_html(|| view! { <crate::street::view::panel_path::ZoneEntry vm=vm.clone()/> });
+    assert!(h.contains("<button") && h.contains("id=\"zone-entry\"") && h.contains(">Zone commands: Zone 1</button>"), "{h}");
+}
+
+#[test]
+fn the_path_is_in_french_too() {
     let vm = street_in(Locale::FrCa);
-    let h = street_html(|| view! { <crate::street::view::panel_tabs::PanelTabs vm=vm.clone()/> });
-    assert!(h.contains(">Élément</button>") && h.contains(">Rue</button>") && h.contains("aria-label=\"Sections des détails\""), "{h}");
+    vm.select(Some(vm.view_now().segments[0].uid));
+    let h = path_html(&vm);
+    assert!(h.contains("aria-label=\"Ce que montrent les détails\"") && h.contains(">Rue</button>") && h.contains(">Trottoir</span>"), "{h}");
 }
 
 // ---- the speed limit control -------------------------------------------------------

@@ -201,9 +201,24 @@ export async function streetLengthM(page: Page) {
   return Number(/([\d.]+) m long/.exec(label)?.[1]);
 }
 
+/** Shows the Street level of the street page's details panel (the speed limit, the standards): the first step of the
+ *  panel's path, unless the street is already the level shown. */
+export async function showStreetLevel(page: Page) {
+  const step = page.locator('.panel-path .path-step[data-level="street"]');
+  if ((await step.count()) > 0) await step.click();
+  await expect(page.locator("#p-street")).toBeVisible();
+}
+
+/** Shows the selected zone's commands in the details panel, by choosing that zone again in the zone strip. */
+export async function showZoneLevel(page: Page) {
+  await page.locator('#zone-strip [role="option"][aria-selected="true"]').click();
+  await expect(page.locator("#p-zone")).toBeVisible();
+}
+
 /** Cuts the street into `count` zones with the Split command, at whole metres, evenly. The street needs room for
  *  them (5 m a zone): the test names the shortest it can use. */
 export async function splitInto(page: Page, count: number) {
+  await showZoneLevel(page);
   const length = await streetLengthM(page);
   const step = Math.floor(length / count);
   expect(step, `a street of ${length} m is too short for ${count} zones`).toBeGreaterThanOrEqual(5);

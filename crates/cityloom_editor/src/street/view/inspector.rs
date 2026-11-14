@@ -513,10 +513,8 @@ pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
             }
         }
     });
-    move || match selected.get() {
-        Some(uid) => piece_panel(w, uid),
-        None => view! { <p class="insp-empty">{say(w, "inspector-empty")}</p> }.into_any(),
-    }
+    // The inspector is the details panel's piece level, which shows only while a piece is chosen (`level::shown`).
+    move || selected.get().map(|uid| piece_panel(w, uid))
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openStreet, test } from "./fixtures";
+import { expect, openStreet, showStreetLevel, test } from "./fixtures";
 
 // Project-specific design standards (#79): a profile of local thresholds, kept in the browser, that the street's checks
 // read in place of the built-in ones and name when they do.
@@ -11,7 +11,7 @@ const checkNamed = (page: Page, name: string) => page.locator("#checks li").filt
 async function openProfiles(page: Page) {
   await openStreet(page);
   await expect(page.locator("#drawing")).toBeVisible();
-  await page.locator("#t-street").click();
+  await showStreetLevel(page);
   await expect(section(page)).toBeVisible();
 }
 
@@ -50,7 +50,7 @@ test.describe("standards profiles on the street page", () => {
 
     // The choice is the browser's: it is still in force when the page is opened again.
     await page.reload();
-    await page.locator("#t-street").click();
+    await showStreetLevel(page);
     await expect(page.locator("#standards-in-force")).toHaveValue(/.+/);
     await page.locator("#t-checks").click();
     await expect(checkNamed(page, "Room for emergency vehicles").locator(".check-standard")).toContainText("City of X");

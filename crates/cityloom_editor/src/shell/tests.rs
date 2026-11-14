@@ -233,7 +233,7 @@ fn the_editors_open_with_a_skip_link_to_the_drawing_that_shows_on_focus() {
 fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under() {
     // The inspector's sections are level 3; without a level 2 above them the outline skips a level.
     for (page, html, key) in [
-        ("street", include_str!("../../../../web/street.html"), "st-piece-details"),
+        ("street", include_str!("../../../../web/street.html"), "st-details"),
         ("intersection", include_str!("../../../../web/intersection.html"), "jn-page-details-panel"),
     ] {
         let aside = &html[html.find("id=\"details-panel\"").unwrap()..];

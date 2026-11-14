@@ -8,7 +8,6 @@ not-kept = Ce navigateur ne conserve pas vos modifications, alors les autres pag
 notes-hidden = Notes masquées.
 details-shown = { $what } affichés.
 details-hidden = { $what } masqués.
-details-piece = détails des éléments
 details-details = détails
 details-places = lieux
 details-areas = détails des règles de zone

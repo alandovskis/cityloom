@@ -30,7 +30,7 @@ const ENGLISH = [
   "Undo",
   "Redo",
   "Allowed",
-  "Piece details",
+  "Details",
   "Settings",
   "Units",
   "Theme",
