@@ -793,7 +793,7 @@ check-detail-speed-target-over = La limite de vitesse la plus élevée, { $kmh }
 check-detail-speed-target-ok = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, respecte la cible de { $target }{" "}km/h pour une rue de type { $class }.
 check-detail-speed-target-none = Aucune limite de vitesse n’est fixée; la cible pour une rue de type { $class } est de { $target }{" "}km/h.
 
-# Objectifs de conception guidés sur la carte (src/map/goal_view.rs).
+# Objectifs de conception guidés sur la carte (src/map/view/goal_view.rs).
 goal-use = Examiner : { $change }
 goal-select-first = Sélectionnez des rues sur la carte pour examiner ce changement.
 goal-fit-greenway-through = Une voie verte de quartier tranquille donne la rue aux cyclistes et laisse peu de raisons aux voitures de couper par là.

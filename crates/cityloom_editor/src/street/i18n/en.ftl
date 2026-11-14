@@ -793,7 +793,7 @@ check-detail-speed-target-over = The highest speed limit, { $kmh } km/h, is over
 check-detail-speed-target-ok = The highest speed limit, { $kmh } km/h, is within the { $target } km/h target for a { $class } street.
 check-detail-speed-target-none = No speed limit is set; the target for a { $class } street is { $target } km/h.
 
-# Guided design goals on the map (src/map/goal_view.rs).
+# Guided design goals on the map (src/map/view/goal_view.rs).
 goal-use = Review { $change }
 goal-select-first = Select streets on the map to review this change.
 goal-fit-greenway-through = A quiet neighbourhood greenway gives cyclists the street and leaves cars little reason to cut through.
