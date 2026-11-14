@@ -101,6 +101,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Details (the panel of what is chosen) | Détails | As the junction page's panel. |
 | Street page | path (Street › Zone 1 › Driving lane, above the Details panel) | chemin | `Ce que montrent les détails` names it for a screen reader; its first step is `Rue`. |
 | Street page | free stretch (a strip's cell with nothing in it, on the path) | tronçon libre | As in `Choisissez d’abord un tronçon libre`. |
+| Street page | tray (the Notes under the drawing) and its handle | tiroir, poignée | The Notes keep their name (`Notes`); only the guide names the tray. |
 | Street page | Same as the street (a zone that follows the street's speed limit) | Comme la rue | `Comme la rue : 50 km/h`. |
 | Street page frame | Add a piece | Ajouter un élément |  |
 | Street page frame | Time of day | Heure de la journée |  |

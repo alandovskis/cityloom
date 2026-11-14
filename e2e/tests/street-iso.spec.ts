@@ -59,6 +59,10 @@ test.describe("the street in 2.5D", () => {
   test("the 2.5D follows an edit made with the keys and outlines the selected piece", async ({ page }) => {
     const tops = () =>
       page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
+    // The first edit takes the welcome away, which leaves the drawing more room, and it is drawn larger: compare
+    // with the drawing as it is once the welcome has gone.
+    await page.locator("#welcome-dismiss").click();
+    await expect(page.locator("#welcome")).toBeHidden();
     const before = await tops();
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");

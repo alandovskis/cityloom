@@ -41,7 +41,7 @@ mod taper;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm, max_height};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm, fit, max_height};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use raised::{materials, shades, strips};

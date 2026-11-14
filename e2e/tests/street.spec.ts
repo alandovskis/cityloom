@@ -608,7 +608,8 @@ test.describe("the zones of a street", () => {
     await page.locator("#zone-1").click();
     await selectFirstPiece(page);
     await page.keyboard.press("-");
-    const stage = page.locator(".stage-main");
+    // the drawing and the strips under it scroll in the street page's column, under the title and the tools
+    const stage = page.locator(".stage-scroll");
     await stage.evaluate((e) => (e.scrollTop = e.scrollHeight));
     const before = await stage.evaluate((e) => [e.scrollTop, e.scrollHeight]);
     const box = (await page.locator("#zone-0").boundingBox())!;

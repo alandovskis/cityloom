@@ -21,6 +21,9 @@ test.describe("the summary of the last change", () => {
   test.beforeEach(async ({ page }) => {
     await openStreet(page);
     await expect(page.locator("#drawing")).toBeVisible();
+    // The notes are a tray under the drawing that starts closed to its handle: its Impact tab opens it on the card.
+    await page.locator("#t-space").click();
+    await expect(card(page)).toBeVisible();
   });
 
   test("the first tab is Impact, and the card starts by saying nothing has changed", async ({ page }) => {

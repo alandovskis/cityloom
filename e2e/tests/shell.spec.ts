@@ -101,12 +101,16 @@ for (const p of PAGES) {
     });
 
     test("the notes are hidden and shown from their button or the ] key", async ({ page }) => {
+      // The street page's notes are a tray that starts closed to its handle; the other pages' start open.
+      const html = page.locator("html");
+      const open = (await html.getAttribute("data-notes")) !== "closed";
+      const said = (shown: boolean) => (shown ? "Notes shown." : "Notes hidden.");
       await page.locator("#notes-toggle").click();
-      await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
-      await expect(live(page)).toHaveText("Notes hidden.");
+      await expect(html).toHaveAttribute("data-notes", open ? "closed" : "open");
+      await expect(live(page)).toHaveText(said(!open));
       await page.keyboard.press("]");
-      await expect(page.locator("html")).not.toHaveAttribute("data-notes", "closed");
-      await expect(live(page)).toHaveText("Notes shown.");
+      await expect(html).toHaveAttribute("data-notes", open ? "open" : "closed");
+      await expect(live(page)).toHaveText(said(open));
     });
 
     if (p.details) {
