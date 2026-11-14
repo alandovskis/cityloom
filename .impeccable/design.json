@@ -1,22 +1,22 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-03T19:50:42Z",
+  "generatedAt": "2026-11-13T13:03:59Z",
   "title": "Design System: CityLoom",
   "extensions": {
     "colorMeta": {
       "accent": {
         "role": "primary",
         "displayName": "Map Blue",
-        "canonical": "#2563eb",
+        "canonical": "#1f5ee0",
         "tonalRamp": [
-          "#061a46",
-          "#0b2c75",
-          "#0f3da3",
-          "#134fd2",
-          "#4479ee",
-          "#8aabf4",
-          "#b9cdf9",
-          "#e8eefd"
+          "#091c43",
+          "#103276",
+          "#1747aa",
+          "#1f5ddd",
+          "#4f80e7",
+          "#82a5ee",
+          "#b5caf5",
+          "#e9effc"
         ]
       },
       "warn-line": {
@@ -142,16 +142,16 @@
       "field-line": {
         "role": "neutral",
         "displayName": "Field Line",
-        "canonical": "#cdd3da",
+        "canonical": "#7f8a96",
         "tonalRamp": [
-          "#21262c",
-          "#363f49",
-          "#4c5867",
-          "#627184",
-          "#8a98a8",
-          "#b6bfc9",
-          "#d3d8de",
-          "#f0f2f4"
+          "#22262a",
+          "#3d434a",
+          "#57606a",
+          "#717d8a",
+          "#919aa5",
+          "#b1b8bf",
+          "#d1d5d9",
+          "#f1f2f4"
         ]
       },
       "dark-land": {
@@ -213,6 +213,111 @@
           "#feecb4",
           "#fff9e6"
         ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Quiet Slate",
+        "canonical": "#536070",
+        "tonalRamp": [
+          "#21262c",
+          "#39424d",
+          "#525f6f",
+          "#6b7c90",
+          "#8c99aa",
+          "#adb7c3",
+          "#cfd4db",
+          "#f0f2f4"
+        ]
+      },
+      "fill": {
+        "role": "neutral",
+        "displayName": "Well Grey",
+        "canonical": "#f1f3f5",
+        "tonalRamp": [
+          "#20262d",
+          "#38434f",
+          "#506171",
+          "#697e93",
+          "#8a9bac",
+          "#acb8c4",
+          "#ced5dc",
+          "#f0f2f4"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Ink on Blue",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7e7e7e",
+          "#9b9b9b",
+          "#b8b8b8",
+          "#d5d5d5",
+          "#f2f2f2"
+        ]
+      },
+      "accent-wash": {
+        "role": "primary",
+        "displayName": "Blue Wash",
+        "canonical": "#e8effd",
+        "tonalRamp": [
+          "#061c46",
+          "#0b317c",
+          "#0f46b2",
+          "#145ae7",
+          "#477fef",
+          "#7ca4f4",
+          "#b2c9f8",
+          "#e8effd"
+        ]
+      },
+      "warn": {
+        "role": "secondary",
+        "displayName": "Attention Amber",
+        "canonical": "#92400e",
+        "tonalRamp": [
+          "#461f07",
+          "#7b360c",
+          "#b04d11",
+          "#e56516",
+          "#ed8748",
+          "#f3aa7d",
+          "#f8cdb3",
+          "#fdf0e8"
+        ]
+      },
+      "warn-wash": {
+        "role": "secondary",
+        "displayName": "Amber Wash",
+        "canonical": "#fef3c7",
+        "tonalRamp": [
+          "#4b3c01",
+          "#846a02",
+          "#be9803",
+          "#f7c604",
+          "#fbd53a",
+          "#fde173",
+          "#feedad",
+          "#fffae6"
+        ]
+      },
+      "ok-wash": {
+        "role": "tertiary",
+        "displayName": "Pass Wash",
+        "canonical": "#dcfce7",
+        "tonalRamp": [
+          "#06461c",
+          "#0b7c32",
+          "#0fb247",
+          "#14e85d",
+          "#46ef80",
+          "#7cf4a5",
+          "#b2f8ca",
+          "#e8fdef"
+        ]
       }
     },
     "typographyMeta": {
@@ -235,6 +340,22 @@
       "label": {
         "displayName": "Label",
         "purpose": "Sub-lines, hints, keys, pills."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Note headings in a read card and the stuck note heading (17px)."
+      },
+      "reading-lead": {
+        "displayName": "Reading lead",
+        "purpose": "The lede of a read card (18px, ink-2)."
+      },
+      "name": {
+        "displayName": "Name",
+        "purpose": "The piece name in the inspector and the stepper value (20px)."
+      },
+      "chip": {
+        "displayName": "Chip",
+        "purpose": "Pills and table-like cells; the 12px floor."
       }
     },
     "shadows": [
