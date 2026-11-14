@@ -14,7 +14,7 @@ const config: Config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // GitHub Pages, deployed by the `docs-deploy` job of .github/workflows/ci.yml on every push to main.
+  // GitHub Pages, deployed by .github/workflows/docs.yml on every push to main that changes website/.
   url: "https://alandovskis.github.io",
   baseUrl: "/cityloom/",
   trailingSlash: false,
