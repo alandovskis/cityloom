@@ -8,6 +8,7 @@ import {
   openLongStreet,
   openStreet,
   placesOnMap,
+  showZoneLevel,
   streetLengthM,
   test,
 } from "./fixtures";
@@ -435,6 +436,7 @@ const ticks = (page: Page) =>
 async function splitOneStreet(page: Page) {
   await openLongStreet(page, 20);
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
+  await showZoneLevel(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   await page.goto("/map.html");
@@ -507,6 +509,7 @@ test.describe("the zone boundaries on the map", () => {
 
   test("a boundary with a transition is a band along the street", async ({ page }) => {
     await openLongStreet(page, 20);
+    await showZoneLevel(page);
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await page.locator("#zone-1").click();
