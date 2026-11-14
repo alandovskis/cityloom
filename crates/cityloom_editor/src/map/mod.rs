@@ -28,7 +28,7 @@ impl MapPage {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", true);
+        crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", crate::shell::NotesAtStart::OpenWhenRoomy);
     }
 
     /// Binds the Share menu's Download report item (`#report`, made by the shell's `mount_shell`) to the report's

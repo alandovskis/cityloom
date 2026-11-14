@@ -93,7 +93,7 @@ pub struct HomePage(std::rc::Rc<shared::i18n::I18n>);
 impl HomePage {
     /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
     pub fn mount_shell(&self) {
-        shell::mount(self.0.clone(), std::rc::Rc::new(shell::Bare::default()), "details-details", false);
+        shell::mount(self.0.clone(), std::rc::Rc::new(shell::Bare::default()), "details-details", shell::NotesAtStart::Open);
     }
 }
 
@@ -120,7 +120,7 @@ pub struct TimelinePage {
 impl TimelinePage {
     /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page, in its project.
     pub fn mount_shell(&self) {
-        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", false);
+        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", shell::NotesAtStart::Open);
     }
 }
 

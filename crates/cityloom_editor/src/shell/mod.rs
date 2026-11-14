@@ -16,6 +16,7 @@ pub mod vm;
 use crate::shared::i18n::Resources;
 
 pub use view::mount;
+pub use vm::NotesAtStart;
 pub use vm::{Bare, Target};
 
 /// What the shell says, in both languages.

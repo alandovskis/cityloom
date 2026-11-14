@@ -13,7 +13,7 @@ use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
 use crate::shell::session_view::SessionMenu;
 use crate::shell::share_view::{ShareMenu, share_has_report};
-use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
+use crate::shell::vm::{NotesAtStart, RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
     let cb = Closure::<dyn FnMut(Event)>::new(move |e: Event| f(e.unchecked_into()));
@@ -57,7 +57,7 @@ fn typing(target: Option<EventTarget>) -> bool {
 
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
 /// is the message that names what the left sidebar holds on this page.
-pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes_give_way: bool) {
+pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes: NotesAtStart) {
     let tabs = all(".notes .tab").iter().map(|t| t.id()).collect();
     let dark = leptos::prelude::window().match_media("(prefers-color-scheme: dark)").ok().flatten();
     // An editor has too little room for its notes beside the drawing below this width.
@@ -69,7 +69,7 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         details_word,
         tabs,
         dark.as_ref().is_some_and(|m| m.matches()),
-        roomy || !notes_give_way,
+        notes.open(roomy),
     );
     // The markup's links to the map and the editors open them in the page's project, whichever another tab opened since.
     for a in all("a[href]") {

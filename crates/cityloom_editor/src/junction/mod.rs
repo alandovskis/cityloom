@@ -32,7 +32,7 @@ impl Editor {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", true);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", crate::shell::NotesAtStart::OpenWhenRoomy);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -131,7 +131,7 @@ pub fn mount_bare_shell(node: u32) {
         let i18n = i18n.clone();
         leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::Stuck i18n=i18n map=map/> }).forget();
     }
-    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", true);
+    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", crate::shell::NotesAtStart::OpenWhenRoomy);
 }
 
 /// The junction editor on one junction of the city of the page's project, which writes what is made back to the

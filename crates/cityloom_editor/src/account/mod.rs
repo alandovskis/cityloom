@@ -26,7 +26,7 @@ pub struct AccountPage(Rc<I18n>);
 impl AccountPage {
     /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), Rc::new(crate::shell::Bare::default()), "details-details", false);
+        crate::shell::mount(self.0.clone(), Rc::new(crate::shell::Bare::default()), "details-details", crate::shell::NotesAtStart::Open);
     }
 }
 
