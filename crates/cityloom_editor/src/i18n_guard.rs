@@ -513,6 +513,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("project-delete-safe", "the id of the Cancel button of the question before deleting, where focus goes"),
     ("timeline-slot", "the id of the element the timeline is drawn into (web/timeline.html)"),
     ("timeline-name", "the id of the save form's name field, where focus goes"),
+    ("timeline-restore-question", "the id of the question asked before restoring, which names its group"),
+    ("timeline-delete-question", "the id of the question asked before deleting a milestone, which names its group"),
     ("timeline-restore-safe", "the id of the Cancel button of the question before restoring, where focus goes"),
     ("timeline-delete-safe", "the id of the Cancel button of the question before deleting a milestone, where focus goes"),
     ("map-canvas", "the id of the element MapLibre draws the map into (web/map.html)"),

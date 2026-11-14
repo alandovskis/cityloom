@@ -310,16 +310,40 @@ impl TimelineVm {
         }
     }
 
+    // ---- the questions asked before restoring and before deleting ----
+
+    /// Asks about milestone `id` in `asked`, closing the other question, and sends focus to the safe button. Nothing
+    /// for a milestone that is not here.
+    fn ask(&self, id: &str, (asked, other): (&ArcRwSignal<Option<String>>, &ArcRwSignal<Option<String>>), safe: Focus) {
+        if self.store.get(id).is_none() {
+            return;
+        }
+        other.set(None);
+        asked.set(Some(id.to_string()));
+        self.ask_focus(safe);
+    }
+
+    /// The question `key` about the milestone `asked` holds, while one is asked; tracked.
+    fn question_of(&self, asked: &ArcRwSignal<Option<String>>, key: &str) -> Option<String> {
+        self.version.track();
+        let id = asked.get()?;
+        let name = self.name_of(&id)?;
+        Some(self.named(key, &name))
+    }
+
+    /// Answers no to the question `asked` holds: it closes and focus goes back to the button that asked.
+    fn withdraw(&self, asked: &ArcRwSignal<Option<String>>, back_to: fn(String) -> Focus) {
+        if let Some(id) = asked.get_untracked() {
+            asked.set(None);
+            self.ask_focus(back_to(id));
+        }
+    }
+
     // ---- restore ----
 
     /// Asks before putting the work back as milestone `id` held it. Nothing for a milestone that is not here.
     pub fn ask_restore(&self, id: &str) {
-        if self.store.get(id).is_none() {
-            return;
-        }
-        self.deleting.set(None);
-        self.restoring.set(Some(id.to_string()));
-        self.ask_focus(Focus::RestoreSafe);
+        self.ask(id, (&self.restoring, &self.deleting), Focus::RestoreSafe);
     }
 
     /// The milestone the question is about, while it is asked; tracked.
@@ -329,17 +353,11 @@ impl TimelineVm {
 
     /// The question asked before restoring; tracked.
     pub fn restore_question(&self) -> Option<String> {
-        self.version.track();
-        let id = self.restoring.get()?;
-        let name = self.name_of(&id)?;
-        Some(self.named("timeline-restore-confirm", &name))
+        self.question_of(&self.restoring, "timeline-restore-confirm")
     }
 
     pub fn cancel_restore(&self) {
-        if let Some(id) = self.restoring.get_untracked() {
-            self.restoring.set(None);
-            self.ask_focus(Focus::RestoreButton(id));
-        }
+        self.withdraw(&self.restoring, Focus::RestoreButton);
     }
 
     /// Puts the work back as the milestone asked about held it, after keeping the work it replaces as a milestone
@@ -375,12 +393,7 @@ impl TimelineVm {
 
     /// Asks before deleting milestone `id`. Nothing for a milestone that is not here.
     pub fn ask_delete(&self, id: &str) {
-        if self.store.get(id).is_none() {
-            return;
-        }
-        self.restoring.set(None);
-        self.deleting.set(Some(id.to_string()));
-        self.ask_focus(Focus::DeleteSafe);
+        self.ask(id, (&self.deleting, &self.restoring), Focus::DeleteSafe);
     }
 
     /// The milestone the question is about, while it is asked; tracked.
@@ -390,17 +403,11 @@ impl TimelineVm {
 
     /// The question asked before deleting; tracked.
     pub fn delete_question(&self) -> Option<String> {
-        self.version.track();
-        let id = self.deleting.get()?;
-        let name = self.name_of(&id)?;
-        Some(self.named("timeline-delete-confirm", &name))
+        self.question_of(&self.deleting, "timeline-delete-confirm")
     }
 
     pub fn cancel_delete(&self) {
-        if let Some(id) = self.deleting.get_untracked() {
-            self.deleting.set(None);
-            self.ask_focus(Focus::DeleteButton(id));
-        }
+        self.withdraw(&self.deleting, Focus::DeleteButton);
     }
 
     /// Deletes the milestone the question is about; the work is not touched. False where nothing was asked or it

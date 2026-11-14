@@ -41,61 +41,50 @@ fn follow_focus(vm: Vm) {
     });
 }
 
-/// The question asked in a row before the work is put back.
-fn restore_question(vm: Vm) -> impl IntoView {
+/// What differs between the questions asked in a row: the ids focus and the labels go by, and the button that says yes.
+struct Ask {
+    question_id: &'static str,
+    safe_id: &'static str,
+    yes_id: &'static str,
+    yes_key: &'static str,
+    danger: bool,
+}
+
+/// A question asked in a row before something is done: the safe button first, and Escape answers no.
+fn question(vm: Vm, ask: Ask, text: fn(&TimelineVm) -> Option<String>, no: fn(&TimelineVm), yes: fn(&TimelineVm) -> bool) -> impl IntoView {
     view! {
         <div
             role="group"
             class="confirm"
-            aria-labelledby="timeline-restore-question"
+            aria-labelledby=ask.question_id
             on:keydown=move |e| {
                 if e.key() == "Escape" {
                     e.stop_propagation();
-                    vm.with_value(|v| v.cancel_restore());
+                    vm.with_value(|v| no(v));
                 }
             }
         >
-            <p id="timeline-restore-question">{move || vm.with_value(|v| v.restore_question())}</p>
+            <p id=ask.question_id>{move || vm.with_value(|v| text(v))}</p>
             <div class="timeline-buttons">
-                <button type="button" id="timeline-restore-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_restore())>
+                <button type="button" id=ask.safe_id class="btn" on:click=move |_| vm.with_value(|v| no(v))>
                     {move || word(vm, "timeline-cancel")}
                 </button>
-                <button type="button" id="timeline-restore-yes" class="btn" on:click=move |_| {
-                    vm.with_value(|v| v.confirm_restore());
+                <button type="button" id=ask.yes_id class=if ask.danger { "btn danger" } else { "btn" } on:click=move |_| {
+                    vm.with_value(|v| yes(v));
                 }>
-                    {move || word(vm, "timeline-restore-yes")}
+                    {move || word(vm, ask.yes_key)}
                 </button>
             </div>
         </div>
     }
 }
 
-/// The question asked in a row before the milestone is deleted.
-fn delete_question(vm: Vm) -> impl IntoView {
+/// A button of a row, named for its milestone: its visible words first, then the milestone's name.
+fn row_button(vm: Vm, id: String, label_key: &'static str, named_key: &'static str, name: String, on_click: impl Fn() + 'static) -> impl IntoView {
     view! {
-        <div
-            role="group"
-            class="confirm"
-            aria-labelledby="timeline-delete-question"
-            on:keydown=move |e| {
-                if e.key() == "Escape" {
-                    e.stop_propagation();
-                    vm.with_value(|v| v.cancel_delete());
-                }
-            }
-        >
-            <p id="timeline-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
-            <div class="timeline-buttons">
-                <button type="button" id="timeline-delete-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
-                    {move || word(vm, "timeline-cancel")}
-                </button>
-                <button type="button" id="timeline-delete-yes" class="btn danger" on:click=move |_| {
-                    vm.with_value(|v| v.confirm_delete());
-                }>
-                    {move || word(vm, "timeline-delete-yes")}
-                </button>
-            </div>
-        </div>
+        <button type="button" class="btn" id=id aria-label=move || vm.with_value(|v| v.named(named_key, &name)) on:click=move |_| on_click()>
+            {move || word(vm, label_key)}
+        </button>
     }
 }
 
@@ -148,7 +137,6 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
     let named_by = format!("{name_id} {meta_id}");
     let (compare_id, restore_id, delete_id) = (row.id.clone(), row.id.clone(), row.id.clone());
     let (here_compare, here_restore, here_delete) = (row.id.clone(), row.id.clone(), row.id.clone());
-    let (compare_label, restore_label, delete_label) = (row.name.clone(), row.name.clone(), row.name.clone());
     view! {
         <li class="timeline-row" aria-labelledby=named_by>
             <h3 class="timeline-name" id=name_id>{row.name.clone()}</h3>
@@ -160,35 +148,15 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
             </p>
             <p class="timeline-summary">{row.summary.clone()}</p>
             <div class="timeline-buttons">
-                <button
-                    type="button"
-                    class="btn"
-                    id=part("compare", &row.id)
-                    aria-label=move || vm.with_value(|v| v.named("timeline-compare-named", &compare_label))
-                    on:click=move |_| {
-                        vm.with_value(|v| v.compare(&compare_id));
-                    }
-                >
-                    {move || word(vm, "timeline-compare")}
-                </button>
-                <button
-                    type="button"
-                    class="btn"
-                    id=part("restore", &row.id)
-                    aria-label=move || vm.with_value(|v| v.named("timeline-restore-named", &restore_label))
-                    on:click=move |_| vm.with_value(|v| v.ask_restore(&restore_id))
-                >
-                    {move || word(vm, "timeline-restore")}
-                </button>
-                <button
-                    type="button"
-                    class="btn"
-                    id=part("delete", &row.id)
-                    aria-label=move || vm.with_value(|v| v.named("timeline-delete-named", &delete_label))
-                    on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_id))
-                >
-                    {move || word(vm, "timeline-delete")}
-                </button>
+                {row_button(vm, part("compare", &row.id), "timeline-compare", "timeline-compare-named", row.name.clone(), move || {
+                    vm.with_value(|v| v.compare(&compare_id));
+                })}
+                {row_button(vm, part("restore", &row.id), "timeline-restore", "timeline-restore-named", row.name.clone(), move || {
+                    vm.with_value(|v| v.ask_restore(&restore_id))
+                })}
+                {row_button(vm, part("delete", &row.id), "timeline-delete", "timeline-delete-named", row.name.clone(), move || {
+                    vm.with_value(|v| v.ask_delete(&delete_id))
+                })}
             </div>
             {move || {
                 (vm.with_value(|v| v.comparing()).as_deref() == Some(here_compare.as_str()))
@@ -196,8 +164,32 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                     .flatten()
                     .map(|c| comparison_view(vm, c))
             }}
-            {move || (vm.with_value(|v| v.restoring()).as_deref() == Some(here_restore.as_str())).then(|| restore_question(vm))}
-            {move || (vm.with_value(|v| v.deleting()).as_deref() == Some(here_delete.as_str())).then(|| delete_question(vm))}
+            {move || {
+                (vm.with_value(|v| v.restoring()).as_deref() == Some(here_restore.as_str()))
+                    .then(|| {
+                        let ask = Ask {
+                            question_id: "timeline-restore-question",
+                            safe_id: "timeline-restore-safe",
+                            yes_id: "timeline-restore-yes",
+                            yes_key: "timeline-restore-yes",
+                            danger: false,
+                        };
+                        question(vm, ask, TimelineVm::restore_question, TimelineVm::cancel_restore, TimelineVm::confirm_restore)
+                    })
+            }}
+            {move || {
+                (vm.with_value(|v| v.deleting()).as_deref() == Some(here_delete.as_str()))
+                    .then(|| {
+                        let ask = Ask {
+                            question_id: "timeline-delete-question",
+                            safe_id: "timeline-delete-safe",
+                            yes_id: "timeline-delete-yes",
+                            yes_key: "timeline-delete-yes",
+                            danger: true,
+                        };
+                        question(vm, ask, TimelineVm::delete_question, TimelineVm::cancel_delete, TimelineVm::confirm_delete)
+                    })
+            }}
         </li>
     }
 }
