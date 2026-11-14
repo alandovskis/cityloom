@@ -1,0 +1,7 @@
+  ✓  56 [ui] › tests/timeline.spec.ts:33:3 › the timeline page › names the project, starts empty and refuses a milestone with no name (457ms)
+  ✓  58 [ui] › tests/timeline.spec.ts:62:3 › the timeline page › compares a milestone with the work now by place and by what changed (552ms)
+  ✓  57 [ui] › tests/timeline.spec.ts:45:3 › the timeline page › saves a milestone of the work now, which stays over a reload (659ms)
+  ✓  60 [ui] › tests/timeline.spec.ts:120:3 › the timeline page › deletes a milestone after a question and leaves the work alone (589ms)
+  ✓  59 [ui] › tests/timeline.spec.ts:85:3 › the timeline page › restores after a question that Escape answers no, and keeps the work it replaces (828
+  ✓  62 [ui] › tests/timeline.spec.ts:147:3 › the timeline page › a project that is not here goes to the list (433ms)
+  ✓  61 [ui] › tests/timeline.spec.ts:136:3 › the timeline page › is reached from the project's row on the home page and speaks French (785ms)
