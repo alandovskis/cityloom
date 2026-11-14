@@ -1,6 +1,6 @@
 //! Area restrictions: a traffic rule over an outline the resident draws on the map, kept in its own document, and
 //! the streets inside checked against it. The model, the drawing and the document live here; the map page's tab
-//! is the map slice's (`map::areas`), and the street page reads the model and the store.
+//! is the map slice's (`map::vm::areas`), and the street page reads the model and the store.
 
 pub mod draw;
 pub mod model;

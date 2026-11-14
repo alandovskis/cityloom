@@ -1,6 +1,6 @@
 //! What the network-level checks read of the city: plain data about each street and junction, with no wording and
 //! no editor. `City::network_read` makes it from the streets and junctions as they stand now; the rules that judge it
-//! are the map's (`map::network`).
+//! are the map's (`map::model::network`).
 
 use super::street_note;
 use super::{City, node_uid, path_mm};

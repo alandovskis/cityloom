@@ -2,7 +2,7 @@
 //! zone across it, and the taper that boundary needs. Derived, never saved. Pure, no browser types.
 //!
 //! Distances are along the arm from the junction's centre, which is the street's end (the mouth is not subtracted:
-//! `junction::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
+//! `junction::model::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
 
 use super::zones::{same_pieces, zone_label_mid};
 use super::{Host, LENGTH_TOLERANCE_MM, Segment, Street, ZoneEnd, ZoneFrame, total, transition};

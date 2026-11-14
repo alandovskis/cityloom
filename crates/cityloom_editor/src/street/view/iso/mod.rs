@@ -87,7 +87,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     IsoSvg { markup: render(&diagram(v, i18n, width), &p), width: p.width, height: p.height }
 }
 
-/// The diagram `iso_svg` draws and the projection it is drawn through, for a flat figure (`street::drawing`).
+/// The diagram `iso_svg` draws and the projection it is drawn through, for a flat figure (`street::view::drawing`).
 pub(crate) fn diagram_and_projection(v: &View, i18n: &I18n, width: f64) -> (Diagram, Projection) {
     (diagram(v, i18n, width), Projection::fit(width, span_mm(v)))
 }
@@ -1129,7 +1129,7 @@ mod tests {
     }
 
     /// Not a check: prints how long the markup of some streets is, at 1050 and 600 px.
-    /// `cargo test street::iso::tests::markup_size -- --ignored --nocapture`.
+    /// `cargo test street::view::iso::tests::markup_size -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn markup_size() {
@@ -1144,7 +1144,7 @@ mod tests {
 
     /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
     /// every sample street and of `furnished()` at three widths with the page's styles and hatches, to look at
-    /// in a browser. `cargo test street::iso::tests::preview -- --ignored`.
+    /// in a browser. `cargo test street::view::iso::tests::preview -- --ignored`.
     #[test]
     #[ignore]
     fn preview() {

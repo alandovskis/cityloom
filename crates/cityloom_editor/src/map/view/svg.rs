@@ -264,7 +264,7 @@ mod tests {
         City::new().view(0)
     }
 
-    /// The drawing in English; the French one is drawn in `map::tests` (`the_hero_speaks_french_with_no_english_left`).
+    /// The drawing in English; the French one is drawn in `map::view::tests` (`the_hero_speaks_french_with_no_english_left`).
     fn en() -> std::rc::Rc<I18n> {
         crate::i18n_for(crate::shared::i18n::Locale::En)
     }
