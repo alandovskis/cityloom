@@ -1,7 +1,7 @@
 ---
 id: issues
 title: Reporting a problem
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 # Reporting a problem
