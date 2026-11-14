@@ -792,3 +792,15 @@ check-label-speed-target = Speed limit within the target for its class
 check-detail-speed-target-over = The highest speed limit, { $kmh } km/h, is over the { $target } km/h target for a { $class } street.
 check-detail-speed-target-ok = The highest speed limit, { $kmh } km/h, is within the { $target } km/h target for a { $class } street.
 check-detail-speed-target-none = No speed limit is set; the target for a { $class } street is { $target } km/h.
+
+# Guided design goals on the map (src/map/goal_view.rs).
+goal-use = Review { $change }
+goal-select-first = Select streets on the map to review this change.
+goal-fit-greenway-through = A quiet neighbourhood greenway gives cyclists the street and leaves cars little reason to cut through.
+goal-fit-pedestrian-through = Making the streets pedestrian takes cars off them altogether.
+goal-fit-school-school = A school street is walking first, with a single shared lane between planting and the sidewalks.
+goal-fit-bus-corridor-buses = A bus corridor gives buses a lane at each curb.
+goal-conflict-greenway-through-buses = a greenway has no bus lane and is not built for a bus route.
+goal-conflict-pedestrian-through-buses = a pedestrian street cuts the buses that use it.
+goal-conflict-school-school-buses = the shared lane has no room for a bus lane.
+goal-conflict-bus-corridor-buses-school = the bus lane at the curb is where parents stop to drop children off.

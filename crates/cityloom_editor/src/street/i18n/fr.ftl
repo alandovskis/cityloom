@@ -792,3 +792,15 @@ check-label-speed-target = Limite de vitesse sous la cible de sa catégorie
 check-detail-speed-target-over = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, dépasse la cible de { $target }{" "}km/h pour une rue de type { $class }.
 check-detail-speed-target-ok = La limite de vitesse la plus élevée, { $kmh }{" "}km/h, respecte la cible de { $target }{" "}km/h pour une rue de type { $class }.
 check-detail-speed-target-none = Aucune limite de vitesse n’est fixée; la cible pour une rue de type { $class } est de { $target }{" "}km/h.
+
+# Objectifs de conception guidés sur la carte (src/map/goal_view.rs).
+goal-use = Examiner : { $change }
+goal-select-first = Sélectionnez des rues sur la carte pour examiner ce changement.
+goal-fit-greenway-through = Une voie verte de quartier tranquille donne la rue aux cyclistes et laisse peu de raisons aux voitures de couper par là.
+goal-fit-pedestrian-through = Rendre les rues piétonnes en retire complètement les voitures.
+goal-fit-school-school = Une rue scolaire donne la priorité à la marche, avec une seule voie partagée entre la plantation et les trottoirs.
+goal-fit-bus-corridor-buses = Un corridor d’autobus donne aux autobus une voie à chaque bordure.
+goal-conflict-greenway-through-buses = une voie verte n’a pas de voie d’autobus et n’est pas conçue pour une ligne d’autobus.
+goal-conflict-pedestrian-through-buses = une rue piétonne coupe les autobus qui l’empruntent.
+goal-conflict-school-school-buses = la voie partagée n’a pas la place d’une voie d’autobus.
+goal-conflict-bus-corridor-buses-school = la voie d’autobus à la bordure est l’endroit où les parents arrêtent pour déposer les enfants.

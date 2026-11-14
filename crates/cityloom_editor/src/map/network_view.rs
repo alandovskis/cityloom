@@ -28,12 +28,15 @@ pub fn NetworkChecks(vm: Rc<MapVm>) -> impl IntoView {
 fn check(vm: Vm, rule: NetworkCheck) -> impl IntoView {
     let source = vm.with(|v| crate::shared::sources_view::source_note(rule.source, &rule.label, v.i18n(), v.units()));
     let heading = format!("net-h-{}", rule.id);
+    let marked = vm.with(|v| v.goal().get()).is_some_and(|g| g.bears_on_network(rule.id));
+    let mark = marked.then(|| vm.with(|v| v.word("goal-check-mark")));
     let items = rule.items.into_iter().map(finding).collect_view();
     // The name and the count are two spans with a hidden ": " between them, so a screen reader hears "Cycling links:
     // 3 findings" and the heading reads as two parts.
     view! {
-        <div class="net-rule" data-rule=rule.id>
+        <div class="net-rule" class:goal=marked data-rule=rule.id>
             <h3 id=heading class="net-h"><span>{rule.label}</span><span class="sr-only">": "</span><span class="fig net-count">{rule.count_text}</span></h3>
+            {mark.map(|m| view! { <span class="goal-mark">{m}</span> })}
             {source}
             <ul class="checks places-list" data-count=rule.count>{items}</ul>
             {rule.more.map(|m| view! { <p class="hint net-more">{m}</p> })}

@@ -21,18 +21,22 @@ pub enum Goal {
     Buses,
 }
 
-/// The editor that shows the guidance: a street's cross-section or a junction.
+/// The page that shows the guidance: the street's cross-section, a junction, or the map's selected streets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
     Street,
     Junction,
+    Map,
 }
 
 /// A measure to consider, why it fits the goal and what it is likely to cost another goal.
 #[derive(Clone, Copy, Debug)]
 pub struct Pick {
-    /// The Atlas code (`shared::atlas`), named by `atlas::name_key`.
+    /// The Atlas code (`shared::atlas`), named by `atlas::name_key`; on the map, the id of the change to the selected
+    /// streets (`map::corridor::Op::id`), named by `name`.
     pub code: &'static str,
+    /// The message that names a pick that is not an Atlas measure.
+    pub name: Option<&'static str>,
     pub place: Place,
     /// The message that says why it fits.
     pub fit: &'static str,
@@ -41,7 +45,12 @@ pub struct Pick {
 }
 
 const fn pick(code: &'static str, place: Place, fit: &'static str, conflict: Option<(Goal, &'static str)>) -> Pick {
-    Pick { code, place, fit, conflict }
+    Pick { code, name: None, place, fit, conflict }
+}
+
+/// A change to the selected streets of the map, which the person can ask for but is never made for them.
+const fn change(op: &'static str, name: &'static str, fit: &'static str, conflict: Option<(Goal, &'static str)>) -> Pick {
+    Pick { code: op, name: Some(name), place: Place::Map, fit, conflict }
 }
 
 impl Goal {
@@ -87,6 +96,20 @@ impl Goal {
         }
     }
 
+    /// The network checks of the map (`map::network::Check::id`) the goal bears on.
+    pub fn networks(self) -> &'static [&'static str] {
+        match self {
+            Goal::ThroughTraffic => &["lanes"],
+            Goal::SchoolRoute => &["walking", "crossings", "access"],
+            Goal::Buses => &["transit"],
+        }
+    }
+
+    /// Whether the network check `rule` bears on the goal.
+    pub fn bears_on_network(self, rule: &str) -> bool {
+        self.networks().contains(&rule)
+    }
+
     /// Whether the check `id` bears on the goal.
     pub fn bears_on(self, id: &str) -> bool {
         self.focus().iter().any(|f| if f.ends_with('-') { id.starts_with(f) } else { id == *f })
@@ -95,9 +118,9 @@ impl Goal {
     /// The measures worth considering for the goal.
     pub fn picks(self) -> &'static [Pick] {
         match self {
-            Goal::ThroughTraffic => &THROUGH,
-            Goal::SchoolRoute => &SCHOOL,
-            Goal::Buses => &BUSES,
+            Goal::ThroughTraffic => THROUGH,
+            Goal::SchoolRoute => SCHOOL,
+            Goal::Buses => BUSES,
         }
     }
 
@@ -109,21 +132,24 @@ impl Goal {
 
 use Place::{Junction, Street};
 
-const THROUGH: [Pick; 5] = [
+const THROUGH: &[Pick] = &[
     pick("A1", Street, "goal-fit-a1-through", Some((Goal::Buses, "goal-conflict-a1-through-buses"))),
     pick("A2", Street, "goal-fit-a2-through", None),
     pick("N1", Junction, "goal-fit-n1-through", Some((Goal::Buses, "goal-conflict-n1-through-buses"))),
     pick("L3", Junction, "goal-fit-l3-through", Some((Goal::SchoolRoute, "goal-conflict-l3-through-school"))),
     pick("L4", Junction, "goal-fit-l4-through", Some((Goal::SchoolRoute, "goal-conflict-l4-through-school"))),
+    change("greenway", "template-greenway", "goal-fit-greenway-through", Some((Goal::Buses, "goal-conflict-greenway-through-buses"))),
+    change("pedestrian", "make-pedestrian-button", "goal-fit-pedestrian-through", Some((Goal::Buses, "goal-conflict-pedestrian-through-buses"))),
 ];
 
-const SCHOOL: [Pick; 3] = [
+const SCHOOL: &[Pick] = &[
     pick("A2", Street, "goal-fit-a2-school", None),
     pick("N1", Junction, "goal-fit-n1-school", Some((Goal::Buses, "goal-conflict-n1-school-buses"))),
     pick("M1", Junction, "goal-fit-m1-school", None),
+    change("school", "template-school", "goal-fit-school-school", Some((Goal::Buses, "goal-conflict-school-school-buses"))),
 ];
 
-const BUSES: [Pick; 12] = [
+const BUSES: &[Pick] = &[
     pick("B1", Street, "goal-fit-b1-buses", None),
     pick("C1", Street, "goal-fit-c1-buses", None),
     pick("E1", Street, "goal-fit-e1-buses", Some((Goal::SchoolRoute, "goal-conflict-e1-buses-school"))),
@@ -136,6 +162,7 @@ const BUSES: [Pick; 12] = [
     pick("M1", Junction, "goal-fit-m1-buses", Some((Goal::SchoolRoute, "goal-conflict-m1-buses-school"))),
     pick("M2", Junction, "goal-fit-m2-buses", None),
     pick("N1", Junction, "goal-fit-n1-buses", None),
+    change("bus-corridor", "template-bus-corridor", "goal-fit-bus-corridor-buses", Some((Goal::SchoolRoute, "goal-conflict-bus-corridor-buses-school"))),
 ];
 
 /// The chosen goal, kept for the page and between visits. Choosing and clearing only write this preference.
@@ -182,9 +209,10 @@ mod tests {
     #[test]
     fn every_pick_is_an_atlas_measure_modelled_where_it_is_shown() {
         for g in Goal::ALL {
-            for p in g.picks() {
+            for p in g.picks().iter().filter(|p| p.place != Place::Map) {
                 let m = MEASURES.iter().find(|m| m.code == p.code).unwrap_or_else(|| panic!("{} is not in the Atlas table", p.code));
                 let expected = if p.place == Place::Street { Where::Street } else { Where::Junction };
+                assert!(p.name.is_none(), "{} is an Atlas measure, named by its code", p.code);
                 assert_eq!(m.place, expected, "{} is shown in the wrong editor for {}", p.code, g.id());
             }
         }
@@ -197,6 +225,27 @@ mod tests {
             assert!(g.picks_at(Place::Street).count() + g.picks_at(Place::Junction).count() > 0, "{}", g.id());
         }
         assert!(Goal::SchoolRoute.picks_at(Place::Street).count() > 0);
+        for g in Goal::ALL {
+            assert!(g.picks_at(Place::Map).count() > 0, "{} has no change to offer the selected streets", g.id());
+            assert!(!g.networks().is_empty());
+        }
+    }
+
+    #[test]
+    fn a_map_pick_is_a_named_change_and_nothing_else_is_named() {
+        for g in Goal::ALL {
+            for p in g.picks() {
+                assert_eq!(p.name.is_some(), p.place == Place::Map, "{} of {}", p.code, g.id());
+            }
+        }
+    }
+
+    #[test]
+    fn a_goal_bears_on_its_network_checks_and_on_no_other() {
+        assert!(Goal::Buses.bears_on_network("transit"));
+        assert!(Goal::SchoolRoute.bears_on_network("walking") && Goal::SchoolRoute.bears_on_network("crossings"));
+        assert!(!Goal::Buses.bears_on_network("walking"));
+        assert!(!Goal::ThroughTraffic.bears_on_network("lane"), "an id is matched whole");
     }
 
     #[test]

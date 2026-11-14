@@ -260,7 +260,7 @@ pub fn GoalGuide(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let choice = w.vm_goal();
-        crate::shared::goals_view::goal_guide(choice, crate::shared::goals::Place::Street, &w.i18n())
+        crate::shared::goals_view::goal_guide(choice, crate::shared::goals::Place::Street, &w.i18n(), None)
     }
 }
 

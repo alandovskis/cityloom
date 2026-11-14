@@ -1,5 +1,8 @@
-//! The goal picker and its guidance, drawn in the Checks tab of the street and junction pages. It offers and
-//! explains; no control here edits a design (`goals.rs`).
+//! The goal picker and its guidance, drawn in the Checks tab of the street, junction and map pages. It offers and
+//! explains; no control here edits a design (`goals.rs`). On the map a change to the selected streets can be picked
+//! as the one to review, which is as far as this goes: making it stays with the review and its apply button.
+
+use std::rc::Rc;
 
 use leptos::prelude::*;
 
@@ -8,8 +11,9 @@ use crate::shared::goals::{Goal, GoalChoice, Place};
 use crate::shared::i18n::{Args, I18n};
 
 /// The picker and, for the chosen goal, why each measure fits and what it is likely to cost. Call it inside a
-/// closure that tracks the page's words.
-pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n) -> impl IntoView + use<> {
+/// closure that tracks the page's words. `pick_change` is the map's way of choosing the change to review, given the
+/// change's id; it is `None` where there is nothing to pick it for (no editor offers it, or no street is selected).
+pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n, pick_change: Option<Rc<dyn Fn(&'static str)>>) -> impl IntoView + use<> {
     let plain = |key: &str| i18n.tr(key, &Args::new());
     let current = choice.get();
     let radio = |goal: Option<Goal>, label: String| {
@@ -32,11 +36,28 @@ pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n) -> impl IntoVie
                     let text = i18n.tr("goal-conflict", &Args::new().str("goal", i18n.tr(other.name(), &Args::new())).str("why", plain(why)));
                     view! { <span class="goal-conflict">{text}</span> }
                 });
+                let title = match p.name {
+                    Some(name) => plain(name),
+                    None => i18n.tr("goal-measure", &Args::new().str("code", p.code).str("name", plain(&name_key(p.code)))),
+                };
+                let choose = (place == Place::Map).then(|| match &pick_change {
+                    Some(pick) => {
+                        let (pick, op) = (pick.clone(), p.code);
+                        view! {
+                            <button type="button" class="btn quiet goal-use" data-op=op on:click=move |_| pick(op)>
+                                {i18n.tr("goal-use", &Args::new().str("change", plain(p.name.unwrap_or(""))))}
+                            </button>
+                        }
+                        .into_any()
+                    }
+                    None => view! { <span class="goal-select">{plain("goal-select-first")}</span> }.into_any(),
+                });
                 view! {
                     <li>
-                        <b>{i18n.tr("goal-measure", &Args::new().str("code", p.code).str("name", plain(&name_key(p.code))))}</b>
+                        <b>{title}</b>
                         <span>{plain(p.fit)}</span>
                         {conflict}
+                        {choose}
                     </li>
                 }
             })
@@ -79,7 +100,7 @@ mod tests {
     fn drawn(goal: Option<Goal>, place: Place, locale: Locale) -> String {
         let choice = GoalChoice::new(Rc::new(MemoryStorage::default()));
         choice.set(goal);
-        html(move || goal_guide(choice, place, &crate::i18n_for(locale)).into_any())
+        html(move || goal_guide(choice, place, &crate::i18n_for(locale), None).into_any())
     }
 
     #[test]
@@ -103,6 +124,20 @@ mod tests {
     }
 
     #[test]
+    fn on_the_map_a_change_is_named_and_offered_only_where_streets_are_selected() {
+        let choice = GoalChoice::new(Rc::new(MemoryStorage::default()));
+        choice.set(Some(Goal::SchoolRoute));
+        let without = html({
+            let choice = choice.clone();
+            move || goal_guide(choice, Place::Map, &crate::i18n_for(Locale::En), None).into_any()
+        });
+        assert!(without.contains("School street") && without.contains("Select streets on the map"), "{without}");
+        assert!(!without.contains("goal-use"));
+        let with = html(move || goal_guide(choice, Place::Map, &crate::i18n_for(Locale::En), Some(Rc::new(|_| {}))).into_any());
+        assert!(with.contains("class=\"btn quiet goal-use\"") && with.contains("data-op=\"school\"") && with.contains("Review School street"), "{with}");
+    }
+
+    #[test]
     fn a_chosen_goal_explains_each_measure_and_names_the_likely_conflict() {
         let h = drawn(Some(Goal::Buses), Place::Junction, Locale::En);
         assert!(h.contains("M1") && h.contains("Bus Bulbs"));
@@ -114,7 +149,7 @@ mod tests {
     fn both_languages_word_every_goal_in_both_editors() {
         for locale in [Locale::En, Locale::FrCa] {
             for g in Goal::ALL {
-                for place in [Place::Street, Place::Junction] {
+                for place in [Place::Street, Place::Junction, Place::Map] {
                     let h = drawn(Some(g), place, locale);
                     // An unknown message renders as its own id.
                     assert!(!h.contains("goal-fit") && !h.contains("goal-conflict-") && !h.contains("goal-intro"), "{} {place:?} {locale:?}", g.id());

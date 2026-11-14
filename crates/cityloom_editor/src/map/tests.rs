@@ -1780,3 +1780,75 @@ mod corridor_words {
         assert!(said.contains("0 rue peut être modifiée"), "{said}");
     }
 }
+
+mod goals {
+    use super::*;
+    use crate::map::corridor::Op;
+    use crate::shared::goals::Goal;
+
+    fn guide(vm: &Rc<MapVm>) -> String {
+        map_html(|| view! { <crate::map::goal_view::GoalGuide vm=vm.clone()/> })
+    }
+
+    #[test]
+    fn every_network_check_a_goal_names_is_one_of_the_maps_and_every_change_is_one_the_panel_offers() {
+        let rules: Vec<_> = crate::map::network::Check::ALL.iter().map(|c| c.id()).collect();
+        for g in Goal::ALL {
+            for r in g.networks() {
+                assert!(rules.contains(r), "{r} of {} is not a network check", g.id());
+            }
+            for p in g.picks_at(crate::shared::goals::Place::Map) {
+                assert!(Op::from_id(p.code).is_some(), "{} is not a change of the corridor panel", p.code);
+            }
+        }
+    }
+
+    #[test]
+    fn the_guide_offers_the_change_that_fits_only_where_streets_are_selected() {
+        let (vm, _) = map_vm();
+        vm.goal().set(Some(Goal::SchoolRoute));
+        let h = guide(&vm);
+        assert!(h.contains("School street") && h.contains("Select streets on the map to review this change"), "{h}");
+        assert!(!h.contains("goal-use"));
+        vm.toggle_selected(Some("s-1"));
+        let h = guide(&vm);
+        assert!(h.contains("Review School street") && h.contains("data-op=\"school\""), "{h}");
+    }
+
+    #[test]
+    fn a_goal_marks_the_network_checks_that_bear_on_it_and_changes_nothing() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        let before = (vm.corridor_op(), matches!(vm.corridor_stage(), crate::map::vm::Stage::Idle), vm.selection().streets());
+        let plain = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+        assert!(!plain.contains("goal-mark"));
+        vm.goal().set(Some(Goal::Buses));
+        let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+        assert_eq!(count(&h, "goal-mark"), 1, "only the transit check bears on buses: {h}");
+        assert!(h.contains("Bears on your goal"), "{h}");
+        vm.goal().set(None);
+        let after = (vm.corridor_op(), matches!(vm.corridor_stage(), crate::map::vm::Stage::Idle), vm.selection().streets());
+        assert_eq!(before, after, "a goal is a preference: no change picked, reviewed or made");
+        assert!(vm.corridor_undo_label().is_none());
+    }
+
+    #[test]
+    fn picking_the_offered_change_only_chooses_it_for_review() {
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        vm.goal().set(Some(Goal::Buses));
+        vm.set_corridor_op("bus-corridor");
+        assert_eq!(vm.corridor_op().id(), "bus-corridor");
+        assert!(matches!(vm.corridor_stage(), crate::map::vm::Stage::Idle), "nothing is reviewed until the person asks");
+        assert!(vm.corridor_undo_label().is_none(), "and nothing is made");
+    }
+
+    #[test]
+    fn the_guide_speaks_french() {
+        let (vm, _) = map_vm_in(Locale::FrCa);
+        vm.goal().set(Some(Goal::Buses));
+        vm.toggle_selected(Some("s-1"));
+        let h = guide(&vm);
+        assert!(h.contains("Prioriser les autobus") && h.contains("Examiner"), "{h}");
+    }
+}

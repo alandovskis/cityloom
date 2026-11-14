@@ -358,6 +358,8 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Area rules panel, and what the map shows of them.
     areas: Rc<AreasVm>,
+    /// The planning goal chosen (#72): it marks network checks and offers a change to review, and changes nothing.
+    goal: crate::shared::goals::GoalChoice,
     /// The streets selected on the map, and in the Selected streets panel.
     selection: Rc<SelectionVm>,
     /// The change picked for the selected streets, and how far it has got.
@@ -405,6 +407,7 @@ impl MapVm {
             me: me.clone(),
             core,
             store,
+            goal: crate::shared::goals::GoalChoice::new(ports.storage.clone()),
             ports,
             i18n,
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
@@ -1262,6 +1265,11 @@ impl MapVm {
     }
 
     // ---- the selected streets ----
+
+    /// The planning goal chosen.
+    pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
+        &self.goal
+    }
 
     /// The selected streets' view-model.
     pub fn selection(&self) -> &Rc<SelectionVm> {
