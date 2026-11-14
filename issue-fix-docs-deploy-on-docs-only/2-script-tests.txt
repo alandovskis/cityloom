@@ -1,0 +1,17 @@
+$ git rev-parse HEAD
+453118e3204ece69c90b4f3ba3a48abdb98e35ac
+$ just test-scripts
+----------------------------------------------------------------------
+Ran 70 tests in 0.088s
+
+OK
+
+$ python3 scripts/include/tests/test_ci_changes.py -v -k version -k paths_ignore -k workflows
+test_the_workflows_ignore_exactly_the_documentation (__main__.Coverage) ... ok
+test_an_unknown_change_needs_a_version_bump (__main__.Selection) ... ok
+test_anything_else_needs_a_version_bump (__main__.Selection) ... ok
+test_ci_configuration_alone_still_runs_every_test (__main__.Selection) ... ok
+test_documentation_and_ci_configuration_need_no_version_bump (__main__.Selection) ... ok
+test_a_version_bump_is_not_a_change (__main__.VersionOnly) ... ok
+Ran 6 tests in 0.011s
+OK

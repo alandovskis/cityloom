@@ -1,0 +1,32 @@
+$ scripts/ci/ci_changes.py website/docs/intro.md
+  unit false  version false  browser false
+$ scripts/ci/ci_changes.py docs/glossary-fr-ca.md CLAUDE.md
+  unit false  version false  browser false
+$ scripts/ci/ci_changes.py .github/workflows/ci.yml
+  unit true  version false  browser true
+$ scripts/ci/ci_changes.py .github/workflows/docs.yml website/docs/intro.md
+  unit true  version false  browser true
+$ scripts/ci/ci_changes.py scripts/ci/ci_changes.py .claude/agents/deploy.md
+  unit true  version false  browser true
+$ scripts/ci/ci_changes.py crates/cityloom_editor/src/junction/model.rs
+  unit true  version true  browser true
+$ scripts/ci/ci_changes.py .github/workflows/ci.yml web/app.css
+  unit true  version true  browser true
+$ scripts/ci/ci_changes.py scripts/build.sh
+  unit true  version true  browser true
+
+$ scripts/ci/ci_changes.py $(git diff --name-only origin/main...HEAD)   # this PR
+  .claude/agents/deploy.md: docs
+  .github/workflows/ci.yml: all
+  .github/workflows/docs.yml: all
+  .github/workflows/sonar.yml: all
+  CLAUDE.md: docs
+  scripts/ci/ci_changes.py: all
+  scripts/ci/spec-map.json: all
+  scripts/include/tests/test_ci_changes.py: none
+  website/docs/getting-started.md: docs
+  website/docs/project-layout.md: docs
+  website/docusaurus.config.ts: docs
+  website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md: docs
+  website/i18n/fr-CA/docusaurus-plugin-content-docs/current/project-layout.md: docs
+{"unit": "true", "version": "false", "browser": "true", "ui": "true", "ui_specs": "", "integration": "true", "integration_specs": "", "e2e": "true", "e2e_specs": ""}

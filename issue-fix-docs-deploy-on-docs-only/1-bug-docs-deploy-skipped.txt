@@ -1,0 +1,18 @@
+$ gh run view 43620546760 --json headSha,event,jobs  # main after #202, a documentation-only merge
+headSha 0c7068f353a28252d79160aabd06be691dc9dd7c event push
+Format: success
+Changes: success
+Documentation: success
+Version bump: skipped
+Unit tests: skipped
+UI tests: skipped
+Build for the browser tests: skipped
+E2E tests: skipped
+Integration tests: skipped
+Release server has no fake provider: skipped
+CI: success
+Deploy to Railway: skipped
+Deploy the documentation: skipped
+
+$ curl -s -o /dev/null -w "%{http_code}" https://alandovskis.github.io/cityloom/project-layout
+404

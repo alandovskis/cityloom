@@ -1,0 +1,34 @@
+$ actionlint .github/workflows/ci.yml .github/workflows/docs.yml .github/workflows/sonar.yml  (ubuntu-26.04 label and the SC2086 notes on unchanged lines filtered out; actionlint does not know that runner label yet)
+remaining findings: 0
+
+$ grep -n paths-ignore -A5 .github/workflows/ci.yml | head -14
+10:    paths-ignore:
+11-      - "website/**"
+12-      - "docs/**"
+13-      - "**/*.md"
+14-      - "LICENSE*"
+15-  pull_request:
+16:    paths-ignore:
+17-      - "website/**"
+18-      - "docs/**"
+19-      - "**/*.md"
+20-      - "LICENSE*"
+21-  workflow_dispatch:
+
+$ sed -n "/^  deploy:/,/^    steps:/p" .github/workflows/docs.yml
+  deploy:
+    name: Deploy the documentation
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:

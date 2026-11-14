@@ -1,0 +1,8 @@
+$ (cd e2e && npx prettier --ignore-path ../.prettierignore --check ../website)  # the step docs.yml runs
+Checking formatting...
+All matched files use Prettier code style!
+exit 0
+$ (cd website && npm run build)  # the step docs.yml runs
+[SUCCESS] Generated static files in "build".
+[SUCCESS] Generated static files in "build/fr-CA".
+exit 0
