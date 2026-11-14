@@ -244,6 +244,16 @@ fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under(
     }
 }
 
+#[test]
+fn the_street_page_s_details_come_after_the_drawing_in_reading_and_focus_order() {
+    // They are drawn on the right of the drawing: a keyboard or a screen reader meets them in the same order.
+    let html = include_str!("../../../../web/street.html");
+    let at = |needle: &str| html.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(at("id=\"scroll\"") < at("id=\"inspector-toggle\""), "the details' toggle comes after the drawing");
+    assert!(at("id=\"inspector-toggle\"") < at("id=\"details-panel\""), "the toggle comes just before the panel it opens");
+    assert!(at("</main>") < at("id=\"details-panel\""), "the details panel comes after the drawing's column");
+}
+
 /// The pages that run the module say, in their own markup, that it could not start: the module holds every other
 /// message, and it is what did not load. `web/boot.js` shows the block of the page's language.
 #[test]
