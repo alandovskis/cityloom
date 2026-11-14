@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home: the person's projects), `web/about.html` (About CityLoom, with the city of the project opened last behind it), `web/map.html`, `web/street.html`, `web/intersection.html` (and `web/account.html`, `web/credits.html`). Every page's top bar links Projects (`index.html`) and About (`about.html`), the page's own `aria-current="page"`, and the logo goes to `index.html`; there is no Map link: a map is opened from its project. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
+CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home: the person's projects), `web/about.html` (About CityLoom, with the city of the project opened last behind it), `web/map.html`, `web/street.html`, `web/intersection.html` (and `web/account.html`, `web/credits.html`, and `web/timeline.html`, a project's milestones). Every page's top bar links Projects (`index.html`) and About (`about.html`), the page's own `aria-current="page"`, and the logo goes to `index.html`; there is no Map link: a map is opened from its project. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
 
 Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_model`, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
 
@@ -49,7 +49,7 @@ Vertical slices, one folder per feature, MVVM inside each:
 
 Translation: English and fr-CA on every app page (all but `credits.html`) and the shell.
 
-- Engine `shared/i18n.rs` (`I18n` with `tr`/`tr_now`, `detect`, `LANG_KEY`, ...). Slices owning messages (shell, account, street, city, map, place, junction, restriction, sync, archive, project) have `i18n/{en,fr}.ftl` and a `RESOURCES` const, registered only in `lib.rs::i18n_for`. Text functions take `&I18n`; views use the tracked `tr`/`say` so they follow a switch, commands use `tr_now`/`say_now`.
+- Engine `shared/i18n.rs` (`I18n` with `tr`/`tr_now`, `detect`, `LANG_KEY`, ...). Slices owning messages (shell, account, street, city, map, place, junction, restriction, sync, archive, project, timeline) have `i18n/{en,fr}.ftl` and a `RESOURCES` const, registered only in `lib.rs::i18n_for`. Text functions take `&I18n`; views use the tracked `tr`/`say` so they follow a switch, commands use `tr_now`/`say_now`.
 - The model never holds wording: it says things as `Said` data (`shared/said.rs`: a key and `Arg`s) that `say` renders in the current language. Names the app invents (place, street title, ends, class words, "unnamed") are `Said` too, with messages in `city/i18n`.
 - Message keys are global: a slice words another slice's messages only by key through `Said`/`Arg`, never by importing its text.
 - The shell owns the switch (`ShellVm::set_locale` keeps `cityloom-lang`, sets `<html lang>`); page markup carries `data-i18n*` attributes filled by `shell/view.rs::apply_translations`. `web/junction.js` holds no wording (`mount_bare_shell`).
@@ -82,6 +82,7 @@ Folder-level `CLAUDE.md` files hold the details of each area and load when you w
 - `src/project/CLAUDE.md`: Project slice (`src/project/`): projects, the home page's list, the move of older work
 - `src/restriction/CLAUDE.md`: Restriction slice (`src/restriction/`)
 - `src/sync/CLAUDE.md`: Sync slice (`src/sync/`)
+- `src/timeline/CLAUDE.md`: Timeline slice (`src/timeline/`): milestones of a project's work and their page
 - `src/archive/CLAUDE.md`: Archive slice (`src/archive/`)
 - `src/standards/CLAUDE.md`: Standards profiles (`src/standards/`)
 - `src/shared/CLAUDE.md`: Shared kernel (`src/shared/`)

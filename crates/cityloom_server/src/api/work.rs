@@ -19,7 +19,8 @@ use super::{authed, no_content, store_error};
 use crate::app::{Account, ProxyIpKeyExtractor, json_error, json_response, require_origin};
 use crate::work::{self, Ask, Limit, Put, Record, Verdict, WorkError};
 
-/// 100 records of 64 KB, and the envelope.
+/// A few records of the largest size, and the envelope. A batch over this is a 413 `batch` and the client sends its
+/// records one at a time, each of which fits.
 const MAX_REQUEST_BYTES: usize = 7 * 1024 * 1024;
 
 fn too_large(limit: Limit) -> Response {

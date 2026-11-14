@@ -14,5 +14,5 @@ sync-merged = Your work was merged with your account: { $sent ->
   }
 sync-too-large-record = A place is too big for the server (64 KB), so it stays on this device only.
 sync-too-large-records = The server keeps at most 5,000 records per account, so the rest stays on this device only.
-sync-too-large-bytes = The server keeps at most 2 MB of work per account, so the rest stays on this device only.
+sync-too-large-bytes = The server keeps at most 16 MB of work per account, so the rest stays on this device only.
 sync-too-large-other = Some of your work is too big for the server, so it stays on this device only.

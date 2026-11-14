@@ -23,6 +23,7 @@ use crate::shared::ports::Storage;
 use crate::shared::project_id::{FIRST, split_key, valid, wire_key};
 use crate::shared::scoped::ScopedStorage;
 use crate::sync::model::{Id, Kind, valid_key};
+use crate::timeline::store::MilestoneStore;
 
 type Shared = Rc<dyn Storage>;
 
@@ -50,7 +51,7 @@ fn section(kind: Kind) -> Option<&'static str> {
     match kind {
         Kind::Street => Some(STREETS),
         Kind::Junction => Some(JUNCTIONS),
-        Kind::Rule | Kind::Area | Kind::Project => None,
+        Kind::Rule | Kind::Area | Kind::Project | Kind::Milestone => None,
     }
 }
 
@@ -59,6 +60,7 @@ fn usable_in(scoped: &Shared, kind: Kind) -> bool {
     match kind {
         Kind::Street | Kind::Junction => edits_draft(scoped).is_some(),
         Kind::Rule => RestrictionStore::new(scoped.clone()).is_usable(),
+        Kind::Milestone => MilestoneStore::new(scoped.clone()).is_usable(),
         Kind::Area | Kind::Project => true,
     }
 }
@@ -97,6 +99,7 @@ pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     match id.kind {
         Kind::Street | Kind::Junction => edits_draft(storage)?.get_raw(section(id.kind)?, key).cloned(),
         Kind::Rule => RestrictionStore::new(storage.clone()).raw(key),
+        Kind::Milestone => MilestoneStore::new(storage.clone()).raw(key),
         Kind::Area => storage.recall(AREA_KEY).filter(|q| Area::from_query(q).is_some()).map(|query| json!({ "query": query })),
         Kind::Project => None,
     }
@@ -174,7 +177,8 @@ impl LegacyHold {
             Kind::Junction => !self.first_junctions.contains(key) && self.junctions.has(key),
             Kind::Rule => !self.first_rules.contains(key) && self.rules.has(key),
             Kind::Area => !self.first_area && self.area,
-            Kind::Project => false,
+            // Milestones began with projects: no document from before them holds any.
+            Kind::Project | Kind::Milestone => false,
         }
     }
 }
@@ -215,6 +219,10 @@ fn write_in(storage: &Shared, kind: Kind, key: &str, body: &Value) -> bool {
             let rules = RestrictionStore::new(storage.clone());
             rules.is_usable() && rules.put_raw(key, body.clone())
         }
+        Kind::Milestone => {
+            let milestones = MilestoneStore::new(storage.clone());
+            milestones.is_usable() && milestones.put_raw(key, body.clone())
+        }
         Kind::Area => match body.get("query").and_then(Value::as_str) {
             Some(query) if Area::from_query(query).is_some() => storage.remember(AREA_KEY, query),
             _ => false,
@@ -244,6 +252,10 @@ pub fn remove(storage: &Shared, id: &Id) -> bool {
         Kind::Rule => {
             let rules = RestrictionStore::new(storage.clone());
             rules.is_usable() && (!rules.raw_ids().iter().any(|held| held == key) || rules.remove_raw(key))
+        }
+        Kind::Milestone => {
+            let milestones = MilestoneStore::new(storage.clone());
+            milestones.is_usable() && (!milestones.raw_ids().iter().any(|held| held == key) || milestones.remove_raw(key))
         }
         Kind::Area | Kind::Project => true,
     }
@@ -295,6 +307,38 @@ mod tests {
         assert_eq!(read(&s, &rule), None);
         assert!(read(&s, &area).is_some(), "the chosen area is never removed, only replaced");
         assert_eq!(memory.recall("cityloom-sync"), None, "reading and writing for the sync is not an edit");
+    }
+
+    #[test]
+    fn a_milestone_is_listed_read_written_and_removed_in_its_project_without_marking() {
+        let (s, memory) = storage();
+        assert!(write(&s, &Id::new(Kind::Project, "p1"), &project_body("Plateau")));
+        let first = Id::new(Kind::Milestone, "m-abc");
+        let other = Id::new(Kind::Milestone, "p1:m-def");
+        let body = |name: &str| json!({"name": name, "created_at": "2027-01-01T00:00:00.000Z", "app_version": "9", "summary": {"streets": 1, "junctions": 0, "rules": 0}, "edits": {"version": 5}, "newer": [1]});
+        for (id, name) in [(&first, "One"), (&other, "Two")] {
+            assert!(write(&s, id, &body(name)), "{id:?}");
+            assert_eq!(read(&s, id), Some(body(name)), "{id:?}");
+        }
+        assert!(memory.recall("cityloom-milestones@first").is_some() && memory.recall("cityloom-milestones@p1").is_some());
+        let mut listed: Vec<Id> = ids(&s).into_iter().filter(|id| id.kind == Kind::Milestone).collect();
+        listed.sort();
+        assert_eq!(listed, [first.clone(), other.clone()]);
+        assert!(remove(&s, &first) && remove(&s, &other) && remove(&s, &other), "removing what is gone is done");
+        assert_eq!((read(&s, &first), read(&s, &other)), (None, None));
+        assert_eq!(memory.recall("cityloom-sync"), None, "reading and writing for the sync is not an edit");
+    }
+
+    #[test]
+    fn a_damaged_milestones_document_pauses_milestones_alone() {
+        let (s, memory) = storage();
+        memory.remember("cityloom-milestones@first", "not json");
+        assert!(!usable(&s, Kind::Milestone));
+        assert!(usable(&s, Kind::Street) && usable(&s, Kind::Rule) && usable(&s, Kind::Project));
+        assert!(!write(&s, &Id::new(Kind::Milestone, "m-abc"), &json!({"name": "A"})));
+        assert!(!remove(&s, &Id::new(Kind::Milestone, "m-abc")));
+        assert_eq!(memory.recall("cityloom-milestones@first").as_deref(), Some("not json"), "not written over");
+        assert_eq!(memory.recall("cityloom-milestones-damaged@first"), None, "and not copied aside: the editors do that");
     }
 
     fn many_zone_record(zones: usize) -> Value {

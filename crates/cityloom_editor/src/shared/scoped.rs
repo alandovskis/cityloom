@@ -12,7 +12,15 @@ pub fn in_project(ports: Ports, project: &str) -> Ports {
 }
 
 /// The keys that hold one project's data. Each is stored as `<key>@<project>`.
-pub const SCOPED_KEYS: [&str; 5] = ["cityloom-edits", "cityloom-edits-damaged", "cityloom-restrictions", "cityloom-restrictions-damaged", "cityloom-area"];
+pub const SCOPED_KEYS: [&str; 7] = [
+    "cityloom-edits",
+    "cityloom-edits-damaged",
+    "cityloom-restrictions",
+    "cityloom-restrictions-damaged",
+    "cityloom-area",
+    "cityloom-milestones",
+    "cityloom-milestones-damaged",
+];
 
 pub struct ScopedStorage {
     inner: Rc<dyn Storage>,

@@ -118,6 +118,8 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
     let (name_id, area_id) = (part("name", &row.id), part("area", &row.id));
     let named_by = format!("{name_id} {area_id}");
     let href = vm.with_value(|v| v.href(&row.id));
+    let timeline_href = vm.with_value(|v| v.timeline_href(&row.id));
+    let timeline_label = row.name.clone();
     let (open_id, rename_id, delete_id) = (row.id.clone(), row.id.clone(), row.id.clone());
     let (here_rename, here_delete) = (row.id.clone(), row.id.clone());
     let (rename_label, delete_label) = (row.name.clone(), row.name.clone());
@@ -145,6 +147,14 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                 {(!row.changed.is_empty()).then(|| view! { <span class="project-changed">{row.changed.clone()}</span> })}
             </p>
             <div class="project-buttons">
+                <a
+                    class="btn"
+                    id=part("timeline", &row.id)
+                    href=timeline_href
+                    aria-label=move || vm.with_value(|v| v.named("project-timeline-named", &timeline_label))
+                >
+                    {move || word(vm, "project-timeline")}
+                </a>
                 <button
                     type="button"
                     class="btn"

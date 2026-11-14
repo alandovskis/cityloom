@@ -10,9 +10,10 @@ use time::format_description::well_known::Rfc3339;
 use uuid::Uuid;
 
 pub const MAX_KEY: usize = 200;
-pub const MAX_RECORD_BYTES: usize = 64 * 1024;
+/// A record is a place, a rule, a project or a design milestone (a snapshot of a project's work).
+pub const MAX_RECORD_BYTES: usize = 1024 * 1024;
 pub const MAX_RECORDS: usize = 5_000;
-pub const MAX_SEALED_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_SEALED_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_BATCH: usize = 100;
 pub const PAGE: usize = 500;
 pub const TOMBSTONE_DAYS: i64 = 90;
@@ -26,6 +27,7 @@ pub enum Kind {
     Rule,
     Area,
     Project,
+    Milestone,
 }
 
 impl Kind {
@@ -36,6 +38,7 @@ impl Kind {
             Kind::Rule => "rule",
             Kind::Area => "area",
             Kind::Project => "project",
+            Kind::Milestone => "milestone",
         }
     }
 
@@ -46,6 +49,7 @@ impl Kind {
             "rule" => Kind::Rule,
             "area" => Kind::Area,
             "project" => Kind::Project,
+            "milestone" => Kind::Milestone,
             _ => return None,
         })
     }
@@ -438,7 +442,8 @@ mod tests {
     fn a_batch_is_refused_whole_for_the_limit_it_passes() {
         let big = |n: usize| Put { body: Some(vec![b' '; n]), ..put("a", 0, at(0)) };
         assert_eq!(plan(&[], &[big(MAX_RECORD_BYTES + 1)]).unwrap_err(), Refusal::TooLarge(Limit::Record));
-        assert!(plan(&[], &[big(MAX_RECORD_BYTES)]).is_ok(), "exactly 64 KB is allowed");
+        assert!(plan(&[], &[big(MAX_RECORD_BYTES)]).is_ok(), "exactly the limit is allowed");
+        assert!(plan(&[], &[big(512 * 1024)]).is_ok(), "a design snapshot is one record");
         let many: Vec<Put> = (0..MAX_BATCH + 1).map(|i| put(&format!("k{i}"), 0, at(0))).collect();
         assert_eq!(plan(&[], &many).unwrap_err(), Refusal::TooLarge(Limit::Batch));
         assert_eq!(plan(&[], &[put("a", 0, at(0)), put("a", 0, at(1))]).unwrap_err(), Refusal::Duplicate);
@@ -447,10 +452,10 @@ mod tests {
         let rows: Vec<(&str, Meta)> = full.iter().map(|(k, m)| (k.as_str(), m.clone())).collect();
         assert_eq!(plan(&rows, &[put("new", 0, at(1))]).unwrap_err(), Refusal::TooLarge(Limit::Records));
         assert!(plan(&rows, &[put("k0", 1, at(1))]).is_ok());
-        // 2 MB of sealed bodies: 35 records of 60,000 bytes do not fit
-        let sixty: Vec<Put> = (0..35).map(|i| Put { body: Some(vec![b' '; 60_000]), ..put(&format!("s{i}"), 0, at(0)) }).collect();
-        assert_eq!(plan(&[], &sixty[..34]).map(|p| p.rev), Ok(34));
-        assert_eq!(plan(&[], &sixty).unwrap_err(), Refusal::TooLarge(Limit::Bytes));
+        // The account holds 16 MiB of sealed bodies: 16 records of the largest size do not fit, 15 do
+        let largest: Vec<Put> = (0..16).map(|i| Put { body: Some(vec![b' '; MAX_RECORD_BYTES]), ..put(&format!("s{i}"), 0, at(0)) }).collect();
+        assert_eq!(plan(&[], &largest[..15]).map(|p| p.rev), Ok(15));
+        assert_eq!(plan(&[], &largest).unwrap_err(), Refusal::TooLarge(Limit::Bytes));
     }
 
     #[test]

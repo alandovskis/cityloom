@@ -638,7 +638,7 @@ fn a_batch_refused_over_a_record_limit_goes_one_at_a_time_and_the_refused_one_is
 fn an_account_wide_limit_blocks_nothing_stops_pushing_for_the_page_and_is_said_once() {
     for (limit, said) in [
         ("records", "The server keeps at most 5,000 records per account, so the rest stays on this device only."),
-        ("bytes", "The server keeps at most 2 MB of work per account, so the rest stays on this device only."),
+        ("bytes", "The server keeps at most 16 MB of work per account, so the rest stays on this device only."),
     ] {
         let (work, announcer, storage, scheduler, vm, ports) = two_waiting_places();
         assert!(work.answer(WorkReply::Pushed(Err(WorkError::TooLarge(limit.into())))));
@@ -991,7 +991,7 @@ fn the_numbers_and_units_of_the_french_messages_do_not_break_across_lines() {
     let fr = crate::i18n_for(Locale::FrCa);
     assert_eq!(
         fr.tr_now("sync-too-large-bytes", &Args::new()),
-        "Le serveur conserve au plus 2\u{a0}Mo de travail par compte; le reste demeure sur cet appareil seulement."
+        "Le serveur conserve au plus 16\u{a0}Mo de travail par compte; le reste demeure sur cet appareil seulement."
     );
     assert!(fr.tr_now("sync-too-large-records", &Args::new()).contains("5\u{a0}000\u{a0}enregistrements"));
     assert!(fr.tr_now("sync-too-large-record", &Args::new()).contains("64\u{a0}Ko"));

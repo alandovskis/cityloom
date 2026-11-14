@@ -361,6 +361,11 @@ impl ProjectsVm {
         link("map.html", Some(id))
     }
 
+    /// The address of project `id`'s timeline.
+    pub fn timeline_href(&self, id: &str) -> String {
+        link("timeline.html", Some(id))
+    }
+
     /// Remembers project `id` as the one opened last and goes to its map. Nothing where it is not listed.
     pub fn open(&self, id: &str) {
         self.acted();

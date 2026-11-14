@@ -343,7 +343,7 @@ async function createProject(page: Page, name: string) {
   await page.goto("/");
   await page.getByLabel("Project name").fill(name);
   await page.getByRole("button", { name: "Create project" }).click();
-  const href = await page.getByRole("link", { name }).getAttribute("href");
+  const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
   return new URL(href!, "http://x/").searchParams.get("project")!;
 }
 
@@ -395,18 +395,18 @@ test("a project renamed on one device is renamed on the other after a sync", asy
   const sub = await storingAccount(page, context, baseURL!);
   const phone = await secondDevice(browser, baseURL!, sub);
   await phone.page.goto("/");
-  await expect(phone.page.getByRole("link", { name: "First project" })).toBeVisible();
+  await expect(phone.page.getByRole("link", { name: "First project", exact: true })).toBeVisible();
   await page.goto("/");
   await page.getByRole("button", { name: "Rename First project" }).click();
   await page.locator("#project-rename-field").fill("Plateau study");
   await page.locator("#project-rename-field").press("Enter");
-  await expect(page.getByRole("link", { name: "Plateau study" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Plateau study", exact: true })).toBeVisible();
   await expect
     .poll(async () => (await serverWork(context)).body.records.find((r: { kind: string }) => r.kind === "project").body)
     .toMatchObject({ name: "Plateau study" });
   await shown(phone.page);
-  await expect(phone.page.getByRole("link", { name: "Plateau study" })).toBeVisible();
-  await expect(phone.page.getByRole("link", { name: "First project" })).toHaveCount(0);
+  await expect(phone.page.getByRole("link", { name: "Plateau study", exact: true })).toBeVisible();
+  await expect(phone.page.getByRole("link", { name: "First project", exact: true })).toHaveCount(0);
   await phone.context.close();
 });
 
@@ -422,7 +422,7 @@ test("a project deleted on one device sends the other, which has it open, back t
   await expect.poll(async () => await serverRecords(context)).toContain(`project/${verdun}`);
   const phone = await secondDevice(browser, baseURL!, sub);
   await phone.page.goto("/");
-  await phone.page.getByRole("link", { name: "Verdun" }).click();
+  await phone.page.getByRole("link", { name: "Verdun", exact: true }).click();
   await expect(phone.page).toHaveURL(new RegExp(`/map\\.html\\?project=${verdun}$`));
   await expect(phone.page.locator("#sync-status")).toHaveText("Synced");
 
@@ -435,7 +435,7 @@ test("a project deleted on one device sends the other, which has it open, back t
   await shown(phone.page);
   await expect(phone.page).toHaveURL(/\/index\.html\?missing=1$/);
   await expect(phone.page.getByText("That project is no longer here.")).toBeVisible();
-  await expect(phone.page.getByRole("link", { name: "Verdun" })).toHaveCount(0);
+  await expect(phone.page.getByRole("link", { name: "Verdun", exact: true })).toHaveCount(0);
   await phone.context.close();
 });
 
@@ -482,7 +482,7 @@ test("a device given only rows an older CityLoom wrote, under bare keys, shows t
 
   const tablet = await cleanBrowser(browser, baseURL!);
   await signInAtHome(tablet.page, tablet.context, baseURL!, sub);
-  await expect(tablet.page.getByRole("link", { name: "First project" })).toHaveAttribute(
+  await expect(tablet.page.getByRole("link", { name: "First project", exact: true })).toHaveAttribute(
     "href",
     "map.html?project=first",
   );

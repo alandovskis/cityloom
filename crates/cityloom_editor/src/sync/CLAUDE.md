@@ -13,7 +13,7 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 
 ## Record
 
-`kind` (`street`, `junction`, `rule`, `area`, `project`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
+`kind` (`street`, `junction`, `rule`, `area`, `project`, `milestone`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
 
 ## Projects
 
@@ -31,8 +31,8 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
   - `user` differing from the page's account: stop and ask `/api/me` again (`SyncVm::on_account_changed`). The document switches account only after the first page proves the session's, so two tabs on two accounts do not flip it.
   - `error: "corrupt"` with no body: leave the record alone.
 - `410 resync` (`start` older than a purged tombstone, or `since` above the account's rev): pull everything, drop what the server no longer lists. `410 reset` (other epoch): storage was turned off and on meanwhile.
-- `PUT {records: [{kind, key, base_rev, edited_at, deleted, body}]}` (max 100, body max 64 KB) -> `{rev, results: [{kind, key, status, rev, record?}]}`; `status` `accepted` | `superseded` (server's newer record comes back).
-- `413 {"error": "too-large", "limit": "record"|"records"|"bytes"|"batch"}`: batch refused whole (account cap 5,000 records, 2 MB sealed). `400` bad JSON/key/time. `409 storage-off` any call while storage is not on the server. `401 signed-out`.
+- `PUT {records: [{kind, key, base_rev, edited_at, deleted, body}]}` (max 100, body max 1 MiB) -> `{rev, results: [{kind, key, status, rev, record?}]}`; `status` `accepted` | `superseded` (server's newer record comes back).
+- `413 {"error": "too-large", "limit": "record"|"records"|"bytes"|"batch"}`: batch refused whole (account cap 5,000 records, 16 MiB sealed). `400` bad JSON/key/time. `409 storage-off` any call while storage is not on the server. `401 signed-out`.
 - `DELETE`: removes the server copy, new epoch (other devices reset, keep their places). The app never calls it.
 
 ## `cityloom-sync` document (version 1)
@@ -56,6 +56,7 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 
 - `410 resync`: full pull. `410 reset`: turn-on merge `SyncDoc::restart` (every record competes again with its own time; nothing removed locally).
 - `409 storage-off`: stop. `SyncVm::disable` forgets the server's numbers (`user`, `epoch`, `rev`, each record's `rev`) but keeps every record pending with its `edited_at`, so a stale copy cannot beat a later edit when storage is turned on again.
+- A batch (`next_batch`) takes the places first and a milestone last, alone: a milestone is a whole snapshot, so a full account (16 MiB) or an oversized request holds back history, never the work it describes.
 - `413`: retry one record at a time; the one refused alone is `blocked` (local, out of batches until the place is edited again), its limit said once.
 - A skipped record (paused kind, or `corrupt`, which goes through `decide`) does not advance `rev`, so it comes back. A place superseded by a record that cannot be applied stays marked but is not resent in that run.
 
@@ -63,7 +64,7 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 
 - Area rules get ids `r-<32 hex>` where storage has randomness (`Storage::random_hex`; test fake has none unless asked, so tests' `r1` stay); existing `r<n>` are renamed once at first sync.
 - Editors reload a place a sync changed (`StreetVm::watch_sync`, `JunctionVm::watch_sync`) and say "Updated from another device." or "Your change to this place was replaced by a later one."
-- Opt in (`hub::enable`): merges, says places sent/received (`Report`: streets, junctions, rules, the area; a `project` record is no place, `Kind::is_place`). Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
+- Opt in (`hub::enable`): merges, says places sent/received (`Report`: streets, junctions, rules, the area; a `project` record and a `milestone` are no place, `Kind::is_place`). Opt out: confirmed; the server deletes its copy in the transaction that records the choice (`set_storage`); the page forgets the server's numbers, the browser's work stays. Storage off -> on gives a new `work_epoch`; choosing it when already on changes nothing. Deleting the account removes the rows.
 
 ## Known limits
 

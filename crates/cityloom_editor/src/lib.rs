@@ -18,6 +18,7 @@ pub mod shell;
 pub mod standards;
 pub mod street;
 pub mod sync;
+pub mod timeline;
 
 use shared::{atlas, symbols};
 use wasm_bindgen::prelude::*;
@@ -108,6 +109,37 @@ pub fn mount_projects() -> HomePage {
     HomePage(i18n)
 }
 
+/// The timeline page as its script sees it: the milestones of the project it is opened in (`timeline`).
+#[wasm_bindgen]
+pub struct TimelinePage {
+    i18n: std::rc::Rc<shared::i18n::I18n>,
+    project: Option<String>,
+}
+
+#[wasm_bindgen]
+impl TimelinePage {
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page, in its project.
+    pub fn mount_shell(&self) {
+        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", false);
+    }
+}
+
+/// Draws the timeline of the project the page is opened in (`project::context::open_page`). The page is put together
+/// here, where slices may meet: the project slice says which project and what it is called, the timeline slice draws
+/// its milestones. Where the project is not here the page has gone to the list, and there is nothing to draw.
+#[wasm_bindgen]
+pub fn mount_timeline() -> Option<TimelinePage> {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let ports = project::context::open_page(shared::platform::browser_ports())?;
+    let i18n = i18n_browser(&ports);
+    let project = ports.storage.project();
+    let name = project.as_deref().and_then(|id| project::store::find(&*ports.storage, id)).map(|p| p.name).unwrap_or_default();
+    let context = timeline::vm::Context { project_name: name, app_version: env!("CARGO_PKG_VERSION").to_string() };
+    timeline::mount_timeline(ports, i18n.clone(), context);
+    Some(TimelinePage { i18n, project })
+}
+
 /// The About page as its script sees it: what CityLoom is for, with the city of the project opened last drawn behind
 /// it (the map's About part). The page is put together here, where slices may meet: the map slice draws it, and the
 /// project slice moves the work from before projects first.
@@ -153,6 +185,7 @@ const RESOURCES: &[shared::i18n::Resources] = &[
     sync::RESOURCES,
     archive::RESOURCES,
     project::RESOURCES,
+    timeline::RESOURCES,
     standards::RESOURCES,
 ];
 

@@ -73,9 +73,9 @@ test.describe("the list of projects", () => {
     await page.reload();
     await listed(page);
     await expect(rows(page)).toHaveCount(1);
-    await expect(page.getByRole("link", { name: "Plateau study" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Plateau study", exact: true })).toBeVisible();
 
-    await page.getByRole("link", { name: "Plateau study" }).click();
+    await page.getByRole("link", { name: "Plateau study", exact: true }).click();
     await expect(page).toHaveURL(/\/map\.html\?project=p-[0-9a-f]{12}$/);
     const id = new URL(page.url()).searchParams.get("project");
     expect(await page.evaluate(() => localStorage.getItem("cityloom-project"))).toBe(id);
@@ -107,7 +107,7 @@ test.describe("the list of projects", () => {
     await page.keyboard.press("Escape");
 
     // Its map opens on Montréal's starting place, from the metro tiles.
-    await page.getByRole("link", { name: "Mile End study" }).click();
+    await page.getByRole("link", { name: "Mile End study", exact: true }).click();
     await expect(page).toHaveURL(/\/map\.html\?project=p-[0-9a-f]{12}$/);
     await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
     const id = new URL(page.url()).searchParams.get("project")!;
@@ -146,7 +146,7 @@ test.describe("the list of projects", () => {
     await expect(field).toHaveValue("Verdun");
     await field.fill("Verdun south");
     await field.press("Enter");
-    await expect(page.getByRole("link", { name: "Verdun south" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Verdun south", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Rename Verdun south" })).toBeFocused();
 
     await page.getByRole("button", { name: "Delete Verdun south" }).click();
@@ -167,7 +167,7 @@ test.describe("the list of projects", () => {
     await page.reload();
     await listed(page);
     await expect(rows(page)).toHaveCount(1);
-    await expect(page.getByRole("link", { name: "First project" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "First project", exact: true })).toBeVisible();
   });
 
   test("makes the work kept from before projects the first project", async ({ page, browser, baseURL }) => {
@@ -184,7 +184,10 @@ test.describe("the list of projects", () => {
     await legacy.goto("/");
     await listed(legacy);
     await expect(rows(legacy)).toHaveCount(1);
-    await expect(legacy.getByRole("link", { name: "First project" })).toHaveAttribute("href", "map.html?project=first");
+    await expect(legacy.getByRole("link", { name: "First project", exact: true })).toHaveAttribute(
+      "href",
+      "map.html?project=first",
+    );
     const kept = await legacy.evaluate(() => ({
       old: localStorage.getItem("cityloom-edits"),
       moved: localStorage.getItem("cityloom-edits@first"),
@@ -246,7 +249,7 @@ test.describe("the list of projects", () => {
     await expect(page.locator("h1")).toHaveText("Vos projets");
     // Sent here by a bookmark from before projects: its work is the first project now, so nothing is gone.
     await expect(page.locator(".project-notice")).toBeHidden();
-    await expect(page.getByRole("link", { name: "Premier projet" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Premier projet", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Renommer Premier projet" })).toBeVisible();
     await page.getByLabel("Nom du projet").fill("Mile End");
     await page.getByRole("button", { name: "Créer le projet" }).click();
@@ -277,7 +280,9 @@ test.describe("the list of projects", () => {
     await expect(page.locator("#projects-heading")).toBeFocused();
     // Then the list's own controls: the first project, then its buttons.
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: "First project" })).toBeFocused();
+    await expect(page.getByRole("link", { name: "First project", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Timeline of First project" })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Rename First project" })).toBeFocused();
   });

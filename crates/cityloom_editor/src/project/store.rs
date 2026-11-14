@@ -16,6 +16,7 @@ use crate::shared::ports::Storage;
 use crate::shared::project_id::{round_trips, split_key, valid, wire_key};
 use crate::shared::scoped::{SCOPED_KEYS, ScopedStorage};
 use crate::sync::model::{AREA_RECORD, Id, Kind, Loaded, load, mark, mark_all, stamp};
+use crate::timeline::store::MilestoneStore;
 
 /// The shape of the document.
 pub const VERSION: u32 = 1;
@@ -271,6 +272,7 @@ pub fn records(storage: &Rc<dyn Storage>, project: &str) -> Vec<(Kind, String)> 
         out.extend(draft.raw_keys(JUNCTIONS).into_iter().map(|key| (Kind::Junction, key)));
     }
     out.extend(RestrictionStore::new(scoped.clone()).raw_ids().into_iter().map(|key| (Kind::Rule, key)));
+    out.extend(MilestoneStore::new(scoped.clone()).raw_ids().into_iter().map(|key| (Kind::Milestone, key)));
     if scoped.recall(AREA_KEY).is_some_and(|query| Area::from_query(&query).is_some()) {
         out.push((Kind::Area, AREA_RECORD.to_string()));
     }
