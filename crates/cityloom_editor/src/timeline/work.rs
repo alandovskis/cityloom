@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::city::edits::{self, Document as EditsDocument, EDITS_KEY, JUNCTIONS, STREETS};
 use crate::restriction::store::{self as rules, RESTRICTIONS_KEY, RestrictionStore};
 use crate::shared::ports::Storage;
-use crate::sync::model::{Kind, mark_all};
+use crate::sync::model::{Id, Kind, mark_all, open, save};
 use crate::timeline::model::{Draft, Milestone, Refused, Snapshot, Summary};
 use crate::timeline::store::MilestoneStore;
 
@@ -195,14 +195,12 @@ pub fn restore(storage: &Rc<dyn Storage>, id: &str, backup_name: &str, app_versi
     let (kept_edits, kept_rules) = (storage.recall(EDITS_KEY), storage.recall(RESTRICTIONS_KEY));
     let then = records_of(&target);
     if let Err(e) = put_back(storage, &then, &differences) {
-        // Neither document is left half way: both are put as they were, and the backup made first is dropped.
-        if let Some(text) = &kept_edits {
-            storage.remember(EDITS_KEY, text);
-        }
-        if let Some(text) = &kept_rules {
-            storage.remember(RESTRICTIONS_KEY, text);
-        }
+        // Neither document is left half way: both are put as they were (one there was none of is blanked: an empty
+        // value reads as absent), and the backup made first is dropped, with the mark that told the sync of it.
+        storage.remember(EDITS_KEY, kept_edits.as_deref().unwrap_or(""));
+        storage.remember(RESTRICTIONS_KEY, kept_rules.as_deref().unwrap_or(""));
         milestones.remove_raw(&backup.id);
+        forget_mark(storage, &backup.id);
         return Err(e);
     }
     let removed: Vec<(Kind, String)> = differences.iter().filter(|d| d.how == How::Added).map(|d| (d.kind, d.key.clone())).collect();
@@ -210,6 +208,15 @@ pub fn restore(storage: &Rc<dyn Storage>, id: &str, backup_name: &str, app_versi
     mark_all(&**storage, &removed, true);
     mark_all(&**storage, &back, false);
     Ok(Restored { changed: differences.len(), backup: Some(backup) })
+}
+
+/// Takes milestone `id`'s entry out of the sync document: it was marked when made and never existed anywhere else, so
+/// a removal sent for it would name a record the server never had.
+fn forget_mark(storage: &Rc<dyn Storage>, id: &str) {
+    if let Some(mut doc) = open(&**storage) {
+        doc.forget(&Id::new(Kind::Milestone, id));
+        save(&**storage, &doc);
+    }
 }
 
 fn put_back(storage: &Rc<dyn Storage>, then: &Records, differences: &[Difference]) -> Result<(), Refused> {
@@ -252,7 +259,7 @@ fn put_back(storage: &Rc<dyn Storage>, then: &Records, differences: &[Difference
 mod tests {
     use super::*;
     use crate::shared::ports::{MemoryStorage, test_ports};
-    use crate::sync::model::{Id, open};
+    use crate::sync::model::Id;
     use serde_json::json;
 
     fn setup() -> (Rc<dyn Storage>, Rc<MemoryStorage>) {
@@ -408,6 +415,28 @@ mod tests {
         assert_eq!(storage.recall(EDITS_KEY), now, "the work stands");
         assert_eq!(MilestoneStore::new(storage.clone()).list().len(), 1, "and no backup was made");
         assert_eq!(restore(&storage, "nope", "Backup", "1", None), Err(Refused::Unknown));
+    }
+
+    #[test]
+    fn a_restore_that_fails_half_way_leaves_no_document_it_made_and_no_mark_for_the_backup_it_dropped() {
+        let (storage, memory) = setup();
+        keep(&storage, &[("w1", 1)], &[("r1", "Zone")]);
+        let before = milestone(&storage, "Before");
+        // The project now has streets only: no rules document at all.
+        storage.remember(RESTRICTIONS_KEY, "");
+        keep_streets_only(&storage, &[("w1", 2)]);
+        memory.refuse(EDITS_KEY);
+        assert_eq!(restore(&storage, &before.id, "Backup", "1", None), Err(Refused::Unusable));
+        memory.refuse_nothing();
+        assert!(storage.recall(RESTRICTIONS_KEY).is_none_or(|text| text.trim().is_empty()), "the rules the restore began to put back are gone again");
+        assert_eq!(MilestoneStore::new(storage.clone()).list().len(), 1, "no backup is kept");
+        let any_backup_mark = open(&*memory).is_some_and(|doc| doc.records.keys().any(|name| name.starts_with("milestone/") && name != &format!("milestone/{}", before.id)));
+        assert!(!any_backup_mark, "no mark is left for the backup that was dropped");
+    }
+
+    fn keep_streets_only(storage: &Rc<dyn Storage>, streets: &[(&str, i64)]) {
+        let streets: serde_json::Map<String, Value> = streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "street": { "n": n } }))).collect();
+        assert!(storage.remember(EDITS_KEY, &json!({ "version": 5, "streets": streets }).to_string()));
     }
 
     #[test]
