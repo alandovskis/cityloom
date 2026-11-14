@@ -225,9 +225,8 @@ impl Editor {
     }
 }
 
-/// The shortest stop: a boarding platform for one single-unit bus, 8 m in the Ville de Montréal's bus-stop sheet (an
-/// articulated bus needs 16 m, which is not modelled; the length is to be checked with the STM).
-pub const MIN_STOP_MM: i32 = 8_000;
+use crate::standards::model as standards;
+pub use crate::standards::model::MIN_STOP_MM;
 
 /// The boarding area a wheelchair ramp needs. Unverified (TAC / STM to check).
 const BOARDING_MM: i32 = 2_400;
@@ -482,7 +481,7 @@ impl Editor {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
         let driving = REGIONS[self.region].drive_side;
-        let sections = content.sections_over(from_mm, from_mm.saturating_add(MIN_STOP_MM), length_mm);
+        let sections = content.sections_over(from_mm, from_mm.saturating_add(standards::stop_min_mm()), length_mm);
         StopKind::ALL
             .into_iter()
             .find(|&kind| {
@@ -547,8 +546,8 @@ impl Editor {
                     fail(6, Said::new(key).with("gap", Arg::Length(gap)).with("need", Arg::Length(STOP_CLEAR_MM)));
                 }
             }
-            if s.length_mm < MIN_STOP_MM {
-                fail(2, Said::new("check-detail-stop-length").with("length", Arg::Length(s.length_mm)).with("min", Arg::Length(MIN_STOP_MM)));
+            if s.length_mm < standards::stop_min_mm() {
+                fail(2, Said::new("check-detail-stop-length").with("length", Arg::Length(s.length_mm)).with("min", Arg::Length(standards::stop_min_mm())));
             }
             for segs in content.sections_over(s.from_mm, s.to_mm(), length_mm) {
                 let Some(lane) = bus_lane(segs, s.side, driving) else {

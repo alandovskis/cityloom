@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync` and `project` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync`, `project` and `standards` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -20,6 +20,8 @@ const LEFT_OUT: &[(&str, &str)] = &[
         "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
     ),
     ("src/project/tests.rs", "test-only"),
+    ("src/standards/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/standards/tests.rs", "test-only"),
     ("src/archive/tests.rs", "test-only"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
@@ -38,6 +40,12 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/archive/text.rs", include_str!("archive/text.rs")),
     ("src/archive/view.rs", include_str!("archive/view.rs")),
     ("src/archive/vm.rs", include_str!("archive/vm.rs")),
+    ("src/standards/mod.rs", include_str!("standards/mod.rs")),
+    ("src/standards/model.rs", include_str!("standards/model.rs")),
+    ("src/standards/text.rs", include_str!("standards/text.rs")),
+    ("src/standards/view.rs", include_str!("standards/view.rs")),
+    ("src/standards/vm.rs", include_str!("standards/vm.rs")),
+    ("src/street/model/profile.rs", include_str!("street/model/profile.rs")),
     ("src/account/mod.rs", include_str!("account/mod.rs")),
     ("src/account/text.rs", include_str!("account/text.rs")),
     ("src/account/view.rs", include_str!("account/view.rs")),
@@ -482,6 +490,14 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("access-lane", "the end of the id of a standards profile field's input, not a message"),
+    ("crossing-clearance", "the end of the id of a standards profile field's input, not a message"),
+    ("door-buffer", "the end of the id of a standards profile field's input, not a message"),
+    ("patio-walk", "the end of the id of a standards profile field's input, not a message"),
+    ("stop-min", "the end of the id of a standards profile field's input, not a message"),
+    ("speed-choices", "the end of the id of a standards profile field's input, not a message"),
+    ("target-speed", "the end of the id of a standards profile field's input, not a message"),
+    ("speed-target", "the id of a check, not a message"),
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
     ("projects-heading", "the id of the list of projects' heading, where focus goes"),
     ("project-name", "the id of the create form's name field, where focus goes"),
@@ -796,7 +812,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project", "standards"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

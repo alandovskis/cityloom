@@ -20,8 +20,8 @@ use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
 use crate::street::impact::{self, Cause, Impact, Input};
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Template, TemplateView,
-    TreeSize, Use, View, ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View,
+    ZoneRefusal,
 };
 use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
@@ -1236,7 +1236,7 @@ impl StreetVm {
     pub fn speed_options(&self) -> Vec<SpeedOption> {
         let view = self.view();
         let current = view.speed_kmh;
-        let mut values: Vec<u16> = SPEED_CHOICES.to_vec();
+        let mut values: Vec<u16> = crate::standards::model::speed_choices();
         if let Some(n) = current.filter(|n| !values.contains(n)) {
             values.push(n);
             values.sort_unstable();

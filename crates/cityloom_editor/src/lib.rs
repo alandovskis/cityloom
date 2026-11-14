@@ -15,6 +15,7 @@ pub mod project;
 pub mod restriction;
 pub mod shared;
 pub mod shell;
+pub mod standards;
 pub mod street;
 pub mod sync;
 
@@ -56,6 +57,31 @@ pub fn atlas() -> String {
 #[wasm_bindgen]
 pub fn say(text: &str) {
     shared::live::say(text);
+}
+
+/// Draws the Profiles section into the street page's `#standards-slot`: the browser's standards profiles, to create,
+/// edit, choose, export, import and remove. The street's checks are drawn again whenever one changes. The street page's
+/// script calls it after `mount_street_page`.
+#[wasm_bindgen]
+pub fn mount_standards(sheet: &street::Sheet) {
+    use wasm_bindgen::JsCast;
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let Some(slot) = leptos::prelude::document().get_element_by_id("standards-slot").and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) else {
+        return;
+    };
+    let vm = sheet.view_model();
+    let (for_units, for_change) = (vm.clone(), vm.clone());
+    standards::mount_profiles(
+        slot,
+        shared::platform::browser_ports(),
+        vm.i18n().clone(),
+        std::rc::Rc::new(move || for_units.units()),
+        std::rc::Rc::new(move || {
+            use leptos::prelude::Update;
+            for_change.version().update(|v| *v = v.wrapping_add(1));
+        }),
+    );
 }
 
 /// The home page as its script sees it: the list of projects (`project`), and nothing else. It is in no project.
@@ -127,6 +153,7 @@ const RESOURCES: &[shared::i18n::Resources] = &[
     sync::RESOURCES,
     archive::RESOURCES,
     project::RESOURCES,
+    standards::RESOURCES,
 ];
 
 /// The words of the app in `locale`.

@@ -275,7 +275,7 @@ pub(super) fn lay_out(
     // Leave out what can go until the minimums fit, from one end and then the
     // other so the street stays balanced.
     let mut removed = 0;
-    while specs.iter().map(|s| KINDS[kinds(s)].min_mm).sum::<i32>() > room {
+    while specs.iter().map(|s| crate::standards::model::kind_bounds(kinds(s)).0).sum::<i32>() > room {
         let i = if removed % 2 == 0 { specs.iter().rposition(|s| s.removable)? } else { specs.iter().position(|s| s.removable)? };
         specs.remove(i);
         removed += 1;
@@ -285,7 +285,9 @@ pub(super) fn lay_out(
     // Squeeze other traffic before the transit lanes: a transit lane wants its width.
     'squeeze: while sum(&w) > room {
         for pick in ["travel", "parking", "bike", "loading", "shoulder", "planting", "median", "bus", "sidewalk", "terrace"] {
-            if let Some(i) = (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] > KINDS[kinds(&specs[i])].min_mm).max_by_key(|&i| w[i]) {
+            if let Some(i) =
+                (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] > crate::standards::model::kind_bounds(kinds(&specs[i])).0).max_by_key(|&i| w[i])
+            {
                 w[i] -= 100;
                 continue 'squeeze;
             }

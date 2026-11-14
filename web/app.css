@@ -1688,3 +1688,46 @@ details.src ul {
 .checks li.bad details.src {
   color: var(--ink-2);
 }
+
+/* A standards profile (#79): which standard a check or a range came from. */
+.check-standard {
+  display: block;
+  font-size: 0.85em;
+  color: var(--ink-2);
+}
+.insp-range .check-standard {
+  display: inline;
+}
+.standards h3,
+.standards h4,
+.standards h5 {
+  margin: 0.75rem 0 0.25rem;
+}
+.standards-field {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.4rem 0;
+}
+.standards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.35rem 0;
+}
+.standards-list,
+.standards ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.standards-error {
+  color: var(--warn);
+}
+.standards-hint {
+  font-size: 0.85em;
+  color: var(--ink-2);
+}
+.standards textarea {
+  width: 100%;
+}
