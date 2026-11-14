@@ -42,6 +42,11 @@ Chaque tranche d’édition contient :
 - Les vues Leptos, qui se lient à un modèle de vue et lui transmettent les événements. Elles ne décident de rien.
 - `tests.rs`.
 
+Dans les trois plus grandes tranches, `street/`, `junction/` et `map/`, chaque couche est un dossier : `model/` (les
+règles et tout calcul pur sur elles, sans Leptos et sans mots), `vm/` (le modèle de vue et ce qui lui appartient : les
+mots, les machines à états du clavier, la poignée que prennent les vues) et `view/` (les vues Leptos, le dessin SVG et
+les tests des composants). Une autre tranche n’utilise que ce qui se trouve sous `model/`.
+
 Le dessin est produit par des fonctions pures qui renvoient des chaînes SVG, placées avec `inner_html`. La logique du
 pointeur et du clavier est faite de machines à états pures et testées. La page Carte fait exception : elle dessine avec
 MapLibre, sans SVG.
