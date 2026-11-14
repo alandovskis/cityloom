@@ -26,6 +26,11 @@ impl SheetWatch {
         SheetWatch { vm: StoredValue::new_local(vm) }
     }
 
+    /// The planning goal chosen.
+    pub fn vm_goal(&self) -> crate::shared::goals::GoalChoice {
+        self.vm.with_value(|v| v.goal().clone())
+    }
+
     pub fn version(&self) -> RwSignal<u32> {
         self.vm.with_value(|v| v.version())
     }

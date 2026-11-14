@@ -32,6 +32,7 @@ pub struct JunctionVm {
     i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
+    goal: crate::shared::goals::GoalChoice,
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
@@ -61,11 +62,17 @@ impl JunctionVm {
                     },
                 )
             });
-            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding }
+            let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal }
         })
     }
 
     // ---- what the views read ----
+
+    /// The planning goal chosen (#72): it marks checks and lists measures, and changes nothing in the junction.
+    pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
+        &self.goal
+    }
 
     /// The words of the page, in its language.
     pub fn i18n(&self) -> &Rc<I18n> {

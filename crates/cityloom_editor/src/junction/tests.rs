@@ -3376,3 +3376,18 @@ fn the_junction_figure_is_fitted_to_what_is_drawn_and_its_words_are_whole_and_ap
         }
     }
 }
+
+#[test]
+fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_junction_as_it_was() {
+    use crate::shared::goals::Goal;
+    let s = shared(0);
+    let before = serde_json::to_string(&*s.view_now()).unwrap();
+    s.goal().set(Some(Goal::SchoolRoute));
+    let marked = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
+    assert!(marked.contains("goal-mark"), "{marked}");
+    let guide = html(|| view! { <notes::GoalGuide vm=s.clone()/> }.into_any());
+    assert!(guide.contains("Bus Bulbs") || guide.contains("Transit Modal Filter"), "{guide}");
+    s.goal().set(None);
+    assert_eq!(serde_json::to_string(&*s.view_now()).unwrap(), before);
+    assert!(!html(|| view! { <notes::Checks vm=s.clone()/> }.into_any()).contains("goal-mark"));
+}

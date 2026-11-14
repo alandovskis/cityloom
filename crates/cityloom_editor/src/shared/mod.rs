@@ -10,6 +10,8 @@ pub mod contrast;
 pub mod core;
 pub mod diagram;
 pub mod flat;
+pub mod goals;
+pub mod goals_view;
 pub mod i18n;
 pub mod iso;
 pub mod keeper;
