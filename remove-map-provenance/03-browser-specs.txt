@@ -1,0 +1,14 @@
+$ git rev-parse HEAD
+33a152dd44bb35626469c6f04474ffdfa6e45956
+$ just e2e tests/map.spec.ts tests/network.spec.ts tests/restrictions.spec.ts tests/world.spec.ts tests/report.spec.ts tests/search.spec.ts tests/webgl.spec.ts tests/shell.spec.ts tests/language.spec.ts
+Running 146 tests using 7 workers
+  ✓   59 [ui] › tests/network.spec.ts:64:3 › the network checks on the map page › each finding says why it failed and a link opens the place it concerns (1.7s)
+  ✓   65 [ui] › tests/report.spec.ts:86:1 › the Share menu downloads the report as a PDF (1.7s)
+  ✓   68 [ui] › tests/report.spec.ts:144:1 › the editors' Share menu still prints (1.6s)
+  ✓   66 [ui] › tests/report.spec.ts:107:1 › the report downloads in French when the page is French (1.7s)
+  ✓   69 [ui] › tests/report.spec.ts:151:1 › with no edits the report has the review pages and the appendix but no place pages (2.0s)
+  ✓   67 [ui] › tests/report.spec.ts:124:1 › a report that cannot be written saves nothing (3.6s)
+  ✓   70 [ui] › tests/report.spec.ts:164:1 › an edited street and an edited junction each get a page in the report (4.6s)
+  ✓   71 [ui] › tests/report.spec.ts:181:1 › the place pages follow the language (5.3s)
+  ✓   77 [ui] › tests/restrictions.spec.ts:381:3 › area restrictions › the Notes keep Checks and Changes only, and the area rules are in the panel on the left (1.8s)
+  146 passed (54.9s)

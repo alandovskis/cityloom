@@ -1,0 +1,16 @@
+$ git rev-parse HEAD
+f35c39fabcc27938062daff0fe30c733c249dee8
+$ cargo test -p cityloom_editor --lib -- map::tests::the_map_notes_have_only_the_checks_and_changes_tabs map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix
+running 2 tests
+test map::tests::the_map_notes_have_only_the_checks_and_changes_tabs ... ok
+test map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3195 filtered out; finished in 0.19s
+$ RUSTFLAGS='-D warnings' cargo test -p cityloom_editor --lib
+test result: ok. 3195 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 10.51s
+$ RUSTFLAGS='-D warnings' cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 00s
+$ just test-scripts
+
+OK
+$ just format-check
+All matched files use Prettier code style!

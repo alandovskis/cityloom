@@ -1,0 +1,16 @@
+# origin/main (eaa38795) with only the branch's map/tests.rs copied in: the implementation reverted
+$ cargo test -p cityloom_editor --lib -- map::tests::the_map_notes_have_only_the_checks_and_changes_tabs map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix
+running 2 tests
+test map::tests::the_map_notes_have_only_the_checks_and_changes_tabs ... FAILED
+test map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix ... FAILED
+failures:
+thread 'map::tests::the_map_notes_have_only_the_checks_and_changes_tabs' (23726938) panicked at crates/cityloom_editor/src/map/tests.rs:537:5:
+  left: ["t-checks", "t-changes", "t-provenance"]
+ right: ["t-checks", "t-changes"]
+thread 'map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix' (23726937) panicked at crates/cityloom_editor/src/map/tests.rs:971:13:
+  left: 5
+ right: 4
+failures:
+    map::tests::report::the_report_ends_with_the_network_the_areas_and_the_appendix
+    map::tests::the_map_notes_have_only_the_checks_and_changes_tabs
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 3202 filtered out; finished in 0.10s

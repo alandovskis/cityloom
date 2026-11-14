@@ -1,0 +1,4 @@
+$ node shoot-map.mjs http://127.0.0.1:8291 05-after-map-notes.png   # head 33a152dd, served by cityloom_server on :8291
+Notes tabs: ["Checks","Changes"]
+#t-provenance count: 0
+#p-provenance count: 0
