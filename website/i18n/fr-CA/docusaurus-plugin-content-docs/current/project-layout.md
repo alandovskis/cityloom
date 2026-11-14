@@ -74,7 +74,7 @@ Le code source de l’éditeur, `crates/cityloom_editor/src/`, compte un dossier
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `street/`      | L’éditeur de rue.                                                                                                                                 |
 | `junction/`    | L’éditeur de jonction, avec sa géométrie, son dessin en 2,5D (`iso/`), ses arrêts et ses feux.                                                    |
-| `map/`         | La carte de la ville dessinée par MapLibre, le panneau Règles de zone et les vérifications du réseau.                                             |
+| `map/`         | La carte de la ville dessinée par MapLibre, le panneau Règles de zone et la section Vérifications du réseau.                                      |
 | `shell/`       | Ce que partagent toutes les pages : le menu, le changement de langue, les raccourcis et le menu Se connecter.                                     |
 | `account/`     | La page Compte.                                                                                                                                   |
 | `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre, le document des modifications et l’importation d’un réseau.                  |
@@ -118,8 +118,9 @@ Les autres fichiers :
   hors de `v/<build>/`.
 - `city.js` : lit, dans l’adresse d’une page, le lieu pour lequel elle a été ouverte (`?street=7`, `?junction=3`).
 - `report.js` : charge le générateur de PDF et ses polices la première fois qu’un rapport est demandé.
-- `app.css` (toutes les pages), `editor.css` (les éditeurs de rue et de jonction) et une feuille de style par autre
-  page.
+- `app.css` (toutes les pages), `editor.css` (les éditeurs de rue et de jonction), `home.css` (l’accueil et À propos), et
+  `about.css`, `account.css` et `timeline.css` pour leurs pages. La page de la carte utilise la feuille de style de
+  MapLibre, dans `vendor/`.
 - `fonts/` : les polices Noto Sans qu’intègre le rapport PDF. `glyphs/` : les glyphes des étiquettes de la carte.
   `licenses/` : les licences de ce qui est livré d’autres auteurs.
 - Le logo, les icônes et `favicon.svg`.

@@ -113,7 +113,9 @@ The page scripts are start-up glue: they load the WebAssembly module and call it
 - `boot.js`: the message shown when a page's code cannot be loaded or started. It is the one script outside `v/<build>/`.
 - `city.js`: reads which place a page was opened for from its address (`?street=7`, `?junction=3`).
 - `report.js`: loads the PDF writer and its fonts the first time a report is asked for.
-- `app.css` (every page), `editor.css` (the street and junction editors) and one stylesheet for each other page.
+- `app.css` (every page), `editor.css` (the street and junction editors), `home.css` (home and About), and
+  `about.css`, `account.css` and `timeline.css` for their pages. The map page uses MapLibre's stylesheet from
+  `vendor/`.
 - `fonts/`: the Noto Sans fonts the PDF report embeds. `glyphs/`: the map's label glyphs. `licenses/`: the licences of
   what is shipped from others.
 - The logo, icons and `favicon.svg`.
