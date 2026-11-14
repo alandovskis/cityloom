@@ -41,13 +41,21 @@ pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n) -> impl IntoVie
                 }
             })
             .collect_view();
-        let none = goal.picks_at(place).next().is_none();
+        let count = goal.picks_at(place).count();
         view! {
             <p>{plain(goal.intro())}</p>
             <p>{plain("goal-focus-note")}</p>
-            <h3>{plain("goal-picks-heading")}</h3>
-            {none.then(|| view! { <p>{plain("goal-no-picks")}</p> })}
-            <ul class="goal-picks">{picks}</ul>
+            {if count == 0 {
+                view! { <p>{plain("goal-no-picks")}</p> }.into_any()
+            } else {
+                view! {
+                    <details class="goal-measures">
+                        <summary>{i18n.tr("goal-picks-summary", &Args::new().num("n", count as i64))}</summary>
+                        <ul class="goal-picks">{picks}</ul>
+                    </details>
+                }
+                .into_any()
+            }}
         }
     });
     view! {
@@ -82,6 +90,16 @@ mod tests {
         }
         assert!(h.contains("id=\"goal-none\"") && !h.contains("goal-picks"));
         assert!(h.contains("never changes the design"));
+    }
+
+    #[test]
+    fn the_measures_are_in_a_closed_disclosure_that_counts_them() {
+        let h = drawn(Some(Goal::Buses), Place::Junction, Locale::En);
+        assert!(h.contains("<details class=\"goal-measures\""), "{h}");
+        assert!(!h.contains("goal-measures\" open"), "closed until opened");
+        assert!(h.contains("Measures to consider (8)"), "{h}");
+        let none = drawn(Some(Goal::SchoolRoute), Place::Street, Locale::En);
+        assert!(none.contains("<details class=\"goal-measures\""));
     }
 
     #[test]
