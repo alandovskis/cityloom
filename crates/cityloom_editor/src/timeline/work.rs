@@ -74,11 +74,72 @@ pub enum How {
     Changed,
 }
 
+/// What about a changed place is different: the parts of its design a person would name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Aspect {
+    Name,
+    Class,
+    Width,
+    Lanes,
+    Speed,
+    Zones,
+    Arms,
+    Control,
+    Rule,
+    Outline,
+    /// Something else in the record that differs.
+    Other,
+}
+
+/// Where each aspect lives in a record, by kind: a path of object keys.
+fn aspect_paths(kind: Kind) -> &'static [(&'static [&'static str], Aspect)] {
+    match kind {
+        Kind::Street => &[
+            (&["street", "name"], Aspect::Name),
+            (&["street", "class"], Aspect::Class),
+            (&["street", "row_mm"], Aspect::Width),
+            (&["street", "segments"], Aspect::Lanes),
+            (&["street", "speed_kmh"], Aspect::Speed),
+            (&["street", "zones"], Aspect::Zones),
+        ],
+        Kind::Junction => &[(&["state", "arms"], Aspect::Arms), (&["state", "control"], Aspect::Control)],
+        Kind::Rule => &[(&["name"], Aspect::Name), (&["rule"], Aspect::Rule), (&["ring"], Aspect::Outline)],
+        _ => &[],
+    }
+}
+
+fn at<'a>(record: &'a Value, path: &[&str]) -> Option<&'a Value> {
+    path.iter().try_fold(record, |value, key| value.get(*key))
+}
+
+fn without(record: &Value, path: &[&str]) -> Value {
+    let mut copy = record.clone();
+    if let Some((last, parents)) = path.split_last() {
+        if let Some(object) = parents.iter().try_fold(&mut copy, |value, key| value.get_mut(*key)).and_then(Value::as_object_mut) {
+            object.remove(*last);
+        }
+    }
+    copy
+}
+
+/// What differs between two records of one place, in the order of the table, `Other` last for what no aspect names.
+fn aspects(kind: Kind, before: &Value, after: &Value) -> Vec<Aspect> {
+    let table = aspect_paths(kind);
+    let mut out: Vec<Aspect> = table.iter().filter(|(path, _)| at(before, path) != at(after, path)).map(|(_, aspect)| *aspect).collect();
+    let rest = |record: &Value| table.iter().fold(record.clone(), |left, (path, _)| without(&left, path));
+    if rest(before) != rest(after) {
+        out.push(Aspect::Other);
+    }
+    out
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Difference {
     pub kind: Kind,
     pub key: String,
     pub how: How,
+    /// What about the place differs, for a `Changed` one; empty for a place that was added or removed.
+    pub aspects: Vec<Aspect>,
 }
 
 /// What differs between a milestone and the work now, places in kind and key order. Nothing where they are the same.
@@ -87,12 +148,17 @@ pub fn compare(milestone: &Snapshot, now: &Snapshot) -> Vec<Difference> {
     let mut out = Vec::new();
     for ((kind, key), before) in &then {
         match now.get(&(*kind, key.clone())) {
-            None => out.push(Difference { kind: *kind, key: key.clone(), how: How::Removed }),
-            Some(after) if after != before => out.push(Difference { kind: *kind, key: key.clone(), how: How::Changed }),
+            None => out.push(Difference { kind: *kind, key: key.clone(), how: How::Removed, aspects: Vec::new() }),
+            Some(after) if after != before => out.push(Difference { kind: *kind, key: key.clone(), how: How::Changed, aspects: aspects(*kind, before, after) }),
             Some(_) => {}
         }
     }
-    out.extend(now.keys().filter(|id| !then.contains_key(id)).map(|(kind, key)| Difference { kind: *kind, key: key.clone(), how: How::Added }));
+    out.extend(now.keys().filter(|id| !then.contains_key(id)).map(|(kind, key)| Difference {
+        kind: *kind,
+        key: key.clone(),
+        how: How::Added,
+        aspects: Vec::new(),
+    }));
     out.sort_by(|a, b| (a.kind, &a.key).cmp(&(b.kind, &b.key)));
     out
 }
@@ -251,6 +317,30 @@ mod tests {
                 want(Kind::Rule, "r1", How::Changed),
             ]
         );
+    }
+
+    #[test]
+    fn a_changed_place_says_what_about_it_changed() {
+        let street = |street: Value| json!({ "ways": [1], "street": street });
+        let rule = |name: &str, kind: &str, kmh: i64| json!({ "name": name, "rule": { "kind": kind, "kmh": kmh }, "ring": [[0, 0]] });
+        let edits =
+            |a: Value, b: Value| Snapshot { edits: Some(json!({ "version": 5, "streets": { "w1": a }, "junctions": { "j1": b } })), restrictions: None };
+        let before = edits(
+            street(json!({ "name": "A", "class": "local", "row_mm": 9000, "segments": [1], "speed_kmh": 30 })),
+            json!({ "nodes": [1], "state": { "arms": [1, 2], "control": 0 } }),
+        );
+        let after = edits(
+            street(json!({ "name": "B", "class": "local", "row_mm": 12000, "segments": [1, 2], "speed_kmh": 30, "note": 1 })),
+            json!({ "nodes": [1], "state": { "arms": [1, 2], "control": 2 } }),
+        );
+        let seen = compare(&before, &after);
+        assert_eq!(seen[0].aspects, [Aspect::Name, Aspect::Width, Aspect::Lanes, Aspect::Other]);
+        assert_eq!(seen[1].aspects, [Aspect::Control]);
+        let rules = |r: Value| Snapshot { edits: None, restrictions: Some(json!({ "version": 1, "restrictions": { "r1": r } })) };
+        let seen = compare(&rules(rule("Z", "car_free", 0)), &rules(rule("Z", "speed_limit", 20)));
+        assert_eq!(seen[0].aspects, [Aspect::Rule]);
+        let added = compare(&Snapshot::default(), &before);
+        assert!(added.iter().all(|d| d.aspects.is_empty()), "only a changed place has aspects");
     }
 
     fn milestone(storage: &Rc<dyn Storage>, name: &str) -> Milestone {
