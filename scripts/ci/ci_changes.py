@@ -6,8 +6,9 @@
 Reads the files the change touches (git diff base..head) and the rules in scripts/ci/spec-map.json, prints what it
 decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
-    docs_only  true when every file is documentation: the Rust and browser jobs and the Railway deploy are skipped
-    unit       true unless docs_only: the unit tests run in full
+    unit       true unless every file is documentation: the unit tests run in full (ci.yml does not start for a change
+               to documentation alone, so in CI this is always true)
+    version    true unless every file is documentation or CI configuration (CI_CONFIGURATION): the version must be raised
     browser    true when some browser tier runs (the shared build of the wasm and the server)
     ui         true when the UI tier runs (e2e/tiers.json: no database, no archive)
     ui_specs   its Playwright arguments ("" runs every spec of the tier)
@@ -15,7 +16,7 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
     e2e_specs  its Playwright arguments
 
-Only a pull request is narrowed. A push to main and a manual run run every spec (a push may still be docs_only),
+Only a pull request is narrowed. A push to main and a manual run run every spec (a push of documentation alone does not start ci.yml),
 and so does anything doubtful: no files, a base that is not there, a file no rule names. A version bump alone
 (the version in the editor's Cargo.toml and its line of Cargo.lock) is not a change to those files.
 
@@ -36,6 +37,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EDITOR_TOML = "crates/cityloom_editor/Cargo.toml"  # where the product's version is
 TIERS = ("ui", "integration", "e2e")  # the tiers of e2e/tiers.json, and the CI job of each
+# CI configuration and its tooling: they change nothing the pages show, so they need no version bump (they still run
+# every test).
+CI_CONFIGURATION = (".github/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
 
 
 def glob(pattern: str, path: str) -> bool:
@@ -71,6 +75,7 @@ def matched(rules: dict, path: str) -> bool:
 @dataclass
 class Selection:
     docs_only: bool = False
+    version: bool = True
     all: bool = False
     specs: list[str] = field(default_factory=list)
     tiers: dict = field(default_factory=dict)  # e2e/tiers.json
@@ -128,10 +133,13 @@ def select(rules: dict, every_spec: list[str], files: list[str], tiers: dict, em
     if not files:
         return Selection(all=not empty_means_none, tiers=tiers)
     docs = 0
+    no_version = 0
     chosen: set[str] = set()
     everything = False
     for f in files:
         rule = rule_for(rules, f)
+        if (rule is not None and rule.get("docs")) or any(glob(p, f) for p in CI_CONFIGURATION):
+            no_version += 1
         if rule is None:
             everything = True
         elif rule.get("docs"):
@@ -144,6 +152,7 @@ def select(rules: dict, every_spec: list[str], files: list[str], tiers: dict, em
                 chosen |= asked
     return Selection(
         docs_only=docs == len(files),
+        version=no_version < len(files),
         all=everything,
         specs=sorted(every_spec if everything else chosen),
         tiers=tiers,
@@ -208,10 +217,10 @@ def main() -> int:
         for f in files:
             print(f"  {f}: {describe(rule_for(rules, f))}")
     if a.event != "pull_request" and not s.docs_only:
-        s = Selection(all=True, tiers=tiers)
+        s = Selection(all=True, version=s.version, tiers=tiers)
     out = {
-        "docs_only": str(s.docs_only).lower(),
         "unit": str(s.unit).lower(),
+        "version": str(s.version).lower(),
         "browser": str(s.browser).lower(),
         "ui": str(s.ui).lower(),
         "ui_specs": s.spec_args("ui"),

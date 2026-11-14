@@ -8,6 +8,7 @@ so a new one cannot be left out of the selection without a failure.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -22,6 +23,30 @@ TIERS = json.loads((ROOT / "e2e" / "tiers.json").read_text(encoding="utf-8"))
 SPECS = sorted(p.name[: -len(".spec.ts")] for p in (ROOT / "e2e" / "tests").glob("*.spec.ts"))
 
 
+def paths_ignore(workflow: Path) -> dict[str, list[str] | None]:
+    """Every event of a workflow's `on:` block, with its `paths-ignore` list or None when it has none.
+
+    A line scan of the block-style YAML the workflows use: the standard library has no YAML parser.
+    """
+    lists: dict[str, list[str] | None] = {}
+    event, inside, collecting = None, False, False
+    for line in workflow.read_text(encoding="utf-8").splitlines():
+        if not inside:
+            inside = line.startswith("on:")
+        elif line and not line.startswith((" ", "#")):
+            break
+        elif m := re.fullmatch(r"  ([\w-]+):.*", line):
+            event, collecting = m.group(1), False
+            lists[event] = None
+        elif m := re.fullmatch(r"    ([\w-]+):.*", line):
+            collecting = m.group(1) == "paths-ignore"
+            if collecting:
+                lists[event] = []
+        elif collecting and (m := re.fullmatch(r"      - (.*)", line)):
+            lists[event].append(m.group(1).strip().strip('"'))
+    return lists
+
+
 def pick(*files: str) -> ci_changes.Selection:
     return ci_changes.select(MAP, SPECS, list(files), tiers=TIERS)
 
@@ -32,6 +57,38 @@ class Selection(unittest.TestCase):
         self.assertTrue(s.docs_only)
         self.assertEqual(s.specs, [])
         self.assertFalse(s.browser)
+
+    def test_documentation_and_ci_configuration_need_no_version_bump(self):
+        # Neither changes anything the pages show (the version is in their menu).
+        for files in (
+            ["website/docs/intro.md"],
+            [".github/workflows/ci.yml"],
+            [".github/workflows/docs.yml", "website/docs/intro.md", "CLAUDE.md"],
+            [".github/labels.yml", ".github/ISSUE_TEMPLATE/bug.yml"],
+            ["scripts/ci/ci_changes.py", "scripts/ci/spec-map.json", "scripts/include/tests/test_ci_changes.py"],
+            [".claude/agents/deploy.md", ".github/workflows/ci.yml"],
+        ):
+            with self.subTest(files):
+                self.assertFalse(pick(*files).version)
+
+    def test_ci_configuration_alone_still_runs_every_test(self):
+        s = pick(".github/workflows/ci.yml", "website/docs/intro.md")
+        self.assertFalse(s.version)
+        self.assertTrue(s.all)
+        self.assertTrue(s.unit)
+
+    def test_anything_else_needs_a_version_bump(self):
+        for files in (
+            ["crates/cityloom_editor/src/junction/model.rs"],
+            [".github/workflows/ci.yml", "web/app.css"],
+            ["scripts/build.sh"],
+            ["something-new/file.rs"],
+        ):
+            with self.subTest(files):
+                self.assertTrue(pick(*files).version)
+
+    def test_an_unknown_change_needs_a_version_bump(self):
+        self.assertTrue(ci_changes.select(MAP, SPECS, [], tiers=TIERS).version)
 
     def test_documentation_with_code_is_code(self):
         s = pick("README.md", "crates/cityloom_editor/src/junction/model/mod.rs")
@@ -235,6 +292,19 @@ class Coverage(unittest.TestCase):
                     self.assertTrue(s.startswith("@") and s[1:] in MAP["groups"] or s in SPECS, f"unknown {s}")
             else:
                 self.assertIn(specs, ("all", "none", "self"))
+
+    def test_the_workflows_ignore_exactly_the_documentation(self):
+        # ci.yml and sonar.yml do not start for documentation alone; their `paths-ignore` lists must be the `docs` rule,
+        # or a file would start no test at all, or start every job for a change the selector calls documentation.
+        # Every event a change starts (all but a manual run) has the list; the order does not matter.
+        docs = sorted(next(r["paths"] for r in MAP["rules"] if r.get("docs")))
+        for workflow in ("ci.yml", "sonar.yml"):
+            with self.subTest(workflow):
+                lists = paths_ignore(ROOT / ".github" / "workflows" / workflow)
+                self.assertTrue({"push", "pull_request"} <= set(lists), f"{workflow}: {sorted(lists)}")
+                for event, paths in lists.items():
+                    if event != "workflow_dispatch":
+                        self.assertEqual(sorted(paths or []), docs, f"{workflow} {event}")
 
 
 class Revisions(unittest.TestCase):

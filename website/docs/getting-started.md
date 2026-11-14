@@ -64,9 +64,12 @@ just format        # rustfmt and Prettier
 just format-check  # the same, without changing anything
 ```
 
-CI runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
-it, and builds this documentation with `just docs-build`. CI's `test` and integration jobs run a Postgres service; the UI and E2E browser jobs need none. Every pull
-request raises the version in `crates/cityloom_editor/Cargo.toml`.
+CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
+it. A workflow of its own, `.github/workflows/docs.yml`, checks and builds this documentation (what `just docs-build` runs) when a change
+touches `website/`, and publishes it to GitHub Pages from main. CI does not start for a change to documentation alone. CI's `test` and integration jobs run a Postgres service; the UI
+and E2E browser jobs need none. Every pull request raises the version in `crates/cityloom_editor/Cargo.toml`, except one
+made only of documentation and CI configuration (`CI_CONFIGURATION` in `scripts/ci/ci_changes.py`: `.github/`,
+`scripts/ci/`, `scripts/include/` and `.claude/`).
 
 `just db` starts the Postgres in a container named `cityloom-db` on 127.0.0.1:55432 and prints the line to run:
 `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. The server's tests and the account spec

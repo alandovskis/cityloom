@@ -1,0 +1,82 @@
+name: Documentation
+
+# The documentation site (website/) on its own: checked and built for every change to it, and published to GitHub
+# Pages (https://alandovskis.github.io/cityloom/) from main. ci.yml does not start for a change to documentation alone,
+# and its `CI` check does not cover the build: a broken build shows only in this workflow's Documentation check, on the
+# pull requests that change website/. The build reads nothing outside website/ (the same command as `just docs-build`,
+# without just); the formatting check uses e2e/'s Prettier and the root's rules, whose own changes ci.yml's Format job
+# checks against website/ too. No check is required on main, so a path filter is safe.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# A newer push to the same pull request supersedes the run in progress; runs on main always finish.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# Actions are pinned to a commit; Dependabot proposes the updates.
+jobs:
+  build:
+    name: Documentation
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: |
+            website/package-lock.json
+            e2e/package-lock.json
+      # The Prettier check of `just format-check`, for website/ (the same Prettier version, from e2e/).
+      - run: npm ci
+        working-directory: e2e
+      - run: npx prettier --ignore-path ../.prettierignore --check ../website
+        working-directory: e2e
+      - run: npm ci
+        working-directory: website
+      # Builds English and fr-CA, and fails on a broken link (what `just docs-build` runs).
+      - run: npm run build
+        working-directory: website
+      # Only main is published: say so on a manual run from another branch, where `deploy` is skipped.
+      - if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: echo "Built only. The documentation is deployed from main; this run is on $GITHUB_REF." >> "$GITHUB_STEP_SUMMARY"
+      # What `deploy` publishes; uploaded on every run, so a pull request shows the site would build.
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/build
+
+  # Pages is set to deploy from GitHub Actions in the repository's settings.
+  deploy:
+    name: Deploy the documentation
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

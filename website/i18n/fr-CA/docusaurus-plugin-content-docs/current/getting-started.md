@@ -64,9 +64,13 @@ just format        # rustfmt et Prettier
 just format-check  # la même vérification, sans rien modifier
 ```
 
-L’intégration continue exécute `just format-check`, `just test` et `just e2e` avec `RUSTFLAGS=-D warnings`; un nouvel
-avertissement du compilateur la fait donc échouer. Elle construit aussi cette documentation avec `just docs-build`. Les tâches `test` et d’intégration de l’intégration continue
-exécutent un service Postgres; les tâches de tests de l’interface et de bout en bout n’en ont pas besoin. Chaque demande de fusion augmente la version dans `crates/cityloom_editor/Cargo.toml`.
+L’intégration continue (`.github/workflows/ci.yml`) exécute `just format-check`, `just test` et `just e2e` avec `RUSTFLAGS=-D warnings`; un nouvel
+avertissement du compilateur la fait donc échouer. Un flux de travail distinct, `.github/workflows/docs.yml`, vérifie et construit cette documentation (ce qu’exécute `just docs-build`) quand un
+changement touche `website/`, et la publie sur GitHub Pages depuis main. L’intégration continue ne démarre pas pour un changement qui ne touche que la
+documentation. Les tâches `test` et d’intégration de l’intégration continue
+exécutent un service Postgres; les tâches de tests de l’interface et de bout en bout n’en ont pas besoin. Chaque demande de fusion augmente la version dans `crates/cityloom_editor/Cargo.toml`, sauf celle qui ne
+touche que la documentation et la configuration de l’intégration continue (`CI_CONFIGURATION` dans `scripts/ci/ci_changes.py` : `.github/`,
+`scripts/ci/`, `scripts/include/` et `.claude/`).
 
 `just db` démarre le Postgres dans un conteneur nommé `cityloom-db`, sur 127.0.0.1:55432, et affiche la ligne à
 exécuter : `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. Les tests du serveur et la
