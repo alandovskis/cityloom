@@ -1,5 +1,5 @@
 $ git rev-parse --short HEAD
-9d09e08e
+ce40b710
 $ just format-check   # cargo fmt --check, then Prettier --check
 cargo fmt --check
 cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
@@ -7,7 +7,7 @@ Checking formatting...
 All matched files use Prettier code style!
 exit=0
 $ just test-scripts
-Ran 65 tests in 0.112s
+Ran 65 tests in 0.193s
 
 OK
 exit=0

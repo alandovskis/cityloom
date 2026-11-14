@@ -118,6 +118,7 @@ map/vm/:
   style.rs
 map/view/:
   areas_view.rs
+  goal_view.rs
   home.rs
   mod.rs
   network_view.rs

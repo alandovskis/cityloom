@@ -1,28 +1,27 @@
-$ git log --oneline -1
-4a105b33 Put the street slice's files in model, vm and view folders
+$ git log --oneline -1   # a fresh worktree with its own empty target/
+5f55ae32 Put the street slice's files in model, vm and view folders
 $ cargo fmt --check
 exit=0
 $ RUSTFLAGS='-D warnings' just test
 exit=0
-test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 17.37s
+test result: ok. 3210 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.78s
 cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
 
-
-$ git log --oneline -1
-22b7bb8c Put the junction slice's files in model, vm and view folders
+$ git log --oneline -1   # a fresh worktree with its own empty target/
+25af8c89 Put the junction slice's files in model, vm and view folders
 $ cargo fmt --check
 exit=0
 $ RUSTFLAGS='-D warnings' just test
 exit=0
-test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 10.51s
+test result: ok. 3210 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.75s
 cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
 
-$ git log --oneline -1
-f7d34f9f Put the map slice's files in model, vm and view folders
+$ git log --oneline -1   # a fresh worktree with its own empty target/
+696972fa Put the map slice's files in model, vm and view folders
 $ cargo fmt --check
 exit=0
 $ RUSTFLAGS='-D warnings' just test
 exit=0
-test result: ok. 3202 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 18.77s
+test result: ok. 3210 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 9.98s
 cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
 

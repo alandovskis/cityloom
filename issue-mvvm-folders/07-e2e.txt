@@ -1,14 +1,14 @@
 $ git rev-parse --short HEAD; git status --porcelain | wc -l
-9d09e08e
+ce40b710
        0
 $ just e2e   # builds wasm and server, then the UI, integration and E2E (archive) tiers
 exit=0
 Running 471 tests using 7 workers
-  471 passed (2.6m)
+  471 passed (2.2m)
 Running 25 tests using 7 workers
-  25 passed (21.8s)
+  25 passed (21.2s)
 Running 111 tests using 7 workers
-  111 passed (29.8s)
+  111 passed (26.3s)
 $ git rev-parse --short HEAD; git status --porcelain | wc -l   # after
-9d09e08e
+ce40b710
        0
