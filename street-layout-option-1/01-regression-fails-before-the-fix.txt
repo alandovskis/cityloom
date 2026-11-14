@@ -1,0 +1,8 @@
+# the selection panel's first commit (35e49064), before the review's fix, with the fix's regression test copied in
+$ cargo test -p cityloom_editor --lib -- street::vm::level_tests::an_edit_of_a_piece_never_moves_the_panel_to_a_stretch_chosen_earlier
+test street::vm::level_tests::an_edit_of_a_piece_never_moves_the_panel_to_a_stretch_chosen_earlier ... FAILED
+thread 'street::vm::level_tests::an_edit_of_a_piece_never_moves_the_panel_to_a_stretch_chosen_earlier' (24761474) panicked at crates/cityloom_editor/src/street/vm.rs:4000:25:
+assertion `left == right` failed: sample 2, Left, piece 2, direction Some(1)
+  left: Stop
+ right: Piece
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3215 filtered out; finished in 0.24s

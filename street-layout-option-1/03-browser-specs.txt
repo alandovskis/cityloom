@@ -1,0 +1,9 @@
+$ git rev-parse HEAD
+23cd35f2b8c6e54e229e147c015890a676ec7fd4
+$ just e2e (the street group, standards, the cross-page specs and the junction specs)
+  ✓  238 [ui] › tests/speed.spec.ts:104:3 › the details panel's path › with nothing chosen it shows the street, which holds the speed limit (1.7s)
+  ✓  239 [ui] › tests/speed.spec.ts:114:3 › the details panel's path › a pressed piece shows under its zone, and the path's steps go back up with the piece still chosen (2.0s)
+  ✓  240 [ui] › tests/speed.spec.ts:141:3 › the details panel's path › from the street, one button shows the selected zone's commands (1.8s)
+  ✓  241 [ui] › tests/speed.spec.ts:152:3 › the details panel's path › a stretch of the curbside shows along the street, not under a zone (3.6s)
+  ✓  308 [ui] › tests/street.spec.ts:496:3 › the zones of a street › the zone strip is one line, at most 48 px, and the commands sit in the details panel (1.4s)
+  328 passed (1.6m)
