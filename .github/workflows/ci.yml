@@ -2,7 +2,8 @@ name: CI
 
 # A change to documentation alone (the `docs` rule of scripts/ci/spec-map.json) does not start this workflow: it changes
 # nothing the site serves, and .github/workflows/docs.yml builds, checks and publishes the documentation. No check is
-# required on main, so a path filter is safe; keep the list in step with that rule.
+# required on main, so a path filter is safe. scripts/include/tests/test_ci_changes.py fails when the list and that rule
+# differ.
 on:
   push:
     branches: [main]
