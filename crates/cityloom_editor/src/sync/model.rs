@@ -379,15 +379,21 @@ pub fn block(doc: &mut SyncDoc, put: &WorkPut) {
 /// The records that wait to be sent, up to a batch: with their bodies read by `body_of`, or as removals (a record
 /// whose place has gone from the store is sent as a removal). `usable` says which kinds may be sent (a kind whose
 /// document is damaged or newer is not). A `keepalive` batch stops where the browser's 64 KiB would be passed; a
-/// record too big for that waits for the next page. A blocked record is left out.
+/// record too big for that waits for the next page. A blocked record is left out. Places come first, and a milestone
+/// goes last and alone.
 pub fn next_batch(doc: &SyncDoc, body_of: &dyn Fn(&Id) -> Option<Value>, usable: &dyn Fn(Kind) -> bool, keepalive: bool) -> Vec<WorkPut> {
     let mut out = Vec::new();
     let mut bytes = 0;
-    for (name, e) in &doc.records {
-        if !e.pending || e.blocked {
-            continue;
-        }
+    // Places first, milestones last: a milestone is a whole snapshot, so it goes in a batch of its own, and a full
+    // account or an oversized request holds back history, never the work it describes.
+    let mut waiting: Vec<(&String, &Entry)> = doc.records.iter().filter(|(_, e)| e.pending && !e.blocked).collect();
+    waiting.sort_by_key(|(name, _)| name.starts_with("milestone/"));
+    for (name, e) in waiting {
         let Some(id) = Id::from_name(name).filter(|id| usable(id.kind)) else { continue };
+        let milestone = id.kind == Kind::Milestone;
+        if milestone && !out.is_empty() {
+            break;
+        }
         let body = if e.deleted { None } else { body_of(&id) };
         let put = WorkPut { kind: id.kind.as_str().into(), key: id.key, base_rev: e.rev, edited_at: e.edited_at.clone(), deleted: body.is_none(), body };
         if keepalive {
@@ -398,7 +404,7 @@ pub fn next_batch(doc: &SyncDoc, body_of: &dyn Fn(&Id) -> Option<Value>, usable:
             bytes += size;
         }
         out.push(put);
-        if out.len() == BATCH {
+        if milestone || out.len() == BATCH {
             break;
         }
     }
@@ -610,6 +616,20 @@ mod tests {
         let shape: Vec<_> = batch.iter().map(|p| (p.kind.as_str(), p.key.as_str(), p.deleted, p.body.is_some(), p.base_rev)).collect();
         assert_eq!(shape, [("rule", "r-1", true, false, 2), ("street", "a", false, true, 2), ("street", "gone", true, false, 2)]);
         assert_eq!(batch[1].edited_at, T1);
+    }
+
+    #[test]
+    fn a_milestone_waits_behind_the_places_and_goes_in_a_batch_of_its_own() {
+        // A milestone is a whole snapshot, up to 1 MiB: beside places it could refuse them with it (the account's
+        // bytes, the request's size), so history never holds back the work it describes.
+        let mut doc = doc_with(&[("milestone/m1", T1, false), ("street/a", T1, false), ("milestone/m2", T1, false), ("rule/r-1", T1, false)]);
+        let names = |doc: &SyncDoc| next_batch(doc, &|_| Some(json!({})), &|_| true, false).iter().map(|p| format!("{}/{}", p.kind, p.key)).collect::<Vec<_>>();
+        assert_eq!(names(&doc), ["rule/r-1", "street/a"], "the places first, without a milestone");
+        for name in ["rule/r-1", "street/a"] {
+            doc.records.get_mut(name).unwrap().pending = false;
+        }
+        assert_eq!(names(&doc), ["milestone/m1"], "then one milestone at a time");
+        assert_eq!(next_batch(&doc, &|_| Some(json!({})), &|_| true, true).len(), 1, "a keepalive batch the same");
     }
 
     #[test]

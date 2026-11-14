@@ -56,6 +56,7 @@ Page open with storage on the server; 250 ms after a write (not within 2 s of th
 
 - `410 resync`: full pull. `410 reset`: turn-on merge `SyncDoc::restart` (every record competes again with its own time; nothing removed locally).
 - `409 storage-off`: stop. `SyncVm::disable` forgets the server's numbers (`user`, `epoch`, `rev`, each record's `rev`) but keeps every record pending with its `edited_at`, so a stale copy cannot beat a later edit when storage is turned on again.
+- A batch (`next_batch`) takes the places first and a milestone last, alone: a milestone is a whole snapshot, so a full account (16 MiB) or an oversized request holds back history, never the work it describes.
 - `413`: retry one record at a time; the one refused alone is `blocked` (local, out of batches until the place is edited again), its limit said once.
 - A skipped record (paused kind, or `corrupt`, which goes through `decide`) does not advance `rev`, so it comes back. A place superseded by a record that cannot be applied stays marked but is not resent in that run.
 
