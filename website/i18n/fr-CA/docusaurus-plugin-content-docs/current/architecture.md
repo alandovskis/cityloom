@@ -1,7 +1,7 @@
 ---
 id: architecture
 title: Architecture
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Architecture
@@ -62,10 +62,14 @@ français sont dans `docs/glossary-fr-ca.md`.
 
 ## Modules WebAssembly
 
-L’espace de travail compte quatre caisses :
+L’espace de travail compte six caisses, dans `crates/` (voir [Organisation du dépôt](project-layout.md#les-caisses)) :
 
-- `cityloom_editor` (la caisse racine) est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
+- `cityloom_editor` est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
 - `cityloom_model` est le type de réseau simple (serde seulement).
+- `cityloom_report` est le rapport d’examen de la conception sous forme de données simples (serde seulement), que
+  l’éditeur remplit.
+- `cityloom_report_pdf` écrit ce rapport en PDF. C’est un module WebAssembly distinct, chargé la première fois qu’un
+  rapport est demandé, pour que sa lourde dépendance (krilla) reste hors du module de l’éditeur.
 - `citymodel_builder` prépare les données cartographiques. Son importateur exécute
   [osm2streets](https://github.com/a-b-street/osm2streets) une seule fois sur toute la région métropolitaine et remplit
   le réseau, qui est découpé en tuiles JSON que l’éditeur télécharge et dans lesquelles il découpe un lieu.

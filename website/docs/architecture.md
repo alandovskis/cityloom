@@ -1,7 +1,7 @@
 ---
 id: architecture
 title: Architecture
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Architecture
@@ -57,10 +57,13 @@ renders, so a history follows a language switch. Each slice that owns messages h
 
 ## WebAssembly modules
 
-The workspace has four crates:
+The workspace has six crates, in `crates/` (see [Project layout](project-layout.md#the-crates)):
 
-- `cityloom_editor` (the root crate) is the editor, built to WebAssembly and driven by `wasm-bindgen`.
+- `cityloom_editor` is the editor, built to WebAssembly and driven by `wasm-bindgen`.
 - `cityloom_model` is the plain network type (serde only).
+- `cityloom_report` is the design-review report as plain data (serde only), which the editor fills.
+- `cityloom_report_pdf` writes that report as a PDF. It is a WebAssembly module of its own, loaded the first time a
+  report is asked for, so that its large dependency (krilla) stays out of the editor's module.
 - `citymodel_builder` prepares the map data. Its importer runs [osm2streets](https://github.com/a-b-street/osm2streets)
   once over the whole metropolitan area and fills the network, which is cut into JSON tiles the editor fetches and cuts
   a place out of. osm2streets therefore never reaches the browser.
