@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::city::edits::{self, Document as EditsDocument, EDITS_KEY, JUNCTIONS, STREETS};
 use crate::restriction::store::{self as rules, RESTRICTIONS_KEY, RestrictionStore};
 use crate::shared::ports::Storage;
+use crate::shared::project_id::{FIRST, wire_key};
 use crate::sync::model::{Id, Kind, mark_all, open, save};
 use crate::timeline::model::{Draft, Milestone, Refused, Snapshot, Summary};
 use crate::timeline::store::MilestoneStore;
@@ -214,7 +215,9 @@ pub fn restore(storage: &Rc<dyn Storage>, id: &str, backup_name: &str, app_versi
 /// a removal sent for it would name a record the server never had.
 fn forget_mark(storage: &Rc<dyn Storage>, id: &str) {
     if let Some(mut doc) = open(&**storage) {
-        doc.forget(&Id::new(Kind::Milestone, id));
+        // The entry is named by the wire key, as `mark` composes it: `<project>:<id>` outside the first project.
+        let project = storage.project();
+        doc.forget(&Id::new(Kind::Milestone, &wire_key(project.as_deref().unwrap_or(FIRST), id)));
         save(&**storage, &doc);
     }
 }
@@ -433,6 +436,21 @@ mod tests {
         let any_backup_mark =
             open(&*memory).is_some_and(|doc| doc.records.keys().any(|name| name.starts_with("milestone/") && name != &format!("milestone/{}", before.id)));
         assert!(!any_backup_mark, "no mark is left for the backup that was dropped");
+    }
+
+    #[test]
+    fn the_mark_of_a_dropped_backup_is_found_under_the_project_s_wire_key_in_any_project() {
+        let (ports, _, memory) = test_ports();
+        let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage, "p1"));
+        keep(&storage, &[("w1", 1)], &[("r1", "Zone")]);
+        let before = milestone(&storage, "Before");
+        storage.remember(RESTRICTIONS_KEY, "");
+        keep_streets_only(&storage, &[("w1", 2)]);
+        memory.refuse(&format!("{EDITS_KEY}@p1"));
+        assert_eq!(restore(&storage, &before.id, "Backup", "1", None), Err(Refused::Unusable));
+        memory.refuse_nothing();
+        let marks: Vec<String> = open(&*memory).unwrap().records.keys().filter(|name| name.starts_with("milestone/")).cloned().collect();
+        assert_eq!(marks, [format!("milestone/p1:{}", before.id)], "only the milestone that was kept is marked");
     }
 
     fn keep_streets_only(storage: &Rc<dyn Storage>, streets: &[(&str, i64)]) {
