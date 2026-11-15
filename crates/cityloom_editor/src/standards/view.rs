@@ -251,6 +251,18 @@ pub fn Profiles(vm: Rc<StandardsVm>) -> impl IntoView {
     let create_ref = NodeRef::<leptos::html::Input>::new();
     let import_ref = NodeRef::<leptos::html::Textarea>::new();
     let select_ref = NodeRef::<leptos::html::Select>::new();
+    // "Manage profiles" opens by itself while a profile is being edited or exported, and is never closed for the person:
+    // closing an edit leaves the profiles in view.
+    let manage_ref = NodeRef::<leptos::html::Details>::new();
+    let busy = move || vm.with_value(|v| v.form().is_some() || v.exported().is_some());
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        if busy()
+            && let Some(details) = manage_ref.get()
+        {
+            details.set_open(true);
+        }
+    });
     let on_create = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let name = create_ref.get().map(|i| i.value()).unwrap_or_default();
@@ -270,13 +282,13 @@ pub fn Profiles(vm: Rc<StandardsVm>) -> impl IntoView {
         }
     };
     view! {
-        <section class="standards" aria-labelledby="standards-heading">
-            <h3 id="standards-heading">{move || word(vm, "standards-heading")}</h3>
-            <p class="standards-intro">{move || word(vm, "standards-intro")}</p>
-            <div class="standards-field">
-                <label for="standards-in-force">{move || word(vm, "standards-in-force-label")}</label>
+        <section class="standards zone-row" aria-labelledby="standards-heading">
+            <h3 id="standards-heading" class="sr-only">{move || word(vm, "standards-heading")}</h3>
+            <label for="standards-in-force" class="zone-l">{move || word(vm, "standards-row")}</label>
+            <div class="zone-c">
                 <select
                     id="standards-in-force"
+                    aria-label=move || word(vm, "standards-in-force-label")
                     node_ref=select_ref
                     on:change=move |ev| {
                         let value = event_target_value(&ev);
@@ -291,11 +303,15 @@ pub fn Profiles(vm: Rc<StandardsVm>) -> impl IntoView {
                             .collect_view()
                     }}
                 </select>
-            </div>
-            <p id="standards-active" role="status">{move || vm.with_value(|v| v.in_force_text())}</p>
+            <p id="standards-active" class="zone-hint" role="status">{move || vm.with_value(|v| v.in_force_text())}</p>
             <p id="standards-error" class="standards-error" role="alert" hidden=move || vm.with_value(|v| v.error()).is_none()>
                 {move || vm.with_value(|v| v.error()).unwrap_or_default()}
             </p>
+            // Keeping profiles is a setting of the browser, not of this street: it waits behind a disclosure, which
+            // opens by itself while a profile is being edited or exported.
+            <details class="standards-manage" node_ref=manage_ref open=busy()>
+            <summary>{move || word(vm, "standards-manage")}</summary>
+            <p class="standards-intro">{move || word(vm, "standards-intro")}</p>
             <h4>{move || word(vm, "standards-profiles-label")}</h4>
             <ul id="standards-list" class="standards-list">
                 {move || {
@@ -312,13 +328,18 @@ pub fn Profiles(vm: Rc<StandardsVm>) -> impl IntoView {
             <form class="standards-create" on:submit=on_create>
                 <label for="standards-name">{move || word(vm, "standards-name-label")}</label>
                 <input type="text" id="standards-name" node_ref=create_ref maxlength="60"/>
-                <button type="submit" id="standards-create">{move || word(vm, "standards-create")}</button>
+                <button type="submit" class="btn" id="standards-create">{move || word(vm, "standards-create")}</button>
             </form>
-            <form class="standards-import" on:submit=on_import>
-                <label for="standards-import-text">{move || word(vm, "standards-import-label")}</label>
-                <textarea id="standards-import-text" node_ref=import_ref rows="4"></textarea>
-                <button type="submit" id="standards-import">{move || word(vm, "standards-import")}</button>
-            </form>
+            <details class="standards-import-open">
+                <summary>{move || word(vm, "standards-import-open")}</summary>
+                <form class="standards-import" on:submit=on_import>
+                    <label for="standards-import-text">{move || word(vm, "standards-import-label")}</label>
+                    <textarea id="standards-import-text" node_ref=import_ref rows="4"></textarea>
+                    <button type="submit" class="btn" id="standards-import">{move || word(vm, "standards-import")}</button>
+                </form>
+            </details>
+            </details>
+            </div>
         </section>
     }
 }

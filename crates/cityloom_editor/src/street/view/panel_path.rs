@@ -72,7 +72,13 @@ pub fn ZoneEntry(vm: Rc<StreetVm>) -> impl IntoView {
         w.show_level(Level::Zone);
         focus_current();
     };
-    view! { <button type="button" id="zone-entry" class="btn" on:click=on_press>{move || w.zone_entry()}</button> }
+    view! {
+        <button type="button" id="zone-entry" class="btn" on:click=on_press>{move || w.zone_entry()}</button>
+        {move || {
+            (!w.view().zones.several)
+                .then(|| view! { <p class="zone-hint">{w.i18n().tr("st-zones-entry-hint", &crate::shared::i18n::Args::new())}</p> })
+        }}
+    }
 }
 
 /// Moves the focus to the step that is the level shown, once the path is drawn again: from there Tab enters the level.

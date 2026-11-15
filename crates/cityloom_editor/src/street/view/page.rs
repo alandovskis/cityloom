@@ -143,6 +143,47 @@ fn street_title(w: SheetWatch) -> String {
     said::say(&w.i18n(), w.units(), &w.view().name)
 }
 
+/// The head of the details panel's Street level: the street's name, then its class, width, length and zones, and a
+/// strip of its zones (seen only: the line says it). A street with no end to measure from has no length to give.
+#[component]
+pub fn StreetSummary(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    let sub = move || {
+        let (v, units) = w.now();
+        let i18n = w.i18n();
+        let locale = i18n.locale();
+        let class = match v.class {
+            crate::shared::catalogue::StreetClass::Motorway => "motorway",
+            crate::shared::catalogue::StreetClass::Arterial => "arterial",
+            crate::shared::catalogue::StreetClass::Collector => "collector",
+            crate::shared::catalogue::StreetClass::Local => "local",
+            crate::shared::catalogue::StreetClass::Pedestrian => "pedestrian",
+        };
+        let length = v.zones.length_mm;
+        let args = Args::new()
+            .str("class", class)
+            .str("width", units.length_fine_in(v.row_mm, locale))
+            .str("length", units.length_in(length, locale))
+            .num("zones", v.zones.zones.len().max(1) as i64);
+        i18n.tr(if length > 0 { "st-street-sub" } else { "st-street-sub-free" }, &args)
+    };
+    let mini = move || {
+        let v = w.view();
+        let zones = &v.zones.zones;
+        if zones.is_empty() {
+            return view! { <span style="flex-grow: 1"></span> }.into_any();
+        }
+        zones.iter().map(|z| view! { <span style=format!("flex-grow: {}", (z.to_mm - z.from_mm).max(1))></span> }).collect_view().into_any()
+    };
+    view! {
+        <div class="street-head">
+            <h2 class="insp-name">{move || street_title(w)}</h2>
+            <p class="insp-sub">{sub}</p>
+            <div class="zone-mini" aria-hidden="true">{mini}</div>
+        </div>
+    }
+}
+
 /// One end of the street, named in the language of the page: a link where it is a junction.
 fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
     let name = e.name.clone();

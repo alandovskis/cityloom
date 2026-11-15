@@ -122,10 +122,11 @@
     <div id="panel-path-slot" style="display: contents"></div>
     <div class="panel-body">
       <div class="panel-level" id="p-street">
-        <p class="hint" data-i18n="st-path-hint">Choose a piece, a zone or a stretch along the street to change it.</p>
-        <p class="zone-entry"><span id="zone-entry-slot" style="display: contents"></span></p>
+        <div id="street-head-slot" style="display: contents"></div>
         <div id="speed-slot" style="display: contents"></div>
+        <div class="zone-row zone-entry"><span class="zone-l" data-i18n="st-row-zones">Zones</span><div class="zone-c"><span id="zone-entry-slot" style="display: contents"></span></div></div>
         <div id="standards-slot" style="display: contents"></div>
+        <p class="hint street-tip" data-i18n="st-path-hint">Choose a piece, a zone or a stretch along the street to change it.</p>
       </div>
       <div class="panel-level" id="p-zone" hidden><div id="zone-tools-slot" style="display: contents"></div></div>
       <div class="panel-level" id="p-piece" hidden><div class="inspector" id="inspector"></div></div>

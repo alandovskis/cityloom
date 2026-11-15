@@ -1608,6 +1608,44 @@ svg pattern circle {
   border-radius: 10px;
   background: var(--accent-wash);
 }
+/* The details panel's Street level: the street's name and figures, then rows like the zone pane's (speed limit,
+   zones, the standard in force, with "Manage profiles" a disclosure), and the tip for someone who has chosen nothing
+   at its foot. */
+.street-head .insp-sub {
+  margin-top: 2px;
+}
+.street-head .zone-mini {
+  margin-top: 10px;
+}
+.speed-limit label.zone-l {
+  color: var(--ink);
+  font-size: 13px;
+}
+#p-street .zone-row {
+  padding: 12px 0;
+}
+.standards-manage > summary,
+.standards-import-open > summary {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.standards-manage[open] {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.street-tip {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .zone-ask {
   margin: 0;
   font-size: 13px;
