@@ -1,0 +1,8 @@
+$ git rev-parse HEAD
+2a858b57bfa5bdc799d7c4585e3e4383c13b2dc5
+$ just format-check
+cargo fmt --check
+cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
+Checking formatting...
+All matched files use Prettier code style!
+exit status: 0

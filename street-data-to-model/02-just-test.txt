@@ -1,0 +1,69 @@
+$ RUSTFLAGS='-D warnings' just test
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.41s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-07d833bbff4b226b)
+test result: ok. 3199 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 19.14s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_model-e02b6a446ebeeb8f)
+test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_report-3e79aa9c4f95133d)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_report_pdf-2d242c465420fbfc)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/pdf.rs (target/debug/deps/pdf-39fb539c5141162e)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_server-59d20cf45a31396f)
+test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running unittests src/main.rs (target/debug/deps/cityloom_server-3a24f6f116890455)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/api.rs (target/debug/deps/api-c575aeeefef9e75d)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+     Running tests/areas.rs (target/debug/deps/areas-b7a555ddf2045d65)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/auth_flow.rs (target/debug/deps/auth_flow-ef2ec5fe6dde9b3a)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+     Running tests/data_mount.rs (target/debug/deps/data_mount-f889870048abaebf)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/db.rs (target/debug/deps/db-e45683cf4d5f3f0e)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+     Running tests/no_plaintext.rs (target/debug/deps/no_plaintext-ce9c31c68f78ff85)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/providers.rs (target/debug/deps/providers-3071d226554cd4fb)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/rotate.rs (target/debug/deps/rotate-f269feedc2d4450f)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+     Running tests/static_files.rs (target/debug/deps/static_files-5095c38aeff41d77)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/unavailable.rs (target/debug/deps/unavailable-ecb0ecc18403dc02)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+     Running tests/work_api.rs (target/debug/deps/work_api-6160228990db1fab)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+     Running tests/work_db.rs (target/debug/deps/work_db-217e0993603dfa4d)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.20s
+     Running unittests src/lib.rs (target/debug/deps/citymodel_builder-118bd8ee89ef45b7)
+test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+     Running unittests src/main.rs (target/debug/deps/citymodel_builder-e8615240494b0068)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/archive.rs (target/debug/deps/archive-1e0fd30eb8b6fe47)
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/commands.rs (target/debug/deps/commands-54c77bbec4fdc11a)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+     Running tests/ctrl_c.rs (target/debug/deps/ctrl_c-6e290e3cc7c2644f)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/download.rs (target/debug/deps/download-43ac31c766e1008d)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/importer/main.rs (target/debug/deps/importer-028c6c8f1d6db20e)
+test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.34s
+     Running tests/prepare.rs (target/debug/deps/prepare-91eb37d80ee1104d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+     Running tests/progress.rs (target/debug/deps/progress-fe63004bbdee59b2)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running tests/tiles.rs (target/debug/deps/tiles-47976d4af703701c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.40s
+exit status: 0

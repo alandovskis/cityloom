@@ -1,0 +1,22 @@
+$ cargo test -p cityloom_model -- street:: catalogue::
+test street::from_road::tests::a_road_is_classed_by_its_type ... ok
+test street::from_road::tests::a_buffer_is_planting_only_when_it_is_planted_or_grass ... ok
+test street::from_road::tests::any_other_buffer_and_one_of_no_known_type_is_the_neutral_buffer_and_not_a_median ... ok
+test street::from_road::tests::a_two_way_bike_lane_has_no_direction_and_a_one_way_one_keeps_it ... ok
+test street::from_road::tests::the_other_lanes_keep_their_kinds ... ok
+test street::from_road::tests::a_bus_lane_without_hours_or_with_hours_that_cannot_be_read_stays_a_bus_lane ... ok
+test catalogue::tests::cars_are_travel_parking_and_loading_and_motor_pieces_add_the_bus_and_the_shoulder ... ok
+test street::tests::a_street_with_no_motor_piece_is_pedestrian_and_gets_its_class_back_with_one ... ok
+test catalogue::tests::a_class_is_kept_by_its_word_and_only_a_motorway_is_a_freeway ... ok
+test street::from_road::tests::the_days_of_the_hours_go_with_each_window ... ok
+test street::from_road::tests::a_bus_lane_with_hours_is_parking_outside_them ... ok
+test street::speed::tests::a_speed_that_is_not_a_speed_is_not_read ... ok
+test street::tests::a_street_whose_indices_leave_the_catalogue_or_whose_things_have_no_length_to_lie_along_is_not_sound ... ok
+test street::tests::seen_from_its_other_end_a_street_has_its_pieces_in_the_other_order_running_the_other_way ... ok
+test street::from_road::tests::a_curb_buffer_with_no_bike_lane_or_sidewalk_to_belong_to_is_the_neutral_buffer ... ok
+test street::from_road::tests::paint_posts_a_barrier_and_a_shoulder_beside_a_bike_lane_stay_buffers_of_their_own ... ok
+test street::tests::a_street_with_zones_and_things_along_it_keeps_them_and_where_they_are_measured_from ... ok
+test street::tests::a_street_with_nothing_along_it_is_kept_without_the_fields_it_does_not_use ... ok
+test street::tests::a_speed_is_kept_as_speed_kmh_absent_when_undecided_null_when_there_is_none_or_a_number ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

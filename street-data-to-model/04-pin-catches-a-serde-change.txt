@@ -1,0 +1,30 @@
+$ git rev-parse HEAD
+2a858b57bfa5bdc799d7c4585e3e4383c13b2dc5
+$ git diff   # deliberate break: Street.source no longer left out when empty
+diff --git a/crates/cityloom_model/src/street/mod.rs b/crates/cityloom_model/src/street/mod.rs
+index a5393e9c..5dd35c9c 100644
+--- a/crates/cityloom_model/src/street/mod.rs
++++ b/crates/cityloom_model/src/street/mod.rs
+@@ -44,7 +44,7 @@ pub struct Street {
+     pub segments: Vec<Segment>,
+     pub next_uid: u32,
+     /// The OSM ways it was made from. The sample streets are made from none.
+-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
++    #[serde(default)]
+     pub source: Vec<SourceRef>,
+     /// The street's zones along its length, in order of `from_mm`. Empty for a street of one section, the base.
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+$ cargo test -p cityloom_model -- street::tests
+test street::tests::a_street_with_no_motor_piece_is_pedestrian_and_gets_its_class_back_with_one ... ok
+test street::tests::a_street_whose_indices_leave_the_catalogue_or_whose_things_have_no_length_to_lie_along_is_not_sound ... ok
+test street::tests::seen_from_its_other_end_a_street_has_its_pieces_in_the_other_order_running_the_other_way ... ok
+test street::tests::a_street_with_zones_and_things_along_it_keeps_them_and_where_they_are_measured_from ... ok
+test street::tests::a_speed_is_kept_as_speed_kmh_absent_when_undecided_null_when_there_is_none_or_a_number ... ok
+test street::tests::a_street_with_nothing_along_it_is_kept_without_the_fields_it_does_not_use ... FAILED
+  left: ["class", "name", "next_uid", "row_mm", "segments", "side", "source"]
+ right: ["class", "name", "next_uid", "row_mm", "segments", "side"]
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.00s
+$ git checkout -- crates/cityloom_model/src/street/mod.rs   # restore
+$ cargo test -p cityloom_model -- street::tests
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.00s
+$ git status --short
