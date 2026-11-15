@@ -9,6 +9,7 @@ use crate::catalogue::{CURBS, DIRECTIONS, KINDS, MATERIALS, Side, StreetClass};
 
 mod calming;
 mod curb;
+mod from_road;
 mod green;
 mod segment;
 mod speed;
@@ -17,6 +18,7 @@ mod zone;
 
 pub use calming::{Calming, Kind as CalmingKind};
 pub use curb::{Instance, Use};
+pub use from_road::{class_of, legacy_pieces, one_way_bike_lanes, pieces, refs};
 pub use green::{Green, GreenKind, TreeSize, sort_green};
 pub use segment::{SLOT_MIN, SLOTS, Segment, Variant, valid_window, window_mask};
 pub use speed::{Speed, max_kmh, speed_in};

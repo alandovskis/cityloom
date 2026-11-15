@@ -263,7 +263,6 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(min-width: 1360px)", "a media query"),
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
-    ("the catalogue has every kind of lane", "a panic message about the code, never shown"),
     ("the edits serialise", "a panic message about the code, never shown"),
     ("Feature", "a GeoJSON type name, data for MapLibre"),
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
