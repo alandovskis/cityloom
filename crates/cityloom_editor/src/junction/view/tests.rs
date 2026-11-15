@@ -377,6 +377,34 @@ fn the_junction_level_opens_on_a_summary_and_lists_its_streets_to_go_to() {
 }
 
 #[test]
+fn a_street_folds_its_transit_priority_and_position_and_says_on_each_what_is_set() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s).replace('\u{a0}', " ");
+    let folds: Vec<&str> = h.split("<details").skip(1).map(|d| &d[..d.find('>').unwrap()]).filter(|d| d.contains("jn-fold")).collect();
+    assert_eq!(folds.len(), 2, "two folds: {h}");
+    assert!(folds.iter().all(|d| !d.contains(" open")), "closed at first: {folds:?}");
+    let fold = |h: &str, id: &str| {
+        let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+        let summary = &h[at..];
+        summary[summary.find("<summary>").unwrap()..summary.find("</summary>").unwrap()].to_string()
+    };
+    let transit = fold(&h, "jn-fold-transit");
+    assert!(transit.contains("Transit priority") && transit.contains("None set"), "{transit}");
+    let position = fold(&h, "jn-fold-position");
+    assert!(position.contains("Position") && position.contains("90°, not shifted"), "{position}");
+    // inside the folds: what was there before, unchanged
+    assert!(h.contains("Bus lane along the way in") && h.contains(r#"id="i-h-bearing""#), "{h}");
+    s.edit(|j| j.set_bus_lane(e, true));
+    s.edit(|j| j.set_approach(e, Q_CURB));
+    s.edit(|j| j.step_offset(e, 1));
+    let h = panel(&s).replace('\u{a0}', " ");
+    assert!(fold(&h, "jn-fold-transit").contains("Bus lane, G2"), "{h}");
+    assert!(fold(&h, "jn-fold-position").contains("90°, shifted 0.1 m"), "{h}");
+}
+
+#[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
     let h = panel(&s);

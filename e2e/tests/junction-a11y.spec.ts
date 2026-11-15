@@ -99,7 +99,10 @@ test.describe("the junction's parts are reached without a pointer, and with one 
       for (let i = 0; i < 24 && !found; i++) {
         const [t] = await stepThrough(page, () => page.keyboard.press("ArrowRight"), 1);
         if (pattern.test(t)) {
+          // a street's direction is in its Position fold
+          if (id === "i-h-bearing") await page.locator("#jn-fold-position summary").click();
           await expect(field(id)).toBeVisible();
+          await page.locator("#wrap").focus();
           found = true;
         }
       }

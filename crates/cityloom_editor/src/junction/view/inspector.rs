@@ -1645,6 +1645,54 @@ fn signal_overview(w: Watch) -> impl IntoView {
     }
 }
 
+/// A part of a street's level that is rarely set, folded: its name and, beside it, what is set, so a measure in place is
+/// never out of sight.
+fn fold(w: Watch, id: &'static str, heading: &'static str, set: impl Fn() -> String + Send + Sync + 'static, body: impl IntoView + 'static) -> impl IntoView {
+    view! {
+        <details class="jn-fold" id=id>
+            <summary><span class="jn-fold-name">{words(w, heading)}</span><span class="jn-fold-set">{set}</span></summary>
+            {body}
+        </details>
+    }
+}
+
+/// What a street has of the transit measures, as the fold says it: the bus lane, then the Atlas codes, or "None set".
+fn transit_set(w: Watch, uid: u32) -> String {
+    use crate::shared::said::{Arg, Said};
+    let Some(items) = w.arm(uid, |a| {
+        let t = &a.transit;
+        let mut items: Vec<Said> = Vec::new();
+        if t.bus_lane {
+            items.push(Said::new("jn-fold-bus-lane"));
+        }
+        for code in [APPROACHES[t.approach].code, STOPS[t.stop].code, RULES[t.rule].code] {
+            if !code.is_empty() {
+                items.push(Said::new("city-name").with("name", Arg::Text(code.to_string())));
+            }
+        }
+        if t.filter {
+            items.push(Said::new("city-name").with("name", Arg::Text(FILTER_CODE.to_string())));
+        }
+        items
+    }) else {
+        return String::new();
+    };
+    match items.into_iter().reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail)))) {
+        Some(list) => w.say(&list),
+        None => w.tr("jn-fold-none"),
+    }
+}
+
+/// Where a street points and how far it is shifted, as the fold says it: "90°, not shifted".
+fn position_set(w: Watch, uid: u32) -> String {
+    w.arm(uid, |a| {
+        let shift =
+            if a.offset_mm == 0 { w.tr("jn-fold-not-shifted") } else { tr(w, "jn-fold-shifted", Args::new().str("length", length(w, a.offset_mm.abs()))) };
+        tr(w, "jn-fold-position-set", Args::new().num("degrees", a.bearing as i64).str("shift", shift))
+    })
+    .unwrap_or_default()
+}
+
 fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let name = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
     let sub = move || {
@@ -1716,19 +1764,28 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             }}
         </section>
         {crossing_entry(w, uid)}
-        {move || (!walk.get()).then(|| view! { {transit_section(w, uid)} {signal_section(w, uid)} })}
+        {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
-        {num_field(
+        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), transit_section(w, uid)))}
+        {fold(
             w,
-            direction,
-            move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
-            move |v| set_bearing_degrees(w, uid, v),
-        )}
-        {num_field(
-            w,
-            offset,
-            move |dir| { w.edit(|j| j.step_offset(uid, dir)); },
-            move |v| { w.edit(|j| j.set_offset(uid, w.units_now().mm(v))); },
+            "jn-fold-position",
+            "jn-fold-position",
+            move || position_set(w, uid),
+            view! {
+                {num_field(
+                    w,
+                    direction,
+                    move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
+                    move |v| set_bearing_degrees(w, uid, v),
+                )}
+                {num_field(
+                    w,
+                    offset,
+                    move |dir| { w.edit(|j| j.step_offset(uid, dir)); },
+                    move |v| { w.edit(|j| j.set_offset(uid, w.units_now().mm(v))); },
+                )}
+            },
         )}
         {street}
         {remove}

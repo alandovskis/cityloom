@@ -2438,6 +2438,31 @@ svg pattern circle {
   min-width: 2em;
   color: var(--ink-2);
 }
+/* A street's rarely set parts, folded, with what is set beside the name (`fold` in the junction's inspector). */
+.jn-fold {
+  border-top: 1px solid var(--rule);
+}
+.jn-fold > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.jn-fold-name {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.jn-fold-set {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-align: right;
+}
+.jn-fold[open] > summary {
+  padding-bottom: 6px;
+}
 .jn-tip {
   margin-top: 4px;
   padding: 10px 12px;

@@ -229,6 +229,9 @@ test.describe("the junction measures of the Atlas", () => {
       await page.keyboard.press("ArrowRight");
       const tag = page.locator("#drawing text.measure-tag", { hasText: new RegExp(`^${m.code}$`) });
       await expect(tag).toHaveCount(0);
+      // the measures are folded on the street's level, the fold saying what is set
+      await expect(page.locator("#jn-fold-transit summary")).toContainText("None set");
+      await page.locator("#jn-fold-transit summary").click();
       if (m.busLane) {
         await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
       }
@@ -1421,6 +1424,7 @@ test.describe("a part of the junction is pressed to select it", () => {
 
     // A street turns only where it keeps clear of its neighbours: one way or the other.
     await pressOn(page, '#drawing [data-role="arm"]');
+    await page.locator("#jn-fold-position summary").click();
     const bearing = field("i-h-bearing");
     const was = await bearing.inputValue();
     const before = await picture();
