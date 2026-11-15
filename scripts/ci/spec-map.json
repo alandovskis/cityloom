@@ -4,7 +4,7 @@
     "street": ["street", "street-iso", "edits", "impact", "speed", "templates", "calming", "curb", "stops", "green"],
     "standards": ["standards"],
     "junction": ["junction", "junction-a11y"],
-    "map": ["map", "network", "source-quality", "restrictions", "world", "report", "search", "webgl"],
+    "map": ["map", "network", "restrictions", "world", "report", "search", "webgl"],
     "home": ["home", "projects", "about"],
     "timeline": ["timeline"],
     "account": ["account", "account-server"],

@@ -91,8 +91,6 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("areas-slot", view! { <view::areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <view::network_view::NetworkLead vm=vm.clone()/> }.into_any());
     mount("network-slot", view! { <view::network_view::NetworkChecks vm=vm.clone()/> }.into_any());
-    mount("source-lead", view! { <view::source_view::SourceLead vm=vm.clone()/> }.into_any());
-    mount("source-slot", view! { <view::source_view::SourceFindings vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/><view::MapTitle vm=vm.clone()/> }.into_any());
     Some(MapPage(vm, i18n))
 }
