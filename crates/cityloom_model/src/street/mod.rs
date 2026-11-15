@@ -266,6 +266,12 @@ mod tests {
             serde_json::json!({"uid": 2, "kind": 3, "width_mm": 3300, "material": 0, "curb": null, "direction": 0, "tram": false, "variants": []})
         );
         assert_eq!(serde_json::from_value::<Street>(json).unwrap(), plain());
+        // a street made from no OSM way (a sample) and of no known speed leaves both out
+        let bare = Street { source: Vec::new(), speed: Speed::Undecided, ..plain() };
+        let json = serde_json::to_value(&bare).unwrap();
+        let keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(keys, ["class", "name", "next_uid", "row_mm", "segments", "side"]);
+        assert_eq!(serde_json::from_value::<Street>(json).unwrap(), bare);
     }
 
     #[test]
