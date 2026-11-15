@@ -2,7 +2,8 @@
 
 use leptos::prelude::*;
 
-pub use cityloom_model::street::OsmRef;
+/// What the editor calls `cityloom_model::SourceRef`: the OSM way or node a street or a junction was made from.
+pub use cityloom_model::SourceRef as OsmRef;
 
 /// The page of a way or node (`kind`) on OpenStreetMap.
 pub fn osm_url(kind: &str, id: i64) -> String {

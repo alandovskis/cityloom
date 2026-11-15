@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::SourceRef;
 use crate::catalogue::{CURBS, DIRECTIONS, KINDS, MATERIALS, Side, StreetClass};
 
 mod calming;
@@ -25,14 +26,6 @@ pub use speed::{Speed, max_kmh, speed_in};
 pub use stop::{Stop, StopKind};
 pub use zone::{Zone, ZoneEnd, ZoneFrame, same_pieces, settle_zones};
 
-/// An OpenStreetMap way (of a street) or node (of a junction) that a place was made from, and the version it had when
-/// the data was read. Unlike the network's `crate::OsmRef`, it does not say which of the two it is: the place does.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct OsmRef {
-    pub id: i64,
-    pub version: Option<i32>,
-}
-
 /// One street as the city keeps it: the pieces of its section as the street
 /// editor shows them, looking from the street's first end toward its second.
 /// Directions are written for the side of the road in `side`.
@@ -52,7 +45,7 @@ pub struct Street {
     pub next_uid: u32,
     /// The OSM ways it was made from. The sample streets are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source: Vec<OsmRef>,
+    pub source: Vec<SourceRef>,
     /// The street's zones along its length, in order of `from_mm`. Empty for a street of one section, the base.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zones: Vec<Zone>,
@@ -250,7 +243,7 @@ mod tests {
             side: Side::Right,
             segments,
             next_uid: 5,
-            source: vec![OsmRef { id: 7, version: Some(3) }],
+            source: vec![SourceRef { id: 7, version: Some(3) }],
             zones: Vec::new(),
             from_end: ZoneEnd::First,
             length_mm: None,
@@ -273,6 +266,19 @@ mod tests {
             serde_json::json!({"uid": 2, "kind": 3, "width_mm": 3300, "material": 0, "curb": null, "direction": 0, "tram": false, "variants": []})
         );
         assert_eq!(serde_json::from_value::<Street>(json).unwrap(), plain());
+    }
+
+    #[test]
+    fn a_speed_is_kept_as_speed_kmh_absent_when_undecided_null_when_there_is_none_or_a_number() {
+        for (speed, written) in [(Speed::Undecided, None), (Speed::NotSet, Some("\"speed_kmh\":null")), (Speed::Kmh(30), Some("\"speed_kmh\":30"))] {
+            let street = Street { speed, ..plain() };
+            let json = serde_json::to_string(&street).unwrap();
+            match written {
+                Some(text) => assert!(json.contains(text), "{speed:?}: {json}"),
+                None => assert!(!json.contains("speed_kmh"), "{speed:?}: {json}"),
+            }
+            assert_eq!(serde_json::from_str::<Street>(&json).unwrap(), street);
+        }
     }
 
     #[test]

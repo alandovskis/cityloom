@@ -34,7 +34,7 @@ pub use importer::{IMPORTER_VERSION, with_importer};
 pub use junction::{Control, Junction};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;
-pub use osm::{NodeRef, OsmRef, WayRef};
+pub use osm::{NodeRef, OsmRef, SourceRef, WayRef};
 pub use point::{Coordinate, Local, Point, Street};
 pub use provenance::Provenance;
 pub use road::{Road, RoadId};

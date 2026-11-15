@@ -28,8 +28,6 @@ pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod beyond;
 mod joint;
 mod school;
-#[cfg(test)]
-mod speed;
 pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
 mod profile;
 mod zone_speed;

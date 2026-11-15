@@ -40,6 +40,14 @@ impl NodeRef {
     }
 }
 
+/// An OpenStreetMap way (of a street) or node (of a junction) that a place the city keeps was made from, and the
+/// version it had when the data was read. Unlike `OsmRef`, it does not say which of the two it is: the place does.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SourceRef {
+    pub id: i64,
+    pub version: Option<i32>,
+}
+
 /// A thing in OpenStreetMap that a road or a node was made from: a way or a node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

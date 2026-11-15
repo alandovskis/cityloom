@@ -5,7 +5,8 @@
 use crate::catalogue::{KINDS, StreetClass, kind_index};
 use crate::{BufferType, Direction, Lane, LaneKind, Provenance, RoadType};
 
-use super::{OsmRef, Piece, Window};
+use super::{Piece, Window};
+use crate::SourceRef;
 
 /// The class of a road, by its type.
 pub fn class_of(road_type: RoadType) -> StreetClass {
@@ -140,12 +141,12 @@ fn piece(lane: &Lane) -> Piece {
 }
 
 /// The OSM ways or nodes with the version each had.
-pub fn refs(p: &Provenance) -> Vec<OsmRef> {
+pub fn refs(p: &Provenance) -> Vec<SourceRef> {
     p.refs
         .iter()
         .map(|r| match r {
-            crate::OsmRef::Way(w) => OsmRef { id: w.id, version: w.version },
-            crate::OsmRef::Node(n) => OsmRef { id: n.id, version: n.version },
+            crate::OsmRef::Way(w) => SourceRef { id: w.id, version: w.version },
+            crate::OsmRef::Node(n) => SourceRef { id: n.id, version: n.version },
         })
         .collect()
 }
