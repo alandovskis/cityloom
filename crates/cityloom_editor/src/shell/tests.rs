@@ -473,18 +473,17 @@ fn a_page_opened_offline_learns_it_is_signed_in_when_the_network_returns_and_sta
 // ---- the notes' tray (`shell::tray`) ----------------------------------------------------------
 
 fn tray_html(locale: Locale) -> String {
-    use crate::shell::tray::{Tray, TrayTab};
+    use crate::shell::tray::{Tray, TrayPage, TrayTab};
     use leptos::prelude::*;
     let i18n = crate::i18n_for(locale);
     crate::shared::testing::html(move || {
-        let tabs = vec![
-            TrayTab { id: "t-one", panel: "p-one", label: "ui-tab-checks", badge: Some("one-n-slot") },
-            TrayTab { id: "t-two", panel: "p-two", label: "ui-tab-changes", badge: None },
+        let pages = vec![
+            TrayPage::new(TrayTab { id: "t-one", panel: "p-one", label: "ui-tab-checks", badge: Some("one-n-slot") }, view! { <p>"one"</p> }),
+            TrayPage::new(TrayTab { id: "t-two", panel: "p-two", label: "ui-tab-changes", badge: None }, view! { <p>"two"</p> }),
         ];
         view! {
-            <Tray i18n=i18n tabs=tabs status=vec!["first-slot", "second-slot"]>
-                <div id="p-one" role="tabpanel">"one"</div>
-                <div id="p-two" role="tabpanel" hidden>"two"</div>
+            <Tray i18n=i18n pages=pages status=vec!["first-slot", "second-slot"]>
+                <div id="after-panels"></div>
             </Tray>
         }
         .into_any()
@@ -542,10 +541,16 @@ fn the_tray_is_the_notes_with_a_handle_of_status_tabs_and_toggle_over_a_body_of_
         ],
     );
     assert!(handle.contains("<span>Notes</span>"), "{handle}");
-    // the body: what the page gives, as it gives it
+    // the body: each tab's panel, drawn from the same page as its tab (so their ids agree), the first shown, then what
+    // else the page gives
     has_all(&tag_of(&h, "notes-body"), &[r#"class="tray-body""#]);
     let body = &h[h.find(r#"id="notes-body""#).unwrap()..];
-    assert!(body.contains(r#"<div id="p-one" role="tabpanel">one</div><div id="p-two" role="tabpanel" hidden>two</div>"#), "{body}");
+    let panels = concat!(
+        r#"<div id="p-one" role="tabpanel" aria-labelledby="t-one" class="panel-tab"><p>one</p></div>"#,
+        r#"<div id="p-two" role="tabpanel" aria-labelledby="t-two" hidden class="panel-tab"><p>two</p></div>"#,
+    );
+    let (at, after) = (body.find(panels).expect(body), body.find(r#"<div id="after-panels">"#).expect(body));
+    assert!(at < after, "the page's other content follows the panels: {body}");
 }
 
 #[test]

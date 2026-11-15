@@ -1,5 +1,6 @@
 //! The notes as a tray under a page's drawing (the street page): a handle that stays in view (the page's status
-//! line, the notes' tabs, the toggle) over a body holding the tabs' panels. The tray only draws: the shell binds its
+//! line, the notes' tabs, the toggle) over a body holding the tabs' panels. A page gives each tab as a `TrayPage`, the
+//! tab and what its panel holds together; the tray draws both from it, so a tab and its panel always name each other. The tray only draws: the shell binds its
 //! toggle (`]`, `data-notes`) and its tabs (`show_tab`, `tab_key`) as it binds any page's notes, by their ids, so a
 //! page mounts its tray before `mount_shell`. Its styles are `web/tray.css`.
 
@@ -19,15 +20,29 @@ pub struct TrayTab {
     pub badge: Option<&'static str>,
 }
 
+/// One tab of the tray and what its panel holds.
+pub struct TrayPage {
+    tab: TrayTab,
+    body: AnyView,
+}
+
+impl TrayPage {
+    pub fn new(tab: TrayTab, body: impl IntoView + 'static) -> Self {
+        Self { tab, body: body.into_any() }
+    }
+}
+
 /// The tray: `status` names the empty slots the page mounts its status line into, at the start of the handle; the
-/// first of `tabs` is chosen until the shell shows the one remembered; `children` are the tabs' panels.
+/// first of `pages` is chosen (its panel shown, the others hidden) until the shell shows the one remembered;
+/// `children` follow the panels in the body.
 #[component]
-pub fn Tray(i18n: Rc<I18n>, tabs: Vec<TrayTab>, status: Vec<&'static str>, children: Children) -> impl IntoView {
+pub fn Tray(i18n: Rc<I18n>, pages: Vec<TrayPage>, status: Vec<&'static str>, children: Children) -> impl IntoView {
     let i18n = StoredValue::new_local(i18n);
     let tr = move |key: &'static str| move || i18n.with_value(|i| i.tr(key, &Args::new()));
     let slots = status.into_iter().map(|id| view! { <div id=id style="display: contents"></div> }).collect_view();
-    let tabs = tabs
-        .into_iter()
+    let tabs = pages
+        .iter()
+        .map(|p| p.tab)
         .enumerate()
         .map(|(n, t)| {
             let first = n == 0;
@@ -44,6 +59,17 @@ pub fn Tray(i18n: Rc<I18n>, tabs: Vec<TrayTab>, status: Vec<&'static str>, child
                     <span>{tr(t.label)}</span>
                     {t.badge.map(|id| view! { <span id=id style="display: contents"></span> })}
                 </button>
+            }
+        })
+        .collect_view();
+    let panels = pages
+        .into_iter()
+        .enumerate()
+        .map(|(n, p)| {
+            view! {
+                <div class="panel-tab" id=p.tab.panel role="tabpanel" aria-labelledby=p.tab.id hidden=n != 0>
+                    {p.body}
+                </div>
             }
         })
         .collect_view();
@@ -70,6 +96,7 @@ pub fn Tray(i18n: Rc<I18n>, tabs: Vec<TrayTab>, status: Vec<&'static str>, child
                 </button>
             </div>
             <div class="tray-body" id="notes-body">
+                {panels}
                 {children()}
             </div>
         </aside>
