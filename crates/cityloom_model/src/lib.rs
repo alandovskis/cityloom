@@ -2,8 +2,12 @@
 //! the editor reads.
 //! It stands between them so that the editor does not depend on osm2streets.
 //!
-//! Positions are metres from the south-west corner of the data: `x` east, `y` north.
+//! It also holds the street as the city keeps it (`street`) and the catalogue its pieces name (`catalogue`): what
+//! OpenStreetMap can say of a street, without the editor's rules for changing it.
+//!
+//! Positions in the network are metres from the south-west corner of the data: `x` east, `y` north.
 
+pub mod catalogue;
 mod corridor;
 mod cut;
 mod frame;
@@ -18,6 +22,7 @@ mod point;
 mod provenance;
 mod road;
 mod road_type;
+pub mod street;
 mod zone;
 
 pub use corridor::{Corridor, UserClass};
