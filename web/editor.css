@@ -2395,30 +2395,6 @@ svg pattern circle {
   font-weight: 400;
   overflow-wrap: anywhere;
 }
-/* The junction's Provenance tab: a label over its value. */
-dl.prov {
-  margin: 0;
-  padding: 0 8px;
-}
-dl.prov dt {
-  padding-top: 10px;
-  color: var(--ink-2);
-  font-size: 13px;
-}
-dl.prov dd {
-  margin: 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--rule);
-  font-size: 14px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-dl.prov dd.tb-src {
-  font-weight: 400;
-}
-dl.prov dd:last-child {
-  border-bottom: 0;
-}
 
 /* ---- the Add menu --------------------------------------------------------------- */
 

@@ -306,8 +306,6 @@ jn-page-does-it-work = Does it work?
 jn-page-your-changes = Your changes
 jn-page-fine-print = Sample numbers and limits for now, not real measurements.
 jn-page-about = About this junction
-jn-provenance-heading = Where this junction came from
-jn-no-source = This junction was not made from OpenStreetMap.
 
 ## The page of a junction that cannot be drawn (src/junction/view/page.rs: Stuck)
 jn-stuck-title = This junction cannot be drawn

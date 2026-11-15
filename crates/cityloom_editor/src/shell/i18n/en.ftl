@@ -53,7 +53,6 @@ ui-notes-sections = Notes sections
 ui-tab-impact = Impact
 ui-tab-checks = Checks
 ui-tab-changes = Changes
-ui-tab-provenance = Provenance
 ui-key-shift = Shift
 ui-key-ctrl = Ctrl
 ui-key-enter = Enter
