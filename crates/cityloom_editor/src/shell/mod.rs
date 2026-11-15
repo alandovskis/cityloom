@@ -10,6 +10,7 @@ pub mod share;
 pub mod share_view;
 #[cfg(test)]
 mod tests;
+pub mod tray;
 pub mod view;
 pub mod vm;
 

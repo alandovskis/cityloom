@@ -117,6 +117,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/share_view.rs", include_str!("shell/share_view.rs")),
     ("src/shell/session.rs", include_str!("shell/session.rs")),
+    ("src/shell/tray.rs", include_str!("shell/tray.rs")),
     ("src/shell/session_view.rs", include_str!("shell/session_view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),
     ("src/map/vm/mod.rs", include_str!("map/vm/mod.rs")),
