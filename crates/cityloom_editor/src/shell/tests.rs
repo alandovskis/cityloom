@@ -17,7 +17,8 @@ fn every_data_i18n_key_in_street_html_exists_in_both_languages() {
     let i = crate::i18n_for(Locale::En);
     let f = crate::i18n_for(Locale::FrCa);
     let keys = i18n_keys(html);
-    assert!(keys.len() > 40, "the page should have been converted: {}", keys.len());
+    // The notes' words are the tray's (`street::view::notes_tray`), not the page's.
+    assert!(keys.len() > 30, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         i.tr_now(&key, &Args::new());
         f.tr_now(&key, &Args::new());

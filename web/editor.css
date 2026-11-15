@@ -216,7 +216,8 @@
    Layout option 1 of the editors' review (docs/superpowers/specs/2026-11-14-street-editor-layout-design.md). The
    junction page shares this file and keeps its two sidebars, so everything here is under .street-page. The column
    is three parts: the title and tools, which never scroll away; the drawing and the strips, which scroll; and the
-   notes' tray, whose handle (the status line, the tabs, the toggle) is always in view and whose body opens above it. */
+   notes' tray, whose handle (the status line, the tabs, the toggle) is always in view and whose body opens above it.
+   The tray's own styles are in tray.css (`shell::tray`). */
 
 .street-page {
   --lw: 0px;
@@ -226,70 +227,6 @@
   --rw: 0px;
 }
 :root[data-inspector="closed"] .panel.details {
-  display: none;
-}
-.tray {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-radius: var(--r-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
-  overflow: hidden;
-}
-.tray-handle {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 10px;
-}
-.tray .fit-row {
-  justify-content: flex-start;
-}
-.tray .tabs {
-  flex: 1 1 auto;
-  margin: 0;
-}
-.tray-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.tray-toggle:hover {
-  background: var(--fill);
-  color: var(--ink);
-}
-.tray-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* An open tray's chevron points down, to close it; a closed one's up, to open it. */
-.tray-chevron {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-:root[data-notes="open"] .tray-chevron {
-  transform: rotate(180deg);
-}
-.tray-body {
-  padding: 14px 20px 18px;
-  border-top: 1px solid var(--rule);
-}
-:root[data-notes="closed"] .tray-body {
   display: none;
 }
 @media (min-width: 900px) {
@@ -318,17 +255,6 @@
   }
   .street-page .stage-head {
     flex: none;
-  }
-  /* The tray never takes more than about a quarter of the column, so the drawing keeps the rest; its body scrolls. */
-  .tray {
-    flex: none;
-    max-height: 24%;
-  }
-  .tray-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: auto;
-    mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
   }
 }
 
@@ -916,7 +842,7 @@ svg pattern circle {
   pointer-events: none;
 }
 @media (forced-colors: active) {
-      #drawing .approach-mark {
+  #drawing .approach-mark {
     stroke: CanvasText;
   }
   #drawing .stop-pad,
@@ -1891,7 +1817,9 @@ svg pattern circle {
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+  transition:
+    background-color 120ms var(--ease-out),
+    border-color 120ms var(--ease-out);
 }
 .ico svg {
   width: 14px;
@@ -2126,7 +2054,9 @@ svg pattern circle {
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
-  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+  transition:
+    background-color 120ms var(--ease-out),
+    color 120ms var(--ease-out);
 }
 .turn:hover:not(:disabled):not([aria-pressed="true"]) {
   background: var(--fill);
@@ -2152,7 +2082,12 @@ svg pattern circle {
   content: "";
   position: absolute;
   inset: 5px;
-  background: linear-gradient(to top right, transparent calc(50% - 0.8px), var(--ink-3) calc(50% - 0.8px) calc(50% + 0.8px), transparent calc(50% + 0.8px));
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.8px),
+    var(--ink-3) calc(50% - 0.8px) calc(50% + 0.8px),
+    transparent calc(50% + 0.8px)
+  );
   pointer-events: none;
 }
 .turn.bad {
@@ -2614,10 +2549,10 @@ dl.prov dd:last-child {
 
 @media (any-pointer: coarse) {
   /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
-    .add-item,
-.check,
-.fit-checks,
-.path-step {
+  .add-item,
+  .check,
+  .fit-checks,
+  .path-step {
     min-height: 44px;
   }
   .ico,
@@ -2700,24 +2635,23 @@ dl.prov dd:last-child {
   }
   /* The Notes' edge tab stands at the window's right edge here, fixed half-way down: the toggle keeps clear of it
      across, as it scrolls past. */
-  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .ico,
-.turn,
-.opt {
+  .turn,
+  .opt {
     transition: none;
   }
 }
 
 @media print {
   .bar,
-.panel,
-.tools,
-.welcome,
-.clock,
-.statusbar,
-.tray {
+  .panel,
+  .tools,
+  .welcome,
+  .clock,
+  .statusbar {
     display: none;
   }
   .stage-main,

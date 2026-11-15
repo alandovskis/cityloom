@@ -12,6 +12,7 @@ pub mod green_tools;
 pub mod inspector;
 pub mod iso;
 pub mod notes;
+pub mod notes_tray;
 pub mod page;
 pub mod panel_path;
 pub mod piece_list;

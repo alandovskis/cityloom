@@ -2190,11 +2190,15 @@ fn the_card_is_in_french_with_plurals_and_follows_a_switch_of_language() {
 
 #[test]
 fn the_card_is_a_polite_live_region_in_the_page_and_the_first_tab_is_called_impact() {
-    let page = include_str!("../../../../../web/street.html");
-    let card = &page[page.find("id=\"impact-card\"").unwrap()..];
+    let (vm, _) = street_watch();
+    let page = html(|| view! { <view::notes_tray::StreetNotes vm=vm.clone()/> }.into_any());
+    let card = &page[..page.find("id=\"impact-card\"").unwrap()];
+    let card = &page[card.rfind('<').unwrap()..];
     let card = &card[..card.find('>').unwrap()];
     assert!(card.contains("aria-live=\"polite\"") && !card.contains("assertive") && card.contains("aria-atomic=\"true\""), "{card}");
-    assert!(page.contains("id=\"t-space\" aria-controls=\"p-space\" aria-selected=\"true\" data-i18n=\"ui-tab-impact\">Impact</button>"));
+    let first = button_tag(&page, "t-space");
+    assert!(first.contains("aria-controls=\"p-space\"") && first.contains("aria-selected=\"true\""), "{first}");
+    assert!(page.contains("<span>Impact</span>"), "{page}");
     // The card is in the first tab's panel, above the width table.
     assert!(page.find("id=\"impact-card\"").unwrap() < page.find("id=\"h-space\"").unwrap());
     let en = crate::i18n_for(Locale::En);
@@ -2453,4 +2457,76 @@ fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_street_as_it_
     s.goal().set(None);
     assert_eq!(serde_json::to_string(&*s.view_now()).unwrap(), before, "a goal is a preference, not an edit");
     assert!(!street_html(|| view! { <notes::Checks vm=s.clone()/> }).contains("goal-mark"));
+}
+
+// ---- the notes' tray of the street page ------------------------------------------------------
+
+#[test]
+fn the_street_s_notes_are_the_shell_s_tray_with_its_four_tabs_and_the_slots_the_page_fills() {
+    let (s, _) = street_watch();
+    let h = html(|| view! { <view::notes_tray::StreetNotes vm=s.clone()/> }.into_any());
+    assert!(h.starts_with("<aside ") && h.contains(r#"class="notes tray""#), "{h}");
+    for (tab, panel, label) in [
+        ("t-space", "p-space", "Impact"),
+        ("t-checks", "p-checks", "Checks"),
+        ("t-changes", "p-changes", "Changes"),
+        ("t-provenance", "p-provenance", "Provenance"),
+    ] {
+        let b = button_tag(&h, tab);
+        assert!(b.contains(&format!(r#"aria-controls="{panel}""#)), "{b}");
+        let at = h.find(&format!(r#"id="{panel}""#)).unwrap_or_else(|| panic!("{panel}"));
+        let tag = &h[h[..at].rfind('<').unwrap()..at + h[at..].find('>').unwrap()];
+        assert!(tag.contains(r#"role="tabpanel""#) && tag.contains(&format!(r#"aria-labelledby="{tab}""#)), "{tag}");
+        assert!(h.contains(&format!("<span>{label}</span>")), "{label}");
+    }
+    assert_eq!(count(&h, r#"role="tabpanel""#), 4);
+    assert_eq!(count(&h, " hidden"), 3, "only the first panel shows until the shell shows the chosen one");
+    // every slot `mount_street_page` fills, once each, inside the tray
+    for id in [
+        "fit-slot",
+        "fit-checks-slot",
+        "checks-n-slot",
+        "impact",
+        "space",
+        "cap",
+        "time-note",
+        "goal-slot",
+        "checks",
+        "atlas-source",
+        "revs",
+        "provenance",
+        "title-block",
+    ] {
+        assert_eq!(count(&h, &format!(r#"id="{id}""#)), 1, "{id}");
+    }
+    for heading in [
+        "Last change",
+        "Where the width goes",
+        "People moved",
+        "sample numbers",
+        "Guided goals",
+        "Does it work?",
+        "sample limits",
+        "Transit priority",
+        "Your changes",
+        "Where this street came from",
+    ] {
+        assert!(h.contains(heading), "{heading}: {h}");
+    }
+    let at = h.find(r#"id="impact-card""#).expect("the Last change card");
+    let card = &h[h[..at].rfind('<').unwrap()..at + h[at..].find('>').unwrap()];
+    for a in [r#"class="impact""#, r#"aria-labelledby="h-impact""#, r#"aria-live="polite""#, r#"aria-atomic="true""#] {
+        assert!(card.contains(a), "{a}: {card}");
+    }
+    assert!(h.contains(r#"aria-label="About this street""#), "{h}");
+}
+
+#[test]
+fn the_street_page_leaves_a_slot_for_its_notes_and_writes_none_of_the_tray_itself() {
+    let page = include_str!("../../../../../web/street.html");
+    assert!(page.contains(r#"<div id="notes-slot" style="display: contents"></div>"#));
+    for gone in ["tray-handle", "notes-toggle", "notes-body", r#"id="t-space""#, r#"id="impact""#] {
+        assert!(!page.contains(gone), "{gone} is drawn by the tray, not written in the page");
+    }
+    assert!(page.contains(r#"href="v/{{build}}/tray.css""#), "the tray's own stylesheet");
 }

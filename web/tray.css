@@ -1,0 +1,86 @@
+/* The notes as a tray under a page's drawing (`shell::tray`; the street page): a handle that stays in view (the
+   page's status line, the notes' tabs, the toggle) over a body holding the tabs' panels, hidden with the notes closed.
+   Loaded after editor.css. */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.tray-handle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+}
+.tray .fit-row {
+  justify-content: flex-start;
+}
+.tray .tabs {
+  flex: 1 1 auto;
+}
+.tray-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tray-toggle:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.tray-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* An open tray's chevron points down, to close it; a closed one's up, to open it. */
+.tray-chevron {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+:root[data-notes="open"] .tray-chevron {
+  transform: rotate(180deg);
+}
+.tray-body {
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--rule);
+}
+:root[data-notes="closed"] .tray-body {
+  display: none;
+}
+@media (min-width: 900px) {
+  /* The tray never takes more than about a quarter of the column, so the drawing keeps the rest; its body scrolls. */
+  .tray {
+    flex: none;
+    max-height: 24%;
+  }
+  .tray-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+  }
+}
+
+@media print {
+  .tray {
+    display: none;
+  }
+}
