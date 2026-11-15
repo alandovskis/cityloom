@@ -110,6 +110,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("impact", view! { <view::notes::LastChange vm=vm.clone()/> }.into_any());
     mount("space", view! { <view::notes::Space vm=vm.clone()/> }.into_any());
     mount("cap", view! { <view::notes::Capacity vm=vm.clone()/> }.into_any());
+    mount("space-bars", view! { <view::notes::SpaceBars vm=vm.clone()/> }.into_any());
+    mount("cap-figure", view! { <view::notes::CapacityFigure vm=vm.clone()/> }.into_any());
     mount("goal-slot", view! { <view::notes::GoalGuide vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
     mount("checks-fold-slot", view! { <view::notes::PassingChecks vm=vm.clone()/> }.into_any());

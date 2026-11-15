@@ -29,29 +29,34 @@ pub fn StreetNotes(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// Impact: the Last change card, the width table, People moved.
+/// Impact: one band of three parts side by side (stacked where narrow): the Last change card, the width drawn as bars
+/// (the table read instead), People moved as one figure (the table read instead).
 fn impact(words: Words) -> TrayPage {
     let tab = TrayTab { id: "t-space", panel: "p-space", label: "ui-tab-impact", badge: None };
     TrayPage::new(
         tab,
         view! {
-            <section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
-                <h2 id="h-impact" class="note-h">{tr(words, "st-impact-heading")}</h2>
-                <div id="impact"></div>
-            </section>
-            <section aria-labelledby="h-space">
-                <h2 id="h-space" class="note-h">{tr(words, "st-space-heading")}</h2>
-                <table class="nt" id="space"></table>
-            </section>
-            <section aria-labelledby="h-cap">
-                <h2 id="h-cap" class="note-h">
-                    <span>{tr(words, "st-people-moved")}</span>
-                    " "
-                    <span class="sample">{tr(words, "st-sample-numbers")}</span>
-                </h2>
-                <table class="nt" id="cap"></table>
-            </section>
-            <p class="fine" id="time-note"></p>
+            <div class="impact-band">
+                <section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
+                    <h2 id="h-impact" class="note-h">{tr(words, "st-impact-heading")}</h2>
+                    <div id="impact"></div>
+                </section>
+                <section class="impact-width" aria-labelledby="h-space">
+                    <h2 id="h-space" class="note-h">{tr(words, "st-space-heading")}</h2>
+                    <div id="space-bars"></div>
+                    <table class="nt sr-only" id="space"></table>
+                    <p class="fine" id="time-note"></p>
+                </section>
+                <section class="impact-people" aria-labelledby="h-cap">
+                    <h2 id="h-cap" class="note-h">
+                        <span>{tr(words, "st-people-moved")}</span>
+                        " "
+                        <span class="sample">{tr(words, "st-sample-numbers")}</span>
+                    </h2>
+                    <div id="cap-figure"></div>
+                    <table class="nt sr-only" id="cap"></table>
+                </section>
+            </div>
         },
     )
 }

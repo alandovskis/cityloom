@@ -109,8 +109,86 @@ pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// What the last change did to the street: the width each use gained or lost, then the design checks that now pass
-/// and the ones that now fail, apart, and a line on the checks as a whole. It sits in a live region that is polite, and
+/// The width table drawn: a bar to scale for today and, once the design differs, one for the design, each use a
+/// segment in its colour, then a legend of the uses the street has, each with its width and its change. Hidden from a
+/// screen reader, which reads the table (`Space`) instead.
+#[component]
+pub fn SpaceBars(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let (v, units) = w.now();
+        let i18n = w.i18n();
+        let locale = i18n.locale();
+        let o = &v.outcomes;
+        let changed = o.share.iter().zip(&o.existing_share).any(|(s, ex)| s.mm != ex.mm);
+        let bar = |label: &'static str, shares: &[crate::street::model::Share]| {
+            let segments = shares
+                .iter()
+                .filter(|s| s.mm > 0)
+                .map(|s| view! { <span class=format!("seg mc-{}", mode_class(s.mode)) style=format!("flex-grow: {}", s.mm)></span> })
+                .collect_view();
+            view! {
+                <span class="space-bar-label">{plain(&i18n, label)}</span>
+                <span class="space-bar">{segments}</span>
+            }
+        };
+        let legend = o
+            .share
+            .iter()
+            .zip(&o.existing_share)
+            .filter(|(s, ex)| s.mm > 0 || ex.mm > 0)
+            .map(|(s, ex)| {
+                let delta = s.mm - ex.mm;
+                view! {
+                    <span class="leg">
+                        <span class=format!("mc mc-{}", mode_class(s.mode))></span>
+                        {plain(&i18n, mode_key(s.mode))}
+                        " "
+                        <b>{units.length_fine_in(s.mm, locale)}</b>
+                        {(delta != 0).then(|| view! { " " <span class=change_class(delta)>{units.signed_in(delta, locale)}</span> })}
+                    </span>
+                }
+            })
+            .collect_view();
+        view! {
+            <div class="space-bars" aria-hidden="true">
+                <div class="bars">
+                    {bar("col-today", &o.existing_share)}
+                    {changed.then(|| bar("col-design", &o.share))}
+                </div>
+                <div class="legend">{legend}</div>
+            </div>
+        }
+    }
+}
+
+/// People moved drawn: the design's figure, and its change from today. Hidden from a screen reader, which reads the
+/// table (`Capacity`) instead.
+#[component]
+pub fn CapacityFigure(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let v = w.view();
+        let i18n = w.i18n();
+        let locale = i18n.locale();
+        let (now, today) = (v.outcomes.capacity_pph, v.outcomes.existing_capacity_pph);
+        let figure = i18n.tr("capacity-figure", &Args::new().str("n", group_thousands(now.into(), locale)));
+        let from = if now == today {
+            plain(&i18n, "capacity-same")
+        } else {
+            i18n.tr("capacity-from", &Args::new().str("change", capacity_change(today, now, locale)).str("today", group_thousands(today.into(), locale)))
+        };
+        view! {
+            <div class="cap-figure" aria-hidden="true">
+                <p class="cap-big">{figure}</p>
+                <p class=format!("cap-from {}", change_class(now - today))>{from}</p>
+            </div>
+        }
+    }
+}
+
+/// What the last change did to the street: a line on the checks as a whole first, then the width each use gained or
+/// lost, then the design checks that now pass and the ones that now fail, apart. It sits in a live region that is polite, and
 /// the view-model shows a change only after the edits have settled, so it never talks over typing.
 #[component]
 pub fn LastChange(vm: Rc<StreetVm>) -> impl IntoView {
@@ -158,13 +236,14 @@ pub fn LastChange(vm: Rc<StreetVm>) -> impl IntoView {
             Verdict::Mixed => "mixed",
             Verdict::Unchanged => "unchanged",
         };
+        // The verdict leads: it answers what the change did; the detail follows.
         view! {
+            <p class=format!("impact-verdict {verdict}")>{say(&i18n, units, &impact.verdict_said())}</p>
             <p class="impact-what">{headline}</p>
             {uses}
             {class}
             {checks("impact-passing-heading", true, &impact.now_passing)}
             {checks("impact-failing-heading", false, &impact.now_failing)}
-            <p class=format!("impact-verdict {verdict}")>{say(&i18n, units, &impact.verdict_said())}</p>
         }
         .into_any()
     }

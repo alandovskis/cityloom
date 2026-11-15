@@ -2312,7 +2312,7 @@ svg pattern circle {
   padding-block: 4px;
 }
 .impact-verdict {
-  margin: 8px 8px 0;
+  margin: 0 8px 2px;
   color: var(--ink-2);
   font-weight: 600;
 }
@@ -2332,6 +2332,112 @@ svg pattern circle {
   .impact-verdict.mixed {
     color: CanvasText;
   }
+}
+/* The Impact tab: one band of three parts side by side (the last change, the width, the people moved), stacked where
+   the panel is narrow (the junction's sidebar, a phone). The bars and the figure are drawings of the two tables, which
+   are hidden but read. */
+#p-space {
+  container-type: inline-size;
+}
+.impact-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.5fr) minmax(0, 0.8fr);
+}
+.impact-band > section {
+  min-width: 0;
+  padding: 0 18px;
+  border-left: 1px solid var(--rule);
+}
+.impact-band > section:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.impact-band > section:last-child {
+  padding-right: 0;
+}
+.impact-band .impact {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+@container (max-width: 700px) {
+  .impact-band {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .impact-band > section {
+    padding: 12px 0 0;
+    border-top: 1px solid var(--rule);
+    border-left: 0;
+  }
+  .impact-band > section:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+/* In the band the card's sub-headings ("Street space", "Newly failing") are read, not shown: the marks and the verdict
+   above say what each list is, and the card keeps to the tray's height. */
+.impact-band .impact-sub {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.impact-band .impact-checks li {
+  padding-block: 2px;
+}
+.space-bars .bars {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 8px;
+  align-items: center;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.space-bars .space-bar {
+  display: flex;
+  gap: 1px;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+.space-bars .seg {
+  display: block;
+  min-width: 2px;
+}
+.space-bars .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.space-bars .legend .mc {
+  margin-right: 5px;
+}
+.space-bars .legend b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.space-bars .legend .up,
+.space-bars .legend .down,
+.cap-from.up,
+.cap-from.down {
+  color: var(--ink);
+  font-weight: 700;
+}
+.cap-big {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cap-from {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
 }
 .revs {
   min-height: 0;
