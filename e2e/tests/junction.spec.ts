@@ -43,6 +43,9 @@ test.describe("the junction editor on a junction of the city", () => {
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("#drawing .iso-ramp.k-sidewalk")).toHaveCount(0);
+    // the crossing is a step further in from the street's details
+    await page.locator("#i-cross-go").click();
+    await expect(page.locator("#jn-path-current")).toHaveText("Crossing");
     await page.getByRole("checkbox", { name: "Sidewalk runs on across the street" }).check();
     await expect(page.locator("#drawing .iso-ramp.k-sidewalk").first()).toBeVisible();
   });

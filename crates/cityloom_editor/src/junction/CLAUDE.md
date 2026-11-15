@@ -2,6 +2,12 @@
 
 Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
 
+## The details panel (`junction/view/inspector.rs`, `#inspector`)
+
+- One level at a time under a path (`path`, a `nav.panel-path`, `jn-path-label`, the street page's styles): Junction; Junction › a street; Junction › a street › Crossing or Lane n; Junction › Corner, Bus lane or Cycle track. Steps before the last are `.path-step` buttons (`jn-path-up-<i>`) that choose the parent (`Target::None`, `Target::Arm`); the last is `#jn-path-current` (`aria-current="location"`, `tabindex=-1`), which takes the focus after a step or a "go to" button is pressed.
+- The Junction level (nothing chosen): the junction's name and `jn-insp-junction-sub` ("4 streets · Traffic signal"), its control (`control_section`, only here: the parts' levels no longer repeat it), its streets as `.btn.jn-go` buttons (`jn-go-<uid>`, compass and name), the signal plan, then the tip `jn-insp-empty`.
+- A street's level shows its crossing as one row, `#i-cross-go` ("7.6 m to cross ›", choosing `Target::Crossing`); the crossing's settings are the Crossing level's. A street with no crossing, or a pedestrian one, keeps the old row (mark one, or the note).
+
 ## Turbo layouts (`turbo.rs`, `turbo_spiral.rs`, `turbo_ring.rs`)
 
 - Basic, egg, knee, spiral, rotor, in the four Dutch blocks. Figures are placeholders from secondary sources on CROW 2008; unverified ones are marked in doc comments.

@@ -2411,6 +2411,41 @@ svg pattern circle {
 /* ---- the street page's details panel: the path to the level shown --------- */
 
 /* A header of the panel above its scrolling body, where a sidebar's tab strip sits, so it never scrolls away. */
+/* The junction's details: its streets to go to, one button each, the compass beside the name; the tip for someone who
+   has chosen nothing at the foot. The path above is the street page's (.panel-path). */
+.jn-goes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.jn-goes .btn,
+.btn.jn-go {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 32px;
+  gap: 8px;
+  font-size: 13px;
+  text-align: left;
+}
+.btn.jn-go::after {
+  content: "›" / "";
+  margin-left: auto;
+  color: var(--ink-3);
+}
+.jn-goes .btn b {
+  min-width: 2em;
+  color: var(--ink-2);
+}
+.jn-tip {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .panel-path {
   margin: 12px 12px 0;
   padding: 4px 8px 8px;

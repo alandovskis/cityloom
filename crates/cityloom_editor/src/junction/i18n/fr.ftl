@@ -312,6 +312,15 @@ jn-stuck-text = Les rues qui se rencontrent ici ont été modifiées de sorte qu
 
 ## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/view/inspector.rs)
 jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
+jn-path-label = Ce que montrent les détails
+jn-path-junction = Jonction
+jn-path-lane = Voie { $n }
+jn-insp-junction-sub =
+    { $streets ->
+        [one] 1 rue
+       *[other] { $streets } rues
+    } · { $control }
+jn-insp-streets = Rues
 jn-insp-control = Signalisation de la jonction
 jn-insp-ring-size = Taille du carrefour giratoire
 # L’étiquette après la taille du carrefour giratoire : « m de diamètre ».

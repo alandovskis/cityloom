@@ -300,6 +300,82 @@ fn a_selected_street_offers_a_control_for_each_junction_measure_of_the_atlas() {
     }
 }
 
+// ---- the panel one level at a time, under a path ------------------------------------------
+
+/// The path above the panel: each step's text, and whether it is the current one.
+fn path_steps(h: &str) -> Vec<(String, bool)> {
+    let nav = &h[h.find("<nav").expect("a path")..];
+    let nav = &nav[..nav.find("</nav>").unwrap()];
+    nav.split("<li")
+        .skip(1)
+        .map(|li| {
+            let current = li.contains("aria-current=\"location\"");
+            let text: String = {
+                let mut out = String::new();
+                let mut inside = false;
+                for ch in li.chars() {
+                    match ch {
+                        '<' => inside = true,
+                        '>' => inside = false,
+                        c if !inside => out.push(c),
+                        _ => {}
+                    }
+                }
+                out.trim().to_string()
+            };
+            (text, current)
+        })
+        .collect()
+}
+
+#[test]
+fn the_panel_is_under_a_path_from_the_junction_to_what_is_chosen() {
+    let s = shared(0);
+    let h = panel(&s);
+    assert!(h.contains(r#"<nav aria-label="What the details are of""#), "{h}");
+    assert_eq!(path_steps(&h), vec![("Junction".to_string(), true)]);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = panel(&s);
+    let steps = path_steps(&h);
+    assert_eq!(steps.len(), 2, "{steps:?}");
+    assert!(!steps[0].1 && steps[1].1, "{steps:?}");
+    assert!(h.contains(r#"id="jn-path-up-0""#), "the junction's step is a button: {h}");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    let steps = path_steps(&panel(&s));
+    assert_eq!(steps.len(), 3, "{steps:?}");
+    assert_eq!(steps[2], ("Crossing".to_string(), true));
+    s.edit(|j| j.select(Target::Corner(n)));
+    let steps = path_steps(&panel(&s));
+    assert_eq!(steps, vec![("Junction".to_string(), false), ("Corner".to_string(), true)]);
+}
+
+#[test]
+fn the_junction_s_control_is_the_junction_level_s_and_a_street_leads_to_its_crossing() {
+    let s = shared(0);
+    let n = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = panel(&s);
+    assert!(!h.contains("Junction control"), "the control is one step up the path: {h}");
+    assert!(!h.contains(r#"id="i-h-setback""#), "the crossing's settings are its own level: {h}");
+    assert!(h.contains(r#"id="i-cross-go""#) && h.contains("11.4 m to cross"), "{h}");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    let h = panel(&s);
+    assert!(h.contains(r#"id="i-h-setback""#) && !h.contains("Junction control"), "{h}");
+}
+
+#[test]
+fn the_junction_level_opens_on_a_summary_and_lists_its_streets_to_go_to() {
+    let s = shared(0);
+    let h = panel(&s);
+    let streets = s.view_now().arms.len();
+    assert!(h.contains(&format!(" streets · ")) && h.contains("<h2 class=\"insp-name\">"), "{h}");
+    assert_eq!(h.matches("class=\"btn jn-go\"").count(), streets, "{h}");
+    for a in s.view_now().arms.iter() {
+        assert!(h.contains(&format!("id=\"jn-go-{}\"", a.uid)), "{h}");
+    }
+}
+
 #[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
@@ -497,7 +573,7 @@ fn the_raised_table_switch_is_worded_in_french_too() {
 fn a_continuous_sidewalk_says_why_its_street_has_no_island_switch() {
     let s = shared(0);
     let e = arm(&s, 90);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     assert!(panel(&s).contains("Refuge island in the middle"));
     s.edit(|j| j.set_continuous(e, true));
     let h = panel(&s);
@@ -557,7 +633,7 @@ fn a_roundabout_says_it_has_no_bike_box() {
 fn a_street_with_a_crossing_offers_a_continuous_sidewalk_and_one_without_does_not() {
     let s = shared(0);
     let e = arm(&s, 90);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     let h = panel(&s);
     assert!(h.contains("Continuous sidewalk") && h.contains("Sidewalk runs on across the street"));
     s.edit(|j| j.set_crossing(e, false));
@@ -570,7 +646,8 @@ fn a_street_s_panel_has_its_lanes_crossing_transit_direction_and_street() {
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
-    for want in ["Sample Street 1", "Lanes coming in", "Set back from the junction", "Transit priority", "Direction", "Shift sideways", "Remove this street"] {
+    // its crossing is a step further in: "11.4 m to cross", a button to the crossing's level
+    for want in ["Sample Street 1", "Lanes coming in", "11.4 m to cross", "Transit priority", "Direction", "Shift sideways", "Remove this street"] {
         assert!(h.contains(want), "{want}");
     }
     assert!(h.contains("E, 90° · 11.4 m road"));
@@ -1759,22 +1836,19 @@ fn the_panel_of_a_walkway_arm_says_there_is_no_roadway_to_cross_and_offers_no_cr
     assert!(h.contains("A pedestrian street has no roadway to cross."), "{h}");
     assert!(!h.contains("Mark a crossing") && !h.contains("Remove the crossing"));
     let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     let h = panel(&s);
     assert!(h.contains("Remove the crossing") && !h.contains("A pedestrian street has no roadway to cross."));
 }
 
 #[test]
 fn with_one_street_carrying_traffic_the_control_choice_is_replaced_by_a_note() {
+    // the control is the junction level's: nothing chosen
     let s = walkway_shared(&[90, 180, 270]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("Only one street here carries traffic."), "{h}");
     assert!(!h.contains("aria-labelledby=\"i-h-control\""), "no control to choose");
     let s = walkway_shared(&[90]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("aria-labelledby=\"i-h-control\"") && !h.contains("Only one street here carries traffic."));
 }
@@ -1797,8 +1871,6 @@ fn the_panel_of_a_walkway_arm_has_no_transit_signal_or_lane_sections_and_says_it
 #[test]
 fn the_control_note_counts_the_streets_that_carry_traffic() {
     let s = walkway_shared(&[0, 90, 180, 270]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("No street here carries traffic.") && !h.contains("Only one street"), "{h}");
 }

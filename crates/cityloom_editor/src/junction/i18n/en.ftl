@@ -312,6 +312,15 @@ jn-stuck-text = The streets that meet here have been changed so that they no lon
 
 ## The panel beside the plan: what is selected and the controls to change it (src/junction/view/inspector.rs)
 jn-insp-empty = Select a street, corner or crossing to change it.
+jn-path-label = What the details are of
+jn-path-junction = Junction
+jn-path-lane = Lane { $n }
+jn-insp-junction-sub =
+    { $streets ->
+        [one] 1 street
+       *[other] { $streets } streets
+    } · { $control }
+jn-insp-streets = Streets
 jn-insp-control = Junction control
 jn-insp-ring-size = Size of the roundabout
 # The tag after the roundabout's size: "m across".
