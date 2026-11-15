@@ -51,6 +51,6 @@ test("under 900px the footer ends the page, below the last card", async ({ page 
   await page.setViewportSize({ width: 390, height: 800 });
   await openStreet(page);
   const foot = (await page.locator("footer.site-foot").boundingBox())!;
-  const last = (await page.locator(".panel.left").boundingBox())!;
+  const last = (await page.locator("#details-panel").boundingBox())!;
   expect(foot.y).toBeGreaterThanOrEqual(last.y + last.height);
 });

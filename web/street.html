@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="v/{{build}}/app.css">
   <link rel="stylesheet" href="v/{{build}}/editor.css">
 </head>
-<body>
+<body class="street-page">
   <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
   <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
     <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
@@ -84,10 +84,97 @@
     </div>
   </header>
 
-  <button type="button" id="inspector-toggle" class="edge-tab left" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="st-details-toggle-title" title="Show or hide the details ( [ )" data-i18n="st-details">Details</button>
-  <button type="button" id="notes-toggle" class="edge-tab right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
+  <main class="stage">
+    <div class="stage-main">
+      <div class="stage-head">
+        <div class="title-card with-view">
+          <div class="street" id="street"></div>
+        </div>
+        <div class="tools">
+          <div class="add" id="add"></div>
+          <div id="transform-slot" style="display: contents"></div>
+          <div id="history" style="display: contents"></div>
+        </div>
+      </div>
+      <div class="stage-scroll">
+        <section class="drawing" aria-labelledby="h-drawing">
+          <h2 id="h-drawing" class="sr-only"></h2>
+          <div id="welcome-slot" style="display: contents"></div>
+          <div id="clock-slot" style="display: contents"></div>
+          <div class="scroll" id="scroll"></div>
+        </section>
+        <p class="focus-hint" aria-hidden="true" data-i18n="st-focus-hint">Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.</p>
+        <div id="pieces-slot" style="display: contents"></div>
+        <div id="zones-slot" style="display: contents"></div>
+        <div id="curb-slot" style="display: contents"></div>
+        <div id="calming-slot" style="display: contents"></div>
+        <div id="green-slot" style="display: contents"></div>
+      </div>
+      <aside class="notes tray" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes">
+        <div class="tray-handle">
+          <div class="fit-row">
+            <div id="fit-slot" style="display: contents"></div>
+            <div id="fit-checks-slot" style="display: contents"></div>
+          </div>
+          <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
+            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="ui-tab-impact">Impact</button>
+            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1"><span data-i18n="ui-tab-checks">Checks</span><span id="checks-n-slot" style="display: contents"></span></button>
+            <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
+            <button type="button" role="tab" class="tab" id="t-provenance" aria-controls="p-provenance" aria-selected="false" tabindex="-1" data-i18n="ui-tab-provenance">Provenance</button>
+          </div>
+          <button type="button" id="notes-toggle" class="tray-toggle" aria-controls="notes-body" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )"><span data-i18n="ui-notes">Notes</span><svg class="tray-chevron" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 10l4-4 4 4"/></svg></button>
+        </div>
+        <div class="tray-body" id="notes-body">
+          <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
+            <section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
+              <h2 id="h-impact" class="note-h" data-i18n="st-impact-heading">Last change</h2>
+              <div id="impact"></div>
+            </section>
+            <section aria-labelledby="h-space">
+              <h2 id="h-space" class="note-h" data-i18n="st-space-heading">Where the width goes</h2>
+              <table class="nt" id="space"></table>
+            </section>
+            <section aria-labelledby="h-cap">
+              <h2 id="h-cap" class="note-h"><span data-i18n="st-people-moved">People moved</span> <span class="sample" data-i18n="st-sample-numbers">sample numbers</span></h2>
+              <table class="nt" id="cap"></table>
+            </section>
+            <p class="fine" id="time-note"></p>
+          </div>
+          <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
+            <section aria-labelledby="h-goal">
+              <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>
+              <div id="goal-slot"></div>
+            </section>
+            <section aria-labelledby="h-checks">
+              <h2 id="h-checks" class="note-h"><span data-i18n="st-does-it-work">Does it work?</span> <span class="sample" data-i18n="st-sample-limits">sample limits</span></h2>
+              <ul class="checks" id="checks"></ul>
+            </section>
+            <section aria-labelledby="h-atlas">
+              <h2 id="h-atlas" class="note-h" data-i18n="st-transit-heading">Transit priority</h2>
+              <div id="atlas-source"></div>
+            </section>
+          </div>
+          <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+            <section aria-labelledby="h-rev" class="revs">
+              <h2 id="h-rev" class="note-h" data-i18n="st-your-changes">Your changes</h2>
+              <table class="nt rev" id="revs"></table>
+            </section>
+          </div>
+          <div class="panel-tab" id="p-provenance" role="tabpanel" aria-labelledby="t-provenance" hidden>
+            <section aria-labelledby="h-provenance">
+              <h2 id="h-provenance" class="note-h" data-i18n="st-provenance-heading">Where this street came from</h2>
+              <div id="provenance"></div>
+            </section>
+          </div>
+          <div class="title-block" id="title-block" data-i18n-aria-label="st-about-street" aria-label="About this street"></div>
+        </div>
+      </aside>
+    </div>
+  </main>
 
-  <aside class="panel left" id="details-panel" data-i18n-aria-label="st-details" aria-label="Details" data-covers>
+  <button type="button" id="inspector-toggle" class="edge-tab right" aria-controls="details-panel" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="st-details-toggle-title" title="Show or hide the details ( [ )" data-i18n="st-details">Details</button>
+
+  <aside class="panel details" id="details-panel" data-i18n-aria-label="st-details" aria-label="Details" data-covers>
     <h2 class="sr-only" data-i18n="st-details">Details</h2>
     <div id="panel-path-slot" style="display: contents"></div>
     <div class="panel-body">
@@ -106,95 +193,7 @@
     </div>
   </aside>
 
-  <main class="stage">
-    <div class="stage-main">
-      <div class="stage-head">
-        <div class="title-card with-view">
-          <div class="street" id="street"></div>
-        </div>
-        <div class="tools">
-          <div class="add" id="add"></div>
-          <div id="transform-slot" style="display: contents"></div>
-          <div id="history" style="display: contents"></div>
-        </div>
-      </div>
-      <section class="drawing" aria-labelledby="h-drawing">
-        <h2 id="h-drawing" class="sr-only"></h2>
-        <div id="welcome-slot" style="display: contents"></div>
-        <div id="clock-slot" style="display: contents"></div>
-        <div class="scroll" id="scroll"></div>
-      </section>
-      <div class="statusbar">
-        <div class="fit-row">
-          <div id="fit-slot" style="display: contents"></div>
-          <div id="fit-checks-slot" style="display: contents"></div>
-        </div>
-        <p class="focus-hint" aria-hidden="true" data-i18n="st-focus-hint">Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.</p>
-      </div>
-      <div id="pieces-slot" style="display: contents"></div>
-      <div id="zones-slot" style="display: contents"></div>
-      <div id="curb-slot" style="display: contents"></div>
-      <div id="calming-slot" style="display: contents"></div>
-      <div id="green-slot" style="display: contents"></div>
-    </div>
-  </main>
   <footer class="site-foot"><span data-version></span></footer>
-
-  <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
-    <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
-      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="ui-tab-impact">Impact</button>
-      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1"><span data-i18n="ui-tab-checks">Checks</span><span id="checks-n-slot" style="display: contents"></span></button>
-      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
-      <button type="button" role="tab" class="tab" id="t-provenance" aria-controls="p-provenance" aria-selected="false" tabindex="-1" data-i18n="ui-tab-provenance">Provenance</button>
-    </div>
-    <div class="panel-body">
-      <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
-          <section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
-            <h2 id="h-impact" class="note-h" data-i18n="st-impact-heading">Last change</h2>
-            <div id="impact"></div>
-          </section>
-          <section aria-labelledby="h-space">
-            <h2 id="h-space" class="note-h" data-i18n="st-space-heading">Where the width goes</h2>
-            <table class="nt" id="space"></table>
-          </section>
-          <section aria-labelledby="h-cap">
-            <h2 id="h-cap" class="note-h"><span data-i18n="st-people-moved">People moved</span> <span class="sample" data-i18n="st-sample-numbers">sample numbers</span></h2>
-            <table class="nt" id="cap"></table>
-          </section>
-          <p class="fine" id="time-note"></p>
-        </div>
-      
-        <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
-          <section aria-labelledby="h-goal">
-            <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>
-            <div id="goal-slot"></div>
-          </section>
-          <section aria-labelledby="h-checks">
-            <h2 id="h-checks" class="note-h"><span data-i18n="st-does-it-work">Does it work?</span> <span class="sample" data-i18n="st-sample-limits">sample limits</span></h2>
-            <ul class="checks" id="checks"></ul>
-          </section>
-          <section aria-labelledby="h-atlas">
-            <h2 id="h-atlas" class="note-h" data-i18n="st-transit-heading">Transit priority</h2>
-            <div id="atlas-source"></div>
-          </section>
-        </div>
-      
-        <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
-          <section aria-labelledby="h-rev" class="revs">
-            <h2 id="h-rev" class="note-h" data-i18n="st-your-changes">Your changes</h2>
-            <table class="nt rev" id="revs"></table>
-          </section>
-        </div>
-      
-        <div class="panel-tab" id="p-provenance" role="tabpanel" aria-labelledby="t-provenance" hidden>
-          <section aria-labelledby="h-provenance">
-            <h2 id="h-provenance" class="note-h" data-i18n="st-provenance-heading">Where this street came from</h2>
-            <div id="provenance"></div>
-          </section>
-        </div>
-    </div>
-    <div class="title-block" id="title-block" data-i18n-aria-label="st-about-street" aria-label="About this street"></div>
-  </aside>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
   <script src="boot.js"></script>

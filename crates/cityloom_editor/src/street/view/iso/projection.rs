@@ -20,6 +20,34 @@ pub fn max_height(width: f64) -> f64 {
     let factor = (width.max(680.0) / 1050.0).clamp(0.9, 1.1);
     (484.0 * factor).round()
 }
+/// The widest the drawing may be laid out for its height (`max_height`) to fit `room` pixels: the street page draws it
+/// narrower, centred, when the column under the title has less room than its width would take (a long title, the
+/// welcome, the notes' tray). Without limit when the room holds the tallest drawing, and when not even the shortest
+/// fits (no width helps then: the drawing scrolls).
+pub fn width_for_height(room: f64) -> f64 {
+    let (shortest, tallest) = (max_height(0.0), max_height(f64::MAX));
+    if room >= tallest || room < shortest {
+        return f64::INFINITY;
+    }
+    // max_height rounds 484 * width / 1050 in this range: the widest width whose rounded height is no more than room.
+    let mut width = ((room + 0.5) * 1050.0 / 484.0).floor();
+    while max_height(width) > room {
+        width -= 1.0;
+    }
+    width
+}
+/// The least the street page scales its drawing down to fit a short column (`fit`): smaller than this it scrolls.
+pub const MIN_FIT_SCALE: f64 = 1.0 / 3.0;
+
+/// How the drawing fits a group `width` wide in `room` pixels of height: the width it is laid out for (no wider than
+/// lets it fit, `width_for_height`) and the scale it is drawn at, 1 unless even the shortest drawing is taller than the
+/// room (an open notes' tray on a laptop): then it is drawn smaller, whole, down to `MIN_FIT_SCALE`.
+pub fn fit(width: f64, room: f64) -> (f64, f64) {
+    let laid = width.min(width_for_height(room));
+    let tall = max_height(laid);
+    let scale = if room.is_finite() && tall > room { (room / tall).max(MIN_FIT_SCALE) } else { 1.0 };
+    (laid, scale)
+}
 /// Room round the scene, in pixels.
 pub(super) const PAD: f64 = 30.0;
 /// The narrowest the drawing is laid out for, in pixels: about the narrowest phone's group. The 2.5D is read-only, has no
@@ -213,6 +241,38 @@ pub(super) fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drawing_fits_its_room_narrower_first_and_scaled_down_only_below_the_shortest_height() {
+        // Room for it at its width: as it is.
+        assert_eq!(fit(1008.0, f64::INFINITY), (1008.0, 1.0));
+        assert_eq!(fit(1008.0, 900.0), (1008.0, 1.0));
+        // Less room: laid out narrower, unscaled, and it fits.
+        let (w, k) = fit(1008.0, 450.0);
+        assert!(w < 1008.0 && k == 1.0 && max_height(w) <= 450.0, "{w} {k}");
+        // Less than the shortest drawing: as narrow as helps, then scaled to the room, never below a third.
+        let (w, k) = fit(1008.0, 300.0);
+        assert!((max_height(w) * k - 300.0).abs() < 1e-9, "{w} {k}");
+        let (_, k) = fit(1008.0, 20.0);
+        assert_eq!(k, MIN_FIT_SCALE);
+        // A narrow group is never laid out wider than it is.
+        assert_eq!(fit(400.0, 450.0).0, 400.0);
+    }
+
+    #[test]
+    fn the_widest_drawing_that_fits_a_height_is_the_inverse_of_its_height() {
+        // Room for the tallest drawing, or not even for the shortest: no width helps, so none is set.
+        assert_eq!(width_for_height(600.0), f64::INFINITY);
+        assert_eq!(width_for_height(max_height(2000.0)), f64::INFINITY);
+        assert_eq!(width_for_height(300.0), f64::INFINITY);
+        // Between the two: the widest width whose drawing is no taller than the room.
+        for room in [440.0, 465.0, 480.0, 500.0, 531.0] {
+            let w = width_for_height(room);
+            assert!(w.is_finite(), "{room}");
+            assert!(max_height(w) <= room, "{room}: {w} draws {}", max_height(w));
+            assert!(max_height(w + 3.0) > room, "{room}: {w} is the widest within 3 px");
+        }
+    }
 
     fn close(a: (f64, f64), b: (f64, f64)) -> bool {
         (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9

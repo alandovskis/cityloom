@@ -602,6 +602,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("panel-path-slot", "the id of the element the details panel's path is mounted in"),
     ("panel-path-current", "the id of the step of the details panel's path that is the level shown"),
     ("zone-entry-slot", "the id of the element the Street level's button to the zone commands is mounted in"),
+    ("overflow-y", "a CSS property the street drawing reads to tell whether its column scrolls"),
     ("cityloom-goal", "a storage key: the planning goal chosen on the street and junction pages"),
     ("through-traffic", "the id of a planning goal, kept in storage, not a message"),
     ("school-route", "the id of a planning goal, kept in storage, not a message"),

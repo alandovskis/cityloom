@@ -46,7 +46,7 @@ impl Sheet {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", true);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", crate::shell::NotesAtStart::Closed);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.

@@ -28,7 +28,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, MouseEvent};
 
 use crate::shared::i18n::Args;
-use crate::street::view::iso::{iso_label_at, iso_svg, max_height};
+use crate::street::view::iso::{fit, iso_label_at, iso_svg, max_height};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::{self, Action};
 use crate::street::vm::watch::SheetWatch;
@@ -37,13 +37,20 @@ use crate::street::vm::watch::SheetWatch;
 pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let width = RwSignal::new(1050.0_f64);
+    // The height the column under the title leaves the drawing (none limits it on a phone, where the page scrolls):
+    // the drawing is laid out no wider than lets it fit, so it is seen whole.
+    let room = RwSignal::new(f64::INFINITY);
+    // The width the drawing is laid out for, and the scale it is drawn at (`iso::fit`).
+    let fitted = move || fit(width.get(), room.get());
+    let drawn = move || fitted().0;
+    let scale = move || fitted().1;
     let wrap = NodeRef::<leptos::html::Div>::new();
 
     #[cfg(target_arch = "wasm32")]
     {
         Effect::new(move |_| {
             if let Some(el) = wrap.get() {
-                watch_size(el.into(), width);
+                watch_size(el.into(), width, room);
             }
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
@@ -70,7 +77,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     // so the memo follows a switch.
     let iso = Memo::new(move |_| {
         let (v, _) = w.now();
-        iso_svg(&v, &w.i18n(), width.get())
+        iso_svg(&v, &w.i18n(), drawn())
     });
 
     let keydown = move |e: KeyboardEvent| {
@@ -110,9 +117,9 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             aria-describedby="keys"
             node_ref=wrap
             on:keydown=keydown
-            // The group keeps the height the drawing is held to (`iso::max_height`), and the drawing, which is as
-            // wide as the group, is centred in it.
-            style:min-height=move || format!("{}px", max_height(width.get()))
+            // The group keeps the height the drawing is held to (`iso::max_height`, at its scale), and the drawing,
+            // which is as wide as the group unless it is fitted to the column's height, is centred in it.
+            style:min-height=move || format!("{}px", (max_height(drawn()) * scale()).round())
         >
             <svg
                 id="drawing"
@@ -124,10 +131,11 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                     let (v, units) = w.now();
                     let i18n = w.i18n();
                     i18n.locale();
-                    iso_label_at(&v, &i18n, units, width.get())
+                    iso_label_at(&v, &i18n, units, drawn())
                 }
-                width=move || iso.with(|s| s.width.to_string())
-                height=move || iso.with(|s| s.height.to_string())
+                // Drawn at its scale: the view box keeps the size it was laid out at, so the picture is scaled whole.
+                width=move || iso.with(|s| (s.width * scale()).round().to_string())
+                height=move || iso.with(|s| (s.height * scale()).round().to_string())
                 viewBox=move || iso.with(|s| format!("0 0 {} {}", s.width, s.height))
                 inner_html=move || iso.with(|s| s.markup.clone())
             ></svg>
@@ -193,28 +201,56 @@ fn typing(e: &KeyboardEvent) -> bool {
         || leptos::wasm_bindgen::JsCast::dyn_ref::<HtmlElement>(&t).is_some_and(|h| h.is_content_editable())
 }
 
-/// Keeps `width` as wide as the drawing's group.
+/// Keeps `width` as wide as the drawing's group, and `room` as high as the street page's column under the title leaves
+/// the drawing: the scroller's height less what else the drawing's card holds (the welcome, the clock, its padding).
+/// Where that column does not scroll (a phone: the page scrolls), nothing limits the drawing's height.
 #[cfg(target_arch = "wasm32")]
-fn watch_size(wrap: Element, width: RwSignal<f64>) {
+fn watch_size(wrap: Element, width: RwSignal<f64>, room: RwSignal<f64>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
+    use leptos::web_sys::HtmlElement;
 
+    let column = wrap.closest(".stage-scroll").ok().flatten();
+    let card = wrap.closest(".drawing").ok().flatten();
     // The group is watched as well as its scroller: its own width can change with no change to the scroller's.
     let update = {
-        let wrap = wrap.clone();
+        let (wrap, column, card) = (wrap.clone(), column.clone(), card.clone());
         move || {
             let now = wrap.client_width() as f64;
             if (width.get_untracked() - now).abs() >= 0.5 {
                 width.set(now);
+            }
+            let scrolls = |el: &Element| {
+                leptos::prelude::window()
+                    .get_computed_style(el)
+                    .ok()
+                    .flatten()
+                    .and_then(|s| s.get_property_value("overflow-y").ok())
+                    .is_some_and(|o| o == "auto" || o == "scroll")
+            };
+            let high = |el: &Element| el.dyn_ref::<HtmlElement>().map_or(0.0, |h| h.offset_height() as f64);
+            let left = match (&column, &card) {
+                (Some(column), Some(card)) if scrolls(column) => {
+                    // the column's own padding, top and bottom (`web/editor.css`, `.stage-scroll`)
+                    column.client_height() as f64 - (high(card) - high(&wrap)) - 4.0
+                }
+                _ => f64::INFINITY,
+            };
+            if room.get_untracked() != left {
+                room.set(left);
             }
         }
     };
     update();
     let on_resize = update.clone();
     let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| on_resize());
-    if let Some(scroll) = wrap.parent_element() {
-        if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+    if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+        if let Some(scroll) = wrap.parent_element() {
             o.observe(&scroll);
-            o.observe(&wrap);
+        }
+        o.observe(&wrap);
+        // The column changes height as the notes' tray opens and closes, and the card as the welcome goes.
+        for el in column.iter().chain(card.iter()) {
+            o.observe(el);
         }
     }
     observer.forget();

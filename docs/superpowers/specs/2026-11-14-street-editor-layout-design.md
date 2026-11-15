@@ -58,7 +58,14 @@ drawing, the details and the notes stack, so a change and its effect are never i
 - The details panel moves to the right edge; the Notes leave the right edge and become a tray at the bottom of the
   drawing column (sticky), its handle the status line with the four tabs; `]` opens and closes the tray as it
   opened and closed the Notes, `[` the panel.
-- The title card and the toolbar are sticky at the top of the column.
+- The title card and the toolbar sit at the top of the column and never scroll away: the column is the head, a
+  scroller (the drawing and the strips under it) and the tray (builder's call: three parts rather than sticky
+  elements, so the tray takes room from the scroller instead of covering it).
+- The tray starts closed to its handle (builder's call: open, it takes room from the drawing at 1440 by 900); a
+  remembered choice wins, and choosing a tab opens it. The drawing is laid out to fit the room the column leaves it,
+  narrower and centred when a long title, the welcome or the open tray leave less.
+- The open tray takes at most a quarter of the column's height (asked for after review: half was too tall); its body
+  scrolls.
 - Scoped to the street page (the junction page shares the shell and `editor.css` and keeps its layout).
 
 ### 3. The phone

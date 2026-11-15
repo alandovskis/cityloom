@@ -106,6 +106,28 @@ pub struct RegionOption {
     pub label: String,
 }
 
+/// Whether a page's notes start open when the person has not chosen. Each page says which, by the room it has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotesAtStart {
+    /// Open (the pages whose notes take no room from a drawing).
+    Open,
+    /// Open on a screen roomy enough for them beside the drawing, else closed (the junction page and the map).
+    OpenWhenRoomy,
+    /// Closed (the street page, whose notes are a tray under the drawing: its handle stays in view).
+    Closed,
+}
+
+impl NotesAtStart {
+    /// Whether the notes start open, on a screen that is `roomy` or not.
+    pub fn open(self, roomy: bool) -> bool {
+        match self {
+            NotesAtStart::Open => true,
+            NotesAtStart::OpenWhenRoomy => roomy,
+            NotesAtStart::Closed => false,
+        }
+    }
+}
+
 pub struct ShellVm {
     ports: Ports,
     i18n: Rc<I18n>,
@@ -147,7 +169,7 @@ impl ShellVm {
         ShellVm::new_with(ports, i18n, target, details_word, tabs, system_dark, true)
     }
 
-    /// As `new`, with whether the notes start open when the person has not chosen:
+    /// As `new`, with whether the notes start open when the person has not chosen (`NotesAtStart::open`):
     /// a page that cannot spare the room for them on a narrow screen says no.
     pub fn new_with(
         ports: Ports,
@@ -417,10 +439,15 @@ impl ShellVm {
         self.tab.get()
     }
 
+    /// Shows a tab of the notes, and opens them if they are closed: where the tabs stay in view with the notes closed
+    /// (the street page's tray), choosing one is a way to open them.
     pub fn show_tab(&self, id: &str) {
         if self.tabs.iter().any(|t| t == id) {
             self.tab.set(id.to_string());
             self.ports.storage.remember(TAB_KEY, id);
+            if !self.notes_open.get_untracked() {
+                self.toggle_notes();
+            }
         }
     }
 
@@ -747,6 +774,27 @@ mod tests {
         let page = new_page();
         let vm = ShellVm::new_with(ports, en(), Rc::new(Fake(page.clone())), "details-details", tabs(), false, default_open);
         Rig { vm, page, said, storage, doc }
+    }
+
+    #[test]
+    fn where_the_notes_start_open_follows_the_page() {
+        assert!(NotesAtStart::Open.open(false) && NotesAtStart::Open.open(true));
+        assert!(!NotesAtStart::OpenWhenRoomy.open(false) && NotesAtStart::OpenWhenRoomy.open(true));
+        assert!(!NotesAtStart::Closed.open(false) && !NotesAtStart::Closed.open(true), "the street page's tray starts closed to its handle");
+    }
+
+    #[test]
+    fn choosing_a_tab_while_the_notes_are_closed_opens_them_on_it() {
+        // The street page's notes are a tray whose tabs stay in view when it is closed: a tab is a way to open it.
+        let r = rig_notes(false, |_| {});
+        r.said.take();
+        r.vm.show_tab("t-checks");
+        assert!(r.vm.notes_open());
+        assert_eq!(r.vm.tab(), "t-checks");
+        assert_eq!(r.storage.recall(NOTES_KEY).as_deref(), Some("open"));
+        assert_eq!(r.said.take(), vec!["Notes shown."]);
+        r.vm.show_tab("t-changes");
+        assert!(r.said.take().is_empty(), "already open: nothing more is said");
     }
 
     #[test]

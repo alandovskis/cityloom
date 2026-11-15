@@ -213,7 +213,9 @@ fn the_sign_in_menu_is_drawn_for_each_state_in_each_language() {
 #[test]
 fn the_editors_open_with_a_skip_link_to_the_drawing_that_shows_on_focus() {
     for (page, html) in [("street", include_str!("../../../../web/street.html")), ("intersection", include_str!("../../../../web/intersection.html"))] {
-        let body = &html[html.find("<body>").unwrap() + "<body>".len()..];
+        // the body's tag may carry a class (the street page's `street-page`)
+        let tag = html.find("<body").unwrap();
+        let body = &html[tag + html[tag..].find('>').unwrap() + 1..];
         assert!(
             body.trim_start().starts_with(r##"<a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>"##),
             "{page}: the first thing in the body"
@@ -240,6 +242,16 @@ fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under(
         let first = aside[aside.find('>').unwrap() + 1..].trim_start();
         assert!(first.starts_with(&format!("<h2 class=\"sr-only\" data-i18n=\"{key}\">")), "{page}: {}", &first[..80]);
     }
+}
+
+#[test]
+fn the_street_page_s_details_come_after_the_drawing_in_reading_and_focus_order() {
+    // They are drawn on the right of the drawing: a keyboard or a screen reader meets them in the same order.
+    let html = include_str!("../../../../web/street.html");
+    let at = |needle: &str| html.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(at("id=\"scroll\"") < at("id=\"inspector-toggle\""), "the details' toggle comes after the drawing");
+    assert!(at("id=\"inspector-toggle\"") < at("id=\"details-panel\""), "the toggle comes just before the panel it opens");
+    assert!(at("</main>") < at("id=\"details-panel\""), "the details panel comes after the drawing's column");
 }
 
 /// The pages that run the module say, in their own markup, that it could not start: the module holds every other
