@@ -564,15 +564,54 @@ fn the_count_of_failing_checks_shows_under_the_drawing_and_on_the_tab_only_when_
     assert!(badge.contains(">1<") && badge.contains("sr-only"));
 }
 
+/// The cards of the changes list, in order: each card's opening tag and its text.
+fn change_cards(h: &str) -> Vec<(String, String)> {
+    h.split("<li ")
+        .skip(1)
+        .map(|c| {
+            let tag = c[..c.find('>').unwrap()].to_string();
+            let body = &c[c.find('>').unwrap() + 1..c.find("</li>").unwrap()];
+            let mut text = String::new();
+            let mut inside = false;
+            for ch in body.chars() {
+                match ch {
+                    '<' => {
+                        inside = true;
+                        if !text.is_empty() && !text.ends_with(' ') {
+                            text.push(' ');
+                        }
+                    }
+                    '>' => inside = false,
+                    c if !inside => text.push(c),
+                    _ => {}
+                }
+            }
+            (tag, text.trim().to_string())
+        })
+        .collect()
+}
+
 #[test]
-fn the_street_s_changes_start_from_the_street_today_and_list_each_edit() {
+fn the_street_s_changes_are_a_card_each_newest_first_over_the_street_today() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(h.contains("Street today") && h.contains("base now"));
+    let cards = change_cards(&h);
+    assert_eq!(cards.len(), 1, "{h}");
+    assert_eq!(cards[0].1, "Street today");
+    assert!(cards[0].0.contains("rev-card base now") && cards[0].0.contains(r#"aria-current="step""#), "{:?}", cards[0]);
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
+    let v = segment(&s, 0);
+    s.edit(|e| e.nudge_width(v, 100));
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains("<td>Remove sidewalk</td>"), "{h}");
+    let cards = change_cards(&h);
+    assert_eq!(cards.len(), 3, "{h}");
+    assert!(cards[0].1.starts_with("Step 2 ") && cards[1].1 == "Step 1 Remove sidewalk" && cards[2].1 == "Street today", "{cards:?}");
+    assert!(cards[0].0.contains("rev-card now") && cards[0].0.contains(r#"aria-current="step""#), "the newest is the street now: {cards:?}");
+    for (tag, _) in &cards[1..] {
+        assert!(!tag.contains("now") && !tag.contains("aria-current"), "{tag}");
+    }
+    assert!(h.contains(r#"<span class="rev-step">Step 1</span>"#) && h.contains(r#"<span class="rev-what">Remove sidewalk</span>"#), "{h}");
 }
 
 #[test]
@@ -583,10 +622,10 @@ fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(h.contains("<td>Remove sidewalk</td>") && h.contains("Street today"), "{h}");
+    assert!(h.contains(">Remove sidewalk<") && h.contains(">Step 1<") && h.contains("Street today"), "{h}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(h.contains("<td>Retrait\u{a0}: trottoir</td>") && h.contains("La rue aujourd’hui"), "{h}");
+    assert!(h.contains(">Retrait\u{a0}: trottoir<") && h.contains(">Étape 1<") && h.contains("La rue aujourd’hui"), "{h}");
     assert!(!h.contains("Remove sidewalk"), "{h}");
 }
 
@@ -823,8 +862,10 @@ fn the_checks_and_their_count_are_in_french() {
 #[test]
 fn the_changes_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
+    let u = segment(&s, 0);
+    s.edit(|e| e.nudge_width(u, 100));
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(h.contains("La rue aujourd’hui") && h.contains("Étape") && !h.contains("Street today"));
+    assert!(h.contains("La rue aujourd’hui") && h.contains(">Étape 1<") && !h.contains("Street today") && !h.contains("Step"), "{h}");
 }
 
 #[test]

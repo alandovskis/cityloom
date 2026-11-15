@@ -198,16 +198,21 @@ fn a_failing_check_is_marked_and_says_so_to_a_screen_reader() {
 }
 
 #[test]
-fn the_changes_start_from_the_junction_today_and_list_each_edit() {
+fn the_changes_are_a_card_each_newest_first_over_the_junction_today() {
     let s = shared(0);
     let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
-    assert!(h.contains("Junction today") && h.contains("base now"));
+    assert_eq!(h.matches("<li ").count(), 1, "{h}");
+    assert!(h.contains("Junction today") && h.contains("rev-card base now") && h.contains(r#"aria-current="step""#), "{h}");
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
+    s.edit(|j| j.set_corner(n, 8_000));
     let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
-    assert!(h.contains("7.0 m radius"));
-    assert!(h.contains("class=\"now\""));
-    assert!(!h.contains("base now"));
+    assert_eq!(h.matches("<li ").count(), 3, "{h}");
+    let (two, one, today) = (h.find(">Step 2<").expect("step 2"), h.find(">Step 1<").expect("step 1"), h.find("Junction today").unwrap());
+    assert!(two < one && one < today, "newest first: {h}");
+    assert!(h.contains("7.0 m radius") && h.contains("8.0 m radius"), "{h}");
+    assert_eq!(h.matches(r#"aria-current="step""#).count(), 1, "{h}");
+    assert!(h[..one].contains("rev-card now") && !h.contains("base now"), "the newest is the junction now: {h}");
 }
 
 // ---- inspector -----------------------------------------------------------------
@@ -1079,11 +1084,7 @@ fn the_notes_speak_french() {
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
     speaks_french(&h, &[": passes", "Longest crossing", " m<"], &["\u{a0}: réussite", "Plus longue traversée d’un seul coup\u{a0}: 11,4\u{a0}m"]);
     let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
-    speaks_french(
-        &h,
-        &["Step", "What changed", "Junction today", "Corner after"],
-        &["Étape", "Ce qui a changé", "Jonction aujourd’hui", "Coin après Sample Avenue 2 (nord)"],
-    );
+    speaks_french(&h, &["Step", "What changed", "Junction today", "Corner after"], &[">Étape 1<", "Jonction aujourd’hui", "Coin après Sample Avenue 2 (nord)"]);
 }
 
 #[test]

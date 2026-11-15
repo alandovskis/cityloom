@@ -271,8 +271,7 @@ jn-check-passes = { " " }: réussite
 jn-check-fails = { " " }: échec
 # Le détail d’une vérification avec la longueur dont il parle : « Plus longue traversée d’un seul coup : 11,4 m ».
 jn-check-length = { $detail } : { $length }
-jn-col-step = Étape
-jn-col-what-changed = Ce qui a changé
+jn-rev-step = Étape { $n }
 
 ## Le dessin (src/junction/view/drawing.rs, iso/)
 jn-editor = Éditeur de la jonction

@@ -194,7 +194,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#checks li").first()).toBeVisible();
     await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
     await page.locator("#t-changes").click();
-    await expect(page.locator("#revs tbody tr")).toHaveCount(2);
+    await expect(page.locator("#revs li")).toHaveCount(2);
     // where the junction came from is in the title block, under every tab: there is no tab of its own
     await expect(page.locator("#title-block #tb-state")).toBeVisible();
     await expect(page.locator("#t-provenance")).toHaveCount(0);

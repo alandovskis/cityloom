@@ -158,45 +158,36 @@ pub fn AtlasSource(vm: Rc<JunctionVm>) -> impl IntoView {
     }
 }
 
+/// What has been changed, from the junction as it is today: a card per change, the newest first, over a card for the
+/// junction today. The card of the junction as it is now is the current step.
 #[component]
 pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    // The newest change is the one to see.
-    #[cfg(target_arch = "wasm32")]
-    {
-        let version = watch.version();
-        Effect::new(move |_| {
-            version.track();
-            request_animation_frame(|| {
-                if let Some(el) = document().get_element_by_id("revs") {
-                    el.set_scroll_top(el.scroll_height());
-                }
-            });
-        });
-    }
     move || {
         let (v, _) = watch.now();
+        let i18n = watch.i18n();
         let last = v.revisions.len().checked_sub(1);
-        let rows = v
+        let cards = v
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{watch.say(&r.label)}</td></tr> })
+            .rev()
+            .map(|(i, r)| {
+                let now = Some(i) == last;
+                view! {
+                    <li class=if now { "rev-card now" } else { "rev-card" } aria-current=now.then_some("step")>
+                        <span class="rev-step">{i18n.tr("jn-rev-step", &Args::new().num("n", r.step as i64))}</span>
+                        <span class="rev-what">{watch.say(&r.label)}</span>
+                    </li>
+                }
+            })
             .collect_view();
+        let today = v.revisions.is_empty();
         view! {
-            <thead>
-                <tr>
-                    <th scope="col">{watch.tr("jn-col-step")}</th>
-                    <th scope="col">{watch.tr("jn-col-what-changed")}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class=if v.revisions.is_empty() { "base now" } else { "base" }>
-                    <td>"—"</td>
-                    <td>{watch.tr("city-junction-today")}</td>
-                </tr>
-                {rows}
-            </tbody>
+            {cards}
+            <li class=if today { "rev-card base now" } else { "rev-card base" } aria-current=today.then_some("step")>
+                <span class="rev-what">{watch.tr("city-junction-today")}</span>
+            </li>
         }
         .into_any()
     }

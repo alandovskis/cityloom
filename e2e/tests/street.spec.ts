@@ -258,7 +258,7 @@ test.describe("the street editor on a street of the city", () => {
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await page.locator("#t-changes").click();
-    await expect(page.locator("#revs tbody tr")).toHaveCount(2);
+    await expect(page.locator("#revs li")).toHaveCount(2);
     // where the street came from is in the title block, under every tab: there is no tab of its own
     await expect(page.locator("#title-block #tb-state")).toBeVisible();
     await expect(page.locator("#t-provenance")).toHaveCount(0);

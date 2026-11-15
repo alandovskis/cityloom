@@ -315,38 +315,36 @@ pub fn ChecksBadge(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// What has been changed, from the street as it is today.
+/// What has been changed, from the street as it is today: a card per change, the newest first, over a card for the
+/// street today. The card of the street as it is now is the current step.
 #[component]
 pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    #[cfg(target_arch = "wasm32")]
-    {
-        let version = w.version();
-        Effect::new(move |_| {
-            version.track();
-            request_animation_frame(|| {
-                if let Some(el) = document().get_element_by_id("revs") {
-                    el.set_scroll_top(el.scroll_height());
-                }
-            });
-        });
-    }
     move || {
         let (v, units) = w.now();
         let i18n = w.i18n();
         let last = v.revisions.len().checked_sub(1);
-        let rows = v
+        let cards = v
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{say(&i18n, units, &r.label)}</td></tr> })
+            .rev()
+            .map(|(i, r)| {
+                let now = Some(i) == last;
+                view! {
+                    <li class=if now { "rev-card now" } else { "rev-card" } aria-current=now.then_some("step")>
+                        <span class="rev-step">{i18n.tr("rev-step", &Args::new().num("n", r.step as i64))}</span>
+                        <span class="rev-what">{say(&i18n, units, &r.label)}</span>
+                    </li>
+                }
+            })
             .collect_view();
+        let today = v.revisions.is_empty();
         view! {
-            <thead><tr><th scope="col">{plain(&i18n, "col-step")}</th><th scope="col">{plain(&i18n, "col-what-changed")}</th></tr></thead>
-            <tbody>
-                <tr class=if v.revisions.is_empty() { "base now" } else { "base" }><td>"\u{2014}"</td><td>{plain(&i18n, "street-today")}</td></tr>
-                {rows}
-            </tbody>
+            {cards}
+            <li class=if today { "rev-card base now" } else { "rev-card base" } aria-current=today.then_some("step")>
+                <span class="rev-what">{plain(&i18n, "street-today")}</span>
+            </li>
         }
         .into_any()
     }

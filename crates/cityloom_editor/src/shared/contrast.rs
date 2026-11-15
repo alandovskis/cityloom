@@ -137,6 +137,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_change_s_card_is_4_5_to_1_as_text_on_the_panel_and_on_the_current_step_s_wash() {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() };
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i).unwrap();
+            for name in ["ink", "ink-2", "ink-3"] {
+                let c = pick(&token(app, name), i).unwrap();
+                assert!(contrast(&c, &panel) >= 4.5, "{name} on the panel {theme}: {:.2}", contrast(&c, &panel));
+            }
+            // The current step's card is washed; the dark wash is translucent, so it is measured over the panel by the
+            // audit, the light one is a colour.
+            if let Some(wash) = pick(&token(app, "accent-wash"), i) {
+                for name in ["ink", "ink-2"] {
+                    let c = pick(&token(app, name), i).unwrap();
+                    assert!(contrast(&c, &wash) >= 4.5, "{name} on the wash {theme}: {:.2}", contrast(&c, &wash));
+                }
+            }
+        }
+        let card = rule(editor, ".rev-card.now");
+        assert!(card.contains("background: var(--accent-wash);") && card.contains("border: 2px solid var(--accent);"), "{card}");
+        assert!(rule(editor, ".rev-card.now .rev-step").contains("color: var(--ink-2);"));
+        assert!(rule(editor, ".rev-step").contains("color: var(--ink-3);"));
+    }
+
     /// The body of the rule whose selector line is `selector`.
     fn rule<'a>(css: &'a str, selector: &str) -> &'a str {
         let at = css.find(&format!("{selector} {{")).unwrap_or_else(|| panic!("{selector}"));

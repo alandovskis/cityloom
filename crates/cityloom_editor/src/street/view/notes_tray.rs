@@ -90,7 +90,7 @@ fn changes(words: Words) -> TrayPage {
         view! {
             <section aria-labelledby="h-rev" class="revs">
                 <h2 id="h-rev" class="note-h">{tr(words, "st-your-changes")}</h2>
-                <table class="nt rev" id="revs"></table>
+                <ol class="rev-cards" id="revs" aria-labelledby="h-rev"></ol>
             </section>
         },
     )
