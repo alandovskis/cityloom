@@ -5,9 +5,10 @@
 //! (`Street::from_end`), as a zone boundary is, so splitting, merging or moving zones leaves them where they are.
 //! A street with none is written, drawn and checked exactly as before.
 
-use serde::{Deserialize, Serialize};
+use super::{Instance, Use};
+use serde::Serialize;
 
-use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, Side};
 
 use crate::standards::model as standards;
@@ -26,54 +27,17 @@ pub struct EndInfo {
     pub junction: bool,
 }
 
-/// What a stretch of curbside is used for. Each is drawn as an existing catalogue kind.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Use {
-    Parking,
-    Loading,
-    Tree,
-    Planting,
-    RainGarden,
-    Patio,
-    BikeParking,
-    Platform,
+/// What the editor knows of a curbside use besides what it is: its shortest length and the message that names it.
+pub trait UseExt {
+    fn min_mm(self) -> i32;
+    fn name_key(self) -> &'static str;
 }
 
-impl Use {
-    /// Every use, in the order a choice lists them.
-    pub const ALL: [Use; 8] = [Use::Parking, Use::Loading, Use::Tree, Use::Planting, Use::RainGarden, Use::Patio, Use::BikeParking, Use::Platform];
-
-    /// The catalogue kind it is drawn as.
-    pub fn kind_id(self) -> &'static str {
-        match self {
-            Use::Parking => "parking",
-            Use::Loading => "loading",
-            Use::Tree | Use::Planting | Use::RainGarden => "planting",
-            Use::Patio => "terrace",
-            Use::BikeParking => "bikerack",
-            Use::Platform => "sidewalk",
-        }
-    }
-
-    /// The catalogue material it is drawn in, where it is not the kind's own.
-    pub fn material(self) -> Option<&'static str> {
-        match self {
-            Use::Tree => Some("trees"),
-            Use::RainGarden => Some("rain_garden"),
-            _ => None,
-        }
-    }
-
-    /// Whether it stands at sidewalk height (a curb extension) rather than lying on the roadway.
-    pub fn raised(self) -> bool {
-        !matches!(self, Use::Parking | Use::Loading)
-    }
-
+impl UseExt for Use {
     /// The shortest it should be, in millimetres. Placeholders, UNVERIFIED: a parking space of 5.5 m, a loading
     /// bay of 9 m, a tree pit or planting bed of 2 m, a rain garden or patio of 4 m, a bike corral of 2 m and a
     /// transit platform of 9 m. Shorter is allowed and fails the `curb-length` check.
-    pub fn min_mm(self) -> i32 {
+    fn min_mm(self) -> i32 {
         match self {
             Use::Parking => 5_500,
             Use::Loading | Use::Platform => 9_000,
@@ -83,7 +47,7 @@ impl Use {
     }
 
     /// The message that names it.
-    pub fn name_key(self) -> &'static str {
+    fn name_key(self) -> &'static str {
         match self {
             Use::Parking => "curb-use-parking",
             Use::Loading => "curb-use-loading",
@@ -94,27 +58,6 @@ impl Use {
             Use::BikeParking => "curb-use-bike-parking",
             Use::Platform => "curb-use-platform",
         }
-    }
-}
-
-/// One use of the curbside, along `length_mm` of the street from `from_mm`.
-///
-/// `side` is the side of the section, not the region's driving side: `Left` is the first piece of the section's
-/// list (the street's left looking from its first end), `Right` the last. It does not change with the end the
-/// positions are measured from; `Street::reversed` swaps it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Instance {
-    pub side: Side,
-    /// Millimetres from the anchored end (`Street::from_end`) to where it starts, a multiple of `SNAP_MM`.
-    pub from_mm: i32,
-    pub length_mm: i32,
-    #[serde(rename = "use")]
-    pub use_: Use,
-}
-
-impl Instance {
-    fn to_mm(&self) -> i32 {
-        self.from_mm + self.length_mm
     }
 }
 
@@ -367,25 +310,6 @@ impl Content {
     }
 }
 
-impl Street {
-    /// Swaps the sides of the instances for a street seen from its other end. Their positions stay measured from
-    /// the same physical end (`reverse_zones` flips the label of that end).
-    pub(super) fn reverse_curb(&mut self) {
-        for i in &mut self.curb {
-            i.side = match i.side {
-                Side::Left => Side::Right,
-                Side::Right => Side::Left,
-            };
-        }
-        self.curb.sort_by_key(|i| (i.side == Side::Right, i.from_mm));
-    }
-
-    /// Whether the instances can be placed: they need the length they were drawn against, and lie in front of it.
-    pub(super) fn curb_is_sound(&self) -> bool {
-        self.curb.is_empty() || (self.length_mm.is_some() && self.curb.iter().all(|i| i.from_mm >= 0 && i.length_mm > 0))
-    }
-}
-
 impl Editor {
     /// The curbside strips: a side has one when some zone's section has a curbside lane there, or it has uses
     /// (which can then still be taken away).
@@ -584,7 +508,12 @@ pub(super) fn side_word(side: Side) -> &'static str {
     }
 }
 
-impl Instance {
+/// How the checks name a curbside use.
+pub(super) trait InstanceExt {
+    fn named(&self) -> Said;
+}
+
+impl InstanceExt for Instance {
     /// How the checks name it: "Patio at 42 m, right".
     fn named(&self) -> Said {
         Said::new("curb-instance")
@@ -727,6 +656,8 @@ mod tests {
     use super::super::{Keep, Piece};
     use super::*;
     use crate::shared::catalogue::kind_index;
+    use crate::street::model::Street;
+    use crate::street::model::StreetExt;
 
     const LEN: i32 = 60_000;
 

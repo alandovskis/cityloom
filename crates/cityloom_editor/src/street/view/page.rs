@@ -15,6 +15,7 @@ use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind, TemplateView, View};
+use crate::street::model::{CalmingKindExt, GreenKindExt, StopKindExt};
 use crate::street::vm::StreetVm;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;

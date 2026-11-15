@@ -5,34 +5,22 @@
 //! they are. A stop may overlap a curbside use; two stops on one side may not overlap each other. A street with
 //! none is written, drawn and checked exactly as before.
 
-use serde::{Deserialize, Serialize};
+use super::{Stop, StopKind};
+use serde::Serialize;
 
 use super::curb::{CurbRefusal, Failure, SideView, StripCell, StripView, check_rows, curbside, selected_cell, side_word, strip_cells, toward_edge};
 use super::stop_end::{STOP_CLEAR_MM, stop_gap_mm};
-use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_motor};
 
-/// The most characters a stop's name keeps.
-const MAX_NAME_CHARS: usize = 80;
-
-/// How a stop is built.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StopKind {
-    /// The bus stops in its lane against the curb.
-    Curb,
-    /// The sidewalk reaches out over the parking lane to the bus lane.
-    Bulb,
-    /// The bus stops beside an island with a bike lane behind it.
-    Island,
+/// The message that names a kind of stop.
+pub trait StopKindExt {
+    fn name_key(self) -> &'static str;
 }
 
-impl StopKind {
-    /// Every kind, in the order a choice lists them.
-    pub const ALL: [StopKind; 3] = [StopKind::Curb, StopKind::Bulb, StopKind::Island];
-
+impl StopKindExt for StopKind {
     /// The message that names it.
-    pub fn name_key(self) -> &'static str {
+    fn name_key(self) -> &'static str {
         match self {
             StopKind::Curb => "stop-kind-curb",
             StopKind::Bulb => "stop-kind-bulb",
@@ -41,52 +29,13 @@ impl StopKind {
     }
 }
 
-/// One transit stop, along `length_mm` of the street from `from_mm`.
-///
-/// `side` is the side of the section, as for a curbside `Instance`: `Left` is the first piece of the section's list,
-/// `Right` the last, whatever the end the positions are measured from; `Street::reversed` swaps it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Stop {
-    pub side: Side,
-    /// Millimetres from the anchored end (`Street::from_end`) to where it starts, a multiple of `SNAP_MM`.
-    pub from_mm: i32,
-    pub length_mm: i32,
-    pub kind: StopKind,
-    /// Whether it has a shelter.
-    pub shelter: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-}
-
-impl Stop {
-    pub(super) fn to_mm(&self) -> i32 {
-        self.from_mm + self.length_mm
-    }
-}
+/// The most characters a stop's name keeps.
+const MAX_NAME_CHARS: usize = 80;
 
 impl Content {
     /// The stops in their canonical order: left side first, then by position.
     pub(super) fn sort_stops(&mut self) {
         self.stops.sort_by_key(|s| (s.side == Side::Right, s.from_mm));
-    }
-}
-
-impl Street {
-    /// Swaps the sides of the stops for a street seen from its other end. Their positions stay measured from the
-    /// same physical end (`reverse_zones` flips the label of that end).
-    pub(super) fn reverse_stops(&mut self) {
-        for s in &mut self.stops {
-            s.side = match s.side {
-                Side::Left => Side::Right,
-                Side::Right => Side::Left,
-            };
-        }
-        self.stops.sort_by_key(|s| (s.side == Side::Right, s.from_mm));
-    }
-
-    /// Whether the stops can be placed: they need the length they were drawn against, and lie in front of it.
-    pub(super) fn stops_are_sound(&self) -> bool {
-        self.stops.is_empty() || (self.length_mm.is_some() && self.stops.iter().all(|s| s.from_mm >= 0 && s.length_mm > 0))
     }
 }
 
@@ -350,14 +299,30 @@ pub(crate) fn kind_fits(segs: &[Segment], lane: usize, side: Side, kind: StopKin
     platform(segs, lane, side, kind).is_some()
 }
 
-impl Stop {
+/// How the checks and the stops row name a stop.
+pub(super) trait StopExt {
+    fn named(&self) -> Said;
+    fn cell_label(&self) -> Said;
+}
+
+impl StopExt for Stop {
     /// How the checks name it: "curb stop at 12 m, right", or "Mont-Royal (curb stop, 12 m)".
-    pub(super) fn named(&self) -> Said {
+    fn named(&self) -> Said {
         let kind = Arg::MsgLower(self.kind.name_key());
         match &self.name {
             Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Length(self.from_mm)),
             None => Said::new("stop-instance").with("kind", kind).with("at", Arg::Length(self.from_mm)).with("side", Arg::Msg(side_word(self.side))),
         }
+    }
+
+    /// What its cell says: "Mont-Royal (curb stop)" or "Curb stop", and ", with a shelter" when it has one.
+    fn cell_label(&self) -> Said {
+        let kind = Arg::Msg(self.kind.name_key());
+        let base = match &self.name {
+            Some(name) => Said::new("stop-label-named").with("name", Arg::Text(name.clone())).with("kind", Arg::MsgLower(self.kind.name_key())),
+            None => Said::new("stop-label").with("kind", kind),
+        };
+        if self.shelter { Said::new("stop-label-sheltered").with("label", Arg::Said(Box::new(base))) } else { base }
     }
 }
 
@@ -400,18 +365,6 @@ impl StripCell for StopCell {
 /// or a plain driving lane) in some zone.
 pub type StopsView = StripView<StopCell>;
 pub type StopSideView = SideView<StopCell>;
-
-impl Stop {
-    /// What its cell says: "Mont-Royal (curb stop)" or "Curb stop", and ", with a shelter" when it has one.
-    fn cell_label(&self) -> Said {
-        let kind = Arg::Msg(self.kind.name_key());
-        let base = match &self.name {
-            Some(name) => Said::new("stop-label-named").with("name", Arg::Text(name.clone())).with("kind", Arg::MsgLower(self.kind.name_key())),
-            None => Said::new("stop-label").with("kind", kind),
-        };
-        if self.shelter { Said::new("stop-label-sheltered").with("label", Arg::Said(Box::new(base))) } else { base }
-    }
-}
 
 impl Editor {
     /// The stops rows: a cell per stop and per gap along the whole street, for each side that can have a stop.
@@ -593,10 +546,12 @@ impl Editor {
 
 #[cfg(test)]
 mod tests {
-    use super::super::curb::{Instance, Use};
     use super::super::zones::Keep;
     use super::*;
+    use crate::street::model::Street;
+    use crate::street::model::StreetExt;
     use crate::street::model::ZoneEnd;
+    use crate::street::model::{Instance, Use};
 
     const LEN: i32 = 60_000;
 

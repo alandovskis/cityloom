@@ -2,7 +2,8 @@
 //! from the junction's centre, with the lane the bus uses and the pieces the stop stands on. Derived, never saved.
 //! Pure, no browser types.
 
-use super::stop::{StopKind, bus_lane, stand};
+use super::StopKind;
+use super::stop::{bus_lane, stand};
 use super::{LENGTH_TOLERANCE_MM, Street, ZoneEnd, ZoneFrame};
 use crate::shared::catalogue::Side;
 
@@ -37,68 +38,66 @@ pub struct EndStop {
     pub pad: Vec<usize>,
 }
 
-impl Street {
-    /// The stops wholly inside the end zone at the street's first end (`first_end`) or its last, nearest first. How
-    /// far the arm is drawn is the junction's to decide: a stop past it is returned all the same. Empty with no frame, a frame of another road (another length or anchored at the other
-    /// end) or no stops. The street is read as the junction reads it, under the side of the road `driving` names (an
-    /// imported street keeps traffic on the right whatever the region), so a stop enters or not as the arm's lanes do.
-    pub fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>, driving: Side) -> Vec<EndStop> {
-        let Some(frame) = frame else { return Vec::new() };
-        let street = self.for_side(driving);
-        let this = &street;
-        // A street with stops has a recorded length (`stops_are_sound`), so `None` cannot match.
-        let same_length = this.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
-        if this.stops.is_empty() || frame.from_end != this.from_end || !same_length {
-            return Vec::new();
-        }
-        // The end zone in millimetres from the anchored end, as `at_end` picks it.
-        let anchored = (this.from_end == ZoneEnd::First) == first_end;
-        let range = match this.zones.last() {
-            Some(_) if anchored => (0, this.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
-            Some(last) => (last.from_mm, frame.length_mm),
-            None => (0, frame.length_mm),
-        };
-        let mut section = this.at_end(first_end);
-        if !first_end {
-            section = section.reversed();
-        }
-        let mut found: Vec<EndStop> = self
-            .stops
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.from_mm >= range.0 && s.to_mm() <= range.1)
-            .map(|(index, s)| {
-                let near_mm = if anchored { s.from_mm } else { frame.length_mm - s.to_mm() };
-                let side = if first_end {
-                    s.side
-                } else {
-                    match s.side {
-                        Side::Left => Side::Right,
-                        Side::Right => Side::Left,
-                    }
-                };
-                let lane = bus_lane(&section.segments, side, section.side);
-                let pad = lane
-                    .and_then(|l| stand(&section.segments, l, side, s.kind))
-                    .map(|p| if p.raised.is_empty() { p.stand.into_iter().collect() } else { p.raised })
-                    .unwrap_or_default();
-                EndStop {
-                    index,
-                    side,
-                    near_mm,
-                    far_mm: near_mm + s.length_mm,
-                    kind: s.kind,
-                    shelter: s.shelter,
-                    name: s.name.clone(),
-                    enters: side != section.side,
-                    lane,
-                    pad,
-                }
-            })
-            .collect();
-        found.sort_by_key(|s| s.near_mm);
-        found
+/// The stops wholly inside the end zone at the street's first end (`first_end`) or its last, nearest first. How
+/// far the arm is drawn is the junction's to decide: a stop past it is returned all the same. Empty with no frame, a frame of another road (another length or anchored at the other
+/// end) or no stops. The street is read as the junction reads it, under the side of the road `driving` names (an
+/// imported street keeps traffic on the right whatever the region), so a stop enters or not as the arm's lanes do.
+pub(super) fn end_stops(street: &Street, first_end: bool, frame: Option<ZoneFrame>, driving: Side) -> Vec<EndStop> {
+    let Some(frame) = frame else { return Vec::new() };
+    let street = street.for_side(driving);
+    let this = &street;
+    // A street with stops has a recorded length (`stops_are_sound`), so `None` cannot match.
+    let same_length = this.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
+    if this.stops.is_empty() || frame.from_end != this.from_end || !same_length {
+        return Vec::new();
     }
+    // The end zone in millimetres from the anchored end, as `at_end` picks it.
+    let anchored = (this.from_end == ZoneEnd::First) == first_end;
+    let range = match this.zones.last() {
+        Some(_) if anchored => (0, this.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
+        Some(last) => (last.from_mm, frame.length_mm),
+        None => (0, frame.length_mm),
+    };
+    let mut section = this.at_end(first_end);
+    if !first_end {
+        section = section.reversed();
+    }
+    let mut found: Vec<EndStop> = street
+        .stops
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.from_mm >= range.0 && s.to_mm() <= range.1)
+        .map(|(index, s)| {
+            let near_mm = if anchored { s.from_mm } else { frame.length_mm - s.to_mm() };
+            let side = if first_end {
+                s.side
+            } else {
+                match s.side {
+                    Side::Left => Side::Right,
+                    Side::Right => Side::Left,
+                }
+            };
+            let lane = bus_lane(&section.segments, side, section.side);
+            let pad = lane
+                .and_then(|l| stand(&section.segments, l, side, s.kind))
+                .map(|p| if p.raised.is_empty() { p.stand.into_iter().collect() } else { p.raised })
+                .unwrap_or_default();
+            EndStop {
+                index,
+                side,
+                near_mm,
+                far_mm: near_mm + s.length_mm,
+                kind: s.kind,
+                shelter: s.shelter,
+                name: s.name.clone(),
+                enters: side != section.side,
+                lane,
+                pad,
+            }
+        })
+        .collect();
+    found.sort_by_key(|s| s.near_mm);
+    found
 }
 
 #[cfg(test)]
@@ -107,6 +106,7 @@ mod tests {
     use super::super::{Segment, Stop};
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
+    use crate::street::model::StreetExt;
 
     const LEN: i32 = 60_000;
 

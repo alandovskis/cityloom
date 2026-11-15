@@ -9,11 +9,13 @@
 
 use serde::Serialize;
 
+use super::StopKind;
 use super::curb::curbside;
-use super::green::{GreenKind, TreeSize, host_at};
+use super::green::host_at;
 use super::joint::SHOWN_MM;
-use super::stop::{Stand, StopKind, bus_lane, stand};
+use super::stop::{Stand, bus_lane, stand};
 use super::{Editor, REGIONS, Use, ZoneEnd};
+use super::{GreenKind, TreeSize};
 use crate::shared::catalogue::is_roadway;
 
 /// One transit stop as the 2.5D shows it, on the selected zone's section.
@@ -192,6 +194,7 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::shared::catalogue::Side;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Street, ZoneFrame};
 
     const LEN: i32 = 60_000;

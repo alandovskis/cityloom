@@ -12,6 +12,7 @@ use crate::junction::view::{drawing, inspector, notes, page, turns};
 use crate::junction::vm::JunctionVm;
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
+use crate::street::model::StreetExt;
 
 fn shared(sample: usize) -> Rc<JunctionVm> {
     JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None)

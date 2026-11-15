@@ -1,15 +1,22 @@
 //! The cross-section editing model. Pure Rust, no browser types, so it is
 //! tested natively. All lengths are integer millimetres.
+//!
+//! The street itself, as OpenStreetMap can describe it, is `cityloom_model::street`, re-exported here: its pieces,
+//! zones, speed limit and what stands along it. This module holds what the editor adds: the rules for changing it
+//! (`Editor`), the checks, the views and the words (`Said`). What the editor reads of a street beyond its data is
+//! `StreetExt`; the `…Ext` traits of the other types hold their thresholds and the keys of the messages that name them.
 
 pub mod measures;
 pub mod pieces;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::shared::catalogue::{
-    CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, PEDESTRIAN_KINDS, REGIONS, Side, StreetClass, class_key, is_motor, kind_index,
-};
+use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, PEDESTRIAN_KINDS, REGIONS, Side, StreetClass, class_key, kind_index};
 use crate::shared::provenance::OsmRef;
+pub use cityloom_model::street::{
+    Calming, CalmingKind, Green, GreenKind, Instance, Piece, Segment, Speed, Stop, StopKind, Street, TreeSize, Use, Variant, Window, Zone, ZoneEnd, ZoneFrame,
+};
+use cityloom_model::street::{SLOT_MIN, settle_zones, settled_class, sort_green, speed_in, total, valid_window, window_mask};
 
 pub use crate::shared::said::{Arg, Said};
 
@@ -18,11 +25,11 @@ mod fixtures;
 #[cfg(test)]
 pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
 pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
-mod joint;
-mod speed;
-pub use speed::Speed;
 mod beyond;
+mod joint;
 mod school;
+#[cfg(test)]
+mod speed;
 pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
 mod profile;
 mod zone_speed;
@@ -41,86 +48,27 @@ mod map_uses;
 mod stop;
 mod stop_end;
 pub use calming::{
-    CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, Calming, CalmingRefusal, DEFAULT_TABLE_MM, FILTER_HEIGHT_MM,
-    Kind as CalmingKind, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
+    CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingExt, CalmingKindExt, CalmingRefusal, DEFAULT_TABLE_MM,
+    FILTER_HEIGHT_MM, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
 };
 pub use calming::{CalmingCell, CalmingStripView, CalmingView};
 pub use calming_shown::ShownCalming;
 use curb::Choice;
-pub use curb::{
-    CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
-};
+pub use curb::{CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, SideView, StripCell, StripView, Subject, UseExt, curbside};
 pub use curb_end::EndUse;
 pub use curb_shown::{ShownGreen, ShownInstance, ShownStop};
-pub use green::{Green, GreenCell, GreenForm, GreenKind, GreenRefusal, GreenRowView, TreeSize, fills, host_at};
+pub use green::{GreenCell, GreenExt, GreenForm, GreenKindExt, GreenRefusal, GreenRowView, TreeSizeExt, fills, host_at};
 pub use map_uses::{MapStop, MapUse, MapUses};
-pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
+pub use stop::{MIN_STOP_MM, StopCell, StopKindExt, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
 mod zones;
 use zones::Failing;
-pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
+pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
 use crate::standards::model as standards;
 pub use crate::standards::model::ACCESS_LANE_MM;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Segment {
-    pub uid: u32,
-    pub kind: usize,
-    pub width_mm: i32,
-    /// Index into `MATERIALS`; always one the kind allows.
-    pub material: usize,
-    /// Index into `CURBS`. `None` is a flush edge, and is always the value for
-    /// a kind without a curb.
-    pub curb: Option<usize>,
-    /// Index into `DIRECTIONS`. Always `Some` where the kind requires a
-    /// direction (a driving lane), and `None` for a kind without one. Where it
-    /// is optional (a bike lane) `None` means two-way.
-    pub direction: Option<usize>,
-    /// Whether a transit lane carries trams rather than buses. Matters only
-    /// while the piece is a transit lane, at its base or in a window.
-    #[serde(default)]
-    pub tram: bool,
-    /// Other types this piece takes at certain times of day. Outside every
-    /// window it is the type above. Windows never overlap.
-    pub variants: Vec<Variant>,
-}
-
-/// A different type a piece takes between two times of day.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Variant {
-    pub kind: usize,
-    /// Index into `MATERIALS`; always one the kind allows.
-    pub material: usize,
-    /// Which way the piece runs in this window, by the same rule as the base type.
-    pub direction: Option<usize>,
-    /// Start of the window, in minutes after midnight, a multiple of 15.
-    pub from_min: i32,
-    /// End of the window (not included). Earlier than `from_min` means the
-    /// window runs past midnight.
-    pub to_min: i32,
-    /// The days of the week it applies on, as OSM writes them (`Mo-Fr`), where the window is not every day.
-    /// Only said: the sheet's clock has no day.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub days: Option<String>,
-}
-
-/// Time of day is kept in quarter hours; a window is a set of those.
-const SLOT_MIN: i32 = 15;
-const SLOTS: i32 = 24 * 60 / SLOT_MIN;
-
-fn window_mask(from_min: i32, to_min: i32) -> u128 {
-    let (from, to) = (from_min / SLOT_MIN, to_min / SLOT_MIN);
-    let range = |a: i32, b: i32| (a..b).fold(0u128, |m, i| m | (1 << i));
-    if from < to { range(from, to) } else { range(from, SLOTS) | range(0, to) }
-}
-
-fn valid_window(from_min: i32, to_min: i32) -> bool {
-    let ok = |m: i32| (0..24 * 60).contains(&m) && m % SLOT_MIN == 0;
-    ok(from_min) && ok(to_min) && from_min != to_min
-}
 
 fn kind_lower(kind: usize) -> Arg {
     Arg::KindLower(KINDS[kind].id)
@@ -143,17 +91,145 @@ fn window_said(base: usize, kind: usize, from_min: i32, to_min: i32) -> Said {
         .with("to", Arg::Clock(to_min))
 }
 
-impl Segment {
-    /// The variant in force at `time_min`, if any.
-    fn variant_at(&self, time_min: i32) -> Option<usize> {
-        let slot = 1u128 << (time_min.rem_euclid(24 * 60) / SLOT_MIN);
-        self.variants.iter().position(|v| window_mask(v.from_min, v.to_min) & slot != 0)
+/// A name that is data, said as it is: a street's, a place's, a junction's.
+pub fn named_said(name: &str) -> Said {
+    Said::new("city-name").with("name", Arg::Text(name.to_string()))
+}
+
+fn title_of(name: Option<&str>, class: StreetClass) -> Said {
+    match (name, class) {
+        (Some(name), _) => named_said(name),
+        (None, class) => unnamed_said(class, false),
+    }
+}
+
+/// A road with no name, said as what sort of road it is: as a title ("Unnamed local street") or, with
+/// `in_sentence`, as a phrase ("an unnamed local street"). A motorway has a message of its own.
+pub fn unnamed_said(class: StreetClass, in_sentence: bool) -> Said {
+    match (class, in_sentence) {
+        (StreetClass::Motorway, false) => Said::new("city-unnamed-motorway"),
+        (StreetClass::Motorway, true) => Said::new("city-unnamed-motorway-in-sentence"),
+        (class, false) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
+        (class, true) => Said::new("city-unnamed-in-sentence").with("class", Arg::Msg(class_key(class))),
+    }
+}
+
+/// What the editor reads of a street besides its data: its title, the street it makes of a road's pieces, and what
+/// the junction and the map read of its ends and its programme.
+pub trait StreetExt {
+    /// A street made of the given pieces, left to right as seen from its first end, with each kind's default
+    /// surface. `class` says what sort of street it is (a motorway has its own rules); the row is the pieces'
+    /// widths, each brought inside what its kind allows under the standards profile.
+    fn imported(class: StreetClass, side: Side, pieces: &[Piece]) -> Street;
+    /// What it is called: its own name, or else what sort of street it is.
+    fn title(&self) -> Said;
+    /// What lies beyond the end of the street at its first end or its last (`beyond::beyond`).
+    fn beyond(&self, first_end: bool, frame: Option<ZoneFrame>) -> Option<Beyond>;
+    /// The curbside uses in the end zone at its first end or its last (`curb_end::end_uses`).
+    fn end_uses(&self, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndUse>;
+    /// The stops wholly inside the end zone at its first end or its last (`stop_end::end_stops`).
+    fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>, driving: Side) -> Vec<EndStop>;
+    /// The parts of the programme to draw on the map (`map_uses::map_uses`).
+    fn map_uses(&self, frame: ZoneFrame) -> MapUses;
+    /// The speed the transition at boundary `b` (between zones `b` and `b + 1`) is sized by.
+    fn taper_speed_kmh(&self, b: usize) -> Option<u16>;
+    /// The sample street laid out for a side of the road.
+    #[cfg(test)]
+    fn sample(sample: usize, side: Side) -> Street;
+}
+
+impl StreetExt for Street {
+    fn imported(class: StreetClass, side: Side, pieces: &[Piece]) -> Street {
+        imported(class, side, pieces)
     }
 
-    fn kind_at(&self, time_min: i32) -> usize {
-        self.variant_at(time_min).map_or(self.kind, |i| self.variants[i].kind)
+    fn title(&self) -> Said {
+        title_of(self.name.as_deref(), self.class)
     }
 
+    fn beyond(&self, first_end: bool, frame: Option<ZoneFrame>) -> Option<Beyond> {
+        beyond::beyond(self, first_end, frame)
+    }
+
+    fn end_uses(&self, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndUse> {
+        curb_end::end_uses(self, first_end, frame)
+    }
+
+    fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>, driving: Side) -> Vec<EndStop> {
+        stop_end::end_stops(self, first_end, frame, driving)
+    }
+
+    fn map_uses(&self, frame: ZoneFrame) -> MapUses {
+        map_uses::map_uses(self, frame)
+    }
+
+    fn taper_speed_kmh(&self, b: usize) -> Option<u16> {
+        zone_speed::taper_speed_kmh(self, b)
+    }
+
+    #[cfg(test)]
+    fn sample(sample: usize, side: Side) -> Street {
+        fixtures::sample(sample, side)
+    }
+}
+
+/// See `StreetExt::imported`.
+fn imported(class: StreetClass, side: Side, pieces: &[Piece]) -> Street {
+    let segments: Vec<Segment> = pieces
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let (min_mm, max_mm) = standards::kind_bounds(p.kind);
+            let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(min_mm, max_mm));
+            g.direction = direction_for(p.kind, p.direction);
+            g.variants = p
+                .variants
+                .iter()
+                .map(|w| Variant {
+                    kind: w.kind,
+                    material: KINDS[w.kind].materials[0],
+                    direction: direction_for(w.kind, p.direction),
+                    from_min: w.from_min,
+                    to_min: w.to_min,
+                    days: w.days.clone(),
+                })
+                .collect();
+            let (lo, hi) = g.bounds();
+            g.width_mm = p.width_mm.clamp(lo, hi);
+            g
+        })
+        .collect();
+    let mut street = Street {
+        class,
+        class_before: None,
+        name: None,
+        row_mm: total(&segments),
+        side,
+        segments,
+        next_uid: pieces.len() as u32 + 1,
+        source: Vec::new(),
+        zones: Vec::new(),
+        from_end: ZoneEnd::First,
+        length_mm: None,
+        speed: Speed::Undecided,
+        curb: Vec::new(),
+        stops: Vec::new(),
+        calming: Vec::new(),
+        green: Vec::new(),
+    };
+    street.settle_class();
+    street
+}
+
+/// The widths and other kinds a piece may take, under the standards profile.
+trait SegmentBounds {
+    fn bounds(&self) -> (i32, i32);
+    fn bounds_except(&self, skip: Option<usize>) -> (i32, i32);
+    fn alt_kinds(&self) -> Vec<usize>;
+    fn alt_kinds_except(&self, skip: Option<usize>) -> Vec<usize>;
+}
+
+impl SegmentBounds for Segment {
     /// The range of widths every type of this piece allows.
     fn bounds(&self) -> (i32, i32) {
         self.bounds_except(None)
@@ -166,29 +242,6 @@ impl Segment {
             let (min_mm, max_mm) = standards::kind_bounds(k);
             (lo.max(min_mm), hi.min(max_mm))
         })
-    }
-
-    /// The piece as it is at `time_min`: its type, surface and direction then,
-    /// with no variants of its own.
-    fn at(&self, time_min: i32) -> Segment {
-        let vi = self.variant_at(time_min);
-        let kind = vi.map_or(self.kind, |i| self.variants[i].kind);
-        let k = &KINDS[kind];
-        let dir = vi.map_or(self.direction, |i| self.variants[i].direction);
-        Segment {
-            uid: self.uid,
-            kind,
-            width_mm: self.width_mm,
-            material: vi.map_or(self.material, |i| self.variants[i].material),
-            curb: if k.has_curb { self.curb } else { None },
-            direction: match k.direction {
-                DirectionRule::None => None,
-                DirectionRule::Required => Some(dir.unwrap_or(0)),
-                DirectionRule::Optional => dir,
-            },
-            tram: self.tram && k.id == "bus",
-            variants: Vec::new(),
-        }
     }
 
     /// Kinds this piece may take at other times: other roadway types that
@@ -211,299 +264,6 @@ impl Segment {
                 k != self.kind && KINDS[k].shares_road && KINDS[k].id != "bike" && lo.max(min_mm) <= hi.min(max_mm)
             })
             .collect()
-    }
-}
-
-impl Segment {
-    /// Whether the piece is a motor piece (`is_motor`), as its own kind or in any of its time windows.
-    pub fn has_motor(&self) -> bool {
-        std::iter::once(self.kind).chain(self.variants.iter().map(|v| v.kind)).any(is_motor)
-    }
-
-    /// A piece with its kind's default surface and, where the kind has one,
-    /// the default curb.
-    pub fn new(uid: u32, kind: usize, width_mm: i32) -> Segment {
-        let k = &KINDS[kind];
-        Segment {
-            uid,
-            kind,
-            width_mm,
-            material: k.materials[0],
-            curb: k.has_curb.then_some(DEFAULT_CURB),
-            direction: (k.direction == DirectionRule::Required).then_some(0),
-            tram: false,
-            variants: Vec::new(),
-        }
-    }
-}
-
-/// One street as the city keeps it: the pieces of its section as the street
-/// editor shows them, looking from the street's first end toward its second.
-/// Directions are written for the side of the road in `side`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Street {
-    /// What sort of street it is.
-    pub class: StreetClass,
-    /// The class the street had before it became pedestrian: giving it a lane again restores it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub class_before: Option<StreetClass>,
-    /// What the street is called.
-    #[serde(default)]
-    pub name: Option<String>,
-    pub row_mm: i32,
-    pub side: Side,
-    pub segments: Vec<Segment>,
-    pub next_uid: u32,
-    /// The OSM ways it was made from. The sample streets are made from none.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source: Vec<OsmRef>,
-    /// The street's zones along its length, in order of `from_mm`. Empty for a street of one section, the base.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub zones: Vec<Zone>,
-    /// The end the zones' positions are measured from: the end that is a real OSM node. Written only with zones.
-    #[serde(default, skip_serializing_if = "ZoneEnd::is_first")]
-    pub from_end: ZoneEnd,
-    /// The length along the centreline the zones were drawn against. Written only with zones.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub length_mm: Option<i32>,
-    /// The speed limit, kept as `speed_kmh`: absent when not yet decided, `null` when the road has none.
-    #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
-    pub speed: Speed,
-    /// The uses of the curbside along the street, left side first, then by `from_mm`. Empty for a street whose curbside
-    /// is whatever its sections hold; with any, `from_end` and `length_mm` are written as they are with zones.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub curb: Vec<Instance>,
-    /// The transit stops along the street, left side first, then by `from_mm`. Empty for a street with none; with
-    /// any, `from_end` and `length_mm` are written as they are with zones.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub stops: Vec<Stop>,
-    /// The raised tables and crossings along the street, by `from_mm`. Empty for a street with none; with any,
-    /// `from_end` and `length_mm` are written as they are with zones.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub calming: Vec<Calming>,
-    /// The trees and green infrastructure along the street, by `from_mm`. Empty for a street with none; with any,
-    /// `from_end` and `length_mm` are written as they are with zones.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub green: Vec<Green>,
-}
-
-/// A name that is data, said as it is: a street's, a place's, a junction's.
-pub fn named_said(name: &str) -> Said {
-    Said::new("city-name").with("name", Arg::Text(name.to_string()))
-}
-
-/// What a street is called: its own name (data, said as it is), or else what sort of street it is.
-/// The class a street has, and the one it had before it became pedestrian, given whether it has a motor piece.
-fn settled_class(motor: bool, class: StreetClass, before: Option<StreetClass>) -> (StreetClass, Option<StreetClass>) {
-    match (motor, class) {
-        (false, class) if class != StreetClass::Pedestrian => (StreetClass::Pedestrian, Some(class)),
-        (true, StreetClass::Pedestrian) => (before.unwrap_or(StreetClass::Local), None),
-        _ => (class, before),
-    }
-}
-
-fn title_of(name: Option<&str>, class: StreetClass) -> Said {
-    match (name, class) {
-        (Some(name), _) => named_said(name),
-        (None, class) => unnamed_said(class, false),
-    }
-}
-
-/// A road with no name, said as what sort of road it is: as a title ("Unnamed local street") or, with
-/// `in_sentence`, as a phrase ("an unnamed local street"). A motorway has a message of its own.
-pub fn unnamed_said(class: StreetClass, in_sentence: bool) -> Said {
-    match (class, in_sentence) {
-        (StreetClass::Motorway, false) => Said::new("city-unnamed-motorway"),
-        (StreetClass::Motorway, true) => Said::new("city-unnamed-motorway-in-sentence"),
-        (class, false) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
-        (class, true) => Said::new("city-unnamed-in-sentence").with("class", Arg::Msg(class_key(class))),
-    }
-}
-
-fn flip(d: &mut Option<usize>) {
-    if let Some(d) = d {
-        *d = 1 - *d;
-    }
-}
-
-/// One piece of a street, as read from a road of the network.
-#[derive(Clone, Debug)]
-pub struct Piece {
-    pub kind: usize,
-    pub width_mm: i32,
-    /// Index into `DIRECTIONS`, for a kind that has one.
-    pub direction: Option<usize>,
-    /// The times of day it is another kind; they must not overlap.
-    pub variants: Vec<Window>,
-}
-
-/// A time of day, in minutes after midnight and on quarter hours as `Variant`'s are, that a piece is of another kind.
-#[derive(Clone, Debug)]
-pub struct Window {
-    pub kind: usize,
-    pub from_min: i32,
-    pub to_min: i32,
-    /// The days of the week, as `Variant::days`.
-    pub days: Option<String>,
-}
-
-impl Street {
-    /// A street made of the given pieces, left to right as seen from its first
-    /// end, with each kind's default surface. `class` says what sort of street
-    /// it is (a motorway has its own rules); the row is the pieces' widths,
-    /// each brought inside what its kind allows.
-    pub fn imported(class: StreetClass, side: Side, pieces: &[Piece]) -> Street {
-        let segments: Vec<Segment> = pieces
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                let (min_mm, max_mm) = standards::kind_bounds(p.kind);
-                let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(min_mm, max_mm));
-                g.direction = direction_for(p.kind, p.direction);
-                g.variants = p
-                    .variants
-                    .iter()
-                    .map(|w| Variant {
-                        kind: w.kind,
-                        material: KINDS[w.kind].materials[0],
-                        direction: direction_for(w.kind, p.direction),
-                        from_min: w.from_min,
-                        to_min: w.to_min,
-                        days: w.days.clone(),
-                    })
-                    .collect();
-                let (lo, hi) = g.bounds();
-                g.width_mm = p.width_mm.clamp(lo, hi);
-                g
-            })
-            .collect();
-        let mut street = Street {
-            class,
-            class_before: None,
-            name: None,
-            row_mm: total(&segments),
-            side,
-            segments,
-            next_uid: pieces.len() as u32 + 1,
-            source: Vec::new(),
-            zones: Vec::new(),
-            from_end: ZoneEnd::First,
-            length_mm: None,
-            speed: Speed::Undecided,
-            curb: Vec::new(),
-            stops: Vec::new(),
-            calming: Vec::new(),
-            green: Vec::new(),
-        };
-        street.settle_class();
-        street
-    }
-
-    /// Whether any piece of any section is a motor piece.
-    pub fn has_motor(&self) -> bool {
-        self.sections().iter().any(|s| s.iter().any(Segment::has_motor))
-    }
-
-    /// Keeps the class true to the pieces. No motor piece: pedestrian, remembering the class it had. A motor
-    /// piece (travel, parking, loading, bus, shoulder) on a pedestrian street: the class it had, or else local. Run after every edit and when a street is built.
-    pub fn settle_class(&mut self) {
-        (self.class, self.class_before) = settled_class(self.has_motor(), self.class, self.class_before);
-    }
-
-    /// The same street, settled.
-    pub fn settled(mut self) -> Street {
-        self.settle_zones();
-        self.settle_class();
-        self
-    }
-
-    /// The same street, called `name`.
-    pub fn named(mut self, name: &str) -> Street {
-        self.name = Some(name.to_string());
-        self
-    }
-
-    /// What it is called: its own name, or else what sort of street it is.
-    pub fn title(&self) -> Said {
-        title_of(self.name.as_deref(), self.class)
-    }
-
-    /// The same street with its lanes written for `side`: running the other
-    /// way when the side differs.
-    pub fn for_side(&self, side: Side) -> Street {
-        let mut s = self.clone();
-        if s.side != side {
-            s.side = side;
-            for seg in &mut s.segments {
-                flip(&mut seg.direction);
-                for v in &mut seg.variants {
-                    flip(&mut v.direction);
-                }
-            }
-            s.flip_zone_lanes();
-        }
-        s
-    }
-
-    /// The street as seen from its other end: the pieces in the opposite order
-    /// and every lane running the other way.
-    pub fn reversed(&self) -> Street {
-        let mut s = self.clone();
-        s.segments.reverse();
-        for seg in &mut s.segments {
-            flip(&mut seg.direction);
-            for v in &mut seg.variants {
-                flip(&mut v.direction);
-            }
-        }
-        s.reverse_zones();
-        s.reverse_curb();
-        s.reverse_stops();
-        // a raised element spans the roadway: no side to swap, and its place stays measured from the same end
-        s.reverse_green();
-        s
-    }
-
-    /// Whether every index in it points into the catalogue, so that it can be
-    /// drawn. A street that came from storage is checked before it is used.
-    pub fn is_sound(&self) -> bool {
-        self.row_mm > 0
-            && self.section_is_sound(&self.segments)
-            && self.zones_are_sound()
-            && self.curb_is_sound()
-            && self.stops_are_sound()
-            && self.green_is_sound()
-            && self.calming_is_sound()
-    }
-
-    /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
-    fn section_is_sound(&self, section: &[Segment]) -> bool {
-        let seg_ok = |kind: usize, material: usize, curb: Option<usize>, direction: Option<usize>| {
-            kind < KINDS.len()
-                && KINDS[kind].materials.contains(&material)
-                && material < MATERIALS.len()
-                && curb.is_none_or(|c| c < CURBS.len() && KINDS[kind].has_curb)
-                && direction.is_none_or(|d| d < DIRECTIONS.len())
-        };
-        !section.is_empty()
-            && section.iter().all(|s| {
-                // the variants are checked before the tram rule reads their kinds
-                seg_ok(s.kind, s.material, s.curb, s.direction)
-                    && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
-                    && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
-                    && s.width_mm > 0
-            })
-            && section.iter().map(|s| s.uid).all(|u| u < self.next_uid)
-    }
-
-    /// The zones start at 0, rise strictly and end inside the length they were drawn against; each own section is sound.
-    fn zones_are_sound(&self) -> bool {
-        let Some(first) = self.zones.first() else { return true };
-        let Some(length) = self.length_mm else { return false };
-        first.from_mm == 0
-            && self.zones.windows(2).all(|w| w[0].from_mm < w[1].from_mm)
-            && self.zones.last().is_some_and(|z| z.from_mm < length)
-            && self.zones.iter().filter_map(|z| z.segments.as_deref()).all(|s| self.section_is_sound(s))
     }
 }
 
@@ -575,9 +335,9 @@ impl Content {
         self.sort_curb();
         self.sort_stops();
         self.sort_calming();
-        green::sort_green(&mut self.green);
+        sort_green(&mut self.green);
         let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty() || !self.calming.is_empty();
-        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.speed, &mut self.from_end, &mut self.length_mm, keep_anchor);
+        settle_zones(&mut self.segments, &mut self.zones, &mut self.speed, &mut self.from_end, &mut self.length_mm, keep_anchor);
     }
 }
 
@@ -663,10 +423,6 @@ fn default_directions(segs: &mut [Segment], side: Side) {
 
 pub(crate) fn snap(v: i32) -> i32 {
     ((v as f64 / SNAP_MM as f64).round() as i32) * SNAP_MM
-}
-
-pub(super) fn total(segments: &[Segment]) -> i32 {
-    segments.iter().map(|s| s.width_mm).sum()
 }
 
 impl Editor {
@@ -1449,7 +1205,7 @@ impl Editor {
         let content = &self.states[self.cursor].content;
         let z = self.zone;
         let zoned = content.zones.len() > 1;
-        let current = if zoned { zone_speed::speed_in(content.speed, &content.zones, z) } else { content.speed };
+        let current = if zoned { speed_in(content.speed, &content.zones, z) } else { content.speed };
         if kmh.is_some_and(|n| !standards::speed_choices().contains(&n)) || current.kmh() == kmh {
             return false;
         }
@@ -1559,7 +1315,7 @@ impl Editor {
             region: REGIONS[self.region].id,
             speed_kmh: {
                 let content = &self.states[self.cursor].content;
-                zone_speed::speed_in(content.speed, &content.zones, self.zone).kmh()
+                speed_in(content.speed, &content.zones, self.zone).kmh()
             },
             street_speed_kmh: self.states[self.cursor].content.speed.kmh(),
             speed_follows: {
@@ -2015,6 +1771,7 @@ pub struct View {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::catalogue::DEFAULT_CURB;
 
     /// What a message of the model says in English, as the page shows it.
     fn says(said: &Said) -> String {

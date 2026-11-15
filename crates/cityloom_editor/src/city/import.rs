@@ -8,6 +8,7 @@ use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
 use crate::shared::provenance::OsmRef;
+use crate::street::model::StreetExt;
 use crate::street::model::{Piece, Speed, Street, Window};
 
 /// How wide a corner is rounded where nothing in the data says.

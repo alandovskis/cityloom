@@ -15,6 +15,7 @@ use crate::junction::model::{
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
+use crate::street::model::{StopKindExt, UseExt};
 
 use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
 use crate::junction::model::signal::{self, Pattern};
@@ -2177,6 +2178,7 @@ mod tests {
     use super::*;
     use crate::junction::model::{JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
     use crate::shared::testing::{en, fr};
+    use crate::street::model::StreetExt;
 
     /// How many things an `and_list` says.
     fn items(s: &Said) -> usize {

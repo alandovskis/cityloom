@@ -4,6 +4,7 @@
 
 use crate::shared::catalogue::KINDS;
 use crate::shared::said::{Arg, Said};
+use crate::street::model::{CalmingKindExt, GreenKindExt, StopKindExt};
 use crate::street::model::{StripCell, View};
 
 /// A level of the details panel.

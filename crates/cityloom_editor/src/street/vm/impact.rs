@@ -186,6 +186,7 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::{Side, kind_index};
     use crate::shared::testing::{en, fr};
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, Street, ZoneEnd, ZoneFrame, zoned};
 
     fn input(e: &Editor) -> Input {

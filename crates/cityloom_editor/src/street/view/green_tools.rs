@@ -11,6 +11,7 @@ use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 use crate::shared::i18n::Args;
 use crate::shared::said::say;
 use crate::shared::units::parse_number;
+use crate::street::model::GreenKindExt;
 use crate::street::model::{GreenCell, GreenForm, GreenKind, TreeSize};
 use crate::street::view::curb_tools::typed_length;
 use crate::street::view::zone_tools::focus_later;

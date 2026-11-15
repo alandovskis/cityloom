@@ -12,6 +12,7 @@ use crate::shared::catalogue::Side;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said, say, say_now};
 use crate::shared::units::Units;
+use crate::street::model::{StopKindExt, UseExt};
 
 /// How a message is asked for: tracked for a view, or as it is now for a command.
 #[derive(Clone, Copy)]

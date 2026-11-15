@@ -7,12 +7,15 @@
 //! so it has no side; a chicane's build-outs alternate from side to side, starting on the side it says. A street with
 //! none is written, drawn and checked exactly as before.
 
-use serde::{Deserialize, Serialize};
+use super::Calming;
+use super::stop::StopExt;
+use serde::Serialize;
 
+use super::CalmingKind as Kind;
 use super::stop_end::stop_gap_mm;
-use super::zone_speed::{max_kmh, speed_in};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
 use crate::shared::catalogue::{KINDS, Side, is_roadway};
+use cityloom_model::street::{max_kmh, speed_in};
 
 /// How high the plateau of a raised table stands above the roadway, in millimetres: 150 mm, the height of a sidewalk,
 /// as the Ville de Montréal's raised-crossing sheet has it ("typiquement de 150 mm").
@@ -58,38 +61,17 @@ pub const DEFAULT_FILTER_MM: i32 = 2_000;
 /// How high a modal filter's barrier stands above the roadway, in millimetres. A placeholder, UNVERIFIED.
 pub const FILTER_HEIGHT_MM: i32 = 600;
 
-/// What a raised element is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Kind {
-    /// A raised table: a speed table across the roadway.
-    Table,
-    /// A raised pedestrian crossing: the plateau is the crossing.
-    Crossing,
-    /// A chicane: build-outs from alternate curbs, which make the road bend. Appended last so the values a choice
-    /// saved for the others keep their place.
-    Chicane,
-    /// A modal filter: a barrier or planter across the roadway that stops motor traffic and leaves a way through for
-    /// people on foot and on bikes. Appended last, as the chicane was.
-    ModalFilter,
+/// What the editor knows of a kind of raised element besides what it is: its words, lengths and highest speed.
+pub trait CalmingKindExt {
+    fn name_key(self) -> &'static str;
+    fn min_mm(self) -> i32;
+    fn default_mm(self) -> i32;
+    fn max_kmh(self) -> Option<u8>;
 }
 
-impl Kind {
-    /// Every kind, in the order a choice lists them.
-    pub const ALL: [Kind; 4] = [Kind::Table, Kind::Crossing, Kind::Chicane, Kind::ModalFilter];
-
-    /// The kind's stable name, as saved and as the choice's value.
-    pub fn id(self) -> &'static str {
-        match self {
-            Kind::Table => "table",
-            Kind::Crossing => "crossing",
-            Kind::Chicane => "chicane",
-            Kind::ModalFilter => "modal_filter",
-        }
-    }
-
+impl CalmingKindExt for Kind {
     /// The message that names it.
-    pub fn name_key(self) -> &'static str {
+    fn name_key(self) -> &'static str {
         match self {
             Kind::Table => "calming-kind-table",
             Kind::Crossing => "calming-kind-crossing",
@@ -99,7 +81,7 @@ impl Kind {
     }
 
     /// The shortest the kind may be, in millimetres.
-    pub fn min_mm(self) -> i32 {
+    fn min_mm(self) -> i32 {
         match self {
             Kind::Chicane => MIN_CHICANE_MM,
             Kind::ModalFilter => MIN_FILTER_MM,
@@ -108,7 +90,7 @@ impl Kind {
     }
 
     /// The length a new one is given when none is typed, in millimetres.
-    pub fn default_mm(self) -> i32 {
+    fn default_mm(self) -> i32 {
         match self {
             Kind::Chicane => DEFAULT_CHICANE_MM,
             Kind::ModalFilter => DEFAULT_FILTER_MM,
@@ -118,56 +100,12 @@ impl Kind {
 
     /// The highest speed limit it is meant for, in km/h; none for a modal filter, which leaves no through traffic to
     /// be too fast.
-    pub fn max_kmh(self) -> Option<u8> {
+    fn max_kmh(self) -> Option<u8> {
         match self {
             Kind::Chicane => Some(MAX_CHICANE_SPEED_KMH),
             Kind::Table | Kind::Crossing => Some(MAX_TABLE_SPEED_KMH),
             Kind::ModalFilter => None,
         }
-    }
-}
-
-/// One raised element, along `length_mm` of the street from `from_mm`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Calming {
-    /// Millimetres from the anchored end (`Street::from_end`) to where it starts, a multiple of `SNAP_MM`.
-    pub from_mm: i32,
-    pub length_mm: i32,
-    pub kind: Kind,
-    /// For a chicane, the side its first build-out is on (the section's side, Left being the first piece); `None`
-    /// means the right. Saved only when set, and only a chicane has one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub first: Option<Side>,
-}
-
-impl Calming {
-    pub fn to_mm(&self) -> i32 {
-        self.from_mm + self.length_mm
-    }
-
-    /// The side a chicane's first build-out is on.
-    pub fn first_side(&self) -> Side {
-        self.first.unwrap_or(Side::Right)
-    }
-
-    /// A chicane's build-outs as (from, to, side) in millimetres from the anchored end, alternating from side to side
-    /// and filling the length from its start. Empty for anything else.
-    pub fn buildouts(&self) -> Vec<(i32, i32, Side)> {
-        if self.kind != Kind::Chicane {
-            return Vec::new();
-        }
-        let pitch = CHICANE_BUILDOUT_MM + CHICANE_GAP_MM;
-        let n = (self.length_mm + CHICANE_GAP_MM) / pitch;
-        let other = |side: Side| if side == Side::Left { Side::Right } else { Side::Left };
-        let mut side = self.first_side();
-        (0..n)
-            .map(|k| {
-                let from = self.from_mm + k * pitch;
-                let out = (from, from + CHICANE_BUILDOUT_MM, side);
-                side = other(side);
-                out
-            })
-            .collect()
     }
 }
 
@@ -220,13 +158,6 @@ impl Content {
     /// The elements in their canonical order: by position.
     pub(super) fn sort_calming(&mut self) {
         self.calming.sort_by_key(|c| c.from_mm);
-    }
-}
-
-impl super::Street {
-    /// Whether the elements can be placed: they need the length they were drawn against, and lie in front of it.
-    pub(super) fn calming_is_sound(&self) -> bool {
-        self.calming.is_empty() || (self.length_mm.is_some() && self.calming.iter().all(|c| c.from_mm >= 0 && c.length_mm > 0))
     }
 }
 
@@ -496,7 +427,14 @@ impl Editor {
     }
 }
 
-impl Calming {
+/// How the checks name a raised element, and where a chicane's build-outs stand.
+pub trait CalmingExt {
+    fn named(&self) -> Said;
+    fn named_in(&self, zone: Said) -> Said;
+    fn buildouts(&self) -> Vec<(i32, i32, Side)>;
+}
+
+impl CalmingExt for Calming {
     /// How the checks name it: "raised table at 20 m".
     fn named(&self) -> Said {
         Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(self.from_mm))
@@ -508,6 +446,26 @@ impl Calming {
             .with("kind", Arg::MsgLower(self.kind.name_key()))
             .with("at", Arg::Length(self.from_mm))
             .with("zone", Arg::Said(Box::new(zone)))
+    }
+
+    /// A chicane's build-outs as (from, to, side) in millimetres from the anchored end, alternating from side to side
+    /// and filling the length from its start. Empty for anything else.
+    fn buildouts(&self) -> Vec<(i32, i32, Side)> {
+        if self.kind != Kind::Chicane {
+            return Vec::new();
+        }
+        let pitch = CHICANE_BUILDOUT_MM + CHICANE_GAP_MM;
+        let n = (self.length_mm + CHICANE_GAP_MM) / pitch;
+        let other = |side: Side| if side == Side::Left { Side::Right } else { Side::Left };
+        let mut side = self.first_side();
+        (0..n)
+            .map(|k| {
+                let from = self.from_mm + k * pitch;
+                let out = (from, from + CHICANE_BUILDOUT_MM, side);
+                side = other(side);
+                out
+            })
+            .collect()
     }
 }
 
@@ -741,6 +699,7 @@ fn refusal(r: super::CurbRefusal) -> CalmingRefusal {
 mod tests {
     use super::*;
     use crate::street::model::Street;
+    use crate::street::model::StreetExt;
 
     fn table(from_mm: i32) -> Calming {
         Calming { from_mm, length_mm: 7_000, kind: Kind::Table, first: None }
@@ -1137,9 +1096,9 @@ mod tests {
 
     // ---- the design checks ----
 
-    use super::super::stop::StopKind;
     use super::super::{Check, EndInfo};
     use crate::street::model::Speed;
+    use crate::street::model::StopKind;
 
     fn check(e: &Editor, id: &str) -> Check {
         e.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))

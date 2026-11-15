@@ -20,6 +20,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
+use crate::street::model::StopKindExt;
 use crate::street::model::{CalmingKind, SegView, ShownGreen, ShownInstance, ShownStop, View};
 
 mod calming;
@@ -262,6 +263,7 @@ mod tests {
     use crate::shared::diagram::render::layer_markup;
     use crate::shared::i18n::Locale;
     use crate::street::model::Editor;
+    use crate::street::model::StreetExt;
 
     /// How far a face rises on the drawing, in pixels: the first polygon of `class` in the `nth` group drawn for `uid`.
     fn rise_of(markup: &str, uid: u32, nth: usize, class: &str) -> f64 {

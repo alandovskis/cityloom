@@ -1484,6 +1484,7 @@ mod tests {
     use crate::city::store::CityStore;
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::StreetExt;
 
     struct Rig {
         vm: Rc<StreetVm>,
@@ -2587,6 +2588,7 @@ mod curb_tests {
     use crate::shared::catalogue::Side;
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::StreetExt;
     use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
@@ -2831,6 +2833,7 @@ mod stop_tests {
     use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::StreetExt;
     use crate::street::model::{Piece, Street, Use, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
@@ -3288,6 +3291,8 @@ mod calming_tests {
     use crate::shared::catalogue::Side;
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::CalmingKindExt;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Street, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
@@ -3530,6 +3535,7 @@ mod green_tests {
     use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::StreetExt;
     use crate::street::model::{GreenForm, GreenKind, Piece, Street, TreeSize, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
@@ -3914,6 +3920,7 @@ mod level_tests {
     use super::*;
     use crate::shared::i18n::Locale;
     use crate::shared::ports::test_ports_with_time;
+    use crate::street::model::StreetExt;
     use crate::street::model::{CalmingKind, GreenForm, GreenKind, StopKind, Street, Use, ZoneEnd, ZoneFrame};
     use crate::street::vm::level::Level;
 

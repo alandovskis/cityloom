@@ -266,6 +266,7 @@ mod tests {
     use super::*;
     use crate::project::store::PLACEHOLDER_NAME;
     use crate::shared::ports::{MemoryStorage, test_ports};
+    use crate::street::model::StreetExt;
     use crate::sync::model::AREA_RECORD;
     use serde_json::json;
 

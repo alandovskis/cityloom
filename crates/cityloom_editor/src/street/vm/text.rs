@@ -209,6 +209,7 @@ mod tests {
     use super::*;
     use crate::shared::i18n::Locale;
     use crate::street::model::Editor;
+    use crate::street::model::StreetExt;
 
     fn en() -> std::rc::Rc<I18n> {
         crate::i18n_for(Locale::En)

@@ -2,19 +2,7 @@
 //! base the way `segments: None` is the base section; a street of one zone has no zone to hold one.
 
 use super::{Speed, Street, Zone};
-
-/// The speed of zone `z`: its own, else the street's. With no zones the street's.
-pub(super) fn speed_in(base: Speed, zones: &[Zone], z: usize) -> Speed {
-    match zones.get(z) {
-        Some(zone) if !zone.speed.is_undecided() => zone.speed,
-        _ => base,
-    }
-}
-
-/// The highest speed any zone has, when one has a speed.
-pub(super) fn max_kmh(base: Speed, zones: &[Zone]) -> Option<u16> {
-    (0..zones.len().max(1)).filter_map(|z| speed_in(base, zones, z).kmh()).max()
-}
+use cityloom_model::street::speed_in;
 
 /// The speed a transition between zones `b` and `b + 1` is sized by: the higher of the two, since the taper must
 /// serve the faster traffic.
@@ -22,31 +10,15 @@ pub(super) fn taper_kmh(base: Speed, zones: &[Zone], b: usize) -> Option<u16> {
     [speed_in(base, zones, b).kmh(), speed_in(base, zones, b + 1).kmh()].into_iter().flatten().max()
 }
 
-impl Street {
-    /// The speed of zone `z`, its own or else the street's.
-    pub fn zone_speed(&self, z: usize) -> Speed {
-        speed_in(self.speed, &self.zones, z)
-    }
-
-    /// The limit of zone `z` in kilometres an hour, when it has one.
-    pub fn zone_speed_kmh(&self, z: usize) -> Option<u16> {
-        self.zone_speed(z).kmh()
-    }
-
-    /// The highest limit any zone has: what an area's speed rule judges the street by.
-    pub fn max_speed_kmh(&self) -> Option<u16> {
-        max_kmh(self.speed, &self.zones)
-    }
-
-    /// The speed the transition at boundary `b` (between zones `b` and `b + 1`) is sized by.
-    pub fn taper_speed_kmh(&self, b: usize) -> Option<u16> {
-        taper_kmh(self.speed, &self.zones, b)
-    }
+/// The speed the transition at boundary `b` (between zones `b` and `b + 1`) is sized by.
+pub(super) fn taper_speed_kmh(street: &Street, b: usize) -> Option<u16> {
+    taper_kmh(street.speed, &street.zones, b)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Side, zoned};
 
     fn two(base: Speed, second: Speed) -> Street {

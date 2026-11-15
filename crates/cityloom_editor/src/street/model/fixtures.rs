@@ -2,6 +2,7 @@
 //! app is a road of the network, with the lanes and name OpenStreetMap gives it.
 
 use super::*;
+use super::{Segment, Speed, Street, StreetExt, Zone, ZoneEnd};
 use crate::shared::catalogue::kind_index;
 
 pub struct Sample {
@@ -92,15 +93,13 @@ pub fn two_zones(second_own: bool) -> Editor {
     Editor::from_street(&s, &s, region)
 }
 
-impl Street {
-    /// The sample street laid out for a side of the road.
-    pub fn sample(sample: usize, side: Side) -> Street {
-        let sample = sample.min(SAMPLES.len() - 1);
-        let mut e = Editor::new(sample);
-        let region = REGIONS.iter().position(|r| r.drive_side == side).unwrap_or(0);
-        e.set_region(region);
-        e.snapshot()
-    }
+/// The sample street laid out for a side of the road.
+pub fn sample(sample: usize, side: Side) -> Street {
+    let sample = sample.min(SAMPLES.len() - 1);
+    let mut e = Editor::new(sample);
+    let region = REGIONS.iter().position(|r| r.drive_side == side).unwrap_or(0);
+    e.set_region(region);
+    e.snapshot()
 }
 
 impl Editor {

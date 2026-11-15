@@ -2,7 +2,6 @@
 //! check's threshold came from, and the check a profile adds, the speed target of the street's class. With no profile
 //! in force nothing here adds anything, and the checks are the built-in ones.
 
-use super::zone_speed;
 use super::{Arg, Check, Editor, Said, StreetClass};
 use crate::shared::catalogue::class_key;
 use crate::standards::model::{self as standards, Field};
@@ -33,7 +32,7 @@ impl Editor {
         let class: StreetClass = self.class();
         let target = standards::target_kmh(class)?;
         let content = &self.states[self.cursor].content;
-        let highest = zone_speed::max_kmh(content.speed, &content.zones);
+        let highest = cityloom_model::street::max_kmh(content.speed, &content.zones);
         let over = highest.filter(|&kmh| kmh > target);
         let class = Arg::Msg(class_key(class));
         let detail = match (highest, over) {
@@ -54,6 +53,7 @@ mod tests {
     use super::super::{Editor, Speed, Street};
     use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
     use crate::standards::model::{self as standards, Field, Standards, WidthRange, activate_for_test};
+    use crate::street::model::StreetExt;
 
     fn editor() -> Editor {
         Editor::new(0)

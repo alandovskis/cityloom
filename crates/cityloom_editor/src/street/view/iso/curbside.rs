@@ -6,6 +6,7 @@
 
 use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
 use crate::street::model::{SegView, ShownInstance, ShownStop};
+use crate::street::model::{StopKindExt, UseExt};
 
 use super::order::Bx;
 use super::projection::{Projection, Reach};
@@ -174,6 +175,7 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownInstance], p: &Projection) 
 mod tests {
     use crate::shared::catalogue::{KINDS, MATERIALS, Side, kind_index};
     use crate::shared::units::Units;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, Street, Use, ZoneEnd, ZoneFrame};
     use crate::street::view::iso::projection::points;
     use crate::street::view::iso::testing::{count, drawn, en, furnished, joined, marked};

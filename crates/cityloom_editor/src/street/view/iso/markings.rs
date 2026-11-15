@@ -100,6 +100,7 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::{DIRECTIONS, REGIONS, Side, kind_index};
     use crate::street::model::Editor;
+    use crate::street::model::StreetExt;
 
     /// Where piece `i` ends, across the street.
     fn edge(e: &Editor, i: usize) -> i32 {
