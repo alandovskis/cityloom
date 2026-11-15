@@ -30,6 +30,10 @@
 /// of the tile.
 ///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
+///
+/// CI keeps the tiles until the sources that make them change, and does not count this crate's `street` and
+/// `catalogue` modules among them (`.github/workflows/ci.yml`, the `tiles` cache key): the importer and the tile code
+/// must not use them, or the key must count them again.
 pub const IMPORTER_VERSION: u32 = 10;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
