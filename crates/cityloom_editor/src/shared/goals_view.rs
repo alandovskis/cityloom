@@ -1,4 +1,4 @@
-//! The goal picker and its guidance, drawn in the Checks tab of the street, junction and map pages. It offers and
+//! The goal picker (a menu) and its guidance, drawn in the Checks tab of the street, junction and map pages. It offers and
 //! explains; no control here edits a design (`goals.rs`). On the map a change to the selected streets can be picked
 //! as the one to review, which is as far as this goes: making it stays with the review and its apply button.
 
@@ -10,25 +10,41 @@ use crate::shared::atlas::name_key;
 use crate::shared::goals::{Goal, GoalChoice, Place};
 use crate::shared::i18n::{Args, I18n};
 
-/// The picker and, for the chosen goal, why each measure fits and what it is likely to cost. Call it inside a
-/// closure that tracks the page's words. `pick_change` is the map's way of choosing the change to review, given the
-/// change's id; it is `None` where there is nothing to pick it for (no editor offers it, or no street is selected).
-pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n, pick_change: Option<Rc<dyn Fn(&'static str)>>) -> impl IntoView + use<> {
+/// The picker: a menu of the goals, "No goal" first, with the note that a goal changes nothing. Call it inside a
+/// closure that tracks only the page's words, so a choice does not draw the menu again under the focus; the chosen
+/// goal is set as the menu's value.
+pub fn goal_picker(choice: GoalChoice, i18n: &I18n) -> impl IntoView + use<> {
     let plain = |key: &str| i18n.tr(key, &Args::new());
-    let current = choice.get();
-    let radio = |goal: Option<Goal>, label: String| {
-        let choice = choice.clone();
-        let id = format!("goal-{}", goal.map_or("none", Goal::id));
-        view! {
-            <label class="goal-choice">
-                <input type="radio" name="goal" id=id checked=goal == current on:change=move |_| choice.set(goal)/>
-                {label}
-            </label>
-        }
+    let current = choice.get_untracked();
+    let option = |goal: Option<Goal>, label: String| {
+        let value = goal.map_or("", Goal::id);
+        view! { <option value=value selected=goal == current>{label}</option> }
     };
-    let mut radios = vec![radio(None, plain("goal-none")).into_any()];
-    radios.extend(Goal::ALL.into_iter().map(|g| radio(Some(g), plain(g.name())).into_any()));
-    let guidance = current.map(|goal| {
+    let mut options = vec![option(None, plain("goal-none")).into_any()];
+    options.extend(Goal::ALL.into_iter().map(|g| option(Some(g), plain(g.name())).into_any()));
+    let chosen = StoredValue::new_local(choice);
+    view! {
+        <div class="goal-guide">
+            <label for="goal-pick">{plain("goal-legend")}</label>
+            <select
+                id="goal-pick"
+                prop:value=move || chosen.with_value(|c| c.get()).map_or("", Goal::id)
+                on:change=move |ev| chosen.with_value(|c| c.set(Goal::from_id(&event_target_value(&ev))))
+            >
+                {options}
+            </select>
+            <p class="goal-note">{plain("goal-changes-nothing")}</p>
+        </div>
+    }
+}
+
+/// For the chosen goal, why each measure fits and what it is likely to cost; nothing without one. Call it inside a
+/// closure that tracks the page's words and the goal. `pick_change` is the map's way of choosing the change to review,
+/// given the change's id; it is `None` where there is nothing to pick it for (no editor offers it, or no street is
+/// selected).
+pub fn goal_guidance(goal: Option<Goal>, place: Place, i18n: &I18n, pick_change: Option<Rc<dyn Fn(&'static str)>>) -> impl IntoView + use<> {
+    let plain = |key: &str| i18n.tr(key, &Args::new());
+    let guidance = goal.map(|goal| {
         let picks = goal
             .picks_at(place)
             .map(|p| {
@@ -70,7 +86,7 @@ pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n, pick_change: Op
                 view! { <p>{plain("goal-no-picks")}</p> }.into_any()
             } else {
                 view! {
-                    <details class="goal-measures">
+                    <details class="goal-measures" open>
                         <summary>{i18n.tr("goal-picks-summary", &Args::new().num("n", count as i64))}</summary>
                         <ul class="goal-picks">{picks}</ul>
                     </details>
@@ -79,14 +95,7 @@ pub fn goal_guide(choice: GoalChoice, place: Place, i18n: &I18n, pick_change: Op
             }}
         }
     });
-    view! {
-        <fieldset class="goal-guide">
-            <legend>{plain("goal-legend")}</legend>
-            {radios}
-            <p class="goal-note">{plain("goal-changes-nothing")}</p>
-            <div aria-live="polite">{guidance}</div>
-        </fieldset>
-    }
+    view! { <div class="goal-guidance" aria-live="polite">{guidance}</div> }
 }
 
 #[cfg(test)]
@@ -100,40 +109,41 @@ mod tests {
     fn drawn(goal: Option<Goal>, place: Place, locale: Locale) -> String {
         let choice = GoalChoice::new(Rc::new(MemoryStorage::default()));
         choice.set(goal);
-        html(move || goal_guide(choice, place, &crate::i18n_for(locale), None).into_any())
+        let i18n = crate::i18n_for(locale);
+        html(move || view! { {goal_picker(choice.clone(), &i18n)}{goal_guidance(goal, place, &i18n, None)} }.into_any())
     }
 
     #[test]
-    fn with_no_goal_the_picker_offers_every_goal_and_no_guidance() {
+    fn the_picker_is_a_labelled_menu_of_every_goal_with_the_chosen_one_selected() {
         let h = drawn(None, Place::Street, Locale::En);
+        assert!(h.contains(r#"<label for="goal-pick">Planning goal</label>"#) && h.contains(r#"<select id="goal-pick""#), "{h}");
+        assert!(!h.contains(r#"type="radio""#), "a menu, not a radio button per goal: {h}");
+        assert!(h.contains(r#"<option value="" selected>No goal</option>"#), "no goal is the choice: {h}");
         for g in Goal::ALL {
-            assert!(h.contains(&format!("id=\"goal-{}\"", g.id())), "{}", g.id());
+            assert!(h.contains(&format!(r#"<option value="{}">"#, g.id())), "{}: {h}", g.id());
         }
-        assert!(h.contains("id=\"goal-none\"") && !h.contains("goal-picks"));
-        assert!(h.contains("never changes the design"));
+        assert!(h.contains("never changes the design") && !h.contains("goal-picks"), "no guidance without a goal: {h}");
+        let chosen = drawn(Some(Goal::Buses), Place::Street, Locale::En);
+        assert!(chosen.contains(r#"<option value="buses" selected>"#), "{chosen}");
     }
 
     #[test]
-    fn the_measures_are_in_a_closed_disclosure_that_counts_them() {
+    fn the_measures_are_listed_open_and_counted() {
         let h = drawn(Some(Goal::Buses), Place::Junction, Locale::En);
-        assert!(h.contains("<details class=\"goal-measures\""), "{h}");
-        assert!(!h.contains("goal-measures\" open"), "closed until opened");
+        assert!(h.contains(r#"<details open class="goal-measures">"#), "open, in the goal's own column: {h}");
         assert!(h.contains("Measures to consider (8)"), "{h}");
         let none = drawn(Some(Goal::SchoolRoute), Place::Street, Locale::En);
-        assert!(none.contains("<details class=\"goal-measures\""));
+        assert!(none.contains(r#"<details open class="goal-measures">"#));
     }
 
     #[test]
     fn on_the_map_a_change_is_named_and_offered_only_where_streets_are_selected() {
         let choice = GoalChoice::new(Rc::new(MemoryStorage::default()));
         choice.set(Some(Goal::SchoolRoute));
-        let without = html({
-            let choice = choice.clone();
-            move || goal_guide(choice, Place::Map, &crate::i18n_for(Locale::En), None).into_any()
-        });
+        let without = html(move || goal_guidance(choice.get(), Place::Map, &crate::i18n_for(Locale::En), None).into_any());
         assert!(without.contains("School street") && without.contains("Select streets on the map"), "{without}");
         assert!(!without.contains("goal-use"));
-        let with = html(move || goal_guide(choice, Place::Map, &crate::i18n_for(Locale::En), Some(Rc::new(|_| {}))).into_any());
+        let with = html(move || goal_guidance(Some(Goal::SchoolRoute), Place::Map, &crate::i18n_for(Locale::En), Some(Rc::new(|_| {}))).into_any());
         assert!(with.contains("class=\"btn quiet goal-use\"") && with.contains("data-op=\"school\"") && with.contains("Review School street"), "{with}");
     }
 

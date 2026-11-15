@@ -215,42 +215,55 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
         let (v, units) = w.now();
         let i18n = w.i18n();
         let goal = w.vm_goal().get();
-        let editor = v
-            .checks
-            .iter()
-            .map(|c| {
-                let marked = goal.is_some_and(|g| g.bears_on(c.id));
-                view! {
-                    <li class=if c.ok { "ok" } else { "bad" } class:goal=marked>
-                        {icon(c.ok)}
-                        <div>
-                            <b>{say(&i18n, units, &crate::street::vm::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{plain(&i18n, "goal-check-mark")}</span> })}</b>
-                            <span>{say(&i18n, units, &c.detail)}</span>
-                            {c.standard.as_ref().map(|s| view! { <span class="check-standard">{say(&i18n, units, s)}</span> })}
-                            {crate::shared::sources_view::source_note(c.id, &say(&i18n, units, &crate::street::vm::text::check_label(c)), &i18n, units)}
-                        </div>
-                    </li>
-                }
-            })
-            .collect_view();
-        let areas = w
-            .area_checks()
-            .into_iter()
-            .map(|f| {
-                let state = if f.ok() { "check-passes" } else { "check-fails" };
-                let detail = f.detail().iter().map(|s| say(&i18n, units, s)).collect::<Vec<_>>().join(" ");
-                view! {
-                    <li class=if f.ok() { "ok" } else { "bad" }>
-                        {icon(f.ok())}
-                        <div>
-                            <b>{say(&i18n, units, &f.label())}<span class="sr-only">{plain(&i18n, state)}</span></b>
-                            <span>{detail}</span>
-                        </div>
-                    </li>
-                }
-            })
-            .collect_view();
-        view! { {editor}{areas} }
+        let folded = !w.passes().shown();
+        // What fails first, then what passes, folded until asked for; each keeps its order.
+        let (bad, ok): (Vec<_>, Vec<_>) = v.checks.iter().partition(|c| !c.ok);
+        let row = |c: &crate::street::model::Check| {
+            let marked = goal.is_some_and(|g| g.bears_on(c.id));
+            view! {
+                <li class=if c.ok { "ok" } else { "bad" } class:goal=marked hidden=c.ok && folded>
+                    {icon(c.ok)}
+                    <div>
+                        <b>{say(&i18n, units, &crate::street::vm::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{plain(&i18n, "goal-check-mark")}</span> })}</b>
+                        <span>{say(&i18n, units, &c.detail)}</span>
+                        {c.standard.as_ref().map(|s| view! { <span class="check-standard">{say(&i18n, units, s)}</span> })}
+                        {crate::shared::sources_view::source_note(c.id, &say(&i18n, units, &crate::street::vm::text::check_label(c)), &i18n, units)}
+                    </div>
+                </li>
+            }
+        };
+        let (editor_bad, editor_ok) = (bad.into_iter().map(row).collect_view(), ok.into_iter().map(row).collect_view());
+        let (bad_areas, ok_areas): (Vec<_>, Vec<_>) = w.area_checks().into_iter().partition(|f| !f.ok());
+        let area_row = |f: crate::restriction::model::Finding| {
+            let state = if f.ok() { "check-passes" } else { "check-fails" };
+            let detail = f.detail().iter().map(|s| say(&i18n, units, s)).collect::<Vec<_>>().join(" ");
+            view! {
+                <li class=if f.ok() { "ok" } else { "bad" } hidden=f.ok() && folded>
+                    {icon(f.ok())}
+                    <div>
+                        <b>{say(&i18n, units, &f.label())}<span class="sr-only">{plain(&i18n, state)}</span></b>
+                        <span>{detail}</span>
+                    </div>
+                </li>
+            }
+        };
+        let bad_areas = bad_areas.into_iter().map(area_row).collect_view();
+        let ok_areas = ok_areas.into_iter().map(area_row).collect_view();
+        // The area rules' failures join the street's, ahead of every pass.
+        view! { {editor_bad}{bad_areas}{editor_ok}{ok_areas} }
+    }
+}
+
+/// Under the checks: the button that shows or folds the passing ones (and, when all pass, a line that says so).
+#[component]
+pub fn PassingChecks(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let checks = &w.view().checks;
+        let areas = w.area_checks();
+        let all = checks.len() + areas.len();
+        let passing = checks.iter().filter(|c| c.ok).count() + areas.iter().filter(|f| f.ok()).count();
+        crate::shared::check_fold::passing_toggle(w.passes(), passing, all, &w.i18n())
     }
 }
 
@@ -258,9 +271,9 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
 #[component]
 pub fn GoalGuide(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    move || {
-        let choice = w.vm_goal();
-        crate::shared::goals_view::goal_guide(choice, crate::shared::goals::Place::Street, &w.i18n(), None)
+    view! {
+        {move || crate::shared::goals_view::goal_picker(w.vm_goal(), &w.i18n())}
+        {move || crate::shared::goals_view::goal_guidance(w.vm_goal().get(), crate::shared::goals::Place::Street, &w.i18n(), None)}
     }
 }
 

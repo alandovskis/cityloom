@@ -119,7 +119,10 @@ pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn GoalGuide(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    move || crate::shared::goals_view::goal_guide(watch.goal(), crate::shared::goals::Place::Junction, &watch.i18n(), None)
+    view! {
+        {move || crate::shared::goals_view::goal_picker(watch.goal(), &watch.i18n())}
+        {move || crate::shared::goals_view::goal_guidance(watch.goal().get(), crate::shared::goals::Place::Junction, &watch.i18n(), None)}
+    }
 }
 
 #[component]
@@ -128,12 +131,15 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
     move || {
         let (v, units) = watch.now();
         let goal = watch.goal().get();
-        v.checks
-            .iter()
+        let folded = !watch.passes().shown();
+        // What fails first, then what passes, folded until asked for; each keeps its order.
+        let (bad, ok): (Vec<_>, Vec<_>) = v.checks.iter().partition(|k| !k.ok);
+        bad.into_iter()
+            .chain(ok)
             .map(|k| {
                 let marked = goal.is_some_and(|g| g.bears_on(k.id));
                 view! {
-                    <li class=if k.ok { "ok" } else { "bad" } class:goal=marked>
+                    <li class=if k.ok { "ok" } else { "bad" } class:goal=marked hidden=k.ok && folded>
                         {icon(k.ok)}
                         <div>
                             <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{watch.tr("goal-check-mark")}</span> })}</b>
@@ -144,6 +150,17 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                 }
             })
             .collect_view()
+    }
+}
+
+/// Under the checks: the button that shows or folds the passing ones (and, when all pass, a line that says so).
+#[component]
+pub fn PassingChecks(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
+    move || {
+        let (v, _) = watch.now();
+        let passing = v.checks.iter().filter(|k| k.ok).count();
+        crate::shared::check_fold::passing_toggle(watch.passes(), passing, v.checks.len(), &watch.i18n())
     }
 }
 

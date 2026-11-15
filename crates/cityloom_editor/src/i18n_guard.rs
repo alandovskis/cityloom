@@ -612,6 +612,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("school-route", "the id of a planning goal, kept in storage, not a message"),
     ("bus-corridor", "the id of a change to the selected streets (`map::model::corridor::Op::id`), not a message"),
     ("goal-slot", "the id of the page slot the planning goal's picker mounts into, not a message"),
+    ("checks-fold-slot", "the id of the page slot the button that folds the passing checks mounts into, not a message"),
     ("zone-tools-slot", "the id of the element the zone commands are mounted in"),
     ("zone-strip", "the id of the zone strip, the listbox of the street's zones"),
     ("curb-slot", "the id of the element the curbside strips are mounted in"),

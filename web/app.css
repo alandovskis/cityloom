@@ -1692,9 +1692,24 @@ details.src ul {
   font-weight: 600;
   padding: 0;
 }
-.goal-choice {
+.goal-guide label {
   display: block;
-  padding: 4px 0;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+#goal-pick {
+  min-height: 32px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+#goal-pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .goal-note,
 .goal-picks span {

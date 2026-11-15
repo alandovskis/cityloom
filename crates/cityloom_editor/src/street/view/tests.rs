@@ -524,7 +524,7 @@ fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
 fn the_checks_each_say_whether_they_pass_in_words() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
-    assert_eq!(count(&h, "<li class=\"ok\">"), 4);
+    assert_eq!(count(&h, "class=\"ok\""), 4);
     assert!(h.contains(": passes") && h.contains("Every metre is used"));
     let u = segment(&s, 0);
     s.edit(|e| e.set_width(u, 3_800));
@@ -545,7 +545,7 @@ fn the_transit_measures_cite_the_atlas_toolbox_for_their_names_and_say_the_rest_
 fn every_check_carries_its_sources_or_says_it_is_a_placeholder() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
-    assert_eq!(count(&h, "<details class=\"src"), count(&h, "<li class="));
+    assert_eq!(count(&h, "<details class=\"src"), count(&h, "<li "));
     assert!(h.contains("Source: placeholder, no source"));
 }
 
@@ -2480,6 +2480,26 @@ fn a_fitted_street_figure_leaves_out_the_speed_signs_words() {
 }
 
 #[test]
+fn the_checks_list_what_fails_first_and_fold_what_passes_until_asked() {
+    let s = street_shared(0);
+    let u = segment(&s, 0);
+    s.edit(|e| e.nudge_width(u, 100)); // too wide: the street no longer fits
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    let rows: Vec<&str> = h.split("<li ").skip(1).collect();
+    assert!(rows.len() > 2, "{h}");
+    assert!(rows[0].starts_with(r#"class="bad""#) && rows[0].contains("Fits the street width"), "the failure first: {h}");
+    let (failing, passing) = (rows.iter().filter(|r| r.contains(r#"class="bad""#)).count(), rows.iter().filter(|r| r.contains(r#"class="ok""#)).count());
+    assert!(rows[..failing].iter().all(|r| r.contains(r#"class="bad""#)), "every failure before every pass: {h}");
+    assert!(rows.iter().filter(|r| r.contains(r#"class="ok""#)).all(|r| r[..r.find('>').unwrap()].contains("hidden")), "passes folded: {h}");
+    let toggle = street_html(|| view! { <notes::PassingChecks vm=s.clone()/> });
+    assert!(toggle.contains(&format!(">Show the {passing} passing checks<")), "{toggle}");
+    s.passes().toggle();
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(!h.contains(" hidden"), "shown once asked: {h}");
+    assert!(street_html(|| view! { <notes::PassingChecks vm=s.clone()/> }).contains(r#"aria-expanded="true""#));
+}
+
+#[test]
 fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_street_as_it_was() {
     use crate::shared::goals::Goal;
     let s = street_shared(0);
@@ -2517,9 +2537,21 @@ fn the_street_s_notes_are_the_shell_s_tray_with_its_three_tabs_and_the_slots_the
         assert!(!h.contains(gone), "where the street came from is in the title block, under every tab: {gone}");
     }
     // every slot `mount_street_page` fills, once each, inside the tray
-    for id in
-        ["fit-slot", "fit-checks-slot", "checks-n-slot", "impact", "space", "cap", "time-note", "goal-slot", "checks", "atlas-source", "revs", "title-block"]
-    {
+    for id in [
+        "fit-slot",
+        "fit-checks-slot",
+        "checks-n-slot",
+        "impact",
+        "space",
+        "cap",
+        "time-note",
+        "goal-slot",
+        "checks",
+        "checks-fold-slot",
+        "atlas-source",
+        "revs",
+        "title-block",
+    ] {
         assert_eq!(count(&h, &format!(r#"id="{id}""#)), 1, "{id}");
     }
     for heading in [
@@ -2541,6 +2573,21 @@ fn the_street_s_notes_are_the_shell_s_tray_with_its_three_tabs_and_the_slots_the
         assert!(card.contains(a), "{a}: {card}");
     }
     assert!(h.contains(r#"aria-label="About this street""#), "{h}");
+}
+
+#[test]
+fn the_checks_tab_puts_the_checks_first_and_the_goal_and_its_measures_in_a_column_beside_them() {
+    let (s, _) = street_watch();
+    let h = html(|| view! { <view::notes_tray::StreetNotes vm=s.clone()/> }.into_any());
+    let panel = &h[h.find(r#"id="p-checks""#).unwrap()..h.find(r#"id="p-changes""#).unwrap()];
+    let at = |s: &str| panel.find(s).unwrap_or_else(|| panic!("{s}: {panel}"));
+    assert!(at(r#"class="checks-split""#) < at(r#"id="h-checks""#), "{panel}");
+    assert!(at(r#"id="checks""#) < at(r#"id="checks-fold-slot""#), "the fold's button under the list: {panel}");
+    assert!(at(r#"id="checks-fold-slot""#) < at(r#"class="checks-side""#), "{panel}");
+    assert!(
+        at(r#"class="checks-side""#) < at(r#"id="h-goal""#) && at(r#"id="h-goal""#) < at(r#"id="h-atlas""#),
+        "the goal, then where the measures' names come from: {panel}"
+    );
 }
 
 #[test]

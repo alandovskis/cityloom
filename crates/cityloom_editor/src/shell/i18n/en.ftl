@@ -52,6 +52,17 @@ ui-notes-toggle-title = Show or hide the notes ( ] )
 ui-notes-sections = Notes sections
 ui-tab-impact = Impact
 ui-tab-checks = Checks
+ui-checks-passing =
+    { $n ->
+        [one] Show the passing check
+       *[other] Show the { $n } passing checks
+    }
+ui-checks-passing-hide = Hide the passing checks
+ui-checks-all-pass =
+    { $n ->
+        [one] The check passes.
+       *[other] All { $n } checks pass.
+    }
 ui-tab-changes = Changes
 ui-key-shift = Shift
 ui-key-ctrl = Ctrl

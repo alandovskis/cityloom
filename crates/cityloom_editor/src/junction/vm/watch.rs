@@ -50,6 +50,10 @@ impl Watch {
         self.vm.with_value(|v| v.goal().clone())
     }
 
+    pub fn passes(&self) -> crate::shared::check_fold::PassFold {
+        self.vm.with_value(|v| v.passes().clone())
+    }
+
     pub fn version(&self) -> RwSignal<u32> {
         self.vm.with_value(|v| v.version())
     }

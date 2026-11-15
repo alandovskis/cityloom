@@ -249,12 +249,25 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
+  test("the Checks tab shows what fails first and folds what passes until asked", async ({ page }) => {
+    await page.locator("#t-checks").click();
+    const passing = page.locator("#checks li.ok");
+    const fold = page.locator("#checks-passing");
+    await expect(fold).toHaveAttribute("aria-expanded", "false");
+    await expect(passing.first()).toBeHidden();
+    await fold.click();
+    await expect(fold).toHaveAttribute("aria-expanded", "true");
+    await expect(passing.first()).toBeVisible();
+    await fold.click();
+    await expect(passing.first()).toBeHidden();
+  });
+
   test("the notes list the width shared out, the checks and the changes, over where the street came from", async ({
     page,
   }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
     await page.locator("#t-checks").click();
-    await expect(page.locator("#checks li").first()).toBeVisible();
+    await expect(page.locator("#checks li")).not.toHaveCount(0);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await page.locator("#t-changes").click();

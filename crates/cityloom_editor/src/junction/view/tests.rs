@@ -181,7 +181,7 @@ fn the_transit_measures_of_a_junction_cite_the_atlas_toolbox_for_their_names_and
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 15, "the ten of any junction, and a signal's time to cross, phases, cycle and meeting movements");
+    assert_eq!(count(&h, "class=\"ok\""), 15, "the ten of any junction, and a signal's time to cross, phases, cycle and meeting movements");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle") && h.contains("Movements that meet"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -1976,13 +1976,13 @@ fn the_checks_list_fails_while_movements_meet_and_passes_again() {
     let north = arm(&s, 0);
     let list = |s: &Rc<JunctionVm>| html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
     assert!(list(&s).contains("Movements that meet"));
-    let ok = count(&list(&s), "<li class=\"ok\">");
+    let ok = count(&list(&s), "class=\"ok\"");
     assert!(s.toggle_phase_walk(0, north));
     let bad = list(&s);
-    assert_eq!(count(&bad, "<li class=\"ok\">"), ok - 1, "{bad}");
+    assert_eq!(count(&bad, "class=\"ok\""), ok - 1, "{bad}");
     assert!(bad.replace(['\u{a0}', '\u{202f}'], " ").contains("meet people walking across on the north side"), "{bad}");
     assert!(s.toggle_phase_walk(0, north));
-    assert_eq!(count(&list(&s), "<li class=\"ok\">"), ok);
+    assert_eq!(count(&list(&s), "class=\"ok\""), ok);
 }
 
 // ---- the pattern of a phase ----
@@ -3384,6 +3384,34 @@ fn the_junction_figure_is_fitted_to_what_is_drawn_and_its_words_are_whole_and_ap
             }
         }
     }
+}
+
+#[test]
+fn the_checks_list_what_fails_first_and_fold_what_passes_until_asked() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    assert!(s.toggle_phase_walk(0, north)); // people walk across the north side while its traffic moves: movements meet
+    let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
+    let rows: Vec<&str> = h.split("<li ").skip(1).collect();
+    let failing = rows.iter().filter(|r| r.contains(r#"class="bad""#)).count();
+    assert!(failing > 0 && failing < rows.len(), "some fail and some pass: {h}");
+    assert!(rows[..failing].iter().all(|r| r.contains(r#"class="bad""#)), "every failure before every pass: {h}");
+    assert!(rows[failing..].iter().all(|r| r[..r.find('>').unwrap()].contains("hidden")), "passes folded: {h}");
+    let passing = rows.len() - failing;
+    let toggle = html(|| view! { <notes::PassingChecks vm=s.clone()/> }.into_any());
+    assert!(toggle.contains(&format!("Show the {passing} passing check")), "{toggle}");
+    s.passes().toggle();
+    assert!(!html(|| view! { <notes::Checks vm=s.clone()/> }.into_any()).contains(" hidden"));
+}
+
+#[test]
+fn the_checks_tab_puts_the_checks_first_and_the_goal_and_its_measures_in_a_column_beside_them() {
+    let page = include_str!("../../../../../web/intersection.html");
+    let panel = &page[page.find(r#"id="p-checks""#).unwrap()..page.find(r#"id="p-changes""#).unwrap()];
+    let at = |s: &str| panel.find(s).unwrap_or_else(|| panic!("{s}: {panel}"));
+    assert!(at(r#"class="checks-split""#) < at(r#"id="h-checks""#) && at(r#"id="checks""#) < at(r#"id="checks-fold-slot""#), "{panel}");
+    assert!(at(r#"id="checks-fold-slot""#) < at(r#"class="checks-side""#) && at(r#"class="checks-side""#) < at(r#"id="h-goal""#), "{panel}");
+    assert!(at(r#"id="h-goal""#) < at(r#"id="h-atlas""#), "{panel}");
 }
 
 #[test]

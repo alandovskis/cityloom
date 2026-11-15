@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 
-use leptos::prelude::{ArcRwSignal, Get, Set};
+use leptos::prelude::{ArcRwSignal, Get, GetUntracked, Set};
 
 use crate::shared::ports::Storage;
 
@@ -182,6 +182,11 @@ impl GoalChoice {
     /// The chosen goal, watched.
     pub fn get(&self) -> Option<Goal> {
         self.chosen.get()
+    }
+
+    /// The chosen goal, not watched.
+    pub fn get_untracked(&self) -> Option<Goal> {
+        self.chosen.get_untracked()
     }
 
     /// Chooses a goal, or clears the choice with `None`.
