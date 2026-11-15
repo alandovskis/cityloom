@@ -249,7 +249,7 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
-  test("the notes list the width shared out, the checks, the changes and where the street came from", async ({
+  test("the notes list the width shared out, the checks and the changes, over where the street came from", async ({
     page,
   }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
@@ -259,9 +259,9 @@ test.describe("the street editor on a street of the city", () => {
     await page.keyboard.press("Delete");
     await page.locator("#t-changes").click();
     await expect(page.locator("#revs tbody tr")).toHaveCount(2);
-    await page.locator("#t-provenance").click();
-    await expect(page.locator("#t-provenance")).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#p-provenance")).toBeVisible();
+    // where the street came from is in the title block, under every tab: there is no tab of its own
+    await expect(page.locator("#title-block #tb-state")).toBeVisible();
+    await expect(page.locator("#t-provenance")).toHaveCount(0);
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
@@ -326,8 +326,9 @@ test.describe("what the street editor keeps in the city", () => {
 
   test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
     await openStreet(page);
-    await page.locator("#t-provenance").click();
-    const block = page.locator("#p-provenance");
+    await page.locator("#t-space").click();
+    const block = page.locator("#title-block");
+    await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toBeVisible();
     await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toHaveText(
       /^way \d+( v\d+)?$/,
     );
@@ -339,7 +340,7 @@ test.describe("what the street editor keeps in the city", () => {
     await width.press("Enter");
     await expect(block.locator("#tb-state")).toHaveText("Edited");
     await page.reload();
-    await page.locator("#t-provenance").click();
+    await page.locator("#t-space").click();
     await expect(block.locator("#tb-state")).toHaveText("Edited");
   });
 

@@ -729,45 +729,41 @@ fn osm_street_shared(locale: Locale) -> Rc<StreetVm> {
 }
 
 #[test]
-fn the_provenance_links_the_osm_ways_and_says_whether_the_street_was_changed() {
+fn the_title_block_ends_with_whether_the_street_was_changed_and_the_osm_ways_it_came_from() {
     let s = osm_street_shared(Locale::En);
-    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains("href=\"https://www.openstreetmap.org/way/4687530\"") && h.contains(">way 4687530 v49<"), "{h}");
     assert!(h.contains(">way 7<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
+    // Street, Width, Changes made, then Data and OpenStreetMap, each a label over its value
+    let at = |id: &str| h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+    assert!(at("tb-street") < at("tb-row") && at("tb-row") < at("tb-changes") && at("tb-changes") < at("tb-state"), "{h}");
+    assert!(at("tb-state") < h.find("openstreetmap.org").unwrap(), "{h}");
+    assert!(h.contains("<span>Data</span>") && h.contains("<span>OpenStreetMap</span>"), "{h}");
+    assert!(h.contains(r#"class="tb-cell tb-src""#), "the sources wrap in a cell of their own: {h}");
     let u = segment(&s, 0);
     s.edit(|e| e.nudge_width(u, 100));
-    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
 }
 
 #[test]
-fn a_street_with_no_source_says_so() {
+fn a_street_with_no_source_has_no_source_in_its_title_block() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
-    assert!(h.contains("This street was not made from OpenStreetMap."), "{h}");
-    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state"), "{h}");
-    let fr = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <page::Provenance vm=fr.clone()/> });
-    assert!(h.contains("Cette rue ne vient pas d’OpenStreetMap.") && !h.contains("was not made"), "{h}");
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains("id=\"tb-street\"") && h.contains("id=\"tb-changes\""), "{h}");
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
 }
 
 #[test]
-fn the_provenance_follows_the_language_switch() {
+fn the_title_block_s_source_follows_the_language_switch() {
     let owner = Owner::new();
     owner.set();
     let s = osm_street_shared(Locale::En);
-    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(">Data<") && h.contains("As imported"), "{h}");
     s.i18n().set(Locale::FrCa);
-    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
-    assert!(h.contains(">Données<") && h.contains("Tel qu’importé") && !h.contains("As imported"), "{h}");
-}
-
-#[test]
-fn the_title_block_no_longer_holds_the_sources() {
-    let s = osm_street_shared(Locale::En);
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
-    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
+    assert!(h.contains(">Données<") && h.contains("Tel qu’importé") && !h.contains("As imported"), "{h}");
 }
 
 #[test]
@@ -2462,16 +2458,11 @@ fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_street_as_it_
 // ---- the notes' tray of the street page ------------------------------------------------------
 
 #[test]
-fn the_street_s_notes_are_the_shell_s_tray_with_its_four_tabs_and_the_slots_the_page_fills() {
+fn the_street_s_notes_are_the_shell_s_tray_with_its_three_tabs_and_the_slots_the_page_fills() {
     let (s, _) = street_watch();
     let h = html(|| view! { <view::notes_tray::StreetNotes vm=s.clone()/> }.into_any());
     assert!(h.starts_with("<aside ") && h.contains(r#"class="notes tray""#), "{h}");
-    for (tab, panel, label) in [
-        ("t-space", "p-space", "Impact"),
-        ("t-checks", "p-checks", "Checks"),
-        ("t-changes", "p-changes", "Changes"),
-        ("t-provenance", "p-provenance", "Provenance"),
-    ] {
+    for (tab, panel, label) in [("t-space", "p-space", "Impact"), ("t-checks", "p-checks", "Checks"), ("t-changes", "p-changes", "Changes")] {
         let b = button_tag(&h, tab);
         assert!(b.contains(&format!(r#"aria-controls="{panel}""#)), "{b}");
         let at = h.find(&format!(r#"id="{panel}""#)).unwrap_or_else(|| panic!("{panel}"));
@@ -2479,24 +2470,15 @@ fn the_street_s_notes_are_the_shell_s_tray_with_its_four_tabs_and_the_slots_the_
         assert!(tag.contains(r#"role="tabpanel""#) && tag.contains(&format!(r#"aria-labelledby="{tab}""#)), "{tag}");
         assert!(h.contains(&format!("<span>{label}</span>")), "{label}");
     }
-    assert_eq!(count(&h, r#"role="tabpanel""#), 4);
-    assert_eq!(count(&h, " hidden"), 3, "only the first panel shows until the shell shows the chosen one");
+    assert_eq!(count(&h, r#"role="tabpanel""#), 3);
+    assert_eq!(count(&h, " hidden"), 2, "only the first panel shows until the shell shows the chosen one");
+    for gone in ["t-provenance", "p-provenance", r#"id="provenance""#, "Provenance", "Where this street came from"] {
+        assert!(!h.contains(gone), "where the street came from is in the title block, under every tab: {gone}");
+    }
     // every slot `mount_street_page` fills, once each, inside the tray
-    for id in [
-        "fit-slot",
-        "fit-checks-slot",
-        "checks-n-slot",
-        "impact",
-        "space",
-        "cap",
-        "time-note",
-        "goal-slot",
-        "checks",
-        "atlas-source",
-        "revs",
-        "provenance",
-        "title-block",
-    ] {
+    for id in
+        ["fit-slot", "fit-checks-slot", "checks-n-slot", "impact", "space", "cap", "time-note", "goal-slot", "checks", "atlas-source", "revs", "title-block"]
+    {
         assert_eq!(count(&h, &format!(r#"id="{id}""#)), 1, "{id}");
     }
     for heading in [
@@ -2509,7 +2491,6 @@ fn the_street_s_notes_are_the_shell_s_tray_with_its_four_tabs_and_the_slots_the_
         "sample limits",
         "Transit priority",
         "Your changes",
-        "Where this street came from",
     ] {
         assert!(h.contains(heading), "{heading}: {h}");
     }

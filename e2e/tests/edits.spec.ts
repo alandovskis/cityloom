@@ -86,7 +86,6 @@ const switchTo = async (page: Page, query: string, name: string) => {
 };
 
 const provenanceState = async (page: Page) => {
-  await page.locator("#t-provenance").click();
   return (await page.locator("#tb-state").textContent())?.trim();
 };
 
@@ -138,7 +137,6 @@ test("the edit is there from another area of the same tile", async ({ page }) =>
     await page.goto("/" + href);
     if (((await page.locator("#tb-street").textContent()) ?? "").trim() !== title) continue;
     seen.push(await firstPieceWidth(page));
-    await page.locator("#t-provenance").click();
     const edited = (await page.locator("#tb-state").textContent()) === "Edited";
     if (edited && seen[seen.length - 1] === after) {
       found = href;

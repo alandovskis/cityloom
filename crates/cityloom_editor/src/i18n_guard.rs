@@ -604,8 +604,6 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("p-checks", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
     ("t-changes", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
     ("p-changes", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
-    ("t-provenance", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
-    ("p-provenance", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
     ("notes-slot", "the id of the element the street page's notes' tray is mounted in"),
     ("zone-entry-slot", "the id of the element the Street level's button to the zone commands is mounted in"),
     ("overflow-y", "a CSS property the street drawing reads to tell whether its column scrolls"),

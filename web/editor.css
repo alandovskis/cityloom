@@ -2372,18 +2372,30 @@ svg pattern circle {
 .checks li {
   grid-template-columns: 22px minmax(0, 1fr);
 }
+/* The title block: the street's or junction's name, its figures, then where it came from (whether it was edited since
+   it was imported, and the OpenStreetMap ways or nodes), each a label over its value, in one row while there is room. */
 .title-block {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 4px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 22px;
   padding: 12px 20px 14px;
   border-top: 1px solid var(--rule);
 }
-.tb-src {
+.title-block .tb-cell:first-child {
+  flex: 1 1 10em;
+  min-width: 0;
+}
+.title-block .tb-src {
+  flex: 1 1 14em;
+  min-width: 0;
+}
+.title-block .tb-src b {
+  font-size: 14px;
   font-weight: 400;
   overflow-wrap: anywhere;
 }
-/* The Provenance tab: a label over its value, as in the title block. */
+/* The junction's Provenance tab: a label over its value. */
 dl.prov {
   margin: 0;
   padding: 0 8px;
