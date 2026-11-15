@@ -107,29 +107,74 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
         open
     });
 
+    // A merge button names the zone it merges with ("With Zone 1", read as "Merge with Zone 1"); with none on that side
+    // it says which side, stays unavailable, and a line under it says why.
+    let neighbour = move |next: bool| {
+        let v = w.view();
+        let at = if next { Some(v.zones.selected + 1) } else { v.zones.selected.checked_sub(1) };
+        at.and_then(|i| v.zones.zones.get(i)).map(|z| say(&w.i18n(), w.units(), &z.label_mid))
+    };
     let merge_button = move |next: bool| {
         let (id, why_id, key) = if next {
             ("zone-merge-next", "zone-merge-next-why", "st-zone-merge-next")
         } else {
             ("zone-merge-prev", "zone-merge-prev-why", "st-zone-merge-prev")
         };
+        let with = move |key: &'static str| neighbour(next).filter(|_| !no_neighbour(next)).map(|zone| w.i18n().tr(key, &Args::new().str("zone", zone)));
         view! {
             <button
                 type="button"
+                class="btn"
                 id=id
+                aria-label=move || with("st-zone-merge-with")
                 aria-disabled=move || no_neighbour(next).then_some("true")
                 aria-describedby=move || no_neighbour(next).then_some(why_id)
                 on:click=move |_| {
                     if !no_neighbour(next) && w.begin_merge(next) && w.pending_merge().is_none() {
-                        // Merged at once: the button may be gone (one zone left), so the strip keeps the focus.
                         focus_later("zone-strip");
                     }
                 }
             >
-                {move || text(key)}
+                {move || with("st-zone-with").unwrap_or_else(|| text(key))}
             </button>
-            <span id=why_id class="sr-only">{move || no_neighbour(next).then(no_neighbour_why)}</span>
         }
+    };
+    let merge_why = move |next: bool| {
+        let why_id = if next { "zone-merge-next-why" } else { "zone-merge-prev-why" };
+        view! { <span id=why_id class="zone-why">{move || no_neighbour(next).then(no_neighbour_why)}</span> }
+    };
+    // Where the zone lies, and a strip of the zones with this one filled (the line says it; the strip is only seen).
+    let sub = move || {
+        let v = w.view();
+        let (units, i18n) = (w.units(), w.i18n());
+        let locale = i18n.locale();
+        let z = &v.zones;
+        let Some(zone) = z.zones.get(z.selected) else { return String::new() };
+        if !z.several {
+            return i18n.tr("st-zone-sub-whole", &Args::new().str("length", units.length_in(z.length_mm, locale)));
+        }
+        let args = Args::new()
+            .str("from", units.length_in(zone.from_mm, locale))
+            .str("to", units.length_in(zone.to_mm, locale))
+            .str("length", units.length_in(zone.to_mm - zone.from_mm, locale))
+            .num("at", z.selected as i64 + 1)
+            .num("total", z.zones.len() as i64);
+        i18n.tr("st-zone-sub", &args)
+    };
+    let name_shown = move || {
+        let v = w.view();
+        v.zones.zones.get(v.zones.selected).map(|z| say(&w.i18n(), w.units(), &z.label)).unwrap_or_default()
+    };
+    let mini = move || {
+        let v = w.view();
+        v.zones
+            .zones
+            .iter()
+            .enumerate()
+            .map(|(i, z)| {
+                view! { <span class=(i == v.zones.selected).then_some("on") style=format!("flex-grow: {}", (z.to_mm - z.from_mm).max(1))></span> }
+            })
+            .collect_view()
     };
     let keep_button = move |id: &'static str, keep: Keep| {
         let name = move || {
@@ -145,80 +190,31 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
         view! { <button type="button" id=id on:click=move |_| { w.finish_merge(keep); }>{name}</button> }
     };
 
+    let row = |label: AnyView, body: AnyView| view! { <div class="zone-row">{label}<div class="zone-c">{body}</div></div> };
+    let span_label = move |key: &'static str| view! { <span class="zone-l">{move || text(key)}</span> }.into_any();
+    let field_label = move |id: &'static str, key: &'static str| view! { <label for=id class="zone-l">{move || text(key)}</label> }.into_any();
+
     view! {
-        <section class="insp-sec" aria-labelledby="h-zone-tools">
-        <h3 class="note-h" id="h-zone-tools">{move || text("st-zone-tools")}</h3>
-        <div class="zone-tools" role="group" aria-label=move || text("st-zone-tools")>
-            <div class="zone-tool">
-                <label for="zone-split-at">{move || unit_text("st-zone-split-at")}</label>
-                <input
-                    id="zone-split-at"
-                    type="text"
-                    inputmode="decimal"
-                    autocomplete="off"
-                    on:keydown=move |e| {
-                        if e.key() == "Enter" {
-                            e.prevent_default();
-                            let input = event_target::<HtmlInputElement>(&e);
-                            if commit_split(w, &input.value()) {
-                                input.set_value("");
-                            }
-                        }
-                    }
-                />
-                <button
-                    type="button"
-                    id="zone-split"
-                    aria-disabled=move || split_why().map(|_| "true")
-                    aria-describedby=move || split_why().map(|_| "zone-split-why")
-                    on:click=move |_| {
-                        let typed = document()
-                            .get_element_by_id("zone-split-at")
-                            .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                            .map(|i| i.value())
-                            .unwrap_or_default();
-                        commit_split(w, &typed);
-                    }
-                >
-                    {move || text("st-zone-split")}
-                </button>
-                {move || split_why().map(|why| view! { <p id="zone-split-why" class="zone-why">{why}</p> })}
+        <section class="zone-pane" aria-labelledby="h-zone-tools">
+        <div class="insp-head">
+            <span class="zone-badge" aria-hidden="true">{move || selected() + 1}</span>
+            <div>
+                <h2 class="insp-name">{name_shown}</h2>
+                <p class="insp-sub">{sub}</p>
             </div>
-            {move || {
-                (several() && selected() > 0)
-                    .then(|| {
-                        view! {
-                            <div class="zone-tool">
-                                <label for="zone-start">{move || unit_text("st-zone-start")}</label>
-                                <input
-                                    id="zone-start"
-                                    type="text"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    prop:value=start_value
-                                    on:keydown=move |e| {
-                                        if e.key() == "Enter" {
-                                            e.prevent_default();
-                                            let input = event_target::<HtmlInputElement>(&e);
-                                            if !commit_start(w, &input.value()) {
-                                                input.set_value(&start_value());
-                                            }
-                                        }
-                                    }
-                                />
-                            </div>
-                        }
-                    })
-            }}
-            {move || several().then(|| view! { <div class="zone-tool">{merge_button(false)} {merge_button(true)}</div> })}
+        </div>
+        <div class="zone-mini" aria-hidden="true">{mini}</div>
+        <h3 class="sr-only" id="h-zone-tools">{move || text("st-zone-tools")}</h3>
+        <div class="zone-tools" role="group" aria-label=move || text("st-zone-tools")>
             {move || {
                 w.pending_merge()
                     .map(|_| {
                         view! {
-                            <div class="zone-tool zone-merge-choice" role="group" aria-label=move || text("st-zone-merge-choice")>
+                            <div class="zone-merge-choice" role="group" aria-label=move || text("st-zone-merge-choice")>
+                                <p class="zone-ask">{move || text("st-zone-merge-choice")}</p>
                                 {keep_button("zone-keep-this", Keep::Selected)}
                                 {keep_button("zone-keep-other", Keep::Neighbour)}
-                                <button type="button" id="zone-keep-cancel" on:click=move |_| w.cancel_merge()>
+                                <button type="button" class="btn" id="zone-keep-cancel" on:click=move |_| w.cancel_merge()>
                                     {move || text("st-zone-keep-cancel")}
                                 </button>
                             </div>
@@ -228,13 +224,18 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
             {move || {
                 several()
                     .then(|| {
-                        view! {
-                            <div class="zone-tool">
-                                <label for="zone-name">{move || text("st-zone-name")}</label>
+                        row(
+                            field_label("zone-name", "st-zone-row-name"),
+                            view! {
                                 <input
                                     id="zone-name"
                                     type="text"
                                     autocomplete="off"
+                                    aria-label=move || text("st-zone-name")
+                                    placeholder=move || {
+                                        let v = w.view();
+                                        v.zones.zones.get(v.zones.selected).map(|z| say(&w.i18n(), w.units(), &z.label)).unwrap_or_default()
+                                    }
                                     prop:value=name_value
                                     on:keydown=move |e| {
                                         if e.key() == "Enter" {
@@ -244,19 +245,129 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                                     }
                                     on:blur=move |e| apply_name(event_target::<HtmlInputElement>(&e))
                                 />
-                            </div>
-                        }
+                            }
+                            .into_any(),
+                        )
                     })
             }}
             {move || {
-                own()
+                (several() && selected() > 0)
                     .then(|| {
-                        view! {
-                            <div class="zone-tool">
-                                <button type="button" id="zone-reset" on:click=move |_| { w.reset_zone(); }>{move || text("st-zone-reset")}</button>
-                                <button type="button" id="zone-use" on:click=move |_| { w.use_for_street(); }>{move || text("st-zone-use")}</button>
-                            </div>
-                        }
+                        row(
+                            field_label("zone-start", "st-zone-row-start"),
+                            view! {
+                                <span class="zone-field">
+                                    <input
+                                        id="zone-start"
+                                        type="text"
+                                        inputmode="decimal"
+                                        autocomplete="off"
+                                        aria-label=move || unit_text("st-zone-start")
+                                        prop:value=start_value
+                                        on:keydown=move |e| {
+                                            if e.key() == "Enter" {
+                                                e.prevent_default();
+                                                let input = event_target::<HtmlInputElement>(&e);
+                                                if !commit_start(w, &input.value()) {
+                                                    input.set_value(&start_value());
+                                                }
+                                            }
+                                        }
+                                    />
+                                    <span class="unit-tag" aria-hidden="true">{move || w.units().word()}</span>
+                                </span>
+                            }
+                            .into_any(),
+                        )
+                    })
+            }}
+            {move || {
+                several()
+                    .then(|| {
+                        row(
+                            span_label("st-zone-row-section"),
+                            view! {
+                                <span class=move || if own() { "zone-chip own" } else { "zone-chip" }>
+                                    {move || text(if own() { "st-zone-own" } else { "st-zone-same" })}
+                                </span>
+                                {move || {
+                                    own()
+                                        .then(|| {
+                                            view! {
+                                                <div class="zone-btns">
+                                                    <button type="button" class="btn" id="zone-reset" on:click=move |_| { w.reset_zone(); }>
+                                                        {move || text("st-zone-reset")}
+                                                    </button>
+                                                    <button type="button" class="btn" id="zone-use" on:click=move |_| { w.use_for_street(); }>
+                                                        {move || text("st-zone-use")}
+                                                    </button>
+                                                </div>
+                                            }
+                                        })
+                                }}
+                            }
+                            .into_any(),
+                        )
+                    })
+            }}
+            {row(
+                field_label("zone-split-at", "st-zone-row-split"),
+                view! {
+                    <div class="zone-btns">
+                        <span class="zone-field">
+                            <input
+                                id="zone-split-at"
+                                type="text"
+                                inputmode="decimal"
+                                autocomplete="off"
+                                aria-label=move || unit_text("st-zone-split-at")
+                                on:keydown=move |e| {
+                                    if e.key() == "Enter" {
+                                        e.prevent_default();
+                                        let input = event_target::<HtmlInputElement>(&e);
+                                        if commit_split(w, &input.value()) {
+                                            input.set_value("");
+                                        }
+                                    }
+                                }
+                            />
+                            <span class="unit-tag" aria-hidden="true">{move || w.units().word()}</span>
+                        </span>
+                        <button
+                            type="button"
+                            class=move || if several() { "btn" } else { "btn primary" }
+                            id="zone-split"
+                            aria-disabled=move || split_why().map(|_| "true")
+                            aria-describedby=move || split_why().map(|_| "zone-split-why")
+                            on:click=move |_| {
+                                let typed = document()
+                                    .get_element_by_id("zone-split-at")
+                                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                                    .map(|i| i.value())
+                                    .unwrap_or_default();
+                                commit_split(w, &typed);
+                            }
+                        >
+                            {move || text("st-zone-split")}
+                        </button>
+                    </div>
+                    {move || split_why().map(|why| view! { <p id="zone-split-why" class="zone-why">{why}</p> })}
+                    {move || (!several() && split_why().is_none()).then(|| view! { <p class="zone-hint">{move || text("st-zone-split-hint")}</p> })}
+                }
+                .into_any(),
+            )}
+            {move || {
+                several()
+                    .then(|| {
+                        row(
+                            span_label("st-zone-row-merge"),
+                            view! {
+                                <div class="zone-btns">{merge_button(false)} {merge_button(true)}</div>
+                                {merge_why(false)}
+                                {merge_why(true)}
+                            }
+                            .into_any(),
+                        )
                     })
             }}
         </div>
