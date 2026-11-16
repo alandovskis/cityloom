@@ -1935,11 +1935,6 @@ fn plain_panel(s: &Rc<JunctionVm>) -> String {
 }
 
 /// The panel at the signal plan's level (`JunctionVm::show_plan`), where the plan's own tests look.
-fn plan_panel(s: &Rc<JunctionVm>) -> String {
-    s.show_plan();
-    panel(s)
-}
-
 fn plan_plain(s: &Rc<JunctionVm>) -> String {
     s.show_plan();
     plain_panel(s)
