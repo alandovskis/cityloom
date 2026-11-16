@@ -771,7 +771,7 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 
 #[test]
 fn the_details_are_opened_through_the_shell_s_own_toggle_only_where_they_are_closed() {
-    use crate::map::view::areas_view::reveal_clicks;
+    use crate::map::view::details::reveal_clicks;
     assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
     assert_eq!(reveal_clicks(Some("false")), ["notes-toggle"]);
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");

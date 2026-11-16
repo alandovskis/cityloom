@@ -154,6 +154,22 @@ test.describe("the city map", () => {
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
   });
 
+  test("a press on a place opens the details where they were closed, and says the place over the notes' own words", async ({
+    page,
+  }) => {
+    await page.locator("#notes-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
+    await mapStill(page); // the map takes the room the details left
+    const spot = await junctionSpot(page);
+    await page.mouse.move(spot.x, spot.y);
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "open");
+    await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#map-place")).toBeVisible();
+    await expect(page.locator("#map-open-place")).toBeVisible();
+    await expect(live(page)).toHaveText(/\. Press it again, or Open, to edit it\.$/);
+  });
+
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
     const fitted = await zoom(page);
     await page.locator("#zoom-in").click();

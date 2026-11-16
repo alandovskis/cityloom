@@ -58,33 +58,11 @@ fn focus_list(vm: Vm) {
     }
 }
 
-/// The shell's own control to press so the details are shown, given the notes toggle's `aria-expanded`: the toggle,
-/// if they are closed. The map slice does not reach the shell's view-model; it presses what a person would.
-#[cfg(any(target_arch = "wasm32", test))]
-pub(crate) fn reveal_clicks(panel_expanded: Option<&str>) -> Vec<&'static str> {
-    if panel_expanded == Some("false") { vec!["notes-toggle"] } else { Vec::new() }
-}
-
 /// Shows the details, where an outline is finished, cancelled and named (the area rules' level, which an outline
 /// being drawn always shows), wherever the person had gone: a closed outline takes no key from the map, so its form
 /// must be reachable.
 fn reveal(vm: Vm) {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use leptos::wasm_bindgen::JsCast;
-
-        let doc = leptos::prelude::document();
-        let attr = |id: &str, name: &str| doc.get_element_by_id(id).and_then(|el| el.get_attribute(name));
-        for id in reveal_clicks(attr("notes-toggle", "aria-expanded").as_deref()) {
-            if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
-                el.click();
-                // The shell said the panel was shown, over what the outline had just said: say that again.
-                vm.with(|v| v.areas().repeat_last());
-            }
-        }
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = vm;
+    super::details::reveal(vm);
 }
 
 /// The panel: the list, or the outline being drawn, or the closed outline's rule and name.

@@ -6,7 +6,6 @@
 //! Every outline that reaches the store has passed `valid`: a new or redrawn one when it is closed (the drawing
 //! machine checks it), a dragged one when its corner is let go (checked here). The store does not check.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
@@ -50,8 +49,6 @@ pub struct AreasVm {
     deleted: ArcRwSignal<Vec<Restriction>>,
     /// What is typed into the selected area's name field and not yet kept: the area's id and the text.
     name_draft: ArcRwSignal<Option<(String, String)>>,
-    /// The last thing announced, for `repeat_last`.
-    last_said: RefCell<Option<String>>,
 }
 
 impl AreasVm {
@@ -72,7 +69,6 @@ impl AreasVm {
             rule: ArcRwSignal::new(Rule::CarFree),
             deleted: ArcRwSignal::new(Vec::new()),
             name_draft: ArcRwSignal::new(None),
-            last_said: RefCell::new(None),
         })
     }
 
@@ -98,15 +94,6 @@ impl AreasVm {
 
     fn speak(&self, text: String) {
         self.ports.announcer.say(&text);
-        *self.last_said.borrow_mut() = Some(text);
-    }
-
-    /// Says the last announcement again. Showing the panel presses the shell's own toggle, which announces itself
-    /// and so speaks over what was just said; the view says that again after it.
-    pub fn repeat_last(&self) {
-        if let Some(text) = self.last_said.borrow().clone() {
-            self.ports.announcer.say(&text);
-        }
     }
 
     fn tell_about(&self, key: &str, r: &Restriction) {
@@ -723,18 +710,6 @@ mod tests {
         assert!(!vm.close());
         assert_eq!(said.take(), ["The outline crosses itself. Move or remove a corner."]);
         assert!(matches!(vm.draw_now(), Draw::Drawing(c) if c.len() == 4));
-    }
-
-    #[test]
-    fn the_last_thing_said_can_be_said_again_for_when_the_shell_spoke_over_it() {
-        let (vm, _, said, _) = rig();
-        vm.repeat_last();
-        assert!(said.take().is_empty(), "nothing was said yet");
-        draw_square(&vm);
-        let closed = "The outline is closed. Choose its rule and name, then save it.";
-        assert_eq!(said.take().last().unwrap(), closed);
-        vm.repeat_last();
-        assert_eq!(said.take(), [closed]);
     }
 
     #[test]

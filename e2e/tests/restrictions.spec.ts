@@ -112,7 +112,12 @@ const openPanel = async (page: Page) => {
   if ((await page.locator("#notes-toggle").getAttribute("aria-expanded")) === "false") {
     await page.locator("#notes-toggle").click();
   }
-  if (!(await page.locator("#map-areas").isVisible())) await page.locator("#map-go-areas").click();
+  if (!(await page.locator("#map-areas").isVisible())) {
+    await page.locator("#map-go-areas").click();
+    // the row moves the focus to the path's current step on the next frame: wait for it, so a focus the test
+    // gives a control afterwards is not taken from it
+    await expect(page.locator("#map-path-current")).toBeFocused();
+  }
   await expect(page.locator("#map-areas")).toBeVisible();
 };
 

@@ -189,6 +189,19 @@ pub fn junction_href(uid: u32, project: Option<&str>) -> String {
 
 // ---- what the view binds to ----------------------------------------------------------------
 
+/// An announcer that keeps the last thing said through it.
+struct LastSaid {
+    inner: Rc<dyn crate::shared::ports::Announcer>,
+    last: RefCell<Option<String>>,
+}
+
+impl crate::shared::ports::Announcer for LastSaid {
+    fn say(&self, text: &str) {
+        *self.last.borrow_mut() = Some(text.to_string());
+        self.inner.say(text);
+    }
+}
+
 /// What the map's details show, one level at a time under a path from the city.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MapLevel {
@@ -357,6 +370,8 @@ pub struct MapVm {
     /// The level of the details chosen: the city, the place a press shows (a second press on it, or Open, opens
     /// it), the area rules or a network check. An outline being drawn shows the area rules whatever this is.
     shown: ArcRwSignal<MapLevel>,
+    /// The announcer the map speaks through, which keeps what it said last (`say_again`).
+    said: Rc<LastSaid>,
     /// The last change made to the selected streets, which can be taken back as one step while this page is open.
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
@@ -389,6 +404,9 @@ impl MapVm {
     }
 
     fn over(store: CityStore, ports: Ports, i18n: Rc<I18n>) -> Rc<MapVm> {
+        // Everything the map, its selection and its area rules say goes through one announcer that keeps the last.
+        let said = Rc::new(LastSaid { inner: ports.announcer.clone(), last: RefCell::new(None) });
+        let ports = Ports { announcer: said.clone(), ..ports };
         let has_roads = store.has_network();
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
@@ -419,6 +437,7 @@ impl MapVm {
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
             shown: ArcRwSignal::new(MapLevel::City),
+            said,
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
             area_findings: RefCell::new(None),
@@ -1101,6 +1120,14 @@ impl MapVm {
     }
 
     // ---- the place a press shows ----
+
+    /// Says again what the map said last. Showing the details presses the shell's own toggle, which announces
+    /// itself and so speaks over what the press had just said; the view says that again after it.
+    pub fn say_again(&self) {
+        if let Some(text) = self.said.last.borrow().clone() {
+            self.said.inner.say(&text);
+        }
+    }
 
     /// The place shown in the details, watched.
     pub fn picked(&self) -> Option<String> {
@@ -2489,6 +2516,29 @@ mod tests {
         vm.pick(Some("s-1"));
         vm.open_picked();
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "Open does what a second press does");
+    }
+
+    #[test]
+    fn the_last_thing_the_map_said_can_be_said_again_for_when_the_shell_spoke_over_it() {
+        let (vm, mapper, _, said) = area_vm_said();
+        mapper.say(COVERING);
+        said.take();
+        vm.say_again();
+        assert!(said.take().is_empty(), "nothing was said yet");
+        mapper.say(press("s-1"));
+        let picked = said.take();
+        vm.say_again();
+        assert_eq!(said.take(), picked, "the place shown");
+        vm.toggle_selected(Some("s-1"));
+        let selected = said.take();
+        assert_eq!(selected.len(), 1, "{selected:?}");
+        vm.say_again();
+        assert_eq!(said.take(), selected, "the selection's own words, through the same announcer");
+        vm.show_areas();
+        vm.areas().start();
+        let drawing = said.take();
+        vm.say_again();
+        assert_eq!(said.take().last(), drawing.last(), "and the area rules'");
     }
 
     #[test]

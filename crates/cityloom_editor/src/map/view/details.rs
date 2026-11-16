@@ -25,6 +25,33 @@ pub(crate) fn focus_current() {
     });
 }
 
+/// The shell's own control to press so the details are shown, given the notes toggle's `aria-expanded`: the toggle,
+/// if they are closed. The map slice does not reach the shell's view-model; it presses what a person would.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) fn reveal_clicks(panel_expanded: Option<&str>) -> Vec<&'static str> {
+    if panel_expanded == Some("false") { vec!["notes-toggle"] } else { Vec::new() }
+}
+
+/// Shows the details if they are closed, and says again what the map had just said, which the shell's toggle spoke
+/// over: a press that shows a place, an area or the selection there is otherwise shown in a closed panel.
+pub(crate) fn reveal(vm: Bound<MapVm>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use leptos::wasm_bindgen::JsCast;
+
+        let doc = document();
+        let expanded = doc.get_element_by_id("notes-toggle").and_then(|el| el.get_attribute("aria-expanded"));
+        for id in reveal_clicks(expanded.as_deref()) {
+            if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+                el.click();
+                vm.with(|v| v.say_again());
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = vm;
+}
+
 /// The page's element of each level, and whether it is the level `level`.
 fn levels(level: &MapLevel) -> [(&'static str, bool); 5] {
     [
@@ -42,7 +69,7 @@ fn levels(level: &MapLevel) -> [(&'static str, bool); 5] {
 pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     #[cfg(target_arch = "wasm32")]
-    Effect::new(move |_| {
+    Effect::new(move |before: Option<MapLevel>| {
         let level = vm.with(|v| v.level());
         let doc = document();
         for (id, shown) in levels(&level) {
@@ -50,6 +77,12 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
                 let _ = if shown { el.remove_attribute("hidden") } else { el.set_attribute("hidden", "") };
             }
         }
+        // A level other than the city, newly chosen (a press on the map shows a place, an area or the selection),
+        // is shown even where the details were closed.
+        if before.is_some_and(|b| b != level) && level != MapLevel::City {
+            reveal(vm);
+        }
+        level
     });
     #[cfg(not(target_arch = "wasm32"))]
     let _ = levels;
