@@ -93,7 +93,7 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
             MapLevel::City => None,
             MapLevel::Place(_) => vm.with(|v| v.picked_row().map(|row| v.say(&row.name))),
             MapLevel::Areas => Some(vm.with(|v| v.word("restriction-panel"))),
-            MapLevel::Check(_) => vm.with(|v| v.shown_check().map(|c| c.label)),
+            MapLevel::Check(id) => Some(vm.with(|v| v.check_label(&id))),
             MapLevel::Selection => Some(vm.with(|v| v.word("sel-heading"))),
         };
         match here {

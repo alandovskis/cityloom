@@ -514,35 +514,37 @@ impl MapVm {
 
     /// The junctions, in the order of their numbers, as rows to open.
     pub fn junction_rows(&self) -> Vec<PlaceRow> {
-        let v = self.view();
-        Self::junctions(&v)
-            .into_iter()
-            .map(|n| PlaceRow {
-                href: junction_href(n.uid, self.project().as_deref()),
-                hot: format!("j-{}", n.uid),
-                name: n.name.clone(),
-                sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
-                tag: Self::tag(n.ok, n.edited),
-            })
-            .collect()
+        let (v, project) = (self.view(), self.project());
+        Self::junctions(&v).into_iter().map(|n| Self::junction_row(n, project.as_deref())).collect()
+    }
+
+    fn junction_row(n: &NodeView, project: Option<&str>) -> PlaceRow {
+        PlaceRow {
+            href: junction_href(n.uid, project),
+            hot: format!("j-{}", n.uid),
+            name: n.name.clone(),
+            sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
+            tag: Self::tag(n.ok, n.edited),
+        }
     }
 
     /// The streets, as rows to open. The width in the small print is written in the units and with the
     /// decimal mark of the page now; the rows are made again when either changes.
     pub fn street_rows(&self) -> Vec<PlaceRow> {
-        let (v, units, locale) = (self.view(), self.units(), self.i18n.locale());
-        v.edges
-            .iter()
-            .map(|e| PlaceRow {
-                href: street_href(e.uid, self.project().as_deref()),
-                hot: format!("s-{}", e.uid),
-                name: e.called.clone(),
-                sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
-                    .with("ends", Arg::Said(Box::new(e.ends.clone())))
-                    .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
-                tag: Self::tag(e.ok, e.edited),
-            })
-            .collect()
+        let (v, project) = (self.view(), self.project());
+        v.edges.iter().map(|e| self.street_row(e, project.as_deref())).collect()
+    }
+
+    fn street_row(&self, e: &EdgeView, project: Option<&str>) -> PlaceRow {
+        PlaceRow {
+            href: street_href(e.uid, project),
+            hot: format!("s-{}", e.uid),
+            name: e.called.clone(),
+            sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
+                .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                .with("width", Arg::Text(self.units().length_in(e.row_mm, self.i18n.locale()))),
+            tag: Self::tag(e.ok, e.edited),
+        }
     }
 
     // ---- search ----
@@ -872,7 +874,7 @@ impl MapVm {
         NetworkCheck {
             id: rule.id(),
             source: rule.rule(),
-            label: self.word(&format!("net-rule-{}", rule.id())),
+            label: self.check_label(rule.id()),
             count: found.len(),
             count_text: self.count_text(found.len()),
             items: found.into_iter().take(NETWORK_SHOWN).map(|f| self.network_item(f)).collect(),
@@ -1171,10 +1173,20 @@ impl MapVm {
         }
     }
 
+    /// The name of the network check `id`, as its row and its level give it.
+    pub fn check_label(&self, id: &str) -> String {
+        self.word(&format!("net-rule-{id}"))
+    }
+
     /// The network check shown, with its findings. Watched.
     pub fn shown_check(&self) -> Option<NetworkCheck> {
         let MapLevel::Check(id) = self.shown.get() else { return None };
-        self.network_rules().into_iter().find(|c| c.id == id)
+        let rule = Check::ALL.into_iter().find(|c| c.id() == id)?;
+        if self.has_no_places() {
+            return None;
+        }
+        let report = self.network_report();
+        Some(self.network_check(rule, report.findings.iter().filter(|f| f.rule == rule).collect()))
     }
 
     /// Whether the path may lead away from the area rules: not while an outline is drawn or named, which is finished,
@@ -1186,8 +1198,13 @@ impl MapVm {
     /// The row of the place shown: its name, small print, state and the address of its editor.
     pub fn picked_row(&self) -> Option<PlaceRow> {
         let hot = self.picked()?;
-        let rows = if hot.starts_with("s-") { self.street_rows() } else { self.junction_rows() };
-        rows.into_iter().find(|r| r.hot == hot)
+        let uid = hot.get(2..)?.parse::<u32>().ok()?;
+        let (v, project) = (self.view(), self.project());
+        match hot.as_bytes().first() {
+            Some(b's') => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref())),
+            Some(b'j') => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref())),
+            _ => None,
+        }
     }
 
     /// The checks the place shown fails, worded as the map's notes word them.
@@ -2546,6 +2563,26 @@ mod tests {
         let drawing = said.take();
         vm.say_again();
         assert_eq!(said.take().last(), drawing.last(), "and the area rules'");
+    }
+
+    #[test]
+    fn the_place_shown_and_the_check_shown_are_the_rows_and_the_check_their_lists_give() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        for row in vm.street_rows().into_iter().chain(vm.junction_rows()) {
+            vm.pick(Some(&row.hot));
+            assert_eq!(vm.picked_row(), Some(row));
+        }
+        let plain = vm.view().nodes.iter().find(|n| !n.junction).map(|n| format!("j-{}", n.uid));
+        if let Some(plain) = plain {
+            vm.pick(Some(&plain));
+            assert_eq!(vm.picked_row(), None, "a node that is no junction is no place");
+        }
+        for check in vm.network_rules() {
+            vm.show_check(check.id);
+            assert_eq!(vm.check_label(check.id), check.label);
+            assert_eq!(vm.shown_check(), Some(check));
+        }
     }
 
     #[test]
