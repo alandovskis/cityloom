@@ -546,7 +546,8 @@ test.describe("area restrictions", () => {
     // the next press is the map's again: a place pressed opens
     await recordNavigations(page);
     const spot = await junctionSpot(page, 0, await areaCorners(page));
-    await page.mouse.click(spot.x, spot.y);
+    await page.mouse.click(spot.x, spot.y); // shows the place
+    await page.locator("#map-open-place").click(); // and Open opens it
     await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${spot.junction}&project=first`]);
   });
 
@@ -579,7 +580,8 @@ test.describe("area restrictions", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "false");
     await expect.poll(() => drawnAt(page, "areas-vertex", j)).toBe(0);
-    await page.mouse.click(j.x, j.y);
+    await page.mouse.click(j.x, j.y); // shows the junction
+    await page.locator("#map-open-place").click(); // and Open opens it
     await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${j.junction}&project=first`]);
   });
 

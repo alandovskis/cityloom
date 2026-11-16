@@ -1796,3 +1796,105 @@ details.src ul {
   display: block;
   color: var(--ink-2);
 }
+
+/* The map's details one level at a time (`map/view/details.rs`): the city's tabs and notes, or the place a press shows.
+   A level lays out as its contents did before it was wrapped. */
+.map-level {
+  display: contents;
+}
+/* The path over a panel's levels: the street, junction and map pages each have one. */
+.panel-path {
+  margin: 12px 12px 0;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.panel-path ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.panel-path li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+/* The separator is drawn, not said: the list already tells a screen reader the steps apart. */
+.panel-path li + li::before {
+  content: "›" / "";
+  color: var(--ink-3);
+}
+.path-step {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.path-step:hover {
+  background: var(--fill);
+}
+.path-here {
+  padding: 2px 6px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.path-step:focus-visible,
+.path-here:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (any-pointer: coarse) {
+  .path-step {
+    min-height: 44px;
+  }
+}
+/* The place a press on the map shows: its name heads the level, as a street's or a junction's does on its page. */
+#map-place .insp-head {
+  padding: 0;
+}
+#map-place .insp-name {
+  display: block;
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+#map-place .insp-sub {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.map-level[hidden] {
+  display: none;
+}
+.map-path .panel-path {
+  padding: 0 4px;
+}
+.map-place-failing {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--warn);
+}
+.map-place-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.map-place-actions .btn {
+  justify-content: center;
+}

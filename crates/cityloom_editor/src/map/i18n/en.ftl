@@ -78,6 +78,15 @@ map-changed = Changed.
 map-opens-junction = Opens the junction plan.
 map-opens-street = Opens the street cross-section.
 map-not-editable = Not all of this place is in view. Move the map so all of it shows, then try again.
+map-picked = { $name }. Press it again, or Open, to edit it.
+map-path-label = What the details are of
+map-path-city = City
+map-open-street = Open in the street editor
+map-open-junction = Open in the junction editor
+map-add-selection = Add to the selection
+map-drop-selection = Remove from the selection
+map-place-failing = Checks that fail
+map-place-ok = Every check passes.
 
 ## The search
 map-search-label = Search places

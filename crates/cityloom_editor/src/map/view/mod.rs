@@ -2,6 +2,7 @@
 //! says and send it what the person does; nothing here decides anything.
 
 pub mod areas_view;
+pub mod details;
 pub mod goal_view;
 pub mod home;
 pub mod network_view;

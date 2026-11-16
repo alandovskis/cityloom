@@ -339,6 +339,8 @@ pub struct MapVm {
     /// The change picked for the selected streets, and how far it has got.
     corridor_op: ArcRwSignal<Op>,
     corridor: ArcRwSignal<Stage>,
+    /// The place a press shows in the details (`s-<uid>` or `j-<uid>`); a second press on it, or Open, opens it.
+    picked: ArcRwSignal<Option<String>>,
     /// The last change made to the selected streets, which can be taken back as one step while this page is open.
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
@@ -397,6 +399,7 @@ impl MapVm {
             selection,
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
+            picked: ArcRwSignal::new(None),
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
             report_running: Cell::new(false),
@@ -1027,14 +1030,24 @@ impl MapVm {
                 Draw::Naming(_) => {}
                 Draw::Idle => {
                     let place = hot.as_deref().filter(|h| self.can_edit(h));
-                    match place.and_then(|hot| href_of(hot, self.project().as_deref())) {
-                        Some(href) => self.ports.navigator.go(&href),
+                    match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
+                        // A first press shows the place in the details; a second on it opens it.
+                        Some((hot, href)) => {
+                            if self.picked.get_untracked().as_deref() == Some(hot) {
+                                self.ports.navigator.go(&href);
+                            } else {
+                                self.show_place(hot);
+                            }
+                        }
                         None => {
                             // A refused press on a place (muted, outside every outline) is not a press on nothing: it
                             // lets no selected area go.
                             let refused = hot.is_some() && place.is_none();
                             if refused && area.is_none() {
                                 return self.say_not_editable();
+                            }
+                            if hot.is_none() {
+                                self.pick(None);
                             }
                             let before = self.areas.selected_id_now();
                             self.areas.select(area.as_deref());
@@ -1059,6 +1072,51 @@ impl MapVm {
                 self.sync_editable();
             }
         }
+    }
+
+    // ---- the place a press shows ----
+
+    /// The place shown in the details, watched.
+    pub fn picked(&self) -> Option<String> {
+        self.picked.get()
+    }
+
+    /// Shows a place in the details, or none (the city's level).
+    pub fn pick(&self, hot: Option<&str>) {
+        self.picked.set(hot.map(String::from));
+    }
+
+    /// The row of the place shown: its name, small print, state and the address of its editor.
+    pub fn picked_row(&self) -> Option<PlaceRow> {
+        let hot = self.picked.get()?;
+        let rows = if hot.starts_with("s-") { self.street_rows() } else { self.junction_rows() };
+        rows.into_iter().find(|r| r.hot == hot)
+    }
+
+    /// The checks the place shown fails, worded as the map's notes word them.
+    pub fn picked_failing(&self) -> Vec<Said> {
+        let Some(hot) = self.picked.get() else { return Vec::new() };
+        let v = self.view();
+        let uid = hot.get(2..).and_then(|u| u.parse::<u32>().ok());
+        match (hot.as_bytes().first(), uid) {
+            (Some(b's'), Some(uid)) => v.edges.iter().find(|e| e.uid == uid).map(|e| e.failing.clone()).unwrap_or_default(),
+            (Some(b'j'), Some(uid)) => v.nodes.iter().find(|n| n.uid == uid).map(|n| n.failing.clone()).unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Opens the place shown in its editor, as a second press on it does.
+    pub fn open_picked(&self) {
+        if let Some(href) = self.picked.get_untracked().and_then(|h| href_of(&h, self.project().as_deref())) {
+            self.ports.navigator.go(&href);
+        }
+    }
+
+    /// A first press on a place: show it, and say how to open it.
+    fn show_place(&self, hot: &str) {
+        self.pick(Some(hot));
+        let name = self.picked_row().map(|r| self.say_now(&r.name)).unwrap_or_default();
+        self.ports.announcer.say(&self.i18n.tr_now("map-picked", &Args::new().str("name", name)));
     }
 
     fn say_not_editable(&self) {
@@ -2138,6 +2196,8 @@ mod tests {
         vm.attach();
         mapper.say(MapEvent::Ready);
         let hot = format!("s-{}", vm.view().edges[0].uid);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press(&hot));
         mapper.say(press(&hot));
         assert_eq!(navigator.take(), vec![format!("street.html?street={}&project=p1", vm.view().edges[0].uid)]);
     }
@@ -2146,14 +2206,18 @@ mod tests {
     fn a_press_on_a_place_outside_the_open_view_opens_nothing_and_says_why() {
         let (vm, mapper, navigator, said) = area_vm_said();
         mapper.say(COVERING);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press("s-1"));
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "no view yet: nothing is held back");
+        said.take(); // the first press said the place's name
         let b = street_box(&vm);
         mapper.say(MapEvent::View { bounds: clipping(b) });
         mapper.say(press("s-1"));
         assert!(navigator.take().is_empty());
         assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
         mapper.say(MapEvent::View { bounds: around(b) });
+        // the place is still the one shown (the refused press kept it), so this press opens it
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
         assert!(said.take().is_empty());
@@ -2287,10 +2351,39 @@ mod tests {
     }
 
     #[test]
+    fn a_first_press_shows_a_place_and_a_second_on_it_opens_it_and_a_press_on_nothing_goes_back_to_the_city() {
+        let (vm, mapper, navigator, said) = area_vm_said();
+        mapper.say(COVERING);
+        said.take();
+        mapper.say(press("s-1"));
+        assert!(navigator.take().is_empty(), "a first press does not leave the map");
+        assert_eq!(vm.picked().as_deref(), Some("s-1"));
+        let heard = said.take();
+        assert_eq!(heard.len(), 1, "{heard:?}");
+        assert!(heard[0].ends_with("Press it again, or Open, to edit it."), "{heard:?}");
+        let row = vm.picked_row().expect("the place's row");
+        assert_eq!(row.hot, "s-1");
+        mapper.say(press("j-3"));
+        assert!(navigator.take().is_empty());
+        assert_eq!(vm.picked().as_deref(), Some("j-3"), "another place is shown in its stead");
+        mapper.say(press("j-3"));
+        assert_eq!(navigator.take(), vec!["intersection.html?junction=3".to_string()], "a second press on it opens it");
+        mapper.say(press("s-1"));
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.picked(), None, "a press on nothing goes back to the city");
+        vm.pick(Some("s-1"));
+        vm.open_picked();
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "Open does what a second press does");
+    }
+
+    #[test]
     fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
         let (vm, mapper, navigator, _) = area_vm();
         let press = |hot: Option<&str>| MapEvent::Press { at: [-73.6, 45.5], hot: hot.map(String::from), area: None, vertex: None };
+        // a first press shows a place; a second on it opens it
         mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("j-3")));
         mapper.say(press(Some("j-3")));
         mapper.say(press(Some("nonsense")));
         mapper.say(press(None));
@@ -2672,6 +2765,8 @@ mod tests {
         assert_eq!(vm.areas().find_now("r1").unwrap().ring[0], to);
         mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
         assert_eq!(vm.areas().selected_id_now(), None);
+        // a first press shows the place; a second on it opens it
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         assert_eq!(navigator.take(), ["street.html?street=1"], "a place in an area opens the place");
     }
@@ -2686,6 +2781,8 @@ mod tests {
         assert!(navigator.take().is_empty(), "a drop opens nothing");
         assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "and the area stays selected");
         assert_eq!(storage.recall(crate::restriction::store::RESTRICTIONS_KEY), kept, "nothing moved");
+        // a first press shows the place; a second on it opens it
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         assert_eq!(navigator.take(), ["street.html?street=1"]);
     }
@@ -2943,6 +3040,8 @@ mod tests {
     fn a_press_on_a_use_opens_its_street() {
         let (_vm, mapper, navigator, _) = programme_vm();
         mapper.say(COVERING);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press("s-1"));
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
     }

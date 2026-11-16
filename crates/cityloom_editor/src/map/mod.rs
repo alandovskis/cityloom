@@ -87,6 +87,8 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
     mount("goal-slot", view! { <view::goal_view::GoalGuide vm=vm.clone()/> }.into_any());
+    mount("map-path-slot", view! { <view::details::MapPath vm=vm.clone()/> }.into_any());
+    mount("map-place-slot", view! { <view::details::PlacePane vm=vm.clone()/> }.into_any());
     mount("selection-slot", view! { <view::selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
     mount("areas-slot", view! { <view::areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <view::network_view::NetworkLead vm=vm.clone()/> }.into_any());

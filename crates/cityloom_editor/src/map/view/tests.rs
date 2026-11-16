@@ -1807,3 +1807,49 @@ mod goals {
         assert!(h.contains("Prioriser les autobus") && h.contains("Examiner"), "{h}");
     }
 }
+
+// ---- the details one level at a time: the city, a place pressed ------------------------
+
+#[test]
+fn the_details_are_under_a_path_from_the_city_to_the_place_pressed() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"<nav aria-label="What the details are of""#), "{h}");
+    assert!(h.contains(r#"aria-current="location""#) && h.contains(">City<") && !h.contains("<button"), "the city alone: {h}");
+    let row = vm.street_rows().into_iter().next().unwrap();
+    vm.pick(Some(&row.hot));
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">City</button>"), "the city is a step back: {h}");
+    assert!(h.contains(&format!(">{}</span>", vm.say(&row.name))), "{h}");
+    // the current step is drawn as the street and junction pages draw theirs
+    assert!(h.contains(r#"class="path-here""#), "{h}");
+}
+
+#[test]
+fn a_street_pressed_shows_its_name_what_it_is_its_checks_and_how_to_open_or_select_it() {
+    let (vm, _) = map_vm();
+    let row = vm.street_rows().into_iter().next().unwrap();
+    vm.pick(Some(&row.hot));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(&format!(r#"<h2 class="insp-name">{}</h2>"#, vm.say(&row.name))), "{h}");
+    assert!(h.contains(&vm.say(&row.sub)), "{h}");
+    assert!(h.contains(&format!(r#"href="{}""#, row.href)) && h.contains(">Open in the street editor<"), "{h}");
+    assert!(h.contains(r#"id="map-place-select""#) && h.contains(">Add to the selection<"), "{h}");
+    assert!(h.contains("Every check passes.") || h.contains("Checks that fail"), "{h}");
+    let junction = vm.junction_rows().into_iter().next().unwrap();
+    vm.pick(Some(&junction.hot));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(">Open in the junction editor<") && !h.contains("map-place-select"), "a junction is not selected: {h}");
+}
+
+#[test]
+fn the_map_page_has_a_city_level_and_a_place_level_shown_one_at_a_time() {
+    let page = include_str!("../../../../../web/map.html");
+    for id in ["map-path-slot", "map-city", "map-place", "map-place-slot"] {
+        assert!(page.contains(&format!(r#"id="{id}""#)), "{id}");
+    }
+    let place = &page[page.find(r#"id="map-place""#).unwrap()..];
+    assert!(place[..place.find('>').unwrap()].contains("hidden"), "the place's level is hidden until a place is pressed");
+    let city = &page[page.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.find(r#"id="t-checks""#).unwrap() < city.find("</aside>").unwrap(), "the tabs are the city's");
+}

@@ -108,6 +108,9 @@
   </aside>
 
   <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
+    <div id="map-path-slot" class="map-path"></div>
+    <div class="map-level" id="map-place" hidden><div class="panel-body"><div id="map-place-slot"></div></div></div>
+    <div class="map-level" id="map-city">
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
@@ -146,6 +149,7 @@
         <ul class="plan-key" id="plan-key" data-i18n-aria-label="map-legend" aria-label="Key to the map"></ul>
       </section>
       <p class="fine" data-i18n="map-fine-print">The streets are from OpenStreetMap. Every threshold the checks use is a sample for now, not a real rule.</p>
+    </div>
     </div>
     <div class="title-block" id="title-block" data-i18n-aria-label="map-about-city" aria-label="About this city"></div>
   </aside>

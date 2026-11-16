@@ -146,6 +146,12 @@ test.describe("the city map", () => {
   test("pressing a place on the map opens it", async ({ page }) => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
+    // a first press shows the place in the details, with a way to open it; a second on it opens it
+    const here = page.url();
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#map-open-place")).toHaveText("Open in the junction editor");
+    await expect(page.locator("#map-path-city")).toBeVisible();
+    expect(page.url()).toBe(here);
     await page.mouse.click(spot.x, spot.y);
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
   });
@@ -315,7 +321,8 @@ test.describe("the city map", () => {
     );
     expect(page.url()).toBe(here);
     const open = spots.find((s) => s.editable)!;
-    await page.mouse.click(open.x, open.y);
+    await page.mouse.click(open.x, open.y); // shows it
+    await page.locator("#map-open-place").click(); // opens it
     await expect(page).toHaveURL(/street\.html\?street=\d+/);
   });
 
@@ -749,7 +756,8 @@ test.describe("the curbside uses and stops on the map", () => {
     await expect.poll(() => curbsideSpot(page), { timeout: 30_000 }).not.toBeNull();
     const spot = await curbsideSpot(page);
     await page.mouse.move(spot!.x, spot!.y);
-    await page.mouse.click(spot!.x, spot!.y);
+    await page.mouse.click(spot!.x, spot!.y); // shows its street
+    await page.locator("#map-open-place").click(); // Open does what a second press does
     await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}&project=first$`));
   });
 
