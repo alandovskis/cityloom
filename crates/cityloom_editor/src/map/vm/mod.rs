@@ -1344,6 +1344,13 @@ impl MapVm {
         }
     }
 
+    /// The change a goal offers, chosen for the selected streets (the goal guide's button): it is shown where it is
+    /// reviewed and applied, with the selected streets.
+    pub fn choose_goal_change(&self, id: &str) {
+        self.set_corridor_op(id);
+        self.show_selected_streets();
+    }
+
     /// Shows the selected streets in the details.
     pub fn show_selected_streets(&self) {
         self.shown.set(MapLevel::Selection);
@@ -2539,6 +2546,18 @@ mod tests {
         let drawing = said.take();
         vm.say_again();
         assert_eq!(said.take().last(), drawing.last(), "and the area rules'");
+    }
+
+    #[test]
+    fn the_goal_s_change_is_chosen_where_the_selected_streets_are_reviewed() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        vm.toggle_selected(Some("s-1"));
+        vm.show_city();
+        vm.choose_goal_change("bus-corridor");
+        assert_eq!(vm.corridor_op().id(), "bus-corridor");
+        assert_eq!(vm.level(), MapLevel::Selection, "the change, its review and Apply are with the selected streets");
+        assert!(matches!(vm.corridor_stage(), Stage::Idle), "nothing is reviewed until the person asks");
     }
 
     #[test]

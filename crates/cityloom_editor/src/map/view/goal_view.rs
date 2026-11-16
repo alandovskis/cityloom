@@ -1,6 +1,6 @@
-//! The guided goal's picker on the map page (#72), at the top of the Notes panel's Checks tab. It offers the change
-//! that fits the goal for the selected streets and sends the person to the change picker with it chosen: the review
-//! and the apply button of the Selected streets panel stay the only way a street is changed.
+//! The guided goal's picker on the map page (#72), at the city's level of the details. It offers the change that fits
+//! the goal for the selected streets and takes the person to the selected streets' level with it chosen: the review
+//! and the apply button there stay the only way a street is changed.
 
 use std::rc::Rc;
 
@@ -18,7 +18,12 @@ pub fn GoalGuide(vm: Rc<MapVm>) -> impl IntoView {
         {move || {
             let selected = !vm.with(|v| v.selection().streets()).is_empty();
             let pick: Option<Rc<dyn Fn(&'static str)>> =
-                selected.then(|| Rc::new(move |op: &'static str| vm.with(|v| v.set_corridor_op(op))) as Rc<dyn Fn(&'static str)>);
+                selected.then(|| {
+                    Rc::new(move |op: &'static str| {
+                        vm.with(|v| v.choose_goal_change(op));
+                        super::details::focus_current();
+                    }) as Rc<dyn Fn(&'static str)>
+                });
             vm.with(|v| crate::shared::goals_view::goal_guidance(v.goal().get(), Place::Map, v.i18n(), pick))
         }}
     }
