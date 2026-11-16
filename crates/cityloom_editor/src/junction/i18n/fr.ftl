@@ -306,8 +306,6 @@ jn-page-does-it-work = Est-ce que ça fonctionne?
 jn-page-your-changes = Vos modifications
 jn-page-fine-print = Chiffres et limites d’exemple pour l’instant, pas de vraies mesures.
 jn-page-about = À propos de cette jonction
-jn-provenance-heading = D’où vient cette jonction
-jn-no-source = Cette jonction ne vient pas d’OpenStreetMap.
 
 ## La page d’une jonction qui ne peut pas être dessinée (src/junction/view/page.rs : Stuck)
 jn-stuck-title = Cette jonction ne peut pas être dessinée

@@ -269,7 +269,6 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction page | 2.5D view of the junction / Roundabout / Raised table (the drawing’s label) | Vue en 2,5D de la jonction / Carrefour giratoire / Carrefour surélevé |  |
 | Junction page | Bus only (road marking) | Autobus seulement |  |
 | Junction page | Details (the left panel's button) | Détails |  |
-| Street and junction pages | Provenance (a notes tab) | Provenance | Where the street or junction came from (`D’où vient cette rue`, `D’où vient cette jonction`); the same word in both languages. |
 | Junction page | Streets (a notes tab) | Rues | Checks and Changes are the shell's `Vérifications` / `Modifications`. |
 | Junction page | Where paths meet | Où les trajectoires se rencontrent |  |
 | Junction page | Key to the strips (the legend) | Légende des bandes |  |

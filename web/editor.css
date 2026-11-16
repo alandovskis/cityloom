@@ -2372,40 +2372,28 @@ svg pattern circle {
 .checks li {
   grid-template-columns: 22px minmax(0, 1fr);
 }
+/* The title block: the street's or junction's name, its figures, then where it came from (whether it was edited since
+   it was imported, and the OpenStreetMap ways or nodes), each a label over its value, in one row while there is room. */
 .title-block {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 4px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 22px;
   padding: 12px 20px 14px;
   border-top: 1px solid var(--rule);
 }
-.tb-src {
-  font-weight: 400;
-  overflow-wrap: anywhere;
+.title-block .tb-cell:first-child {
+  flex: 1 1 10em;
+  min-width: 0;
 }
-/* The Provenance tab: a label over its value, as in the title block. */
-dl.prov {
-  margin: 0;
-  padding: 0 8px;
+.title-block .tb-src {
+  flex: 1 1 14em;
+  min-width: 0;
 }
-dl.prov dt {
-  padding-top: 10px;
-  color: var(--ink-2);
-  font-size: 13px;
-}
-dl.prov dd {
-  margin: 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--rule);
+.title-block .tb-src b {
   font-size: 14px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-dl.prov dd.tb-src {
   font-weight: 400;
-}
-dl.prov dd:last-child {
-  border-bottom: 0;
+  overflow-wrap: anywhere;
 }
 
 /* ---- the Add menu --------------------------------------------------------------- */

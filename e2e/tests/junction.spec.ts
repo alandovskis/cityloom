@@ -189,14 +189,15 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing .plan")).toHaveCount(0);
   });
 
-  test("the notes list the checks, the changes made and where the junction came from", async ({ page }) => {
+  test("the notes list the checks and the changes made, over where the junction came from", async ({ page }) => {
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").first()).toBeVisible();
     await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
     await page.locator("#t-changes").click();
     await expect(page.locator("#revs tbody tr")).toHaveCount(2);
-    await page.locator("#t-provenance").click();
-    await expect(page.locator("#p-provenance")).toBeVisible();
+    // where the junction came from is in the title block, under every tab: there is no tab of its own
+    await expect(page.locator("#title-block #tb-state")).toBeVisible();
+    await expect(page.locator("#t-provenance")).toHaveCount(0);
   });
 });
 
@@ -241,18 +242,15 @@ test.describe("the junction measures of the Atlas", () => {
 test.describe("what the junction editor keeps in the city", () => {
   test("says which OpenStreetMap nodes it was made from, and whether it has been changed", async ({ page }) => {
     await openJunction(page);
-    await page.locator("#t-provenance").click();
-    const block = page.locator("#p-provenance");
+    const block = page.locator("#title-block");
     await expect(block.locator('a[href^="https://www.openstreetmap.org/node/"]').first()).toHaveText(
       /^node \d+( v\d+)?$/,
     );
     await expect(block.locator("#tb-state")).toHaveText("As imported");
     await page.locator("#t-space").click();
     await turns(page).first().click();
-    await page.locator("#t-provenance").click();
     await expect(block.locator("#tb-state")).toHaveText("Edited");
     await page.reload();
-    await page.locator("#t-provenance").click();
     await expect(block.locator("#tb-state")).toHaveText("Edited");
   });
 

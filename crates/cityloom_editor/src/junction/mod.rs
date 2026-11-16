@@ -72,7 +72,6 @@ pub fn mount_page(editor: &Editor) {
     mount("goal-slot", view! { <view::notes::GoalGuide vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
     mount("atlas-source", view! { <view::notes::AtlasSource vm=vm.clone()/> }.into_any());
-    mount("provenance", view! { <view::page::Provenance vm=vm.clone()/> }.into_any());
     mount("revs", view! { <view::notes::Revisions vm=vm/> }.into_any());
 }
 

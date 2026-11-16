@@ -157,7 +157,7 @@ test.describe("the summary of the last change", () => {
     await expect(page.locator("#t-space")).toHaveAttribute("aria-selected", "true");
     await expect(card(page)).toBeVisible();
     await page.keyboard.press("End");
-    await expect(page.locator("#t-provenance")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#t-changes")).toHaveAttribute("aria-selected", "true");
     await page.keyboard.press("Home");
     await expect(page.locator("#t-space")).toHaveAttribute("aria-selected", "true");
     // Remembered across a reload, for the Impact tab as for another.

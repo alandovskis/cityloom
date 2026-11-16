@@ -21,8 +21,6 @@ st-sample-limits = limites d’exemple
 st-your-changes = Vos modifications
 st-transit-heading = Priorité au transport en commun
 st-about-street = À propos de cette rue
-st-provenance-heading = D’où vient cette rue
-st-no-source = Cette rue ne vient pas d’OpenStreetMap.
 
 # Le catalogue : les genres d’éléments, les modes et les groupes du menu d’ajout (src/shared/catalogue.rs).
 kind-sidewalk = Trottoir

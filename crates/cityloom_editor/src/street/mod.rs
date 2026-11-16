@@ -114,7 +114,6 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
     mount("atlas-source", view! { <view::notes::AtlasSource vm=vm.clone()/> }.into_any());
     mount("revs", view! { <view::notes::Revisions vm=vm.clone()/> }.into_any());
-    mount("provenance", view! { <view::page::Provenance vm=vm/> }.into_any());
 }
 
 /// The street editor on one street of the city of the page's project (`project::context`), which writes what is

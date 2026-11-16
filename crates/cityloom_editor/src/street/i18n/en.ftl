@@ -21,8 +21,6 @@ st-sample-limits = sample limits
 st-your-changes = Your changes
 st-transit-heading = Transit priority
 st-about-street = About this street
-st-provenance-heading = Where this street came from
-st-no-source = This street was not made from OpenStreetMap.
 
 # The catalogue: kinds of piece, modes and the groups of the add menu (src/shared/catalogue.rs).
 kind-sidewalk = Sidewalk

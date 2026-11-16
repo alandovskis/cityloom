@@ -864,46 +864,49 @@ fn osm_junction_shared(locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
 }
 
 #[test]
-fn the_provenance_links_the_osm_nodes_and_says_whether_the_junction_was_changed() {
+fn the_title_block_ends_with_whether_the_junction_was_changed_and_the_osm_nodes_it_came_from() {
     let s = osm_junction_shared(crate::shared::i18n::Locale::En);
-    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains("href=\"https://www.openstreetmap.org/node/29796354\"") && h.contains(">node 29796354 v5<"), "{h}");
     assert!(h.contains(">node 9<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
     let n = arm(&s, 0);
+    let at = |id: &str| h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+    assert!(at("tb-changes") < at("tb-state") && at("tb-state") < h.find("openstreetmap.org").unwrap(), "{h}");
+    assert!(h.contains(r#"class="tb-cell tb-src""#), "{h}");
     s.edit(|j| j.set_filter(n, true));
-    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
 }
 
 #[test]
-fn a_junction_with_no_source_says_so() {
-    use crate::shared::i18n::Locale;
-    let h = html(|| view! { <page::Provenance vm=shared(0)/> }.into_any());
-    assert!(h.contains("This junction was not made from OpenStreetMap."), "{h}");
-    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state"), "{h}");
-    let fr = shared_in(0, Locale::FrCa);
-    let h = html(|| view! { <page::Provenance vm=fr.clone()/> }.into_any());
-    assert!(h.contains("Cette jonction ne vient pas d’OpenStreetMap.") && !h.contains("was not made"), "{h}");
+fn a_junction_with_no_source_has_no_source_in_its_title_block() {
+    let h = html(|| view! { <page::TitleBlock vm=shared(0)/> }.into_any());
+    assert!(h.contains("id=\"tb-changes\""), "{h}");
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
 }
 
 #[test]
-fn the_provenance_follows_the_language_switch() {
+fn the_title_block_s_source_follows_the_language_switch() {
     use crate::shared::i18n::Locale;
     let owner = Owner::new();
     owner.set();
     let s = osm_junction_shared(Locale::En);
-    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains(">Data<") && h.contains("As imported"), "{h}");
     s.i18n().set(Locale::FrCa);
-    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains(">Données<") && h.contains("Telle qu’importée") && !h.contains("As imported"), "{h}");
 }
 
 #[test]
-fn the_title_block_no_longer_holds_the_sources() {
-    let s = osm_junction_shared(crate::shared::i18n::Locale::En);
-    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
-    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
+fn the_page_has_no_provenance_tab() {
+    let page = include_str!("../../../../../web/intersection.html");
+    for gone in ["t-provenance", "p-provenance", r#"id="provenance""#, "jn-provenance-heading"] {
+        assert!(!page.contains(gone), "where the junction came from is in the title block: {gone}");
+    }
+    for lang in [include_str!("../i18n/en.ftl"), include_str!("../i18n/fr.ftl")] {
+        assert!(!lang.contains("jn-provenance-heading") && !lang.contains("jn-no-source"), "the tab's words are gone");
+    }
 }
 
 #[test]
@@ -1043,9 +1046,11 @@ fn the_page_around_the_plan_speaks_french() {
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
     speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Jonction en 2,5D", ">4 rues<", ">Jonction 4</h1>"]);
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
-    speaks_french(&h, &["Junction<", "Streets", "Changes made"], &[">Jonction<", ">Rues<", "Modifications apportées"]);
-    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
-    speaks_french(&h, &["Data", "As imported"], &["Données", "Telle qu’importée"]);
+    speaks_french(
+        &h,
+        &["Junction<", "Streets", "Changes made", "Data", "As imported"],
+        &[">Jonction<", ">Rues<", "Modifications apportées", "Données", "Telle qu’importée"],
+    );
     let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
     speaks_french(&h, ENGLISH, &["4 rues, feux de circulation. Toutes les vérifications réussissent."]);
     let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
@@ -1130,7 +1135,7 @@ fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
     s.edit(|j| j.select(Target::Arm(n)));
     let _ = html(|| {
         view! {
-            <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Provenance vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
+            <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
             <notes::Across vm=s.clone()/><notes::Conflicts vm=s.clone()/><notes::ConflictNote vm=s.clone()/><notes::Checks vm=s.clone()/>
             <notes::Revisions vm=s.clone()/><drawing::Drawing vm=s.clone()/><turns::Turns vm=s.clone()/>
         }

@@ -1,7 +1,6 @@
-//! The street page's notes: the shell's tray (`shell::tray`) with the street's four tabs, each a function giving its
+//! The street page's notes: the shell's tray (`shell::tray`) with the street's three tabs, each a function giving its
 //! tab and its panel together. The panels hold the empty slots `mount_street_page` fills next (the Last change card,
-//! the width and capacity tables, the goals, the checks, the changes, where the street came from, the title block), so
-//! it is mounted first.
+//! the width and capacity tables, the goals, the checks, the changes, the title block), so it is mounted first.
 
 use std::rc::Rc;
 
@@ -22,7 +21,7 @@ fn tr(words: Words, key: &'static str) -> impl Fn() -> String + Copy + 'static {
 pub fn StreetNotes(vm: Rc<StreetVm>) -> impl IntoView {
     let i18n: Rc<I18n> = vm.i18n().clone();
     let words = StoredValue::new_local(i18n.clone());
-    let pages = vec![impact(words), checks(words), changes(words), provenance(words)];
+    let pages = vec![impact(words), checks(words), changes(words)];
     view! {
         <Tray i18n=i18n pages=pages status=vec!["fit-slot", "fit-checks-slot"]>
             <div class="title-block" id="title-block" aria-label=tr(words, "st-about-street")></div>
@@ -92,20 +91,6 @@ fn changes(words: Words) -> TrayPage {
             <section aria-labelledby="h-rev" class="revs">
                 <h2 id="h-rev" class="note-h">{tr(words, "st-your-changes")}</h2>
                 <table class="nt rev" id="revs"></table>
-            </section>
-        },
-    )
-}
-
-/// Provenance: where the street came from.
-fn provenance(words: Words) -> TrayPage {
-    let tab = TrayTab { id: "t-provenance", panel: "p-provenance", label: "ui-tab-provenance", badge: None };
-    TrayPage::new(
-        tab,
-        view! {
-            <section aria-labelledby="h-provenance">
-                <h2 id="h-provenance" class="note-h">{tr(words, "st-provenance-heading")}</h2>
-                <div id="provenance"></div>
             </section>
         },
     )
