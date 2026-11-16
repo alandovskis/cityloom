@@ -17,7 +17,8 @@ fn every_data_i18n_key_in_street_html_exists_in_both_languages() {
     let i = crate::i18n_for(Locale::En);
     let f = crate::i18n_for(Locale::FrCa);
     let keys = i18n_keys(html);
-    assert!(keys.len() > 40, "the page should have been converted: {}", keys.len());
+    // The notes' words are the tray's (`street::view::notes_tray`), not the page's.
+    assert!(keys.len() > 30, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         i.tr_now(&key, &Args::new());
         f.tr_now(&key, &Args::new());
@@ -467,4 +468,89 @@ fn a_page_opened_offline_learns_it_is_signed_in_when_the_network_returns_and_sta
     vm.network_back();
     assert_eq!(t.account.calls(), [], "a person who is known is not asked again");
     assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0).with_epoch(Some("e1".into())))], "it syncs as any known page does");
+}
+
+// ---- the notes' tray (`shell::tray`) ----------------------------------------------------------
+
+fn tray_html(locale: Locale) -> String {
+    use crate::shell::tray::{Tray, TrayTab};
+    use leptos::prelude::*;
+    let i18n = crate::i18n_for(locale);
+    crate::shared::testing::html(move || {
+        let tabs = vec![
+            TrayTab { id: "t-one", panel: "p-one", label: "ui-tab-checks", badge: Some("one-n-slot") },
+            TrayTab { id: "t-two", panel: "p-two", label: "ui-tab-changes", badge: None },
+        ];
+        view! {
+            <Tray i18n=i18n tabs=tabs status=vec!["first-slot", "second-slot"]>
+                <div id="p-one" role="tabpanel">"one"</div>
+                <div id="p-two" role="tabpanel" hidden>"two"</div>
+            </Tray>
+        }
+        .into_any()
+    })
+}
+
+/// The opening tag of the element with `id` in `html`.
+fn tag_of(html: &str, id: &str) -> String {
+    let at = html.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("no #{id}: {html}"));
+    let start = html[..at].rfind('<').unwrap();
+    let end = html[at..].find('>').unwrap() + at;
+    html[start..=end].to_string()
+}
+
+fn has_all(tag: &str, attrs: &[&str]) {
+    for a in attrs {
+        assert!(tag.contains(a), "{a}: {tag}");
+    }
+}
+
+#[test]
+fn the_tray_is_the_notes_with_a_handle_of_status_tabs_and_toggle_over_a_body_of_panels() {
+    let h = tray_html(Locale::En);
+    assert!(h.starts_with("<aside "), "{h}");
+    has_all(&tag_of(&h, "notes"), &[r#"class="notes tray""#, r#"aria-label="Notes""#]);
+    // the handle: the page's status slots, then the tabs, then the toggle
+    let handle = &h[h.find(r#"class="tray-handle""#).expect("a handle")..h.find(r#"id="notes-body""#).expect("a body")];
+    let (first, second, tabs, toggle) = (
+        handle.find(r#"id="first-slot""#).expect("first status slot"),
+        handle.find(r#"id="second-slot""#).expect("second status slot"),
+        handle.find(r#"role="tablist""#).expect("tabs"),
+        handle.find(r#"id="notes-toggle""#).expect("toggle"),
+    );
+    assert!(first < second && second < tabs && tabs < toggle, "{handle}");
+    for slot in ["first-slot", "second-slot"] {
+        has_all(&tag_of(&h, slot), &["display: contents"]);
+    }
+    assert!(handle.contains(r#"aria-label="Notes sections""#), "{handle}");
+    let one = crate::shared::testing::button_tag(&h, "t-one");
+    has_all(&one, &[r#"role="tab""#, r#"class="tab""#, r#"aria-controls="p-one""#, r#"aria-selected="true""#]);
+    assert!(!one.contains("tabindex"), "the first tab is chosen and in the tab order: {one}");
+    let two = crate::shared::testing::button_tag(&h, "t-two");
+    has_all(&two, &[r#"aria-controls="p-two""#, r#"aria-selected="false""#, r#"tabindex="-1""#]);
+    assert!(h.contains(r#"<span>Checks</span><span id="one-n-slot""#), "a badge slot after the label: {h}");
+    assert!(h.contains("<span>Changes</span>"), "{h}");
+    assert_eq!(h.matches("one-n-slot").count(), 1, "a slot only where the tab asks for one");
+    has_all(
+        &crate::shared::testing::button_tag(&h, "notes-toggle"),
+        &[
+            r#"class="tray-toggle""#,
+            r#"aria-controls="notes-body""#,
+            r#"aria-expanded="true""#,
+            r#"aria-keyshortcuts="]""#,
+            r#"title="Show or hide the notes ( ] )""#,
+        ],
+    );
+    assert!(handle.contains("<span>Notes</span>"), "{handle}");
+    // the body: what the page gives, as it gives it
+    has_all(&tag_of(&h, "notes-body"), &[r#"class="tray-body""#]);
+    let body = &h[h.find(r#"id="notes-body""#).unwrap()..];
+    assert!(body.contains(r#"<div id="p-one" role="tabpanel">one</div><div id="p-two" role="tabpanel" hidden>two</div>"#), "{body}");
+}
+
+#[test]
+fn the_tray_is_worded_in_french() {
+    let h = tray_html(Locale::FrCa);
+    assert!(h.contains(r#"aria-label="Notes""#) && h.contains("Sections des notes"), "{h}");
+    assert!(h.contains("<span>Vérifications</span>") && h.contains("<span>Modifications</span>"), "{h}");
 }

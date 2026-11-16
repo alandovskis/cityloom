@@ -78,6 +78,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
+    // The notes' tray first: its panels hold slots mounted below.
+    mount("notes-slot", view! { <view::notes_tray::StreetNotes vm=vm.clone()/> }.into_any());
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
     mount("h-drawing", view! { <view::page::DrawingHeading vm=vm.clone()/> }.into_any());
     mount("street", view! { <view::page::StreetHeader vm=vm.clone() ends=ends.clone() neighbours=neighbours/> }.into_any());
