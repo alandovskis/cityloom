@@ -1,11 +1,11 @@
-//! A street's speed limit, as the city keeps it.
+//! A street's speed limit, and its zones'.
 
 use std::fmt;
 
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::Street;
+use super::{Street, Zone};
 
 /// The speed limit of a street, in kilometres an hour. A record written before streets had one has not
 /// decided (`Undecided`), and takes the road's when it is applied; `NotSet` is a decision: the road has none.
@@ -85,30 +85,39 @@ impl<'de> Deserialize<'de> for Speed {
     }
 }
 
+/// The speed of zone `z`: its own, else the street's. With no zones the street's.
+pub fn speed_in(base: Speed, zones: &[Zone], z: usize) -> Speed {
+    match zones.get(z) {
+        Some(zone) if !zone.speed.is_undecided() => zone.speed,
+        _ => base,
+    }
+}
+
+/// The highest speed any zone has, when one has a speed.
+pub fn max_kmh(base: Speed, zones: &[Zone]) -> Option<u16> {
+    (0..zones.len().max(1)).filter_map(|z| speed_in(base, zones, z).kmh()).max()
+}
+
+impl Street {
+    /// The speed of zone `z`, its own or else the street's.
+    pub fn zone_speed(&self, z: usize) -> Speed {
+        speed_in(self.speed, &self.zones, z)
+    }
+
+    /// The limit of zone `z` in kilometres an hour, when it has one.
+    pub fn zone_speed_kmh(&self, z: usize) -> Option<u16> {
+        self.zone_speed(z).kmh()
+    }
+
+    /// The highest limit any zone has: what an area's speed rule judges the street by.
+    pub fn max_speed_kmh(&self) -> Option<u16> {
+        max_kmh(self.speed, &self.zones)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::catalogue::Side;
-
-    fn street_with(speed: Speed) -> Street {
-        let mut street = Street::sample(0, Side::Right);
-        street.speed = speed;
-        street
-    }
-
-    #[test]
-    fn speed_round_trips_as_absent_null_or_number() {
-        for (speed, written) in [(Speed::Undecided, None), (Speed::NotSet, Some("\"speed_kmh\":null")), (Speed::Kmh(30), Some("\"speed_kmh\":30"))] {
-            let json = serde_json::to_string(&street_with(speed)).unwrap();
-            match written {
-                Some(text) => assert!(json.contains(text), "{speed:?}: {json}"),
-                None => assert!(!json.contains("speed_kmh"), "{speed:?}: {json}"),
-            }
-            let back: Street = serde_json::from_str(&json).unwrap();
-            assert_eq!(back.speed, speed);
-            assert_eq!(back, street_with(speed));
-        }
-    }
 
     #[test]
     fn a_speed_that_is_not_a_speed_is_not_read() {

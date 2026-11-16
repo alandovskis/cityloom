@@ -6,11 +6,14 @@
 //! zones leaves them where they are. Across, `offset_mm` is the element's centre from the section's left edge.
 //! A street with none is written, drawn and checked exactly as before.
 
-use serde::{Deserialize, Serialize};
+use super::stop::StopExt;
+use super::{Green, GreenKind, TreeSize};
+use cityloom_model::street::sort_green;
+use serde::Serialize;
 
 use super::curb::{CurbRefusal, Failure, check_rows};
 use super::stop::{bus_lane, stand};
-use super::{Arg, Check, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, total};
+use super::{Arg, Check, Editor, SNAP_MM, Said, Segment, ZoneEnd, ZoneFrame, snap, total};
 use crate::shared::catalogue::{KINDS, REGIONS, is_roadway};
 
 /// The walkway a sidewalk keeps beside an element standing on it, in millimetres.
@@ -36,26 +39,15 @@ pub const BIOSWALE_MIN_MM: i32 = 10_000;
 /// UNVERIFIED (placeholder): 600 mm.
 const MIN_TREE_WIDTH_MM: i32 = 600;
 
-/// What an element is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GreenKind {
-    /// One tree in its pit.
-    Tree,
-    /// A planting bed.
-    Bed,
-    /// A planted basin that takes the street's runoff.
-    RainGarden,
-    /// A long planted channel that carries and soaks up runoff.
-    Bioswale,
+/// What the editor knows of a kind of green element besides what it is: its word and the length a new one is given.
+pub trait GreenKindExt {
+    fn name_key(self) -> &'static str;
+    fn default_length_mm(self) -> i32;
 }
 
-impl GreenKind {
-    /// Every kind, in the order a choice lists them.
-    pub const ALL: [GreenKind; 4] = [GreenKind::Tree, GreenKind::Bed, GreenKind::RainGarden, GreenKind::Bioswale];
-
+impl GreenKindExt for GreenKind {
     /// The message that names it.
-    pub fn name_key(self) -> &'static str {
+    fn name_key(self) -> &'static str {
         match self {
             GreenKind::Tree => "green-kind-tree",
             GreenKind::Bed => "green-kind-bed",
@@ -68,7 +60,7 @@ impl GreenKind {
     ///
     /// UNVERIFIED (placeholder): a tree pit 1 500 mm square, a bed 4 000 mm, a rain garden 6 000 mm, a bioswale
     /// 20 000 mm.
-    pub fn default_length_mm(self) -> i32 {
+    fn default_length_mm(self) -> i32 {
         match self {
             GreenKind::Tree => 1_500,
             GreenKind::Bed => 4_000,
@@ -78,17 +70,18 @@ impl GreenKind {
     }
 }
 
-/// The size a tree grows to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum TreeSize {
-    S,
-    M,
-    L,
+/// What the editor knows of a size of tree: its words, its crown and the soil it needs.
+pub trait TreeSizeExt {
+    fn name_key(self) -> &'static str;
+    fn tree_key(self) -> &'static str;
+    fn canopy_mm(self) -> i32;
+    fn default_pit_mm(self) -> i32;
+    fn min_pit_mm2(self) -> i64;
 }
 
-impl TreeSize {
+impl TreeSizeExt for TreeSize {
     /// The message that names it: "small", "medium", "large".
-    pub fn name_key(self) -> &'static str {
+    fn name_key(self) -> &'static str {
         match self {
             TreeSize::S => "green-size-s",
             TreeSize::M => "green-size-m",
@@ -98,7 +91,7 @@ impl TreeSize {
 
     /// The message that names a tree of this size in a sentence: "a small tree", « un petit arbre » (the adjective's
     /// place differs between the languages, so it is a message of its own).
-    pub fn tree_key(self) -> &'static str {
+    fn tree_key(self) -> &'static str {
         match self {
             TreeSize::S => "green-tree-s",
             TreeSize::M => "green-tree-m",
@@ -109,7 +102,7 @@ impl TreeSize {
     /// The width of the crown, which is also the spacing between trees.
     ///
     /// UNVERIFIED (placeholder): 6 000, 8 000 and 10 000 mm.
-    pub fn canopy_mm(self) -> i32 {
+    fn canopy_mm(self) -> i32 {
         match self {
             TreeSize::S => 6_000,
             TreeSize::M => 8_000,
@@ -120,7 +113,7 @@ impl TreeSize {
     /// The side of the square pit a new tree of this size is given, enough soil for its size.
     ///
     /// UNVERIFIED (placeholder): 1 500, 1 900 and 2 300 mm, each at least the size's least area.
-    pub fn default_pit_mm(self) -> i32 {
+    fn default_pit_mm(self) -> i32 {
         match self {
             TreeSize::S => 1_500,
             TreeSize::M => 1_900,
@@ -131,29 +124,13 @@ impl TreeSize {
     /// The least area of soil a pit gives this tree, in square millimetres.
     ///
     /// UNVERIFIED (placeholder): 2.25, 3.5 and 5 square metres.
-    pub fn min_pit_mm2(self) -> i64 {
+    fn min_pit_mm2(self) -> i64 {
         match self {
             TreeSize::S => 2_250_000,
             TreeSize::M => 3_500_000,
             TreeSize::L => 5_000_000,
         }
     }
-}
-
-/// One element, `length_mm` along the street from `from_mm`, centred `offset_mm` from the section's left edge and
-/// `width_mm` across. `size` is set for a tree and only for a tree.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Green {
-    pub kind: GreenKind,
-    /// Millimetres from the anchored end (`Street::from_end`) to where it starts, a multiple of `SNAP_MM`.
-    pub from_mm: i32,
-    pub length_mm: i32,
-    /// The element's centre across, from the left edge of the section (`SegView.x_mm`). The anchored end does not
-    /// flip it.
-    pub offset_mm: i32,
-    pub width_mm: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<TreeSize>,
 }
 
 /// Why a change to the elements was refused.
@@ -301,47 +278,6 @@ impl GreenChoice {
     }
 }
 
-pub(super) fn sort_green(green: &mut [Green]) {
-    green.sort_by_key(|g| (g.from_mm, g.offset_mm));
-}
-
-impl Street {
-    pub(super) fn sort_green(&mut self) {
-        sort_green(&mut self.green);
-    }
-
-    /// The total width of the section that lies at `along_mm` from the anchored end: the zone's own section, or
-    /// the base. Sections are laid out from x = 0 and may total less than `row_mm`.
-    fn section_total_at(&self, along_mm: i32) -> i32 {
-        let zone = self.zones.iter().rev().find(|z| z.from_mm <= along_mm);
-        total(zone.and_then(|z| z.segments.as_deref()).unwrap_or(&self.segments))
-    }
-
-    /// Mirrors the elements across for a street seen from its other end. Their positions along stay measured from
-    /// the same physical end (`reverse_zones` flips the label of that end); the section is reversed, so each
-    /// centre is measured from the other edge, of the section under the element.
-    pub(super) fn reverse_green(&mut self) {
-        let mirrored: Vec<Green> =
-            self.green.iter().map(|g| Green { offset_mm: self.section_total_at(g.from_mm.saturating_add(g.length_mm / 2)) - g.offset_mm, ..*g }).collect();
-        self.green = mirrored;
-        self.sort_green();
-    }
-
-    /// Whether the elements can be placed: they need the length they were drawn against, and each lies in front
-    /// of it with a size exactly when it is a tree.
-    pub(super) fn green_is_sound(&self) -> bool {
-        self.green.is_empty()
-            || (self.length_mm.is_some()
-                && self.green.iter().all(|g| {
-                    g.from_mm >= 0
-                        && g.length_mm > 0
-                        && g.width_mm > 0
-                        && (0..=self.section_total_at(g.from_mm.saturating_add(g.length_mm / 2))).contains(&g.offset_mm)
-                        && g.size.is_some() == (g.kind == GreenKind::Tree)
-                }))
-    }
-}
-
 /// How far apart the middles of two elements are, along the street and across it, in millimetres: what crowns need
 /// between them.
 fn centre_gap_mm(a: &Green, b: &Green) -> i32 {
@@ -350,17 +286,19 @@ fn centre_gap_mm(a: &Green, b: &Green) -> i32 {
     along.hypot(across).round() as i32
 }
 
-impl Green {
+/// Where the checks place a green element, and how they name it.
+pub trait GreenExt {
+    fn place(&self) -> Place;
+    fn named(&self, segs: &[Segment]) -> Said;
+}
+
+impl GreenExt for Green {
     fn place(&self) -> Place {
         (self.from_mm, self.offset_mm)
     }
 
-    fn centre_mm(&self) -> i32 {
-        self.from_mm.saturating_add(self.length_mm / 2)
-    }
-
     /// How the checks name it: "Tree at 42 m, on sidewalk", the piece being the one under its centre in `segs`.
-    pub fn named(&self, segs: &[Segment]) -> Said {
+    fn named(&self, segs: &[Segment]) -> Said {
         let kind = Arg::Msg(self.kind.name_key());
         match host_at(segs, self.offset_mm) {
             Some(h) => {
@@ -368,10 +306,6 @@ impl Green {
             }
             None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Length(self.from_mm)),
         }
-    }
-
-    fn to_mm(&self) -> i32 {
-        self.from_mm.saturating_add(self.length_mm)
     }
 }
 
@@ -1047,6 +981,8 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::Side;
     use crate::shared::catalogue::kind_index;
+    use crate::street::model::Street;
+    use crate::street::model::StreetExt;
     use crate::street::model::fixtures::zoned;
     use crate::street::model::{Editor, EndInfo, Segment, ZoneEnd, ZoneFrame};
 
@@ -1300,7 +1236,7 @@ mod tests {
 
     #[test]
     fn green_edits_and_other_drags_exclude_each_other() {
-        use crate::street::model::curb::{CurbRefusal, Use};
+        use crate::street::model::{CurbRefusal, Use};
         let mut e = editor();
         e.begin_gesture();
         assert_eq!(e.add_green(pit(10_000, 1_700)), Err(GreenRefusal::Dragging), "a zone drag is under way");

@@ -12,6 +12,7 @@ use crate::shared::live;
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::model::Editor;
+use crate::street::model::StreetExt;
 use crate::street::view::{self, inspector, notes, page};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::Action as StreetAction;

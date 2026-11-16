@@ -6,7 +6,8 @@
 //!
 //! Every figure is a placeholder, UNVERIFIED: the speed and the length of a school zone are CityLoom's own.
 
-use super::calming::{DEFAULT_TABLE_MM, Kind};
+use super::CalmingKind as Kind;
+use super::calming::DEFAULT_TABLE_MM;
 use super::zones::MIN_ZONE_MM;
 use super::{Arg, Editor, Said, Segment, snap};
 
@@ -62,7 +63,7 @@ impl Editor {
         // The speed limit of the school zone.
         let z = self.zone;
         let content = &self.states[self.cursor].content;
-        let current = if content.zones.len() > 1 { super::zone_speed::speed_in(content.speed, &content.zones, z) } else { content.speed };
+        let current = if content.zones.len() > 1 { cityloom_model::street::speed_in(content.speed, &content.zones, z) } else { content.speed };
         match current.kmh().filter(|&n| n <= SCHOOL_KMH) {
             Some(n) => report
                 .skipped
@@ -101,6 +102,7 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Side, Speed, Street, Template, ZoneEnd, ZoneFrame};
 
     fn editor(length_mm: i32, speed: Speed) -> Editor {

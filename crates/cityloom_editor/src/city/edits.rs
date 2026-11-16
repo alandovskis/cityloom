@@ -542,6 +542,7 @@ pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::street::model::StreetExt;
 
     #[test]
     fn nothing_stored_is_an_empty_document() {

@@ -152,6 +152,7 @@ pub struct TemplateView {
 mod tests {
     use super::*;
     use crate::shared::catalogue::{DirectionRule, is_roadway};
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, SAMPLES, Street, TemplateReport};
 
     fn arranged(t: Template, row_mm: i32, side: Side) -> Vec<Segment> {

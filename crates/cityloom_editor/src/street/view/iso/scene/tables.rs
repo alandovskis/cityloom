@@ -5,6 +5,7 @@
 use crate::shared::catalogue::{KINDS, is_roadway};
 use crate::shared::diagram::{Face, Pt, Shape};
 use crate::shared::i18n::{Args, I18n};
+use crate::street::model::CalmingKindExt;
 use crate::street::model::{CalmingKind, SegView};
 
 use super::surface::top;

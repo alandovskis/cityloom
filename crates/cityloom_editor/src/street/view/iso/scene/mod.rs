@@ -23,6 +23,7 @@ pub(super) use surface::surface;
 #[cfg(test)]
 pub(super) mod testing {
     use crate::shared::catalogue::Side;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, SegView, ShownInstance, ShownStop, StopKind, Street, Use, View, ZoneEnd, ZoneFrame};
     use crate::street::view::iso::curbside::{self, Over};
     use crate::street::view::iso::projection::{Projection, Reach, STRETCH_MM};

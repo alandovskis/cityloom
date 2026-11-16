@@ -4,10 +4,12 @@
 //! Distances are along the arm from the junction's centre, which is the street's end (the mouth is not subtracted:
 //! `junction::model::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
 
-use super::zones::{same_pieces, zone_label_mid};
+use super::StreetExt;
+use super::zones::zone_label_mid;
 use super::{Host, LENGTH_TOLERANCE_MM, Segment, Street, ZoneEnd, ZoneFrame, total, transition};
 use crate::shared::catalogue::is_roadway;
 use crate::shared::said::Said;
+use cityloom_model::street::same_pieces;
 
 /// The first boundary met going out from an arm's end, and what is across it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,73 +51,71 @@ pub struct TaperPiece {
     pub becomes: Option<(i32, i32)>,
 }
 
-impl Street {
-    /// What lies beyond the end of the street at its first end (`first_end`) or its last: the first zone boundary met
-    /// going out from the end, with the zone across it and the taper it needs. `None` for a street of one zone, with
-    /// no frame, with a zoning drawn on another road (the page's "elsewhere", as `Editor::elsewhere` decides it), when
-    /// the boundary is at or past the road's end, when the two sections have the same pieces, or when either is wider than the street (`row_mm`; a narrower one fits and is drawn).
-    pub fn beyond(&self, first_end: bool, frame: Option<ZoneFrame>) -> Option<Beyond> {
-        let frame = frame?;
-        let n = self.zones.len();
-        if n < 2 || frame.from_end != self.from_end || self.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() > LENGTH_TOLERANCE_MM) {
-            return None;
-        }
-        // As `at_end` picks the end zone; the neighbour is the one beside it.
-        let anchored = (self.from_end == ZoneEnd::First) == first_end;
-        let (end, neighbour) = if anchored { (0, 1) } else { (n - 1, n - 2) };
-        let b = end.min(neighbour);
-        let at = self.zones[b + 1].from_mm;
-        if at >= frame.length_mm {
-            return None;
-        }
-        let sections = self.sections();
-        if same_pieces(sections[end], sections[neighbour]) {
-            return None;
-        }
-        // A section wider than the street does not fit and is not drawn. One narrower does fit ("left to use"): its
-        // pieces are laid out from the left edge, and the mirrored spans below flip by the section's own total.
-        let (end_total, across_total) = (total(sections[end]), total(sections[neighbour]));
-        if end_total > self.row_mm || across_total > self.row_mm {
-            return None;
-        }
-        // Measured from the anchored end; the arm measures from its own, the junction's centre.
-        let out = |lo: i32, hi: i32| if anchored { (lo, hi) } else { (frame.length_mm - hi, frame.length_mm - lo) };
-        let boundary_mm = out(at, at).0;
-        let mirrored = !first_end;
-        let taper = transition(sections[b], sections[b + 1], self.taper_speed_kmh(b), self.from_end).map(|t| {
-            let (host, interval) = match t.host {
-                Host::Near => (b, ((at - t.length_mm).max(self.zones[b].from_mm), at)),
-                Host::Far => (b + 1, (at, (at + t.length_mm).min(self.zones.get(b + 2).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm)))),
-            };
-            let host_end = self.zones.get(host + 1).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm);
-            let (from_mm, to_mm) = out(interval.0, interval.1);
-            // `before` is the nearer-the-anchor zone's side: the end zone's when that is zone `b`.
-            let end_is_near = end == b;
-            let mut changes: Vec<(usize, Option<(i32, i32)>, Option<(i32, i32)>)> =
-                t.changes.iter().map(|c| if end_is_near { (c.kind, c.before, c.after) } else { (c.kind, c.after, c.before) }).collect();
-            if mirrored {
-                // Each side flips by its own section's total: the view lays a section's pieces out from 0.
-                let flip = |r: Option<(i32, i32)>, total: i32| r.map(|(x0, x1)| (total - x1, total - x0));
-                changes = changes.into_iter().rev().map(|(k, was, becomes)| (k, flip(was, end_total), flip(becomes, across_total))).collect();
-            }
-            let pieces = changes
-                .iter()
-                .enumerate()
-                .filter(|(_, (kind, was, becomes))| is_roadway(*kind) && was != becomes)
-                .filter_map(|(i, &(kind, was, becomes))| {
-                    let from = was.or_else(|| anchor(&changes, i, |c| c.1))?;
-                    let to = becomes.or_else(|| anchor(&changes, i, |c| c.2))?;
-                    Some(TaperPiece { kind, from, to, was, becomes })
-                })
-                .collect();
-            BeyondTaper { from_mm, to_mm, need_mm: t.length_mm, room_mm: host_end - self.zones[host].from_mm, merges: t.merges, pieces }
-        });
-        let mut across = Street { segments: sections[neighbour].to_vec(), zones: Vec::new(), ..self.clone() };
-        if !first_end {
-            across = across.reversed();
-        }
-        Some(Beyond { boundary_mm, next: across.segments, zone: zone_label_mid(&self.zones[neighbour], neighbour + 1), taper })
+/// What lies beyond the end of the street at its first end (`first_end`) or its last: the first zone boundary met
+/// going out from the end, with the zone across it and the taper it needs. `None` for a street of one zone, with
+/// no frame, with a zoning drawn on another road (the page's "elsewhere", as `Editor::elsewhere` decides it), when
+/// the boundary is at or past the road's end, when the two sections have the same pieces, or when either is wider than the street (`row_mm`; a narrower one fits and is drawn).
+pub(super) fn beyond(street: &Street, first_end: bool, frame: Option<ZoneFrame>) -> Option<Beyond> {
+    let frame = frame?;
+    let n = street.zones.len();
+    if n < 2 || frame.from_end != street.from_end || street.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() > LENGTH_TOLERANCE_MM) {
+        return None;
     }
+    // As `at_end` picks the end zone; the neighbour is the one beside it.
+    let anchored = (street.from_end == ZoneEnd::First) == first_end;
+    let (end, neighbour) = if anchored { (0, 1) } else { (n - 1, n - 2) };
+    let b = end.min(neighbour);
+    let at = street.zones[b + 1].from_mm;
+    if at >= frame.length_mm {
+        return None;
+    }
+    let sections = street.sections();
+    if same_pieces(sections[end], sections[neighbour]) {
+        return None;
+    }
+    // A section wider than the street does not fit and is not drawn. One narrower does fit ("left to use"): its
+    // pieces are laid out from the left edge, and the mirrored spans below flip by the section's own total.
+    let (end_total, across_total) = (total(sections[end]), total(sections[neighbour]));
+    if end_total > street.row_mm || across_total > street.row_mm {
+        return None;
+    }
+    // Measured from the anchored end; the arm measures from its own, the junction's centre.
+    let out = |lo: i32, hi: i32| if anchored { (lo, hi) } else { (frame.length_mm - hi, frame.length_mm - lo) };
+    let boundary_mm = out(at, at).0;
+    let mirrored = !first_end;
+    let taper = transition(sections[b], sections[b + 1], street.taper_speed_kmh(b), street.from_end).map(|t| {
+        let (host, interval) = match t.host {
+            Host::Near => (b, ((at - t.length_mm).max(street.zones[b].from_mm), at)),
+            Host::Far => (b + 1, (at, (at + t.length_mm).min(street.zones.get(b + 2).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm)))),
+        };
+        let host_end = street.zones.get(host + 1).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm);
+        let (from_mm, to_mm) = out(interval.0, interval.1);
+        // `before` is the nearer-the-anchor zone's side: the end zone's when that is zone `b`.
+        let end_is_near = end == b;
+        let mut changes: Vec<(usize, Option<(i32, i32)>, Option<(i32, i32)>)> =
+            t.changes.iter().map(|c| if end_is_near { (c.kind, c.before, c.after) } else { (c.kind, c.after, c.before) }).collect();
+        if mirrored {
+            // Each side flips by its own section's total: the view lays a section's pieces out from 0.
+            let flip = |r: Option<(i32, i32)>, total: i32| r.map(|(x0, x1)| (total - x1, total - x0));
+            changes = changes.into_iter().rev().map(|(k, was, becomes)| (k, flip(was, end_total), flip(becomes, across_total))).collect();
+        }
+        let pieces = changes
+            .iter()
+            .enumerate()
+            .filter(|(_, (kind, was, becomes))| is_roadway(*kind) && was != becomes)
+            .filter_map(|(i, &(kind, was, becomes))| {
+                let from = was.or_else(|| anchor(&changes, i, |c| c.1))?;
+                let to = becomes.or_else(|| anchor(&changes, i, |c| c.2))?;
+                Some(TaperPiece { kind, from, to, was, becomes })
+            })
+            .collect();
+        BeyondTaper { from_mm, to_mm, need_mm: t.length_mm, room_mm: host_end - street.zones[host].from_mm, merges: t.merges, pieces }
+    });
+    let mut across = Street { segments: sections[neighbour].to_vec(), zones: Vec::new(), ..street.clone() };
+    if !first_end {
+        across = across.reversed();
+    }
+    Some(Beyond { boundary_mm, next: across.segments, zone: zone_label_mid(&street.zones[neighbour], neighbour + 1), taper })
 }
 
 type Row = (usize, Option<(i32, i32)>, Option<(i32, i32)>);

@@ -8,8 +8,10 @@
 
 use serde::Serialize;
 
-use super::curb::{Use, curbside};
-use super::stop::{StopKind, bus_lane, stand};
+use super::StopKind;
+use super::Use;
+use super::curb::curbside;
+use super::stop::{bus_lane, stand};
 use super::{Segment, Side, Street, ZoneEnd, ZoneFrame};
 
 /// One part of a curbside use: where it stands along the street and across it.
@@ -58,58 +60,56 @@ fn edges(segs: &[Segment], row_mm: i32) -> Vec<(i32, i32)> {
         .collect()
 }
 
-impl Street {
-    /// The parts of the programme (`curb`, `stops`) to draw on the map, laid along `frame.length_mm` (the street as
-    /// loaded). A part is one use or stop inside one zone; a part whose zone has no piece to stand on draws nothing.
-    pub fn map_uses(&self, frame: ZoneFrame) -> MapUses {
-        let length = frame.length_mm;
-        // Each zone: its anchored span, its section and the lateral edges of the section's pieces.
-        let zones: Vec<((i32, i32), &[Segment], Vec<(i32, i32)>)> = self
-            .sections()
-            .into_iter()
-            .enumerate()
-            .map(|(z, segs)| {
-                ((self.zones.get(z).map_or(0, |g| g.from_mm), self.zones.get(z + 1).map_or(length, |g| g.from_mm)), segs, edges(segs, self.row_mm))
+/// The parts of the programme (`curb`, `stops`) to draw on the map, laid along `frame.length_mm` (the street as
+/// loaded). A part is one use or stop inside one zone; a part whose zone has no piece to stand on draws nothing.
+pub(super) fn map_uses(street: &Street, frame: ZoneFrame) -> MapUses {
+    let length = frame.length_mm;
+    // Each zone: its anchored span, its section and the lateral edges of the section's pieces.
+    let zones: Vec<((i32, i32), &[Segment], Vec<(i32, i32)>)> = street
+        .sections()
+        .into_iter()
+        .enumerate()
+        .map(|(z, segs)| {
+            ((street.zones.get(z).map_or(0, |g| g.from_mm), street.zones.get(z + 1).map_or(length, |g| g.from_mm)), segs, edges(segs, street.row_mm))
+        })
+        .collect();
+    // The parts of the anchored span `from..to` inside the street, one per zone, as positions from node a.
+    let parts = |from: i32, to: i32| {
+        let (from, to) = (from.max(0), to.min(length));
+        zones
+            .iter()
+            .filter_map(|((z_from, z_to), segs, edges)| {
+                let (a, b) = (from.max(*z_from), to.min(*z_to));
+                let along = if frame.from_end == ZoneEnd::Last { (length - b, length - a) } else { (a, b) };
+                (a < b).then_some((along, *segs, edges))
             })
-            .collect();
-        // The parts of the anchored span `from..to` inside the street, one per zone, as positions from node a.
-        let parts = |from: i32, to: i32| {
-            let (from, to) = (from.max(0), to.min(length));
-            zones
-                .iter()
-                .filter_map(|((z_from, z_to), segs, edges)| {
-                    let (a, b) = (from.max(*z_from), to.min(*z_to));
-                    let along = if frame.from_end == ZoneEnd::Last { (length - b, length - a) } else { (a, b) };
-                    (a < b).then_some((along, *segs, edges))
-                })
-                .collect::<Vec<_>>()
-        };
+            .collect::<Vec<_>>()
+    };
 
-        let mut uses = Vec::new();
-        let mut drawn_uses = 0;
-        for i in &self.curb {
-            let before = uses.len();
-            for ((from_mm, to_mm), segs, edges) in parts(i.from_mm, i.from_mm + i.length_mm) {
-                if let Some(p) = curbside(segs, i.side) {
-                    uses.push(MapUse { side: i.side, use_: i.use_, from_mm, to_mm, lo_mm: edges[p].0, hi_mm: edges[p].1 });
-                }
+    let mut uses = Vec::new();
+    let mut drawn_uses = 0;
+    for i in &street.curb {
+        let before = uses.len();
+        for ((from_mm, to_mm), segs, edges) in parts(i.from_mm, i.from_mm + i.length_mm) {
+            if let Some(p) = curbside(segs, i.side) {
+                uses.push(MapUse { side: i.side, use_: i.use_, from_mm, to_mm, lo_mm: edges[p].0, hi_mm: edges[p].1 });
             }
-            drawn_uses += usize::from(uses.len() > before);
         }
-        let mut stops = Vec::new();
-        let mut drawn_stops = 0;
-        for st in &self.stops {
-            let before = stops.len();
-            for ((from_mm, to_mm), segs, edges) in parts(st.from_mm, st.to_mm()) {
-                let Some(extent) = stop_extent(segs, edges, st.side, self.side, st.kind) else { continue };
-                stops.push(MapStop { side: st.side, kind: st.kind, name: st.name.clone(), from_mm, to_mm, lo_mm: extent.0, hi_mm: extent.1 });
-            }
-            drawn_stops += usize::from(stops.len() > before);
-        }
-        uses.sort_by_key(|u| (u.from_mm, u.side == Side::Right));
-        stops.sort_by_key(|s| (s.from_mm, s.side == Side::Right));
-        MapUses { uses, stops, drawn_uses, drawn_stops }
+        drawn_uses += usize::from(uses.len() > before);
     }
+    let mut stops = Vec::new();
+    let mut drawn_stops = 0;
+    for st in &street.stops {
+        let before = stops.len();
+        for ((from_mm, to_mm), segs, edges) in parts(st.from_mm, st.to_mm()) {
+            let Some(extent) = stop_extent(segs, edges, st.side, street.side, st.kind) else { continue };
+            stops.push(MapStop { side: st.side, kind: st.kind, name: st.name.clone(), from_mm, to_mm, lo_mm: extent.0, hi_mm: extent.1 });
+        }
+        drawn_stops += usize::from(stops.len() > before);
+    }
+    uses.sort_by_key(|u| (u.from_mm, u.side == Side::Right));
+    stops.sort_by_key(|s| (s.from_mm, s.side == Side::Right));
+    MapUses { uses, stops, drawn_uses, drawn_stops }
 }
 
 /// The lateral extent of the platform a stop of `kind` stands on in a section, or `None` when the section has no bus
@@ -128,11 +128,10 @@ fn stop_extent(segs: &[Segment], edges: &[(i32, i32)], side: Side, driving: Side
 
 #[cfg(test)]
 mod tests {
-    use super::super::curb::Instance;
-    use super::super::stop::Stop;
-    use super::super::zones::Zone;
     use super::*;
     use crate::shared::catalogue::kind_index;
+    use crate::street::model::StreetExt;
+    use crate::street::model::{Instance, Stop, Zone};
 
     const LEN: i32 = 60_000;
 

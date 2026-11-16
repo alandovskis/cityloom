@@ -5,6 +5,7 @@ use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::diagram::{Face, Layer, LayerKind, Pt, Shape};
 use crate::shared::i18n::{Args, I18n};
 use crate::street::model::GreenKind;
+use crate::street::model::GreenKindExt;
 use crate::street::model::SegView;
 
 use super::surface::top;
@@ -230,6 +231,7 @@ pub(in crate::street::view::iso) fn raised(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::street::model::UseExt;
     use crate::street::view::iso::raised::strips;
     use crate::street::view::iso::scene::testing::each_run;
     use crate::street::view::iso::surface::split;

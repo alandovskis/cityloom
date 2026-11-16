@@ -134,6 +134,7 @@ mod tests {
     use super::*;
     use crate::junction::model::{Piece, unlabelled};
     use crate::shared::catalogue::{Side, kind_index};
+    use crate::street::model::StreetExt;
     use serde_json::Value;
 
     const ROW: i32 = 18_000;

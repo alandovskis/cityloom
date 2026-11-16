@@ -16,6 +16,7 @@ pub mod turbo_spiral;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
+use crate::street::model::StreetExt;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 

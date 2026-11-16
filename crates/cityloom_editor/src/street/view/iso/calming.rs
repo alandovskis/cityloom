@@ -248,6 +248,7 @@ mod drawing {
     use super::*;
     use crate::shared::catalogue::Side;
     use crate::shared::units::Units;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, Street, ZoneEnd, ZoneFrame};
     use crate::street::view::iso::iso_label;
     use crate::street::view::iso::testing::{drawn, en};

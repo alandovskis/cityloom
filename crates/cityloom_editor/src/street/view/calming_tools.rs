@@ -10,6 +10,7 @@ use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
 use crate::street::model::CalmingKind;
+use crate::street::model::CalmingKindExt;
 use crate::street::view::curb_tools::typed_length;
 use crate::street::view::zone_tools::focus_later;
 use crate::street::vm::StreetVm;

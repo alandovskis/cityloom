@@ -26,6 +26,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
+use crate::street::model::StreetExt;
 use crate::street::model::{
     Beyond, Editor, EndInfo, EndStop, EndUse, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition,
     unnamed_said,

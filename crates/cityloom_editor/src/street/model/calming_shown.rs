@@ -2,10 +2,12 @@
 //! `Stretch` as the curbside uses (see `curb_shown`), so from the anchored end whatever it is and mirrored when it is
 //! the last end. A table spans the roadway, so it has no side and no piece.
 
+use super::CalmingExt;
 use serde::Serialize;
 
+use super::CalmingKind as Kind;
 use super::Editor;
-use super::calming::{Kind, RAMP_MM};
+use super::calming::RAMP_MM;
 use crate::shared::catalogue::Side;
 
 /// One raised element as the 2.5D shows it.
@@ -74,6 +76,7 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::shared::catalogue::Side;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Street, ZoneEnd, ZoneFrame};
 
     const LEN: i32 = 60_000;

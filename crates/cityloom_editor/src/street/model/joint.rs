@@ -2,7 +2,8 @@
 
 use serde::Serialize;
 
-use super::zones::{ZoneEnd, zone_label, zone_label_mid};
+use super::ZoneEnd;
+use super::zones::{zone_label, zone_label_mid};
 use super::{Change, Editor, Host, Said, SegView};
 
 /// The stretch the 2.5D shows, in millimetres (a test pins it to `iso::STRETCH_MM`).

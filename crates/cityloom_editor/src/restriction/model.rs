@@ -342,6 +342,7 @@ impl Finding {
 
 #[cfg(test)]
 mod tests {
+    use crate::street::model::StreetExt;
     #[test]
     fn every_area_rule_has_its_own_registry_id_and_is_a_placeholder_for_now() {
         use crate::shared::sources::{Confidence, citation};

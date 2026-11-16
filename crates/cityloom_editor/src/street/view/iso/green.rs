@@ -5,6 +5,7 @@
 //! with an outline. An element on a roadway piece is not shown at all (`Editor::green_shown`).
 
 use crate::shared::catalogue::KINDS;
+use crate::street::model::TreeSizeExt;
 use crate::street::model::{GreenKind, SegView, ShownGreen, TreeSize};
 
 use super::order::Bx;
@@ -113,6 +114,8 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownGreen], p: &Projection) -> 
 mod tests {
     use crate::shared::catalogue::Side;
     use crate::shared::units::Units;
+    use crate::street::model::StreetExt;
+    use crate::street::model::TreeSizeExt;
     use crate::street::model::{Editor, Green, GreenKind, SAMPLES, Street, TreeSize, Use, ZoneEnd, ZoneFrame};
     use crate::street::view::iso::projection::points;
     use crate::street::view::iso::testing::{count, drawn, en, joined, joined_from_last};

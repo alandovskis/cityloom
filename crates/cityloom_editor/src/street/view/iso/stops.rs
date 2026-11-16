@@ -87,6 +87,7 @@ pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> Ve
 mod tests {
     use crate::shared::catalogue::{REGIONS, Side, kind_index};
     use crate::shared::units::Units;
+    use crate::street::model::StreetExt;
     use crate::street::model::{Editor, Piece, StopKind, Street, ZoneEnd, ZoneFrame};
     use crate::street::view::iso::projection::points;
     use crate::street::view::iso::testing::{count, drawn, en};

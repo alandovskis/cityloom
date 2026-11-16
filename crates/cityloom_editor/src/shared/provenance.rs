@@ -1,15 +1,9 @@
 //! Where a street or a junction came from.
 
 use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
 
-/// An OpenStreetMap way (of a street) or node (of a junction) that a place was made from, and the version it had when
-/// the data was read.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct OsmRef {
-    pub id: i64,
-    pub version: Option<i32>,
-}
+/// What the editor calls `cityloom_model::SourceRef`: the OSM way or node a street or a junction was made from.
+pub use cityloom_model::SourceRef as OsmRef;
 
 /// The page of a way or node (`kind`) on OpenStreetMap.
 pub fn osm_url(kind: &str, id: i64) -> String {

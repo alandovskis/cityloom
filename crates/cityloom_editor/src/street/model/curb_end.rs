@@ -1,7 +1,8 @@
 //! The curbside uses at a street's end, as an arm of a junction reads them: in the arm's orientation, measured from
 //! the junction's centre, with the piece each stands on. Derived, never saved. Pure, no browser types.
 
-use super::curb::{Use, curbside};
+use super::Use;
+use super::curb::curbside;
 use super::{LENGTH_TOLERANCE_MM, Street, ZoneEnd, ZoneFrame};
 use crate::shared::catalogue::Side;
 
@@ -22,52 +23,50 @@ pub struct EndUse {
     pub piece: Option<usize>,
 }
 
-impl Street {
-    /// The curbside uses that have a part in the end zone at the street's first end (`first_end`) or its last, nearest
-    /// first. How far the arm is drawn is the junction's to decide: a use past it is returned all the same. Empty
-    /// with no frame, a frame of another road (another length or anchored at the other end) or no uses.
-    pub fn end_uses(&self, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndUse> {
-        let Some(frame) = frame else { return Vec::new() };
-        // A street with uses has a recorded length, so `None` cannot match.
-        let same_length = self.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
-        if self.curb.is_empty() || frame.from_end != self.from_end || !same_length {
-            return Vec::new();
-        }
-        // The end zone in millimetres from the anchored end, as `at_end` picks it.
-        let anchored = (self.from_end == ZoneEnd::First) == first_end;
-        let range = match self.zones.last() {
-            Some(_) if anchored => (0, self.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
-            Some(last) => (last.from_mm, frame.length_mm),
-            None => (0, frame.length_mm),
-        };
-        let mut section = self.at_end(first_end);
-        if !first_end {
-            section = section.reversed();
-        }
-        let mut found: Vec<EndUse> = self
-            .curb
-            .iter()
-            .enumerate()
-            .filter_map(|(index, i)| {
-                let (from, to) = (i.from_mm.max(range.0), (i.from_mm + i.length_mm).min(range.1));
-                if from >= to {
-                    return None;
-                }
-                let (near_mm, far_mm) = if anchored { (from, to) } else { (frame.length_mm - to, frame.length_mm - from) };
-                let side = if first_end {
-                    i.side
-                } else {
-                    match i.side {
-                        Side::Left => Side::Right,
-                        Side::Right => Side::Left,
-                    }
-                };
-                Some(EndUse { index, side, use_: i.use_, near_mm, far_mm, piece: curbside(&section.segments, side) })
-            })
-            .collect();
-        found.sort_by_key(|u| (u.near_mm, u.index));
-        found
+/// The curbside uses that have a part in the end zone at the street's first end (`first_end`) or its last, nearest
+/// first. How far the arm is drawn is the junction's to decide: a use past it is returned all the same. Empty
+/// with no frame, a frame of another road (another length or anchored at the other end) or no uses.
+pub(super) fn end_uses(street: &Street, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndUse> {
+    let Some(frame) = frame else { return Vec::new() };
+    // A street with uses has a recorded length, so `None` cannot match.
+    let same_length = street.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
+    if street.curb.is_empty() || frame.from_end != street.from_end || !same_length {
+        return Vec::new();
     }
+    // The end zone in millimetres from the anchored end, as `at_end` picks it.
+    let anchored = (street.from_end == ZoneEnd::First) == first_end;
+    let range = match street.zones.last() {
+        Some(_) if anchored => (0, street.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
+        Some(last) => (last.from_mm, frame.length_mm),
+        None => (0, frame.length_mm),
+    };
+    let mut section = street.at_end(first_end);
+    if !first_end {
+        section = section.reversed();
+    }
+    let mut found: Vec<EndUse> = street
+        .curb
+        .iter()
+        .enumerate()
+        .filter_map(|(index, i)| {
+            let (from, to) = (i.from_mm.max(range.0), (i.from_mm + i.length_mm).min(range.1));
+            if from >= to {
+                return None;
+            }
+            let (near_mm, far_mm) = if anchored { (from, to) } else { (frame.length_mm - to, frame.length_mm - from) };
+            let side = if first_end {
+                i.side
+            } else {
+                match i.side {
+                    Side::Left => Side::Right,
+                    Side::Right => Side::Left,
+                }
+            };
+            Some(EndUse { index, side, use_: i.use_, near_mm, far_mm, piece: curbside(&section.segments, side) })
+        })
+        .collect();
+    found.sort_by_key(|u| (u.near_mm, u.index));
+    found
 }
 
 #[cfg(test)]
@@ -76,6 +75,7 @@ mod tests {
     use super::super::fixtures::zoned;
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
+    use crate::street::model::StreetExt;
 
     const LEN: i32 = 60_000;
 

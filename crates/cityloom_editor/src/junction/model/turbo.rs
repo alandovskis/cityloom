@@ -372,6 +372,7 @@ pub fn ring_lane(k: usize, n: usize, ring_lanes: usize, right_hand: bool) -> usi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::street::model::StreetExt;
 
     use crate::junction::model::Junction;
     use crate::shared::catalogue::{Side, kind_index};
