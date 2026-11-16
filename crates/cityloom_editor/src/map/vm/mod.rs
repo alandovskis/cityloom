@@ -1106,7 +1106,7 @@ impl MapVm {
                             // A press on nothing goes back from a place to the city; with the area rules or a check
                             // shown it keeps them (and lets a selected area go).
                             if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
-                                self.shown.set(MapLevel::City);
+                                self.set_shown(MapLevel::City);
                             }
                             let before = self.areas.selected_id_now();
                             self.areas.select(area.as_deref());
@@ -1158,8 +1158,17 @@ impl MapVm {
     /// Shows a place in the details, or none (the city's level).
     pub fn pick(&self, hot: Option<&str>) {
         match hot {
-            Some(hot) => self.shown.set(MapLevel::Place(hot.to_string())),
+            Some(hot) => self.set_shown(MapLevel::Place(hot.to_string())),
             None => self.show_city(),
+        }
+    }
+
+    /// Chooses the level of the details. A new level forgets what the map said last, so that opening the details
+    /// for it says again only what was said for it (`say_again`), never what was said for the one before.
+    fn set_shown(&self, level: MapLevel) {
+        if self.shown.get_untracked() != level {
+            self.said.last.borrow_mut().take();
+            self.shown.set(level);
         }
     }
 
@@ -1173,19 +1182,19 @@ impl MapVm {
 
     /// Goes back to the city's level. A selected area is let go, since its form is no longer shown.
     pub fn show_city(&self) {
-        self.shown.set(MapLevel::City);
+        self.set_shown(MapLevel::City);
         self.areas.select(None);
     }
 
     /// Shows the area rules.
     pub fn show_areas(&self) {
-        self.shown.set(MapLevel::Areas);
+        self.set_shown(MapLevel::Areas);
     }
 
     /// Shows the network check `id` and its findings; an id that is no check changes nothing.
     pub fn show_check(&self, id: &str) {
         if network::Check::ALL.iter().any(|c| c.id() == id) {
-            self.shown.set(MapLevel::Check(id.to_string()));
+            self.set_shown(MapLevel::Check(id.to_string()));
         }
     }
 
@@ -1348,13 +1357,13 @@ impl MapVm {
         if !self.selection.contains(uid) && !self.can_edit(&format!("s-{uid}")) {
             return self.say_not_editable();
         }
-        let added = !self.selection.contains(uid);
+        // Shown first: a change of level forgets what the map said, and the street added is what it says now.
+        if !self.selection.contains(uid) {
+            self.show_selected_streets();
+        }
         self.selection.toggle(uid, &self.street_label(uid));
         self.show_selection();
         self.corridor.set(Stage::Idle);
-        if added {
-            self.show_selected_streets();
-        }
     }
 
     /// The change a goal offers, chosen for the selected streets (the goal guide's button): it is shown where it is
@@ -1366,7 +1375,7 @@ impl MapVm {
 
     /// Shows the selected streets in the details.
     pub fn show_selected_streets(&self) {
-        self.shown.set(MapLevel::Selection);
+        self.set_shown(MapLevel::Selection);
     }
 
     /// The city's row to the selected streets: how many there are. Watched.
@@ -2593,6 +2602,28 @@ mod tests {
         assert_eq!(vm.corridor_op().id(), "bus-corridor");
         assert_eq!(vm.level(), MapLevel::Selection, "the change, its review and Apply are with the selected streets");
         assert!(matches!(vm.corridor_stage(), Stage::Idle), "nothing is reviewed until the person asks");
+    }
+
+    #[test]
+    fn a_level_shown_with_nothing_said_has_nothing_said_again() {
+        let (vm, mapper, _, said, _) = car_free_bendville_said();
+        mapper.say(COVERING);
+        vm.show_areas();
+        vm.areas().select(Some("r1"));
+        let street = vm.street_rows().into_iter().next().expect("a street").hot;
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some(street), area: None, vertex: None });
+        said.take();
+        // the area, still selected, pressed again: the area rules are shown, and nothing new is said
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.level(), MapLevel::Areas);
+        said.take();
+        vm.say_again();
+        assert!(said.take().is_empty(), "the street's words are not said over the area rules");
+        // a street added shows the selection and its words are said again
+        vm.toggle_selected(Some("s-1"));
+        let added = said.take();
+        vm.say_again();
+        assert_eq!(said.take(), added);
     }
 
     #[test]
