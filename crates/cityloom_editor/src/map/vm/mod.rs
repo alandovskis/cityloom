@@ -368,7 +368,8 @@ pub struct MapVm {
     corridor_op: ArcRwSignal<Op>,
     corridor: ArcRwSignal<Stage>,
     /// The level of the details chosen: the city, the place a press shows (a second press on it, or Open, opens
-    /// it), the area rules or a network check. An outline being drawn shows the area rules whatever this is.
+    /// it), the area rules, a network check or the selected streets. An outline being drawn shows the area rules
+    /// whatever this is.
     shown: ArcRwSignal<MapLevel>,
     /// The announcer the map speaks through, which keeps what it said last (`say_again`).
     said: Rc<LastSaid>,

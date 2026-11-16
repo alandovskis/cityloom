@@ -64,8 +64,8 @@ fn levels(level: &MapLevel) -> [(&'static str, bool); 5] {
     ]
 }
 
-/// The path: City, or City › the place shown, or City › Area rules. It also shows the level it names and hides the
-/// others. While an outline is drawn or named the city is not a step back: Finish, Save or Cancel come first.
+/// The path: City, or City › the level shown (a place, Area rules, a network check, Selected streets). It also shows
+/// the level it names and hides the others. While an outline is drawn or named the city is not a step back: Finish, Save or Cancel come first.
 #[component]
 pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
