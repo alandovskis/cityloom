@@ -1,8 +1,9 @@
 //! The map's details, one level at a time under a path, as the street and junction pages have them: the city (the
 //! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), the area rules (`#map-areas`) or a
 //! network check (`#map-check`, `network_view::NetworkCheckPane`) or the selected streets (`#map-selection`). A
-//! first press on a place shows it here; a second press on it, or Open, opens its editor (`MapVm::pick`,
-//! `open_picked`). The city leads to the area rules by a row of its own (`AreasRow`).
+//! first press on a place shows it here (`MapVm::pick`); a second press on it, or Open (a link to the address of its
+//! row, `picked_row`), opens its editor. The city leads to the area rules and to the selected streets by rows of its
+//! own (`AreasRow`, `SelectionRow`).
 
 use std::rc::Rc;
 

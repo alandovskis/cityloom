@@ -1219,17 +1219,6 @@ impl MapVm {
         }
     }
 
-    /// Opens the place shown in its editor, as a second press on it does.
-    pub fn open_picked(&self) {
-        let hot = match self.shown.get_untracked() {
-            MapLevel::Place(hot) => hot,
-            _ => return,
-        };
-        if let Some(href) = href_of(&hot, self.project().as_deref()) {
-            self.ports.navigator.go(&href);
-        }
-    }
-
     /// A first press on a place: show it, and say how to open it.
     fn show_place(&self, hot: &str) {
         self.pick(Some(hot));
@@ -2537,9 +2526,11 @@ mod tests {
         mapper.say(press("s-1"));
         mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
         assert_eq!(vm.picked(), None, "a press on nothing goes back to the city");
+        // Open (the place pane's link to the row's address) goes where a second press goes
         vm.pick(Some("s-1"));
-        vm.open_picked();
-        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "Open does what a second press does");
+        let open = vm.picked_row().expect("the place's row").href;
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec![open]);
     }
 
     #[test]
