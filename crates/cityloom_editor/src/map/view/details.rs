@@ -1,5 +1,6 @@
 //! The map's details, one level at a time under a path, as the street and junction pages have them: the city (the
-//! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), or the area rules (`#map-areas`). A
+//! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), the area rules (`#map-areas`) or a
+//! network check (`#map-check`, `network_view::NetworkCheckPane`). A
 //! first press on a place shows it here; a second press on it, or Open, opens its editor (`MapVm::pick`,
 //! `open_picked`). The city leads to the area rules by a row of its own (`AreasRow`).
 
@@ -14,7 +15,7 @@ use crate::shared::bind::Bound;
 const CURRENT: &str = "map-path-current";
 
 /// Moves the focus to the path's current step once the details are drawn again: from there Tab enters the level.
-fn focus_current() {
+pub(crate) fn focus_current() {
     #[cfg(target_arch = "wasm32")]
     request_animation_frame(|| {
         use leptos::wasm_bindgen::JsCast;
@@ -25,8 +26,13 @@ fn focus_current() {
 }
 
 /// The page's element of each level, and whether it is the level `level`.
-fn levels(level: &MapLevel) -> [(&'static str, bool); 3] {
-    [("map-city", *level == MapLevel::City), ("map-place", matches!(level, MapLevel::Place(_))), ("map-areas", *level == MapLevel::Areas)]
+fn levels(level: &MapLevel) -> [(&'static str, bool); 4] {
+    [
+        ("map-city", *level == MapLevel::City),
+        ("map-place", matches!(level, MapLevel::Place(_))),
+        ("map-areas", *level == MapLevel::Areas),
+        ("map-check", matches!(level, MapLevel::Check(_))),
+    ]
 }
 
 /// The path: City, or City › the place shown, or City › Area rules. It also shows the level it names and hides the
@@ -53,6 +59,7 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
             MapLevel::City => None,
             MapLevel::Place(_) => vm.with(|v| v.picked_row().map(|row| v.say(&row.name))),
             MapLevel::Areas => Some(vm.with(|v| v.word("restriction-panel"))),
+            MapLevel::Check(_) => vm.with(|v| v.shown_check().map(|c| c.label)),
         };
         match here {
             None => view! {

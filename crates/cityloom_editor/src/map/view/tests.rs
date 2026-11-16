@@ -831,23 +831,33 @@ fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
     vm.reload();
 }
 
-#[test]
-fn every_network_check_says_it_is_a_placeholder_and_the_name_of_its_summary_is_its_check() {
-    let (vm, _) = map_vm();
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
-    assert_eq!(count(&h, "<details class=\"src placeholder\""), 6, "{h}");
-    assert!(h.contains("aria-label=\"Source: placeholder, no source (Crossings)\""), "{h}");
+/// The level of the network check `id`, as the details show it.
+fn check_pane(vm: &Rc<MapVm>, id: &str) -> String {
+    vm.show_check(id);
+    map_html(|| view! { <network_view::NetworkCheckPane vm=vm.clone()/> })
 }
 
 #[test]
-fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
+fn every_network_check_says_it_is_a_placeholder_and_the_name_of_its_summary_is_its_check() {
+    let (vm, _) = map_vm();
+    let rows = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(!rows.contains("<details"), "the sources are at each check's own level: {rows}");
+    for id in ["cycling", "access", "crossings", "lanes", "transit", "walking"] {
+        let h = check_pane(&vm, id);
+        assert_eq!(count(&h, "<details class=\"src placeholder\""), 1, "{id}: {h}");
+    }
+    assert!(check_pane(&vm, "crossings").contains("aria-label=\"Source: placeholder, no source (Crossings)\""));
+}
+
+#[test]
+fn the_network_checks_are_a_row_each_with_its_count_that_leads_to_the_check() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
     assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
-    assert!(!h.contains("aria-labelledby"), "{h}");
-    assert_eq!(count(&h, "<h3"), 6);
-    // the name and the count are read apart: "Crossings: no findings"
-    assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
+    assert_eq!(count(&h, "<h3"), 0, "a row, not a heading: {h}");
+    assert_eq!(count(&h, "<button"), 6, "{h}");
+    assert!(h.contains("<b>Crossings</b><small data-count=\"0\" class=\"fig net-count\">no findings</small>"), "{h}");
+    assert!(!h.contains("These look across"), "what the checks are is said at a check's own level: {h}");
     for (id, label) in [
         ("cycling", "Cycling links"),
         ("access", "Pedestrian street access"),
@@ -856,10 +866,13 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
         ("transit", "Transit corridors"),
         ("walking", "Walking routes"),
     ] {
-        assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"net-go-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+        let pane = check_pane(&vm, id);
+        assert!(pane.contains(&format!("<h2 id=\"net-h-{id}\" class=\"insp-name\">{label}</h2>")), "{id}: {pane}");
+        assert!(pane.contains("no findings") && pane.contains("These look across the whole network"), "{pane}");
+        assert_eq!(count(&pane, "<li"), 0, "{pane}");
     }
     assert_eq!(count(&h, "no findings"), 6);
-    assert_eq!(count(&h, "<li"), 0);
     let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
     assert!(lead.contains("found nothing"), "{lead}");
 }
@@ -868,10 +881,14 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
 fn a_finding_says_why_and_links_the_street_and_the_junction() {
     let (vm, storage) = map_vm();
     take_a_crossing_away(&vm, &storage);
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    let rows = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(rows.contains("data-count=\"1\" class=\"fig net-count\">1 finding</small>") && !rows.contains("has no pedestrian crossing"), "{rows}");
+    let h = check_pane(&vm, "crossings");
     assert_eq!(count(&h, "<li data-severity"), 1, "{h}");
     assert!(h.contains("1 finding") && h.contains("has no pedestrian crossing") && h.contains("Problem"), "{h}");
-    assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
+    // a place it names is shown in the details, as a press on the map shows it
+    assert!(h.contains("data-hot=\"s-") && h.contains("data-hot=\"j-2\"") && !h.contains("href="), "{h}");
+    assert_eq!(count(&h, "<button type=\"button\" data-hot="), 2, "the places are buttons: {h}");
     assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\"") && h.contains("data-rule=\"crossings\""), "{h}");
     // the places are a list of their own, so a screen reader says how many there are
     assert!(h.contains("<ul class=\"net-links\"") && count(&h, "<ul class=\"net-links\"") == 1, "{h}");
@@ -884,7 +901,7 @@ fn a_finding_says_why_and_links_the_street_and_the_junction() {
 fn the_network_checks_are_worded_in_french() {
     let (vm, storage) = map_vm_in(Locale::FrCa);
     take_a_crossing_away(&vm, &storage);
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    let h = check_pane(&vm, "crossings");
     assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
 }
 
@@ -1886,4 +1903,17 @@ fn the_city_has_a_row_to_the_area_rules_that_counts_them_and_the_streets_breakin
     let vm = ready_areas_vm(Locale::FrCa, &[("Zone", Rule::CarFree)]);
     let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
     assert!(h.contains(">Règles de zone<") && h.contains(">Une zone · "), "{h}");
+}
+
+#[test]
+fn a_network_check_is_a_level_under_the_city_named_by_the_path() {
+    let (vm, _) = map_vm();
+    vm.show_check("walking");
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Walking routes</span>"), "{h}");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let level = &notes[notes.find(r#"id="map-check""#).expect("the check's level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden") && level.contains(r#"id="map-check-slot""#));
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.contains(r#"id="network-slot""#) && !city.contains("net-note"), "the rows are the city's, the note the check's");
 }

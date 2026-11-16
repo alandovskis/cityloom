@@ -1624,7 +1624,8 @@ a.btn {
     padding: 24px 20px 28px;
   }
 }
-/* The Network checks section of the map's Notes panel: a heading and a count for each check, then its findings. */
+/* The network checks of the map's details: a row and a count for each at the city's level, and a check's findings at
+   its own. */
 .net-h {
   display: flex;
   flex-wrap: wrap;
@@ -1653,10 +1654,30 @@ a.btn {
   padding: 0;
   border: 0;
 }
-.net-links a {
+/* A place a finding names: a press shows it in the details, so it is a button drawn as the link it reads as. */
+.net-links .net-link {
   display: inline-block;
+  min-height: 24px;
   padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
   text-decoration: underline;
+  cursor: pointer;
+}
+.net-links .net-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The city's row for each network check: its name, and its count on the right. */
+.net-rows .place-row small {
+  grid-column: 2;
+  grid-row: 1;
+}
+.net-rows .goal-mark {
+  grid-column: 1 / -1;
 }
 .net-more {
   margin: 0 8px 4px;
@@ -1787,7 +1808,6 @@ details.src ul {
 /* A network check that bears on the chosen goal (#72), marked as the street page's checks are. */
 .net-rule.goal {
   border-left: 3px solid var(--accent);
-  padding-left: 8px;
 }
 .goal-use {
   margin-top: 4px;
@@ -1862,10 +1882,10 @@ details.src ul {
   }
 }
 /* The place a press on the map shows: its name heads the level, as a street's or a junction's does on its page. */
-#map-place .insp-head {
+.map-level .insp-head {
   padding: 0;
 }
-#map-place .insp-name {
+.map-level .insp-name {
   display: block;
   margin: 0;
   color: var(--ink);
@@ -1873,7 +1893,7 @@ details.src ul {
   font-weight: 700;
   line-height: 1.15;
 }
-#map-place .insp-sub {
+.map-level .insp-sub {
   display: block;
   margin: 3px 0 0;
   color: var(--ink-2);

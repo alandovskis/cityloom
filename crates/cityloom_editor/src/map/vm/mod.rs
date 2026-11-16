@@ -198,6 +198,8 @@ pub enum MapLevel {
     Place(String),
     /// The area rules: the list, an outline being drawn or named, and the selected area's form.
     Areas,
+    /// One network check (its `Check` id) and its findings.
+    Check(String),
 }
 
 /// A place to open: in a list, or as a link on the map. Its name and small print are data, worded by the view
@@ -350,10 +352,9 @@ pub struct MapVm {
     /// The change picked for the selected streets, and how far it has got.
     corridor_op: ArcRwSignal<Op>,
     corridor: ArcRwSignal<Stage>,
-    /// The place a press shows in the details (`s-<uid>` or `j-<uid>`); a second press on it, or Open, opens it.
-    picked: ArcRwSignal<Option<String>>,
-    /// Whether the details show the area rules (when no place is shown); an outline being drawn shows them anyway.
-    areas_shown: ArcRwSignal<bool>,
+    /// The level of the details chosen: the city, the place a press shows (a second press on it, or Open, opens
+    /// it), the area rules or a network check. An outline being drawn shows the area rules whatever this is.
+    shown: ArcRwSignal<MapLevel>,
     /// The last change made to the selected streets, which can be taken back as one step while this page is open.
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
@@ -412,8 +413,7 @@ impl MapVm {
             selection,
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
-            picked: ArcRwSignal::new(None),
-            areas_shown: ArcRwSignal::new(false),
+            shown: ArcRwSignal::new(MapLevel::City),
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
             report_running: Cell::new(false),
@@ -1047,7 +1047,7 @@ impl MapVm {
                     match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
                         // A first press shows the place in the details; a second on it opens it.
                         Some((hot, href)) => {
-                            if self.picked.get_untracked().as_deref() == Some(hot) {
+                            if self.shown.get_untracked() == MapLevel::Place(hot.to_string()) {
                                 self.ports.navigator.go(&href);
                             } else {
                                 self.show_place(hot);
@@ -1060,10 +1060,10 @@ impl MapVm {
                             if refused && area.is_none() {
                                 return self.say_not_editable();
                             }
-                            // A press on nothing goes back from a place to the city; with the area rules shown, it
-                            // only lets the selected area go.
-                            if hot.is_none() {
-                                self.picked.set(None);
+                            // A press on nothing goes back from a place to the city; with the area rules or a check
+                            // shown it keeps them (and lets a selected area go).
+                            if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
+                                self.shown.set(MapLevel::City);
                             }
                             let before = self.areas.selected_id_now();
                             self.areas.select(area.as_deref());
@@ -1098,16 +1098,16 @@ impl MapVm {
 
     /// The place shown in the details, watched.
     pub fn picked(&self) -> Option<String> {
-        self.picked.get()
+        match self.shown.get() {
+            MapLevel::Place(hot) => Some(hot),
+            _ => None,
+        }
     }
 
     /// Shows a place in the details, or none (the city's level).
     pub fn pick(&self, hot: Option<&str>) {
         match hot {
-            Some(hot) => {
-                self.areas_shown.set(false);
-                self.picked.set(Some(hot.to_string()));
-            }
+            Some(hot) => self.shown.set(MapLevel::Place(hot.to_string())),
             None => self.show_city(),
         }
     }
@@ -1117,24 +1117,31 @@ impl MapVm {
         if !matches!(self.areas.draw(), Draw::Idle) {
             return MapLevel::Areas;
         }
-        match self.picked.get() {
-            Some(hot) => MapLevel::Place(hot),
-            None if self.areas_shown.get() => MapLevel::Areas,
-            None => MapLevel::City,
-        }
+        self.shown.get()
     }
 
     /// Goes back to the city's level. A selected area is let go, since its form is no longer shown.
     pub fn show_city(&self) {
-        self.picked.set(None);
-        self.areas_shown.set(false);
+        self.shown.set(MapLevel::City);
         self.areas.select(None);
     }
 
     /// Shows the area rules.
     pub fn show_areas(&self) {
-        self.picked.set(None);
-        self.areas_shown.set(true);
+        self.shown.set(MapLevel::Areas);
+    }
+
+    /// Shows the network check `id` and its findings; an id that is no check changes nothing.
+    pub fn show_check(&self, id: &str) {
+        if network::Check::ALL.iter().any(|c| c.id() == id) {
+            self.shown.set(MapLevel::Check(id.to_string()));
+        }
+    }
+
+    /// The network check shown, with its findings. Watched.
+    pub fn shown_check(&self) -> Option<NetworkCheck> {
+        let MapLevel::Check(id) = self.shown.get() else { return None };
+        self.network_rules().into_iter().find(|c| c.id == id)
     }
 
     /// Whether the path may lead away from the area rules: not while an outline is drawn or named, which is finished,
@@ -1145,14 +1152,14 @@ impl MapVm {
 
     /// The row of the place shown: its name, small print, state and the address of its editor.
     pub fn picked_row(&self) -> Option<PlaceRow> {
-        let hot = self.picked.get()?;
+        let hot = self.picked()?;
         let rows = if hot.starts_with("s-") { self.street_rows() } else { self.junction_rows() };
         rows.into_iter().find(|r| r.hot == hot)
     }
 
     /// The checks the place shown fails, worded as the map's notes word them.
     pub fn picked_failing(&self) -> Vec<Said> {
-        let Some(hot) = self.picked.get() else { return Vec::new() };
+        let Some(hot) = self.picked() else { return Vec::new() };
         let v = self.view();
         let uid = hot.get(2..).and_then(|u| u.parse::<u32>().ok());
         match (hot.as_bytes().first(), uid) {
@@ -1164,7 +1171,11 @@ impl MapVm {
 
     /// Opens the place shown in its editor, as a second press on it does.
     pub fn open_picked(&self) {
-        if let Some(href) = self.picked.get_untracked().and_then(|h| href_of(&h, self.project().as_deref())) {
+        let hot = match self.shown.get_untracked() {
+            MapLevel::Place(hot) => hot,
+            _ => return,
+        };
+        if let Some(href) = href_of(&hot, self.project().as_deref()) {
             self.ports.navigator.go(&href);
         }
     }
@@ -2441,6 +2452,27 @@ mod tests {
         vm.pick(Some("s-1"));
         vm.open_picked();
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "Open does what a second press does");
+    }
+
+    #[test]
+    fn a_network_check_is_a_level_of_its_own_that_a_press_on_nothing_keeps() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        vm.show_check("cycling");
+        assert_eq!(vm.level(), MapLevel::Check("cycling".into()));
+        let shown = vm.shown_check().expect("the check shown");
+        assert_eq!(shown.id, "cycling");
+        assert_eq!(shown.label, "Cycling links");
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::Check("cycling".into()), "a press on nothing keeps the check");
+        // a place it names is shown at its own level, and the city is a step back from there
+        vm.pick(Some("s-1"));
+        assert_eq!(vm.level(), MapLevel::Place("s-1".into()));
+        vm.show_check("no-such-check");
+        assert_eq!(vm.level(), MapLevel::Place("s-1".into()), "a check there is not changes nothing");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        assert_eq!(vm.shown_check(), None);
     }
 
     #[test]

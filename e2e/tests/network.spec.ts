@@ -2,24 +2,42 @@ import type { Page } from "@playwright/test";
 
 import { expect, live, mapReady, test } from "./fixtures";
 
-// The network checks look across the whole city: a section in the map page's Notes panel, under the Checks tab with a count for each check
-// and the findings under it, each linking the places it concerns. They are worked out when the map reads the city, so
-// an edit made on a street page shows on the map's next load.
+// The network checks look across the whole city: a row for each in the city's level of the map's details, with its
+// count, leading to the check's own level, where its findings name the places they concern; a place pressed there is
+// shown in the details, from where Open opens it. They are worked out when the map reads the city, so an edit made on
+// a street page shows on the map's next load.
 
 const RULES = ["cycling", "access", "crossings", "lanes", "transit", "walking"];
 
-const rule = (page: Page, id: string) => page.locator(`#network-slot .net-rule[data-rule="${id}"]`);
+/** The city's row for the check `id`. */
+const row = (page: Page, id: string) => page.locator(`#network-slot .net-rule[data-rule="${id}"]`);
+/** The check shown at its own level. */
+const shown = (page: Page) => page.locator("#map-check-slot");
 
-/** The count each check shows, by rule. */
+/** The count each check shows on its row, by rule. */
 const counts = (page: Page) =>
   page.evaluate(() =>
     Object.fromEntries(
       [...document.querySelectorAll<HTMLElement>("#network-slot .net-rule")].map((s) => [
         s.dataset.rule!,
-        Number(s.querySelector("ul.places-list")!.getAttribute("data-count")),
+        Number(s.querySelector(".net-count")!.getAttribute("data-count")),
       ]),
     ),
   );
+
+/** Goes from the city to the check `id`. */
+async function openCheck(page: Page, id: string) {
+  if (!(await page.locator("#map-city").isVisible())) await page.locator("#map-path-city").click();
+  await page.locator(`#net-go-${id}`).click();
+  await expect(page.locator("#map-check")).toBeVisible();
+  await expect(shown(page).locator(`ul.net-findings[data-rule="${id}"]`)).toHaveCount(1);
+}
+
+/** The editor's address of a place a finding names. */
+const hrefOf = (hot: string) =>
+  hot.startsWith("s-")
+    ? `street.html?street=${hot.slice(2)}&project=first`
+    : `intersection.html?junction=${hot.slice(2)}&project=first`;
 
 async function openMap(page: Page) {
   await page.goto("/map.html");
@@ -28,19 +46,28 @@ async function openMap(page: Page) {
 }
 
 test.describe("the network checks on the map page", () => {
-  test("have a heading, a lead and a count and a list for each of the six checks", async ({ page }) => {
+  test("have a heading, a lead, a row with its count for each of the six checks, and each check a level", async ({
+    page,
+  }) => {
     await openMap(page);
     await expect(page.locator("#network-panel")).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Network checks" })).toBeVisible();
     for (const id of RULES) {
-      const heading = rule(page, id).getByRole("heading", { level: 3 });
-      await expect(heading).toBeVisible();
-      // the count is part of the heading, so a screen reader hears it with the name
       const n = (await counts(page))[id];
-      // the name and the count are apart, with a ": " a screen reader hears between them
-      expect((await heading.textContent())!.replace(/\s+/g, " ")).toMatch(/^[^:]+: (no findings|\d+ findings?)$/);
-      await expect(heading).toContainText(n === 0 ? "no findings" : n === 1 ? "1 finding" : `${n} findings`);
-      await expect(rule(page, id).locator("ul.places-list > li")).toHaveCount(n);
+      const words = n === 0 ? "no findings" : n === 1 ? "1 finding" : `${n} findings`;
+      // the row is a button whose name says the check and its count
+      const go = page.locator(`#net-go-${id}`);
+      await expect(go).toBeVisible();
+      await expect(go).toContainText(words);
+      await openCheck(page, id);
+      const name = (await go.locator("b").textContent())!;
+      await expect(page.getByRole("heading", { level: 2, name })).toBeVisible();
+      await expect(page.locator("#map-path-current")).toHaveText(name);
+      await expect(shown(page).locator(".net-count")).toHaveText(words);
+      await expect(shown(page)).toContainText("These look across the whole network");
+      await expect(shown(page).locator("ul.net-findings > li")).toHaveCount(Math.min(n, 50));
+      await page.locator("#map-path-city").click();
+      await expect(page.locator("#map-city")).toBeVisible();
     }
     const total = Object.values(await counts(page)).reduce((a, b) => a + b, 0);
     await expect(page.locator("#network-lead")).toHaveText(
@@ -61,28 +88,40 @@ test.describe("the network checks on the map page", () => {
     await expect(page.locator("#fit-slot")).not.toContainText(String(total) + " findings");
   });
 
-  test("each finding says why it failed and a link opens the place it concerns", async ({ page }) => {
+  test("each finding says why it failed, and a place it names is shown in the details and opened from there", async ({
+    page,
+  }) => {
     await openMap(page);
-    const finding = page.locator("#network-slot li").first();
+    const id = Object.entries(await counts(page)).find(([, n]) => n > 0)![0];
+    await openCheck(page, id);
+    const finding = shown(page).locator("li[data-severity]").first();
     await expect(finding.locator("b")).not.toBeEmpty();
     await expect(finding.locator(".net-severity")).toHaveText(/^(Problem|Notice)$/);
-    const link = finding.locator("a").first();
-    const href = await link.getAttribute("href");
-    expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+&project=first$/);
-    await link.focus();
+    const place = finding.locator(".net-link").first();
+    const [hot, name] = [(await place.getAttribute("data-hot"))!, (await place.textContent())!];
+    expect(hot).toMatch(/^[sj]-\d+$/);
+    await place.focus();
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`/${href!.replace("?", "\\?")}$`));
+    await expect(page.locator("#map-place")).toBeVisible();
+    // the finding names a street with its ends; the path, by its name
+    const here = (await page.locator("#map-path-current").textContent())!;
+    expect(here.length).toBeGreaterThan(0);
+    expect(name.startsWith(here), `${name} names ${here}`).toBe(true);
+    await expect(page.locator("#map-open-place")).toHaveAttribute("href", hrefOf(hot));
+    await page.locator("#map-open-place").click();
+    await expect(page).toHaveURL(new RegExp(`/${hrefOf(hot).replace("?", "\\?")}$`));
   });
 
   test("the places of a finding are a list of links that are apart from one another", async ({ page }) => {
     await openMap(page);
-    const finding = page
-      .locator("#network-slot li[data-severity]", { has: page.locator("ul.net-links li + li") })
+    await openCheck(page, "walking");
+    const finding = shown(page)
+      .locator("li[data-severity]", { has: page.locator("ul.net-links li + li") })
       .first();
     const list = finding.locator("ul.net-links");
     await expect(list).toHaveCSS("display", "flex");
     await expect(list.locator("li").first()).toHaveCSS("display", "block");
-    const boxes = await list.locator("a").evaluateAll((els) =>
+    const boxes = await list.locator(".net-link").evaluateAll((els) =>
       els.map((e) => {
         const r = e.getBoundingClientRect();
         return { x: r.x, y: r.y, w: r.width, h: r.height };
@@ -96,24 +135,23 @@ test.describe("the network checks on the map page", () => {
       expect(apart, `link ${i} is apart from the one before`).toBe(true);
     }
     // and no more of them are listed than the panel caps
-    expect(await list.locator("a").count()).toBeLessThanOrEqual(8);
+    expect(await list.locator(".net-link").count()).toBeLessThanOrEqual(8);
   });
 
   test("a finding goes when the street it concerns is edited, at the map's next load", async ({ page }) => {
     await openMap(page);
+    await openCheck(page, "cycling");
     // the smallest cycling link that is cut off, and the street at the head of it
     const target = await page.evaluate(() => {
-      const items = [
-        ...document.querySelectorAll<HTMLElement>('#network-slot .net-rule[data-rule="cycling"] ul.places-list > li'),
-      ];
+      const items = [...document.querySelectorAll<HTMLElement>("#map-check-slot ul.net-findings > li")];
       const islands = items
         .filter((li) => /cut off/.test(li.querySelector("b")!.textContent!))
-        .map((li) => ({ links: [...li.querySelectorAll("a")].map((a) => a.getAttribute("href")!) }));
-      islands.sort((a, b) => a.links.length - b.links.length);
-      return { href: islands[0].links[0], size: islands[0].links.length };
+        .map((li) => ({ places: [...li.querySelectorAll(".net-link")].map((a) => a.getAttribute("data-hot")!) }));
+      islands.sort((a, b) => a.places.length - b.places.length);
+      return { hot: islands[0].places[0], size: islands[0].places.length };
     });
-    const before = await rule(page, "cycling").innerText();
-    await page.goto("/" + target.href);
+    const before = await shown(page).innerText();
+    await page.goto("/" + hrefOf(target.hot));
     // take every bike lane off the street
     const bikes = page.locator("#drawing .iso-piece:has(.k-bike)");
     for (let guard = 0; (await bikes.count()) > 0 && guard < 4; guard++) {
@@ -126,25 +164,25 @@ test.describe("the network checks on the map page", () => {
     await page.goto("/map.html"); // leaving the page keeps what was waiting to be kept
     await mapReady(page);
     await expect(page.locator("#network-slot .net-rule")).toHaveCount(6);
-    await expect(rule(page, "cycling").locator(`a[href="${target.href}"]`)).toHaveCount(0);
-    expect(await rule(page, "cycling").innerText()).not.toEqual(before);
+    await openCheck(page, "cycling");
+    await expect(shown(page).locator(`.net-link[data-hot="${target.hot}"]`)).toHaveCount(0);
+    expect(await shown(page).innerText()).not.toEqual(before);
   });
 
-  test("a walking finding lists the streets and junctions of its route as links, and a link opens one", async ({
+  test("a walking finding names the streets and junctions of its route, and one pressed is shown and opened", async ({
     page,
   }) => {
     await openMap(page);
-    const walking = rule(page, "walking");
-    await expect(walking.getByRole("heading", { level: 3 })).toContainText("Walking routes");
-    const finding = walking.locator("li[data-severity]").first();
+    await expect(row(page, "walking")).toContainText("Walking routes");
+    await openCheck(page, "walking");
+    const finding = shown(page).locator("li[data-severity]").first();
     await expect(finding).toBeVisible();
-    expect(await finding.locator("a").count()).toBeGreaterThan(0);
-    const hrefs = await finding.locator("a").evaluateAll((els) => els.map((e) => e.getAttribute("href")!));
-    for (const href of hrefs)
-      expect(href).toMatch(/^(street\.html\?street|intersection\.html\?junction)=\d+&project=first$/);
-    await finding.locator("a").first().focus();
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`/${hrefs[0].replace("?", "\\?")}$`));
+    const hots = await finding.locator(".net-link").evaluateAll((els) => els.map((e) => e.getAttribute("data-hot")!));
+    expect(hots.length).toBeGreaterThan(0);
+    for (const hot of hots) expect(hot).toMatch(/^[sj]-\d+$/);
+    await finding.locator(".net-link").first().click();
+    await page.locator("#map-open-place").click();
+    await expect(page).toHaveURL(new RegExp(`/${hrefOf(hots[0]).replace("?", "\\?")}$`));
   });
 
   test("a route cut off at a junction is a finding, and a fix on its street clears it and lowers the lead's count", async ({
@@ -153,16 +191,17 @@ test.describe("the network checks on the map page", () => {
     await openMap(page);
     const total = async () => Object.values(await counts(page)).reduce((a, b) => a + b, 0);
     const island = (street: string) =>
-      rule(page, "walking").locator(`li[data-severity]:has-text("from this street"):has(a[href="${street}"])`);
+      shown(page).locator(`li[data-severity]:has-text("from this street"):has(.net-link[data-hot="${street}"])`);
     // a street that is a dead end (Rue Waverly, the end of the map to a junction) and walkable: it is found by its long block
-    const block = rule(page, "walking").locator('li[data-severity]:has-text("Rue Waverly is")');
-    const street = (await block.locator('a[href^="street.html"]').first().getAttribute("href"))!;
-    const junction = (await block.locator('a[href^="intersection.html"]').first().getAttribute("href"))!;
+    await openCheck(page, "walking");
+    const block = shown(page).locator('li[data-severity]:has-text("Rue Waverly is")');
+    const street = (await block.locator('.net-link[data-hot^="s-"]').first().getAttribute("data-hot"))!;
+    const junction = (await block.locator('.net-link[data-hot^="j-"]').first().getAttribute("data-hot"))!;
     await expect(island(street)).toHaveCount(0);
     const clean = await total();
     // take the street's own crossing off the junction (the panel names the street of the one pressed): its arm
     // can no longer be crossed to, so the street is cut off there
-    await page.goto("/" + junction);
+    await page.goto("/" + hrefOf(junction));
     await expect(page.locator("#drawing")).toBeVisible();
     const crossings = page.locator('#drawing path.iso-hit[data-role="crossing"]');
     const n = await crossings.count();
@@ -185,17 +224,19 @@ test.describe("the network checks on the map page", () => {
     await page.goto("/map.html"); // leaving the page keeps what was waiting to be kept
     await mapReady(page);
     await expect(page.locator("#network-slot .net-rule")).toHaveCount(6);
+    await openCheck(page, "walking");
     await expect(island(street)).toHaveCount(1);
-    await expect(island(street).locator(`a[href="${junction}"]`)).toHaveCount(1);
+    await expect(island(street).locator(`.net-link[data-hot="${junction}"]`)).toHaveCount(1);
     const cut = await total();
     expect(cut).toBeGreaterThan(clean);
     // a pedestrian street needs no crossing to be walked on to: making the street one joins the route
-    await page.goto("/" + street);
+    await page.goto("/" + hrefOf(street));
     await page.locator("#transform-btn").click();
     await page.locator("#transform-menu .ped-item").first().click();
     await page.goto("/map.html");
     await mapReady(page);
     await expect(page.locator("#network-slot .net-rule")).toHaveCount(6);
+    await openCheck(page, "walking");
     await expect(island(street)).toHaveCount(0);
     expect(await total()).toBeLessThan(cut);
     const now = await total();
@@ -206,6 +247,8 @@ test.describe("the network checks on the map page", () => {
     await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await openMap(page);
     await expect(page.getByRole("heading", { level: 2, name: "Vérifications du réseau" })).toBeVisible();
-    await expect(rule(page, "cycling").getByRole("heading", { level: 3 })).toContainText("Liens cyclables");
+    await expect(row(page, "cycling")).toContainText("Liens cyclables");
+    await openCheck(page, "cycling");
+    await expect(page.getByRole("heading", { level: 2, name: "Liens cyclables" })).toBeVisible();
   });
 });

@@ -618,6 +618,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("map-city", "the id of the map details' city level, which the path shows and hides"),
     ("map-place", "the id of the map details' place level, which the path shows and hides"),
     ("map-path-slot", "the id of the map page's slot the details' path mounts into, not a message"),
+    ("map-check", "the id of the network check's level of the map's details"),
+    ("map-check-slot", "the id of the slot of the map page the network check shown mounts into"),
     ("map-areas", "the id of the area rules' level of the map's details"),
     ("map-areas-row-slot", "the id of the slot of the city's row to the area rules"),
     ("map-place-slot", "the id of the map page's slot the place a press shows mounts into, not a message"),
