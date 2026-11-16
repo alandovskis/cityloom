@@ -1,0 +1,31 @@
+Last change
+
+No change in the checks.
+
+Resize sidewalk
+
+Street space
+Walking: 3.4 m → 3.3 m (0.1 m less)
+Where the width goes
+Today
+Your design
+Walking 3.3 m +0.1
+Cars and trucks 12.0 m
+Width by use, in metres
+Use	Today	Your design	Change
+Walking	3.2	3.3	+0.1
+Biking	0.0	0.0	0
+Transit	0.0	0.0	0
+Cars and trucks	12.0	12.0	0
+Greenery	0.0	0.0	0
+
+People moved sample numbers
+
+13,650 per hour
+
++2% from 13,400 today
+
+People per hour, placeholder rates
+Measure
+	Today	Your design	Change
+People per hour	13,400	13,650	+2%

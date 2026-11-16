@@ -1,0 +1,29 @@
+Does it work? sample limits
+Fits the street width
+: fails
+0.2 m too wide. Narrow or remove a piece.
+Source: placeholder, no source
+Sidewalk on both sides
+: passes
+Both sides
+Source: placeholder, no source
+Room for emergency vehicles
+: passes
+A lane of 3.0 m or more
+Source: named, figures not checked
+Traffic keeps right
+: passes
+Lanes run the way this region drives
+Source: placeholder, no source
+Hide the passing checks
+Guided goals
+Planning goal
+No goal
+Reduce through traffic
+Improve a school route
+Prioritize buses
+
+A goal only points out checks and measures. It never changes the design.
+
+Transit priority
+Source: named, figures not checked

@@ -1,0 +1,1 @@
+test result: ok. 3243 passed; 0 failed; 2 ignored (cargo test -p cityloom_editor --lib at this head)

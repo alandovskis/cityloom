@@ -1,0 +1,10 @@
+Street
+Rue Saint-Dominique
+Width
+15.2 m
+Changes made
+0
+Data
+As imported
+OpenStreetMap
+way 19938632 v24

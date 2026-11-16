@@ -1,0 +1,34 @@
+Details
+Street
+Zone 1
+Driving lane
+Driving lane
+
+3.0 m wide · 3 of 6 from the left
+
+Move left
+Move right
+Remove
+Width
+m
+
+Allowed 2.70 to 4.00 m
+
+Surface
+
+What it is paved with.
+
+Asphalt
+Concrete
+Permeable paving
+Other times
+
+Driving lane the rest of the day.
+
+Add other times
+Direction
+
+Which way traffic goes.
+
+Away from you
+Toward you

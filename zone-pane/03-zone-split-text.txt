@@ -1,0 +1,21 @@
+Details
+Street
+Zone 2
+2
+Zone 2
+
+24.6 m to 49.2 m · 24.6 m long · 2 of 2
+
+Zone commands
+Name
+Start
+m
+Section
+The street's section
+Split
+m
+Split
+Merge
+With Zone 1
+Merge with the next zone
+There is no zone on that side to merge with.

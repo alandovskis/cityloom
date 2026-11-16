@@ -1,0 +1,17 @@
+Does it work? sample limits
+Fits the street width
+: fails
+0.2 m too wide. Narrow or remove a piece.
+Source: placeholder, no source
+Show the 3 passing checks
+Guided goals
+Planning goal
+No goal
+Reduce through traffic
+Improve a school route
+Prioritize buses
+
+A goal only points out checks and measures. It never changes the design.
+
+Transit priority
+Source: named, figures not checked

@@ -1,0 +1,11 @@
+test junction::view::tests::the_current_step_of_the_junction_s_path_is_drawn_as_the_street_s_is ... ok
+test junction::view::tests::the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3229 filtered out; finished in 0.03s
+
+The arrow-key case, in junction::view::tests::the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar (crates/cityloom_editor/src/junction/view/tests.rs):
+429:    // so does a part chosen with the arrow keys, though an edit then leaves nothing chosen (an arm removed)
+430-    s.show_plan();
+431-    s.select_relative(1);
+432-    s.edit(|j| j.select(Target::None));
+433-    assert!(!panel(&s).contains(r#"id="sig-remove-0""#), "the junction's level, not the plan's");
+434-}
