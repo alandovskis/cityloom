@@ -763,6 +763,12 @@ a.btn {
 .checks li:first-child {
   border-top: 0;
 }
+/* A selected street: its name, then the button that drops it. The list shares the checks' look, not their icon
+   column. */
+.checks li.selection-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
 .checks svg {
   width: 18px;
   height: 18px;

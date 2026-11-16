@@ -174,6 +174,23 @@ test.describe("the city map", () => {
     await expect(live(page)).toHaveText(/\. Press it again, or Open, to edit it\.$/);
   });
 
+  test("a street added to the selection from its details is listed by its name, with a small Remove beside it", async ({
+    page,
+  }) => {
+    // a street the view holds shows its details, with Add to the selection
+    const street = (await streetSpots(page)).find((s) => s.editable)!;
+    await page.mouse.move(street.x, street.y);
+    await page.mouse.click(street.x, street.y);
+    await expect(page.locator("#map-place-select")).toBeVisible();
+    await page.locator("#map-place-select").click();
+    await expect(page.locator("#map-selection")).toBeVisible();
+    const row = page.locator("#selection-list .selection-item").first();
+    const [name, remove] = [(await row.locator("span").boundingBox())!, (await row.locator("button").boundingBox())!];
+    expect(name.width, "the name takes the row").toBeGreaterThan(remove.width * 2);
+    expect(remove.width, "Remove is a button, not the row").toBeLessThan(140);
+    expect(remove.x, "beside the name").toBeGreaterThan(name.x + name.width - 1);
+  });
+
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
     const fitted = await zoom(page);
     await page.locator("#zoom-in").click();
