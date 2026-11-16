@@ -36,6 +36,8 @@ pub struct JunctionVm {
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
     goal: crate::shared::goals::GoalChoice,
+    /// Whether the Checks tab shows its passing checks.
+    passes: crate::shared::check_fold::PassFold,
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
@@ -66,7 +68,7 @@ impl JunctionVm {
                 )
             });
             let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
-            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal }
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal, passes: Default::default() }
         })
     }
 
@@ -75,6 +77,11 @@ impl JunctionVm {
     /// The planning goal chosen (#72): it marks checks and lists measures, and changes nothing in the junction.
     pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
         &self.goal
+    }
+
+    /// Whether the Checks tab shows its passing checks (folded at first, not remembered).
+    pub fn passes(&self) -> &crate::shared::check_fold::PassFold {
+        &self.passes
     }
 
     /// The words of the page, in its language.

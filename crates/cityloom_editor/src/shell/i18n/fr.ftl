@@ -52,6 +52,17 @@ ui-notes-toggle-title = Afficher ou masquer les notes ( ] )
 ui-notes-sections = Sections des notes
 ui-tab-impact = Incidence
 ui-tab-checks = Vérifications
+ui-checks-passing =
+    { $n ->
+        [one] Afficher la vérification réussie
+       *[other] Afficher les { $n } vérifications réussies
+    }
+ui-checks-passing-hide = Masquer les vérifications réussies
+ui-checks-all-pass =
+    { $n ->
+        [one] La vérification réussit.
+       *[other] Les { $n } vérifications réussissent.
+    }
 ui-tab-changes = Modifications
 ui-key-shift = Maj
 ui-key-ctrl = Ctrl

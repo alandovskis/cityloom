@@ -191,10 +191,10 @@ test.describe("the junction editor on a junction of the city", () => {
 
   test("the notes list the checks and the changes made, over where the junction came from", async ({ page }) => {
     await page.locator("#t-checks").click();
-    await expect(page.locator("#checks li").first()).toBeVisible();
+    await expect(page.locator("#checks li")).not.toHaveCount(0);
     await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
     await page.locator("#t-changes").click();
-    await expect(page.locator("#revs tbody tr")).toHaveCount(2);
+    await expect(page.locator("#revs li")).toHaveCount(2);
     // where the junction came from is in the title block, under every tab: there is no tab of its own
     await expect(page.locator("#title-block #tb-state")).toBeVisible();
     await expect(page.locator("#t-provenance")).toHaveCount(0);
@@ -1008,6 +1008,7 @@ test.describe("the approach of an arm whose street is divided", () => {
     await expect(page.locator("#drawing path.approach-mark")).toHaveCount(2);
     await expect(page.locator("#drawing .iso-casing").first()).toBeAttached();
     await page.locator("#t-checks").click();
+    await page.locator("#checks-passing").click(); // a passing check is folded until asked for
     await expect(checkRow(page)).toBeVisible();
     await expect(checkRow(page)).not.toHaveClass(/bad/);
     await expect(checkRow(page)).toContainText("Every end zone reaches past its stop line");

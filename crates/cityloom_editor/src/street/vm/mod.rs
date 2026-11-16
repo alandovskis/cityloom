@@ -84,6 +84,8 @@ pub struct StreetVm {
     /// The level of the details panel the person reached last (see `level`).
     asked: ArcRwSignal<Level>,
     goal: crate::shared::goals::GoalChoice,
+    /// Whether the Checks tab shows its passing checks.
+    passes: crate::shared::check_fold::PassFold,
     /// What the last change did to the street, as shown.
     impact: ArcRwSignal<Option<Impact>>,
     /// What the last change did, waiting for the edits to settle, and the timer that shows it.
@@ -167,6 +169,7 @@ impl StreetVm {
                 stop_name_pick: ArcRwSignal::new(None),
                 asked: ArcRwSignal::new(Level::Street),
                 goal,
+                passes: Default::default(),
                 impact: ArcRwSignal::new(None),
                 impact_pending: RefCell::new(None),
                 impact_timer: Cell::new(None),
@@ -286,6 +289,11 @@ impl StreetVm {
     /// The planning goal chosen (#72): it marks checks and lists measures, and changes nothing in the street.
     pub fn goal(&self) -> &crate::shared::goals::GoalChoice {
         &self.goal
+    }
+
+    /// Whether the Checks tab shows its passing checks (folded at first, not remembered).
+    pub fn passes(&self) -> &crate::shared::check_fold::PassFold {
+        &self.passes
     }
 
     /// The level the details panel shows: the one the person reached last while something is chosen there, else the

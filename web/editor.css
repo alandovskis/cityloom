@@ -2336,32 +2336,95 @@ svg pattern circle {
 .revs {
   min-height: 0;
 }
-.rev {
-  display: block;
-  max-height: 320px;
-  overflow-y: auto;
+/* The Checks tab: the checks, what fails first, and beside them a column for the goal and its measures, which drops
+   under the list where there is no room for both (the junction's sidebar, a phone). The passing checks are folded
+   under a button until asked for. */
+.checks-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 28px;
 }
-.rev tbody,
-.rev thead {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
+.checks-main {
+  flex: 1.7 1 360px;
+  min-width: 0;
 }
-.rev th:first-child,
-.rev td:first-child {
-  width: 44px;
+.checks-side {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 10px;
+  min-width: 0;
 }
-.rev th,
-.rev td {
-  text-align: left;
+/* A folded passing check: the rows are grids, which would otherwise win over the `hidden` attribute. */
+.checks li[hidden] {
+  display: none;
 }
-.rev td:first-child {
+.checks-all-pass {
+  margin: 4px 0;
+  color: var(--ok);
   font-weight: 600;
 }
-.rev tr.now td {
+.checks-passing {
+  min-height: 32px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.checks-passing:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.checks-passing:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The changes: a card per change, the newest first, as many across as the width holds (several in the street's tray,
+   one in the junction's sidebar). The street or junction as it is now is the current step: washed, with a border twice
+   as thick, so it does not rest on colour alone; the street or junction today is the last card, its border dashed. */
+.rev-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rev-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.rev-step {
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rev-what {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.rev-card.now {
+  padding: 7px 11px;
+  border: 2px solid var(--accent);
   background: var(--accent-wash);
 }
-.rev tr.base td {
+.rev-card.now .rev-step {
+  color: var(--ink-2);
+}
+.rev-card.base {
+  border-style: dashed;
   color: var(--ink-2);
 }
 .fine {

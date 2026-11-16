@@ -271,8 +271,7 @@ jn-check-passes = : passes
 jn-check-fails = : fails
 # A check's detail with the length it speaks of: "Longest crossing in one go: 11.4 m".
 jn-check-length = { $detail }: { $length }
-jn-col-step = Step
-jn-col-what-changed = What changed
+jn-rev-step = Step { $n }
 
 ## The drawing (src/junction/view/drawing.rs, iso/)
 jn-editor = Junction editor

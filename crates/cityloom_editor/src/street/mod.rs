@@ -112,6 +112,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("cap", view! { <view::notes::Capacity vm=vm.clone()/> }.into_any());
     mount("goal-slot", view! { <view::notes::GoalGuide vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::notes::Checks vm=vm.clone()/> }.into_any());
+    mount("checks-fold-slot", view! { <view::notes::PassingChecks vm=vm.clone()/> }.into_any());
     mount("atlas-source", view! { <view::notes::AtlasSource vm=vm.clone()/> }.into_any());
     mount("revs", view! { <view::notes::Revisions vm=vm.clone()/> }.into_any());
 }

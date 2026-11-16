@@ -119,7 +119,10 @@ pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn GoalGuide(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    move || crate::shared::goals_view::goal_guide(watch.goal(), crate::shared::goals::Place::Junction, &watch.i18n(), None)
+    view! {
+        {move || crate::shared::goals_view::goal_picker(watch.goal(), &watch.i18n())}
+        {move || crate::shared::goals_view::goal_guidance(watch.goal().get(), crate::shared::goals::Place::Junction, &watch.i18n(), None)}
+    }
 }
 
 #[component]
@@ -128,12 +131,15 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
     move || {
         let (v, units) = watch.now();
         let goal = watch.goal().get();
-        v.checks
-            .iter()
+        let folded = !watch.passes().shown();
+        // What fails first, then what passes, folded until asked for; each keeps its order.
+        let (bad, ok): (Vec<_>, Vec<_>) = v.checks.iter().partition(|k| !k.ok);
+        bad.into_iter()
+            .chain(ok)
             .map(|k| {
                 let marked = goal.is_some_and(|g| g.bears_on(k.id));
                 view! {
-                    <li class=if k.ok { "ok" } else { "bad" } class:goal=marked>
+                    <li class=if k.ok { "ok" } else { "bad" } class:goal=marked hidden=k.ok && folded>
                         {icon(k.ok)}
                         <div>
                             <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span>{marked.then(|| view! { <span class="goal-mark">{watch.tr("goal-check-mark")}</span> })}</b>
@@ -144,6 +150,17 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                 }
             })
             .collect_view()
+    }
+}
+
+/// Under the checks: the button that shows or folds the passing ones (and, when all pass, a line that says so).
+#[component]
+pub fn PassingChecks(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
+    move || {
+        let (v, _) = watch.now();
+        let passing = v.checks.iter().filter(|k| k.ok).count();
+        crate::shared::check_fold::passing_toggle(watch.passes(), passing, v.checks.len(), &watch.i18n())
     }
 }
 
@@ -158,45 +175,36 @@ pub fn AtlasSource(vm: Rc<JunctionVm>) -> impl IntoView {
     }
 }
 
+/// What has been changed, from the junction as it is today: a card per change, the newest first, over a card for the
+/// junction today. The card of the junction as it is now is the current step.
 #[component]
 pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    // The newest change is the one to see.
-    #[cfg(target_arch = "wasm32")]
-    {
-        let version = watch.version();
-        Effect::new(move |_| {
-            version.track();
-            request_animation_frame(|| {
-                if let Some(el) = document().get_element_by_id("revs") {
-                    el.set_scroll_top(el.scroll_height());
-                }
-            });
-        });
-    }
     move || {
         let (v, _) = watch.now();
+        let i18n = watch.i18n();
         let last = v.revisions.len().checked_sub(1);
-        let rows = v
+        let cards = v
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{watch.say(&r.label)}</td></tr> })
+            .rev()
+            .map(|(i, r)| {
+                let now = Some(i) == last;
+                view! {
+                    <li class=if now { "rev-card now" } else { "rev-card" } aria-current=now.then_some("step")>
+                        <span class="rev-step">{i18n.tr("jn-rev-step", &Args::new().num("n", r.step as i64))}</span>
+                        <span class="rev-what">{watch.say(&r.label)}</span>
+                    </li>
+                }
+            })
             .collect_view();
+        let today = v.revisions.is_empty();
         view! {
-            <thead>
-                <tr>
-                    <th scope="col">{watch.tr("jn-col-step")}</th>
-                    <th scope="col">{watch.tr("jn-col-what-changed")}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class=if v.revisions.is_empty() { "base now" } else { "base" }>
-                    <td>"—"</td>
-                    <td>{watch.tr("city-junction-today")}</td>
-                </tr>
-                {rows}
-            </tbody>
+            {cards}
+            <li class=if today { "rev-card base now" } else { "rev-card base" } aria-current=today.then_some("step")>
+                <span class="rev-what">{watch.tr("city-junction-today")}</span>
+            </li>
         }
         .into_any()
     }

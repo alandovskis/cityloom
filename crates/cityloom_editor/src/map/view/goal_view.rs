@@ -13,10 +13,13 @@ use crate::shared::goals::Place;
 #[component]
 pub fn GoalGuide(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
-    move || {
-        let selected = !vm.with(|v| v.selection().streets()).is_empty();
-        let pick: Option<Rc<dyn Fn(&'static str)>> =
-            selected.then(|| Rc::new(move |op: &'static str| vm.with(|v| v.set_corridor_op(op))) as Rc<dyn Fn(&'static str)>);
-        vm.with(|v| crate::shared::goals_view::goal_guide(v.goal().clone(), Place::Map, v.i18n(), pick))
+    view! {
+        {move || vm.with(|v| crate::shared::goals_view::goal_picker(v.goal().clone(), v.i18n()))}
+        {move || {
+            let selected = !vm.with(|v| v.selection().streets()).is_empty();
+            let pick: Option<Rc<dyn Fn(&'static str)>> =
+                selected.then(|| Rc::new(move |op: &'static str| vm.with(|v| v.set_corridor_op(op))) as Rc<dyn Fn(&'static str)>);
+            vm.with(|v| crate::shared::goals_view::goal_guidance(v.goal().get(), Place::Map, v.i18n(), pick))
+        }}
     }
 }

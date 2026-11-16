@@ -56,28 +56,34 @@ fn impact(words: Words) -> TrayPage {
     )
 }
 
-/// Checks, with the count of failing checks after its name: the goal, the checks, the transit source.
+/// Checks, with the count of failing checks after its name: the checks, what fails first; beside them a column for
+/// the goal and its measures, then where the measures' names come from.
 fn checks(words: Words) -> TrayPage {
     let tab = TrayTab { id: "t-checks", panel: "p-checks", label: "ui-tab-checks", badge: Some("checks-n-slot") };
     TrayPage::new(
         tab,
         view! {
-            <section aria-labelledby="h-goal">
-                <h2 id="h-goal" class="note-h">{tr(words, "goal-heading")}</h2>
-                <div id="goal-slot"></div>
-            </section>
-            <section aria-labelledby="h-checks">
-                <h2 id="h-checks" class="note-h">
-                    <span>{tr(words, "st-does-it-work")}</span>
-                    " "
-                    <span class="sample">{tr(words, "st-sample-limits")}</span>
-                </h2>
-                <ul class="checks" id="checks"></ul>
-            </section>
-            <section aria-labelledby="h-atlas">
-                <h2 id="h-atlas" class="note-h">{tr(words, "st-transit-heading")}</h2>
-                <div id="atlas-source"></div>
-            </section>
+            <div class="checks-split">
+                <section aria-labelledby="h-checks" class="checks-main">
+                    <h2 id="h-checks" class="note-h">
+                        <span>{tr(words, "st-does-it-work")}</span>
+                        " "
+                        <span class="sample">{tr(words, "st-sample-limits")}</span>
+                    </h2>
+                    <ul class="checks" id="checks"></ul>
+                    <div id="checks-fold-slot"></div>
+                </section>
+                <div class="checks-side">
+                    <section aria-labelledby="h-goal">
+                        <h2 id="h-goal" class="note-h">{tr(words, "goal-heading")}</h2>
+                        <div id="goal-slot"></div>
+                    </section>
+                    <section aria-labelledby="h-atlas">
+                        <h2 id="h-atlas" class="note-h">{tr(words, "st-transit-heading")}</h2>
+                        <div id="atlas-source"></div>
+                    </section>
+                </div>
+            </div>
         },
     )
 }
@@ -90,7 +96,7 @@ fn changes(words: Words) -> TrayPage {
         view! {
             <section aria-labelledby="h-rev" class="revs">
                 <h2 id="h-rev" class="note-h">{tr(words, "st-your-changes")}</h2>
-                <table class="nt rev" id="revs"></table>
+                <ol class="rev-cards" id="revs" aria-labelledby="h-rev"></ol>
             </section>
         },
     )

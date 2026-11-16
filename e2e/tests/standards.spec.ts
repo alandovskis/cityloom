@@ -30,6 +30,7 @@ test.describe("standards profiles on the street page", () => {
     await expect(page.locator("#standards-active")).toHaveText("The checks use the built-in standards.");
     await expect(page.locator("#standards-in-force")).toHaveValue("");
     await page.locator("#t-checks").click();
+    await page.locator("#checks-passing").click(); // a passing check is folded until asked for
     await expect(checkNamed(page, "Room for emergency vehicles")).toBeVisible();
     await expect(page.locator("#checks .check-standard")).toHaveCount(0);
   });
