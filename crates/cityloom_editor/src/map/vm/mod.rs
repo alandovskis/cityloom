@@ -59,14 +59,29 @@ fn fold(text: &str) -> String {
     text.to_lowercase().replace('\u{2019}', "'").replace(['\u{a0}', '\u{202f}'], " ")
 }
 
-/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
-fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
+/// What a `hot` name (`s-7`, `j-3`) names.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Hot {
+    Street(u32),
+    Junction(u32),
+}
+
+/// Reads a `hot` name, the one place its form is known.
+fn parse_hot(hot: &str) -> Option<Hot> {
     let (kind, uid) = hot.split_once('-')?;
     let uid: u32 = uid.parse().ok()?;
     match kind {
-        "s" => Some(street_href(uid, project)),
-        "j" => Some(junction_href(uid, project)),
+        "s" => Some(Hot::Street(uid)),
+        "j" => Some(Hot::Junction(uid)),
         _ => None,
+    }
+}
+
+/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
+fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
+    match parse_hot(hot)? {
+        Hot::Street(uid) => Some(street_href(uid, project)),
+        Hot::Junction(uid) => Some(junction_href(uid, project)),
     }
 }
 
@@ -1198,25 +1213,21 @@ impl MapVm {
 
     /// The row of the place shown: its name, small print, state and the address of its editor.
     pub fn picked_row(&self) -> Option<PlaceRow> {
-        let hot = self.picked()?;
-        let uid = hot.get(2..)?.parse::<u32>().ok()?;
+        let hot = parse_hot(&self.picked()?)?;
         let (v, project) = (self.view(), self.project());
-        match hot.as_bytes().first() {
-            Some(b's') => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref())),
-            Some(b'j') => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref())),
-            _ => None,
+        match hot {
+            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref())),
+            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref())),
         }
     }
 
     /// The checks the place shown fails, worded as the map's notes word them.
     pub fn picked_failing(&self) -> Vec<Said> {
-        let Some(hot) = self.picked() else { return Vec::new() };
+        let Some(hot) = self.picked().as_deref().and_then(parse_hot) else { return Vec::new() };
         let v = self.view();
-        let uid = hot.get(2..).and_then(|u| u.parse::<u32>().ok());
-        match (hot.as_bytes().first(), uid) {
-            (Some(b's'), Some(uid)) => v.edges.iter().find(|e| e.uid == uid).map(|e| e.failing.clone()).unwrap_or_default(),
-            (Some(b'j'), Some(uid)) => v.nodes.iter().find(|n| n.uid == uid).map(|n| n.failing.clone()).unwrap_or_default(),
-            _ => Vec::new(),
+        match hot {
+            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| e.failing.clone()).unwrap_or_default(),
+            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid).map(|n| n.failing.clone()).unwrap_or_default(),
         }
     }
 
