@@ -200,6 +200,8 @@ pub enum MapLevel {
     Areas,
     /// One network check (its `Check` id) and its findings.
     Check(String),
+    /// The streets selected, the change to try on them, its review and Apply.
+    Selection,
 }
 
 /// A place to open: in a list, or as a link on the map. Its name and small print are data, worded by the view
@@ -1302,9 +1304,26 @@ impl MapVm {
         if !self.selection.contains(uid) && !self.can_edit(&format!("s-{uid}")) {
             return self.say_not_editable();
         }
+        let added = !self.selection.contains(uid);
         self.selection.toggle(uid, &self.street_label(uid));
         self.show_selection();
         self.corridor.set(Stage::Idle);
+        if added {
+            self.show_selected_streets();
+        }
+    }
+
+    /// Shows the selected streets in the details.
+    pub fn show_selected_streets(&self) {
+        self.shown.set(MapLevel::Selection);
+    }
+
+    /// The city's row to the selected streets: how many there are. Watched.
+    pub fn selection_summary(&self) -> String {
+        match self.selection.streets().len() {
+            0 => self.word("map-selection-none"),
+            n => self.i18n.tr("map-selection-summary", &Args::new().num("n", n as i64)),
+        }
     }
 
     /// Drops one street from the selection (the panel's button).
@@ -2452,6 +2471,26 @@ mod tests {
         vm.pick(Some("s-1"));
         vm.open_picked();
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "Open does what a second press does");
+    }
+
+    #[test]
+    fn the_selected_streets_are_a_level_that_a_street_added_shows() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.toggle_selected(Some("j-3"));
+        assert_eq!(vm.level(), MapLevel::City, "a junction is refused, and nothing is shown");
+        vm.toggle_selected(Some("s-1"));
+        assert_eq!(vm.level(), MapLevel::Selection, "a street added shows the selection");
+        vm.deselect(1);
+        assert_eq!(vm.level(), MapLevel::Selection, "emptied, it stays where its lead and Undo are");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.show_selected_streets();
+        assert_eq!(vm.level(), MapLevel::Selection, "reached from the city's row");
+        assert_eq!(vm.selection_summary(), "None yet");
+        vm.toggle_selected(Some("s-1"));
+        assert_eq!(vm.selection_summary(), "One street");
     }
 
     #[test]

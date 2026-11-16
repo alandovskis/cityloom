@@ -81,6 +81,11 @@ map-picked = { $name }. Appuyez de nouveau, ou sur Ouvrir, pour la modifier.
 map-path-label = Ce que montrent les détails
 map-path-city = Ville
 map-areas-none = Aucune pour l’instant
+map-selection-none = Aucune pour l’instant
+map-selection-summary = { $n ->
+    [one] Une rue
+   *[other] { $n } rues
+}
 map-areas-summary = { $areas ->
     [one] Une zone
    *[other] { $areas } zones

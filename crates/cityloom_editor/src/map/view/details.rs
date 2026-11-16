@@ -1,6 +1,6 @@
 //! The map's details, one level at a time under a path, as the street and junction pages have them: the city (the
 //! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), the area rules (`#map-areas`) or a
-//! network check (`#map-check`, `network_view::NetworkCheckPane`). A
+//! network check (`#map-check`, `network_view::NetworkCheckPane`) or the selected streets (`#map-selection`). A
 //! first press on a place shows it here; a second press on it, or Open, opens its editor (`MapVm::pick`,
 //! `open_picked`). The city leads to the area rules by a row of its own (`AreasRow`).
 
@@ -26,12 +26,13 @@ pub(crate) fn focus_current() {
 }
 
 /// The page's element of each level, and whether it is the level `level`.
-fn levels(level: &MapLevel) -> [(&'static str, bool); 4] {
+fn levels(level: &MapLevel) -> [(&'static str, bool); 5] {
     [
         ("map-city", *level == MapLevel::City),
         ("map-place", matches!(level, MapLevel::Place(_))),
         ("map-areas", *level == MapLevel::Areas),
         ("map-check", matches!(level, MapLevel::Check(_))),
+        ("map-selection", *level == MapLevel::Selection),
     ]
 }
 
@@ -60,6 +61,7 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
             MapLevel::Place(_) => vm.with(|v| v.picked_row().map(|row| v.say(&row.name))),
             MapLevel::Areas => Some(vm.with(|v| v.word("restriction-panel"))),
             MapLevel::Check(_) => vm.with(|v| v.shown_check().map(|c| c.label)),
+            MapLevel::Selection => Some(vm.with(|v| v.word("sel-heading"))),
         };
         match here {
             None => view! {
@@ -90,6 +92,22 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
                 .into_any()
             }
         }
+    }
+}
+
+/// The city's row to the selected streets: how many there are.
+#[component]
+pub fn SelectionRow(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    view! {
+        <ul class="places-list map-go">
+            <li>
+                <button type="button" class="place-row" id="map-go-selection" on:click=move |_| { vm.with(|v| v.show_selected_streets()); focus_current(); }>
+                    <b>{move || vm.with(|v| v.word("sel-heading"))}</b>
+                    <small>{move || vm.with(|v| v.selection_summary())}</small>
+                </button>
+            </li>
+        </ul>
     }
 }
 

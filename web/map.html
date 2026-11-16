@@ -107,18 +107,23 @@
         </section>
       </div>
     </div>
+    <div class="map-level" id="map-selection" hidden>
+      <div class="panel-body">
+        <section aria-labelledby="h-selection" id="selection-panel">
+          <h2 id="h-selection" class="note-h" tabindex="-1" data-i18n="sel-heading">Selected streets</h2>
+          <div id="selection-slot"></div>
+        </section>
+      </div>
+    </div>
     <div class="map-level" id="map-check" hidden><div class="panel-body"><div id="map-check-slot"></div></div></div>
     <div class="map-level" id="map-city">
     <div id="map-areas-row-slot" class="map-go-slot"></div>
+    <div id="map-selection-row-slot" class="map-go-slot"></div>
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
     </div>
     <div class="panel-body">
-      <section aria-labelledby="h-selection" id="selection-panel">
-        <h2 id="h-selection" class="note-h" tabindex="-1" data-i18n="sel-heading">Selected streets</h2>
-        <div id="selection-slot"></div>
-      </section>
       <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
         <section aria-labelledby="h-goal">
           <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>

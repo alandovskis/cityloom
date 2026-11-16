@@ -82,6 +82,12 @@ map-path-label = What the details are of
 map-path-city = City
 # The city's row to the area rules (the row's title is restriction-panel).
 map-areas-none = None yet
+# The city's row to the selected streets (the row's title is sel-heading).
+map-selection-none = None yet
+map-selection-summary = { $n ->
+    [one] One street
+   *[other] { $n } streets
+}
 map-areas-summary = { $areas ->
     [one] One area
    *[other] { $areas } areas

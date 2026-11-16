@@ -1917,3 +1917,21 @@ fn a_network_check_is_a_level_under_the_city_named_by_the_path() {
     let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
     assert!(city.contains(r#"id="network-slot""#) && !city.contains("net-note"), "the rows are the city's, the note the check's");
 }
+
+#[test]
+fn the_selected_streets_are_a_level_the_city_leads_to_and_the_path_names() {
+    let (vm, _) = map_vm();
+    let row = map_html(|| view! { <crate::map::view::details::SelectionRow vm=vm.clone()/> });
+    assert!(row.contains(r#"id="map-go-selection""#) && row.contains(">Selected streets<") && row.contains(">None yet<"), "{row}");
+    vm.toggle_selected(Some("s-1"));
+    let row = map_html(|| view! { <crate::map::view::details::SelectionRow vm=vm.clone()/> });
+    assert!(row.contains(">One street<"), "{row}");
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Selected streets</span>"), "{h}");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let level = &notes[notes.find(r#"id="map-selection""#).expect("the selection's level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden"));
+    assert!(level.find(r#"id="h-selection""#).unwrap() < level.find(r#"id="selection-slot""#).unwrap());
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(!city.contains("h-selection") && city.contains(r#"id="map-selection-row-slot""#), "the city has a row to it");
+}
