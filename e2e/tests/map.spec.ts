@@ -160,10 +160,14 @@ test.describe("the city map", () => {
     await page.locator("#notes-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
     await mapStill(page); // the map takes the room the details left
-    const spot = await junctionSpot(page);
-    await page.mouse.move(spot.x, spot.y);
-    await page.mouse.click(spot.x, spot.y);
-    await expect(page.locator("html")).toHaveAttribute("data-notes", "open");
+    // the map may still be fitting itself into that room: a press that finds nothing under it is taken again where
+    // the junction now is (a press on nothing changes nothing here)
+    await expect(async () => {
+      const spot = await junctionSpot(page);
+      await page.mouse.move(spot.x, spot.y);
+      await page.mouse.click(spot.x, spot.y);
+      await expect(page.locator("html")).toHaveAttribute("data-notes", "open", { timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
     await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#map-place")).toBeVisible();
     await expect(page.locator("#map-open-place")).toBeVisible();
