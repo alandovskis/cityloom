@@ -185,7 +185,11 @@ pub fn PlacePane(vm: Rc<MapVm>) -> impl IntoView {
             let hot = row.hot.clone();
             let label = move || vm.with(|v| v.word(if v.selection().contains(uid) { "map-drop-selection" } else { "map-add-selection" }));
             view! {
-                <button type="button" class="btn" id="map-place-select" on:click=move |_| vm.with(|v| v.toggle_selected(Some(&hot)))>
+                <button type="button" class="btn" id="map-place-select" on:click=move |_| {
+                    vm.with(|v| v.toggle_selected(Some(&hot)));
+                    // added, the street shows the selection, and this button goes with the place's level
+                    focus_current();
+                }>
                     {label}
                 </button>
             }
