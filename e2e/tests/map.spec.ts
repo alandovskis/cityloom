@@ -330,7 +330,11 @@ test.describe("the city map", () => {
       (window as any).cityloomMap.querySourceFeatures("places").some((f: any) => f.properties.status !== "ok"),
     );
     expect(marked).toBe(true);
-    await page.locator("#t-changes").click();
+    // the changes are a level of the details, reached from the city's row that counts them
+    await expect(page.locator("#map-go-changes")).toContainText(/\d+ places?|One place/);
+    await page.locator("#map-go-changes").click();
+    await expect(page.locator("#map-changes")).toBeVisible();
+    await expect(page.locator("#map-path-current")).toHaveText("Changes");
     await expect(page.locator("#changes")).not.toBeEmpty();
   });
 

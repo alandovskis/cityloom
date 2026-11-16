@@ -10,8 +10,9 @@ const PAGES = [
   {
     name: "map",
     open: (page: Page) => page.goto("/map.html"),
-    firstTab: "t-checks",
-    secondTab: "t-changes",
+    // no tabs: the details are levels reached from the city
+    firstTab: undefined,
+    secondTab: undefined,
     // no left sidebar: the area rules are a level of the details
     details: undefined,
   },
@@ -139,24 +140,27 @@ for (const p of PAGES) {
       });
     }
 
-    test("the notes tabs show one panel, move with the arrow keys, and remember the choice", async ({ page }) => {
-      const first = page.locator(`#${p.firstTab}`);
-      const second = page.locator(`#${p.secondTab}`);
-      await expect(first).toHaveAttribute("aria-selected", "true");
-      await first.focus();
-      await page.keyboard.press("ArrowRight");
-      await expect(second).toHaveAttribute("aria-selected", "true");
-      await expect(second).toBeFocused();
-      await expect(page.locator(`#${await first.getAttribute("aria-controls")}`)).toBeHidden();
-      await expect(page.locator(`#${await second.getAttribute("aria-controls")}`)).toBeVisible();
-      await page.reload();
-      await expect(second).toHaveAttribute("aria-selected", "true");
-      await second.focus();
-      await page.keyboard.press("ArrowLeft");
-      await expect(first).toHaveAttribute("aria-selected", "true");
-      await page.keyboard.press("End");
-      await expect(page.locator(".notes .tab").last()).toHaveAttribute("aria-selected", "true");
-    });
+    // the map's details are levels, not tabs
+    if (p.firstTab) {
+      test("the notes tabs show one panel, move with the arrow keys, and remember the choice", async ({ page }) => {
+        const first = page.locator(`#${p.firstTab}`);
+        const second = page.locator(`#${p.secondTab}`);
+        await expect(first).toHaveAttribute("aria-selected", "true");
+        await first.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(second).toHaveAttribute("aria-selected", "true");
+        await expect(second).toBeFocused();
+        await expect(page.locator(`#${await first.getAttribute("aria-controls")}`)).toBeHidden();
+        await expect(page.locator(`#${await second.getAttribute("aria-controls")}`)).toBeVisible();
+        await page.reload();
+        await expect(second).toHaveAttribute("aria-selected", "true");
+        await second.focus();
+        await page.keyboard.press("ArrowLeft");
+        await expect(first).toHaveAttribute("aria-selected", "true");
+        await page.keyboard.press("End");
+        await expect(page.locator(".notes .tab").last()).toHaveAttribute("aria-selected", "true");
+      });
+    }
   });
 }
 

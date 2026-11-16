@@ -84,6 +84,14 @@ map-path-city = City
 map-areas-none = None yet
 # The city's row to the selected streets (the row's title is sel-heading).
 map-selection-none = None yet
+# The city's row to the changes (the row's title is ui-tab-changes).
+map-changes-row-none = None yet
+map-changes-row = { $n ->
+    [one] One place
+   *[other] { $n } places
+}
+# Under the city's rows: what a press on the map does.
+map-city-hint = Press a place to see it here; press it again, or Open, to edit it. Shift-press streets to change several at once.
 map-selection-summary = { $n ->
     [one] One street
    *[other] { $n } streets

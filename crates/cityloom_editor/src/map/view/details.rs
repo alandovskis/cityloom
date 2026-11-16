@@ -1,9 +1,10 @@
 //! The map's details, one level at a time under a path, as the street and junction pages have them: the city (the
 //! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), the area rules (`#map-areas`) or a
-//! network check (`#map-check`, `network_view::NetworkCheckPane`) or the selected streets (`#map-selection`). A
+//! network check (`#map-check`, `network_view::NetworkCheckPane`), the selected streets (`#map-selection`) or the
+//! places changed (`#map-changes`). A
 //! first press on a place shows it here (`MapVm::pick`); a second press on it, or Open (a link to the address of its
 //! row, `picked_row`), opens its editor. The city leads to the area rules and to the selected streets by rows of its
-//! own (`AreasRow`, `SelectionRow`).
+//! own (`AreasRow`, `SelectionRow`, `ChangesRow`).
 
 use std::rc::Rc;
 
@@ -54,13 +55,14 @@ pub(crate) fn reveal(vm: Bound<MapVm>) {
 }
 
 /// The page's element of each level, and whether it is the level `level`.
-fn levels(level: &MapLevel) -> [(&'static str, bool); 5] {
+fn levels(level: &MapLevel) -> [(&'static str, bool); 6] {
     [
         ("map-city", *level == MapLevel::City),
         ("map-place", matches!(level, MapLevel::Place(_))),
         ("map-areas", *level == MapLevel::Areas),
         ("map-check", matches!(level, MapLevel::Check(_))),
         ("map-selection", *level == MapLevel::Selection),
+        ("map-changes", *level == MapLevel::Changes),
     ]
 }
 
@@ -96,6 +98,7 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
             MapLevel::Areas => Some(vm.with(|v| v.word("restriction-panel"))),
             MapLevel::Check(id) => Some(vm.with(|v| v.check_label(&id))),
             MapLevel::Selection => Some(vm.with(|v| v.word("sel-heading"))),
+            MapLevel::Changes => Some(vm.with(|v| v.word("ui-tab-changes"))),
         };
         match here {
             None => view! {
@@ -126,6 +129,22 @@ pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
                 .into_any()
             }
         }
+    }
+}
+
+/// The city's row to the changes: how many places are changed.
+#[component]
+pub fn ChangesRow(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    view! {
+        <ul class="places-list map-go">
+            <li>
+                <button type="button" class="place-row" id="map-go-changes" on:click=move |_| { vm.with(|v| v.show_changes()); focus_current(); }>
+                    <b>{move || vm.with(|v| v.word("ui-tab-changes"))}</b>
+                    <small>{move || vm.with(|v| v.changes_summary())}</small>
+                </button>
+            </li>
+        </ul>
     }
 }
 

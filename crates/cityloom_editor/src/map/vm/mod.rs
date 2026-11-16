@@ -228,6 +228,8 @@ pub enum MapLevel {
     Areas,
     /// One network check (its `Check` id) and its findings.
     Check(String),
+    /// The places changed, each with whether it still works.
+    Changes,
     /// The streets selected, the change to try on them, its review and Apply.
     Selection,
 }
@@ -1385,6 +1387,19 @@ impl MapVm {
     /// Shows the selected streets in the details.
     pub fn show_selected_streets(&self) {
         self.set_shown(MapLevel::Selection);
+    }
+
+    /// Shows the places changed in the details.
+    pub fn show_changes(&self) {
+        self.set_shown(MapLevel::Changes);
+    }
+
+    /// The city's row to the changes: how many places are changed. Watched.
+    pub fn changes_summary(&self) -> String {
+        match self.changes() {
+            0 => self.word("map-changes-row-none"),
+            n => self.i18n.tr("map-changes-row", &Args::new().num("n", n as i64)),
+        }
     }
 
     /// The city's row to the selected streets: how many there are. Watched.
@@ -2641,6 +2656,20 @@ mod tests {
         assert_eq!(chosen.len(), 1, "the area chosen is said: {chosen:?}");
         vm.say_again();
         assert_eq!(said.take(), chosen);
+    }
+
+    #[test]
+    fn the_changes_are_a_level_the_city_counts_and_leads_to() {
+        let (vm, _, storage) = vm();
+        assert_eq!(vm.changes_summary(), "None yet");
+        vm.show_changes();
+        assert_eq!(vm.level(), MapLevel::Changes);
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        nudge_street(&storage, 1, 300);
+        vm.reload();
+        assert_eq!(vm.changes(), 1);
+        assert_eq!(vm.changes_summary(), "One place");
     }
 
     #[test]

@@ -82,6 +82,12 @@ map-path-label = Ce que montrent les détails
 map-path-city = Ville
 map-areas-none = Aucune pour l’instant
 map-selection-none = Aucune pour l’instant
+map-changes-row-none = Aucun pour l’instant
+map-changes-row = { $n ->
+    [one] Un lieu
+   *[other] { $n } lieux
+}
+map-city-hint = Appuyez sur un lieu pour le voir ici; appuyez de nouveau, ou sur Ouvrir, pour le modifier. Appuyez sur des rues en tenant Maj pour en changer plusieurs à la fois.
 map-selection-summary = { $n ->
     [one] Une rue
    *[other] { $n } rues

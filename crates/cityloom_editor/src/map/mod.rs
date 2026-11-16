@@ -91,6 +91,7 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("map-path-slot", view! { <view::details::MapPath vm=vm.clone()/> }.into_any());
     mount("map-place-slot", view! { <view::details::PlacePane vm=vm.clone()/> }.into_any());
     mount("map-check-slot", view! { <view::network_view::NetworkCheckPane vm=vm.clone()/> }.into_any());
+    mount("map-changes-row-slot", view! { <view::details::ChangesRow vm=vm.clone()/> }.into_any());
     mount("map-selection-row-slot", view! { <view::details::SelectionRow vm=vm.clone()/> }.into_any());
     mount("map-areas-row-slot", view! { <view::details::AreasRow vm=vm.clone()/> }.into_any());
     mount("selection-slot", view! { <view::selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
