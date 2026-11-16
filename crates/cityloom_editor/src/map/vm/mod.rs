@@ -361,6 +361,9 @@ pub struct MapVm {
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
+    /// The streets inside every area, for the city view and the areas they were found from: the status line, the
+    /// checks lead and the city's Area rules row all count them, and they are found again only when either changes.
+    area_findings: RefCell<Option<(Rc<CityView>, Vec<Restriction>, Rc<Vec<AreaStreet>>)>>,
     /// Whether a report is being written: a second request meanwhile is ignored.
     report_running: Cell<bool>,
     /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
@@ -418,6 +421,7 @@ impl MapVm {
             shown: ArcRwSignal::new(MapLevel::City),
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
+            area_findings: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
             #[cfg(test)]
@@ -883,7 +887,7 @@ impl MapVm {
 
     /// How many streets break the rule of an area they are inside (a speed limit never does).
     fn streets_in_conflict(&self) -> usize {
-        let mut uids: Vec<u32> = self.findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
+        let mut uids: Vec<u32> = self.all_findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
         uids.sort_unstable();
         uids.dedup();
         uids.len()
@@ -1518,7 +1522,7 @@ impl MapVm {
         if areas == 0 {
             return self.word("map-areas-none");
         }
-        let breaking = self.findings().iter().filter(|s| !s.conflicts.is_empty()).count();
+        let breaking = self.streets_in_conflict();
         self.i18n.tr("map-areas-summary", &Args::new().num("areas", areas as i64).num("breaking", breaking as i64))
     }
 
@@ -1559,7 +1563,21 @@ impl MapVm {
 
     /// Every street inside an area, for a view: found again when the city or the areas change.
     pub fn findings(&self) -> Vec<AreaStreet> {
-        self.findings_in(&self.view(), &self.areas.list())
+        self.all_findings().as_ref().clone()
+    }
+
+    /// The streets inside every area, found once for a city view and a list of areas.
+    fn all_findings(&self) -> Rc<Vec<AreaStreet>> {
+        let (view, list) = (self.view(), self.areas.list());
+        if let Some((seen, areas, found)) = &*self.area_findings.borrow()
+            && Rc::ptr_eq(seen, &view)
+            && *areas == list
+        {
+            return found.clone();
+        }
+        let found = Rc::new(self.findings_in(&view, &list));
+        *self.area_findings.borrow_mut() = Some((view, list, found.clone()));
+        found
     }
 
     /// The streets inside the area `id`.
@@ -3063,6 +3081,22 @@ mod tests {
         let (vm, _) = slow_bendville(None);
         assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
         assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
+    }
+
+    #[test]
+    fn the_streets_breaking_the_area_rules_are_found_once_for_a_city_view_and_each_counted_once() {
+        let (vm, _, _, storage) = car_free_bendville();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        RestrictionStore::new(storage.clone()).add("Twin", Rule::CarFree, square(mid, 0.001)).unwrap();
+        vm.areas().reload();
+        assert_eq!(vm.findings().len(), 2, "the street is inside both areas");
+        assert_eq!(vm.areas_summary(), "2 areas · one street breaks its rule", "a street is one street, however many areas hold it");
+        vm.editors_read.set(0);
+        vm.findings();
+        vm.areas_summary();
+        vm.status();
+        vm.checks_lead();
+        assert_eq!(vm.editors_read.get(), 0, "the city view and the areas are as they were: nothing is read again");
     }
 
     #[test]
