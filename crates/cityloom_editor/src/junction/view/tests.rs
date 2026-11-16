@@ -3563,3 +3563,13 @@ fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_junction_as_i
     assert_eq!(serde_json::to_string(&*s.view_now()).unwrap(), before);
     assert!(!html(|| view! { <notes::Checks vm=s.clone()/> }.into_any()).contains("goal-mark"));
 }
+
+#[test]
+fn the_current_step_of_the_junction_s_path_is_drawn_as_the_street_s_is() {
+    use crate::junction::model::SIGNAL;
+    let s = shared(0);
+    s.edit(|j| j.set_control(SIGNAL));
+    s.show_plan();
+    let h = panel(&s);
+    assert!(h.contains(r#"class="path-here""#), "the street page's current step, with its focus outline: {h}");
+}

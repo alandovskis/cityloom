@@ -774,7 +774,7 @@ fn path(w: Watch, kind: Option<&'static str>, uid: u32, lane: usize) -> AnyView 
         .enumerate()
         .map(|(i, (text, to))| {
             if i == last {
-                view! { <li><span id=PATH_CURRENT aria-current="location" tabindex="-1">{text}</span></li> }.into_any()
+                view! { <li><span id=PATH_CURRENT class="path-here" aria-current="location" tabindex="-1">{text}</span></li> }.into_any()
             } else {
                 let to = to.unwrap_or(Target::None);
                 view! {
