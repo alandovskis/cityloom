@@ -60,7 +60,7 @@ fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
     // curb; any other is the neutral buffer. A median is only what lies between two merged carriageways.
     let net = import(PLATEAU).expect("the extract reads");
     let city = City::from_network(&net, "Plateau");
-    let kind = |id| cityloom_editor::shared::catalogue::kind_index(id).unwrap();
+    let kind = |id| cityloom_model::catalogue::kind_index(id).unwrap();
     let (median, buffer) = (kind("median"), kind("buffer"));
     let (mut medians, mut buffers) = (0, 0);
     for e in &city.view(0).edges {
@@ -109,7 +109,7 @@ fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
     let buffers = net.roads.iter().flat_map(|r| r.base_lanes()).filter(|l| l.kind == importer::LaneKind::Buffer).count();
     assert!(buffers > 100, "{buffers} buffers");
     let city = City::from_network(&net, "Plateau");
-    let planting = cityloom_editor::shared::catalogue::kind_index("planting").unwrap();
+    let planting = cityloom_model::catalogue::kind_index("planting").unwrap();
     for e in &city.view(0).edges {
         let view = city.street_editor(e.uid, 0).unwrap().view();
         assert!(view.segments.iter().all(|s| s.kind != planting), "{:?} has planting", e.name());
