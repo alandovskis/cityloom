@@ -490,6 +490,12 @@ jn-check-signal-cycle-bad = Le cycle dure { $seconds } s, au-delà des { $max } 
 
 jn-insp-signal = Réglage des feux
 jn-sig-cycle = Cycle : { $seconds } s
+jn-path-plan = Plan des feux
+jn-sig-summary =
+    Cycle de { $seconds } s · { $phases ->
+        [one] 1 phase
+       *[other] { $phases } phases
+    }
 jn-sig-row = { $street } : vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-sig-row-lead = { $street } : avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-sig-walks = Les traverses de { $arms } sont aussi ouvertes.

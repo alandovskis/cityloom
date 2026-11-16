@@ -2463,6 +2463,24 @@ svg pattern circle {
 .jn-fold[open] > summary {
   padding-bottom: 6px;
 }
+/* The junction's signal cycle as one bar: each phase's green, yellow and all-red, to scale. */
+.jn-cycle-bar {
+  display: flex;
+  gap: 1px;
+  height: 12px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.jn-cycle-bar .g {
+  background: var(--ok);
+}
+.jn-cycle-bar .a {
+  background: var(--warn-line);
+}
+.jn-cycle-bar .r {
+  background: var(--danger);
+}
 .jn-tip {
   margin-top: 4px;
   padding: 10px 12px;

@@ -160,4 +160,12 @@ impl Watch {
     pub fn select(&self, target: Target) {
         self.vm.with_value(|v| v.select(target));
     }
+
+    pub fn show_plan(&self) {
+        self.vm.with_value(|v| v.show_plan());
+    }
+
+    pub fn plan_shown(&self) -> bool {
+        self.vm.with_value(|v| v.plan_shown())
+    }
 }

@@ -693,10 +693,44 @@ fn junction_panel(w: Watch) -> AnyView {
         {head(name, sub)}
         {control_section(w)}
         {section(w, "i-h-streets", "jn-insp-streets", view! { <ul class="jn-goes">{streets}</ul> })}
-        {signal_overview(w)}
+        {signal_summary(w)}
         <p class="insp-empty jn-tip">{words(w, "jn-insp-empty")}</p>
     }
     .into_any()
+}
+
+/// The signal at the junction level: its cycle as one bar of each phase's green, yellow and all-red (seen only: the
+/// line under it says it), and the way into the plan, a level of its own.
+fn signal_summary(w: Watch) -> impl IntoView {
+    move || {
+        let v = w.view();
+        let s = v.signal.as_ref()?;
+        let segments = s
+            .phases
+            .iter()
+            .map(|p| {
+                let t = p.timing;
+                view! {
+                    <span class="g" style=format!("flex-grow: {}", t.transit_lead_s + t.green_s)></span>
+                    <span class="a" style=format!("flex-grow: {}", t.yellow_s)></span>
+                    <span class="r" style=format!("flex-grow: {}", t.all_red_s)></span>
+                }
+            })
+            .collect_view();
+        let line = tr(w, "jn-sig-summary", Args::new().num("seconds", i64::from(s.cycle_s)).num("phases", s.phases.len() as i64));
+        Some(section(
+            w,
+            "i-h-signal",
+            "jn-insp-signal",
+            view! {
+                <div class="jn-cycle-bar" aria-hidden="true">{segments}</div>
+                <p class="insp-range">{line}</p>
+                <button type="button" class="btn jn-go" id="jn-go-plan" on:click=move |_| { w.show_plan(); focus_current(); }>
+                    {words(w, "jn-path-plan")}
+                </button>
+            },
+        ))
+    }
 }
 
 /// The id of the path's current step, which takes the focus after a step is pressed.
@@ -731,6 +765,7 @@ fn path(w: Watch, kind: Option<&'static str>, uid: u32, lane: usize) -> AnyView 
         Some("corner") => steps.push((Box::new(move || w.tr("jn-insp-corner")), None)),
         Some("bus") => steps.push((Box::new(move || w.tr("jn-insp-bus")), None)),
         Some("cycle") => steps.push((Box::new(move || w.tr("jn-insp-cycle")), None)),
+        Some("plan") => steps.push((Box::new(move || w.tr("jn-path-plan")), None)),
         _ => {}
     }
     let last = steps.len() - 1;
@@ -1804,9 +1839,13 @@ pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
         let s = &w.view().selected;
         (s.kind, s.uid, s.lane)
     });
+    let plan = Memo::new(move |_| w.plan_shown());
     move || {
+        if plan.get() {
+            return view! { {path(w, Some("plan"), 0, 0)} {signal_overview(w)} }.into_any();
+        }
         let (kind, uid, lane) = selected.get();
-        view! { {path(w, kind, uid, lane)} {panel_of(w, kind, uid, lane)} }
+        view! { {path(w, kind, uid, lane)} {panel_of(w, kind, uid, lane)} }.into_any()
     }
 }
 

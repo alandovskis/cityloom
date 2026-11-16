@@ -371,11 +371,18 @@ test.describe("a junction of a street made pedestrian", () => {
   });
 });
 
+/** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen). */
+async function openPlan(page: Page) {
+  await page.locator("#jn-go-plan").click();
+  await expect(page.locator("#signal-plan-state")).toBeVisible();
+}
+
 test.describe("signal timing on a junction of the city", () => {
   test.beforeEach(async ({ page }) => {
     await openJunction(page);
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await openPlan(page);
   });
 
   test("a street's green is typed, the cycle follows, and a reload keeps it", async ({ page }) => {
@@ -391,6 +398,7 @@ test.describe("signal timing on a junction of the city", () => {
     // (wait for the edit to be kept the way the neighbouring persistence test does, then:)
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     await expect(page.locator("#inspector").getByText(`Cycle: ${before + 5} s`)).toBeVisible();
   });
 
@@ -426,7 +434,7 @@ test.describe("signal timing on a junction of the city", () => {
     // Editing the plan drops the label; Restore brings it back.
     await page.locator("#wrap").focus();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#signal-plan-state")).toBeVisible();
+    await openPlan(page); // letting the street go returns to the Junction level
     await page.locator("#sig-remove-1").click();
     await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
     await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(1);
@@ -537,6 +545,7 @@ test.describe("signal timing on a junction of the city", () => {
     expect(noteBox!.y + noteBox!.height).toBeLessThanOrEqual(firstBox!.y);
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     const again = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
     await expect(again.getByRole("radio", { name: /Pedestrian scramble/ })).toHaveAttribute("aria-checked", "true");
     await expect(page.locator("#inspector .signal-phases .phase-card").first()).not.toContainText("Cars go:");
@@ -576,6 +585,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     const group = page.getByRole("radiogroup", { name: /^Modèle de la phase 1, / });
     await expect(group).toBeVisible();
     await group.getByRole("radio", { name: /Phase piétonne exclusive/ }).click();
@@ -612,6 +622,7 @@ test.describe("signal timing on a junction of the city", () => {
     // It is kept across a reload; undo and redo follow.
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     await expect(page.locator(`#${id}`)).toBeChecked();
     await page.locator("#undo").click();
     await expect(page.locator(`#${id}`)).not.toBeChecked();
@@ -697,6 +708,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     const walks = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
     const off = walks.locator("input:not(:checked)").first();
     await off.focus();
@@ -714,6 +726,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     const group = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
     await expect(group).toBeVisible();
     await group.locator("input:not(:checked)").first().focus();
@@ -830,6 +843,7 @@ test.describe("signal timing on a junction of the city", () => {
     // A reload keeps the edited plan.
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page); // a reload does not keep the plan open
     await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
     await expect(page.locator("#inspector .signal-list > li")).toHaveCount(2);
 

@@ -614,6 +614,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("goal-slot", "the id of the page slot the planning goal's picker mounts into, not a message"),
     ("space-bars", "the id of the page slot the width table's bars mount into, not a message"),
     ("cap-figure", "the id of the page slot the people-moved figure mounts into, not a message"),
+    ("i-h-signal", "the id of the Signal timing heading in the junction's details"),
     ("jn-fold-transit", "the id of a street's Transit priority fold in the junction's details"),
     ("i-h-streets", "the id of the junction level's Streets heading"),
     ("jn-path-current", "the id of the junction path's current step, which takes the focus"),

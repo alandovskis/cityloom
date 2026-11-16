@@ -490,6 +490,12 @@ jn-check-signal-cycle-bad = The cycle is { $seconds } s, over the { $max } s a s
 
 jn-insp-signal = Signal timing
 jn-sig-cycle = Cycle: { $seconds } s
+jn-path-plan = Signal plan
+jn-sig-summary =
+    Cycle of { $seconds } s · { $phases ->
+        [one] 1 phase
+       *[other] { $phases } phases
+    }
 jn-sig-row = { $street }: green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-sig-row-lead = { $street }: early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-sig-walks = Also walks: crossings on { $arms }.
