@@ -1108,12 +1108,13 @@ impl MapVm {
                             if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
                                 self.set_shown(MapLevel::City);
                             }
-                            let before = self.areas.selected_id_now();
-                            self.areas.select(area.as_deref());
-                            if self.areas.selected_id_now().is_some() {
-                                // An area pressed is shown with the area rules, its form open.
+                            // An area pressed is shown with the area rules, its form open: the level first, then the
+                            // area chosen is said (see set_shown).
+                            if area.is_some() {
                                 self.show_areas();
                             }
+                            let before = self.areas.selected_id_now();
+                            self.areas.select(area.as_deref());
                             if refused && self.areas.selected_id_now() == before {
                                 self.say_not_editable();
                             }
@@ -1164,7 +1165,8 @@ impl MapVm {
     }
 
     /// Chooses the level of the details. A new level forgets what the map said last, so that opening the details
-    /// for it says again only what was said for it (`say_again`), never what was said for the one before.
+    /// for it says again only what was said for it (`say_again`), never what was said for the one before. So a
+    /// command that changes the level does so before it says anything about what it shows.
     fn set_shown(&self, level: MapLevel) {
         if self.shown.get_untracked() != level {
             self.said.last.borrow_mut().take();
@@ -2624,6 +2626,14 @@ mod tests {
         let added = said.take();
         vm.say_again();
         assert_eq!(said.take(), added);
+        // an area pressed from the city is said, and said again when the details open for it
+        vm.show_city();
+        said.take();
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        let chosen = said.take();
+        assert_eq!(chosen.len(), 1, "the area chosen is said: {chosen:?}");
+        vm.say_again();
+        assert_eq!(said.take(), chosen);
     }
 
     #[test]
