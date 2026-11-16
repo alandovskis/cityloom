@@ -261,8 +261,10 @@ impl JunctionVm {
         self.plan.get() && v.selected.kind.is_none() && v.signal.is_some()
     }
 
-    /// Moves the selection to the next thing round the junction, and says what.
+    /// Moves the selection to the next thing round the junction, and says what. Like any choice, it leaves the
+    /// signal plan.
     pub fn select_relative(&self, dir: i32) {
+        self.plan.set(false);
         self.edit(|j| j.select_relative(dir));
         self.say_selection();
     }

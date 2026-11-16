@@ -426,6 +426,11 @@ fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_b
     s.select(Target::Arm(arm(&s, 90)));
     s.select(Target::None);
     assert!(!panel(&s).contains(r#"id="sig-remove-0""#));
+    // so does a part chosen with the arrow keys, though an edit then leaves nothing chosen (an arm removed)
+    s.show_plan();
+    s.select_relative(1);
+    s.edit(|j| j.select(Target::None));
+    assert!(!panel(&s).contains(r#"id="sig-remove-0""#), "the junction's level, not the plan's");
 }
 
 #[test]
