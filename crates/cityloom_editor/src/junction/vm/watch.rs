@@ -54,10 +54,6 @@ impl Watch {
         self.vm.with_value(|v| v.passes().clone())
     }
 
-    pub fn version(&self) -> RwSignal<u32> {
-        self.vm.with_value(|v| v.version())
-    }
-
     /// The view, drawing again when the junction is edited.
     pub fn view(&self) -> Rc<JView> {
         self.vm.with_value(|v| v.view())
