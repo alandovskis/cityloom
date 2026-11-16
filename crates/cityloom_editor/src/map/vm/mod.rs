@@ -871,21 +871,21 @@ impl MapVm {
     /// The six checks, each with its count and its findings (the first `NETWORK_SHOWN` of them), in a fixed order.
     /// None when the city has no places.
     pub fn network_rules(&self) -> Vec<NetworkCheck> {
+        Check::ALL.into_iter().filter_map(|rule| self.network_check(rule)).collect()
+    }
+
+    /// The check `rule` with what it found in the city; none in a city with no places, which offers no checks. The
+    /// rows and a check's own level are both made here, so they count the same findings.
+    fn network_check(&self, rule: Check) -> Option<NetworkCheck> {
         if self.has_no_places() {
-            return Vec::new();
+            return None;
         }
         let report = self.network_report();
-        let mut by_check: Vec<Vec<&NetworkFinding>> = vec![Vec::new(); Check::ALL.len()];
-        for f in &report.findings {
-            if let Some(at) = Check::ALL.iter().position(|c| *c == f.rule) {
-                by_check[at].push(f);
-            }
-        }
-        Check::ALL.into_iter().zip(by_check).map(|(rule, found)| self.network_check(rule, found)).collect()
+        Some(self.check_of(rule, report.findings.iter().filter(|f| f.rule == rule).collect()))
     }
 
     /// One check with its count (all the findings) and the first of them.
-    fn network_check(&self, rule: Check, found: Vec<&NetworkFinding>) -> NetworkCheck {
+    fn check_of(&self, rule: Check, found: Vec<&NetworkFinding>) -> NetworkCheck {
         let hidden = found.len().saturating_sub(NETWORK_SHOWN);
         NetworkCheck {
             id: rule.id(),
@@ -1197,12 +1197,7 @@ impl MapVm {
     /// The network check shown, with its findings. Watched.
     pub fn shown_check(&self) -> Option<NetworkCheck> {
         let MapLevel::Check(id) = self.shown.get() else { return None };
-        let rule = Check::ALL.into_iter().find(|c| c.id() == id)?;
-        if self.has_no_places() {
-            return None;
-        }
-        let report = self.network_report();
-        Some(self.network_check(rule, report.findings.iter().filter(|f| f.rule == rule).collect()))
+        self.network_check(Check::ALL.into_iter().find(|c| c.id() == id)?)
     }
 
     /// Whether the path may lead away from the area rules: not while an outline is drawn or named, which is finished,
@@ -2172,7 +2167,7 @@ mod tests {
             places: (1..=n).map(place).collect(),
         };
         let all: Vec<NetworkFinding> = (0..NETWORK_SHOWN as u32 + 12).map(|_| finding(11)).collect();
-        let check = vm.network_check(Check::Cycling, all.iter().collect());
+        let check = vm.check_of(Check::Cycling, all.iter().collect());
         assert_eq!(check.count, NETWORK_SHOWN + 12, "the count is all of them");
         assert_eq!(check.count_text, format!("{} findings", NETWORK_SHOWN + 12));
         assert_eq!(check.items.len(), NETWORK_SHOWN);
@@ -2180,7 +2175,7 @@ mod tests {
         assert_eq!(check.items[0].places.len(), NETWORK_PLACES);
         assert_eq!(check.items[0].more_places.as_deref(), Some("and 3 more places"));
         assert_eq!(check.items[0].rule, "cycling");
-        let few = vm.network_check(Check::Cycling, vec![&finding(2)]);
+        let few = vm.check_of(Check::Cycling, vec![&finding(2)]);
         assert!(few.more.is_none() && few.items[0].more_places.is_none());
     }
 
