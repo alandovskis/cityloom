@@ -10,7 +10,6 @@ details-shown = { $what } shown.
 details-hidden = { $what } hidden.
 details-details = details
 details-places = places
-details-areas = area rules
 region-announced = { $region }: traffic keeps { $side }.
 region-label = { $region } ({ $side })
 drive-left = left

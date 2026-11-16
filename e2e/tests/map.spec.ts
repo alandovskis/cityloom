@@ -117,12 +117,10 @@ test.describe("the city map", () => {
     expect(kinds.sort()).toEqual(["LineString", "Point"]);
   });
 
-  test("has no list of places: the area rules float on the left and the map runs to the edge of the window", async ({
-    page,
-  }) => {
+  test("has no list of places and no left panel: the map runs to the edge of the window", async ({ page }) => {
     await expect(page.locator("#places-panel")).toHaveCount(0);
     await expect(page.locator("#reset")).toHaveCount(0);
-    await expect(page.locator("#areas-panel")).toBeVisible();
+    await expect(page.locator("#areas-panel")).toHaveCount(0);
     const map = (await page.locator("#map-canvas").boundingBox())!;
     expect(map.x).toBe(0);
   });
@@ -230,10 +228,9 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
     const map = await box("#map-canvas");
     const scale = await box(".maplibregl-ctrl-scale");
-    const left = await box("#areas-panel");
-    expect(scale.x - (left.x + left.width)).toBeLessThan(24);
+    expect(scale.x - map.x).toBeLessThan(24);
     const attribution = await box(".maplibregl-ctrl-attrib");
-    for (const covers of ["#areas-panel", "#notes", ".statusbar", "#map-tools-slot"]) {
+    for (const covers of ["#notes", ".statusbar", "#map-tools-slot"]) {
       expect(overlaps(scale, await box(covers)), `the scale under ${covers}`).toBe(false);
       expect(overlaps(attribution, await box(covers)), `the attribution under ${covers}`).toBe(false);
     }
@@ -748,9 +745,27 @@ test.describe("the curbside uses and stops on the map", () => {
     const uid = await openProgrammeStreet(page, 30);
     await addPatio(page, 10);
     await backToMap(page);
-    const use = await patioOnMap(page);
-    const [lng, lat] = centroidOf(use);
-    await page.evaluate(([x, y]) => (window as any).cityloomMap.jumpTo({ center: [x, y], zoom: 19 }), [lng, lat]);
+    await patioOnMap(page); // drawn on the map
+    // the whole street in the open view (a street partly under the details cannot be opened), as close as it fits
+    await page.evaluate((uid) => {
+      const map = (window as any).cityloomMap;
+      const cs = map
+        .getSource("places")
+        .serialize()
+        .data.features.filter((f: any) => f.properties.hot === `s-${uid}` && f.geometry.type === "LineString")
+        .flatMap((f: any) => f.geometry.coordinates);
+      const xs = cs.map((c: number[]) => c[0]);
+      const ys = cs.map((c: number[]) => c[1]);
+      const notes = document.getElementById("notes")!.getBoundingClientRect();
+      const right = map.getCanvas().getBoundingClientRect().right - notes.left + 40;
+      map.fitBounds(
+        [
+          [Math.min(...xs), Math.min(...ys)],
+          [Math.max(...xs), Math.max(...ys)],
+        ],
+        { padding: { left: 60, right, top: 140, bottom: 140 }, animate: false },
+      );
+    }, uid);
     await mapStill(page);
     // the use, drawn under the pointer, with nothing of the page over it
     await expect.poll(() => curbsideSpot(page), { timeout: 30_000 }).not.toBeNull();

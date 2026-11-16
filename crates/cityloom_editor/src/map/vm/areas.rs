@@ -1,4 +1,4 @@
-//! The map page's area restrictions: the list the Area rules panel shows, drawing a new outline, and renaming,
+//! The map page's area restrictions: the list the area rules' level of the details shows, drawing a new outline, and renaming,
 //! changing the rule of, redrawing, dragging the corners of and deleting the one selected. What it shows on the map
 //! goes through the `Mapper` port (`sync`); what it keeps, through the `RestrictionStore`. Which streets are inside
 //! is the map's view-model's business (`MapVm::findings`), which knows the city.

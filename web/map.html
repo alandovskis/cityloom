@@ -6,7 +6,7 @@
   <title>CityLoom city map</title>
   <meta name="description" data-i18n-content="map-page-description" content="See the whole city at once and open any street or junction to change it.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l!=="en"&&l!=="fr-CA"){l=null;var n=navigator.languages||[];for(var i=0;i<n.length&&!l;i++){var m=/^(en|fr)(-|_|$)/i.exec(n[i]);if(m)l=m[1].toLowerCase()==="fr"?"fr-CA":"en"}}if(l)document.documentElement.lang=l}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;var l=localStorage.getItem("cityloom-lang");if(l!=="en"&&l!=="fr-CA"){l=null;var n=navigator.languages||[];for(var i=0;i<n.length&&!l;i++){var m=/^(en|fr)(-|_|$)/i.exec(n[i]);if(m)l=m[1].toLowerCase()==="fr"?"fr-CA":"en"}}if(l)document.documentElement.lang=l}catch(e){}</script>
   <link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">
   <link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">
   <link rel="preload" as="fetch" crossorigin href="data/metro/index.json">
@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="v/{{build}}/app.css">
   <link rel="stylesheet" href="v/{{build}}/vendor/maplibre-gl.css">
 </head>
-<body>
+<body class="map-page">
   <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
     <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
     <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu se charger. Rechargez la page; si cela ne règle rien, vérifiez votre connexion.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
@@ -41,7 +41,6 @@
             <span><kbd>0</kbd> <span data-i18n="map-key-whole">whole city</span></span>
             <span><kbd>⇧</kbd> <span data-i18n="map-key-select">click to select a street</span></span>
             <span><kbd>⇧</kbd> <kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-select-found">select a place found</span></span>
-            <span><kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span></span>
             <span><kbd>]</kbd> <span data-i18n="map-key-panels">notes</span></span>
           </p>
         </div>
@@ -95,22 +94,21 @@
   </main>
   <footer class="site-foot"><span data-version></span></footer>
 
-  <button type="button" id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="restriction-toggle-title" title="Show or hide the area rules ( [ )" data-i18n="restriction-panel">Area rules</button>
   <button type="button" id="notes-toggle" class="edge-tab right" data-covers="right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
-
-  <aside class="panel left" id="areas-panel" data-i18n-aria-label="restriction-panel" aria-label="Area rules" data-covers>
-    <div class="panel-body">
-      <section aria-labelledby="h-areas">
-        <h2 id="h-areas" class="note-h" data-i18n="restriction-heading">Rules over an area</h2>
-        <div id="areas-slot"></div>
-      </section>
-    </div>
-  </aside>
 
   <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
     <div id="map-path-slot" class="map-path"></div>
     <div class="map-level" id="map-place" hidden><div class="panel-body"><div id="map-place-slot"></div></div></div>
+    <div class="map-level" id="map-areas" hidden>
+      <div class="panel-body">
+        <section aria-labelledby="h-areas">
+          <h2 id="h-areas" class="note-h" data-i18n="restriction-heading">Rules over an area</h2>
+          <div id="areas-slot"></div>
+        </section>
+      </div>
+    </div>
     <div class="map-level" id="map-city">
+    <div id="map-areas-row-slot" class="map-go-slot"></div>
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>

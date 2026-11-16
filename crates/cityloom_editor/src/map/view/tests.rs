@@ -547,7 +547,7 @@ fn map_html_has_one_h1_the_city_map() {
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
 
-// ---- the Area rules panel ------------------------------------------------------------------
+// ---- the area rules ------------------------------------------------------------------------
 
 use crate::map::view::areas_view::Areas;
 use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
@@ -713,26 +713,28 @@ fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
 }
 
 #[test]
-fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
-    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\"") && !MAP_HTML.contains("data-left=\"none\""));
-    assert!(
-        MAP_HTML.contains(
-            r#"id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[""#
-        )
-    );
-    assert!(MAP_HTML.contains(r#"<aside class="panel left" id="areas-panel""#));
-    let panel = &MAP_HTML[MAP_HTML.find("id=\"areas-panel\"").unwrap()..];
-    assert!(panel[..panel.find("</aside>").unwrap()].contains("id=\"areas-slot\""));
-    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-inspector")==="closed""#), "the head script restores a closed panel");
+fn the_area_rules_are_a_level_of_the_details_and_the_map_has_no_left_panel() {
+    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\""));
+    for gone in ["areas-panel", "inspector-toggle", "panel left", "cityloom-inspector", "edge-tab left"] {
+        assert!(!MAP_HTML.contains(gone), "{gone}");
+    }
+    assert!(MAP_HTML.contains(r#"<body class="map-page">"#), "the map's stylesheet gives no room to a left panel");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let notes = &notes[..notes.find("</aside>").unwrap()];
+    let level = &notes[notes.find(r#"id="map-areas""#).expect("the area rules' level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden"), "shown only when chosen");
+    assert!(level.find(r#"id="h-areas""#).unwrap() < level.find(r#"id="areas-slot""#).unwrap());
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.find(r#"id="map-areas-row-slot""#).expect("the city leads to them") < city.find(r#"class="tabs""#).unwrap(), "above the tabs, of neither");
 }
 
 #[test]
-fn the_keyboard_help_lists_the_key_for_the_area_rules_beside_the_notes() {
+fn the_keyboard_help_lists_the_key_for_the_notes_and_none_for_a_left_panel() {
     // The map takes no Tab or Enter for the places (Tab leaves it): they are opened from the search, which is what
     // the help says.
     assert!(!MAP_HTML.contains("map-key-next") && !MAP_HTML.contains("next place"));
     assert!(MAP_HTML.contains(r#"<kbd>↓</kbd> <kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-open">open a place found</span>"#));
-    assert!(MAP_HTML.contains(r#"<kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span>"#));
+    assert!(!MAP_HTML.contains("<kbd>[</kbd>") && !MAP_HTML.contains("map-key-areas"), "no left panel to open");
     assert!(MAP_HTML.contains(r#"<kbd>]</kbd> <span data-i18n="map-key-panels">notes</span>"#));
 }
 
@@ -768,10 +770,10 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 }
 
 #[test]
-fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() {
+fn the_details_are_opened_through_the_shell_s_own_toggle_only_where_they_are_closed() {
     use crate::map::view::areas_view::reveal_clicks;
     assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
-    assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
+    assert_eq!(reveal_clicks(Some("false")), ["notes-toggle"]);
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }
 
@@ -1852,4 +1854,36 @@ fn the_map_page_has_a_city_level_and_a_place_level_shown_one_at_a_time() {
     assert!(place[..place.find('>').unwrap()].contains("hidden"), "the place's level is hidden until a place is pressed");
     let city = &page[page.find(r#"id="map-city""#).unwrap()..];
     assert!(city.find(r#"id="t-checks""#).unwrap() < city.find("</aside>").unwrap(), "the tabs are the city's");
+}
+
+#[test]
+fn the_area_rules_level_is_under_the_city_and_an_outline_being_drawn_keeps_the_path_there() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    vm.show_areas();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">City</button>"), "{h}");
+    assert!(h.contains(r#"class="path-here""#) && h.contains(">Area rules</span>"), "{h}");
+    vm.areas().start();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(!h.contains("<button") && h.contains(">City<") && h.contains(">Area rules</span>"), "Finish or Cancel first: {h}");
+    assert!(h.contains(r#"<span class="path-still">City</span>"#), "drawn as no link: {h}");
+}
+
+#[test]
+fn the_city_has_a_row_to_the_area_rules_that_counts_them_and_the_streets_breaking_them() {
+    let vm = ready_areas_vm(Locale::En, &[]);
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-go-areas""#) && h.contains(">Area rules<") && h.contains(">None yet<"), "{h}");
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    let breaking = vm.findings().iter().filter(|s| !s.conflicts.is_empty()).count();
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    let streets = match breaking {
+        0 => "every street keeps to its rule".to_string(),
+        1 => "one street breaks its rule".to_string(),
+        n => format!("{n} streets break their rule"),
+    };
+    assert!(h.contains(&format!(">One area · {streets}<")), "{h}");
+    let vm = ready_areas_vm(Locale::FrCa, &[("Zone", Rule::CarFree)]);
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    assert!(h.contains(">Règles de zone<") && h.contains(">Une zone · "), "{h}");
 }

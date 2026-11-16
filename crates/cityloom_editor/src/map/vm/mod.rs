@@ -189,6 +189,17 @@ pub fn junction_href(uid: u32, project: Option<&str>) -> String {
 
 // ---- what the view binds to ----------------------------------------------------------------
 
+/// What the map's details show, one level at a time under a path from the city.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MapLevel {
+    /// The city: its checks and changes.
+    City,
+    /// The place a press shows (`s-<uid>` or `j-<uid>`).
+    Place(String),
+    /// The area rules: the list, an outline being drawn or named, and the selected area's form.
+    Areas,
+}
+
 /// A place to open: in a list, or as a link on the map. Its name and small print are data, worded by the view
 /// in the language of the page.
 #[derive(Clone, Debug, PartialEq)]
@@ -330,7 +341,7 @@ pub struct MapVm {
     active: ArcRwSignal<Option<usize>>,
     /// The places worded for the search, until the city, the language or the units change.
     worded: RefCell<Option<Worded>>,
-    /// The area restrictions: the Area rules panel, and what the map shows of them.
+    /// The area restrictions: the area rules' level of the details, and what the map shows of them.
     areas: Rc<AreasVm>,
     /// The planning goal chosen (#72): it marks network checks and offers a change to review, and changes nothing.
     goal: crate::shared::goals::GoalChoice,
@@ -341,6 +352,8 @@ pub struct MapVm {
     corridor: ArcRwSignal<Stage>,
     /// The place a press shows in the details (`s-<uid>` or `j-<uid>`); a second press on it, or Open, opens it.
     picked: ArcRwSignal<Option<String>>,
+    /// Whether the details show the area rules (when no place is shown); an outline being drawn shows them anyway.
+    areas_shown: ArcRwSignal<bool>,
     /// The last change made to the selected streets, which can be taken back as one step while this page is open.
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
@@ -400,6 +413,7 @@ impl MapVm {
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
             picked: ArcRwSignal::new(None),
+            areas_shown: ArcRwSignal::new(false),
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
             report_running: Cell::new(false),
@@ -1046,11 +1060,17 @@ impl MapVm {
                             if refused && area.is_none() {
                                 return self.say_not_editable();
                             }
+                            // A press on nothing goes back from a place to the city; with the area rules shown, it
+                            // only lets the selected area go.
                             if hot.is_none() {
-                                self.pick(None);
+                                self.picked.set(None);
                             }
                             let before = self.areas.selected_id_now();
                             self.areas.select(area.as_deref());
+                            if self.areas.selected_id_now().is_some() {
+                                // An area pressed is shown with the area rules, its form open.
+                                self.show_areas();
+                            }
                             if refused && self.areas.selected_id_now() == before {
                                 self.say_not_editable();
                             }
@@ -1083,7 +1103,44 @@ impl MapVm {
 
     /// Shows a place in the details, or none (the city's level).
     pub fn pick(&self, hot: Option<&str>) {
-        self.picked.set(hot.map(String::from));
+        match hot {
+            Some(hot) => {
+                self.areas_shown.set(false);
+                self.picked.set(Some(hot.to_string()));
+            }
+            None => self.show_city(),
+        }
+    }
+
+    /// What the details show, watched: an outline being drawn or named is always shown with the area rules.
+    pub fn level(&self) -> MapLevel {
+        if !matches!(self.areas.draw(), Draw::Idle) {
+            return MapLevel::Areas;
+        }
+        match self.picked.get() {
+            Some(hot) => MapLevel::Place(hot),
+            None if self.areas_shown.get() => MapLevel::Areas,
+            None => MapLevel::City,
+        }
+    }
+
+    /// Goes back to the city's level. A selected area is let go, since its form is no longer shown.
+    pub fn show_city(&self) {
+        self.picked.set(None);
+        self.areas_shown.set(false);
+        self.areas.select(None);
+    }
+
+    /// Shows the area rules.
+    pub fn show_areas(&self) {
+        self.picked.set(None);
+        self.areas_shown.set(true);
+    }
+
+    /// Whether the path may lead away from the area rules: not while an outline is drawn or named, which is finished,
+    /// saved or cancelled there first. Watched.
+    pub fn can_leave_areas(&self) -> bool {
+        matches!(self.areas.draw(), Draw::Idle)
     }
 
     /// The row of the place shown: its name, small print, state and the address of its editor.
@@ -1407,7 +1464,7 @@ impl MapVm {
 
     // ---- area restrictions ----
 
-    /// The Area rules panel's view-model.
+    /// The area rules' view-model.
     pub fn areas(&self) -> &Rc<AreasVm> {
         &self.areas
     }
@@ -1423,6 +1480,16 @@ impl MapVm {
             return self.word("restriction-lead-no-map");
         }
         self.areas.lead()
+    }
+
+    /// The city's row to the area rules: how many there are and how many streets break their rule. Watched.
+    pub fn areas_summary(&self) -> String {
+        let areas = self.areas.list().len();
+        if areas == 0 {
+            return self.word("map-areas-none");
+        }
+        let breaking = self.findings().iter().filter(|s| !s.conflicts.is_empty()).count();
+        self.i18n.tr("map-areas-summary", &Args::new().num("areas", areas as i64).num("breaking", breaking as i64))
     }
 
     /// Sends the areas and the outline being drawn to the map, once there is a map to show them on.
@@ -2377,6 +2444,47 @@ mod tests {
     }
 
     #[test]
+    fn the_area_rules_are_a_level_of_the_details_that_an_area_pressed_or_drawn_shows() {
+        let (vm, mapper, _, _, _) = car_free_bendville_said();
+        mapper.say(COVERING);
+        vm.areas().select(None);
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.show_areas();
+        assert_eq!(vm.level(), MapLevel::Areas, "reached from the city's row");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        // an area pressed on the map is shown at the area rules' level, its form open
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
+        assert_eq!(vm.level(), MapLevel::Areas);
+        // a press on nothing lets the area go and stays with the area rules
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None);
+        assert_eq!(vm.level(), MapLevel::Areas);
+        // a place pressed is shown in their stead; a press on nothing then goes back to the city
+        let street = vm.street_rows().into_iter().next().expect("a street").hot;
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some(street.clone()), area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::Place(street.clone()));
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::City);
+        // the city lets a selected area go: its form is no longer shown
+        vm.areas().select(Some("r1"));
+        vm.show_city();
+        assert_eq!(vm.areas().selected_id_now(), None);
+        // an outline being drawn or named is always shown with the area rules, where Finish, Save and Cancel are
+        vm.show_areas();
+        vm.areas().start();
+        vm.pick(Some(&street));
+        assert_eq!(vm.level(), MapLevel::Areas, "even were a place picked meanwhile");
+        assert!(!vm.can_leave_areas(), "the outline is finished or cancelled first");
+        vm.areas().cancel();
+        assert!(vm.can_leave_areas());
+        vm.show_areas();
+        assert_eq!(vm.level(), MapLevel::Areas);
+    }
+
+    #[test]
     fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
         let (vm, mapper, navigator, _) = area_vm();
         let press = |hot: Option<&str>| MapEvent::Press { at: [-73.6, 45.5], hot: hot.map(String::from), area: None, vertex: None };
@@ -2908,11 +3016,11 @@ mod tests {
         let before = vm.status();
         assert!(!vm.findings().is_empty() && vm.findings().iter().any(|f| !f.conflicts.is_empty()));
         assert_eq!(before, Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
-        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules panel lists it.");
+        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules row above lists it.");
         assert!(vm.failing_items().is_empty(), "the design checks are what that list is of");
         vm.i18n().set(Locale::FrCa);
         assert_eq!(vm.status().text, "1 lieu. Une rue est en conflit avec une règle de zone.");
-        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. Le panneau Règles de zone la liste.");
+        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. La ligne Règles de zone, plus haut, la liste.");
     }
 
     #[test]

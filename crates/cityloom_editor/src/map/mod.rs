@@ -28,7 +28,8 @@ impl MapPage {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", crate::shell::NotesAtStart::OpenWhenRoomy);
+        // The map has no left sidebar (its area rules are a level of the details), so its name is never said.
+        crate::shell::mount(self.1.clone(), self.0.clone(), "details-details", crate::shell::NotesAtStart::OpenWhenRoomy);
     }
 
     /// Binds the Share menu's Download report item (`#report`, made by the shell's `mount_shell`) to the report's
@@ -89,6 +90,7 @@ pub fn mount_map(canvas: crate::shared::platform::MapCanvas) -> Option<MapPage> 
     mount("goal-slot", view! { <view::goal_view::GoalGuide vm=vm.clone()/> }.into_any());
     mount("map-path-slot", view! { <view::details::MapPath vm=vm.clone()/> }.into_any());
     mount("map-place-slot", view! { <view::details::PlacePane vm=vm.clone()/> }.into_any());
+    mount("map-areas-row-slot", view! { <view::details::AreasRow vm=vm.clone()/> }.into_any());
     mount("selection-slot", view! { <view::selection_view::SelectedStreets vm=vm.clone()/> }.into_any());
     mount("areas-slot", view! { <view::areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <view::network_view::NetworkLead vm=vm.clone()/> }.into_any());

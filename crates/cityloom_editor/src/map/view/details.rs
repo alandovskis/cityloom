@@ -1,12 +1,13 @@
 //! The map's details, one level at a time under a path, as the street and junction pages have them: the city (the
-//! Checks and Changes tabs, `#map-city`), or the place a press shows (`#map-place`). A first press on a place shows it
-//! here; a second press on it, or Open, opens its editor (`MapVm::pick`, `open_picked`).
+//! Checks and Changes tabs, `#map-city`), the place a press shows (`#map-place`), or the area rules (`#map-areas`). A
+//! first press on a place shows it here; a second press on it, or Open, opens its editor (`MapVm::pick`,
+//! `open_picked`). The city leads to the area rules by a row of its own (`AreasRow`).
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::map::vm::MapVm;
+use crate::map::vm::{MapLevel, MapVm};
 use crate::shared::bind::Bound;
 
 /// The id of the path's current step, which takes the focus after its City step is pressed.
@@ -23,47 +24,81 @@ fn focus_current() {
     });
 }
 
-/// The path: City, or City › the place shown. It also shows the level it names and hides the other.
+/// The page's element of each level, and whether it is the level `level`.
+fn levels(level: &MapLevel) -> [(&'static str, bool); 3] {
+    [("map-city", *level == MapLevel::City), ("map-place", matches!(level, MapLevel::Place(_))), ("map-areas", *level == MapLevel::Areas)]
+}
+
+/// The path: City, or City › the place shown, or City › Area rules. It also shows the level it names and hides the
+/// others. While an outline is drawn or named the city is not a step back: Finish, Save or Cancel come first.
 #[component]
 pub fn MapPath(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
-        let place = vm.with(|v| v.picked()).is_some();
+        let level = vm.with(|v| v.level());
         let doc = document();
-        for (id, hidden) in [("map-city", place), ("map-place", !place)] {
-            if let Some(level) = doc.get_element_by_id(id) {
-                let _ = if hidden { level.set_attribute("hidden", "") } else { level.remove_attribute("hidden") };
+        for (id, shown) in levels(&level) {
+            if let Some(el) = doc.get_element_by_id(id) {
+                let _ = if shown { el.remove_attribute("hidden") } else { el.set_attribute("hidden", "") };
             }
         }
     });
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = levels;
     move || {
         let label = vm.with(|v| v.word("map-path-label"));
         let city = vm.with(|v| v.word("map-path-city"));
-        match vm.with(|v| v.picked_row()) {
+        let here = match vm.with(|v| v.level()) {
+            MapLevel::City => None,
+            MapLevel::Place(_) => vm.with(|v| v.picked_row().map(|row| v.say(&row.name))),
+            MapLevel::Areas => Some(vm.with(|v| v.word("restriction-panel"))),
+        };
+        match here {
             None => view! {
                 <nav aria-label=label class="panel-path">
                     <ol><li><span id=CURRENT class="path-here" aria-current="location" tabindex="-1">{city}</span></li></ol>
                 </nav>
             }
             .into_any(),
-            Some(row) => {
-                let name = vm.with(|v| v.say(&row.name));
+            Some(here) => {
+                let back = if vm.with(|v| v.can_leave_areas()) {
+                    view! {
+                        <button type="button" class="path-step" id="map-path-city" on:click=move |_| { vm.with(|v| v.show_city()); focus_current(); }>
+                            {city}
+                        </button>
+                    }
+                    .into_any()
+                } else {
+                    view! { <span class="path-still">{city}</span> }.into_any()
+                };
                 view! {
                     <nav aria-label=label class="panel-path">
                         <ol>
-                            <li>
-                                <button type="button" class="path-step" id="map-path-city" on:click=move |_| { vm.with(|v| v.pick(None)); focus_current(); }>
-                                    {city}
-                                </button>
-                            </li>
-                            <li><span id=CURRENT class="path-here" aria-current="location" tabindex="-1">{name}</span></li>
+                            <li>{back}</li>
+                            <li><span id=CURRENT class="path-here" aria-current="location" tabindex="-1">{here}</span></li>
                         </ol>
                     </nav>
                 }
                 .into_any()
             }
         }
+    }
+}
+
+/// The city's row to the area rules: how many there are, and how many streets break them.
+#[component]
+pub fn AreasRow(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    view! {
+        <ul class="places-list map-go">
+            <li>
+                <button type="button" class="place-row" id="map-go-areas" on:click=move |_| { vm.with(|v| v.show_areas()); focus_current(); }>
+                    <b>{move || vm.with(|v| v.word("restriction-panel"))}</b>
+                    <small>{move || vm.with(|v| v.areas_summary())}</small>
+                </button>
+            </li>
+        </ul>
     }
 }
 

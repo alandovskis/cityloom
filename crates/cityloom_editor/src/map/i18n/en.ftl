@@ -16,7 +16,6 @@ map-key-move = move the map
 map-key-whole = whole city
 map-key-select = click to select a street
 map-key-select-found = select a place found
-map-key-areas = area rules
 map-key-panels = notes
 
 ## The heading, the tools and the panels
@@ -81,6 +80,16 @@ map-not-editable = Not all of this place is in view. Move the map so all of it s
 map-picked = { $name }. Press it again, or Open, to edit it.
 map-path-label = What the details are of
 map-path-city = City
+# The city's row to the area rules (the row's title is restriction-panel).
+map-areas-none = None yet
+map-areas-summary = { $areas ->
+    [one] One area
+   *[other] { $areas } areas
+} · { $breaking ->
+    [0] every street keeps to its rule
+    [one] one street breaks its rule
+   *[other] { $breaking } streets break their rule
+}
 map-open-street = Open in the street editor
 map-open-junction = Open in the junction editor
 map-add-selection = Add to the selection
@@ -119,7 +128,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] One street conflicts
    *[other] { $streets } streets conflict
-} with an area rule. The Area rules panel lists { $streets ->
+} with an area rule. The Area rules row above lists { $streets ->
     [one] it
    *[other] them
 }.
