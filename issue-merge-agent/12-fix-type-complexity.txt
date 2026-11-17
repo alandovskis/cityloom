@@ -1,0 +1,33 @@
+$ git diff
+diff --git a/crates/cityloom_editor/src/map/vm/mod.rs b/crates/cityloom_editor/src/map/vm/mod.rs
+index 7c6468af..9858cfad 100644
+--- a/crates/cityloom_editor/src/map/vm/mod.rs
++++ b/crates/cityloom_editor/src/map/vm/mod.rs
+@@ -343,6 +343,9 @@ pub struct Status {
+ /// The junction rows and the street rows, each with its folded text (see `MapVm::worded_rows`).
+ type WordedRows = (Vec<(PlaceRow, String)>, Vec<(PlaceRow, String)>);
+ 
++/// The streets inside every area, with the city view and the areas they were found from (see `MapVm::all_findings`).
++type AreaFindings = (Rc<CityView>, Vec<Restriction>, Rc<Vec<AreaStreet>>);
++
+ /// `WordedRows`, for the city view, language and units they were worded for.
+ struct Worded {
+     view: Rc<CityView>,
+@@ -394,7 +397,7 @@ pub struct MapVm {
+     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
+     /// The streets inside every area, for the city view and the areas they were found from: the status line, the
+     /// checks lead and the city's Area rules row all count them, and they are found again only when either changes.
+-    area_findings: RefCell<Option<(Rc<CityView>, Vec<Restriction>, Rc<Vec<AreaStreet>>)>>,
++    area_findings: RefCell<Option<AreaFindings>>,
+     /// Whether a report is being written: a second request meanwhile is ignored.
+     report_running: Cell<bool>,
+     /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
+
+$ cargo clippy -p cityloom_editor --all-targets 2>&1 | grep -A3 "very complex type" | grep "map/vm/mod.rs"
+    --> crates/cityloom_editor/src/map/vm/mod.rs:2268:25
+    --> crates/cityloom_editor/src/map/vm/mod.rs:2273:57
+    --> crates/cityloom_editor/src/map/vm/mod.rs:3025:37
+(lines 2268, 2273, 3025 are in mod tests (starts at 1746), not the Sonar issue at the area_findings field, which no longer warns)
+
+$ cargo test -p cityloom_editor map::vm
+test result: ok. 212 passed; 0 failed; 0 ignored; 0 measured; 3033 filtered out; finished in 1.31s

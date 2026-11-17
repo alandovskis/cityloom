@@ -1,0 +1,9 @@
+# A live PR with zero Sonar issues (#217) is clean, not an error
+$ body=$(curl -sS --fail-with-body -A cityloom-merge "https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom&pullRequest=217&resolved=false&ps=500"); rc=$?
+rc=0
+$ jq -e .paging.total
+0
+(exit 0: 0 issues, so the runbook does not list them)
+$ gate: jq -e .projectStatus.status
+"OK"
+(exit 0)

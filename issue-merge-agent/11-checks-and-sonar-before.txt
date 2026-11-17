@@ -1,0 +1,40 @@
+$ gh pr checks 216 --repo alandovskis/cityloom
+Build for the browser tests	pass	2m20s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133155940211	
+CI	pass	4s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133165297597	
+Changes	pass	8s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133153678218	
+E2E tests	pass	3m18s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133158384640	
+Format	pass	29s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133153678548	
+Integration tests	pass	2m22s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133158384584	
+Release server has no fake provider	pass	2m16s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133155940187	
+Unit tests	pass	7m33s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133155940194	
+Version bump	pass	8s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133155940193	
+Deploy to Railway	skipping	0	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133165345916	
+SonarCloud Code Analysis	pass	47s	https://sonarcloud.io/dashboard?id=alandovskis_cityloom&pullRequest=216	
+SonarCloud analysis	pass	6m48s	https://github.com/alandovskis/cityloom/actions/runs/43824093636/job/133153678126	
+UI tests	pass	17m25s	https://github.com/alandovskis/cityloom/actions/runs/43824093840/job/133158384675	
+
+[exited with code 0]
+
+$ HEAD_SHA=$(git rev-parse HEAD)  -> c83d982c44d98cc374b473e6e13e4a68d2aa6758
+$ curl https://sonarcloud.io/api/project_pull_requests/list?project=alandovskis_cityloom | jq -r '.pullRequests[] | select(.key=="216") | .commit.sha'
+c83d982c44d98cc374b473e6e13e4a68d2aa6758
+
+$ curl 'https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom&pullRequest=216&resolved=false&ps=500'  (rc, jq -e .paging.total, list)
+rc=0
+2
+rust:S3776 CRITICAL crates/cityloom_editor/src/map/vm/mod.rs:1081 Refactor this function to reduce its Cognitive Complexity from 33 to the 30 allowed.
+external_clippy:type_complexity MAJOR crates/cityloom_editor/src/map/vm/mod.rs:397 very complex type used. Consider factoring parts into `type` definitions
+
+$ curl 'https://sonarcloud.io/api/hotspots/search?projectKey=alandovskis_cityloom&pullRequest=216&status=TO_REVIEW' | jq -e .paging.total
+rc=0
+0
+
+$ curl 'https://sonarcloud.io/api/qualitygates/project_status?projectKey=alandovskis_cityloom&pullRequest=216' | jq -e .projectStatus.status
+rc=0
+"OK"
+$ curl 'https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom:crates/cityloom_editor/src/map/vm/mod.rs&resolved=false&rules=rust:S3776&ps=500'
+rc=0
+0
+$ curl 'https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom:crates/cityloom_editor/src/map/vm/mod.rs&resolved=false&rules=external_clippy:type_complexity&ps=500'
+rc=0
+0

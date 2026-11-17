@@ -1,0 +1,19 @@
+$ git fetch -q origin && git merge-base --is-ancestor origin/junction-pane HEAD; echo "exit $?"
+exit 0
+$ HEAD_SHA=$(git rev-parse HEAD) -> bf406c7e4e66b9d92750da3f28f7308ada894964
+$ gh pr checks 216 --repo alandovskis/cityloom --watch   (progress output omitted)
+watch exit 0
+$ gh pr checks 216 --repo alandovskis/cityloom
+Build for the browser tests	pass	3m7s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779580348	
+CI	pass	4s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133787698357	
+Changes	pass	7s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779519227	
+E2E tests	pass	4m14s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133780822100	
+Format	pass	30s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779518894	
+Integration tests	pass	2m22s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133780822035	
+Release server has no fake provider	pass	2m26s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779580379	
+SonarCloud Code Analysis	pass	38s	https://sonarcloud.io/dashboard?id=alandovskis_cityloom&pullRequest=216	
+SonarCloud analysis	pass	5m30s	https://github.com/alandovskis/cityloom/actions/runs/44005435208/job/133779518350	
+UI tests	pass	17m39s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133780822115	
+Unit tests	pass	7m26s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779580270	
+Deploy to Railway	skipping	0	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133787745930	
+Version bump	pass	8s	https://github.com/alandovskis/cityloom/actions/runs/44005435273/job/133779580303	

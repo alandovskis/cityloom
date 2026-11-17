@@ -1,0 +1,8 @@
+$ body=$(curl -sS --fail-with-body -A cityloom-merge "https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom&pullRequest=216&resolved=false&ps=500"); rc=$?
+rc=0
+$ jq -e .paging.total
+2
+(exit 0)
+$ jq -r '.issues[] | "\(.rule) \(.severity) \(.component | sub("^[^:]*:"; "")):\(.line) \(.message)"'
+rust:S3776 CRITICAL crates/cityloom_editor/src/map/vm/mod.rs:1081 Refactor this function to reduce its Cognitive Complexity from 33 to the 30 allowed.
+external_clippy:type_complexity MAJOR crates/cityloom_editor/src/map/vm/mod.rs:397 very complex type used. Consider factoring parts into `type` definitions

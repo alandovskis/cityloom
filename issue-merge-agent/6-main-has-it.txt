@@ -1,0 +1,8 @@
+# Step 4: does main have the issue too? (narrowed to the file, no pullRequest)
+$ body=$(curl ... "https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom:crates/citymodel_builder/src/archive/pack.rs&resolved=false&rules=rust:S2612&ps=500")
+rc=0
+1
+92 Make sure this permission is safe.
+$ ... same for rules=rust:S3776 on crates/cityloom_editor/src/map/vm/mod.rs (an issue PR #216 brings in)
+rc=0
+0

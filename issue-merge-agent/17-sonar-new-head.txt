@@ -1,0 +1,15 @@
+$ HEAD_SHA=$(git rev-parse HEAD)  -> bf406c7e4e66b9d92750da3f28f7308ada894964
+$ curl https://sonarcloud.io/api/project_pull_requests/list?project=alandovskis_cityloom | jq -r '.pullRequests[] | select(.key=="216") | .commit.sha'
+bf406c7e4e66b9d92750da3f28f7308ada894964
+
+$ curl 'https://sonarcloud.io/api/issues/search?componentKeys=alandovskis_cityloom&pullRequest=216&resolved=false&ps=500'  (rc, jq -e .paging.total, list)
+rc=0
+0
+
+$ curl 'https://sonarcloud.io/api/hotspots/search?projectKey=alandovskis_cityloom&pullRequest=216&status=TO_REVIEW' | jq -e .paging.total
+rc=0
+0
+
+$ curl 'https://sonarcloud.io/api/qualitygates/project_status?projectKey=alandovskis_cityloom&pullRequest=216' | jq -e .projectStatus.status
+rc=0
+"OK"

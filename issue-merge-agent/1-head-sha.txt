@@ -1,0 +1,8 @@
+$ body=$(curl -sS --fail-with-body -A cityloom-merge "https://sonarcloud.io/api/project_pull_requests/list?project=alandovskis_cityloom"); rc=$?
+rc=0
+$ jq -r '.pullRequests[] | select(.key=="216") | .commit.sha'
+c83d982c44d98cc374b473e6e13e4a68d2aa6758
+$ gh pr view 216 --json headRefOid -q .headRefOid
+c83d982c44d98cc374b473e6e13e4a68d2aa6758
+$ jq -r '.pullRequests[] | select(.key=="99999") | .commit.sha'   # a PR Sonar has not listed
+(printed nothing, exit 0)

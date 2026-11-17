@@ -1,0 +1,9 @@
+# Why the runbook reads lists with plain jq -r and checks only scalars with jq -e
+$ echo '{"issues":[],"paging":{"total":0}}' | jq -e '.issues[]'
+(exit 4: jq -e fails on an empty list)
+$ echo '{"issues":[],"paging":{"total":0}}' | jq -e .paging.total
+0
+(exit 0: a total of 0 passes)
+$ echo '{"errors":[]}' | jq -e .paging.total   # a body without the field
+null
+(exit 1: missing field fails)

@@ -1,0 +1,5 @@
+$ git fetch -q origin && git merge-base --is-ancestor origin/junction-pane HEAD; echo "exit $?"
+exit 0
+$ git rev-parse HEAD origin/map-pane
+c83d982c44d98cc374b473e6e13e4a68d2aa6758
+c83d982c44d98cc374b473e6e13e4a68d2aa6758

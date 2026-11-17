@@ -1,0 +1,8 @@
+$ git push
+To github.com:alandovskis/cityloom.git
+   c83d982c..bf406c7e  map-pane -> map-pane
+exit 0
+$ git log --oneline -3
+bf406c7e Reduce the cognitive complexity of MapVm::on_map_event (rust:S3776)
+e37f50b4 Name the type of the map's cached area findings (clippy::type_complexity)
+c83d982c Lay out a selected street as its name and a Remove button

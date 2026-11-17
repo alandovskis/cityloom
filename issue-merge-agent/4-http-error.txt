@@ -1,0 +1,4 @@
+$ body=$(curl -sS --fail-with-body -A cityloom-merge "https://sonarcloud.io/api/qualitygates/project_status?projectKey=alandovskis_cityloom&pullRequest=99999"); rc=$?
+curl: (22) The requested URL returned error: 404
+rc=22
+body={"errors":[{"msg":"Component 'alandovskis_cityloom' of pull request '99999' not found"}]}

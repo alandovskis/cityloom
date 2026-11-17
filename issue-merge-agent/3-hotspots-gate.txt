@@ -1,0 +1,8 @@
+$ body=$(curl ... "https://sonarcloud.io/api/hotspots/search?projectKey=alandovskis_cityloom&pullRequest=216&status=TO_REVIEW"); jq -e .paging.total
+rc=0
+0
+(exit 0)
+$ body=$(curl ... "https://sonarcloud.io/api/qualitygates/project_status?projectKey=alandovskis_cityloom&pullRequest=216"); jq -e .projectStatus.status
+rc=0
+"OK"
+(exit 0)
