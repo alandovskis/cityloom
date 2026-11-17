@@ -1088,42 +1088,7 @@ impl MapVm {
             MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
                 Draw::Drawing(_) => self.areas.on_press(at, vertex),
                 Draw::Naming(_) => {}
-                Draw::Idle => {
-                    let place = hot.as_deref().filter(|h| self.can_edit(h));
-                    match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
-                        // A first press shows the place in the details; a second on it opens it.
-                        Some((hot, href)) => {
-                            if self.shown.get_untracked() == MapLevel::Place(hot.to_string()) {
-                                self.ports.navigator.go(&href);
-                            } else {
-                                self.show_place(hot);
-                            }
-                        }
-                        None => {
-                            // A refused press on a place (muted, outside every outline) is not a press on nothing: it
-                            // lets no selected area go.
-                            let refused = hot.is_some() && place.is_none();
-                            if refused && area.is_none() {
-                                return self.say_not_editable();
-                            }
-                            // A press on nothing goes back from a place to the city; with the area rules or a check
-                            // shown it keeps them (and lets a selected area go).
-                            if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
-                                self.set_shown(MapLevel::City);
-                            }
-                            // An area pressed is shown with the area rules, its form open: the level first, then the
-                            // area chosen is said (see set_shown).
-                            if area.is_some() {
-                                self.show_areas();
-                            }
-                            let before = self.areas.selected_id_now();
-                            self.areas.select(area.as_deref());
-                            if refused && self.areas.selected_id_now() == before {
-                                self.say_not_editable();
-                            }
-                        }
-                    }
-                }
+                Draw::Idle => self.press_idle(hot.as_deref(), area.as_deref()),
             },
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             // A press with Shift held is a press all the same while an outline is drawn.
@@ -1137,6 +1102,45 @@ impl MapVm {
             MapEvent::View { bounds } => {
                 self.viewport.set(Some(bounds));
                 self.sync_editable();
+            }
+        }
+    }
+
+    /// A press while no outline is drawn: on a place it may open (`hot`, if the map lets it be edited), it shows
+    /// that place, or opens it when it is shown already; otherwise it chooses the `area` pressed, or none.
+    fn press_idle(&self, hot: Option<&str>, area: Option<&str>) {
+        let place = hot.filter(|h| self.can_edit(h));
+        match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
+            // A first press shows the place in the details; a second on it opens it.
+            Some((hot, href)) => {
+                if self.shown.get_untracked() == MapLevel::Place(hot.to_string()) {
+                    self.ports.navigator.go(&href);
+                } else {
+                    self.show_place(hot);
+                }
+            }
+            None => {
+                // A refused press on a place (muted, outside every outline) is not a press on nothing: it
+                // lets no selected area go.
+                let refused = hot.is_some() && place.is_none();
+                if refused && area.is_none() {
+                    return self.say_not_editable();
+                }
+                // A press on nothing goes back from a place to the city; with the area rules or a check
+                // shown it keeps them (and lets a selected area go).
+                if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
+                    self.set_shown(MapLevel::City);
+                }
+                // An area pressed is shown with the area rules, its form open: the level first, then the
+                // area chosen is said (see set_shown).
+                if area.is_some() {
+                    self.show_areas();
+                }
+                let before = self.areas.selected_id_now();
+                self.areas.select(area);
+                if refused && self.areas.selected_id_now() == before {
+                    self.say_not_editable();
+                }
             }
         }
     }
