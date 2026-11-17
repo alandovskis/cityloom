@@ -506,6 +506,70 @@ fn the_space_table_has_a_buffer_row_only_on_a_street_that_has_a_buffer() {
 }
 
 #[test]
+fn the_width_bars_draw_today_and_after_a_change_the_design_with_a_legend_of_the_uses_the_street_has() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <notes::SpaceBars vm=s.clone()/> });
+    assert!(
+        h.starts_with(r#"<div aria-hidden="true" class="space-bars""#) || h.contains(r#"aria-hidden="true""#),
+        "a drawing of the table, which is read instead: {h}"
+    );
+    assert_eq!(count(&h, r#"class="space-bar""#), 1, "today alone until the design differs: {h}");
+    assert!(h.contains(">Today<") && !h.contains(">Your design<"), "{h}");
+    let v = s.view();
+    let used: Vec<_> = v.outcomes.share.iter().filter(|u| u.mm > 0).collect();
+    assert_eq!(count(&h, "class=\"seg "), used.len(), "a segment per use with width: {h}");
+    for u in &used {
+        assert!(h.contains(&format!("flex-grow: {}", u.mm)), "{} at {} mm: {h}", u.pct, u.mm);
+    }
+    assert!(!h.contains("Biking") && h.contains("Walking"), "a use with no width is left out of the legend: {h}");
+    let w = segment(&s, 0);
+    s.edit(|e| e.nudge_width(w, 100));
+    let h = street_html(|| view! { <notes::SpaceBars vm=s.clone()/> });
+    assert_eq!(count(&h, r#"class="space-bar""#), 2, "{h}");
+    assert!(h.find(">Today<").unwrap() < h.find(">Your design<").unwrap(), "{h}");
+    assert!(h.contains(r#"<span class="up">+0.1</span>"#), "the change beside the use's width: {h}");
+    let walking = s.view().outcomes.share.iter().find(|u| u.mode == crate::shared::catalogue::Mode::Foot).unwrap().mm;
+    assert!(h.contains(&format!("<b>{}</b>", Units::Metres.length_fine_in(walking, Locale::En))), "each width with its unit: {h}");
+}
+
+#[test]
+fn people_moved_is_one_figure_with_its_change_from_today() {
+    let s = street_shared(0);
+    let v = s.view();
+    let today = group_thousands(v.outcomes.existing_capacity_pph.into(), Locale::En);
+    let h = street_html(|| view! { <notes::CapacityFigure vm=s.clone()/> });
+    assert!(h.contains(r#"aria-hidden="true""#), "a drawing of the table, which is read instead: {h}");
+    assert!(h.contains(&format!("{today} per hour")) && h.contains("As today"), "{h}");
+    let u = segment(&s, 2);
+    s.edit(|e| e.set_width(u, 3_000));
+    let v = s.view();
+    if v.outcomes.capacity_pph != v.outcomes.existing_capacity_pph {
+        let h = street_html(|| view! { <notes::CapacityFigure vm=s.clone()/> });
+        assert!(h.contains(&format!(" from {today} today")) && !h.contains("As today"), "{h}");
+    }
+    let fr = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <notes::CapacityFigure vm=fr.clone()/> });
+    assert!(h.contains("à l’heure") && h.contains("Comme aujourd’hui"), "{h}");
+}
+
+#[test]
+fn the_impact_tab_is_one_band_of_the_last_change_the_width_and_the_people_moved() {
+    let (s, _) = street_watch();
+    let h = html(|| view! { <view::notes_tray::StreetNotes vm=s.clone()/> }.into_any());
+    let panel = &h[h.find(r#"id="p-space""#).unwrap()..h.find(r#"id="p-checks""#).unwrap()];
+    let at = |s: &str| panel.find(s).unwrap_or_else(|| panic!("{s}: {panel}"));
+    assert!(at(r#"class="impact-band""#) < at(r#"id="impact-card""#), "{panel}");
+    assert!(at(r#"id="impact-card""#) < at(r#"id="h-space""#) && at(r#"id="h-space""#) < at(r#"id="h-cap""#), "{panel}");
+    assert!(at(r#"id="space-bars""#) < at(r#"id="time-note""#) && at(r#"id="time-note""#) < at(r#"id="h-cap""#), "the time of day under the bars: {panel}");
+    assert!(at(r#"id="cap-figure""#) > at(r#"id="h-cap""#), "{panel}");
+    for table in ["space", "cap"] {
+        let tag = &panel[panel[..at(&format!(r#"id="{table}""#))].rfind('<').unwrap()..];
+        let tag = &tag[..tag.find('>').unwrap()];
+        assert!(tag.contains("sr-only"), "the table is read, the drawing seen: {tag}");
+    }
+}
+
+#[test]
 fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
@@ -2156,6 +2220,7 @@ fn an_edit_that_widens_a_sidewalk_shows_the_space_it_took_and_the_check_it_broke
     let failing = &h[h.find("Newly failing").unwrap()..];
     assert!(failing.contains("<li class=\"bad\">") && failing.contains("Fits the street width"), "{h}");
     assert!(h.contains("impact-verdict regressed") && h.contains("Regressed: 1 check now fails."), "{h}");
+    assert!(h.find("impact-verdict").unwrap() < h.find("impact-what").unwrap(), "the verdict leads: {h}");
     assert_eq!(count(&h, "<li class=\"bad\">"), 1);
     // Units follow the page.
     s.set_units(Units::Feet);
