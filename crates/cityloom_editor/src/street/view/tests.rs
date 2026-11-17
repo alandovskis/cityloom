@@ -737,8 +737,8 @@ fn nothing_selected_the_street_level_says_how_to_begin_and_the_inspector_is_empt
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(!h.contains("<p"), "the inspector shows only at the piece level, with a piece: {h}");
     let page = include_str!("../../../../../web/street.html");
-    let street = &page[page.find("id=\"p-street\"").unwrap()..];
-    assert!(street[..street.find("</div>").unwrap()].contains("data-i18n=\"st-path-hint\""), "the hint is the Street level's");
+    let street = &page[page.find("id=\"p-street\"").unwrap()..page.find("id=\"p-zone\"").unwrap()];
+    assert!(street.contains("data-i18n=\"st-path-hint\""), "the hint is the Street level's");
 }
 
 #[test]
@@ -1747,6 +1747,51 @@ fn the_zone_commands_are_worded_in_both_languages() {
     );
     assert!(h.contains(">La coupe de la rue<") && h.contains(">Avec zone 1<"), "{h}");
     assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
+}
+
+// ---- the street level of the details panel ------------------------------------------
+
+#[test]
+fn the_street_level_opens_on_the_street_s_name_class_width_length_and_zones() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=s.clone()/> });
+    assert!(h.contains(r#"<h2 class="insp-name">Sample Street 1</h2>"#), "{h}");
+    let v = s.view();
+    let width = Units::Metres.length_fine_in(v.row_mm, Locale::En);
+    assert!(h.contains(&format!(">Local street · {width} wide · 40.0 m long · 2 zones<")), "{h}");
+    let mini = &h[h.find("zone-mini").expect("a strip of the zones")..];
+    assert_eq!(mini[..mini.find("</div>").unwrap()].matches("<span").count(), 2, "{h}");
+    let one = zoned_street(&[], Some(40_000), Locale::FrCa);
+    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=one.clone()/> }).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("Rue locale ·") && h.contains("40,0 m de long · 1 zone<"), "{h}");
+    // A street with no end to measure from has no length to give.
+    let free = street_shared(0);
+    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=free.clone()/> });
+    assert!(h.contains(" wide · 1 zone<") && !h.contains(" long"), "{h}");
+}
+
+#[test]
+fn with_several_zones_the_speed_limit_says_whose_it_is_and_one_zone_s_entry_says_what_splitting_is_for() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    let speed = street_html(|| view! { <crate::street::view::speed_view::SpeedLimit vm=s.clone()/> });
+    assert!(speed.contains(">For Zone 1, the zone chosen.<"), "{speed}");
+    assert!(speed.contains(r#"<label for="speed-limit" class="zone-l">Speed limit</label>"#), "{speed}");
+    let entry = street_html(|| view! { <crate::street::view::panel_path::ZoneEntry vm=s.clone()/> });
+    assert!(!entry.contains("Split the street"), "{entry}");
+    let one = zoned_street(&[], Some(40_000), Locale::En);
+    let speed = street_html(|| view! { <crate::street::view::speed_view::SpeedLimit vm=one.clone()/> });
+    assert!(!speed.contains("the zone chosen"), "{speed}");
+    let entry = street_html(|| view! { <crate::street::view::panel_path::ZoneEntry vm=one.clone()/> });
+    assert!(entry.contains(">Split the street to give a stretch its own pieces and speed limit.<"), "{entry}");
+}
+
+#[test]
+fn the_street_level_is_rows_with_the_tip_at_its_foot() {
+    let page = include_str!("../../../../../web/street.html");
+    let level = &page[page.find(r#"id="p-street""#).unwrap()..page.find(r#"id="p-zone""#).unwrap()];
+    let at = |s: &str| level.find(s).unwrap_or_else(|| panic!("{s}: {level}"));
+    assert!(at("street-head-slot") < at("speed-slot") && at("speed-slot") < at("zone-entry-slot"), "{level}");
+    assert!(at("zone-entry-slot") < at("standards-slot") && at("standards-slot") < at("st-path-hint"), "the tip last: {level}");
 }
 
 // ---- the details panel's path ------------------------------------------------------

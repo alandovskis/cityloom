@@ -358,6 +358,31 @@ st-zone-keep-cancel = Annuler la fusion
 st-zone-name = Nom de la zone
 st-zone-reset = Revenir à la coupe de la rue
 st-zone-use = Utiliser cette coupe pour toute la rue
+st-street-sub =
+    { $class ->
+        [motorway] Autoroute
+        [arterial] Rue artérielle
+        [collector] Rue collectrice
+        [pedestrian] Rue piétonne
+       *[local] Rue locale
+    } · { $width } de large · { $length } de long · { $zones ->
+        [one] 1 zone
+       *[other] { $zones } zones
+    }
+st-street-sub-free =
+    { $class ->
+        [motorway] Autoroute
+        [arterial] Rue artérielle
+        [collector] Rue collectrice
+        [pedestrian] Rue piétonne
+       *[local] Rue locale
+    } · { $width } de large · { $zones ->
+        [one] 1 zone
+       *[other] { $zones } zones
+    }
+st-row-zones = Zones
+st-zones-entry-hint = Divisez la rue pour donner à un tronçon ses propres éléments et sa limite de vitesse.
+st-speed-zone-hint = Pour { $zone }, la zone choisie.
 st-zone-sub = { $from } à { $to } · { $length } de long · { $at } sur { $total }
 st-zone-sub-whole = La rue entière · { $length }
 st-zone-row-name = Nom

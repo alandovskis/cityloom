@@ -220,6 +220,31 @@ fn the_section_draws_its_controls_and_follows_the_profiles() {
 }
 
 #[test]
+fn the_standard_in_force_is_one_row_and_the_profiles_are_kept_behind_manage_profiles() {
+    let t = setup();
+    let vm = t.vm.clone();
+    let h = html(|| leptos::prelude::IntoAny::into_any(leptos::prelude::view! { <Profiles vm=vm.clone()/> }));
+    // the row: a short label, inside the menu's fuller name
+    assert!(h.contains(r#"<label for="standards-in-force" class="zone-l">Standard</label>"#), "{h}");
+    assert!(h.contains(r#"aria-label="Standard in force""#), "{h}");
+    let manage = &h[h.find("standards-manage").expect("a disclosure for the profiles")..];
+    let manage_tag = &h[h[..h.find("standards-manage").unwrap()].rfind('<').unwrap()..];
+    assert!(manage_tag.starts_with("<details") && !manage_tag[..manage_tag.find('>').unwrap()].contains("open"), "closed at first: {manage_tag}");
+    assert!(manage.contains("<summary>Manage profiles</summary>"), "{manage}");
+    for id in ["standards-list", "standards-create", "standards-import-text"] {
+        assert!(manage.contains(&format!("id=\"{id}\"")), "{id} is inside: {manage}");
+    }
+    assert!(manage.contains("<summary>Import a profile</summary>"), "importing is a step further in: {manage}");
+    assert!(h.find("standards-intro").unwrap() > h.find("standards-manage").unwrap(), "the explanation is with the profiles");
+    // A profile being edited opens the disclosure, so its form is in view.
+    t.vm.create("City of X");
+    let vm = t.vm.clone();
+    let h = html(|| leptos::prelude::IntoAny::into_any(leptos::prelude::view! { <Profiles vm=vm.clone()/> }));
+    let manage_tag = &h[h[..h.find("standards-manage").unwrap()].rfind('<').unwrap()..];
+    assert!(manage_tag[..manage_tag.find('>').unwrap()].contains("open"), "{manage_tag}");
+}
+
+#[test]
 fn the_refusals_have_reasons_in_both_languages() {
     use crate::shared::said::Said;
     let refusals = [

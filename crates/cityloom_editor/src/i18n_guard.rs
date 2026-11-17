@@ -614,6 +614,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("goal-slot", "the id of the page slot the planning goal's picker mounts into, not a message"),
     ("space-bars", "the id of the page slot the width table's bars mount into, not a message"),
     ("cap-figure", "the id of the page slot the people-moved figure mounts into, not a message"),
+    ("street-head-slot", "the id of the page slot the Street level's head mounts into, not a message"),
     ("zone-name", "the id of the zone pane's name field, which its label is for"),
     ("zone-start", "the id of the zone pane's start field, which its label is for"),
     ("checks-fold-slot", "the id of the page slot the button that folds the passing checks mounts into, not a message"),

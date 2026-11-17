@@ -33,8 +33,9 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
     };
     let select_ref = NodeRef::<leptos::html::Select>::new();
     let shown = view! {
-        <div class="speed-limit">
-            <label for="speed-limit">{move || w.i18n().tr("st-speed-label", &Args::new())}</label>
+        <div class="zone-row speed-limit">
+            <label for="speed-limit" class="zone-l">{move || w.i18n().tr("st-speed-label", &Args::new())}</label>
+            <div class="zone-c">
             <select
                 node_ref=select_ref
                 id="speed-limit"
@@ -59,6 +60,16 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                         .collect_view()
                 }}
             </select>
+            {move || {
+                // With several zones the limit set here is the chosen zone's (a known limit: there is no zone-level
+                // control), so a line says whose.
+                let v = w.view();
+                (v.zones.several)
+                    .then(|| v.zones.zones.get(v.zones.selected).map(|z| crate::shared::said::say(&w.i18n(), w.units(), &z.label)))
+                    .flatten()
+                    .map(|zone| view! { <p class="zone-hint">{w.i18n().tr("st-speed-zone-hint", &Args::new().str("zone", zone))}</p> })
+            }}
+            </div>
         </div>
     };
     // The browser ignores `selected` on an option once the person has picked one, so after Undo, Redo or Start

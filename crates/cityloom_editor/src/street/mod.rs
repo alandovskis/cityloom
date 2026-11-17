@@ -90,6 +90,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("zone-entry-slot", view! { <view::panel_path::ZoneEntry vm=vm.clone()/> }.into_any());
     mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
+    mount("street-head-slot", view! { <view::page::StreetSummary vm=vm.clone()/> }.into_any());
     mount("speed-slot", view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
     mount("zone-tools-slot", view! { <view::zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
     mount("curb-tools-slot", view! { <view::curb_tools::CurbTools vm=vm.clone()/> }.into_any());

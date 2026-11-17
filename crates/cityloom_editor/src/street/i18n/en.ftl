@@ -358,6 +358,31 @@ st-zone-keep-cancel = Cancel the merge
 st-zone-name = Zone name
 st-zone-reset = Reset to the street's section
 st-zone-use = Use this section for the whole street
+st-street-sub =
+    { $class ->
+        [motorway] Motorway
+        [arterial] Arterial street
+        [collector] Collector street
+        [pedestrian] Pedestrian street
+       *[local] Local street
+    } · { $width } wide · { $length } long · { $zones ->
+        [one] 1 zone
+       *[other] { $zones } zones
+    }
+st-street-sub-free =
+    { $class ->
+        [motorway] Motorway
+        [arterial] Arterial street
+        [collector] Collector street
+        [pedestrian] Pedestrian street
+       *[local] Local street
+    } · { $width } wide · { $zones ->
+        [one] 1 zone
+       *[other] { $zones } zones
+    }
+st-row-zones = Zones
+st-zones-entry-hint = Split the street to give a stretch its own pieces and speed limit.
+st-speed-zone-hint = For { $zone }, the zone chosen.
 st-zone-sub = { $from } to { $to } · { $length } long · { $at } of { $total }
 st-zone-sub-whole = The whole street · { $length }
 st-zone-row-name = Name

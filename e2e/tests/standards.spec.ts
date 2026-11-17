@@ -15,7 +15,14 @@ async function openProfiles(page: Page) {
   await expect(section(page)).toBeVisible();
 }
 
+/** Opens "Manage profiles", where the profiles are kept (it opens by itself while one is being edited). */
+async function manageProfiles(page: Page) {
+  const manage = page.locator(".standards-manage");
+  if (!(await manage.evaluate((d) => (d as HTMLDetailsElement).open))) await manage.locator("> summary").click();
+}
+
 async function createProfile(page: Page, name: string) {
+  await manageProfiles(page);
   await page.locator("#standards-name").fill(name);
   await page.locator("#standards-create").click();
   await expect(page.locator("#standards-edit-form")).toBeVisible();
@@ -122,6 +129,9 @@ test.describe("standards profiles on the street page", () => {
     await expect(page.locator("#standards-download")).toHaveAttribute("download", "city-of-x.json");
 
     // The same name is refused, like creating it again.
+    await manageProfiles(page);
+    const importer = page.locator(".standards-import-open");
+    if (!(await importer.evaluate((d) => (d as HTMLDetailsElement).open))) await importer.locator("> summary").click();
     await page.locator("#standards-import-text").fill(file);
     await page.locator("#standards-import").click();
     await expect(page.locator("#standards-error")).toHaveText("Another profile already has that name.");
