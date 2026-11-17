@@ -207,9 +207,12 @@ direction-away = S’éloigne de vous
 direction-toward = Vient vers vous
 
 # Le panneau de l’élément sélectionné (src/street/view/inspector.rs).
-inspector-sub = { $width } de large · { $at } sur { $total }
-inspector-sub-timed = { $width } de large · { $at } sur { $total } · { $time }
+inspector-sub = { $width } de large · { $at } sur { $total } à partir de la gauche
+inspector-sub-timed = { $width } de large · { $at } sur { $total } à partir de la gauche · { $time }
 inspector-width = Largeur
+inspector-move-left = Déplacer à gauche
+inspector-move-right = Déplacer à droite
+inspector-remove = Retirer
 inspector-step-wider = Élargir de { $step }{ "\u00A0" }{ $unit }
 inspector-step-narrower = Rétrécir de { $step }{ "\u00A0" }{ $unit }
 inspector-allowed = Valeurs permises : de { $min } à { $max }{ "\u00A0" }{ $unit }

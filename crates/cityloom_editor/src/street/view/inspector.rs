@@ -49,6 +49,14 @@ pub fn piece_sub(v: &View, s: &SegView, i18n: &I18n, units: Units) -> String {
     i18n.tr(if s.variants.is_empty() { "inspector-sub" } else { "inspector-sub-timed" }, &args)
 }
 
+/// Where a piece's width sits in its allowed range, from 0 (its least) to 100 (its most), for the meter under the field.
+pub fn meter_pct(s: &SegView) -> f64 {
+    if s.max_mm <= s.min_mm {
+        return 100.0;
+    }
+    ((s.width_mm - s.min_mm) as f64 * 100.0 / (s.max_mm - s.min_mm) as f64).clamp(0.0, 100.0)
+}
+
 /// What the width steppers say they do.
 pub fn step_label(more: bool, i18n: &I18n, units: Units) -> String {
     let args = Args::new().str("step", units.fine_in(units.step_mm(), i18n.locale())).str("unit", units.word());
@@ -266,6 +274,9 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 </span>
                 <button type="button" class="ico" aria-label=move || step_label(true, &w.i18n(), w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
             </div>
+            <span class="insp-meter-track" aria-hidden="true">
+                <span class="insp-meter" style=move || format!("width: {:.0}%", w.segment(uid, meter_pct).unwrap_or(0.0))></span>
+            </span>
             <p class="insp-range" id="i-width-range">{range}{move || standard().map(|s| view! { " " <span class="check-standard">{s}</span> })}</p>
         </section>
     }
@@ -473,6 +484,27 @@ fn rarer_sections(w: SheetWatch, uid: u32) -> impl IntoView {
     }
 }
 
+/// Under the piece's name: move it one place left or right (as Shift and an arrow do on the drawing), or remove it (as
+/// Delete does). A move is not offered past either end.
+fn actions(w: SheetWatch, uid: u32) -> impl IntoView {
+    let at = move || w.view().segments.iter().position(|s| s.uid == uid);
+    let last = move || w.view().segments.len().saturating_sub(1);
+    let go = move |d: i32| w.apply(crate::street::vm::keys::Action::Move(d));
+    view! {
+        <div class="insp-actions">
+            <button type="button" class="btn" id="piece-move-left" disabled=move || at().is_none_or(|i| i == 0) on:click=move |_| go(-1)>
+                {icon("M9 3 5 7l4 4")}<span>{say(w, "inspector-move-left")}</span>
+            </button>
+            <button type="button" class="btn" id="piece-move-right" disabled=move || at().is_none_or(|i| i >= last()) on:click=move |_| go(1)>
+                <span>{say(w, "inspector-move-right")}</span>{icon("M5 3l4 4-4 4")}
+            </button>
+            <button type="button" class="btn danger" id="piece-remove" on:click=move |_| w.apply(crate::street::vm::keys::Action::Remove)>
+                {say(w, "inspector-remove")}
+            </button>
+        </div>
+    }
+}
+
 fn piece_panel(w: SheetWatch, uid: u32) -> AnyView {
     let kind = Memo::new(move |_| kind_of(w, uid));
     let name = move || w.i18n().tr(&kind_key(KINDS[kind.get()].id), &Args::new());
@@ -485,6 +517,7 @@ fn piece_panel(w: SheetWatch, uid: u32) -> AnyView {
             let k = &KINDS[kind.get()];
             view! { <div class="insp-head">{swatch(k.id)}<div><h2 class="insp-name">{name}</h2><p class="insp-sub">{sub}</p></div></div> }
         }}
+        {actions(w, uid)}
         {width_section(w, uid)}
         {surface_section(w, uid)}
         {move || (KINDS[kind.get()].id == "bus").then(|| vehicle_section(w, uid))}
@@ -549,7 +582,7 @@ mod pure_tests {
     fn a_piece_is_placed_among_the_pieces_and_a_timed_one_says_the_time() {
         let mut e = Editor::new(0);
         let v = e.view();
-        assert_eq!(piece_sub(&v, &v.segments[2], &en(), Units::Metres), "3.3 m wide \u{b7} 3 of 6");
+        assert_eq!(piece_sub(&v, &v.segments[2], &en(), Units::Metres), "3.3 m wide \u{b7} 3 of 6 from the left");
         let u = v.segments[1].uid;
         assert!(e.add_variant(u));
         let v = e.view();

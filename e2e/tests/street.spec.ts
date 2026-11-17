@@ -249,6 +249,18 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
+  test("the piece pane's buttons move the piece along and remove it", async ({ page }) => {
+    const cells = page.locator("#piece-list [role=option]");
+    const count = await cells.count();
+    const first = (await cells.nth(0).getAttribute("id"))!;
+    await cells.nth(0).click();
+    await expect(page.locator("#piece-move-left")).toBeDisabled();
+    await page.locator("#piece-move-right").click();
+    await expect(cells.nth(1)).toHaveAttribute("id", first);
+    await page.locator("#piece-remove").click();
+    await expect(cells).toHaveCount(count - 1);
+  });
+
   test("the Checks tab shows what fails first and folds what passes until asked", async ({ page }) => {
     await page.locator("#t-checks").click();
     const passing = page.locator("#checks li.ok");

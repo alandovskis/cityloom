@@ -94,6 +94,44 @@ fn removing_takes_the_selected_piece_away() {
     assert!(s.view().segments.iter().all(|x| x.uid != u));
 }
 
+#[test]
+fn the_piece_pane_moves_and_removes_its_piece_with_buttons_that_stop_at_the_ends() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared(0);
+    let first = segment(&s, 0);
+    s.select(Some(first));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    let (left, right, remove) = (button_tag(&h, "piece-move-left"), button_tag(&h, "piece-move-right"), button_tag(&h, "piece-remove"));
+    assert!(left.contains("disabled"), "the first piece cannot go further left: {left}");
+    assert!(!right.contains("disabled") && !remove.contains("disabled"), "{right} {remove}");
+    assert!(h.contains(">Move left<") && h.contains(">Move right<") && h.contains(">Remove<"), "{h}");
+    assert!(h.find("piece-move-left").unwrap() < h.find("i-h-width").unwrap(), "under the name, above the settings: {h}");
+    let last = segment(&s, s.view().segments.len() - 1);
+    s.select(Some(last));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(button_tag(&h, "piece-move-right").contains("disabled"), "the last cannot go further right");
+    let fr = street_shared_in(0, Locale::FrCa);
+    fr.select(Some(segment(&fr, 0)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=fr.clone()/> });
+    assert!(h.contains(">Déplacer à gauche<") && h.contains(">Déplacer à droite<") && h.contains(">Retirer<"), "{h}");
+}
+
+#[test]
+fn the_piece_pane_says_where_the_piece_is_counted_from_and_where_its_width_sits_in_its_range() {
+    let s = street_shared(0);
+    let u = segment(&s, 1);
+    s.select(Some(u));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(" · 2 of 6 from the left<"), "{h}");
+    let v = s.view();
+    let seg = v.segments.iter().find(|x| x.uid == u).unwrap();
+    let pct = (seg.width_mm - seg.min_mm) as f64 * 100.0 / (seg.max_mm - seg.min_mm) as f64;
+    let meter = &h[h.find("insp-meter").expect("a meter of the width in its range")..];
+    assert!(meter.contains(&format!("width: {:.0}%", pct)), "{meter}");
+    assert!(h[..h.find("insp-meter").unwrap()].rfind("aria-hidden=\"true\"").is_some(), "the range is said in words beside it");
+}
+
 fn street_shared(sample: usize) -> Rc<StreetVm> {
     StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::new(sample), None)
 }
@@ -743,18 +781,17 @@ fn the_width_field_is_text_so_a_comma_reaches_it() {
 }
 
 #[test]
-fn a_selected_piece_s_panel_has_its_width_and_surface_and_no_buttons_to_move_it() {
+fn a_selected_piece_s_panel_has_its_width_surface_and_place_among_the_pieces() {
     let s = street_shared(0);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains(">Driving lane</h2>") && h.contains("3.3 m wide \u{b7} 3 of 6"));
+    assert!(h.contains(">Driving lane</h2>") && h.contains("3.3 m wide \u{b7} 3 of 6 from the left"));
     for want in ["Width", "Surface", "What it is paved with.", "Allowed "] {
         assert!(h.contains(want), "{want}");
     }
-    for not in ["Position", "Move left", "Move right"] {
-        assert!(!h.contains(not), "{not}");
-    }
+    // Moved by the pane's buttons (the drawing has no drag since the 2.5D became the only view) or Shift and an arrow.
+    assert!(!h.contains("Position") && h.contains("Move left") && h.contains("Move right"), "{h}");
     assert!(h.contains("id=\"width\"") && h.contains("value=\"3.30\"") && h.contains("aria-label=\"Narrower by 0.1 m\""));
     assert_eq!(count(&h, "aria-checked=\"true\""), 2, "a surface and a direction are chosen");
 }

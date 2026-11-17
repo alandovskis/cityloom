@@ -207,9 +207,12 @@ direction-away = Away from you
 direction-toward = Toward you
 
 # The panel of the selected piece (src/street/view/inspector.rs).
-inspector-sub = { $width } wide · { $at } of { $total }
-inspector-sub-timed = { $width } wide · { $at } of { $total } · { $time }
+inspector-sub = { $width } wide · { $at } of { $total } from the left
+inspector-sub-timed = { $width } wide · { $at } of { $total } from the left · { $time }
 inspector-width = Width
+inspector-move-left = Move left
+inspector-move-right = Move right
+inspector-remove = Remove
 inspector-step-wider = Wider by { $step } { $unit }
 inspector-step-narrower = Narrower by { $step } { $unit }
 inspector-allowed = Allowed { $min } to { $max } { $unit }

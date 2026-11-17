@@ -167,6 +167,19 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
   });
 });
 
+test("a surface's name is shown whole beside its swatch, at a desktop width and on a phone", async ({ page }) => {
+  await openStreet(page);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator("#piece-list [role=option]").first().click();
+    const name = page.locator("#inspector .opt[role=radio]:has(.swatch) span").first();
+    await expect(name).toBeVisible();
+    const fit = await name.evaluate((el) => ({ width: el.clientWidth, needs: el.scrollWidth }));
+    expect(fit.width).toBeGreaterThan(40);
+    expect(fit.needs).toBeLessThanOrEqual(fit.width);
+  }
+});
+
 test("on a phone the panels stack under the drawing, and nothing overlaps it", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openStreet(page);
