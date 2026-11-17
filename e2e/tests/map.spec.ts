@@ -157,6 +157,61 @@ test.describe("the city map", () => {
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
   });
 
+  test("just past a junction's press target the pointer is on the street, so a short street between two can be reached", async ({
+    page,
+  }) => {
+    await mapStill(page);
+    // a spot on a street a few pixels past where its junction's target ends, within a pointer's reach of it
+    const spot = await page.evaluate(() => {
+      const map = (window as any).cityloomMap;
+      const r = map.getCanvas().getBoundingClientRect();
+      const at = (layer: string, x: number, y: number, reach = 0) =>
+        map
+          .queryRenderedFeatures(
+            [
+              [x - reach, y - reach],
+              [x + reach, y + reach],
+            ],
+            { layers: [layer] },
+          )
+          .map((f: any) => f.properties.hot);
+      for (const j of map.queryRenderedFeatures({ layers: ["places-junction-hit"] })) {
+        const c = map.project(j.geometry.coordinates);
+        for (const s of map.queryRenderedFeatures({ layers: ["places-street"] })) {
+          if (s.geometry.type !== "LineString") continue;
+          const cs = s.geometry.coordinates.map((q: number[]) => map.project(q));
+          for (const [end, next] of [
+            [cs[0], cs[1]],
+            [cs[cs.length - 1], cs[cs.length - 2]],
+          ]) {
+            if (Math.hypot(end.x - c.x, end.y - c.y) > 1) continue;
+            const len = Math.hypot(next.x - end.x, next.y - end.y);
+            const [ux, uy] = [(next.x - end.x) / len, (next.y - end.y) / len];
+            for (let d = 1; d < len - 4; d++) {
+              const [x, y] = [end.x + ux * d, end.y + uy * d];
+              if (at("places-junction-hit", x, y).includes(j.properties.hot)) continue;
+              const [px, py] = [x + ux * 2, y + uy * 2]; // past the target's edge
+              const street = at("places-street", px, py);
+              if (street.length !== 1 || street[0] !== s.properties.hot) break;
+              if (at("places-junction-hit", px, py).length) break;
+              if (px < 8 || py < 8 || px > r.width - 8 || py > r.height - 8) break;
+              if (document.elementFromPoint(r.left + px, r.top + py) !== map.getCanvas()) break;
+              if (!at("places-junction-hit", px, py, 6).length) break; // the case a reach round the pointer took
+              return { x: r.left + px, y: r.top + py, street: s.properties.hot, junction: j.properties.hot };
+            }
+          }
+        }
+      }
+      return null;
+    });
+    expect(spot, "a street running on past a junction's target").not.toBeNull();
+    await page.mouse.move(spot!.x, spot!.y);
+    const hot = (id: string) =>
+      page.evaluate((id) => (window as any).cityloomMap.getFeatureState({ source: "places", id }).hot === true, id);
+    await expect.poll(() => hot(spot!.street)).toBe(true);
+    expect(await hot(spot!.junction)).toBe(false);
+  });
+
   test("a press on a place opens the details where they were closed, and says the place over the notes' own words", async ({
     page,
   }) => {

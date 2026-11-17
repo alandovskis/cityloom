@@ -215,11 +215,16 @@ export async function createMapCanvas(container) {
   ];
   const hotAt = (point) => {
     // A junction (anywhere on its ground, never less than its unseen 24-pixel target) before a street, a street
-    // before what lies beside it.
+    // before what lies beside it. The junction's target is taken under the pointer alone: it is already 24 pixels,
+    // and a reach round the pointer would add to it and cover a short street between two junctions.
     const order = ["places-junction-hit", "places-street", "stops-dot", "stops-platform", "curbside-fill"];
     const layers = order.filter((id) => map.getLayer(id));
     if (!layers.length) return null;
-    const found = map.queryRenderedFeatures(near(point), { layers });
+    const [target, ...rest] = layers[0] === "places-junction-hit" ? layers : [null, ...layers];
+    const found = [
+      ...(target ? map.queryRenderedFeatures([point.x, point.y], { layers: [target] }) : []),
+      ...(rest.length ? map.queryRenderedFeatures(near(point), { layers: rest }) : []),
+    ];
     for (const id of order) {
       const feature = found.find((f) => f.layer.id === id);
       if (feature) return feature.properties.hot;
