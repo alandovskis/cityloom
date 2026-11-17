@@ -116,37 +116,38 @@
       </div>
     </div>
     <div class="map-level" id="map-check" hidden><div class="panel-body"><div id="map-check-slot"></div></div></div>
-    <div class="map-level" id="map-city">
-    <div id="map-areas-row-slot" class="map-go-slot"></div>
-    <div id="map-selection-row-slot" class="map-go-slot"></div>
-    <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
-      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
-      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
-    </div>
-    <div class="panel-body">
-      <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
-        <section aria-labelledby="h-goal">
-          <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>
-          <div id="goal-slot"></div>
-        </section>
-        <section aria-labelledby="h-checks">
-          <h2 id="h-checks" class="note-h" data-i18n="map-does-it-work">Does it work?</h2>
-          <p class="hint" id="checks-lead"></p>
-          <ul class="checks places-list" id="checks"></ul>
-        </section>
-        <section aria-labelledby="h-network" id="network-panel">
-          <h2 id="h-network" class="note-h" data-i18n="net-heading">Network checks</h2>
-          <p class="hint" id="network-lead"></p>
-          <div id="network-slot"></div>
-        </section>
-      </div>
-      <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+    <div class="map-level" id="map-changes" hidden>
+      <div class="panel-body">
         <section aria-labelledby="h-changes">
           <h2 id="h-changes" class="note-h" data-i18n="map-your-changes">Your changes</h2>
           <p class="hint" id="changes-lead"></p>
           <ul class="checks places-list" id="changes"></ul>
         </section>
       </div>
+    </div>
+    <div class="map-level" id="map-city">
+    <div class="panel-body">
+      <section aria-labelledby="h-checks">
+        <h2 id="h-checks" class="note-h" data-i18n="map-does-it-work">Does it work?</h2>
+        <p class="hint" id="checks-lead"></p>
+        <ul class="checks places-list" id="checks"></ul>
+      </section>
+      <section aria-labelledby="h-goal">
+        <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>
+        <div id="goal-slot"></div>
+      </section>
+      <section aria-labelledby="h-network" id="network-panel">
+        <h2 id="h-network" class="note-h" data-i18n="net-heading">Network checks</h2>
+        <p class="hint" id="network-lead"></p>
+        <div id="network-slot"></div>
+      </section>
+      <section aria-labelledby="h-work">
+        <h2 id="h-work" class="note-h" data-i18n="map-work-heading">Your work</h2>
+        <div id="map-areas-row-slot" class="map-go-slot"></div>
+        <div id="map-selection-row-slot" class="map-go-slot"></div>
+        <div id="map-changes-row-slot" class="map-go-slot"></div>
+      </section>
+      <p class="hint map-city-hint" id="map-city-hint" data-i18n="map-city-hint">Press a place to see it here; press it again, or Open, to edit it. To change several streets at once, press each and choose Add to the selection, or Shift-press them.</p>
       <section class="key-section" aria-labelledby="h-key">
         <h2 id="h-key" class="note-h" data-i18n="map-legend">Key to the map</h2>
         <ul class="plan-key" id="plan-key" data-i18n-aria-label="map-legend" aria-label="Key to the map"></ul>

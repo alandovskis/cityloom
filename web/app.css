@@ -1910,7 +1910,11 @@ body.map-page {
   --lw: 0px;
 }
 .map-go {
-  margin: 8px 12px 4px;
+  margin: 4px 0;
+}
+/* Under the city's rows: what a press on the map does. */
+.map-city-hint {
+  margin: 12px 0 4px;
 }
 /* The path's City while an outline is drawn: no step back until it is finished or cancelled. */
 .path-still {

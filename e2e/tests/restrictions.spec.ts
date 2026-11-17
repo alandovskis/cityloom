@@ -403,7 +403,7 @@ test.describe("area restrictions", () => {
     await expect(page.locator("#map-city")).toBeVisible();
     await expect(page.locator("#map-areas")).toBeHidden();
     await expect(page.locator("#t-areas")).toHaveCount(0);
-    await expect(page.locator("#notes .tab")).toHaveCount(2);
+    await expect(page.locator("#notes .tab")).toHaveCount(0);
   });
 
   test("the ] key types into the area name field and leaves the details open", async ({ page }) => {

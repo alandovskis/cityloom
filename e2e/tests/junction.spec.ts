@@ -269,7 +269,7 @@ test.describe("what the junction editor keeps in the city", () => {
     await page.reload();
     await expect(turns(page).first()).not.toHaveClass(/\bon\b/);
     await page.goto("/map.html");
-    await page.locator("#t-changes").click();
+    await page.locator("#map-go-changes").click();
     await expect(page.locator("#changes")).not.toBeEmpty();
   });
 

@@ -531,10 +531,11 @@ fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages()
 }
 
 #[test]
-fn the_map_notes_have_only_the_checks_and_changes_tabs() {
-    let tabs: Vec<&str> =
-        MAP_HTML.match_indices(r#"role="tab""#).map(|(i, _)| &MAP_HTML[i..]).map(|s| s.split(" id=\"").nth(1).unwrap().split('"').next().unwrap()).collect();
-    assert_eq!(tabs, ["t-checks", "t-changes"]);
+fn the_map_details_have_no_tabs_their_levels_are_reached_from_the_city() {
+    assert!(!MAP_HTML.contains(r#"role="tab""#) && !MAP_HTML.contains(r#"role="tablist""#), "levels, not tabs");
+    for gone in ["t-checks", "t-changes", "p-checks", "p-changes"] {
+        assert!(!MAP_HTML.contains(&format!(r#"id="{gone}""#)), "{gone}");
+    }
     for gone in ["provenance", "source-slot", "source-lead", "h-source", "prov-"] {
         assert!(!MAP_HTML.contains(gone), "{gone} is still on the map page");
     }
@@ -725,7 +726,7 @@ fn the_area_rules_are_a_level_of_the_details_and_the_map_has_no_left_panel() {
     assert!(level[..level.find('>').unwrap()].contains("hidden"), "shown only when chosen");
     assert!(level.find(r#"id="h-areas""#).unwrap() < level.find(r#"id="areas-slot""#).unwrap());
     let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
-    assert!(city.find(r#"id="map-areas-row-slot""#).expect("the city leads to them") < city.find(r#"class="tabs""#).unwrap(), "above the tabs, of neither");
+    assert!(city.contains(r#"id="map-areas-row-slot""#), "the city leads to them");
 }
 
 #[test]
@@ -1870,7 +1871,7 @@ fn the_map_page_has_a_city_level_and_a_place_level_shown_one_at_a_time() {
     let place = &page[page.find(r#"id="map-place""#).unwrap()..];
     assert!(place[..place.find('>').unwrap()].contains("hidden"), "the place's level is hidden until a place is pressed");
     let city = &page[page.find(r#"id="map-city""#).unwrap()..];
-    assert!(city.find(r#"id="t-checks""#).unwrap() < city.find("</aside>").unwrap(), "the tabs are the city's");
+    assert!(city.find(r#"id="checks-lead""#).unwrap() < city.find("</aside>").unwrap(), "the city's status is the city's");
 }
 
 #[test]
@@ -1934,4 +1935,51 @@ fn the_selected_streets_are_a_level_the_city_leads_to_and_the_path_names() {
     assert!(level.find(r#"id="h-selection""#).unwrap() < level.find(r#"id="selection-slot""#).unwrap());
     let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
     assert!(!city.contains("h-selection") && city.contains(r#"id="map-selection-row-slot""#), "the city has a row to it");
+}
+
+#[test]
+fn the_city_reads_its_status_its_goal_its_network_then_its_rows_and_what_a_press_does() {
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    let city = &city[..city.find(r#"id="title-block""#).unwrap()];
+    let at = |id: &str| city.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id} in the city's level"));
+    let order =
+        ["checks-lead", "goal-slot", "network-slot", "map-areas-row-slot", "map-selection-row-slot", "map-changes-row-slot", "map-city-hint", "plan-key"];
+    for pair in order.windows(2) {
+        assert!(at(pair[0]) < at(pair[1]), "{} before {}", pair[0], pair[1]);
+    }
+    assert!(city.contains(r#"data-i18n="map-city-hint""#));
+    // the three rows are a section of their own, named, apart from the network checks
+    let work = &city[city.find(r#"aria-labelledby="h-work""#).expect("the rows' section")..];
+    let work = &work[..work.find("</section>").unwrap()];
+    assert!(work.contains(r#"<h2 id="h-work" class="note-h" data-i18n="map-work-heading">"#), "{work}");
+    for slot in ["map-areas-row-slot", "map-selection-row-slot", "map-changes-row-slot"] {
+        assert!(work.contains(&format!(r#"id="{slot}""#)), "{slot} in the rows' section");
+    }
+    let network = &city[city.find(r#"id="network-panel""#).unwrap()..];
+    assert!(!network[..network.find("</section>").unwrap()].contains("row-slot"), "not in the network checks");
+    assert!(!city.contains(r#"id="changes""#), "the changes are a level of their own");
+}
+
+#[test]
+fn the_changes_are_a_level_the_city_leads_to_and_the_path_names() {
+    let (vm, _) = map_vm();
+    let row = map_html(|| view! { <crate::map::view::details::ChangesRow vm=vm.clone()/> });
+    assert!(row.contains(r#"id="map-go-changes""#) && row.contains(">Changes<") && row.contains(">None yet<"), "{row}");
+    // in French, the changes are « modifications »: their empty row agrees with them
+    let (fr, _) = map_vm_in(Locale::FrCa);
+    let row = map_html(|| view! { <crate::map::view::details::ChangesRow vm=fr.clone()/> });
+    assert!(row.contains(">Modifications<") && row.contains(">Aucune pour l’instant<"), "{row}");
+    // what a press does is said for a touch screen too: Add to the selection, not only Shift
+    let en = crate::i18n_for(Locale::En);
+    assert!(en.tr_now("map-city-hint", &Args::new()).contains("Add to the selection"));
+    let fr_i18n = crate::i18n_for(Locale::FrCa);
+    assert!(fr_i18n.tr_now("map-city-hint", &Args::new()).contains(&fr_i18n.tr_now("map-add-selection", &Args::new())));
+    vm.show_changes();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Changes</span>"), "{h}");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let level = &notes[notes.find(r#"id="map-changes""#).expect("the changes' level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden"));
+    assert!(level.find(r#"id="h-changes""#).unwrap() < level.find(r#"id="changes""#).unwrap());
 }
