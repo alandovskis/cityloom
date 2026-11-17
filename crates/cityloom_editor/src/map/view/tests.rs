@@ -1949,6 +1949,15 @@ fn the_city_reads_its_status_its_goal_its_network_then_its_rows_and_what_a_press
         assert!(at(pair[0]) < at(pair[1]), "{} before {}", pair[0], pair[1]);
     }
     assert!(city.contains(r#"data-i18n="map-city-hint""#));
+    // the three rows are a section of their own, named, apart from the network checks
+    let work = &city[city.find(r#"aria-labelledby="h-work""#).expect("the rows' section")..];
+    let work = &work[..work.find("</section>").unwrap()];
+    assert!(work.contains(r#"<h2 id="h-work" class="note-h" data-i18n="map-work-heading">"#), "{work}");
+    for slot in ["map-areas-row-slot", "map-selection-row-slot", "map-changes-row-slot"] {
+        assert!(work.contains(&format!(r#"id="{slot}""#)), "{slot} in the rows' section");
+    }
+    let network = &city[city.find(r#"id="network-panel""#).unwrap()..];
+    assert!(!network[..network.find("</section>").unwrap()].contains("row-slot"), "not in the network checks");
     assert!(!city.contains(r#"id="changes""#), "the changes are a level of their own");
 }
 
@@ -1957,6 +1966,15 @@ fn the_changes_are_a_level_the_city_leads_to_and_the_path_names() {
     let (vm, _) = map_vm();
     let row = map_html(|| view! { <crate::map::view::details::ChangesRow vm=vm.clone()/> });
     assert!(row.contains(r#"id="map-go-changes""#) && row.contains(">Changes<") && row.contains(">None yet<"), "{row}");
+    // in French, the changes are « modifications »: their empty row agrees with them
+    let (fr, _) = map_vm_in(Locale::FrCa);
+    let row = map_html(|| view! { <crate::map::view::details::ChangesRow vm=fr.clone()/> });
+    assert!(row.contains(">Modifications<") && row.contains(">Aucune pour l’instant<"), "{row}");
+    // what a press does is said for a touch screen too: Add to the selection, not only Shift
+    let en = crate::i18n_for(Locale::En);
+    assert!(en.tr_now("map-city-hint", &Args::new()).contains("Add to the selection"));
+    let fr_i18n = crate::i18n_for(Locale::FrCa);
+    assert!(fr_i18n.tr_now("map-city-hint", &Args::new()).contains(&fr_i18n.tr_now("map-add-selection", &Args::new())));
     vm.show_changes();
     let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
     assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Changes</span>"), "{h}");
