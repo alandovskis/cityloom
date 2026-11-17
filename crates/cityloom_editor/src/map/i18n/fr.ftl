@@ -16,7 +16,6 @@ map-key-move = déplacer la carte
 map-key-whole = toute la ville
 map-key-select = cliquer pour sélectionner une rue
 map-key-select-found = sélectionner un lieu trouvé
-map-key-areas = règles de zone
 map-key-panels = notes
 
 ## L’en-tête, les outils et les panneaux
@@ -78,6 +77,29 @@ map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.
 map-opens-street = Ouvre la coupe transversale de la rue.
 map-not-editable = Ce lieu n’est pas entièrement visible. Déplacez la carte pour qu’il le soit, puis réessayez.
+map-picked = { $name }. Appuyez de nouveau, ou sur Ouvrir, pour la modifier.
+map-path-label = Ce que montrent les détails
+map-path-city = Ville
+map-areas-none = Aucune pour l’instant
+map-selection-none = Aucune pour l’instant
+map-selection-summary = { $n ->
+    [one] Une rue
+   *[other] { $n } rues
+}
+map-areas-summary = { $areas ->
+    [one] Une zone
+   *[other] { $areas } zones
+} · { $breaking ->
+    [0] chaque rue respecte sa règle
+    [one] une rue enfreint sa règle
+   *[other] { $breaking } rues enfreignent leur règle
+}
+map-open-street = Ouvrir dans l’éditeur de rue
+map-open-junction = Ouvrir dans l’éditeur de jonction
+map-add-selection = Ajouter à la sélection
+map-drop-selection = Retirer de la sélection
+map-place-failing = Vérifications en échec
+map-place-ok = Toutes les vérifications réussissent.
 
 ## La recherche
 map-search-label = Rechercher des lieux
@@ -110,7 +132,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] Une rue est
    *[other] { $streets } rues sont
-} en conflit avec une règle de zone. Le panneau Règles de zone { $streets ->
+} en conflit avec une règle de zone. La ligne Règles de zone, plus haut, { $streets ->
     [one] la
    *[other] les
 } liste.

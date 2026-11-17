@@ -146,8 +146,9 @@ test.describe("the map under the floating panels", () => {
       return { l, r: rt, t, b };
     });
 
-  test("the whole city is fitted between the panels and under the bar, and centred there", async ({ page }) => {
-    const left = (await page.locator(".panel.left").boundingBox())!;
+  test("the whole city is fitted beside the details and under the bar, and centred there", async ({ page }) => {
+    // no panel on the left: the map's own edge bounds the room there
+    const left = { ...(await page.locator("#map-canvas").boundingBox())!, width: 0 };
     const right = (await page.locator(".panel.right").boundingBox())!;
     const bar = (await page.locator(".bar").boundingBox())!;
     const c = await placesBox(page);
@@ -166,16 +167,11 @@ test.describe("the map under the floating panels", () => {
       const b = await placesBox(page);
       return Math.abs((b.l + b.r) / 2 - page.viewportSize()!.width / 2);
     };
-    // with the panels open the city sits in the gap between them, which is narrower than the window
-    const [leftBox, rightBox] = [
-      await page.locator(".panel.left").boundingBox(),
-      await page.locator(".panel.right").boundingBox(),
-    ];
-    const gap = rightBox!.x - (leftBox!.x + leftBox!.width);
+    // with the details open the city sits beside them, in less than the window
+    const rightBox = (await page.locator(".panel.right").boundingBox())!;
     const before = await placesBox(page);
-    expect(before.r - before.l).toBeLessThan(gap);
+    expect(before.r - before.l).toBeLessThan(rightBox.x);
     await page.locator("#notes-toggle").click();
-    await page.locator("#inspector-toggle").click();
     await page.locator("#zoom-fit").click();
     await mapStill(page); // measured where the fit ends, not on its way there
     // the tabs for the panels, now at the edges, still take a little of the room

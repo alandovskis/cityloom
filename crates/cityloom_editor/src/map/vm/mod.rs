@@ -59,14 +59,29 @@ fn fold(text: &str) -> String {
     text.to_lowercase().replace('\u{2019}', "'").replace(['\u{a0}', '\u{202f}'], " ")
 }
 
-/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
-fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
+/// What a `hot` name (`s-7`, `j-3`) names.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Hot {
+    Street(u32),
+    Junction(u32),
+}
+
+/// Reads a `hot` name, the one place its form is known.
+fn parse_hot(hot: &str) -> Option<Hot> {
     let (kind, uid) = hot.split_once('-')?;
     let uid: u32 = uid.parse().ok()?;
     match kind {
-        "s" => Some(street_href(uid, project)),
-        "j" => Some(junction_href(uid, project)),
+        "s" => Some(Hot::Street(uid)),
+        "j" => Some(Hot::Junction(uid)),
         _ => None,
+    }
+}
+
+/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
+fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
+    match parse_hot(hot)? {
+        Hot::Street(uid) => Some(street_href(uid, project)),
+        Hot::Junction(uid) => Some(junction_href(uid, project)),
     }
 }
 
@@ -189,6 +204,34 @@ pub fn junction_href(uid: u32, project: Option<&str>) -> String {
 
 // ---- what the view binds to ----------------------------------------------------------------
 
+/// An announcer that keeps the last thing said through it.
+struct LastSaid {
+    inner: Rc<dyn crate::shared::ports::Announcer>,
+    last: RefCell<Option<String>>,
+}
+
+impl crate::shared::ports::Announcer for LastSaid {
+    fn say(&self, text: &str) {
+        *self.last.borrow_mut() = Some(text.to_string());
+        self.inner.say(text);
+    }
+}
+
+/// What the map's details show, one level at a time under a path from the city.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MapLevel {
+    /// The city: its checks and changes.
+    City,
+    /// The place a press shows (`s-<uid>` or `j-<uid>`).
+    Place(String),
+    /// The area rules: the list, an outline being drawn or named, and the selected area's form.
+    Areas,
+    /// One network check (its `Check` id) and its findings.
+    Check(String),
+    /// The streets selected, the change to try on them, its review and Apply.
+    Selection,
+}
+
 /// A place to open: in a list, or as a link on the map. Its name and small print are data, worded by the view
 /// in the language of the page.
 #[derive(Clone, Debug, PartialEq)]
@@ -300,6 +343,9 @@ pub struct Status {
 /// The junction rows and the street rows, each with its folded text (see `MapVm::worded_rows`).
 type WordedRows = (Vec<(PlaceRow, String)>, Vec<(PlaceRow, String)>);
 
+/// The streets inside every area, with the city view and the areas they were found from (see `MapVm::all_findings`).
+type AreaFindings = (Rc<CityView>, Vec<Restriction>, Rc<Vec<AreaStreet>>);
+
 /// `WordedRows`, for the city view, language and units they were worded for.
 struct Worded {
     view: Rc<CityView>,
@@ -330,7 +376,7 @@ pub struct MapVm {
     active: ArcRwSignal<Option<usize>>,
     /// The places worded for the search, until the city, the language or the units change.
     worded: RefCell<Option<Worded>>,
-    /// The area restrictions: the Area rules panel, and what the map shows of them.
+    /// The area restrictions: the area rules' level of the details, and what the map shows of them.
     areas: Rc<AreasVm>,
     /// The planning goal chosen (#72): it marks network checks and offers a change to review, and changes nothing.
     goal: crate::shared::goals::GoalChoice,
@@ -339,10 +385,19 @@ pub struct MapVm {
     /// The change picked for the selected streets, and how far it has got.
     corridor_op: ArcRwSignal<Op>,
     corridor: ArcRwSignal<Stage>,
+    /// The level of the details chosen: the city, the place a press shows (a second press on it, or Open, opens
+    /// it), the area rules, a network check or the selected streets. An outline being drawn shows the area rules
+    /// whatever this is.
+    shown: ArcRwSignal<MapLevel>,
+    /// The announcer the map speaks through, which keeps what it said last (`say_again`).
+    said: Rc<LastSaid>,
     /// The last change made to the selected streets, which can be taken back as one step while this page is open.
     undoable: ArcRwSignal<Option<(Op, corridor::Undo)>>,
     /// The network findings for the city view they were made from: the rules run again only when the city changes.
     network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
+    /// The streets inside every area, for the city view and the areas they were found from: the status line, the
+    /// checks lead and the city's Area rules row all count them, and they are found again only when either changes.
+    area_findings: RefCell<Option<AreaFindings>>,
     /// Whether a report is being written: a second request meanwhile is ignored.
     report_running: Cell<bool>,
     /// Whether the last report attempt failed: the page shows `map-report-failed` until the next attempt or a dismissal.
@@ -368,6 +423,9 @@ impl MapVm {
     }
 
     fn over(store: CityStore, ports: Ports, i18n: Rc<I18n>) -> Rc<MapVm> {
+        // Everything the map, its selection and its area rules say goes through one announcer that keeps the last.
+        let said = Rc::new(LastSaid { inner: ports.announcer.clone(), last: RefCell::new(None) });
+        let ports = Ports { announcer: said.clone(), ..ports };
         let has_roads = store.has_network();
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
@@ -397,8 +455,11 @@ impl MapVm {
             selection,
             corridor_op: ArcRwSignal::new(Op::ALL[0]),
             corridor: ArcRwSignal::new(Stage::Idle),
+            shown: ArcRwSignal::new(MapLevel::City),
+            said,
             undoable: ArcRwSignal::new(None),
             network: RefCell::new(None),
+            area_findings: RefCell::new(None),
             report_running: Cell::new(false),
             report_failed: ArcRwSignal::new(false),
             #[cfg(test)]
@@ -472,35 +533,37 @@ impl MapVm {
 
     /// The junctions, in the order of their numbers, as rows to open.
     pub fn junction_rows(&self) -> Vec<PlaceRow> {
-        let v = self.view();
-        Self::junctions(&v)
-            .into_iter()
-            .map(|n| PlaceRow {
-                href: junction_href(n.uid, self.project().as_deref()),
-                hot: format!("j-{}", n.uid),
-                name: n.name.clone(),
-                sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
-                tag: Self::tag(n.ok, n.edited),
-            })
-            .collect()
+        let (v, project) = (self.view(), self.project());
+        Self::junctions(&v).into_iter().map(|n| Self::junction_row(n, project.as_deref())).collect()
+    }
+
+    fn junction_row(n: &NodeView, project: Option<&str>) -> PlaceRow {
+        PlaceRow {
+            href: junction_href(n.uid, project),
+            hot: format!("j-{}", n.uid),
+            name: n.name.clone(),
+            sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
+            tag: Self::tag(n.ok, n.edited),
+        }
     }
 
     /// The streets, as rows to open. The width in the small print is written in the units and with the
     /// decimal mark of the page now; the rows are made again when either changes.
     pub fn street_rows(&self) -> Vec<PlaceRow> {
-        let (v, units, locale) = (self.view(), self.units(), self.i18n.locale());
-        v.edges
-            .iter()
-            .map(|e| PlaceRow {
-                href: street_href(e.uid, self.project().as_deref()),
-                hot: format!("s-{}", e.uid),
-                name: e.called.clone(),
-                sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
-                    .with("ends", Arg::Said(Box::new(e.ends.clone())))
-                    .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
-                tag: Self::tag(e.ok, e.edited),
-            })
-            .collect()
+        let (v, project) = (self.view(), self.project());
+        v.edges.iter().map(|e| self.street_row(e, project.as_deref())).collect()
+    }
+
+    fn street_row(&self, e: &EdgeView, project: Option<&str>) -> PlaceRow {
+        PlaceRow {
+            href: street_href(e.uid, project),
+            hot: format!("s-{}", e.uid),
+            name: e.called.clone(),
+            sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
+                .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                .with("width", Arg::Text(self.units().length_in(e.row_mm, self.i18n.locale()))),
+            tag: Self::tag(e.ok, e.edited),
+        }
     }
 
     // ---- search ----
@@ -811,26 +874,26 @@ impl MapVm {
     /// The six checks, each with its count and its findings (the first `NETWORK_SHOWN` of them), in a fixed order.
     /// None when the city has no places.
     pub fn network_rules(&self) -> Vec<NetworkCheck> {
+        Check::ALL.into_iter().filter_map(|rule| self.network_check(rule)).collect()
+    }
+
+    /// The check `rule` with what it found in the city; none in a city with no places, which offers no checks. The
+    /// rows and a check's own level are both made here, so they count the same findings.
+    fn network_check(&self, rule: Check) -> Option<NetworkCheck> {
         if self.has_no_places() {
-            return Vec::new();
+            return None;
         }
         let report = self.network_report();
-        let mut by_check: Vec<Vec<&NetworkFinding>> = vec![Vec::new(); Check::ALL.len()];
-        for f in &report.findings {
-            if let Some(at) = Check::ALL.iter().position(|c| *c == f.rule) {
-                by_check[at].push(f);
-            }
-        }
-        Check::ALL.into_iter().zip(by_check).map(|(rule, found)| self.network_check(rule, found)).collect()
+        Some(self.check_of(rule, report.findings.iter().filter(|f| f.rule == rule).collect()))
     }
 
     /// One check with its count (all the findings) and the first of them.
-    fn network_check(&self, rule: Check, found: Vec<&NetworkFinding>) -> NetworkCheck {
+    fn check_of(&self, rule: Check, found: Vec<&NetworkFinding>) -> NetworkCheck {
         let hidden = found.len().saturating_sub(NETWORK_SHOWN);
         NetworkCheck {
             id: rule.id(),
             source: rule.rule(),
-            label: self.word(&format!("net-rule-{}", rule.id())),
+            label: self.check_label(rule.id()),
             count: found.len(),
             count_text: self.count_text(found.len()),
             items: found.into_iter().take(NETWORK_SHOWN).map(|f| self.network_item(f)).collect(),
@@ -864,7 +927,7 @@ impl MapVm {
 
     /// How many streets break the rule of an area they are inside (a speed limit never does).
     fn streets_in_conflict(&self) -> usize {
-        let mut uids: Vec<u32> = self.findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
+        let mut uids: Vec<u32> = self.all_findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
         uids.sort_unstable();
         uids.dedup();
         uids.len()
@@ -1025,25 +1088,7 @@ impl MapVm {
             MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
                 Draw::Drawing(_) => self.areas.on_press(at, vertex),
                 Draw::Naming(_) => {}
-                Draw::Idle => {
-                    let place = hot.as_deref().filter(|h| self.can_edit(h));
-                    match place.and_then(|hot| href_of(hot, self.project().as_deref())) {
-                        Some(href) => self.ports.navigator.go(&href),
-                        None => {
-                            // A refused press on a place (muted, outside every outline) is not a press on nothing: it
-                            // lets no selected area go.
-                            let refused = hot.is_some() && place.is_none();
-                            if refused && area.is_none() {
-                                return self.say_not_editable();
-                            }
-                            let before = self.areas.selected_id_now();
-                            self.areas.select(area.as_deref());
-                            if refused && self.areas.selected_id_now() == before {
-                                self.say_not_editable();
-                            }
-                        }
-                    }
-                }
+                Draw::Idle => self.press_idle(hot.as_deref(), area.as_deref()),
             },
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             // A press with Shift held is a press all the same while an outline is drawn.
@@ -1059,6 +1104,151 @@ impl MapVm {
                 self.sync_editable();
             }
         }
+    }
+
+    /// A press while no outline is drawn: on a place it may open (`hot`, if the map lets it be edited), it shows
+    /// that place, or opens it when it is shown already; otherwise it chooses the `area` pressed, or none.
+    fn press_idle(&self, hot: Option<&str>, area: Option<&str>) {
+        let place = hot.filter(|h| self.can_edit(h));
+        match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
+            // A first press shows the place in the details; a second on it opens it.
+            Some((hot, href)) => {
+                if self.shown.get_untracked() == MapLevel::Place(hot.to_string()) {
+                    self.ports.navigator.go(&href);
+                } else {
+                    self.show_place(hot);
+                }
+            }
+            None => {
+                // A refused press on a place (muted, outside every outline) is not a press on nothing: it
+                // lets no selected area go.
+                let refused = hot.is_some() && place.is_none();
+                if refused && area.is_none() {
+                    return self.say_not_editable();
+                }
+                // A press on nothing goes back from a place to the city; with the area rules or a check
+                // shown it keeps them (and lets a selected area go).
+                if hot.is_none() && matches!(self.shown.get_untracked(), MapLevel::Place(_)) {
+                    self.set_shown(MapLevel::City);
+                }
+                // An area pressed is shown with the area rules, its form open: the level first, then the
+                // area chosen is said (see set_shown).
+                if area.is_some() {
+                    self.show_areas();
+                }
+                let before = self.areas.selected_id_now();
+                self.areas.select(area);
+                if refused && self.areas.selected_id_now() == before {
+                    self.say_not_editable();
+                }
+            }
+        }
+    }
+
+    // ---- the place a press shows ----
+
+    /// Says again what the map said last. Showing the details presses the shell's own toggle, which announces
+    /// itself and so speaks over what the press had just said; the view says that again after it.
+    pub fn say_again(&self) {
+        if let Some(text) = self.said.last.borrow().clone() {
+            self.said.inner.say(&text);
+        }
+    }
+
+    /// The place shown in the details, watched.
+    pub fn picked(&self) -> Option<String> {
+        match self.shown.get() {
+            MapLevel::Place(hot) => Some(hot),
+            _ => None,
+        }
+    }
+
+    /// Shows a place in the details, or none (the city's level).
+    pub fn pick(&self, hot: Option<&str>) {
+        match hot {
+            Some(hot) => self.set_shown(MapLevel::Place(hot.to_string())),
+            None => self.show_city(),
+        }
+    }
+
+    /// Chooses the level of the details. A new level forgets what the map said last, so that opening the details
+    /// for it says again only what was said for it (`say_again`), never what was said for the one before. So a
+    /// command that changes the level does so before it says anything about what it shows.
+    fn set_shown(&self, level: MapLevel) {
+        if self.shown.get_untracked() != level {
+            self.said.last.borrow_mut().take();
+            self.shown.set(level);
+        }
+    }
+
+    /// What the details show, watched: an outline being drawn or named is always shown with the area rules.
+    pub fn level(&self) -> MapLevel {
+        if !matches!(self.areas.draw(), Draw::Idle) {
+            return MapLevel::Areas;
+        }
+        self.shown.get()
+    }
+
+    /// Goes back to the city's level. A selected area is let go, since its form is no longer shown.
+    pub fn show_city(&self) {
+        self.set_shown(MapLevel::City);
+        self.areas.select(None);
+    }
+
+    /// Shows the area rules.
+    pub fn show_areas(&self) {
+        self.set_shown(MapLevel::Areas);
+    }
+
+    /// Shows the network check `id` and its findings; an id that is no check changes nothing.
+    pub fn show_check(&self, id: &str) {
+        if network::Check::ALL.iter().any(|c| c.id() == id) {
+            self.set_shown(MapLevel::Check(id.to_string()));
+        }
+    }
+
+    /// The name of the network check `id`, as its row and its level give it.
+    pub fn check_label(&self, id: &str) -> String {
+        self.word(&format!("net-rule-{id}"))
+    }
+
+    /// The network check shown, with its findings. Watched.
+    pub fn shown_check(&self) -> Option<NetworkCheck> {
+        let MapLevel::Check(id) = self.shown.get() else { return None };
+        self.network_check(Check::ALL.into_iter().find(|c| c.id() == id)?)
+    }
+
+    /// Whether the path may lead away from the area rules: not while an outline is drawn or named, which is finished,
+    /// saved or cancelled there first. Watched.
+    pub fn can_leave_areas(&self) -> bool {
+        matches!(self.areas.draw(), Draw::Idle)
+    }
+
+    /// The row of the place shown: its name, small print, state and the address of its editor.
+    pub fn picked_row(&self) -> Option<PlaceRow> {
+        let hot = parse_hot(&self.picked()?)?;
+        let (v, project) = (self.view(), self.project());
+        match hot {
+            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref())),
+            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref())),
+        }
+    }
+
+    /// The checks the place shown fails, worded as the map's notes word them.
+    pub fn picked_failing(&self) -> Vec<Said> {
+        let Some(hot) = self.picked().as_deref().and_then(parse_hot) else { return Vec::new() };
+        let v = self.view();
+        match hot {
+            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| e.failing.clone()).unwrap_or_default(),
+            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid).map(|n| n.failing.clone()).unwrap_or_default(),
+        }
+    }
+
+    /// A first press on a place: show it, and say how to open it.
+    fn show_place(&self, hot: &str) {
+        self.pick(Some(hot));
+        let name = self.picked_row().map(|r| self.say_now(&r.name)).unwrap_or_default();
+        self.ports.announcer.say(&self.i18n.tr_now("map-picked", &Args::new().str("name", name)));
     }
 
     fn say_not_editable(&self) {
@@ -1176,9 +1366,33 @@ impl MapVm {
         if !self.selection.contains(uid) && !self.can_edit(&format!("s-{uid}")) {
             return self.say_not_editable();
         }
+        // Shown first: a change of level forgets what the map said, and the street added is what it says now.
+        if !self.selection.contains(uid) {
+            self.show_selected_streets();
+        }
         self.selection.toggle(uid, &self.street_label(uid));
         self.show_selection();
         self.corridor.set(Stage::Idle);
+    }
+
+    /// The change a goal offers, chosen for the selected streets (the goal guide's button): it is shown where it is
+    /// reviewed and applied, with the selected streets.
+    pub fn choose_goal_change(&self, id: &str) {
+        self.set_corridor_op(id);
+        self.show_selected_streets();
+    }
+
+    /// Shows the selected streets in the details.
+    pub fn show_selected_streets(&self) {
+        self.set_shown(MapLevel::Selection);
+    }
+
+    /// The city's row to the selected streets: how many there are. Watched.
+    pub fn selection_summary(&self) -> String {
+        match self.selection.streets().len() {
+            0 => self.word("map-selection-none"),
+            n => self.i18n.tr("map-selection-summary", &Args::new().num("n", n as i64)),
+        }
     }
 
     /// Drops one street from the selection (the panel's button).
@@ -1349,7 +1563,7 @@ impl MapVm {
 
     // ---- area restrictions ----
 
-    /// The Area rules panel's view-model.
+    /// The area rules' view-model.
     pub fn areas(&self) -> &Rc<AreasVm> {
         &self.areas
     }
@@ -1365,6 +1579,16 @@ impl MapVm {
             return self.word("restriction-lead-no-map");
         }
         self.areas.lead()
+    }
+
+    /// The city's row to the area rules: how many there are and how many streets break their rule. Watched.
+    pub fn areas_summary(&self) -> String {
+        let areas = self.areas.list().len();
+        if areas == 0 {
+            return self.word("map-areas-none");
+        }
+        let breaking = self.streets_in_conflict();
+        self.i18n.tr("map-areas-summary", &Args::new().num("areas", areas as i64).num("breaking", breaking as i64))
     }
 
     /// Sends the areas and the outline being drawn to the map, once there is a map to show them on.
@@ -1404,7 +1628,21 @@ impl MapVm {
 
     /// Every street inside an area, for a view: found again when the city or the areas change.
     pub fn findings(&self) -> Vec<AreaStreet> {
-        self.findings_in(&self.view(), &self.areas.list())
+        self.all_findings().as_ref().clone()
+    }
+
+    /// The streets inside every area, found once for a city view and a list of areas.
+    fn all_findings(&self) -> Rc<Vec<AreaStreet>> {
+        let (view, list) = (self.view(), self.areas.list());
+        if let Some((seen, areas, found)) = &*self.area_findings.borrow()
+            && Rc::ptr_eq(seen, &view)
+            && *areas == list
+        {
+            return found.clone();
+        }
+        let found = Rc::new(self.findings_in(&view, &list));
+        *self.area_findings.borrow_mut() = Some((view, list, found.clone()));
+        found
     }
 
     /// The streets inside the area `id`.
@@ -1947,7 +2185,7 @@ mod tests {
             places: (1..=n).map(place).collect(),
         };
         let all: Vec<NetworkFinding> = (0..NETWORK_SHOWN as u32 + 12).map(|_| finding(11)).collect();
-        let check = vm.network_check(Check::Cycling, all.iter().collect());
+        let check = vm.check_of(Check::Cycling, all.iter().collect());
         assert_eq!(check.count, NETWORK_SHOWN + 12, "the count is all of them");
         assert_eq!(check.count_text, format!("{} findings", NETWORK_SHOWN + 12));
         assert_eq!(check.items.len(), NETWORK_SHOWN);
@@ -1955,7 +2193,7 @@ mod tests {
         assert_eq!(check.items[0].places.len(), NETWORK_PLACES);
         assert_eq!(check.items[0].more_places.as_deref(), Some("and 3 more places"));
         assert_eq!(check.items[0].rule, "cycling");
-        let few = vm.network_check(Check::Cycling, vec![&finding(2)]);
+        let few = vm.check_of(Check::Cycling, vec![&finding(2)]);
         assert!(few.more.is_none() && few.items[0].more_places.is_none());
     }
 
@@ -2138,6 +2376,8 @@ mod tests {
         vm.attach();
         mapper.say(MapEvent::Ready);
         let hot = format!("s-{}", vm.view().edges[0].uid);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press(&hot));
         mapper.say(press(&hot));
         assert_eq!(navigator.take(), vec![format!("street.html?street={}&project=p1", vm.view().edges[0].uid)]);
     }
@@ -2146,14 +2386,18 @@ mod tests {
     fn a_press_on_a_place_outside_the_open_view_opens_nothing_and_says_why() {
         let (vm, mapper, navigator, said) = area_vm_said();
         mapper.say(COVERING);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press("s-1"));
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "no view yet: nothing is held back");
+        said.take(); // the first press said the place's name
         let b = street_box(&vm);
         mapper.say(MapEvent::View { bounds: clipping(b) });
         mapper.say(press("s-1"));
         assert!(navigator.take().is_empty());
         assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
         mapper.say(MapEvent::View { bounds: around(b) });
+        // the place is still the one shown (the refused press kept it), so this press opens it
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
         assert!(said.take().is_empty());
@@ -2287,10 +2531,208 @@ mod tests {
     }
 
     #[test]
+    fn a_first_press_shows_a_place_and_a_second_on_it_opens_it_and_a_press_on_nothing_goes_back_to_the_city() {
+        let (vm, mapper, navigator, said) = area_vm_said();
+        mapper.say(COVERING);
+        said.take();
+        mapper.say(press("s-1"));
+        assert!(navigator.take().is_empty(), "a first press does not leave the map");
+        assert_eq!(vm.picked().as_deref(), Some("s-1"));
+        let heard = said.take();
+        assert_eq!(heard.len(), 1, "{heard:?}");
+        assert!(heard[0].ends_with("Press it again, or Open, to edit it."), "{heard:?}");
+        let row = vm.picked_row().expect("the place's row");
+        assert_eq!(row.hot, "s-1");
+        mapper.say(press("j-3"));
+        assert!(navigator.take().is_empty());
+        assert_eq!(vm.picked().as_deref(), Some("j-3"), "another place is shown in its stead");
+        mapper.say(press("j-3"));
+        assert_eq!(navigator.take(), vec!["intersection.html?junction=3".to_string()], "a second press on it opens it");
+        mapper.say(press("s-1"));
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.picked(), None, "a press on nothing goes back to the city");
+        // Open (the place pane's link to the row's address) goes where a second press goes
+        vm.pick(Some("s-1"));
+        let open = vm.picked_row().expect("the place's row").href;
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec![open]);
+    }
+
+    #[test]
+    fn the_last_thing_the_map_said_can_be_said_again_for_when_the_shell_spoke_over_it() {
+        let (vm, mapper, _, said) = area_vm_said();
+        mapper.say(COVERING);
+        said.take();
+        vm.say_again();
+        assert!(said.take().is_empty(), "nothing was said yet");
+        mapper.say(press("s-1"));
+        let picked = said.take();
+        vm.say_again();
+        assert_eq!(said.take(), picked, "the place shown");
+        vm.toggle_selected(Some("s-1"));
+        let selected = said.take();
+        assert_eq!(selected.len(), 1, "{selected:?}");
+        vm.say_again();
+        assert_eq!(said.take(), selected, "the selection's own words, through the same announcer");
+        vm.show_areas();
+        vm.areas().start();
+        let drawing = said.take();
+        vm.say_again();
+        assert_eq!(said.take().last(), drawing.last(), "and the area rules'");
+    }
+
+    #[test]
+    fn the_place_shown_and_the_check_shown_are_the_rows_and_the_check_their_lists_give() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        for row in vm.street_rows().into_iter().chain(vm.junction_rows()) {
+            vm.pick(Some(&row.hot));
+            assert_eq!(vm.picked_row(), Some(row));
+        }
+        let plain = vm.view().nodes.iter().find(|n| !n.junction).map(|n| format!("j-{}", n.uid));
+        if let Some(plain) = plain {
+            vm.pick(Some(&plain));
+            assert_eq!(vm.picked_row(), None, "a node that is no junction is no place");
+        }
+        for check in vm.network_rules() {
+            vm.show_check(check.id);
+            assert_eq!(vm.check_label(check.id), check.label);
+            assert_eq!(vm.shown_check(), Some(check));
+        }
+    }
+
+    #[test]
+    fn the_goal_s_change_is_chosen_where_the_selected_streets_are_reviewed() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        vm.toggle_selected(Some("s-1"));
+        vm.show_city();
+        vm.choose_goal_change("bus-corridor");
+        assert_eq!(vm.corridor_op().id(), "bus-corridor");
+        assert_eq!(vm.level(), MapLevel::Selection, "the change, its review and Apply are with the selected streets");
+        assert!(matches!(vm.corridor_stage(), Stage::Idle), "nothing is reviewed until the person asks");
+    }
+
+    #[test]
+    fn a_level_shown_with_nothing_said_has_nothing_said_again() {
+        let (vm, mapper, _, said, _) = car_free_bendville_said();
+        mapper.say(COVERING);
+        vm.show_areas();
+        vm.areas().select(Some("r1"));
+        let street = vm.street_rows().into_iter().next().expect("a street").hot;
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some(street), area: None, vertex: None });
+        said.take();
+        // the area, still selected, pressed again: the area rules are shown, and nothing new is said
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.level(), MapLevel::Areas);
+        said.take();
+        vm.say_again();
+        assert!(said.take().is_empty(), "the street's words are not said over the area rules");
+        // a street added shows the selection and its words are said again
+        vm.toggle_selected(Some("s-1"));
+        let added = said.take();
+        vm.say_again();
+        assert_eq!(said.take(), added);
+        // an area pressed from the city is said, and said again when the details open for it
+        vm.show_city();
+        said.take();
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        let chosen = said.take();
+        assert_eq!(chosen.len(), 1, "the area chosen is said: {chosen:?}");
+        vm.say_again();
+        assert_eq!(said.take(), chosen);
+    }
+
+    #[test]
+    fn the_selected_streets_are_a_level_that_a_street_added_shows() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.toggle_selected(Some("j-3"));
+        assert_eq!(vm.level(), MapLevel::City, "a junction is refused, and nothing is shown");
+        vm.toggle_selected(Some("s-1"));
+        assert_eq!(vm.level(), MapLevel::Selection, "a street added shows the selection");
+        vm.deselect(1);
+        assert_eq!(vm.level(), MapLevel::Selection, "emptied, it stays where its lead and Undo are");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.show_selected_streets();
+        assert_eq!(vm.level(), MapLevel::Selection, "reached from the city's row");
+        assert_eq!(vm.selection_summary(), "None yet");
+        vm.toggle_selected(Some("s-1"));
+        assert_eq!(vm.selection_summary(), "One street");
+    }
+
+    #[test]
+    fn a_network_check_is_a_level_of_its_own_that_a_press_on_nothing_keeps() {
+        let (vm, mapper, _, _) = area_vm_said();
+        mapper.say(COVERING);
+        vm.show_check("cycling");
+        assert_eq!(vm.level(), MapLevel::Check("cycling".into()));
+        let shown = vm.shown_check().expect("the check shown");
+        assert_eq!(shown.id, "cycling");
+        assert_eq!(shown.label, "Cycling links");
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::Check("cycling".into()), "a press on nothing keeps the check");
+        // a place it names is shown at its own level, and the city is a step back from there
+        vm.pick(Some("s-1"));
+        assert_eq!(vm.level(), MapLevel::Place("s-1".into()));
+        vm.show_check("no-such-check");
+        assert_eq!(vm.level(), MapLevel::Place("s-1".into()), "a check there is not changes nothing");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        assert_eq!(vm.shown_check(), None);
+    }
+
+    #[test]
+    fn the_area_rules_are_a_level_of_the_details_that_an_area_pressed_or_drawn_shows() {
+        let (vm, mapper, _, _, _) = car_free_bendville_said();
+        mapper.say(COVERING);
+        vm.areas().select(None);
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        vm.show_areas();
+        assert_eq!(vm.level(), MapLevel::Areas, "reached from the city's row");
+        vm.show_city();
+        assert_eq!(vm.level(), MapLevel::City);
+        // an area pressed on the map is shown at the area rules' level, its form open
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
+        assert_eq!(vm.level(), MapLevel::Areas);
+        // a press on nothing lets the area go and stays with the area rules
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None);
+        assert_eq!(vm.level(), MapLevel::Areas);
+        // a place pressed is shown in their stead; a press on nothing then goes back to the city
+        let street = vm.street_rows().into_iter().next().expect("a street").hot;
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some(street.clone()), area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::Place(street.clone()));
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.level(), MapLevel::City);
+        // the city lets a selected area go: its form is no longer shown
+        vm.areas().select(Some("r1"));
+        vm.show_city();
+        assert_eq!(vm.areas().selected_id_now(), None);
+        // an outline being drawn or named is always shown with the area rules, where Finish, Save and Cancel are
+        vm.show_areas();
+        vm.areas().start();
+        vm.pick(Some(&street));
+        assert_eq!(vm.level(), MapLevel::Areas, "even were a place picked meanwhile");
+        assert!(!vm.can_leave_areas(), "the outline is finished or cancelled first");
+        vm.areas().cancel();
+        assert!(vm.can_leave_areas());
+        vm.show_areas();
+        assert_eq!(vm.level(), MapLevel::Areas);
+    }
+
+    #[test]
     fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
         let (vm, mapper, navigator, _) = area_vm();
         let press = |hot: Option<&str>| MapEvent::Press { at: [-73.6, 45.5], hot: hot.map(String::from), area: None, vertex: None };
+        // a first press shows a place; a second on it opens it
         mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("j-3")));
         mapper.say(press(Some("j-3")));
         mapper.say(press(Some("nonsense")));
         mapper.say(press(None));
@@ -2672,6 +3114,8 @@ mod tests {
         assert_eq!(vm.areas().find_now("r1").unwrap().ring[0], to);
         mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
         assert_eq!(vm.areas().selected_id_now(), None);
+        // a first press shows the place; a second on it opens it
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         assert_eq!(navigator.take(), ["street.html?street=1"], "a place in an area opens the place");
     }
@@ -2686,6 +3130,8 @@ mod tests {
         assert!(navigator.take().is_empty(), "a drop opens nothing");
         assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "and the area stays selected");
         assert_eq!(storage.recall(crate::restriction::store::RESTRICTIONS_KEY), kept, "nothing moved");
+        // a first press shows the place; a second on it opens it
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         assert_eq!(navigator.take(), ["street.html?street=1"]);
     }
@@ -2790,6 +3236,22 @@ mod tests {
     }
 
     #[test]
+    fn the_streets_breaking_the_area_rules_are_found_once_for_a_city_view_and_each_counted_once() {
+        let (vm, _, _, storage) = car_free_bendville();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        RestrictionStore::new(storage.clone()).add("Twin", Rule::CarFree, square(mid, 0.001)).unwrap();
+        vm.areas().reload();
+        assert_eq!(vm.findings().len(), 2, "the street is inside both areas");
+        assert_eq!(vm.areas_summary(), "2 areas · one street breaks its rule", "a street is one street, however many areas hold it");
+        vm.editors_read.set(0);
+        vm.findings();
+        vm.areas_summary();
+        vm.status();
+        vm.checks_lead();
+        assert_eq!(vm.editors_read.get(), 0, "the city view and the areas are as they were: nothing is read again");
+    }
+
+    #[test]
     fn the_streets_of_one_area_are_found_without_checking_the_others() {
         let (vm, _, _, storage) = car_free_bendville();
         let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
@@ -2811,11 +3273,11 @@ mod tests {
         let before = vm.status();
         assert!(!vm.findings().is_empty() && vm.findings().iter().any(|f| !f.conflicts.is_empty()));
         assert_eq!(before, Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
-        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules panel lists it.");
+        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules row above lists it.");
         assert!(vm.failing_items().is_empty(), "the design checks are what that list is of");
         vm.i18n().set(Locale::FrCa);
         assert_eq!(vm.status().text, "1 lieu. Une rue est en conflit avec une règle de zone.");
-        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. Le panneau Règles de zone la liste.");
+        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. La ligne Règles de zone, plus haut, la liste.");
     }
 
     #[test]
@@ -2943,6 +3405,8 @@ mod tests {
     fn a_press_on_a_use_opens_its_street() {
         let (_vm, mapper, navigator, _) = programme_vm();
         mapper.say(COVERING);
+        // a first press shows the place; a second on it opens it
+        mapper.say(press("s-1"));
         mapper.say(press("s-1"));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
     }

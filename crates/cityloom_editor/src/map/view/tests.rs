@@ -547,7 +547,7 @@ fn map_html_has_one_h1_the_city_map() {
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
 
-// ---- the Area rules panel ------------------------------------------------------------------
+// ---- the area rules ------------------------------------------------------------------------
 
 use crate::map::view::areas_view::Areas;
 use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
@@ -713,26 +713,28 @@ fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
 }
 
 #[test]
-fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
-    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\"") && !MAP_HTML.contains("data-left=\"none\""));
-    assert!(
-        MAP_HTML.contains(
-            r#"id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[""#
-        )
-    );
-    assert!(MAP_HTML.contains(r#"<aside class="panel left" id="areas-panel""#));
-    let panel = &MAP_HTML[MAP_HTML.find("id=\"areas-panel\"").unwrap()..];
-    assert!(panel[..panel.find("</aside>").unwrap()].contains("id=\"areas-slot\""));
-    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-inspector")==="closed""#), "the head script restores a closed panel");
+fn the_area_rules_are_a_level_of_the_details_and_the_map_has_no_left_panel() {
+    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\""));
+    for gone in ["areas-panel", "inspector-toggle", "panel left", "cityloom-inspector", "edge-tab left"] {
+        assert!(!MAP_HTML.contains(gone), "{gone}");
+    }
+    assert!(MAP_HTML.contains(r#"<body class="map-page">"#), "the map's stylesheet gives no room to a left panel");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let notes = &notes[..notes.find("</aside>").unwrap()];
+    let level = &notes[notes.find(r#"id="map-areas""#).expect("the area rules' level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden"), "shown only when chosen");
+    assert!(level.find(r#"id="h-areas""#).unwrap() < level.find(r#"id="areas-slot""#).unwrap());
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.find(r#"id="map-areas-row-slot""#).expect("the city leads to them") < city.find(r#"class="tabs""#).unwrap(), "above the tabs, of neither");
 }
 
 #[test]
-fn the_keyboard_help_lists_the_key_for_the_area_rules_beside_the_notes() {
+fn the_keyboard_help_lists_the_key_for_the_notes_and_none_for_a_left_panel() {
     // The map takes no Tab or Enter for the places (Tab leaves it): they are opened from the search, which is what
     // the help says.
     assert!(!MAP_HTML.contains("map-key-next") && !MAP_HTML.contains("next place"));
     assert!(MAP_HTML.contains(r#"<kbd>↓</kbd> <kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-open">open a place found</span>"#));
-    assert!(MAP_HTML.contains(r#"<kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span>"#));
+    assert!(!MAP_HTML.contains("<kbd>[</kbd>") && !MAP_HTML.contains("map-key-areas"), "no left panel to open");
     assert!(MAP_HTML.contains(r#"<kbd>]</kbd> <span data-i18n="map-key-panels">notes</span>"#));
 }
 
@@ -768,10 +770,10 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 }
 
 #[test]
-fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() {
-    use crate::map::view::areas_view::reveal_clicks;
+fn the_details_are_opened_through_the_shell_s_own_toggle_only_where_they_are_closed() {
+    use crate::map::view::details::reveal_clicks;
     assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
-    assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
+    assert_eq!(reveal_clicks(Some("false")), ["notes-toggle"]);
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }
 
@@ -829,23 +831,33 @@ fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
     vm.reload();
 }
 
-#[test]
-fn every_network_check_says_it_is_a_placeholder_and_the_name_of_its_summary_is_its_check() {
-    let (vm, _) = map_vm();
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
-    assert_eq!(count(&h, "<details class=\"src placeholder\""), 6, "{h}");
-    assert!(h.contains("aria-label=\"Source: placeholder, no source (Crossings)\""), "{h}");
+/// The level of the network check `id`, as the details show it.
+fn check_pane(vm: &Rc<MapVm>, id: &str) -> String {
+    vm.show_check(id);
+    map_html(|| view! { <network_view::NetworkCheckPane vm=vm.clone()/> })
 }
 
 #[test]
-fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
+fn every_network_check_says_it_is_a_placeholder_and_the_name_of_its_summary_is_its_check() {
+    let (vm, _) = map_vm();
+    let rows = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(!rows.contains("<details"), "the sources are at each check's own level: {rows}");
+    for id in ["cycling", "access", "crossings", "lanes", "transit", "walking"] {
+        let h = check_pane(&vm, id);
+        assert_eq!(count(&h, "<details class=\"src placeholder\""), 1, "{id}: {h}");
+    }
+    assert!(check_pane(&vm, "crossings").contains("aria-label=\"Source: placeholder, no source (Crossings)\""));
+}
+
+#[test]
+fn the_network_checks_are_a_row_each_with_its_count_that_leads_to_the_check() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
     assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
-    assert!(!h.contains("aria-labelledby"), "{h}");
-    assert_eq!(count(&h, "<h3"), 6);
-    // the name and the count are read apart: "Crossings: no findings"
-    assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
+    assert_eq!(count(&h, "<h3"), 0, "a row, not a heading: {h}");
+    assert_eq!(count(&h, "<button"), 6, "{h}");
+    assert!(h.contains("<b>Crossings</b><small data-count=\"0\" class=\"fig net-count\">no findings</small>"), "{h}");
+    assert!(!h.contains("These look across"), "what the checks are is said at a check's own level: {h}");
     for (id, label) in [
         ("cycling", "Cycling links"),
         ("access", "Pedestrian street access"),
@@ -854,10 +866,13 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
         ("transit", "Transit corridors"),
         ("walking", "Walking routes"),
     ] {
-        assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"net-go-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+        let pane = check_pane(&vm, id);
+        assert!(pane.contains(&format!("<h2 id=\"net-h-{id}\" class=\"insp-name\">{label}</h2>")), "{id}: {pane}");
+        assert!(pane.contains("no findings") && pane.contains("These look across the whole network"), "{pane}");
+        assert_eq!(count(&pane, "<li"), 0, "{pane}");
     }
     assert_eq!(count(&h, "no findings"), 6);
-    assert_eq!(count(&h, "<li"), 0);
     let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
     assert!(lead.contains("found nothing"), "{lead}");
 }
@@ -866,10 +881,14 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
 fn a_finding_says_why_and_links_the_street_and_the_junction() {
     let (vm, storage) = map_vm();
     take_a_crossing_away(&vm, &storage);
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    let rows = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(rows.contains("data-count=\"1\" class=\"fig net-count\">1 finding</small>") && !rows.contains("has no pedestrian crossing"), "{rows}");
+    let h = check_pane(&vm, "crossings");
     assert_eq!(count(&h, "<li data-severity"), 1, "{h}");
     assert!(h.contains("1 finding") && h.contains("has no pedestrian crossing") && h.contains("Problem"), "{h}");
-    assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
+    // a place it names is shown in the details, as a press on the map shows it
+    assert!(h.contains("data-hot=\"s-") && h.contains("data-hot=\"j-2\"") && !h.contains("href="), "{h}");
+    assert_eq!(count(&h, "<button type=\"button\" data-hot="), 2, "the places are buttons: {h}");
     assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\"") && h.contains("data-rule=\"crossings\""), "{h}");
     // the places are a list of their own, so a screen reader says how many there are
     assert!(h.contains("<ul class=\"net-links\"") && count(&h, "<ul class=\"net-links\"") == 1, "{h}");
@@ -882,7 +901,7 @@ fn a_finding_says_why_and_links_the_street_and_the_junction() {
 fn the_network_checks_are_worded_in_french() {
     let (vm, storage) = map_vm_in(Locale::FrCa);
     take_a_crossing_away(&vm, &storage);
-    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    let h = check_pane(&vm, "crossings");
     assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
 }
 
@@ -1806,4 +1825,113 @@ mod goals {
         let h = guide(&vm);
         assert!(h.contains("Prioriser les autobus") && h.contains("Examiner"), "{h}");
     }
+}
+
+// ---- the details one level at a time: the city, a place pressed ------------------------
+
+#[test]
+fn the_details_are_under_a_path_from_the_city_to_the_place_pressed() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"<nav aria-label="What the details are of""#), "{h}");
+    assert!(h.contains(r#"aria-current="location""#) && h.contains(">City<") && !h.contains("<button"), "the city alone: {h}");
+    let row = vm.street_rows().into_iter().next().unwrap();
+    vm.pick(Some(&row.hot));
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">City</button>"), "the city is a step back: {h}");
+    assert!(h.contains(&format!(">{}</span>", vm.say(&row.name))), "{h}");
+    // the current step is drawn as the street and junction pages draw theirs
+    assert!(h.contains(r#"class="path-here""#), "{h}");
+}
+
+#[test]
+fn a_street_pressed_shows_its_name_what_it_is_its_checks_and_how_to_open_or_select_it() {
+    let (vm, _) = map_vm();
+    let row = vm.street_rows().into_iter().next().unwrap();
+    vm.pick(Some(&row.hot));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(&format!(r#"<h2 class="insp-name">{}</h2>"#, vm.say(&row.name))), "{h}");
+    assert!(h.contains(&vm.say(&row.sub)), "{h}");
+    assert!(h.contains(&format!(r#"href="{}""#, row.href)) && h.contains(">Open in the street editor<"), "{h}");
+    assert!(h.contains(r#"id="map-place-select""#) && h.contains(">Add to the selection<"), "{h}");
+    assert!(h.contains("Every check passes.") || h.contains("Checks that fail"), "{h}");
+    let junction = vm.junction_rows().into_iter().next().unwrap();
+    vm.pick(Some(&junction.hot));
+    let h = map_html(|| view! { <crate::map::view::details::PlacePane vm=vm.clone()/> });
+    assert!(h.contains(">Open in the junction editor<") && !h.contains("map-place-select"), "a junction is not selected: {h}");
+}
+
+#[test]
+fn the_map_page_has_a_city_level_and_a_place_level_shown_one_at_a_time() {
+    let page = include_str!("../../../../../web/map.html");
+    for id in ["map-path-slot", "map-city", "map-place", "map-place-slot"] {
+        assert!(page.contains(&format!(r#"id="{id}""#)), "{id}");
+    }
+    let place = &page[page.find(r#"id="map-place""#).unwrap()..];
+    assert!(place[..place.find('>').unwrap()].contains("hidden"), "the place's level is hidden until a place is pressed");
+    let city = &page[page.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.find(r#"id="t-checks""#).unwrap() < city.find("</aside>").unwrap(), "the tabs are the city's");
+}
+
+#[test]
+fn the_area_rules_level_is_under_the_city_and_an_outline_being_drawn_keeps_the_path_there() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    vm.show_areas();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">City</button>"), "{h}");
+    assert!(h.contains(r#"class="path-here""#) && h.contains(">Area rules</span>"), "{h}");
+    vm.areas().start();
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(!h.contains("<button") && h.contains(">City<") && h.contains(">Area rules</span>"), "Finish or Cancel first: {h}");
+    assert!(h.contains(r#"<span class="path-still">City</span>"#), "drawn as no link: {h}");
+}
+
+#[test]
+fn the_city_has_a_row_to_the_area_rules_that_counts_them_and_the_streets_breaking_them() {
+    let vm = ready_areas_vm(Locale::En, &[]);
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-go-areas""#) && h.contains(">Area rules<") && h.contains(">None yet<"), "{h}");
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    let breaking = vm.findings().iter().filter(|s| !s.conflicts.is_empty()).count();
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    let streets = match breaking {
+        0 => "every street keeps to its rule".to_string(),
+        1 => "one street breaks its rule".to_string(),
+        n => format!("{n} streets break their rule"),
+    };
+    assert!(h.contains(&format!(">One area · {streets}<")), "{h}");
+    let vm = ready_areas_vm(Locale::FrCa, &[("Zone", Rule::CarFree)]);
+    let h = map_html(|| view! { <crate::map::view::details::AreasRow vm=vm.clone()/> });
+    assert!(h.contains(">Règles de zone<") && h.contains(">Une zone · "), "{h}");
+}
+
+#[test]
+fn a_network_check_is_a_level_under_the_city_named_by_the_path() {
+    let (vm, _) = map_vm();
+    vm.show_check("walking");
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Walking routes</span>"), "{h}");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let level = &notes[notes.find(r#"id="map-check""#).expect("the check's level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden") && level.contains(r#"id="map-check-slot""#));
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(city.contains(r#"id="network-slot""#) && !city.contains("net-note"), "the rows are the city's, the note the check's");
+}
+
+#[test]
+fn the_selected_streets_are_a_level_the_city_leads_to_and_the_path_names() {
+    let (vm, _) = map_vm();
+    let row = map_html(|| view! { <crate::map::view::details::SelectionRow vm=vm.clone()/> });
+    assert!(row.contains(r#"id="map-go-selection""#) && row.contains(">Selected streets<") && row.contains(">None yet<"), "{row}");
+    vm.toggle_selected(Some("s-1"));
+    let row = map_html(|| view! { <crate::map::view::details::SelectionRow vm=vm.clone()/> });
+    assert!(row.contains(">One street<"), "{row}");
+    let h = map_html(|| view! { <crate::map::view::details::MapPath vm=vm.clone()/> });
+    assert!(h.contains(r#"id="map-path-city""#) && h.contains(">Selected streets</span>"), "{h}");
+    let notes = &MAP_HTML[MAP_HTML.find(r#"id="notes""#).unwrap()..];
+    let level = &notes[notes.find(r#"id="map-selection""#).expect("the selection's level")..];
+    assert!(level[..level.find('>').unwrap()].contains("hidden"));
+    assert!(level.find(r#"id="h-selection""#).unwrap() < level.find(r#"id="selection-slot""#).unwrap());
+    let city = &notes[notes.find(r#"id="map-city""#).unwrap()..];
+    assert!(!city.contains("h-selection") && city.contains(r#"id="map-selection-row-slot""#), "the city has a row to it");
 }

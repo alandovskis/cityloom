@@ -2489,59 +2489,6 @@ svg pattern circle {
   color: var(--ink-2);
   font-size: 13px;
 }
-.panel-path {
-  margin: 12px 12px 0;
-  padding: 4px 8px 8px;
-  border-bottom: 1px solid var(--rule);
-}
-.panel-path ol {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.panel-path li {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-/* The separator is drawn, not said: the list already tells a screen reader the steps apart. */
-.panel-path li + li::before {
-  content: "›" / "";
-  color: var(--ink-3);
-}
-.path-step {
-  min-height: 24px;
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.path-step:hover {
-  background: var(--fill);
-}
-.path-here {
-  padding: 2px 6px;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.path-step:focus-visible,
-.path-here:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
 #p-street > .hint {
   margin: 0 0 8px;
 }
@@ -3072,8 +3019,7 @@ svg pattern circle {
   /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
   .add-item,
   .check,
-  .fit-checks,
-  .path-step {
+  .fit-checks {
     min-height: 44px;
   }
   .ico,

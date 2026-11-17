@@ -763,6 +763,12 @@ a.btn {
 .checks li:first-child {
   border-top: 0;
 }
+/* A selected street: its name, then the button that drops it. The list shares the checks' look, not their icon
+   column. */
+.checks li.selection-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
 .checks svg {
   width: 18px;
   height: 18px;
@@ -838,7 +844,7 @@ a.btn {
   padding: 0;
 }
 .area-form .btns,
-#areas-panel .btns {
+#map-areas .btns {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -1624,7 +1630,8 @@ a.btn {
     padding: 24px 20px 28px;
   }
 }
-/* The Network checks section of the map's Notes panel: a heading and a count for each check, then its findings. */
+/* The network checks of the map's details: a row and a count for each at the city's level, and a check's findings at
+   its own. */
 .net-h {
   display: flex;
   flex-wrap: wrap;
@@ -1653,10 +1660,30 @@ a.btn {
   padding: 0;
   border: 0;
 }
-.net-links a {
+/* A place a finding names: a press shows it in the details, so it is a button drawn as the link it reads as. */
+.net-links .net-link {
   display: inline-block;
+  min-height: 24px;
   padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
   text-decoration: underline;
+  cursor: pointer;
+}
+.net-links .net-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The city's row for each network check: its name, and its count on the right. */
+.net-rows .place-row small {
+  grid-column: 2;
+  grid-row: 1;
+}
+.net-rows .goal-mark {
+  grid-column: 1 / -1;
 }
 .net-more {
   margin: 0 8px 4px;
@@ -1787,7 +1814,6 @@ details.src ul {
 /* A network check that bears on the chosen goal (#72), marked as the street page's checks are. */
 .net-rule.goal {
   border-left: 3px solid var(--accent);
-  padding-left: 8px;
 }
 .goal-use {
   margin-top: 4px;
@@ -1795,4 +1821,120 @@ details.src ul {
 .goal-select {
   display: block;
   color: var(--ink-2);
+}
+
+/* The map's details one level at a time (`map/view/details.rs`): the city's tabs and notes, or the place a press shows.
+   A level lays out as its contents did before it was wrapped. */
+.map-level {
+  display: contents;
+}
+/* The path over a panel's levels: the street, junction and map pages each have one. */
+.panel-path {
+  margin: 12px 12px 0;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.panel-path ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.panel-path li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+/* The separator is drawn, not said: the list already tells a screen reader the steps apart. */
+.panel-path li + li::before {
+  content: "›" / "";
+  color: var(--ink-3);
+}
+.path-step {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.path-step:hover {
+  background: var(--fill);
+}
+.path-here {
+  padding: 2px 6px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.path-step:focus-visible,
+.path-here:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (any-pointer: coarse) {
+  .path-step {
+    min-height: 44px;
+  }
+}
+/* The place a press on the map shows: its name heads the level, as a street's or a junction's does on its page. */
+.map-level .insp-head {
+  padding: 0;
+}
+.map-level .insp-name {
+  display: block;
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.map-level .insp-sub {
+  display: block;
+  margin: 3px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+/* The map has no left panel: its area rules are a level of the details on the right. */
+body.map-page {
+  --lw: 0px;
+}
+.map-go {
+  margin: 8px 12px 4px;
+}
+/* The path's City while an outline is drawn: no step back until it is finished or cancelled. */
+.path-still {
+  padding: 2px 6px;
+  color: var(--ink-3);
+  font-size: 14px;
+  font-weight: 600;
+}
+.map-level[hidden] {
+  display: none;
+}
+.map-path .panel-path {
+  padding: 0 4px;
+}
+.map-place-failing {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--warn);
+}
+.map-place-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.map-place-actions .btn {
+  justify-content: center;
 }

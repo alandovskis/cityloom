@@ -1,4 +1,4 @@
-//! The Area rules panel on the left of the map page: the area rules, declaring one by drawing it on the map, and changing or
+//! The area rules, a level of the map's details (`#map-areas`): the area rules, declaring one by drawing it on the map, and changing or
 //! deleting the one selected. The views show what the map's view-model says and send it what the person does.
 //!
 //! Where the keyboard's focus goes when the panel changes what it shows is the views' to say, since a control that
@@ -58,32 +58,11 @@ fn focus_list(vm: Vm) {
     }
 }
 
-/// The shell's own control to press so the Area rules panel is shown, given the left toggle's `aria-expanded`: the
-/// toggle, if the panel is closed. The map slice does not reach the shell's view-model; it presses what a person would.
-#[cfg(any(target_arch = "wasm32", test))]
-pub(crate) fn reveal_clicks(panel_expanded: Option<&str>) -> Vec<&'static str> {
-    if panel_expanded == Some("false") { vec!["inspector-toggle"] } else { Vec::new() }
-}
-
-/// Shows the Area rules panel, where an outline is finished, cancelled and named, wherever the person had gone: a
-/// closed outline takes no key from the map, so its form must be reachable.
+/// Shows the details, where an outline is finished, cancelled and named (the area rules' level, which an outline
+/// being drawn always shows), wherever the person had gone: a closed outline takes no key from the map, so its form
+/// must be reachable.
 fn reveal(vm: Vm) {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use leptos::wasm_bindgen::JsCast;
-
-        let doc = leptos::prelude::document();
-        let attr = |id: &str, name: &str| doc.get_element_by_id(id).and_then(|el| el.get_attribute(name));
-        for id in reveal_clicks(attr("inspector-toggle", "aria-expanded").as_deref()) {
-            if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
-                el.click();
-                // The shell said the panel was shown, over what the outline had just said: say that again.
-                vm.with(|v| v.areas().repeat_last());
-            }
-        }
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = vm;
+    super::details::reveal(vm);
 }
 
 /// The panel: the list, or the outline being drawn, or the closed outline's rule and name.

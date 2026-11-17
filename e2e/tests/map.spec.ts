@@ -117,12 +117,10 @@ test.describe("the city map", () => {
     expect(kinds.sort()).toEqual(["LineString", "Point"]);
   });
 
-  test("has no list of places: the area rules float on the left and the map runs to the edge of the window", async ({
-    page,
-  }) => {
+  test("has no list of places and no left panel: the map runs to the edge of the window", async ({ page }) => {
     await expect(page.locator("#places-panel")).toHaveCount(0);
     await expect(page.locator("#reset")).toHaveCount(0);
-    await expect(page.locator("#areas-panel")).toBeVisible();
+    await expect(page.locator("#areas-panel")).toHaveCount(0);
     const map = (await page.locator("#map-canvas").boundingBox())!;
     expect(map.x).toBe(0);
   });
@@ -146,8 +144,51 @@ test.describe("the city map", () => {
   test("pressing a place on the map opens it", async ({ page }) => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
+    // a first press shows the place in the details, with a way to open it; a second on it opens it
+    const here = page.url();
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#map-open-place")).toHaveText("Open in the junction editor");
+    await expect(page.locator("#map-path-city")).toBeVisible();
+    expect(page.url()).toBe(here);
     await page.mouse.click(spot.x, spot.y);
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
+  });
+
+  test("a press on a place opens the details where they were closed, and says the place over the notes' own words", async ({
+    page,
+  }) => {
+    await page.locator("#notes-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
+    await mapStill(page); // the map takes the room the details left
+    // the map may still be fitting itself into that room: a press that finds nothing under it is taken again where
+    // the junction now is (a press on nothing changes nothing here)
+    await expect(async () => {
+      const spot = await junctionSpot(page);
+      await page.mouse.move(spot.x, spot.y);
+      await page.mouse.click(spot.x, spot.y);
+      await expect(page.locator("html")).toHaveAttribute("data-notes", "open", { timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+    await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#map-place")).toBeVisible();
+    await expect(page.locator("#map-open-place")).toBeVisible();
+    await expect(live(page)).toHaveText(/\. Press it again, or Open, to edit it\.$/);
+  });
+
+  test("a street added to the selection from its details is listed by its name, with a small Remove beside it", async ({
+    page,
+  }) => {
+    // a street the view holds shows its details, with Add to the selection
+    const street = (await streetSpots(page)).find((s) => s.editable)!;
+    await page.mouse.move(street.x, street.y);
+    await page.mouse.click(street.x, street.y);
+    await expect(page.locator("#map-place-select")).toBeVisible();
+    await page.locator("#map-place-select").click();
+    await expect(page.locator("#map-selection")).toBeVisible();
+    const row = page.locator("#selection-list .selection-item").first();
+    const [name, remove] = [(await row.locator("span").boundingBox())!, (await row.locator("button").boundingBox())!];
+    expect(name.width, "the name takes the row").toBeGreaterThan(remove.width * 2);
+    expect(remove.width, "Remove is a button, not the row").toBeLessThan(140);
+    expect(remove.x, "beside the name").toBeGreaterThan(name.x + name.width - 1);
   });
 
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
@@ -224,10 +265,9 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
     const map = await box("#map-canvas");
     const scale = await box(".maplibregl-ctrl-scale");
-    const left = await box("#areas-panel");
-    expect(scale.x - (left.x + left.width)).toBeLessThan(24);
+    expect(scale.x - map.x).toBeLessThan(24);
     const attribution = await box(".maplibregl-ctrl-attrib");
-    for (const covers of ["#areas-panel", "#notes", ".statusbar", "#map-tools-slot"]) {
+    for (const covers of ["#notes", ".statusbar", "#map-tools-slot"]) {
       expect(overlaps(scale, await box(covers)), `the scale under ${covers}`).toBe(false);
       expect(overlaps(attribution, await box(covers)), `the attribution under ${covers}`).toBe(false);
     }
@@ -315,7 +355,8 @@ test.describe("the city map", () => {
     );
     expect(page.url()).toBe(here);
     const open = spots.find((s) => s.editable)!;
-    await page.mouse.click(open.x, open.y);
+    await page.mouse.click(open.x, open.y); // shows it
+    await page.locator("#map-open-place").click(); // opens it
     await expect(page).toHaveURL(/street\.html\?street=\d+/);
   });
 
@@ -741,15 +782,34 @@ test.describe("the curbside uses and stops on the map", () => {
     const uid = await openProgrammeStreet(page, 30);
     await addPatio(page, 10);
     await backToMap(page);
-    const use = await patioOnMap(page);
-    const [lng, lat] = centroidOf(use);
-    await page.evaluate(([x, y]) => (window as any).cityloomMap.jumpTo({ center: [x, y], zoom: 19 }), [lng, lat]);
+    await patioOnMap(page); // drawn on the map
+    // the whole street in the open view (a street partly under the details cannot be opened), as close as it fits
+    await page.evaluate((uid) => {
+      const map = (window as any).cityloomMap;
+      const cs = map
+        .getSource("places")
+        .serialize()
+        .data.features.filter((f: any) => f.properties.hot === `s-${uid}` && f.geometry.type === "LineString")
+        .flatMap((f: any) => f.geometry.coordinates);
+      const xs = cs.map((c: number[]) => c[0]);
+      const ys = cs.map((c: number[]) => c[1]);
+      const notes = document.getElementById("notes")!.getBoundingClientRect();
+      const right = map.getCanvas().getBoundingClientRect().right - notes.left + 40;
+      map.fitBounds(
+        [
+          [Math.min(...xs), Math.min(...ys)],
+          [Math.max(...xs), Math.max(...ys)],
+        ],
+        { padding: { left: 60, right, top: 140, bottom: 140 }, animate: false },
+      );
+    }, uid);
     await mapStill(page);
     // the use, drawn under the pointer, with nothing of the page over it
     await expect.poll(() => curbsideSpot(page), { timeout: 30_000 }).not.toBeNull();
     const spot = await curbsideSpot(page);
     await page.mouse.move(spot!.x, spot!.y);
-    await page.mouse.click(spot!.x, spot!.y);
+    await page.mouse.click(spot!.x, spot!.y); // shows its street
+    await page.locator("#map-open-place").click(); // Open does what a second press does
     await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}&project=first$`));
   });
 
