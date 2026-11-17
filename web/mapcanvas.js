@@ -169,8 +169,8 @@ export async function createMapCanvas(container) {
   };
   // The curbside uses and the stops are the street's: their features say its `hot` id, and take its feature state.
   const showBesides = (kept, name) => {
-    // over the streets, under the junction marks (the disc covers a use's first metres as it covers the street's
-    // line, so what is pressed is what is seen), the zone boundaries and the outline being drawn
+    // over the streets, under the junction marks, the zone boundaries and the outline being drawn (a press on a use's
+    // first metres, on the junction's ground, opens the junction, as one on the street's line there does)
     const above = ["places-junction", "zone-ticks-casing", "draft-fill"].find((id) => map.getLayer(id));
     show(kept, name, above, "hot");
     if (!styled || !kept) return;
@@ -214,8 +214,9 @@ export async function createMapCanvas(container) {
     [point.x + 6, point.y + 6],
   ];
   const hotAt = (point) => {
-    // A junction before a street, a street before what lies beside it.
-    const order = ["places-junction", "places-street", "stops-dot", "stops-platform", "curbside-fill"];
+    // A junction (anywhere on its ground, never less than its unseen 24-pixel target) before a street, a street
+    // before what lies beside it.
+    const order = ["places-junction-hit", "places-street", "stops-dot", "stops-platform", "curbside-fill"];
     const layers = order.filter((id) => map.getLayer(id));
     if (!layers.length) return null;
     const found = map.queryRenderedFeatures(near(point), { layers });

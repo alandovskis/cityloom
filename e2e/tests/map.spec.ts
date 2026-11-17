@@ -71,7 +71,10 @@ const streetSpots = (page: Page) =>
     for (const f of map.queryRenderedFeatures({ layers: ["places-street"] })) {
       const hot = f.properties.hot;
       if (seen.has(hot) || f.geometry.type !== "LineString") continue;
-      for (const c of f.geometry.coordinates) {
+      // its points and the middles of its segments: a short street's ends both lie on a junction's ground
+      const cs: number[][] = f.geometry.coordinates;
+      const along = [...cs, ...cs.slice(1).map((c, i) => [(c[0] + cs[i][0]) / 2, (c[1] + cs[i][1]) / 2])];
+      for (const c of along) {
         const p = map.project(c);
         const x = r.left + p.x;
         const y = r.top + p.y;
@@ -83,7 +86,7 @@ const streetSpots = (page: Page) =>
         ];
         const there = new Set(
           map
-            .queryRenderedFeatures(box, { layers: ["places-junction", "places-street"] })
+            .queryRenderedFeatures(box, { layers: ["places-junction-hit", "places-street"] })
             .map((g: any) => g.properties.hot),
         );
         if (there.size !== 1 || !there.has(hot)) continue;
@@ -631,8 +634,8 @@ async function openProgrammeStreet(page: Page, minM: number) {
 }
 
 /** Adds a 6 m parking-lane use (a patio) to the right curbside strip. With `spacerM`, a tree of that length goes
- *  first, so the patio starts away from the street's end: a use there lies under the junction's disc (the layers
- *  are below `places-junction`, as the street's own line is), so a press on it opens the junction, not the street. */
+ *  first, so the patio starts away from the street's end: a use there lies on the junction's ground (its press
+ *  target, `places-junction-hit`, comes first), so a press on it opens the junction, not the street. */
 async function addPatio(page: Page, spacerM = 0) {
   const cells = page.locator("#curb-strip-right").locator('[role="option"]');
   let count = 1;
@@ -931,7 +934,7 @@ const curbsideSpot = (page: Page) =>
             [p.x - 6, p.y - 6],
             [p.x + 6, p.y + 6],
           ],
-          { layers: ["places-junction", "places-street", "stops-dot", "stops-platform", "curbside-fill"] },
+          { layers: ["places-junction-hit", "places-street", "stops-dot", "stops-platform", "curbside-fill"] },
         );
         if (
           there.every((g: any) => g.properties.hot === f.properties.hot) &&
