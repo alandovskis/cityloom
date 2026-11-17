@@ -1,4 +1,5 @@
-//! The city's places as GeoJSON for the map: each street along its real centreline, each junction a point.
+//! The city's places as GeoJSON for the map: each street along its real centreline, each junction a point
+//! (with `radius_m`), and where streets meet a disc that rounds them (a point with `joint_m`).
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,7 +32,8 @@ fn position(p: &Projection, x_mm: i32, y_mm: i32) -> [f64; 2] {
     [r6(lon), r6(lat)]
 }
 
-/// The streets and junctions of the city as a GeoJSON feature collection. A street in `conflicts` (by uid) has what
+/// The streets and junctions of the city as a GeoJSON feature collection: each street a line, each junction a point
+/// with `radius_m`, and each joint (`joints`) a point with `joint_m` and the `hot` of the place it is drawn as. A street in `conflicts` (by uid) has what
 /// the rule of an area it is inside does not allow.
 pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String {
     let mut features: Vec<Value> = Vec::with_capacity(v.edges.len() + v.nodes.len());

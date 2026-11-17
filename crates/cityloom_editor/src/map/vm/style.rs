@@ -27,6 +27,10 @@ const MUTED: f64 = 0.35;
 /// How big a junction's marker is drawn, in pixels, at every zoom: the streets meeting there show its ground, the
 /// marker only where to press. Its press target is the junction's ground, never less than 24 pixels across.
 const JUNCTION_MARK_PX: f64 = 5.0;
+/// How narrow a street's fill is ever drawn, in pixels, however far out the map is zoomed.
+const STREET_MIN_PX: f64 = 2.5;
+/// How much wider than its fill a street's white casing is drawn, in pixels, and so how narrow it ever is.
+const CASING_PX: f64 = 3.0;
 /// A street that has what the rule of an area it is inside does not allow. `web/app.css`'s `.dot-conflict`
 /// repeats it.
 pub const CONFLICT: &str = "#db2777";
@@ -105,7 +109,7 @@ pub fn layers(lat: f64) -> String {
             "id": "places-casing", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": edge(), "line-opacity": opacity(0.9), "line-width": metres("width_m", lat, 3.0, 3.0) }
+            "paint": { "line-color": edge(), "line-opacity": opacity(0.9), "line-width": metres("width_m", lat, CASING_PX, CASING_PX) }
         },
         // A street's end, rounded (`overlay::joints`): the casing's disc under every street's line, so streets meeting
         // share one outline round the ground they cover, and the disc of the street's colour over the lines. Not drawn
@@ -113,18 +117,18 @@ pub fn layers(lat: f64) -> String {
         {
             "id": "places-joint-casing", "type": "circle", "source": SOURCE,
             "filter": ["has", "joint_m"],
-            "paint": { "circle-color": edge(), "circle-opacity": only_editable(0.9), "circle-radius": metres("joint_m", lat, 1.5, 1.5) }
+            "paint": { "circle-color": edge(), "circle-opacity": only_editable(0.9), "circle-radius": metres("joint_m", lat, CASING_PX / 2.0, CASING_PX / 2.0) }
         },
         {
             "id": "places-street", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": colour(), "line-opacity": opacity(1.0), "line-width": metres("width_m", lat, 2.5, 0.0) }
+            "paint": { "line-color": colour(), "line-opacity": opacity(1.0), "line-width": metres("width_m", lat, STREET_MIN_PX, 0.0) }
         },
         {
             "id": "places-joint", "type": "circle", "source": SOURCE,
             "filter": ["has", "joint_m"],
-            "paint": { "circle-color": colour(), "circle-opacity": only_editable(1.0), "circle-radius": metres("joint_m", lat, 1.25, 0.0) }
+            "paint": { "circle-color": colour(), "circle-opacity": only_editable(1.0), "circle-radius": metres("joint_m", lat, STREET_MIN_PX / 2.0, 0.0) }
         },
         {
             "id": "places-pedestrian", "type": "line", "source": SOURCE,
@@ -459,8 +463,10 @@ mod tests {
             assert!(l["paint"]["circle-stroke-width"].is_null(), "an outline over the streets would cross them: {}", l["id"]);
         }
         // half as wide as the street's lines, in metres with half their floors
-        assert_eq!(joint["paint"]["circle-radius"], metres("joint_m", 45.5, 1.25, 0.0));
-        assert_eq!(joint_casing["paint"]["circle-radius"], metres("joint_m", 45.5, 1.5, 1.5));
+        assert_eq!(joint["paint"]["circle-radius"], metres("joint_m", 45.5, STREET_MIN_PX / 2.0, 0.0));
+        assert_eq!(street["paint"]["line-width"], metres("width_m", 45.5, STREET_MIN_PX, 0.0));
+        assert_eq!(joint_casing["paint"]["circle-radius"], metres("joint_m", 45.5, CASING_PX / 2.0, CASING_PX / 2.0));
+        assert_eq!(casing["paint"]["line-width"], metres("width_m", 45.5, CASING_PX, CASING_PX));
         assert_eq!(joint["paint"]["circle-color"], street["paint"]["line-color"]);
         assert_eq!(joint_casing["paint"]["circle-color"], casing["paint"]["line-color"]);
         // as opaque as the street where it is editable; not drawn where it is muted, since a translucent disc over the

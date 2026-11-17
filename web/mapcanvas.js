@@ -130,7 +130,7 @@ export async function createMapCanvas(container) {
   const showPlaces = () => {
     if (!styled || !places) return;
     const data = JSON.parse(places.data);
-    idsOf.places = data.features.map((f) => f.properties.hot);
+    idsOf.places = [...new Set(data.features.map((f) => f.properties.hot))]; // a street is also each of its joints
     const source = map.getSource("places");
     if (source) {
       source.setData(data);
