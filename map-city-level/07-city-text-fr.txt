@@ -1,0 +1,48 @@
+Est-ce que ça fonctionne?
+
+1 lieu est à corriger. Ouvrez-le pour voir ce qui ne va pas et le corriger.
+
+Rue Saint-Dominique, à travers la ville
+Respecte la largeur de la rue
+Objectifs guidés
+Objectif d’aménagement
+Aucun objectif
+Réduire la circulation de transit
+Améliorer un parcours scolaire
+Prioriser les autobus
+
+Un objectif ne fait que signaler des vérifications et des mesures. Il ne modifie jamais l’aménagement.
+
+Vérifications du réseau
+
+Les vérifications du réseau ont trouvé 14 constats dans l’ensemble des rues et des jonctions.
+
+Liens cyclables
+8 constats
+Accès aux rues piétonnes
+1 constat
+Passages pour piétons
+aucun constat
+Nombre de voies
+aucun constat
+Axes de transport en commun
+aucun constat
+Parcours piétons
+5 constats
+Votre travail
+Règles de zone
+Aucune pour l’instant
+Rues sélectionnées
+Aucune pour l’instant
+Modifications
+Un lieu
+
+Appuyez sur un lieu pour le voir ici; appuyez de nouveau, ou sur Ouvrir, pour le modifier. Pour changer plusieurs rues à la fois, appuyez sur chacune et choisissez Ajouter à la sélection, ou appuyez dessus en tenant Maj.
+
+Légende de la carte
+Fonctionne
+Modifié
+À corriger
+En conflit avec une règle de zone
+
+Les rues proviennent d’OpenStreetMap. Tous les seuils qu’utilisent les vérifications sont des exemples pour l’instant, pas de vraies règles.

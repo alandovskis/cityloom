@@ -1,0 +1,46 @@
+Does it work?
+
+Every check passes in all 168 places.
+
+Guided goals
+Planning goal
+No goal
+Reduce through traffic
+Improve a school route
+Prioritize buses
+
+A goal only points out checks and measures. It never changes the design.
+
+Network checks
+
+The network checks found 14 findings across the streets and junctions.
+
+Cycling links
+8 findings
+Pedestrian street access
+1 finding
+Crossings
+no findings
+Lane counts
+no findings
+Transit corridors
+no findings
+Walking routes
+5 findings
+Your work
+Area rules
+None yet
+Selected streets
+None yet
+Changes
+None yet
+
+Press a place to see it here; press it again, or Open, to edit it. To change several streets at once, press each and choose Add to the selection, or Shift-press them.
+
+Key to the map
+Works
+Changed
+Needs attention
+Conflicts with an area rule
+
+The streets are from OpenStreetMap. Every threshold the checks use is a sample for now, not a real rule.
