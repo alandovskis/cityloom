@@ -645,7 +645,6 @@ fn bus_panel(w: Watch) -> AnyView {
         <section class="insp-sec">
             {hint(Signal::derive(move || bus_note(w).unwrap_or_default()))}
         </section>
-        {control_section(w)}
         {danger_button(w, "jn-insp-bus-remove", move || {
             w.edit(|j| j.set_bus(None));
         })}
@@ -657,7 +656,6 @@ fn cycle_panel(w: Watch) -> AnyView {
     view! {
         {head(words(w, "jn-insp-cycle"), words(w, "jn-insp-cycle-sub"))}
         {cycle_width(w, "jn-insp-track-hint-crossing")}
-        {control_section(w)}
         {danger_button(w, "jn-insp-cycle-remove", move || {
             w.edit(|j| j.set_cycle_track(false));
         })}
@@ -665,13 +663,130 @@ fn cycle_panel(w: Watch) -> AnyView {
     .into_any()
 }
 
+/// The junction level: its name and what it is, its control, its streets to go to, and the signal plan.
 fn junction_panel(w: Watch) -> AnyView {
+    let name = move || w.say(&w.view().name);
+    let sub = move || {
+        let v = w.view();
+        let control = CONTROLS.get(v.control_index).map(|c| w.tr(c.key)).unwrap_or_default();
+        tr(w, "jn-insp-junction-sub", Args::new().num("streets", v.arms.len() as i64).str("control", control))
+    };
+    let streets = move || {
+        w.view()
+            .arms
+            .iter()
+            .map(|a| {
+                let uid = a.uid;
+                let compass = w.tr(compass_key(a.bearing));
+                let street = w.say(&a.street);
+                view! {
+                    <li>
+                        <button type="button" class="btn jn-go" id=format!("jn-go-{uid}") on:click=move |_| { w.select(Target::Arm(uid)); focus_current(); }>
+                            <b>{compass}</b>" "<span>{street}</span>
+                        </button>
+                    </li>
+                }
+            })
+            .collect_view()
+    };
     view! {
-        <p class="insp-empty">{words(w, "jn-insp-empty")}</p>
+        {head(name, sub)}
         {control_section(w)}
-        {signal_overview(w)}
+        {section(w, "i-h-streets", "jn-insp-streets", view! { <ul class="jn-goes">{streets}</ul> })}
+        {signal_summary(w)}
+        <p class="insp-empty jn-tip">{words(w, "jn-insp-empty")}</p>
     }
     .into_any()
+}
+
+/// The signal at the junction level: its cycle as one bar of each phase's green, yellow and all-red (seen only: the
+/// line under it says it), and the way into the plan, a level of its own.
+fn signal_summary(w: Watch) -> impl IntoView {
+    move || {
+        let v = w.view();
+        let s = v.signal.as_ref()?;
+        let segments = s
+            .phases
+            .iter()
+            .map(|p| {
+                let t = p.timing;
+                view! {
+                    <span class="g" style=format!("flex-grow: {}", t.transit_lead_s + t.green_s)></span>
+                    <span class="a" style=format!("flex-grow: {}", t.yellow_s)></span>
+                    <span class="r" style=format!("flex-grow: {}", t.all_red_s)></span>
+                }
+            })
+            .collect_view();
+        let line = tr(w, "jn-sig-summary", Args::new().num("seconds", i64::from(s.cycle_s)).num("phases", s.phases.len() as i64));
+        Some(section(
+            w,
+            "i-h-signal",
+            "jn-insp-signal",
+            view! {
+                <div class="jn-cycle-bar" aria-hidden="true">{segments}</div>
+                <p class="insp-range">{line}</p>
+                <button type="button" class="btn jn-go" id="jn-go-plan" on:click=move |_| { w.show_plan(); focus_current(); }>
+                    {words(w, "jn-path-plan")}
+                </button>
+            },
+        ))
+    }
+}
+
+/// The id of the path's current step, which takes the focus after a step is pressed.
+const PATH_CURRENT: &str = "jn-path-current";
+
+/// Moves the focus to the path's current step once the panel is drawn again: from there Tab enters the level.
+fn focus_current() {
+    #[cfg(target_arch = "wasm32")]
+    request_animation_frame(|| {
+        use leptos::wasm_bindgen::JsCast;
+        if let Some(step) = document().get_element_by_id(PATH_CURRENT).and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+            let _ = step.focus();
+        }
+    });
+}
+
+/// The path from the junction to what is chosen: Junction › a street › its crossing or one of its lanes, or Junction ›
+/// a corner, the bus lane or the cycle track. Each step before the last is a button to that level.
+fn path(w: Watch, kind: Option<&'static str>, uid: u32, lane: usize) -> AnyView {
+    let street = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
+    let mut steps: Vec<(Box<dyn Fn() -> String + Send + Sync>, Option<Target>)> = vec![(Box::new(move || w.tr("jn-path-junction")), Some(Target::None))];
+    match kind {
+        Some("arm") => steps.push((Box::new(street), None)),
+        Some("crossing") => {
+            steps.push((Box::new(street), Some(Target::Arm(uid))));
+            steps.push((Box::new(move || w.tr("jn-insp-crossing")), None));
+        }
+        Some("lane") => {
+            steps.push((Box::new(street), Some(Target::Arm(uid))));
+            steps.push((Box::new(move || tr(w, "jn-path-lane", Args::new().num("n", lane as i64 + 1))), None));
+        }
+        Some("corner") => steps.push((Box::new(move || w.tr("jn-insp-corner")), None)),
+        Some("bus") => steps.push((Box::new(move || w.tr("jn-insp-bus")), None)),
+        Some("cycle") => steps.push((Box::new(move || w.tr("jn-insp-cycle")), None)),
+        Some("plan") => steps.push((Box::new(move || w.tr("jn-path-plan")), None)),
+        _ => {}
+    }
+    let last = steps.len() - 1;
+    let items = steps
+        .into_iter()
+        .enumerate()
+        .map(|(i, (text, to))| {
+            if i == last {
+                view! { <li><span id=PATH_CURRENT class="path-here" aria-current="location" tabindex="-1">{text}</span></li> }.into_any()
+            } else {
+                let to = to.unwrap_or(Target::None);
+                view! {
+                    <li>
+                        <button type="button" class="path-step" id=format!("jn-path-up-{i}") on:click=move |_| { w.select(to); focus_current(); }>{text}</button>
+                    </li>
+                }
+                .into_any()
+            }
+        })
+        .collect_view();
+    view! { <nav aria-label=move || w.tr("jn-path-label") class="panel-path"><ol>{items}</ol></nav> }.into_any()
 }
 
 /// The short tag of the way an arm leaves, or nothing when there is no such arm.
@@ -712,7 +827,6 @@ fn corner_panel(w: Watch, uid: u32) -> AnyView {
         )}
         <p class="insp-empty">{words(w, "jn-insp-corner-note")}</p>
         {protected_section(w, uid)}
-        {control_section(w)}
     }
     .into_any()
 }
@@ -832,7 +946,6 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
         <section class="insp-sec">
             <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button>
         </section>
-        {control_section(w)}
     }
     .into_any()
 }
@@ -945,6 +1058,30 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
             },
         )}
         {section(w, "i-h-bulb", "jn-insp-shorten", view! { <ul class="opts">{bulb(0)}{bulb(1)}</ul> })}
+    }
+}
+
+/// A street's crossing, from the street's level: a button to the crossing's own level with how far it is to cross; a
+/// street with none, or one people walk along, says so as before (marking one is a street's command).
+fn crossing_entry(w: Watch, uid: u32) -> impl IntoView {
+    let has = Memo::new(move |_| w.arm(uid, |a| a.crossing.is_some() && !a.pedestrian).unwrap_or(false));
+    let range = move || w.arm(uid, |a| a.crossing.as_ref().map(|c| crossing_range(c, &w.i18n(), w.units()))).flatten().unwrap_or_default();
+    move || {
+        if has.get() {
+            section(
+                w,
+                "i-h-cross",
+                "jn-insp-crossing",
+                view! {
+                    <button type="button" class="btn jn-go" id="i-cross-go" on:click=move |_| { w.select(Target::Crossing(uid)); focus_current(); }>
+                        <span>{range}</span>
+                    </button>
+                },
+            )
+            .into_any()
+        } else {
+            crossing_section(w, uid).into_any()
+        }
     }
 }
 
@@ -1543,6 +1680,54 @@ fn signal_overview(w: Watch) -> impl IntoView {
     }
 }
 
+/// A part of a street's level that is rarely set, folded: its name and, beside it, what is set, so a measure in place is
+/// never out of sight.
+fn fold(w: Watch, id: &'static str, heading: &'static str, set: impl Fn() -> String + Send + Sync + 'static, body: impl IntoView + 'static) -> impl IntoView {
+    view! {
+        <details class="jn-fold" id=id>
+            <summary><span class="jn-fold-name">{words(w, heading)}</span><span class="jn-fold-set">{set}</span></summary>
+            {body}
+        </details>
+    }
+}
+
+/// What a street has of the transit measures, as the fold says it: the bus lane, then the Atlas codes, or "None set".
+fn transit_set(w: Watch, uid: u32) -> String {
+    use crate::shared::said::{Arg, Said};
+    let Some(items) = w.arm(uid, |a| {
+        let t = &a.transit;
+        let mut items: Vec<Said> = Vec::new();
+        if t.bus_lane {
+            items.push(Said::new("jn-fold-bus-lane"));
+        }
+        for code in [APPROACHES[t.approach].code, STOPS[t.stop].code, RULES[t.rule].code] {
+            if !code.is_empty() {
+                items.push(Said::new("city-name").with("name", Arg::Text(code.to_string())));
+            }
+        }
+        if t.filter {
+            items.push(Said::new("city-name").with("name", Arg::Text(FILTER_CODE.to_string())));
+        }
+        items
+    }) else {
+        return String::new();
+    };
+    match items.into_iter().reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail)))) {
+        Some(list) => w.say(&list),
+        None => w.tr("jn-fold-none"),
+    }
+}
+
+/// Where a street points and how far it is shifted, as the fold says it: "90°, not shifted".
+fn position_set(w: Watch, uid: u32) -> String {
+    w.arm(uid, |a| {
+        let shift =
+            if a.offset_mm == 0 { w.tr("jn-fold-not-shifted") } else { tr(w, "jn-fold-shifted", Args::new().str("length", length(w, a.offset_mm.abs()))) };
+        tr(w, "jn-fold-position-set", Args::new().num("degrees", a.bearing as i64).str("shift", shift))
+    })
+    .unwrap_or_default()
+}
+
 fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let name = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
     let sub = move || {
@@ -1553,7 +1738,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         .unwrap_or_default()
     };
     if crossing_only {
-        return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
+        return view! { {head(name, sub)} {crossing_section(w, uid)} }.into_any();
     }
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
     let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
@@ -1613,23 +1798,31 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
                 view! { <p class="insp-range">{words(w, "jn-insp-one-way-out")}</p> }.into_any()
             }}
         </section>
-        {crossing_section(w, uid)}
-        {move || (!walk.get()).then(|| view! { {transit_section(w, uid)} {signal_section(w, uid)} })}
+        {crossing_entry(w, uid)}
+        {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
-        {num_field(
+        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), transit_section(w, uid)))}
+        {fold(
             w,
-            direction,
-            move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
-            move |v| set_bearing_degrees(w, uid, v),
-        )}
-        {num_field(
-            w,
-            offset,
-            move |dir| { w.edit(|j| j.step_offset(uid, dir)); },
-            move |v| { w.edit(|j| j.set_offset(uid, w.units_now().mm(v))); },
+            "jn-fold-position",
+            "jn-fold-position",
+            move || position_set(w, uid),
+            view! {
+                {num_field(
+                    w,
+                    direction,
+                    move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
+                    move |v| set_bearing_degrees(w, uid, v),
+                )}
+                {num_field(
+                    w,
+                    offset,
+                    move |dir| { w.edit(|j| j.step_offset(uid, dir)); },
+                    move |v| { w.edit(|j| j.set_offset(uid, w.units_now().mm(v))); },
+                )}
+            },
         )}
         {street}
-        {control_section(w)}
         {remove}
     }
     .into_any()
@@ -1646,7 +1839,18 @@ pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
         let s = &w.view().selected;
         (s.kind, s.uid, s.lane)
     });
-    move || match selected.get() {
+    let plan = Memo::new(move |_| w.plan_shown());
+    move || {
+        if plan.get() {
+            return view! { {path(w, Some("plan"), 0, 0)} {signal_overview(w)} }.into_any();
+        }
+        let (kind, uid, lane) = selected.get();
+        view! { {path(w, kind, uid, lane)} {panel_of(w, kind, uid, lane)} }.into_any()
+    }
+}
+
+fn panel_of(w: Watch, kind: Option<&'static str>, uid: u32, lane: usize) -> AnyView {
+    match (kind, uid, lane) {
         (Some("bus"), ..) => bus_panel(w),
         (Some("cycle"), ..) => cycle_panel(w),
         (Some("lane"), uid, lane) => lane_panel(w, uid, lane),

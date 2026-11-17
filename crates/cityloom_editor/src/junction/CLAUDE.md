@@ -2,6 +2,14 @@
 
 Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
 
+## The details panel (`junction/view/inspector.rs`, `#inspector`)
+
+- One level at a time under a path (`path`, a `nav.panel-path`, `jn-path-label`, the street page's styles): Junction; Junction › a street; Junction › a street › Crossing or Lane n; Junction › Corner, Bus lane or Cycle track. Steps before the last are `.path-step` buttons (`jn-path-up-<i>`) that choose the parent (`Target::None`, `Target::Arm`); the last is `#jn-path-current` (`aria-current="location"`, `tabindex=-1`), which takes the focus after a step or a "go to" button is pressed.
+- The Junction level (nothing chosen): the junction's name and `jn-insp-junction-sub` ("4 streets · Traffic signal"), its control (`control_section`, only here: the parts' levels no longer repeat it), its streets as `.btn.jn-go` buttons (`jn-go-<uid>`, compass and name), the signal as one bar of its cycle (`signal_summary`, `.jn-cycle-bar`, each phase's green, yellow and all-red to scale, `aria-hidden`: `jn-sig-summary` "Cycle of 60 s · 2 phases" says it) and `#jn-go-plan`, then the tip `jn-insp-empty`.
+- The signal plan is a level of its own, Junction › Signal plan (`jn-path-plan`): `JunctionVm::show_plan` chooses nothing and sets `plan`; `plan_shown` is that flag while nothing is chosen and there is a signal; `select` and `select_relative` clear it, so choosing a part (by pointer or arrow key) or the path's Junction step leaves the plan, and a reload does not keep it. The plan's content (`signal_overview`) is unchanged.
+- A street's level folds what is rarely set (`fold`, `details.jn-fold`, closed, its name and beside it what is set): Transit priority (`#jn-fold-transit`, `transit_set`: "Bus lane, G2" with `jn-list-comma`, or `jn-fold-none` "None set") and Position (`#jn-fold-position`, `position_set`: "90°, not shifted" / "shifted 0.1 m"; the direction and shift fields). Its signal timing stays in view (it is what a signalised street is set for).
+- A street's level shows its crossing as one row, `#i-cross-go` ("7.6 m to cross ›", choosing `Target::Crossing`); the crossing's settings are the Crossing level's. A street with no crossing, or a pedestrian one, keeps the old row (mark one, or the note).
+
 ## Turbo layouts (`turbo.rs`, `turbo_spiral.rs`, `turbo_ring.rs`)
 
 - Basic, egg, knee, spiral, rotor, in the four Dutch blocks. Figures are placeholders from secondary sources on CROW 2008; unverified ones are marked in doc comments.

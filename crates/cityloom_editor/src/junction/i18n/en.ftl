@@ -312,6 +312,15 @@ jn-stuck-text = The streets that meet here have been changed so that they no lon
 
 ## The panel beside the plan: what is selected and the controls to change it (src/junction/view/inspector.rs)
 jn-insp-empty = Select a street, corner or crossing to change it.
+jn-path-label = What the details are of
+jn-path-junction = Junction
+jn-path-lane = Lane { $n }
+jn-insp-junction-sub =
+    { $streets ->
+        [one] 1 street
+       *[other] { $streets } streets
+    } · { $control }
+jn-insp-streets = Streets
 jn-insp-control = Junction control
 jn-insp-ring-size = Size of the roundabout
 # The tag after the roundabout's size: "m across".
@@ -431,6 +440,12 @@ jn-insp-arm-sub = { $compass }, { $degrees }° · { $width } road
 jn-insp-direction = Direction
 jn-insp-direction-hint = Clockwise from north. At least { $degrees }° from its neighbours.
 jn-insp-shift = Shift sideways
+jn-fold-none = None set
+jn-fold-bus-lane = Bus lane
+jn-fold-position = Position
+jn-fold-position-set = { $degrees }°, { $shift }
+jn-fold-not-shifted = not shifted
+jn-fold-shifted = shifted { $length }
 jn-insp-shift-hint = Up to { $length } either way. Looking out from the junction.
 jn-insp-street = Street
 jn-insp-cross-section = Open the cross-section
@@ -475,6 +490,12 @@ jn-check-signal-cycle-bad = The cycle is { $seconds } s, over the { $max } s a s
 
 jn-insp-signal = Signal timing
 jn-sig-cycle = Cycle: { $seconds } s
+jn-path-plan = Signal plan
+jn-sig-summary =
+    Cycle of { $seconds } s · { $phases ->
+        [one] 1 phase
+       *[other] { $phases } phases
+    }
 jn-sig-row = { $street }: green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-sig-row-lead = { $street }: early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-sig-walks = Also walks: crossings on { $arms }.

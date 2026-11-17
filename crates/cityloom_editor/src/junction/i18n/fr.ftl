@@ -312,6 +312,15 @@ jn-stuck-text = Les rues qui se rencontrent ici ont été modifiées de sorte qu
 
 ## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/view/inspector.rs)
 jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
+jn-path-label = Ce que montrent les détails
+jn-path-junction = Jonction
+jn-path-lane = Voie { $n }
+jn-insp-junction-sub =
+    { $streets ->
+        [one] 1 rue
+       *[other] { $streets } rues
+    } · { $control }
+jn-insp-streets = Rues
 jn-insp-control = Signalisation de la jonction
 jn-insp-ring-size = Taille du carrefour giratoire
 # L’étiquette après la taille du carrefour giratoire : « m de diamètre ».
@@ -431,6 +440,12 @@ jn-insp-arm-sub = { $compass }, { $degrees }° · chaussée de { $width }
 jn-insp-direction = Orientation
 jn-insp-direction-hint = Dans le sens horaire à partir du nord. Au moins { $degrees }° de ses voisines.
 jn-insp-shift = Décalage latéral
+jn-fold-none = Aucune
+jn-fold-bus-lane = Voie réservée
+jn-fold-position = Position
+jn-fold-position-set = { $degrees }°, { $shift }
+jn-fold-not-shifted = sans décalage
+jn-fold-shifted = décalée de { $length }
 jn-insp-shift-hint = Jusqu’à { $length } d’un côté ou de l’autre. Vu depuis la jonction.
 jn-insp-street = Rue
 jn-insp-cross-section = Ouvrir la coupe transversale
@@ -475,6 +490,12 @@ jn-check-signal-cycle-bad = Le cycle dure { $seconds } s, au-delà des { $max } 
 
 jn-insp-signal = Réglage des feux
 jn-sig-cycle = Cycle : { $seconds } s
+jn-path-plan = Plan des feux
+jn-sig-summary =
+    Cycle de { $seconds } s · { $phases ->
+        [one] 1 phase
+       *[other] { $phases } phases
+    }
 jn-sig-row = { $street } : vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-sig-row-lead = { $street } : avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-sig-walks = Les traverses de { $arms } sont aussi ouvertes.

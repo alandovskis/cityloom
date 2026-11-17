@@ -300,6 +300,139 @@ fn a_selected_street_offers_a_control_for_each_junction_measure_of_the_atlas() {
     }
 }
 
+// ---- the panel one level at a time, under a path ------------------------------------------
+
+/// The path above the panel: each step's text, and whether it is the current one.
+fn path_steps(h: &str) -> Vec<(String, bool)> {
+    let nav = &h[h.find("<nav").expect("a path")..];
+    let nav = &nav[..nav.find("</nav>").unwrap()];
+    nav.split("<li")
+        .skip(1)
+        .map(|li| {
+            let current = li.contains("aria-current=\"location\"");
+            let text: String = {
+                let mut out = String::new();
+                let mut inside = false;
+                for ch in li.chars() {
+                    match ch {
+                        '<' => inside = true,
+                        '>' => inside = false,
+                        c if !inside => out.push(c),
+                        _ => {}
+                    }
+                }
+                out.trim().to_string()
+            };
+            (text, current)
+        })
+        .collect()
+}
+
+#[test]
+fn the_panel_is_under_a_path_from_the_junction_to_what_is_chosen() {
+    let s = shared(0);
+    let h = panel(&s);
+    assert!(h.contains(r#"<nav aria-label="What the details are of""#), "{h}");
+    assert_eq!(path_steps(&h), vec![("Junction".to_string(), true)]);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = panel(&s);
+    let steps = path_steps(&h);
+    assert_eq!(steps.len(), 2, "{steps:?}");
+    assert!(!steps[0].1 && steps[1].1, "{steps:?}");
+    assert!(h.contains(r#"id="jn-path-up-0""#), "the junction's step is a button: {h}");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    let steps = path_steps(&panel(&s));
+    assert_eq!(steps.len(), 3, "{steps:?}");
+    assert_eq!(steps[2], ("Crossing".to_string(), true));
+    s.edit(|j| j.select(Target::Corner(n)));
+    let steps = path_steps(&panel(&s));
+    assert_eq!(steps, vec![("Junction".to_string(), false), ("Corner".to_string(), true)]);
+}
+
+#[test]
+fn the_junction_s_control_is_the_junction_level_s_and_a_street_leads_to_its_crossing() {
+    let s = shared(0);
+    let n = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = panel(&s);
+    assert!(!h.contains("Junction control"), "the control is one step up the path: {h}");
+    assert!(!h.contains(r#"id="i-h-setback""#), "the crossing's settings are its own level: {h}");
+    assert!(h.contains(r#"id="i-cross-go""#) && h.contains("11.4 m to cross"), "{h}");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    let h = panel(&s);
+    assert!(h.contains(r#"id="i-h-setback""#) && !h.contains("Junction control"), "{h}");
+}
+
+#[test]
+fn the_junction_level_opens_on_a_summary_and_lists_its_streets_to_go_to() {
+    let s = shared(0);
+    let h = panel(&s);
+    let streets = s.view_now().arms.len();
+    assert!(h.contains(&format!(" streets · ")) && h.contains("<h2 class=\"insp-name\">"), "{h}");
+    assert_eq!(h.matches("id=\"jn-go-").count() - h.matches("id=\"jn-go-plan\"").count(), streets, "{h}");
+    for a in s.view_now().arms.iter() {
+        assert!(h.contains(&format!("id=\"jn-go-{}\"", a.uid)), "{h}");
+    }
+}
+
+#[test]
+fn a_street_folds_its_transit_priority_and_position_and_says_on_each_what_is_set() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s).replace('\u{a0}', " ");
+    let folds: Vec<&str> = h.split("<details").skip(1).map(|d| &d[..d.find('>').unwrap()]).filter(|d| d.contains("jn-fold")).collect();
+    assert_eq!(folds.len(), 2, "two folds: {h}");
+    assert!(folds.iter().all(|d| !d.contains(" open")), "closed at first: {folds:?}");
+    let fold = |h: &str, id: &str| {
+        let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+        let summary = &h[at..];
+        summary[summary.find("<summary>").unwrap()..summary.find("</summary>").unwrap()].to_string()
+    };
+    let transit = fold(&h, "jn-fold-transit");
+    assert!(transit.contains("Transit priority") && transit.contains("None set"), "{transit}");
+    let position = fold(&h, "jn-fold-position");
+    assert!(position.contains("Position") && position.contains("90°, not shifted"), "{position}");
+    // inside the folds: what was there before, unchanged
+    assert!(h.contains("Bus lane along the way in") && h.contains(r#"id="i-h-bearing""#), "{h}");
+    s.edit(|j| j.set_bus_lane(e, true));
+    s.edit(|j| j.set_approach(e, Q_CURB));
+    s.edit(|j| j.step_offset(e, 1));
+    let h = panel(&s).replace('\u{a0}', " ");
+    assert!(fold(&h, "jn-fold-transit").contains("Bus lane, G2"), "{h}");
+    assert!(fold(&h, "jn-fold-position").contains("90°, shifted 0.1 m"), "{h}");
+}
+
+#[test]
+fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar() {
+    use crate::junction::model::SIGNAL;
+    let s = shared(0);
+    s.edit(|j| j.set_control(SIGNAL));
+    let h = panel(&s);
+    assert!(h.contains(r#"id="jn-go-plan""#) && !h.contains(r#"id="sig-remove-0""#), "the plan is a step in: {h}");
+    let bar = &h[h.find("jn-cycle-bar").expect("the cycle as a bar")..];
+    assert!(h[..h.find("jn-cycle-bar").unwrap()].rfind("aria-hidden=\"true\"").is_some(), "the line under it says it");
+    let phases = s.view_now().signal.as_ref().unwrap().phases.len();
+    assert_eq!(bar[..bar.find("</div>").unwrap()].matches("class=\"g\"").count(), phases, "{bar}");
+    s.show_plan();
+    let h = panel(&s);
+    assert_eq!(path_steps(&h), vec![("Junction".to_string(), false), ("Signal plan".to_string(), true)]);
+    assert!(h.contains(r#"id="sig-remove-0""#) && !h.contains("Junction control"), "{h}");
+    // choosing anything leaves the plan; so does the path's first step
+    s.select(Target::None);
+    assert!(!panel(&s).contains(r#"id="sig-remove-0""#));
+    s.show_plan();
+    s.select(Target::Arm(arm(&s, 90)));
+    s.select(Target::None);
+    assert!(!panel(&s).contains(r#"id="sig-remove-0""#));
+    // so does a part chosen with the arrow keys, though an edit then leaves nothing chosen (an arm removed)
+    s.show_plan();
+    s.select_relative(1);
+    s.edit(|j| j.select(Target::None));
+    assert!(!panel(&s).contains(r#"id="sig-remove-0""#), "the junction's level, not the plan's");
+}
+
 #[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
@@ -497,7 +630,7 @@ fn the_raised_table_switch_is_worded_in_french_too() {
 fn a_continuous_sidewalk_says_why_its_street_has_no_island_switch() {
     let s = shared(0);
     let e = arm(&s, 90);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     assert!(panel(&s).contains("Refuge island in the middle"));
     s.edit(|j| j.set_continuous(e, true));
     let h = panel(&s);
@@ -557,7 +690,7 @@ fn a_roundabout_says_it_has_no_bike_box() {
 fn a_street_with_a_crossing_offers_a_continuous_sidewalk_and_one_without_does_not() {
     let s = shared(0);
     let e = arm(&s, 90);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     let h = panel(&s);
     assert!(h.contains("Continuous sidewalk") && h.contains("Sidewalk runs on across the street"));
     s.edit(|j| j.set_crossing(e, false));
@@ -570,7 +703,8 @@ fn a_street_s_panel_has_its_lanes_crossing_transit_direction_and_street() {
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
-    for want in ["Sample Street 1", "Lanes coming in", "Set back from the junction", "Transit priority", "Direction", "Shift sideways", "Remove this street"] {
+    // its crossing is a step further in: "11.4 m to cross", a button to the crossing's level
+    for want in ["Sample Street 1", "Lanes coming in", "11.4 m to cross", "Transit priority", "Direction", "Shift sideways", "Remove this street"] {
         assert!(h.contains(want), "{want}");
     }
     assert!(h.contains("E, 90° · 11.4 m road"));
@@ -1759,22 +1893,19 @@ fn the_panel_of_a_walkway_arm_says_there_is_no_roadway_to_cross_and_offers_no_cr
     assert!(h.contains("A pedestrian street has no roadway to cross."), "{h}");
     assert!(!h.contains("Mark a crossing") && !h.contains("Remove the crossing"));
     let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
+    s.edit(|j| j.select(Target::Crossing(e)));
     let h = panel(&s);
     assert!(h.contains("Remove the crossing") && !h.contains("A pedestrian street has no roadway to cross."));
 }
 
 #[test]
 fn with_one_street_carrying_traffic_the_control_choice_is_replaced_by_a_note() {
+    // the control is the junction level's: nothing chosen
     let s = walkway_shared(&[90, 180, 270]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("Only one street here carries traffic."), "{h}");
     assert!(!h.contains("aria-labelledby=\"i-h-control\""), "no control to choose");
     let s = walkway_shared(&[90]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("aria-labelledby=\"i-h-control\"") && !h.contains("Only one street here carries traffic."));
 }
@@ -1797,8 +1928,6 @@ fn the_panel_of_a_walkway_arm_has_no_transit_signal_or_lane_sections_and_says_it
 #[test]
 fn the_control_note_counts_the_streets_that_carry_traffic() {
     let s = walkway_shared(&[0, 90, 180, 270]);
-    let e = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("No street here carries traffic.") && !h.contains("Only one street"), "{h}");
 }
@@ -1810,20 +1939,26 @@ fn plain_panel(s: &Rc<JunctionVm>) -> String {
     panel(s).replace(['\u{a0}', '\u{202f}'], " ")
 }
 
+/// The panel at the signal plan's level (`JunctionVm::show_plan`), where the plan's own tests look.
+fn plan_plain(s: &Rc<JunctionVm>) -> String {
+    s.show_plan();
+    plain_panel(s)
+}
+
 #[test]
 fn the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle() {
     let s = shared(0);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     assert!(h.contains("Signal timing") && h.contains("Cycle: 120 s"), "{h}");
     assert_eq!(count(&h, "class=\"signal-list\""), 1);
     assert_eq!(count(&h, "green 25 s, yellow 3 s, all-red 2 s"), 4, "a row for each street: {h}");
-    assert!(!plain_panel(&shared(1)).contains("Signal timing"), "no signal, no section");
+    assert!(!plan_plain(&shared(1)).contains("Signal timing"), "no signal, no section");
 }
 
 #[test]
 fn the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggested() {
     let s = shared(0);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     assert!(h.contains("Suggested plan"), "{h}");
     for label in ["Move the phase for", "Remove the phase for", "Add a phase for", "Restore the suggested plan"] {
         assert!(h.contains(label), "{label}: {h}");
@@ -1831,7 +1966,7 @@ fn the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggest
     assert_eq!(count(&h, "id=\"sig-remove-"), 4);
     assert!(h.contains("id=\"sig-earlier-0\"") && h.contains("id=\"sig-later-3\""));
     s.edit(|j| j.remove_phase(0));
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     assert!(h.contains("Edited plan") && !h.contains("Suggested plan"), "{h}");
     assert_eq!(count(&h, "id=\"sig-remove-"), 3);
 }
@@ -1875,7 +2010,7 @@ fn the_timing_panels_are_not_there_off_a_signal_and_speak_french() {
     plain.edit(|j| j.select(Target::Arm(a)));
     assert!(!plain_panel(&plain).contains("Signal timing"));
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     assert!(h.contains("Réglage des feux") && h.contains("Cycle : 120 s"), "{h}");
     assert_eq!(s.i18n().missing(), Vec::<String>::new());
 }
@@ -1957,17 +2092,17 @@ fn undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does()
 #[test]
 fn the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list() {
     let s = shared(0);
-    let clean = plain_panel(&s);
+    let clean = plan_plain(&s);
     assert!(!clean.contains("phase-conflicts"), "the suggested plan has no warnings");
     let north = arm(&s, 0);
     assert!(s.toggle_phase_walk(0, north));
-    let cards = phase_cards(&plain_panel(&s));
+    let cards = phase_cards(&plan_plain(&s));
     assert!(cards[0].contains("class=\"phase-conflicts\"") && cards[0].contains("aria-label=\"Warnings for phase 1\""), "{}", cards[0]);
     assert!(cards[0].contains("meet people walking across on the north side"), "{}", cards[0]);
     assert!(cards[0].find("</button>").unwrap() < cards[0].find("phase-conflicts").unwrap(), "the list is not inside the button: {}", cards[0]);
     assert!(cards[1..].iter().all(|c| !c.contains("phase-conflicts")));
     assert!(s.toggle_phase_walk(0, north));
-    assert!(!plain_panel(&s).contains("phase-conflicts"), "removing the cause removes the warning");
+    assert!(!plan_plain(&s).contains("phase-conflicts"), "removing the cause removes the warning");
 }
 
 #[test]
@@ -2003,7 +2138,7 @@ fn movement_group(h: &str, i: usize, id_part: &str) -> String {
 #[test]
 fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_street_and_phase() {
     let s = shared(0);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     let g = movement_group(&h, 0, "walks");
     assert!(g.contains("role=\"group\"") && g.contains("People walking"), "{g}");
     assert_eq!(count(&g, "type=\"checkbox\""), 4, "every street has a crossing: {g}");
@@ -2018,10 +2153,10 @@ fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_stree
     // A crossing the junction does not have is not listed.
     let n = arm(&s, 0);
     s.edit(|j| j.set_crossing(n, false));
-    assert_eq!(count(&movement_group(&plain_panel(&s), 0, "walks"), "type=\"checkbox\""), 3);
+    assert_eq!(count(&movement_group(&plan_plain(&s), 0, "walks"), "type=\"checkbox\""), 3);
     // A scramble walks every crossing there is: the boxes are shown, checked and not changeable.
     s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
-    let g = movement_group(&plain_panel(&s), 0, "walks");
+    let g = movement_group(&plan_plain(&s), 0, "walks");
     assert_eq!(count(&g, "disabled"), 3, "{g}");
     assert!(
         g.contains("This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one."),
@@ -2036,10 +2171,10 @@ fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_stree
 fn the_names_of_the_boxes_and_the_scramble_note_are_in_french_too() {
     use crate::shared::i18n::Locale;
     let s = shared_in(0, Locale::FrCa);
-    let g = movement_group(&plain_panel(&s), 0, "walks");
+    let g = movement_group(&plan_plain(&s), 0, "walks");
     assert!(g.contains("aria-label=\"Les piétons traversent ") && !g.contains("aria-label=\"Phase 1"), "{g}");
     s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
-    let g = movement_group(&plain_panel(&s), 0, "walks");
+    let g = movement_group(&plan_plain(&s), 0, "walks");
     assert!(g.contains("Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.") && g.contains("aria-describedby=\"sig-walks-0-note\""), "{g}");
 }
 
@@ -2052,7 +2187,7 @@ fn the_bikes_checklist_is_there_where_a_street_has_a_bike_lane_and_the_drawing_f
         junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]),
         None,
     );
-    let g = movement_group(&plain_panel(&s), 0, "rides");
+    let g = movement_group(&plan_plain(&s), 0, "rides");
     assert!(g.contains("Bikes") && g.contains("type=\"checkbox\""), "{g}");
     // The drawing of the phase changes when a crossing is switched.
     let before = crate::junction::view::phase_svg::phase_drawings(&s.view_now());
@@ -2066,7 +2201,7 @@ fn the_bikes_checklist_is_there_where_a_street_has_a_bike_lane_and_the_drawing_f
 #[test]
 fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit() {
     let s = shared(0);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     assert_eq!(count(&h, "role=\"radiogroup\" aria-label=\"Pattern for phase"), 4, "{h}");
     let g = pattern_group(&h, 0);
     assert_eq!(count(&g, "role=\"radio\""), 4, "{g}");
@@ -2092,7 +2227,7 @@ fn a_phase_that_matches_no_pattern_shows_custom_checked_and_not_selectable() {
     for lane in 0..s.read(|j| j.arm(n).unwrap().lanes.len()) {
         s.edit(|j| j.set_lane_dest(n, lane, so, false));
     }
-    let g = pattern_group(&plain_panel(&s), 0);
+    let g = pattern_group(&plan_plain(&s), 0);
     let custom: Vec<&str> = g.split("<li").filter(|r| r.contains("Custom")).collect();
     assert_eq!(custom.len(), 1, "{g}");
     assert!(
@@ -2114,13 +2249,13 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
     assert!(said[0].contains("Phase 1") && said[0].contains("through only"), "{said:?}");
     assert!(s.choose_pattern(0, Pattern::ThroughOnly), "it is the pattern afterwards");
     assert!(live::take_said().is_empty(), "choosing the one chosen changes nothing and says nothing");
-    assert!(plain_panel(&s).contains("Edited plan"));
+    assert!(plan_plain(&s).contains("Edited plan"));
     let f = shared_in(0, Locale::FrCa);
     live::take_said();
     assert!(f.choose_pattern(0, Pattern::Scramble));
     let said = live::take_said();
     assert!(said[0].contains("Phase 1") && said[0].contains("piétonne exclusive"), "{said:?}");
-    assert!(plain_panel(&f).contains("Modèle de la phase 1"));
+    assert!(plan_plain(&f).contains("Modèle de la phase 1"));
     // A pattern that does not fit is refused, said in both languages, and is not the pattern afterwards. Sample 0 has
     // streets to the north, east, south and west with crossings, so a scramble fits; take the crossings away and it
     // does not.
@@ -2214,10 +2349,10 @@ fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languag
 #[test]
 fn the_card_of_a_phase_follows_the_pattern_chosen() {
     let s = shared(0);
-    let before = phase_cards(&plain_panel(&s));
+    let before = phase_cards(&plan_plain(&s));
     assert!(before[0].contains("Cars go: north"));
     s.choose_pattern(0, Pattern::Scramble);
-    let after = phase_cards(&plain_panel(&s));
+    let after = phase_cards(&plan_plain(&s));
     assert!(!after[0].contains("Cars go"), "{}", after[0]);
     assert!(after[0].contains("People cross: north, east, south and west."));
     assert_ne!(after[0], before[0]);
@@ -2226,7 +2361,7 @@ fn the_card_of_a_phase_follows_the_pattern_chosen() {
 
 #[test]
 fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
-    let h = plain_panel(&shared(0));
+    let h = plan_plain(&shared(0));
     let cards = phase_cards(&h);
     assert_eq!(cards.len(), 4, "{h}");
     for (i, c) in cards.iter().enumerate() {
@@ -2249,7 +2384,7 @@ fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
         assert!(c.contains("ph-move lit") && c.contains("ph-walk lit") && c.contains("ph-walk muted"), "lit and muted: {c}");
     }
     assert!(h.contains("The phases of the signal, in the order they run"));
-    assert!(!plain_panel(&shared(1)).contains("signal-phases"), "no signal, no drawings");
+    assert!(!plan_plain(&shared(1)).contains("signal-phases"), "no signal, no drawings");
 }
 
 #[test]
@@ -2288,7 +2423,7 @@ fn with_two_phases_for_one_street_only_the_first_is_current() {
 fn the_drawings_speak_french_with_no_english_left() {
     use crate::shared::i18n::Locale;
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
-    let h = plain_panel(&s);
+    let h = plan_plain(&s);
     let cards = phase_cards(&h);
     assert_eq!(cards.len(), 4);
     assert!(cards[0].contains("Phase 1 : ") && cards[0].contains("Voitures qui passent : ") && cards[0].contains("Piétons qui traversent : "), "{}", cards[0]);
@@ -3427,4 +3562,14 @@ fn choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_junction_as_i
     s.goal().set(None);
     assert_eq!(serde_json::to_string(&*s.view_now()).unwrap(), before);
     assert!(!html(|| view! { <notes::Checks vm=s.clone()/> }.into_any()).contains("goal-mark"));
+}
+
+#[test]
+fn the_current_step_of_the_junction_s_path_is_drawn_as_the_street_s_is() {
+    use crate::junction::model::SIGNAL;
+    let s = shared(0);
+    s.edit(|j| j.set_control(SIGNAL));
+    s.show_plan();
+    let h = panel(&s);
+    assert!(h.contains(r#"class="path-here""#), "the street page's current step, with its focus outline: {h}");
 }

@@ -36,6 +36,8 @@ pub struct JunctionVm {
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
     goal: crate::shared::goals::GoalChoice,
+    /// Whether the details show the signal plan, a level of its own under the junction's (nothing chosen).
+    plan: ArcRwSignal<bool>,
     /// Whether the Checks tab shows its passing checks.
     passes: crate::shared::check_fold::PassFold,
 }
@@ -68,7 +70,7 @@ impl JunctionVm {
                 )
             });
             let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
-            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal, passes: Default::default() }
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal, plan: ArcRwSignal::new(false), passes: Default::default() }
         })
     }
 
@@ -242,12 +244,27 @@ impl JunctionVm {
 
     /// A selection the person made, announced by what is selected.
     pub fn select(&self, target: Target) {
+        self.plan.set(false);
         self.edit(|j| j.select(target));
         self.say_selection();
     }
 
-    /// Moves the selection to the next thing round the junction, and says what.
+    /// Shows the signal plan as the details' level: nothing is chosen, and the plan is the junction's.
+    pub fn show_plan(&self) {
+        self.edit(|j| j.select(Target::None));
+        self.plan.set(true);
+    }
+
+    /// Whether the details show the signal plan: asked for, nothing chosen since, and a signal to plan.
+    pub fn plan_shown(&self) -> bool {
+        let v = self.view();
+        self.plan.get() && v.selected.kind.is_none() && v.signal.is_some()
+    }
+
+    /// Moves the selection to the next thing round the junction, and says what. Like any choice, it leaves the
+    /// signal plan.
     pub fn select_relative(&self, dir: i32) {
+        self.plan.set(false);
         self.edit(|j| j.select_relative(dir));
         self.say_selection();
     }
