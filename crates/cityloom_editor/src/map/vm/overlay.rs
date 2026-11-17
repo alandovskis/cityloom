@@ -44,8 +44,13 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
             "geometry": { "type": "LineString", "coordinates": e.shape_mm.iter().map(|q| position(p, q[0], q[1])).collect::<Vec<_>>() },
         }));
     }
+    // a junction's press target is never smaller than its ground, where a street there was widened past the widest
+    let mut ground_mm: BTreeMap<u32, i32> = BTreeMap::new();
     for (whose, [x, y], row_mm) in joints(v) {
         let joint_m = row_mm as f64 / 2000.0;
+        if let Whose::Junction(n) = whose {
+            ground_mm.insert(n.uid, row_mm / 2);
+        }
         let properties = match whose {
             Whose::Street(e) => {
                 json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "joint_m": joint_m, "conflict": conflicts.contains(&e.uid) })
@@ -59,7 +64,7 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
     for n in v.nodes.iter().filter(|n| n.junction) {
         features.push(json!({
             "type": "Feature",
-            "properties": { "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "radius_m": n.radius_mm as f64 / 1000.0 },
+            "properties": { "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "radius_m": n.radius_mm.max(ground_mm.get(&n.uid).copied().unwrap_or(0)) as f64 / 1000.0 },
             "geometry": { "type": "Point", "coordinates": position(p, n.x_mm, n.y_mm) },
         }));
     }
@@ -676,6 +681,25 @@ mod tests {
             grounds += 1;
         }
         assert!(grounds > 0, "the sample city has junctions streets meet at");
+    }
+
+    #[test]
+    fn a_junctions_press_target_covers_its_ground_even_where_a_street_there_was_widened_past_the_widest() {
+        let mut v = City::new().view(0); // the sample city has junctions
+        let n = v.nodes.iter().find(|n| n.junction && v.edges.iter().filter(|e| e.a == n.uid || e.b == n.uid).count() >= 2).unwrap();
+        let (uid, radius_mm) = (n.uid, n.radius_mm);
+        // every street there far wider than the widest was, so the second-widest is too
+        v.edges.iter_mut().filter(|e| e.a == uid || e.b == uid).for_each(|e| e.row_mm = 4 * radius_mm);
+        let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
+        let mine = |key: &str| {
+            fc["features"].as_array().unwrap().iter().find(|f| f["properties"]["hot"] == format!("j-{uid}") && f["properties"][key].is_number()).unwrap()["properties"][key]
+                .as_f64()
+                .unwrap()
+        };
+        let (target, ground) = (mine("radius_m"), mine("joint_m"));
+        assert!((ground - 2.0 * radius_mm as f64 / 1000.0).abs() < 1e-9, "the ground is the widened streets' half-width: {ground}");
+        assert!((target - ground).abs() < 1e-9, "a press anywhere on the ground opens the junction: target {target}, ground {ground}");
     }
 
     #[test]
