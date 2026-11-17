@@ -1562,9 +1562,14 @@ fn the_commands_are_a_named_group_with_a_labelled_field_for_each_input() {
     s.select_zone(1);
     let h = tools_html(&s);
     assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Zone commands\"") && !h.contains("toolbar"), "{h}");
-    for (id, label) in [("zone-split-at", "Split at (m)"), ("zone-start", "Start of this zone (m)"), ("zone-name", "Zone name")] {
-        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
-        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    // A short label beside each field, inside its fuller name (WCAG 2.5.3, label in name).
+    for (id, short, name) in [("zone-split-at", "Split", "Split at (m)"), ("zone-start", "Start", "Start of this zone (m)"), ("zone-name", "Name", "Zone name")]
+    {
+        assert!(h.contains(&format!("<label for=\"{id}\" class=\"zone-l\">{short}</label>")), "{id}: {h}");
+        let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+        let tag = &h[h[..at].rfind('<').unwrap()..at + h[at..].find('>').unwrap()];
+        assert!(tag.contains(&format!("aria-label=\"{name}\"")), "{tag}");
+        assert!(name.to_lowercase().contains(&short.to_lowercase()), "{short} in {name}");
     }
     for id in ["zone-split", "zone-merge-prev", "zone-merge-next"] {
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
@@ -1573,6 +1578,49 @@ fn the_commands_are_a_named_group_with_a_labelled_field_for_each_input() {
     s.select_zone(0);
     let h = tools_html(&s);
     assert!(!h.contains("id=\"zone-start\""), "{h}");
+}
+
+#[test]
+fn the_zone_pane_opens_on_where_the_zone_lies_and_a_strip_of_the_zones() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    s.select_zone(1);
+    let h = tools_html(&s);
+    assert!(h.contains(r#"<h2 class="insp-name">Zone 2</h2>"#), "{h}");
+    assert!(h.contains(">20.0 m to 40.0 m · 20.0 m long · 2 of 2<"), "{h}");
+    let strip = &h[h.find("zone-mini").expect("a strip of the zones")..];
+    let strip = &strip[..strip.find("</div>").unwrap()];
+    assert_eq!(strip.matches("<span").count(), 2, "{strip}");
+    assert_eq!(strip.matches("class=\"on\"").count(), 1, "{strip}");
+    assert!(h[..h.find("zone-mini").unwrap()].rfind("aria-hidden=\"true\"").is_some(), "the line above it says the same");
+    let one = tools_html(&zoned_street(&[], Some(40_000), Locale::En));
+    assert!(one.contains(">The whole street · 40.0 m<") && one.contains("In the middle if left empty."), "{one}");
+    let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
+    fr.select_zone(1);
+    let h = tools_html(&fr).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("20,0 m à 40,0 m · 20,0 m de long · 2 sur 2"), "{h}");
+}
+
+#[test]
+fn the_zone_pane_says_whose_section_the_zone_has_and_merge_names_the_neighbour() {
+    let s = street_with_own_second_zone(Locale::En);
+    let h = tools_html(&s);
+    assert!(h.contains(">The street's section<") && !h.contains("id=\"zone-reset\""), "zone 1 follows the street: {h}");
+    let next = button_tag(&h, "zone-merge-next");
+    assert!(next.contains("aria-label=\"Merge with zone 2\"") || next.contains("aria-label=\"Merge with Zone 2\""), "{next}");
+    assert!(h.contains(">With zone 2<") || h.contains(">With Zone 2<"), "{h}");
+    s.select_zone(1);
+    let h = tools_html(&s);
+    assert!(h.contains(">Its own section<") && h.contains("id=\"zone-reset\"") && h.contains("id=\"zone-use\""), "{h}");
+    // the reason a merge cannot be made is shown, not only read
+    assert!(h.contains(r#"class="zone-why">There is no zone on that side to merge with."#), "{h}");
+}
+
+#[test]
+fn a_merge_waiting_for_its_choice_comes_before_the_zone_s_settings() {
+    let s = street_with_own_second_zone(Locale::En);
+    assert!(s.begin_merge(true));
+    let h = tools_html(&s);
+    assert!(h.find("zone-keep-this").unwrap() < h.find("id=\"zone-name\"").unwrap(), "{h}");
 }
 
 #[test]
@@ -1692,7 +1740,12 @@ fn the_zone_commands_are_worded_in_both_languages() {
     s.select_zone(1);
     let h = tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains("aria-label=\"Commandes des zones\""), "{h}");
-    assert!(h.contains(">Diviser à (m)</label>") && h.contains(">Début de cette zone (m)</label>") && h.contains(">Nom de la zone</label>"), "{h}");
+    assert!(h.contains(">Diviser</label>") && h.contains(">Début</label>") && h.contains(">Nom</label>"), "{h}");
+    assert!(
+        h.contains("aria-label=\"Diviser à (m)\"") && h.contains("aria-label=\"Début de cette zone (m)\"") && h.contains("aria-label=\"Nom de la zone\""),
+        "{h}"
+    );
+    assert!(h.contains(">La coupe de la rue<") && h.contains(">Avec zone 1<"), "{h}");
     assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
 }
 
