@@ -1,0 +1,3 @@
+junction chosen: j-10
+pointer on street s-102 next to it: street lit=true, junction j-10 lit=false
+pointer on the junction's middle: junction j-10 lit=true, street s-102 lit=false

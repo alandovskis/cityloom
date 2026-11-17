@@ -1,0 +1,2 @@
+# web/mapcanvas.js at b94ebee3
+  38 passed (15.5s)

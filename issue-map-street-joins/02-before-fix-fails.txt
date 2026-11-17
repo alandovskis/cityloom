@@ -1,0 +1,7 @@
+# web/mapcanvas.js as before ed7acdfe (junction target asked in a ±6 px box)
+  ✘  1 [ui] › tests/map.spec.ts:160:3 › the city map › just past a junction's press target the pointer is on the street, so a short street between two can be reached (6.2s)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: true
+    Received: false
+  1 failed
+error: recipe `e2e` failed with exit code 1

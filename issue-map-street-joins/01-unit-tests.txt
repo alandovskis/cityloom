@@ -1,0 +1,12 @@
+test map::vm::style::tests::the_places_are_drawn_in_layers_on_one_source ... ok
+test map::vm::style::tests::a_junction_is_pressed_over_its_ground_and_never_by_less_than_a_24_pixel_target ... ok
+test map::vm::style::tests::a_joint_rounds_a_streets_end_under_the_lines_and_a_junctions_ground_over_them ... ok
+test map::vm::overlay::tests::a_wide_street_going_on_narrower_is_joined_only_as_wide_as_the_narrower_so_it_does_not_bulge ... ok
+test map::vm::overlay::tests::where_two_streets_meet_end_to_end_the_joint_is_a_streets_and_not_ground ... ok
+test map::vm::overlay::tests::streets_meeting_at_an_angle_are_joined_by_a_disc_as_wide_as_they_are ... ok
+test map::vm::overlay::tests::a_joint_says_how_its_street_stands_so_it_is_drawn_in_the_streets_colour ... ok
+test map::vm::overlay::tests::a_street_end_no_other_street_meets_is_left_square_so_a_short_wide_stub_does_not_become_a_disc ... ok
+test map::vm::overlay::tests::a_junctions_press_target_covers_its_ground_even_where_a_street_there_was_widened_past_the_widest ... ok
+test map::vm::overlay::tests::at_a_junction_the_joint_is_the_junctions_ground_so_it_lights_and_opens_with_the_junction ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 3247 filtered out; finished in 0.11s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
