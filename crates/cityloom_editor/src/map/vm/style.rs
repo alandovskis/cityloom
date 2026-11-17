@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn a_joint_rounds_a_streets_end_with_a_casing_under_the_streets_and_a_fill_over_them() {
+    fn a_joint_rounds_a_streets_end_under_the_lines_and_a_junctions_ground_over_them() {
         let (joint_casing, joint, ground) = (layer(45.5, "places-joint-casing"), layer(45.5, "places-joint"), layer(45.5, "places-junction-ground"));
         let (casing, street) = (layer(45.5, "places-casing"), layer(45.5, "places-street"));
         assert_eq!(joint_casing["filter"], json!(["has", "joint_m"]), "every joint shares the streets' one outline");
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn every_layer_of_the_places_is_muted_where_the_place_is_not_editable_and_not_before_it_is_told() {
         // the junction's press target is never seen, editable or not; a muted street's joint is not drawn (see
-        // `a_joint_rounds_a_streets_end_with_a_casing_under_the_streets_and_a_fill_over_them`)
+        // `a_joint_rounds_a_streets_end_under_the_lines_and_a_junctions_ground_over_them`)
         let unseen = ["places-junction-hit", "places-joint-casing", "places-joint", "places-junction-ground"];
         for layer in layers(45.5).into_iter().filter(|l| !unseen.contains(&l["id"].as_str().unwrap())) {
             let id = layer["id"].as_str().unwrap();
