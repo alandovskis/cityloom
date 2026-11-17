@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 
-use crate::city::model::{CityView, EdgeView};
+use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::city::projection::Projection;
 use crate::restriction::model::{LonLat, Restriction};
 use crate::shared::catalogue::Side;
@@ -44,12 +44,17 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
             "geometry": { "type": "LineString", "coordinates": e.shape_mm.iter().map(|q| position(p, q[0], q[1])).collect::<Vec<_>>() },
         }));
     }
-    for (e, [x, y]) in joints(v) {
-        features.push(json!({
-            "type": "Feature",
-            "properties": { "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "joint_m": e.row_mm as f64 / 2000.0, "conflict": conflicts.contains(&e.uid) },
-            "geometry": { "type": "Point", "coordinates": position(p, x, y) },
-        }));
+    for (whose, [x, y], row_mm) in joints(v) {
+        let joint_m = row_mm as f64 / 2000.0;
+        let properties = match whose {
+            Whose::Street(e) => {
+                json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "joint_m": joint_m, "conflict": conflicts.contains(&e.uid) })
+            }
+            Whose::Junction(n) => {
+                json!({ "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "joint_m": joint_m, "conflict": false, "ground": true })
+            }
+        };
+        features.push(json!({ "type": "Feature", "properties": properties, "geometry": { "type": "Point", "coordinates": position(p, x, y) } }));
     }
     for n in v.nodes.iter().filter(|n| n.junction) {
         features.push(json!({
@@ -61,23 +66,33 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
     json!({ "type": "FeatureCollection", "features": features }).to_string()
 }
 
+/// Whose a joint is: it is drawn in that place's colour and state.
+enum Whose<'a> {
+    Street(&'a EdgeView),
+    Junction(&'a NodeView),
+}
+
 /// Where streets meet end to end, the disc that rounds them there: one for each node two streets or more end at, at
-/// the end of the street of the second-widest end there, as wide as that street. The streets are drawn with square
-/// ends, so streets meeting at an angle are joined round and none wider than another bulges past it where it goes on
-/// narrower. An end no other street meets (a dead end, or where the street leaves the map) stays square, so a short
-/// wide stub is not drawn as a disc. The disc is that street's: it takes its colour and its state.
-fn joints(v: &CityView) -> Vec<(&EdgeView, [i32; 2])> {
+/// the end of the street of the second-widest end there, as wide as that street (`row_mm`). The streets are drawn with
+/// square ends, so streets meeting at an angle are joined round and none wider than another bulges past it where it
+/// goes on narrower. An end no other street meets (a dead end, or where the street leaves the map) stays square, so a
+/// short wide stub is not drawn as a disc. At a junction the disc is the junction's ground: it takes the junction's
+/// colour and state, so it lights and opens with the junction it is pressed for. Elsewhere it is that street's, and
+/// only fills the gap the streets' square ends leave (`style.rs` draws it under their lines).
+fn joints(v: &CityView) -> Vec<(Whose<'_>, [i32; 2], i32)> {
     let mut ends: BTreeMap<u32, Vec<(&EdgeView, [i32; 2])>> = BTreeMap::new();
     for e in &v.edges {
         let (Some(&first), Some(&last)) = (e.shape_mm.first(), e.shape_mm.last()) else { continue };
         ends.entry(e.a).or_default().push((e, first));
         ends.entry(e.b).or_default().push((e, last));
     }
-    ends.into_values()
-        .filter(|at| at.len() > 1)
-        .map(|mut at| {
+    let junctions: BTreeMap<u32, &NodeView> = v.nodes.iter().filter(|n| n.junction).map(|n| (n.uid, n)).collect();
+    ends.into_iter()
+        .filter(|(_, at)| at.len() > 1)
+        .map(|(node, mut at)| {
             at.sort_by_key(|(e, _)| (Reverse(e.row_mm), e.uid));
-            at[1]
+            let (e, end) = at[1];
+            (junctions.get(&node).map_or(Whose::Street(e), |n| Whose::Junction(n)), end, e.row_mm)
         })
         .collect()
 }
@@ -634,6 +649,43 @@ mod tests {
         let v = City::from_network(&two_streets(4.0, 4.0, 60.0), "Bendville").view(0);
         let found = joints(&parse(&places(&v, &projection(&v), &BTreeSet::new())));
         assert_eq!(found.len(), 1, "only where the two meet: {found:?}");
+    }
+
+    #[test]
+    fn at_a_junction_the_joint_is_the_junctions_ground_so_it_lights_and_opens_with_the_junction() {
+        let mut v = City::new().view(0); // the sample city has junctions
+        v.nodes.iter_mut().filter(|n| n.junction).for_each(|n| n.edited = true);
+        let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
+        let fc = parse(&places(&v, &p, &v.edges.iter().map(|e| e.uid).collect()));
+        let all = fc["features"].as_array().unwrap();
+        let mut grounds = 0;
+        for n in v.nodes.iter().filter(|n| n.junction) {
+            let mut rows: Vec<i32> = v.edges.iter().filter(|e| e.a == n.uid).chain(v.edges.iter().filter(|e| e.b == n.uid)).map(|e| e.row_mm).collect();
+            if rows.len() < 2 {
+                continue;
+            }
+            rows.sort_unstable_by(|a, b| b.cmp(a));
+            let there: Vec<&Value> =
+                all.iter().filter(|f| f["properties"]["joint_m"].is_number() && f["properties"]["hot"] == format!("j-{}", n.uid)).collect();
+            assert_eq!(there.len(), 1, "one joint at junction {}, and it is the junction's: {there:?}", n.uid);
+            let ground = there[0];
+            assert_eq!(ground["properties"]["ground"], true);
+            assert_eq!(ground["properties"]["status"], "changed", "it takes the junction's state");
+            assert_eq!(ground["properties"]["conflict"], false, "a street's conflict is not the junction's");
+            assert!((ground["properties"]["joint_m"].as_f64().unwrap() - rows[1] as f64 / 2000.0).abs() < 1e-9, "as wide as the second-widest street");
+            grounds += 1;
+        }
+        assert!(grounds > 0, "the sample city has junctions streets meet at");
+    }
+
+    #[test]
+    fn where_two_streets_meet_end_to_end_the_joint_is_a_streets_and_not_ground() {
+        let v = City::from_network(&two_streets(4.0, 4.0, 60.0), "Bendville").view(0);
+        assert!(v.nodes.iter().all(|n| !n.junction), "two streets end to end are not a junction");
+        let fc = parse(&places(&v, &projection(&v), &BTreeSet::new()));
+        let joint = fc["features"].as_array().unwrap().iter().find(|f| f["properties"]["joint_m"].is_number()).unwrap();
+        assert!(joint["properties"]["hot"].as_str().unwrap().starts_with("s-"));
+        assert!(joint["properties"]["ground"].is_null());
     }
 
     #[test]
