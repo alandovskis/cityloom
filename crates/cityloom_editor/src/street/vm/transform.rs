@@ -154,6 +154,81 @@ impl StreetVm {
     }
 }
 
+/// A key that moves along a list of choices or groups.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListKey {
+    Up,
+    Down,
+    Home,
+    End,
+}
+
+/// Where `key` takes the position `at` in a list of `len` items: from nothing, Down and Home reach the first and Up and
+/// End the last; otherwise one step, or the first or last; it stops at the ends. `None` for an empty list.
+fn step(at: Option<usize>, len: usize, key: ListKey) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    Some(match (key, at) {
+        (ListKey::Home, _) | (ListKey::Down, None) => 0,
+        (ListKey::End, _) | (ListKey::Up, None) => last,
+        (ListKey::Down, Some(i)) => (i + 1).min(last),
+        (ListKey::Up, Some(i)) => i.saturating_sub(1),
+    })
+}
+
+/// The Transform dialog's state: the group open, the choice chosen in it and the choice the pointer or focus is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DialogState {
+    pub group: Group,
+    pub chosen: Option<Choice>,
+    pub pointed: Option<Choice>,
+}
+
+impl DialogState {
+    /// The dialog as it opens: the first group, nothing chosen or pointed; `None` when there is nothing to offer.
+    pub fn open(choices: &TransformChoices) -> Option<DialogState> {
+        choices.groups().first().map(|&group| DialogState { group, chosen: None, pointed: None })
+    }
+
+    /// The choice the preview shows: the one pointed at, else the one chosen.
+    pub fn shown(&self) -> Option<Choice> {
+        self.pointed.or(self.chosen)
+    }
+
+    pub fn point(&mut self, c: Option<Choice>) {
+        self.pointed = c;
+    }
+
+    pub fn choose(&mut self, c: Choice) {
+        self.chosen = Some(c);
+    }
+
+    /// Opens another group, which starts with nothing chosen or pointed.
+    pub fn set_group(&mut self, g: Group) {
+        if g != self.group {
+            *self = DialogState { group: g, chosen: None, pointed: None };
+        }
+    }
+
+    /// Moves the choice within the open group (a refused template is still reached) and stops pointing.
+    pub fn step_choice(&mut self, choices: &TransformChoices, k: ListKey) {
+        let all = choices.in_group(self.group);
+        let at = self.chosen.and_then(|c| all.iter().position(|x| *x == c));
+        if let Some(i) = step(at, all.len(), k) {
+            self.chosen = Some(all[i]);
+        }
+        self.pointed = None;
+    }
+
+    /// Moves to another group with something in it.
+    pub fn step_group(&mut self, choices: &TransformChoices, k: ListKey) {
+        let groups = choices.groups();
+        let at = groups.iter().position(|g| *g == self.group);
+        if let Some(i) = step(at, groups.len(), k) {
+            self.set_group(groups[i]);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +427,126 @@ mod tests {
         let s1 = r.vm.read(|e| e.snapshot());
         assert_eq!(Street { next_uid: s0.next_uid, ..s1 }, s0);
         assert!(!r.vm.view_now().can_undo, "one step");
+    }
+
+    fn first_and_last(choices: &TransformChoices, g: Group) -> (Choice, Choice) {
+        let all = choices.in_group(g);
+        (all[0], *all.last().unwrap())
+    }
+
+    #[test]
+    fn opening_selects_the_first_group_and_nothing_else() {
+        let choices = rig(0).vm.transform_choices();
+        let state = DialogState::open(&choices).unwrap();
+        assert_eq!(state, DialogState { group: Group::Pedestrian, chosen: None, pointed: None });
+        assert_eq!(state.shown(), None);
+        let none = TransformChoices { pedestrian: Vec::new(), transit: Vec::new(), templates: Vec::new() };
+        assert_eq!(DialogState::open(&none), None);
+    }
+
+    #[test]
+    fn leaving_the_list_shows_the_chosen_again() {
+        let choices = rig(0).vm.transform_choices();
+        let ped = choices.in_group(Group::Pedestrian);
+        let (a, b) = (ped[0], ped[1]);
+        let mut state = DialogState::open(&choices).unwrap();
+        state.point(Some(b));
+        assert_eq!(state.shown(), Some(b));
+        state.point(None);
+        assert_eq!(state.shown(), None);
+        state.choose(a);
+        state.point(Some(b));
+        assert_eq!(state.shown(), Some(b));
+        state.point(None);
+        assert_eq!(state.shown(), Some(a));
+    }
+
+    #[test]
+    fn arrows_move_the_choice_and_stop_at_the_ends() {
+        let choices = rig(0).vm.transform_choices();
+        let all = choices.in_group(Group::Pedestrian);
+        assert!(all.len() > 2);
+        let (first, last) = first_and_last(&choices, Group::Pedestrian);
+        let mut state = DialogState::open(&choices).unwrap();
+        state.step_choice(&choices, ListKey::Down);
+        assert_eq!(state.chosen, Some(first));
+        state.step_choice(&choices, ListKey::Down);
+        assert_eq!(state.chosen, Some(all[1]));
+        state.step_choice(&choices, ListKey::End);
+        assert_eq!(state.chosen, Some(last));
+        state.step_choice(&choices, ListKey::Down);
+        assert_eq!(state.chosen, Some(last));
+        state.step_choice(&choices, ListKey::Up);
+        assert_eq!(state.chosen, Some(all[all.len() - 2]));
+        state.step_choice(&choices, ListKey::Home);
+        assert_eq!(state.chosen, Some(first));
+        state.step_choice(&choices, ListKey::Up);
+        assert_eq!(state.chosen, Some(first));
+        let mut state = DialogState::open(&choices).unwrap();
+        state.step_choice(&choices, ListKey::Up);
+        assert_eq!(state.chosen, Some(last), "Up from nothing is the last");
+        let mut state = DialogState::open(&choices).unwrap();
+        state.step_choice(&choices, ListKey::Home);
+        assert_eq!(state.chosen, Some(first));
+        let mut state = DialogState::open(&choices).unwrap();
+        state.step_choice(&choices, ListKey::End);
+        assert_eq!(state.chosen, Some(last));
+    }
+
+    #[test]
+    fn stepping_clears_the_pointed_choice() {
+        let choices = rig(0).vm.transform_choices();
+        let mut state = DialogState::open(&choices).unwrap();
+        state.point(Some(choices.in_group(Group::Pedestrian)[1]));
+        state.step_choice(&choices, ListKey::Down);
+        assert_eq!(state.pointed, None);
+    }
+
+    #[test]
+    fn a_disabled_template_is_still_reached_by_the_arrows() {
+        let r = rig_of(&street(&NARROW), Some(LENGTH), Locale::En);
+        let choices = r.vm.transform_choices();
+        let disabled = choices.templates.iter().find(|t| t.refusal.is_some()).expect("a template does not fit").template;
+        let mut state = DialogState::open(&choices).unwrap();
+        state.set_group(Group::Templates);
+        let mut reached = Vec::new();
+        for _ in 0..choices.templates.len() {
+            state.step_choice(&choices, ListKey::Down);
+            reached.push(state.chosen.unwrap());
+        }
+        assert!(reached.contains(&Choice::Template(disabled)), "{reached:?}");
+    }
+
+    #[test]
+    fn switching_group_clears_the_choice() {
+        let choices = rig(0).vm.transform_choices();
+        let mut state = DialogState::open(&choices).unwrap();
+        state.choose(choices.in_group(Group::Pedestrian)[0]);
+        state.point(Some(choices.in_group(Group::Pedestrian)[1]));
+        state.set_group(Group::Pedestrian);
+        assert!(state.chosen.is_some() && state.pointed.is_some(), "the same group keeps them");
+        state.set_group(Group::Transit);
+        assert_eq!(state, DialogState { group: Group::Transit, chosen: None, pointed: None });
+    }
+
+    #[test]
+    fn step_group_skips_empty_groups() {
+        let r = rig(0);
+        let full = r.vm.transform_choices();
+        // no transit measure applies: the dialog goes from Pedestrian straight to Templates
+        let choices = TransformChoices { transit: Vec::new(), ..full };
+        assert_eq!(choices.groups(), vec![Group::Pedestrian, Group::Templates]);
+        let mut state = DialogState::open(&choices).unwrap();
+        state.choose(choices.in_group(Group::Pedestrian)[0]);
+        state.step_group(&choices, ListKey::Down);
+        assert_eq!(state, DialogState { group: Group::Templates, chosen: None, pointed: None });
+        state.step_group(&choices, ListKey::Down);
+        assert_eq!(state.group, Group::Templates, "stops at the last group");
+        state.step_group(&choices, ListKey::Up);
+        assert_eq!(state.group, Group::Pedestrian, "Up skips the empty Transit");
+        state.step_group(&choices, ListKey::End);
+        assert_eq!(state.group, Group::Templates);
+        state.step_group(&choices, ListKey::Home);
+        assert_eq!(state.group, Group::Pedestrian);
     }
 }
