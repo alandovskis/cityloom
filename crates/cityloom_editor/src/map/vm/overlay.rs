@@ -51,7 +51,7 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
         let mut properties = match whose {
             Whose::Street(e) => json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "conflict": conflicts.contains(&e.uid) }),
             Whose::Junction(n) => json!({ "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "conflict": false, "ground": true }),
-            Whose::Meeting(node) => json!({ "hot": format!("m-{node}"), "status": "ok", "conflict": false }),
+            Whose::Meeting { node, .. } => json!({ "hot": format!("m-{node}"), "status": "ok", "conflict": false }),
         };
         let (geometry, ground) = match join {
             Join::Disc { end: [x, y], row_mm } => {
@@ -59,7 +59,7 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
                 properties["joint_m"] = json!(joint_m);
                 (json!({ "type": "Point", "coordinates": position(p, x, y) }), Ground::Disc(joint_m))
             }
-            Join::Middle { ring, .. } => {
+            Join::Middle { ring } => {
                 let coordinates: Vec<[f64; 2]> = ring.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect();
                 (json!({ "type": "Polygon", "coordinates": [coordinates] }), Ground::Shape)
             }
@@ -105,8 +105,11 @@ enum Whose<'a> {
     Junction(&'a NodeView),
     /// The shape where three streets or more meet that are not a junction, by its node's uid: it lies under every
     /// street's end (`places-middle`, under the streets' lines) and is no one street's, so it takes no street's state
-    /// and is never lit or pressed; it is editable where every street that meets there is (`meetings`).
-    Meeting(u32),
+    /// and is never lit or pressed; it is editable where every street that meets there is (`meetings`, by `streets`).
+    Meeting {
+        node: u32,
+        streets: Vec<u32>,
+    },
 }
 
 /// How streets ending at one node are joined there.
@@ -115,10 +118,10 @@ enum Join {
     /// ends, so streets meeting at an angle are joined round, and the wider does not bulge past the narrower where it
     /// goes on narrower.
     Disc { end: [i32; 2], row_mm: i32 },
-    /// Three streets or more: the smallest convex shape over every corner of their square ends at the node `at` (a
+    /// Three streets or more: the smallest convex shape over every corner of their square ends at their node (a
     /// closed ring, in layout millimetres), so wide streets crossing at an angle leave no corner sticking out, and a
     /// narrow street off a wide one adds nothing past the wide one's sides.
-    Middle { at: [i32; 2], ring: Vec<[f64; 2]> },
+    Middle { ring: Vec<[f64; 2]> },
 }
 
 /// Where streets meet, how they are joined (`Join`): one for each node two streets or more end at. An end no other
@@ -143,10 +146,10 @@ fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
             let ring = if at.len() > 2 { middle(end, at.iter().filter_map(|&(e, _, next)| Some((next?, e.row_mm)))) } else { None };
             let whose = match (junctions.get(&node), &ring) {
                 (Some(n), _) => Whose::Junction(n),
-                (None, Some(_)) => Whose::Meeting(node),
+                (None, Some(_)) => Whose::Meeting { node, streets: at.iter().map(|(e, _, _)| e.uid).collect() },
                 (None, None) => Whose::Street(e),
             };
-            (whose, ring.map_or(Join::Disc { end, row_mm: e.row_mm }, |ring| Join::Middle { at: end, ring }))
+            (whose, ring.map_or(Join::Disc { end, row_mm: e.row_mm }, |ring| Join::Middle { ring }))
         })
         .collect()
 }
@@ -194,26 +197,19 @@ fn hull(mut points: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
     ring
 }
 
-/// The shapes where three streets or more meet that are not a junction (`Whose::Meeting`), each with the `hot` ids
-/// of the streets that meet there, sorted: what makes it editable (`editable::with_meetings`). A node whose streets'
-/// ends make no shape is named too, and harmless: nothing is drawn under its id.
+/// The shapes where three streets or more meet that are not a junction (`Whose::Meeting`, as `joints` makes them),
+/// each with the `hot` ids of the streets that meet there, sorted: what makes it editable (`editable::with_meetings`).
 pub fn meetings(v: &CityView) -> Vec<(String, Vec<String>)> {
-    let mut streets: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
-    let mut ends: BTreeMap<u32, usize> = BTreeMap::new();
-    for e in v.edges.iter().filter(|e| !e.shape_mm.is_empty()) {
-        for node in [e.a, e.b] {
-            streets.entry(node).or_default().insert(e.uid);
-            *ends.entry(node).or_default() += 1;
-        }
-    }
-    let junctions: BTreeSet<u32> = v.nodes.iter().filter(|n| n.junction).map(|n| n.uid).collect();
-    streets
+    joints(v)
         .into_iter()
-        .filter(|(node, _)| ends[node] > 2 && !junctions.contains(node))
-        .map(|(node, uids)| {
-            let mut hot: Vec<String> = uids.into_iter().map(|uid| format!("s-{uid}")).collect();
-            hot.sort();
-            (format!("m-{node}"), hot)
+        .filter_map(|(whose, _)| match whose {
+            Whose::Meeting { node, streets } => {
+                let mut hot: Vec<String> = streets.into_iter().map(|uid| format!("s-{uid}")).collect();
+                hot.sort();
+                hot.dedup();
+                Some((format!("m-{node}"), hot))
+            }
+            _ => None,
         })
         .collect()
 }
