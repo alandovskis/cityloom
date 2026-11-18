@@ -155,20 +155,23 @@ fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
 }
 
 /// The ground streets share where they meet at `at`, each street given by the next point along it and its width: a
-/// closed ring, anticlockwise round `at`, or `None` where no two streets' kerbs meet. It is the union of pieces that
-/// each hold `at`:
-/// - between two streets next to each other round the node whose kerbs meet ahead, the ground up to where they meet,
-///   no further than twice the widest half-width along either (`cap`), so a sharp angle does not reach far;
-/// - along each street, from its square end as far as it shares ground with the streets either side;
-/// - across the outside of a bend, or between streets that go straight on, the triangle from the node to their ends'
-///   corners there.
+/// closed ring, anticlockwise round `at`, or `None` where no two streets' kerbs meet. Streets leaving within half a
+/// degree of each other are one, as wide as the widest. The shape is the union of pieces that each hold `at`:
+/// - between two streets next to each other round the node, 10 to 170 degrees apart, the ground up to where their
+///   kerbs meet ahead, no further along either than twice the narrower's half-width, and less the nearer they are to
+///   10 or 170 degrees (nothing there), so a near-straight pair of different widths makes no long taper and the shape
+///   has no step at either bound;
+/// - along each street, from its square end as far as that ground reaches along it, and at least a centimetre;
+/// - across the outside of a bend, or between streets within 10 degrees of straight on or of the same way, the
+///   triangle from the node to their ends' corners.
 ///
 /// Two streets crossing make the square where their kerbs cross, a side street off a through street the box of the
 /// side street across it, and every corner of every street's square end is under it; nothing reaches past a kerb but
-/// into a sharp angle (up to the cap) and across the outside of a bend. Each piece holds the node (a street's piece
-/// runs at least a centimetre along it), so their union is star-shaped from it: its outline is where a ray from the
-/// node leaves the last piece, traced at every corner of a piece and every crossing of two pieces' edges, and just
-/// either side of each, so that it follows the outline where it steps along a ray. That makes it a simple ring.
+/// between two streets next to each other (into a sharp angle, or the inside of a bend where they differ in width)
+/// and across the outside of a bend. Each piece holds the node, so their union is star-shaped from it: its outline is
+/// where a ray from the node leaves the last piece, traced at every corner of a piece and every crossing of two pieces'
+/// edges and just either side of each, so it follows the outline where it steps along a ray; points within a
+/// millimetre of the line between their neighbours are dropped. That makes it a simple ring.
 fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Option<Vec<[f64; 2]>> {
     let o = [at[0] as f64, at[1] as f64];
     // each street: its bearing, its direction and half its width
@@ -179,12 +182,32 @@ fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Optio
             (len > 0.0 && row_mm > 0).then(|| (dy.atan2(dx), [dx / len, dy / len], row_mm as f64 / 2.0))
         })
         .collect();
-    arms.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // streets leaving within half a degree of each other are one, as wide as the widest: a footway beside a road
+    // changes nothing the road makes, whichever side of it it falls
+    arms.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.2.total_cmp(&a.2)));
+    let same = (0.5f64).to_radians();
+    let mut merged: Vec<(f64, [f64; 2], f64)> = Vec::with_capacity(arms.len());
+    for arm in arms {
+        match merged.last_mut() {
+            Some(last) if arm.0 - last.0 < same => {
+                if arm.2 > last.2 {
+                    *last = arm;
+                }
+            }
+            _ => merged.push(arm),
+        }
+    }
+    if merged.len() > 1 && merged[0].0 + std::f64::consts::TAU - merged[merged.len() - 1].0 < same {
+        let last = merged.pop().unwrap();
+        if last.2 > merged[0].2 {
+            merged[0] = last;
+        }
+    }
+    let arms = merged;
     let n = arms.len();
     if n < 2 {
         return None;
     }
-    let cap = 2.0 * arms.iter().map(|a| a.2).fold(0.0, f64::max);
     let cross = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
     // a point `t` along a street from the node and `side` half-widths to its left (+1) or right (-1), from the node
     let kerb = |(_, d, h): (f64, [f64; 2], f64), side: f64, t: f64| [side * h * -d[1] + t * d[0], side * h * d[0] + t * d[1]];
@@ -194,18 +217,19 @@ fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Optio
     for i in 0..n {
         let j = (i + 1) % n;
         let (ai, aj) = (arms[i], arms[j]);
-        let c = cross(ai.1, aj.1);
-        let ahead = ai.1[0] * aj.1[0] + ai.1[1] * aj.1[1];
-        if c >= (10f64).to_radians().sin() && ahead > -(10f64).to_radians().cos() {
-            // between 10 and 170 degrees apart, i's left kerb and j's right kerb meet: the ground between them up to
-            // there, or the cap
+        let (c, ahead) = (cross(ai.1, aj.1), ai.1[0] * aj.1[0] + ai.1[1] * aj.1[1]);
+        // how far from straight on or the same way they are: kerbs meet only between 10 and 170 degrees apart, and how
+        // far their ground reaches grows from nothing there to twice the narrower's half-width 20 degrees further in,
+        // so a near-straight pair of different widths makes no long taper and the shape has no step at either bound
+        let apart = c.atan2(ahead).to_degrees();
+        let room = ((apart - 10.0).min(170.0 - apart) / 20.0).clamp(0.0, 1.0);
+        if c > 0.0 && room > 0.0 {
+            // i's left kerb and j's right kerb meet: the ground between them up to there, or the cap
+            let cap = 2.0 * ai.2.min(aj.2) * room;
             let between = [kerb(aj, -1.0, 0.0)[0] - kerb(ai, 1.0, 0.0)[0], kerb(aj, -1.0, 0.0)[1] - kerb(ai, 1.0, 0.0)[1]];
-            let (t, u) = (cross(between, aj.1) / c, cross(between, ai.1) / c);
-            // a street's ground runs as far as the other's kerb crosses its own, ahead of the node or behind it (a
-            // side street at a slant meets the far side of a through street behind the node)
-            reach[i] = reach[i].max(t.abs().min(cap));
-            reach[j] = reach[j].max(u.abs().min(cap));
-            let (t, u) = (t.clamp(0.0, cap), u.clamp(0.0, cap));
+            let (t, u) = ((cross(between, aj.1) / c).clamp(0.0, cap), (cross(between, ai.1) / c).clamp(0.0, cap));
+            reach[i] = reach[i].max(t);
+            reach[j] = reach[j].max(u);
             met = true;
             let (l0, l, r, r0) = (kerb(ai, 1.0, 0.0), kerb(ai, 1.0, t), kerb(aj, -1.0, u), kerb(aj, -1.0, 0.0));
             pieces.extend([vec![[0.0, 0.0], l0, l], vec![[0.0, 0.0], l, r], vec![[0.0, 0.0], r, r0]]);
@@ -250,6 +274,10 @@ fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Optio
     }
     bearings.sort_by(f64::total_cmp);
     bearings.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    // -pi and pi are one bearing: traced twice, the outline would double back along it
+    if bearings.len() > 1 && bearings[0] + std::f64::consts::TAU - bearings[bearings.len() - 1] < 1e-9 {
+        bearings.pop();
+    }
     // how far a ray from the node on bearing `b` goes before it leaves every piece
     let out = |b: f64| {
         let u = [b.cos(), b.sin()];
@@ -287,6 +315,23 @@ fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Optio
     }
     if ring.len() > 1 && (ring[0][0] - ring[ring.len() - 1][0]).hypot(ring[0][1] - ring[ring.len() - 1][1]) <= 0.5 {
         ring.pop();
+    }
+    // a point within a millimetre of the line between its neighbours adds nothing: the points of a straight run, and
+    // the tip of a needle where a point just either side of a bearing lands a hair in from the outline
+    let near_line = |q: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+        let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+        let t = (((q[0] - a[0]) * ex + (q[1] - a[1]) * ey) / (ex * ex + ey * ey).max(1e-12)).clamp(0.0, 1.0);
+        (a[0] + t * ex - q[0]).hypot(a[1] + t * ey - q[1]) < 1.0
+    };
+    let mut k = 0;
+    while ring.len() > 3 && k < ring.len() {
+        let n = ring.len();
+        if near_line(ring[k], ring[(k + n - 1) % n], ring[(k + 1) % n]) {
+            ring.remove(k);
+            k = k.saturating_sub(1);
+        } else {
+            k += 1;
+        }
     }
     if ring.len() < 3 {
         return None;
@@ -1132,6 +1177,18 @@ mod tests {
                 assert!(!crosses, "simple: edges {i} and {j} cross: {case}");
             }
         }
+        // and does not double back: no point lies on an edge it is not an end of
+        for (k, q) in ring[..n].iter().enumerate() {
+            for (i, &(a, b)) in edges.iter().enumerate() {
+                if i == k || (i + 1) % n == k {
+                    continue;
+                }
+                let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+                let t = (((q[0] - a[0]) * ex + (q[1] - a[1]) * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
+                let d = (a[0] + t * ex - q[0]).hypot(a[1] + t * ey - q[1]);
+                assert!(d > 0.01, "point {k} lies on edge {i}: {case}");
+            }
+        }
         let area: f64 = edges.iter().map(|(a, b)| a[0] * b[1] - b[0] * a[1]).sum::<f64>() / 2.0;
         assert!(area > 0.0, "anticlockwise, with area: {area} {case}");
         assert!(holds(&ring, [0.0, 0.0], 0.0) && !holds_near_edge(&ring, [0.0, 0.0], 1.0), "the node is inside: {case}");
@@ -1139,8 +1196,23 @@ mod tests {
         for &(row_mm, deg) in arms {
             let (s, c) = deg.to_radians().sin_cos();
             let h = row_mm as f64 / 2.0;
+            // under it, or on a street as wide or wider leaving within half a degree, which it was taken into
+            let taken = |q: [f64; 2]| {
+                arms.iter().any(|&(w, d)| {
+                    let (ds, dc) = d.to_radians().sin_cos();
+                    // up to half a degree apart (the code measures it on the rounded points): its corner can sit that
+                    // much behind the wider one's end
+                    let behind = 2.0 + h * (0.51f64).to_radians().sin();
+                    let apart = (d - deg).rem_euclid(360.0);
+                    w >= row_mm
+                        && d != deg
+                        && apart.min(360.0 - apart) < 0.51
+                        && q[0] * dc + q[1] * ds >= -behind
+                        && (dc * q[1] - ds * q[0]).abs() <= w as f64 / 2.0 + 2.0
+                })
+            };
             for q in [[-s * h, c * h], [s * h, -c * h]] {
-                assert!(holds(&ring, q, 2.0), "the corner {q:?} of the street at {deg} degrees is under it: {case}");
+                assert!(holds(&ring, q, 2.0) || taken(q), "the corner {q:?} of the street at {deg} degrees is under it: {case}");
             }
         }
         // nothing past a kerb: every point of the outline is on a street, or between two streets next to each other
@@ -1154,7 +1226,27 @@ mod tests {
                 (y.atan2(x), [x / len, y / len], row_mm as f64 / 2.0)
             })
             .collect();
-        by_bearing.sort_by(|a, b| a.0.total_cmp(&b.0));
+        by_bearing.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.2.total_cmp(&a.2)));
+        // streets leaving within half a degree of each other are one, as wide as the widest
+        let same = (0.5f64).to_radians();
+        let mut one: Vec<(f64, [f64; 2], f64)> = Vec::new();
+        for arm in by_bearing {
+            match one.last_mut() {
+                Some(last) if arm.0 - last.0 < same => {
+                    if arm.2 > last.2 {
+                        *last = arm;
+                    }
+                }
+                _ => one.push(arm),
+            }
+        }
+        if one.len() > 1 && one[0].0 + std::f64::consts::TAU - one[one.len() - 1].0 < same {
+            let last = one.pop().unwrap();
+            if last.2 > one[0].2 {
+                one[0] = last;
+            }
+        }
+        let by_bearing = one;
         let kerb = |(_, d, h): (f64, [f64; 2], f64), side: f64, t: f64| [side * h * -d[1] + t * d[0], side * h * d[0] + t * d[1]];
         let x = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
         let in_triangle = |q: [f64; 2], a: [f64; 2], b: [f64; 2], c: [f64; 2]| {
@@ -1166,15 +1258,20 @@ mod tests {
             let on_street = by_bearing.iter().any(|&(_, d, h)| q[0] * d[0] + q[1] * d[1] >= -2.0 && x(d, q).abs() <= h + 2.0);
             on_street
                 || (0..by_bearing.len()).any(|i| {
+                    // between two streets next to each other round the node, no further along either kerb than twice
+                    // the widest half-width; across the outside of a bend, the triangle to their ends' corners
                     let (ai, aj) = (by_bearing[i], by_bearing[(i + 1) % by_bearing.len()]);
-                    let c = x(ai.1, aj.1);
-                    if c >= (10f64).to_radians().sin() && ai.1[0] * aj.1[0] + ai.1[1] * aj.1[1] > -(10f64).to_radians().cos() {
-                        let g = [kerb(aj, -1.0, 0.0)[0] - kerb(ai, 1.0, 0.0)[0], kerb(aj, -1.0, 0.0)[1] - kerb(ai, 1.0, 0.0)[1]];
-                        let cap = 2.0 * widest;
-                        let (t, u) = ((x(g, aj.1) / c).clamp(0.0, cap), (x(g, ai.1) / c).clamp(0.0, cap));
-                        in_triangle(q, [0.0, 0.0], kerb(ai, 1.0, t), kerb(aj, -1.0, u))
+                    let o = [0.0, 0.0];
+                    if x(ai.1, aj.1) > 0.0 {
+                        let r = 2.0 * widest;
+                        let (l0, l, rr, r0) = (kerb(ai, 1.0, 0.0), kerb(ai, 1.0, r), kerb(aj, -1.0, r), kerb(aj, -1.0, 0.0));
+                        // in order round the node: a narrower street's corner can lie inside a wider one's band
+                        let mut fan = [l0, l, rr, r0];
+                        let from_i = |p: &[f64; 2]| (p[1].atan2(p[0]) - ai.0).rem_euclid(std::f64::consts::TAU);
+                        fan.sort_by(|a, b| from_i(a).total_cmp(&from_i(b)));
+                        fan.windows(2).any(|w| in_triangle(q, o, w[0], w[1]))
                     } else {
-                        in_triangle(q, [0.0, 0.0], kerb(ai, 1.0, 0.0), kerb(aj, -1.0, 0.0))
+                        in_triangle(q, o, kerb(ai, 1.0, 0.0), kerb(aj, -1.0, 0.0))
                     }
                 })
         };
@@ -1260,7 +1357,7 @@ mod tests {
         ] {
             middle_of(&arms).unwrap(); // the checks of every shape
         }
-        let ring = middle_of(&[(8_000, 0.0), (8_000, 10.0), (8_000, 180.0)]).unwrap();
+        let ring = middle_of(&[(8_000, 0.0), (8_000, 25.0), (8_000, 180.0)]).unwrap();
         assert!(ring.iter().any(|q| q[0] > 4_000.0), "it reaches into the sharp angle: {ring:?}");
     }
 
@@ -1303,9 +1400,59 @@ mod tests {
             seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
             (seed >> 33) % n
         };
-        for _ in 0..2_000 {
-            let arms: Vec<(i32, f64)> = (0..3 + next(4)).map(|_| (2_000 + 500 * next(57) as i32, next(3_600) as f64 / 10.0)).collect();
+        for k in 0..2_000 {
+            // half of them with streets on the compass points and between them, where coordinates are exact
+            let bearing = |r: u64, b: u64| if k % 2 == 1 && r == 0 { 45.0 * (b % 8) as f64 } else { b as f64 / 10.0 };
+            let arms: Vec<(i32, f64)> = (0..3 + next(4)).map(|_| (2_000 + 500 * next(57) as i32, bearing(next(2), next(3_600)))).collect();
             let _ = middle_of(&arms);
+        }
+    }
+
+    #[test]
+    fn a_street_that_bends_and_changes_width_at_the_node_makes_ground_with_no_sudden_change() {
+        // through streets narrowing at the node, bent from 40 degrees one way to 40 the other, with a side street: the
+        // ground changes a little with each degree, also where the bend passes 10 degrees
+        for (wide, narrow, side) in [(12_000, 8_000, 4_000), (20_000, 8_000, 4_000)] {
+            let ground = |deg: i32| middle_of(&[(wide, 0.0), (side, 90.0), (narrow, deg as f64)]).map_or(0.0, |r| area_of(&r));
+            // a degree changes it by less than a twentieth of the square of the widest street
+            let step = 0.05 * (wide as f64).powi(2);
+            for deg in 140..220 {
+                let (a, b) = (ground(deg), ground(deg + 1));
+                assert!((a - b).abs() < step, "{wide}/{narrow}: {deg} to {} degrees: {a} to {b}", deg + 1);
+            }
+        }
+        // two streets 10 degrees apart and the one going on: no step at 10 degrees either
+        // (below 10 degrees no kerbs meet and the streets are joined by a disc instead)
+        let sharp = |tenths: i32| middle_of(&[(8_000, 0.0), (8_000, tenths as f64 / 10.0), (8_000, 180.0)]).map(|r| area_of(&r));
+        for tenths in 90..120 {
+            if let (Some(a), Some(b)) = (sharp(tenths), sharp(tenths + 1)) {
+                assert!((a - b).abs() < 2e6, "{tenths} tenths of a degree: {a} to {b}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_side_street_at_a_slant_lights_the_through_street_no_further_than_it_crosses_it() {
+        // a 12 m street east-west and a 4 m one off it to the north-east: along the through street, the ground goes no
+        // further than where the side street's far kerb leaves the through street's far kerb
+        for deg in [15.0f64, 30.0, 45.0, 60.0] {
+            let ring = middle_of(&[(12_000, 0.0), (4_000, deg), (12_000, 180.0)]).unwrap();
+            let (s, t) = (deg.to_radians().sin(), deg.to_radians().tan());
+            let along = 6_000.0 / t + 2_000.0 / s;
+            assert!(ring.iter().all(|q| q[0].abs() <= along + 1.0), "{deg} degrees: no further than {along}: {ring:?}");
+        }
+    }
+
+    #[test]
+    fn a_footway_leaving_with_a_road_changes_nothing_the_road_makes() {
+        // a 2 m way within a tenth of a degree of a 12 m street, either side of it, or the same bearing in either order
+        let road = [(12_000, 0.0), (8_000, 90.0), (12_000, 180.0)];
+        let alone = area_of(&middle_of(&road).unwrap());
+        for way in [-0.1, 0.0, 0.1] {
+            for arms in [[road[0], (2_000, way), road[1], road[2]], [(2_000, way), road[0], road[1], road[2]]] {
+                let with = area_of(&middle_of(&arms).unwrap());
+                assert!((with - alone).abs() < 0.01 * alone, "{arms:?}: {with} against {alone}");
+            }
         }
     }
 
@@ -1315,6 +1462,8 @@ mod tests {
             vec![(12_000, 0.0), (12_000, 180.0), (5_000, -4.0)],
             vec![(8_000, 0.0), (8_000, 0.0), (8_000, 90.0)],
             vec![(8_000, 0.0), (8_000, 3.0), (8_000, 180.0)],
+            vec![(20_000, 270.0), (20_000, 100.19), (10_000, 270.0)],
+            vec![(20_000, 90.0), (10_000, 180.0), (20_000, 270.0)],
         ] {
             let _ = middle_of(&arms); // if there is a shape, it passes the checks of every shape
         }
