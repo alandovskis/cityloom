@@ -689,6 +689,17 @@ test.describe("the Transform dialog", () => {
     await expect(page.locator("#transform-dialog .transform-item").first()).toBeVisible();
     await expect(page.locator("#transform-apply")).toBeVisible();
   });
+
+  test("the dialog fits a phone-width window", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 740 });
+    await page.locator("#transform-btn").click();
+    const dialog = page.locator("#transform-dialog");
+    await expect(dialog).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+    await page.locator("#transform-apply").scrollIntoViewIfNeeded();
+    await expect(page.locator("#transform-apply")).toBeInViewport();
+  });
 });
 
 // ---- zones: a street divided along its length --------------------------------------------------------------

@@ -1,6 +1,5 @@
-import type { Page } from "@playwright/test";
-
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 
 import {
   expect,
@@ -338,3 +337,22 @@ test("the add menu open on Transit, its stops greyed, passes an axe scan", async
   expect(scan.passes.length, "the scan reached the menu").toBeGreaterThan(0);
   expect(scan.violations).toEqual([]);
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`the street's Transform dialog, open on a previewed choice, has no axe violations in ${scheme}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-dialog")).toBeVisible();
+    await page.locator("#transform-dialog .transform-item").first().click();
+    await expect(page.locator("#transform-preview")).toBeVisible();
+    const found = await new AxeBuilder({ page })
+      .include("#transform-dialog")
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+  });
+}
