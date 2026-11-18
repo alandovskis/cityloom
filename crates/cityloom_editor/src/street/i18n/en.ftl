@@ -69,6 +69,7 @@ edit-redone = Redone. { $fit }.
 selection-position = { $kind }, { $width }, { $index } of { $total }
 started-over = Started over from the street as it is today. Undo brings your changes back.
 measure-refused = That measure does not suit this street.
+transform-refused = This change does not suit this street.
 
 # The notes beside the section.
 units-metres = metres

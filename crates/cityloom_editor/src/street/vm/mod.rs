@@ -8,6 +8,7 @@ pub mod keys;
 pub mod level;
 pub mod row;
 pub mod text;
+pub mod transform;
 pub mod watch;
 
 use std::cell::{Cell, RefCell};
@@ -28,8 +29,8 @@ use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View,
-    ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, Street, StripCell, Subject, Template, TemplateView, TreeSize,
+    Use, View, ZoneRefusal,
 };
 use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::impact::{Cause, Impact, Input};
@@ -222,8 +223,16 @@ impl StreetVm {
         if self.areas.is_empty() {
             return Vec::new();
         }
-        let street = self.core.read(|e| e.snapshot());
-        self.areas.iter().map(|r| Finding::of(r, &street)).collect()
+        self.findings_for(&self.core.read(|e| e.snapshot()))
+    }
+
+    /// How `street` (this one, or a copy of it with an edit tried on it) stands against each area the page's street
+    /// is inside.
+    fn findings_for(&self, street: &Street) -> Vec<Finding> {
+        if self.areas.is_empty() {
+            return Vec::new();
+        }
+        self.areas.iter().map(|r| Finding::of(r, street)).collect()
     }
 
     pub fn units(&self) -> Units {

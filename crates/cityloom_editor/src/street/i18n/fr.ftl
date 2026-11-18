@@ -69,6 +69,7 @@ edit-redone = Rétabli. { $fit }.
 selection-position = { $kind }, { $width }, { $index } sur { $total }
 started-over = Retour à la rue telle qu’elle est aujourd’hui. Annulez pour retrouver vos modifications.
 measure-refused = Cette mesure ne convient pas à cette rue.
+transform-refused = Ce changement ne convient pas à cette rue.
 
 # Les notes à côté de la coupe.
 units-metres = mètres

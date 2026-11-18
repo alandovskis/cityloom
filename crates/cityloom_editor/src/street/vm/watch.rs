@@ -436,6 +436,21 @@ impl SheetWatch {
         self.vm.with_value(|v| v.transform_menu())
     }
 
+    /// What the Transform dialog offers, drawing again when the street is edited.
+    pub fn transform_choices(&self) -> crate::street::vm::transform::TransformChoices {
+        self.vm.with_value(|v| v.transform_choices())
+    }
+
+    /// What a choice of the Transform dialog would do, tried on a copy of the street.
+    pub fn preview(&self, choice: crate::street::vm::transform::Choice) -> crate::street::vm::transform::Preview {
+        self.vm.with_value(|v| v.preview(choice))
+    }
+
+    /// Applies a choice of the Transform dialog, as one undoable step.
+    pub fn apply_choice(&self, choice: crate::street::vm::transform::Choice) -> bool {
+        self.vm.with_value(|v| v.apply_choice(choice))
+    }
+
     pub fn apply_measure(&self, code: &str) -> bool {
         self.vm.with_value(|v| v.apply_measure(code))
     }
