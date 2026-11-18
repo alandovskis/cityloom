@@ -417,6 +417,26 @@ test.describe("the add menu", () => {
     await expect.poll(() => shown("utilities")).toBe(true);
   });
 
+  test("undoing with an item focused keeps the focus on it as its greying changes", async ({ page }) => {
+    // A pedestrian street has no lane a bus can stop in, so its stops are greyed.
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-menu .ped-item").first().click();
+    await page.locator("#add-btn").click();
+    await page.locator("#add-topic-transit").click();
+    await expect(menuItem(page, "Curb stop")).toHaveAttribute("aria-disabled", "true");
+    await menuItem(page, "Curb stop").focus();
+    await page.keyboard.press("Control+z");
+    await expect(live(page)).toHaveText(/^Undone\./);
+    await expect(menuItem(page, "Curb stop")).not.toHaveAttribute("aria-disabled", "true");
+    await expect(page.locator("#add-menu")).toBeVisible();
+    await expect(menuItem(page, "Curb stop")).toBeFocused();
+    // Among the search's matches too.
+    await page.locator("#add-search").fill("curb stop");
+    await menuItem(page, "Curb stop").focus();
+    await page.keyboard.press("Control+y");
+    await expect(menuItem(page, "Curb stop")).toHaveAttribute("aria-disabled", "true");
+    await expect(menuItem(page, "Curb stop")).toBeFocused();
+  });
 });
 
 test.describe("what the street editor keeps in the city", () => {
