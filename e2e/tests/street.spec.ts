@@ -397,6 +397,26 @@ test.describe("the add menu", () => {
     expect(menu.x + menu.width).toBeLessThanOrEqual(390);
     expect(menu.y + menu.height).toBeLessThanOrEqual(844);
   });
+
+  test("at phone width the chosen topic's tab is scrolled into the row", async ({ page }) => {
+    await addFromMenu(page, "Street lamp");
+    await page.locator("#piece-list [role=option]").filter({ hasText: "Street lamp" }).first().click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const row = page.locator(".add-topics");
+    const shown = async (id: string) => {
+      const [tab, box] = [(await page.locator(`#add-topic-${id}`).boundingBox())!, (await row.boundingBox())!];
+      return tab.x >= box.x - 1 && tab.x + tab.width <= box.x + box.width + 1;
+    };
+    await page.locator("#add-btn").click();
+    await expect(page.locator("#add-topic-utilities")).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => shown("utilities")).toBe(true);
+    // Choosing a topic at the other end brings it back into the row.
+    await page.locator("#add-topic-walking").click();
+    await expect.poll(() => shown("walking")).toBe(true);
+    await page.locator("#add-topic-utilities").click();
+    await expect.poll(() => shown("utilities")).toBe(true);
+  });
+
 });
 
 test.describe("what the street editor keeps in the city", () => {

@@ -89,6 +89,26 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     };
     // The search's results replace the topics while the box holds text; clearing it shows the topic again.
     let searching = Memo::new(move |_| !query.get().trim().is_empty());
+    // The chosen topic's tab is brought into the row when the row scrolls sideways (a narrow screen): on opening, on
+    // a topic chosen, and when clearing the search shows the topics again. Its own scroll, never the page's.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        let (shown, t) = (open.get() && !searching.get(), topic.get());
+        if !shown {
+            return;
+        }
+        // Once the menu is shown, so that the tab has a place to measure.
+        leptos::task::spawn_local(async move {
+            leptos::task::tick().await;
+            let Some(m) = menu.get_untracked() else { return };
+            let (Ok(Some(row)), Ok(Some(tab))) = (m.query_selector(".add-topics"), m.query_selector(&format!("#add-topic-{}", t.id()))) else { return };
+            let (c, s) = (tab.get_bounding_client_rect(), row.get_bounding_client_rect());
+            let by = crate::street::view::strip::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
+            if by != 0.0 {
+                row.set_scroll_left(row.scroll_left() + by.round() as i32);
+            }
+        });
+    });
     let body = move || {
         if searching.get() { Either::Left(move || results(w, parts, query.get())) } else { Either::Right(topics(w, parts, topic, narrow)) }
     };
