@@ -14,7 +14,7 @@ use crate::shared::i18n::Args;
 use crate::shared::said::{self, Said};
 use crate::shared::symbols::icon;
 use crate::street::vm::StreetVm;
-use crate::street::vm::add_menu::{Entry, Item, Run, Topic};
+use crate::street::vm::add_menu::{Entry, Item, Run, RunView, Topic, runs};
 use crate::street::vm::keys::{AddFocus, add_menu_key};
 use crate::street::vm::watch::SheetWatch;
 
@@ -196,20 +196,12 @@ fn topics(w: SheetWatch, parts: MenuParts, topic: RwSignal<Topic>, narrow: RwSig
 /// A topic's items in runs (its pieces, then its green elements, stops or traffic calming elements), each under the
 /// hint that says where its items go and, when the street cannot take them, over the reason that describes each one.
 fn panel(w: SheetWatch, parts: MenuParts, entries: Vec<Entry>) -> impl IntoView {
-    let mut runs: Vec<Vec<Entry>> = Vec::new();
-    for e in entries {
-        match runs.last_mut() {
-            Some(run) if run[0].item.run() == e.item.run() => run.push(e),
-            _ => runs.push(vec![e]),
-        }
-    }
-    runs.into_iter()
-        .map(|run| {
-            let r = run[0].item.run();
+    runs(&entries)
+        .into_iter()
+        .map(|RunView { run: r, entries, unavailable: reason }| {
             let reason_id = format!("add-reason-{}", r.id());
-            let reason = run[0].unavailable.clone();
             let described = reason.as_ref().map(|_| reason_id.clone());
-            let items = run.into_iter().map(|e| item(w, parts, e, described.clone(), None, false)).collect_view();
+            let items = entries.into_iter().map(|e| item(w, parts, e, described.clone(), None, false)).collect_view();
             view! {
                 <p class="hint" id=format!("add-hint-{}", r.id())>{say(w, r.hint_key())}</p>
                 <ul class="add-sub">{items}</ul>
@@ -227,12 +219,7 @@ fn results(w: SheetWatch, parts: MenuParts, query: String) -> impl IntoView {
     if found.is_empty() {
         return Either::Left(view! { <p class="add-none">{move || w.i18n().tr("add-no-match", &Args::new().str("query", query.clone()))}</p> });
     }
-    let mut runs: Vec<Run> = Vec::new();
-    for e in &found {
-        if !runs.contains(&e.item.run()) {
-            runs.push(e.item.run());
-        }
-    }
+    let places: Vec<Run> = runs(&found).into_iter().map(|r| r.run).collect();
     let items = found
         .into_iter()
         .enumerate()
@@ -243,7 +230,7 @@ fn results(w: SheetWatch, parts: MenuParts, query: String) -> impl IntoView {
             item(w, parts, e, Some(described), reason, true)
         })
         .collect_view();
-    let places = runs.into_iter().map(|r| view! { <p id=format!("add-place-{}", r.id()) hidden>{say(w, r.hint_key())}</p> }).collect_view();
+    let places = places.into_iter().map(|r| view! { <p id=format!("add-place-{}", r.id()) hidden>{say(w, r.hint_key())}</p> }).collect_view();
     Either::Right(view! {
         <ul id="add-results" class="add-sub">{items}</ul>
         {places}

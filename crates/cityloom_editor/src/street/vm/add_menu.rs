@@ -205,6 +205,27 @@ pub fn entries(v: &View, topic: Topic) -> Vec<Entry> {
     topic_items(topic).into_iter().map(|item| entry(v, item)).collect()
 }
 
+/// Items that go to the same place, under the hint that says where, and why the street cannot take them, if so.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RunView {
+    pub run: Run,
+    pub entries: Vec<Entry>,
+    pub unavailable: Option<Said>,
+}
+
+/// `entries` grouped by where they go, in the order each place is first met, every entry kept in its order: a topic's
+/// pieces then its other things, or the places the search's matches go.
+pub fn runs(entries: &[Entry]) -> Vec<RunView> {
+    let mut out: Vec<RunView> = Vec::new();
+    for e in entries {
+        match out.iter_mut().find(|r| r.run == e.item.run()) {
+            Some(r) => r.entries.push(e.clone()),
+            None => out.push(RunView { run: e.item.run(), entries: vec![e.clone()], unavailable: e.unavailable.clone() }),
+        }
+    }
+    out
+}
+
 /// Every item whose name in `i18n`'s language holds `query` (both folded), in topic order; empty for a blank query.
 /// Names are read with the tracked `tr`, so a language switch searches again.
 pub fn search(v: &View, i18n: &I18n, query: &str) -> Vec<Entry> {
@@ -282,6 +303,28 @@ mod tests {
                 "Goes into the chosen free stretch of its row."
             ]
         );
+    }
+
+    #[test]
+    fn items_are_grouped_into_runs_by_where_they_go_in_the_order_first_met() {
+        let reason = Said::new("add-stops-no-lane");
+        let piece = |id: &str| Entry { item: Item::Piece(kind_index(id).unwrap()), topic: Topic::Transit, unavailable: None };
+        let stop = |k: StopKind| Entry { item: Item::Stop(k), topic: Topic::Transit, unavailable: Some(reason.clone()) };
+        let tree = Entry { item: Item::Green(GreenKind::Tree), topic: Topic::Greenery, unavailable: None };
+        // A topic: its pieces, then its stops, which carry their reason.
+        let topic = [piece("bus"), piece("busshelter"), stop(StopKind::Curb), stop(StopKind::Island)];
+        let r = runs(&topic);
+        assert_eq!(r.iter().map(|r| r.run).collect::<Vec<_>>(), [Run::Pieces, Run::Stops]);
+        assert_eq!(r[0].entries, topic[..2]);
+        assert_eq!(r[0].unavailable, None);
+        assert_eq!(r[1].entries, topic[2..]);
+        assert_eq!(r[1].unavailable, Some(reason.clone()));
+        // The search's matches mix them: one run for each place, every match kept in its order.
+        let found = [piece("planting"), tree.clone(), piece("bus"), stop(StopKind::Curb)];
+        let r = runs(&found);
+        assert_eq!(r.iter().map(|r| r.run).collect::<Vec<_>>(), [Run::Pieces, Run::Green, Run::Stops]);
+        assert_eq!(r[0].entries, [found[0].clone(), found[2].clone()]);
+        assert!(runs(&[]).is_empty());
     }
 
     #[test]
