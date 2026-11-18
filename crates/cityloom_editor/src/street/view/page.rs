@@ -14,9 +14,10 @@ use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind, TemplateView, View};
+use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind, TemplateView};
 use crate::street::model::{CalmingKindExt, GreenKindExt, StopKindExt};
 use crate::street::vm::StreetVm;
+use crate::street::vm::add_menu::insert_index;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;
 
@@ -37,11 +38,6 @@ pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
 /// The indices into the catalogue of the kinds in one group, those the catalogue has.
 pub fn group_kinds(ids: &[&str]) -> Vec<usize> {
     ids.iter().filter_map(|id| KINDS.iter().position(|k| k.id == *id)).collect()
-}
-
-/// Where a new piece goes: after the selected one, or at the end.
-pub fn insert_index(v: &View) -> usize {
-    v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)).map_or(v.segments.len(), |i| i + 1)
 }
 
 /// Minutes after midnight from `hh:mm`, or None when it is not a time.
@@ -1013,15 +1009,6 @@ mod tests {
         assert_eq!(ids("furniture"), ["bench", "terrace"]);
         assert_eq!(ids("utilities"), ["pole", "streetlamp"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);
-    }
-
-    #[test]
-    fn a_new_piece_goes_after_the_selected_one_or_at_the_end() {
-        let mut e = Editor::new(0);
-        assert_eq!(insert_index(&e.view()), 6);
-        let u = e.view().segments[2].uid;
-        e.select(Some(u));
-        assert_eq!(insert_index(&e.view()), 3);
     }
 
     #[test]

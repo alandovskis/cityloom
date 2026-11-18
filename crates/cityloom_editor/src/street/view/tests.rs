@@ -1162,8 +1162,8 @@ fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
 
 #[test]
 fn the_group_ids_are_those_of_the_add_menu() {
-    let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
-    assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
+    use crate::street::vm::add_menu::Topic;
+    assert_eq!(Topic::ALL.map(Topic::id), crate::shared::catalogue::GROUP_IDS);
 }
 
 #[test]

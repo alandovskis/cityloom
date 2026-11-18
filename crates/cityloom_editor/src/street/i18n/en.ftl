@@ -127,6 +127,12 @@ history-reset-title = Back to the street as it is today. Undo brings your change
 history-reset = Start over
 add-button = Add a piece
 add-hint = Goes after the selected piece.
+add-hint-green = Goes at the first free place along the street.
+add-hint-stretch = Goes into the chosen free stretch of its row.
+add-matches = { $count ->
+    [one] One match
+   *[other] { $count } matches
+}
 clock-time-of-day = Time of day
 clock-except = { $kind } except { $others }
 clock-window = { $kind } { $from }–{ $to }

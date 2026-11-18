@@ -127,6 +127,12 @@ history-reset-title = Retour à la rue telle qu’elle est aujourd’hui. Annule
 history-reset = Recommencer
 add-button = Ajouter un élément
 add-hint = Se place après l’élément sélectionné.
+add-hint-green = Se place au premier endroit libre le long de la rue.
+add-hint-stretch = Se place dans le tronçon libre choisi de sa rangée.
+add-matches = { $count ->
+    [one] Un résultat
+   *[other] { $count } résultats
+}
 clock-time-of-day = Heure de la journée
 clock-except = { $kind } sauf { $others }
 clock-window = { $kind } { $from }–{ $to }
