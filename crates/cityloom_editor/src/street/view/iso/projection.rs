@@ -111,15 +111,21 @@ impl Projection {
     /// `span_mm` wide: the near end of the street fills that width, unless that would make the drawing taller
     /// than `max_height`; then it is centred. The top of the drawing is the top of the tallest crown at the far end.
     pub fn fit(width: f64, span_mm: i32) -> Projection {
+        Projection::fit_sharing(width, span_mm, span_mm)
+    }
+
+    /// `fit(width, shared_span_mm)`'s scale, horizon and height, centred on a street `span_mm` wide: two streets drawn
+    /// to share one scale, the narrower centred in the room the wider takes.
+    pub fn fit_sharing(width: f64, span_mm: i32, shared_span_mm: i32) -> Projection {
         let width = width.max(MIN_WIDTH);
-        let across = span_mm.max(1) as f64;
+        let across = shared_span_mm.max(1) as f64;
         // How far the tallest thing at the far end stands above the horizon, in near-end millimetres.
         let headroom = (EYE_HEIGHT_MM - TALLEST_MM) * EYE_BACK_MM / (EYE_BACK_MM + STRETCH_MM);
         let scale = ((width - 2.0 * PAD) / across).min((max_height(width) - 2.0 * PAD) / (EYE_HEIGHT_MM - headroom));
         let horizon = PAD - headroom * scale;
         Projection {
             scale,
-            centre_mm: across / 2.0,
+            centre_mm: span_mm.max(1) as f64 / 2.0,
             centre_px: width / 2.0,
             horizon,
             width,
@@ -241,6 +247,18 @@ pub(super) fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fit_sharing_with_its_own_span_is_fit() {
+        assert_eq!(Projection::fit_sharing(1050.0, 12_000, 12_000), Projection::fit(1050.0, 12_000));
+    }
+
+    #[test]
+    fn fit_sharing_takes_the_wider_scale_and_its_own_centre() {
+        let (shared, wide) = (Projection::fit_sharing(1050.0, 12_000, 20_000), Projection::fit(1050.0, 20_000));
+        assert_eq!((shared.scale, shared.horizon, shared.height), (wide.scale, wide.horizon, wide.height));
+        assert_eq!(shared.centre_mm, 6_000.0);
+    }
 
     #[test]
     fn a_drawing_fits_its_room_narrower_first_and_scaled_down_only_below_the_shortest_height() {

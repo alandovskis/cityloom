@@ -85,7 +85,18 @@ struct Run<'a> {
 /// is drawn over both, in the selected zone's half. The neighbour is drawn over its whole half whatever its own length.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let p = Projection::fit(width, span_mm(v));
-    IsoSvg { markup: render(&diagram(v, i18n, width), &p), width: p.width, height: p.height }
+    IsoSvg { markup: render(&diagram_through(v, i18n, &p), &p), width: p.width, height: p.height }
+}
+
+/// Before and After drawn `width` wide at one scale: the scale that fits the wider of the two. Each is centred on its
+/// own street, so the same width looks the same in both.
+pub fn iso_pair(before: &View, after: &View, i18n: &I18n, width: f64) -> (IsoSvg, IsoSvg) {
+    let shared = span_mm(before).max(span_mm(after));
+    let draw = |v: &View| {
+        let p = Projection::fit_sharing(width, span_mm(v), shared);
+        IsoSvg { markup: render(&diagram_through(v, i18n, &p), &p), width: p.width, height: p.height }
+    };
+    (draw(before), draw(after))
 }
 
 /// The diagram `iso_svg` draws and the projection it is drawn through, for a flat figure (`street::view::drawing`).
@@ -122,9 +133,12 @@ fn section(base: &Projection, v: &View, i18n: &I18n, run: &Run, class: Option<&s
 /// The street in 2.5D as a diagram: the ground, the section or sections, and the selected piece's outline (see
 /// `iso_svg` for how they lie).
 fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
-    let span = span_mm(v);
-    let p = Projection::fit(width, span);
-    let (w, l) = (span as f64, STRETCH_MM);
+    diagram_through(v, i18n, &Projection::fit(width, span_mm(v)))
+}
+
+/// The diagram of `diagram`, laid out for the projection `p` (its own, or one it shares with another street).
+fn diagram_through(v: &View, i18n: &I18n, p: &Projection) -> Diagram {
+    let (w, l) = (span_mm(v) as f64, STRETCH_MM);
     let ground = Layer {
         kind: LayerKind::Ground,
         shapes: vec![Shape::Polygon {
@@ -136,7 +150,7 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
     };
     let mut selected = Reach::STRETCH;
     let sections = match &v.zones.joint {
-        None => vec![section(&p, v, i18n, &Run { segs: &v.segments, reach: selected, across: false, taper: None }, None)],
+        None => vec![section(p, v, i18n, &Run { segs: &v.segments, reach: selected, across: false, taper: None }, None)],
         Some(j) => {
             let (near, far) = (Reach { near: 0.0, far: l / 2.0 }, Reach { near: l / 2.0, far: l });
             // The neighbour lies beyond the selected zone (`far`), or before it.
@@ -156,7 +170,7 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
                 taper: j.taper.as_ref().filter(|t| !t.host_is_selected).map(|t| taper::Draw::new(t, !j.far)),
             };
             let runs = if j.far { [&across_run, &own_run] } else { [&own_run, &across_run] };
-            runs.map(|run| section(&p, v, i18n, run, Some(if run.across { "iso-section iso-across" } else { "iso-section" }))).into()
+            runs.map(|run| section(p, v, i18n, run, Some(if run.across { "iso-section iso-across" } else { "iso-section" }))).into()
         }
     };
     let outline = match v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
@@ -272,6 +286,31 @@ mod tests {
         let at = face.find("points=\"").unwrap() + 8;
         let ys: Vec<f64> = face[at..at + face[at..].find('"').unwrap()].split(' ').map(|pt| pt.split(',').nth(1).unwrap().parse().unwrap()).collect();
         ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn a_pair_of_one_street_is_the_street_twice() {
+        let v = Editor::new(0).view();
+        let one = iso_svg(&v, &en(), 1050.0);
+        let (a, b) = iso_pair(&v, &v, &en(), 1050.0);
+        for x in [a, b] {
+            assert_eq!((x.markup.as_str(), x.width, x.height), (one.markup.as_str(), one.width, one.height));
+        }
+    }
+
+    #[test]
+    fn a_pair_draws_the_narrower_at_the_wider_scale() {
+        let narrow = Editor::new(0);
+        let mut wide = narrow.clone();
+        for _ in 0..3 {
+            wide.add(kind_index("bike").unwrap(), 2);
+        }
+        let (n, w) = (narrow.view(), wide.view());
+        assert!(span_mm(&w) > span_mm(&n));
+        let (a, b) = iso_pair(&n, &w, &en(), 1050.0);
+        let wider = iso_svg(&w, &en(), 1050.0);
+        assert_eq!((a.height, b.height), (wider.height, wider.height));
+        assert_ne!(a.markup, iso_svg(&n, &en(), 1050.0).markup, "the narrower street is drawn smaller than alone");
     }
 
     #[test]
