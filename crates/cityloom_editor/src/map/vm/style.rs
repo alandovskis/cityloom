@@ -121,7 +121,7 @@ pub fn layers(lat: f64) -> String {
             "filter": ["has", "joint_m"],
             "paint": { "circle-color": edge(), "circle-opacity": only_editable(0.9), "circle-radius": metres("joint_m", lat, CASING_PX / 2.0, CASING_PX / 2.0) }
         },
-        // Where three streets or more meet, the shape over their ends (`overlay::Join::Middle`): its outline under
+        // Where three streets or more meet, the shape their ends make (`overlay::Join::Middle`): its outline under
         // every street's line, so only its outer half shows where the shape spans the gap between two streets, as
         // wide past its edge as a street's casing is.
         {
@@ -135,17 +135,25 @@ pub fn layers(lat: f64) -> String {
             "filter": ["all", ["has", "joint_m"], ["!", ["has", "ground"]]],
             "paint": { "circle-color": colour(), "circle-opacity": only_editable(1.0), "circle-radius": metres("joint_m", lat, STREET_MIN_PX / 2.0, 0.0) }
         },
+        // Where three streets or more meet that are not a junction, the shape between their ends, under their lines:
+        // its corners are theirs, so it fills only the gaps between them and each street keeps its own colour to its
+        // end. Its own (`m-`), never lit, in the plain colour.
+        {
+            "id": "places-middle", "type": "fill", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["!", ["has", "ground"]]],
+            "paint": { "fill-color": colour(), "fill-opacity": only_editable(1.0) }
+        },
         {
             "id": "places-street", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
             "paint": { "line-color": colour(), "line-opacity": opacity(1.0), "line-width": metres("width_m", lat, STREET_MIN_PX, 0.0) }
         },
-        // The shape itself, over the streets' ends, so no corner of one sticks out past another: the street's, or
-        // the junction's ground, lit and opened with it.
+        // A junction's ground where three of its streets or more meet: the shape over their ends, lit and opened
+        // with the junction (`web/mapcanvas.js`'s `hotAt` takes it at the pointer).
         {
-            "id": "places-middle", "type": "fill", "source": SOURCE,
-            "filter": ["==", ["geometry-type"], "Polygon"],
+            "id": "places-ground", "type": "fill", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["has", "ground"]],
             "paint": { "fill-color": colour(), "fill-opacity": only_editable(1.0) }
         },
         {
@@ -370,13 +378,14 @@ mod tests {
     }
 
     /// The places' layers that draw before the marks, in order: casings under fills, so streets and their joints merge.
-    const DRAWN: [&str; 11] = [
+    const DRAWN: [&str; 12] = [
         "places-casing",
         "places-joint-casing",
         "places-middle-casing",
         "places-joint",
-        "places-street",
         "places-middle",
+        "places-street",
+        "places-ground",
         "places-junction-ground",
         "places-pedestrian",
         "places-conflict",
@@ -512,24 +521,28 @@ mod tests {
     }
 
     #[test]
-    fn where_three_streets_or_more_meet_their_shape_lies_over_their_ends_and_its_outline_under_them() {
-        let (outline, middle) = (layer(45.5, "places-middle-casing"), layer(45.5, "places-middle"));
+    fn where_three_streets_or_more_meet_their_shape_fills_between_their_ends_and_a_junctions_lies_over_them() {
+        let (outline, middle, ground) = (layer(45.5, "places-middle-casing"), layer(45.5, "places-middle"), layer(45.5, "places-ground"));
         let (casing, street) = (layer(45.5, "places-casing"), layer(45.5, "places-street"));
         let polygon = json!(["==", ["geometry-type"], "Polygon"]);
         assert_eq!(outline["filter"], polygon);
-        assert_eq!(middle["filter"], polygon);
-        // the fill covers the corners of the streets' square ends; the outline is under every street's line, so only
-        // its outer half shows, as wide as a street's casing past its edge, and none of it across a street
-        assert_eq!(middle["type"], "fill");
-        assert_eq!(middle["paint"]["fill-color"], street["paint"]["line-color"]);
+        // a meeting's shape is under the streets' lines: its corners are theirs, so it fills only between them and
+        // every street keeps its own colour to its end; a junction's is its ground, over them, lit with the junction
+        assert_eq!(middle["filter"], json!(["all", polygon, ["!", ["has", "ground"]]]));
+        assert_eq!(ground["filter"], json!(["all", polygon, ["has", "ground"]]));
+        for l in [&middle, &ground] {
+            assert_eq!(l["type"], "fill");
+            assert_eq!(l["paint"]["fill-color"], street["paint"]["line-color"]);
+            assert_eq!(l["paint"]["fill-opacity"], json!(["case", ["boolean", ["feature-state", "editable"], true], 1.0, 0]), "not drawn where muted");
+            assert!(l["paint"]["fill-outline-color"].is_null(), "a hairline over the streets would cross them");
+        }
+        // the outline is under every street's line, so only its outer half shows, as far past its edge as a street's
+        // casing, and none of it across a street
         assert_eq!(outline["type"], "line");
         assert_eq!(outline["paint"]["line-color"], casing["paint"]["line-color"]);
         assert_eq!(outline["paint"]["line-width"], CASING_PX);
         assert_eq!(outline["layout"]["line-join"], "round");
-        // not drawn where muted: a translucent shape over translucent lines shows lighter
-        assert_eq!(middle["paint"]["fill-opacity"], json!(["case", ["boolean", ["feature-state", "editable"], true], 1.0, 0]));
         assert_eq!(outline["paint"]["line-opacity"], json!(["case", ["boolean", ["feature-state", "editable"], true], 0.9, 0]));
-        assert!(middle["paint"]["fill-outline-color"].is_null(), "a hairline over the streets would cross them");
     }
 
     #[test]
@@ -574,8 +587,9 @@ mod tests {
     fn every_layer_of_the_places_is_muted_where_the_place_is_not_editable_and_not_before_it_is_told() {
         // the junction's press target is never seen, editable or not; a muted street's joint is not drawn (see
         // `a_joint_rounds_a_streets_end_under_the_lines_and_a_junctions_ground_over_them` and
-        // `where_three_streets_or_more_meet_their_shape_lies_over_their_ends_and_its_outline_under_them`)
-        let unseen = ["places-junction-hit", "places-joint-casing", "places-middle-casing", "places-joint", "places-middle", "places-junction-ground"];
+        // `where_three_streets_or_more_meet_their_shape_fills_between_their_ends_and_a_junctions_lies_over_them`)
+        let unseen =
+            ["places-junction-hit", "places-joint-casing", "places-middle-casing", "places-joint", "places-middle", "places-ground", "places-junction-ground"];
         for layer in layers(45.5).into_iter().filter(|l| !unseen.contains(&l["id"].as_str().unwrap())) {
             let id = layer["id"].as_str().unwrap();
             let paint = layer["paint"].as_object().unwrap();

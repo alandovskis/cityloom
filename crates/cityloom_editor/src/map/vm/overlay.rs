@@ -45,44 +45,68 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
             "geometry": { "type": "LineString", "coordinates": e.shape_mm.iter().map(|q| position(p, q[0], q[1])).collect::<Vec<_>>() },
         }));
     }
-    // a junction's press target is never smaller than its ground, where a street there was widened past the widest
-    let mut ground_m: BTreeMap<u32, f64> = BTreeMap::new();
+    // what each junction's ground is, for its press target (`target_m`)
+    let mut grounds: BTreeMap<u32, Ground> = BTreeMap::new();
     for (whose, join) in joints(v) {
         let mut properties = match whose {
             Whose::Street(e) => json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "conflict": conflicts.contains(&e.uid) }),
             Whose::Junction(n) => json!({ "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "conflict": false, "ground": true }),
+            Whose::Meeting(node) => json!({ "hot": format!("m-{node}"), "status": "ok", "conflict": false }),
         };
-        let (geometry, reach_m) = match join {
+        let (geometry, ground) = match join {
             Join::Disc { end: [x, y], row_mm } => {
                 let joint_m = row_mm as f64 / 2000.0;
                 properties["joint_m"] = json!(joint_m);
-                (json!({ "type": "Point", "coordinates": position(p, x, y) }), joint_m)
+                (json!({ "type": "Point", "coordinates": position(p, x, y) }), Ground::Disc(joint_m))
             }
-            Join::Middle { at, ring } => {
-                let reach_mm = ring.iter().map(|q| (q[0] - at[0] as f64).hypot(q[1] - at[1] as f64)).fold(0.0, f64::max);
+            Join::Middle { ring, .. } => {
                 let coordinates: Vec<[f64; 2]> = ring.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect();
-                (json!({ "type": "Polygon", "coordinates": [coordinates] }), reach_mm / 1000.0)
+                (json!({ "type": "Polygon", "coordinates": [coordinates] }), Ground::Shape)
             }
         };
         if let Whose::Junction(n) = whose {
-            ground_m.insert(n.uid, reach_m);
+            grounds.insert(n.uid, ground);
         }
         features.push(json!({ "type": "Feature", "properties": properties, "geometry": geometry }));
     }
     for n in v.nodes.iter().filter(|n| n.junction) {
         features.push(json!({
             "type": "Feature",
-            "properties": { "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "radius_m": (n.radius_mm as f64 / 1000.0).max(ground_m.get(&n.uid).copied().unwrap_or(0.0)) },
+            "properties": { "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "radius_m": target_m(n, grounds.get(&n.uid)) },
             "geometry": { "type": "Point", "coordinates": position(p, n.x_mm, n.y_mm) },
         }));
     }
     json!({ "type": "FeatureCollection", "features": features }).to_string()
 }
 
+/// What a junction's ground is drawn as.
+enum Ground {
+    /// A disc this many metres round.
+    Disc(f64),
+    /// A shape, pressed for itself (`places-ground`).
+    Shape,
+}
+
+/// How far round its point a junction is pressed (`radius_m`, never less than `style.rs`'s floor): its own radius,
+/// or its ground's where that is a bigger disc; nothing where its ground is a shape, which is pressed for itself, so
+/// a wide street there past a narrow one's corners is pressed as the street.
+fn target_m(n: &NodeView, ground: Option<&Ground>) -> f64 {
+    let own = n.radius_mm as f64 / 1000.0;
+    match ground {
+        None => own,
+        Some(Ground::Disc(r)) => own.max(*r),
+        Some(Ground::Shape) => 0.0,
+    }
+}
+
 /// Whose a joint is: it is drawn in that place's colour and state.
 enum Whose<'a> {
     Street(&'a EdgeView),
     Junction(&'a NodeView),
+    /// The shape where three streets or more meet that are not a junction, by its node's uid: drawn over every
+    /// street's end, it is no one street's, so it takes no street's state and is never lit or pressed; it is
+    /// editable where its point is in the view, as a junction is (`place_boxes`).
+    Meeting(u32),
 }
 
 /// How streets ending at one node are joined there.
@@ -100,8 +124,8 @@ enum Join {
 /// Where streets meet, how they are joined (`Join`): one for each node two streets or more end at. An end no other
 /// street meets (a dead end, or where the street leaves the map) stays square, so a short wide stub is not rounded. At
 /// a junction the join is the junction's ground: it takes the junction's colour and state, so it lights and opens with
-/// the junction it is pressed for. Elsewhere it is the street's of the second-widest end there (`style.rs` draws a
-/// street's disc under the lines, filling only the gap their square ends leave, and every shape over them).
+/// the junction it is pressed for. Elsewhere a disc is the street's of the narrower end (`style.rs` draws it under the
+/// lines, filling only the gap their square ends leave) and a shape is its own (`Whose::Meeting`), drawn over them.
 fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
     let mut ends: BTreeMap<u32, Vec<(&EdgeView, [i32; 2], Option<[i32; 2]>)>> = BTreeMap::new();
     for e in &v.edges {
@@ -115,8 +139,12 @@ fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
         .map(|(node, mut at)| {
             at.sort_by_key(|(e, _, _)| (Reverse(e.row_mm), e.uid));
             let (e, end, _) = at[1];
-            let whose = junctions.get(&node).map_or(Whose::Street(e), |n| Whose::Junction(n));
             let ring = if at.len() > 2 { middle(end, at.iter().filter_map(|&(e, _, next)| Some((next?, e.row_mm)))) } else { None };
+            let whose = match (junctions.get(&node), &ring) {
+                (Some(n), _) => Whose::Junction(n),
+                (None, Some(_)) => Whose::Meeting(node),
+                (None, None) => Whose::Street(e),
+            };
             (whose, ring.map_or(Join::Disc { end, row_mm: e.row_mm }, |ring| Join::Middle { at: end, ring }))
         })
         .collect()
@@ -436,6 +464,12 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
         let [lon, lat] = position(p, n.x_mm, n.y_mm);
         boxes.push((format!("j-{}", n.uid), [lon, lat, lon, lat]));
     }
+    for (whose, join) in joints(v) {
+        if let (Whose::Meeting(node), Join::Middle { at, .. }) = (whose, join) {
+            let [lon, lat] = position(p, at[0], at[1]);
+            boxes.push((format!("m-{node}"), [lon, lat, lon, lat]));
+        }
+    }
     boxes
 }
 
@@ -544,7 +578,7 @@ mod tests {
         let points: Vec<&Value> =
             fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "Point" && f["properties"]["joint_m"].is_null()).collect();
         assert_eq!(points.len(), v.nodes.iter().filter(|n| n.junction).count());
-        assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-") && f["properties"]["radius_m"].as_f64().unwrap() > 0.0));
+        assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-") && f["properties"]["radius_m"].as_f64().unwrap() >= 0.0));
         let streets = fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "LineString").count();
         assert_eq!(streets, v.edges.len());
     }
@@ -763,10 +797,20 @@ mod tests {
         for q in corners(&v, &p, centre) {
             assert!(holds(ring, q, 0.2), "the corner {q:?} of a street's square end is under the shape {ring:?}");
         }
-        let hot = f["properties"]["hot"].as_str().unwrap();
-        assert!(v.edges.iter().any(|e| format!("s-{}", e.uid) == hot), "one of the streets', lit and opened with it: {hot}");
+        let node = v.nodes.iter().find(|n| [n.x_mm, n.y_mm] == centre).expect("the node they meet at");
+        assert_eq!(f["properties"]["hot"], format!("m-{}", node.uid), "its own, not one street's: hovering a street never lights the others' ends");
         assert_eq!(f["properties"]["status"], "ok");
         assert_eq!(f["properties"]["conflict"], false);
+        // it is editable as a junction is, where its point is in the view
+        let b = place_boxes(&v, &p).into_iter().find(|(h, _)| *h == format!("m-{}", node.uid)).expect("a box to say when it is editable").1;
+        let [lon, lat] = position(&p, centre[0], centre[1]);
+        assert_eq!(b, [lon, lat, lon, lat]);
+        // drawn over every street's end, it takes none of their states
+        let mut v = v;
+        v.edges.iter_mut().for_each(|e| (e.edited, e.ok) = (true, false));
+        let fc = parse(&places(&v, &p, &v.edges.iter().map(|e| e.uid).collect()));
+        let f = &middles(&fc, &p, centre)[0].0;
+        assert_eq!((&f["properties"]["status"], &f["properties"]["conflict"]), (&json!("ok"), &json!(false)));
         assert!(f["properties"]["ground"].is_null() && f["properties"]["radius_m"].is_null(), "not a junction");
     }
 
@@ -862,12 +906,13 @@ mod tests {
     }
 
     #[test]
-    fn a_junctions_press_target_covers_its_ground_even_where_a_street_there_was_widened_past_the_widest() {
+    fn where_a_junctions_ground_is_a_shape_its_press_target_is_the_shape_and_no_wider_circle() {
         let mut v = City::new().view(0); // the sample city has junctions
         let n = v.nodes.iter().find(|n| n.junction && v.edges.iter().filter(|e| e.a == n.uid || e.b == n.uid).count() >= 3).unwrap();
         let (uid, radius_mm, centre) = (n.uid, n.radius_mm, [n.x_mm, n.y_mm]);
-        // every street there far wider than the widest was
-        v.edges.iter_mut().filter(|e| e.a == uid || e.b == uid).for_each(|e| e.row_mm = 4 * radius_mm + 1);
+        // one street there far wider than the widest was, at an odd width, halved
+        let wide_mm = 4 * radius_mm + 1;
+        v.edges.iter_mut().find(|e| e.a == uid || e.b == uid).unwrap().row_mm = wide_mm;
         let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
         let fc = parse(&places(&v, &p, &BTreeSet::new()));
         let target = fc["features"]
@@ -878,10 +923,31 @@ mod tests {
             .unwrap()["properties"]["radius_m"]
             .as_f64()
             .unwrap();
-        let ring = middles(&fc, &p, centre).into_iter().find(|(f, _)| f["properties"]["hot"] == format!("j-{uid}")).expect("the junction's ground").1;
-        let farthest = ring.iter().map(|q| q[0].hypot(q[1])).fold(0.0, f64::max);
-        assert!(farthest > radius_mm as f64 / 1000.0, "the ground reaches past the junction's own radius: {farthest}");
-        assert!(target >= farthest - 0.2, "a press anywhere on the ground opens the junction: target {target}, ground reaches {farthest}");
+        assert!(middles(&fc, &p, centre).iter().any(|(f, _)| f["properties"]["hot"] == format!("j-{uid}")), "the junction's ground is a shape");
+        // the shape is pressed for itself (`places-ground`), so the target round the point adds nothing to it: no
+        // more than the 24 px every junction has, or it would take the wide street past the narrow one's corners
+        assert_eq!(target, 0.0, "only the floor of the target is round the point");
+    }
+
+    #[test]
+    fn where_only_two_of_a_junctions_streets_are_in_the_place_its_ground_is_a_disc_its_press_target_covers() {
+        let mut v = City::from_network(&two_streets(4.0, 4.0, 60.0), "Bendville").view(0);
+        let shared = v.edges[0].b;
+        let n = v.nodes.iter_mut().find(|n| n.uid == shared).unwrap();
+        (n.junction, n.edited, n.radius_mm) = (true, true, 1_000); // its other streets are outside the place
+        let wide_mm = 9_001; // both wider than the junction's radius, at an odd width
+        v.edges.iter_mut().for_each(|e| e.row_mm = wide_mm);
+        let p = projection(&v);
+        let fc = parse(&places(&v, &p, &v.edges.iter().map(|e| e.uid).collect()));
+        let mine: Vec<&Value> = fc["features"].as_array().unwrap().iter().filter(|f| f["properties"]["hot"] == format!("j-{shared}")).collect();
+        let ground = mine.iter().find(|f| f["properties"]["joint_m"].is_number()).expect("a disc, its ground");
+        assert_eq!(
+            (&ground["properties"]["ground"], &ground["properties"]["status"], &ground["properties"]["conflict"]),
+            (&json!(true), &json!("changed"), &json!(false))
+        );
+        let target = mine.iter().find(|f| f["properties"]["radius_m"].is_number()).unwrap()["properties"]["radius_m"].as_f64().unwrap();
+        assert!((ground["properties"]["joint_m"].as_f64().unwrap() - wide_mm as f64 / 2000.0).abs() < 1e-9);
+        assert!((target - wide_mm as f64 / 2000.0).abs() < 1e-9, "the press target is as big as the ground: {target}");
     }
 
     #[test]

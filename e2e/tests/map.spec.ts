@@ -86,7 +86,7 @@ const streetSpots = (page: Page) =>
         ];
         const there = new Set(
           map
-            .queryRenderedFeatures(box, { layers: ["places-junction-hit", "places-street"] })
+            .queryRenderedFeatures(box, { layers: ["places-junction-hit", "places-ground", "places-street"] })
             .map((g: any) => g.properties.hot),
         );
         if (there.size !== 1 || !there.has(hot)) continue;
@@ -691,7 +691,7 @@ async function openProgrammeStreet(page: Page, minM: number) {
 
 /** Adds a 6 m parking-lane use (a patio) to the right curbside strip. With `spacerM`, a tree of that length goes
  *  first, so the patio starts away from the street's end: a use there lies on the junction's ground (its press
- *  target, `places-junction-hit`, comes first), so a press on it opens the junction, not the street. */
+ *  targets, `places-junction-hit` and `places-ground`, come first), so a press on it opens the junction, not the street. */
 async function addPatio(page: Page, spacerM = 0) {
   const cells = page.locator("#curb-strip-right").locator('[role="option"]');
   let count = 1;
@@ -990,7 +990,16 @@ const curbsideSpot = (page: Page) =>
             [p.x - 6, p.y - 6],
             [p.x + 6, p.y + 6],
           ],
-          { layers: ["places-junction-hit", "places-street", "stops-dot", "stops-platform", "curbside-fill"] },
+          {
+            layers: [
+              "places-junction-hit",
+              "places-ground",
+              "places-street",
+              "stops-dot",
+              "stops-platform",
+              "curbside-fill",
+            ],
+          },
         );
         if (
           there.every((g: any) => g.properties.hot === f.properties.hot) &&

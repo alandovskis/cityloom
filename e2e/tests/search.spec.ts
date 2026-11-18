@@ -134,7 +134,8 @@ test.describe("the map under the floating panels", () => {
         rt = -Infinity,
         b = -Infinity;
       for (const f of map.querySourceFeatures("places")) {
-        const pts = f.geometry.type === "Point" ? [f.geometry.coordinates] : f.geometry.coordinates;
+        const g = f.geometry;
+        const pts = g.type === "Point" ? [g.coordinates] : g.type === "Polygon" ? g.coordinates.flat() : g.coordinates;
         for (const c of pts) {
           const p = map.project(c);
           l = Math.min(l, r.left + p.x);

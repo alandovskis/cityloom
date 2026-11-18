@@ -215,14 +215,23 @@ export async function createMapCanvas(container) {
   ];
   const hotAt = (point) => {
     // A junction (anywhere on its ground, never less than its unseen 24-pixel target) before a street, a street
-    // before what lies beside it. The junction's target is taken under the pointer alone: it is already 24 pixels,
+    // before what lies beside it. The junction is taken under the pointer alone: its target is already 24 pixels,
     // and a reach round the pointer would add to it and cover a short street between two junctions.
-    const order = ["places-junction-hit", "places-street", "stops-dot", "stops-platform", "curbside-fill"];
+    const order = [
+      "places-junction-hit",
+      "places-ground",
+      "places-street",
+      "stops-dot",
+      "stops-platform",
+      "curbside-fill",
+    ];
+    const junction = ["places-junction-hit", "places-ground"];
     const layers = order.filter((id) => map.getLayer(id));
     if (!layers.length) return null;
-    const [target, ...rest] = layers[0] === "places-junction-hit" ? layers : [null, ...layers];
+    const targets = layers.filter((id) => junction.includes(id));
+    const rest = layers.filter((id) => !junction.includes(id));
     const found = [
-      ...(target ? map.queryRenderedFeatures([point.x, point.y], { layers: [target] }) : []),
+      ...(targets.length ? map.queryRenderedFeatures([point.x, point.y], { layers: targets }) : []),
       ...(rest.length ? map.queryRenderedFeatures(near(point), { layers: rest }) : []),
     ];
     for (const id of order) {
