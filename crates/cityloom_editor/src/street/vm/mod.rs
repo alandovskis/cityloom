@@ -4341,12 +4341,14 @@ mod add_menu_tests {
     #[test]
     fn the_matches_are_counted_in_both_languages() {
         let r = sample_in(Locale::En);
+        r.vm.say_matches(0);
         r.vm.say_matches(1);
         r.vm.say_matches(3);
-        assert_eq!(r.said.take(), ["One match", "3 matches"]);
+        assert_eq!(r.said.take(), ["No matches", "One match", "3 matches"]);
         let r = sample_in(Locale::FrCa);
+        r.vm.say_matches(0);
         r.vm.say_matches(1);
         r.vm.say_matches(3);
-        assert_eq!(r.said.take(), ["Un résultat", "3 résultats"]);
+        assert_eq!(r.said.take(), ["Aucun résultat", "Un résultat", "3 résultats"]);
     }
 }

@@ -367,7 +367,7 @@ test.describe("the add menu", () => {
     await page.locator("#add-search").fill("zzz");
     await expect(page.locator(".add-none")).toHaveText("Nothing matches “zzz”.");
     await expect(page.locator("#add-menu .add-item")).toHaveCount(0);
-    await expect(live(page)).toHaveText("0 matches");
+    await expect(live(page)).toHaveText("No matches");
     await page.locator("#add-search").fill("");
     await expect(page.locator(".add-none")).toHaveCount(0);
     await expect(page.locator("#add-topic-furniture")).toHaveAttribute("aria-selected", "true");

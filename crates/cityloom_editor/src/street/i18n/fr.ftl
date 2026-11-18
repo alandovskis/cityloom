@@ -128,6 +128,7 @@ add-hint = Se place après l’élément sélectionné.
 add-hint-green = Se place au premier endroit libre le long de la rue.
 add-hint-stretch = Se place dans le tronçon libre choisi de sa rangée.
 add-matches = { $count ->
+    [0] Aucun résultat
     [one] Un résultat
    *[other] { $count } résultats
 }

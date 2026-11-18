@@ -128,6 +128,7 @@ add-hint = Goes after the selected piece.
 add-hint-green = Goes at the first free place along the street.
 add-hint-stretch = Goes into the chosen free stretch of its row.
 add-matches = { $count ->
+    [0] No matches
     [one] One match
    *[other] { $count } matches
 }
