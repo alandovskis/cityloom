@@ -279,3 +279,12 @@ export async function openLongStreet(page: Page, minM: number) {
   }
   throw new Error(`no street of ${minM} m or more`);
 }
+
+/** Opens the Transform dialog, chooses the option matching `option` (its tab first, when the option is not in the
+ *  tab the dialog opens on) and applies it. The dialog closes and the focus goes to the drawing. */
+export async function transform(page: Page, option: string, tab?: "ped" | "transit" | "templates"): Promise<void> {
+  await page.locator("#transform-btn").click();
+  if (tab) await page.locator(`#transform-tab-${tab}`).click();
+  await page.locator(`#transform-dialog ${option}`).first().click();
+  await page.locator("#transform-apply").click();
+}

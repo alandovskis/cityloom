@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, showStreetLevel, test } from "./fixtures";
+import { expect, live, openStreet, showStreetLevel, test, transform } from "./fixtures";
 
 // The Impact tab's "Last change" card (#64): what the last edit did to the street's space and checks.
 
@@ -87,8 +87,7 @@ test.describe("the summary of the last change", () => {
   });
 
   test("a grouped operation, Make pedestrian, is one change that says what the street became", async ({ page }) => {
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await transform(page, ".ped-item", "ped");
     await expect(body(page).locator(".impact-what")).toHaveText("Made pedestrian");
     await expect(body(page).locator(".impact-uses li", { hasText: "Cars and trucks" })).toBeVisible();
     await expect(body(page).locator(".impact-class")).toContainText("is now a pedestrian street.");

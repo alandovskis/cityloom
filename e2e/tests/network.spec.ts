@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, mapReady, test } from "./fixtures";
+import { expect, live, mapReady, test, transform } from "./fixtures";
 
 // The network checks look across the whole city: a row for each in the city's level of the map's details, with its
 // count, leading to the check's own level, where its findings name the places they concern; a place pressed there is
@@ -231,8 +231,7 @@ test.describe("the network checks on the map page", () => {
     expect(cut).toBeGreaterThan(clean);
     // a pedestrian street needs no crossing to be walked on to: making the street one joins the route
     await page.goto("/" + hrefOf(street));
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await transform(page, ".ped-item", "ped");
     await page.goto("/map.html");
     await mapReady(page);
     await expect(page.locator("#network-slot .net-rule")).toHaveCount(6);

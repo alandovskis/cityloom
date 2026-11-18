@@ -3118,6 +3118,7 @@ svg pattern circle {
   display: grid;
   grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) minmax(0, 360px);
   gap: 16px;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 16px;
   overflow: auto;
@@ -3274,6 +3275,13 @@ svg pattern circle {
   border-color: var(--field-line);
   background: var(--panel);
   color: var(--ink-3);
+}
+/* From 721 px up the dialog keeps one height, so that the options do not move under the pointer when pointing at one
+   shows its preview and the dialog, centred by the browser, grows. */
+@media (min-width: 721px) {
+  .transform-dialog {
+    height: min(720px, calc(100vh - 32px));
+  }
 }
 @media (max-width: 720px) {
   .transform-body {

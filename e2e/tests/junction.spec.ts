@@ -1,5 +1,6 @@
 import {
   addFromMenu,
+  TURBO_TILE,
   expect,
   live,
   openJunction,
@@ -9,7 +10,7 @@ import {
   streetLengthM,
   test,
   tileFrom,
-  TURBO_TILE,
+  transform,
 } from "./fixtures";
 
 import type { Locator, Page } from "@playwright/test";
@@ -363,8 +364,7 @@ test.describe("a junction of a street made pedestrian", () => {
     const crossings = await crossingShapes.count();
     expect(crossings).toBeGreaterThan(0);
     await page.goBack();
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await transform(page, ".ped-item", "ped");
     // leaving the page keeps what was waiting to be kept
     await page.locator('#street-sub a[href^="intersection.html"]').first().click();
     await expect(page.locator("#drawing")).toBeVisible();
