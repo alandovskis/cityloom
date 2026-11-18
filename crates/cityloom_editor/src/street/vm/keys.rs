@@ -74,9 +74,97 @@ pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Op
     Some(if alt { (ZoneAction::Nudge(d * if shift { 10_000 } else { 1_000 }), true) } else { (ZoneAction::Select(d), true) })
 }
 
+/// Where the arrow, Home and End keys take the focus in a list of `len` items, given the item that has it (if
+/// any): down and up wrap round, with nothing focused down goes to the first and up to the last. `None` for any
+/// other key and for an empty list.
+pub fn menu_step(key: &str, at: Option<usize>, len: usize) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    match key {
+        "ArrowDown" => Some(at.map_or(0, |a| (a + 1) % len)),
+        "ArrowUp" => Some(at.map_or(last, |a| (a + last) % len)),
+        "Home" => Some(0),
+        "End" => Some(last),
+        _ => None,
+    }
+}
+
+/// Where the focus is in the Add menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AddFocus {
+    Search,
+    Topic(usize),
+    Item(usize),
+}
+
+/// What a key in the Add menu asks for: move the focus there (showing that topic when it is one).
+pub fn add_menu_key(key: &str, at: AddFocus, topics: usize, items: usize) -> Option<AddFocus> {
+    match at {
+        AddFocus::Search => (key == "ArrowDown" && items > 0).then_some(AddFocus::Item(0)),
+        AddFocus::Topic(i) => {
+            // The tablist answers to either pair of arrows; Home and End are menu_step's.
+            let key = match key {
+                "ArrowRight" => "ArrowDown",
+                "ArrowLeft" => "ArrowUp",
+                other => other,
+            };
+            menu_step(key, Some(i), topics).map(AddFocus::Topic)
+        }
+        AddFocus::Item(i) => menu_step(key, Some(i), items).map(AddFocus::Item),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_arrows_home_and_end_move_the_focus_through_a_list_and_wrap_round() {
+        assert_eq!(menu_step("ArrowDown", Some(0), 3), Some(1));
+        assert_eq!(menu_step("ArrowDown", Some(2), 3), Some(0));
+        assert_eq!(menu_step("ArrowUp", Some(2), 3), Some(1));
+        assert_eq!(menu_step("ArrowUp", Some(0), 3), Some(2));
+        assert_eq!(menu_step("Home", Some(2), 3), Some(0));
+        assert_eq!(menu_step("End", Some(0), 3), Some(2));
+        // Nothing focused yet: down enters at the first, up at the last.
+        assert_eq!(menu_step("ArrowDown", None, 3), Some(0));
+        assert_eq!(menu_step("ArrowUp", None, 3), Some(2));
+        assert_eq!(menu_step("Home", None, 3), Some(0));
+        assert_eq!(menu_step("End", None, 3), Some(2));
+        // One item: every key stays on it.
+        assert_eq!(menu_step("ArrowDown", Some(0), 1), Some(0));
+        assert_eq!(menu_step("ArrowUp", Some(0), 1), Some(0));
+        // An empty list has nowhere to go.
+        for k in ["ArrowDown", "ArrowUp", "Home", "End"] {
+            assert_eq!(menu_step(k, None, 0), None, "{k}");
+        }
+        // Other keys are not the menu's.
+        for k in ["Enter", "Tab", "a", "ArrowLeft", "Escape"] {
+            assert_eq!(menu_step(k, Some(1), 3), None, "{k}");
+        }
+    }
+
+    #[test]
+    fn add_menu_keys_move_through_topics_and_items() {
+        let k = |key, at| add_menu_key(key, at, 8, 6);
+        assert_eq!(k("ArrowDown", AddFocus::Search), Some(AddFocus::Item(0)));
+        assert_eq!(add_menu_key("ArrowDown", AddFocus::Search, 8, 0), None);
+        assert_eq!(k("ArrowDown", AddFocus::Topic(2)), Some(AddFocus::Topic(3)));
+        assert_eq!(k("ArrowRight", AddFocus::Topic(7)), Some(AddFocus::Topic(0)));
+        assert_eq!(k("ArrowUp", AddFocus::Topic(2)), Some(AddFocus::Topic(1)));
+        assert_eq!(k("ArrowLeft", AddFocus::Topic(0)), Some(AddFocus::Topic(7)));
+        assert_eq!(k("Home", AddFocus::Topic(5)), Some(AddFocus::Topic(0)));
+        assert_eq!(k("End", AddFocus::Topic(1)), Some(AddFocus::Topic(7)));
+        assert_eq!(k("ArrowDown", AddFocus::Item(5)), Some(AddFocus::Item(0)));
+        assert_eq!(k("ArrowDown", AddFocus::Item(1)), Some(AddFocus::Item(2)));
+        assert_eq!(k("ArrowUp", AddFocus::Item(0)), Some(AddFocus::Item(5)));
+        assert_eq!(k("ArrowUp", AddFocus::Item(3)), Some(AddFocus::Item(2)));
+        assert_eq!(k("Home", AddFocus::Item(4)), Some(AddFocus::Item(0)));
+        assert_eq!(k("End", AddFocus::Item(1)), Some(AddFocus::Item(5)));
+        assert_eq!(k("Tab", AddFocus::Topic(2)), None);
+        for key in ["Enter", "Escape", "a"] {
+            assert_eq!(k(key, AddFocus::Item(1)), None, "{key}");
+        }
+    }
 
     #[test]
     fn the_arrows_select_and_shift_with_an_arrow_moves_the_piece() {

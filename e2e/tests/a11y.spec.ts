@@ -1,6 +1,17 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openJunction, openLongStreet, openStreet, showZoneLevel, splitInto, test } from "./fixtures";
+import AxeBuilder from "@axe-core/playwright";
+
+import {
+  expect,
+  openJunction,
+  openLongStreet,
+  openStreet,
+  openPedestrianStreet,
+  showZoneLevel,
+  splitInto,
+  test,
+} from "./fixtures";
 
 // Keyboard and small-window behaviour that the audit (WCAG 2.2 AA) found wanting.
 
@@ -270,7 +281,9 @@ test.describe("the street's 2.5D drawing", () => {
     await page.locator("#add-btn").focus();
     await page.keyboard.press("Enter");
     await expect(page.locator("#add-menu")).toBeVisible();
+    await expect(page.locator("#add-search")).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#add-panel .add-item").first()).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(cells(page)).toHaveCount(order.length);
     // And undo takes it back.
@@ -310,4 +323,18 @@ test.describe("the street's 2.5D drawing", () => {
     await expect(last).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
   });
+});
+
+test("the add menu open on Transit, its stops greyed, passes an axe scan", async ({ page }) => {
+  await openPedestrianStreet(page);
+  await page.locator("#add-btn").click();
+  await page.locator("#add-topic-transit").click();
+  await expect(page.locator('#add-panel .add-item[aria-disabled="true"]')).toHaveCount(3);
+  await expect(page.locator("#add-reason-stops")).toBeVisible();
+  const scan = await new AxeBuilder({ page })
+    .include("#add-menu")
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(scan.passes.length, "the scan reached the menu").toBeGreaterThan(0);
+  expect(scan.violations).toEqual([]);
 });

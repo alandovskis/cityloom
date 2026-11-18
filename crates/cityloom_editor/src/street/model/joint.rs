@@ -63,7 +63,7 @@ impl Editor {
         if content.zones.len() < 2 {
             return None;
         }
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         let spans: Vec<(i32, i32)> = (0..content.zones.len()).map(|z| content.span(z, length_mm)).collect();
         let (zone, far) = near_boundary(&spans, self.zone, content.from_end)?;
         let at_mm = if zone > self.zone { spans[self.zone].1 } else { spans[self.zone].0 };

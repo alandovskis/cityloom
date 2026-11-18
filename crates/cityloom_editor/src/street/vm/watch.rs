@@ -10,6 +10,7 @@ use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::street::model::{CalmingKind, Editor, GreenForm, SegView, StopKind, Use, View};
 use crate::street::vm::StreetVm;
+use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::keys::Action;
 use crate::street::vm::row::Row;
 
@@ -90,6 +91,31 @@ impl SheetWatch {
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
         self.vm.with_value(|v| v.quiet(f))
+    }
+
+    /// The topic the Add a piece menu opens on, for an event handler.
+    pub fn add_menu_opening(&self) -> Topic {
+        self.vm.with_value(|v| v.add_menu_opening())
+    }
+
+    /// A topic's items, each with the reason it cannot be added, if any; drawing again when the street is edited.
+    pub fn add_entries(&self, topic: Topic) -> Vec<Entry> {
+        self.vm.with_value(|v| v.add_entries(topic))
+    }
+
+    /// The items whose name holds `query`, drawing again when the street is edited or the language switched.
+    pub fn add_search(&self, query: &str) -> Vec<Entry> {
+        self.vm.with_value(|v| v.add_search(query))
+    }
+
+    /// Adds the item, or says why it cannot be added.
+    pub fn add_item(&self, item: Item) -> bool {
+        self.vm.with_value(|v| v.add_item(item))
+    }
+
+    /// Says how many items the search matches.
+    pub fn say_matches(&self, count: usize) {
+        self.vm.with_value(|v| v.say_matches(count));
     }
 
     pub fn select(&self, uid: Option<u32>) {

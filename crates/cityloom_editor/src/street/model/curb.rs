@@ -315,7 +315,7 @@ impl Editor {
     /// (which can then still be taken away).
     pub(super) fn curb_view(&self) -> CurbView {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         if length_mm <= 0 {
             // Without a length there is nothing to lay the uses along.
             return CurbView { sides: Vec::new() };
@@ -576,7 +576,7 @@ impl Editor {
     /// Every rule each instance breaks, instance by instance in order: `rule` indexes the five rows of `curb_checks`.
     fn curb_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         let (near, far) = match content.from_end {
             ZoneEnd::First => (self.ends[0], self.ends[1]),
             ZoneEnd::Last => (self.ends[1], self.ends[0]),

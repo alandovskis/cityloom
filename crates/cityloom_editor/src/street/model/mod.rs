@@ -45,6 +45,7 @@ mod green;
 mod map_uses;
 mod stop;
 mod stop_end;
+mod unavailable;
 pub use calming::{
     CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingExt, CalmingKindExt, CalmingRefusal, DEFAULT_TABLE_MM,
     FILTER_HEIGHT_MM, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
@@ -59,6 +60,7 @@ pub use green::{GreenCell, GreenExt, GreenForm, GreenKindExt, GreenRefusal, Gree
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, StopCell, StopKindExt, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
+pub use unavailable::Unavailable;
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -1299,6 +1301,12 @@ impl Editor {
 
     // ---- read side -----------------------------------------------------
 
+    /// The street's length as the shown state keeps it, else the length of the road it is drawn on; `None` when
+    /// neither is known.
+    pub(super) fn street_length_mm(&self) -> Option<i32> {
+        self.states[self.cursor].content.length_mm.or(self.frame.map(|f| f.length_mm))
+    }
+
     pub fn view(&self) -> View {
         let segs = self.current();
         let total_mm = total(segs);
@@ -1306,6 +1314,8 @@ impl Editor {
         // Everything that measures the street does so as it is at the shown time.
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
+        let (stops, calming_strip, green) = (self.stops_view(), self.calming_strip_view(), self.green_row());
+        let unavailable = self.unavailable_from(&stops, &calming_strip, &green);
         View {
             name: title_of(self.street_name.as_deref(), self.class()),
             class: self.class(),
@@ -1333,14 +1343,15 @@ impl Editor {
             checks: self.street_checks(),
             zones: self.zones_view(),
             curb: self.curb_view(),
-            stops: self.stops_view(),
+            stops,
             calming: self.calming_view(),
-            calming_strip: self.calming_strip_view(),
+            calming_strip,
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             calming_shown: self.calming_shown(),
             green_shown: self.green_shown(),
-            green: self.green_row(),
+            green,
+            unavailable,
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
                 .into_iter()
@@ -1754,6 +1765,8 @@ pub struct View {
     pub green_shown: Vec<ShownGreen>,
     /// The Green row: every tree and planting along the street.
     pub green: GreenRowView,
+    /// Why stops, traffic calming and green cannot be added to the street as it is.
+    pub unavailable: Unavailable,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.

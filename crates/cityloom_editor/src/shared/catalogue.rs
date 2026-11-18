@@ -25,8 +25,8 @@ pub const REGIONS: [Region; 6] = [
 /// What the space of a street's motor pieces can become when the street is made pedestrian, by kind id.
 pub const PEDESTRIAN_KINDS: [&str; 3] = ["sidewalk", "planting", "terrace"];
 
-/// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
-pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
+/// The topics of the add menu (`street::vm::add_menu::Topic`), in its order. A group's name is the message `group-<id>`.
+pub const GROUP_IDS: [&str; 8] = ["walking", "greenery", "cycling", "transit", "roadway", "calming", "furniture", "utilities"];
 
 /// The message that names a class of street, as a word to put in a sentence (`city/i18n`).
 pub fn class_key(class: StreetClass) -> &'static str {
@@ -82,7 +82,7 @@ mod tests {
     use crate::shared::i18n::{Args, Locale};
 
     /// The display word of each group, as the add menu shows it today.
-    const GROUP_WORDS: [&str; 7] = ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"];
+    const GROUP_WORDS: [&str; 8] = ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Traffic calming", "Furniture", "Utilities"];
 
     #[test]
     fn every_catalogue_kind_mode_and_group_has_a_message_in_both_languages() {

@@ -165,7 +165,7 @@ impl Editor {
     /// The zones as the strip shows them.
     pub(super) fn zones_view(&self) -> ZonesView {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         let from_end = if content.zones.is_empty() { self.frame.map_or(ZoneEnd::First, |f| f.from_end) } else { content.from_end };
         let failing = self.failing_transitions();
         let one = |z: usize| {
@@ -229,7 +229,7 @@ impl Editor {
     /// The transitions that fail a check: `(boundary, host zone, which)`.
     pub(super) fn failing_transitions(&self) -> Vec<(usize, usize, Failing)> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         let mut out = Vec::new();
         for (b, t) in self.transitions() {
             let host = if t.host == Host::Near { b } else { b + 1 };

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test as base, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 /** `just e2e-archive`: the server serves the Plateau's tile from an unpacked `.citymodel` archive, so the
  *  fixtures do not route them (a route would answer before the server and the run would prove nothing). */
@@ -195,6 +195,19 @@ export async function mapStill(page: Page) {
   await page.waitForFunction(() => !(window as any).cityloomMap.isMoving());
 }
 
+/** The item named exactly `name` in the open Add a piece menu, in the topic shown or in the search's results. */
+export function menuItem(page: Page, name: string): Locator {
+  const exact = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return page.locator("#add-menu .add-item", { has: page.locator("b", { hasText: exact }) });
+}
+
+/** Opens the street page's Add a piece menu, searches for `name` and chooses the item named exactly that. */
+export async function addFromMenu(page: Page, name: string): Promise<void> {
+  await page.locator("#add-btn").click();
+  await page.locator("#add-search").fill(name);
+  await menuItem(page, name).click();
+}
+
 /** The length of the street in metres, from the label of its only zone. */
 export async function streetLengthM(page: Page) {
   const label = (await page.locator("#zone-0").getAttribute("aria-label")) ?? "";
@@ -241,6 +254,17 @@ export async function openAnchoredStreet(page: Page, minM: number) {
     if ((await streetLengthM(page)) >= minM) return href;
   }
   throw new Error(`no street of ${minM} m or more with a real end`);
+}
+
+/** Opens the first street of the city and makes it pedestrian with the Transform menu: it then has no lane a bus can
+ *  stop in, so no Stops row, and the Add a piece menu greys its stops. Every street of the Plateau has such a lane. */
+export async function openPedestrianStreet(page: Page) {
+  await openStreet(page);
+  await expect(page.locator("#drawing")).toBeVisible();
+  await page.locator("#transform-btn").click();
+  await page.locator("#transform-menu .ped-item").first().click();
+  await expect(live(page)).toHaveText(/^Made pedestrian\. /);
+  await expect(page.locator("#stop-strip-left, #stop-strip-right")).toHaveCount(0);
 }
 
 /** Opens the first street of the city that is at least `minM` metres long (the first is about 40 m, too short for

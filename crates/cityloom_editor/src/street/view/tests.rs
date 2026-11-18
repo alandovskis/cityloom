@@ -13,7 +13,7 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::model::Editor;
 use crate::street::model::StreetExt;
-use crate::street::view::{self, inspector, notes, page};
+use crate::street::view::{self, add_menu, inspector, notes, page};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::Action as StreetAction;
 use crate::street::vm::watch::SheetWatch;
@@ -419,69 +419,180 @@ fn the_street_s_history_buttons_are_off_until_there_is_something_to_undo() {
     assert_eq!(off(&h), [false, true, false]);
 }
 
+/// The opening tag of the first element whose markup holds `needle`.
+fn tag_with(h: &str, needle: &str) -> String {
+    let at = h.find(needle).unwrap_or_else(|| panic!("{needle}: {h}"));
+    let start = h[..at].rfind('<').unwrap();
+    let end = h[at..].find('>').unwrap() + at;
+    h[start..=end].to_string()
+}
+
+/// The opening tag of the element with `id`.
+fn tag_of(h: &str, id: &str) -> String {
+    tag_with(h, &format!("id=\"{id}\""))
+}
+
+/// The Add menu's panel of the chosen topic: from its tag to the end of the menu.
+fn add_panel(h: &str) -> &str {
+    &h[h.find("id=\"add-panel\"").unwrap_or_else(|| panic!("no panel: {h}"))..]
+}
+
+/// A street of `pieces` with its first piece of kind `id` selected, so that the Add menu opens on that kind's topic.
+fn add_menu_on(pieces: &[(&str, i32, Option<usize>)], id: &str, locale: Locale) -> Rc<StreetVm> {
+    let s = stop_street(pieces, locale);
+    let u = s.view().segments.iter().find(|g| KINDS[g.kind].id == id).unwrap_or_else(|| panic!("no {id}")).uid;
+    s.select(Some(u));
+    s
+}
+
+/// Sidewalks and a bike lane: no lane a bus can stop in. The bus shelter is there to be selected, so the menu opens on
+/// Transit.
+const NO_BUS_LANE: [(&str, i32, Option<usize>); 4] = [("sidewalk", 3000, None), ("bike", 1800, None), ("busshelter", 2000, None), ("sidewalk", 3000, None)];
+
 #[test]
-fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
+fn the_add_menu_has_a_search_and_eight_topics() {
+    use crate::street::vm::add_menu::Topic;
     let s = street_shared(0);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
-    // A disclosure of a panel of buttons, not a menu: no popup role, and the palette is groups of lists (no
-    // list that holds anything but items).
-    assert!(!button_tag(&h, "add-btn").contains("aria-haspopup"));
-    assert!(!h.contains("role=\"presentation\"") && !h.contains("<ul id=\"palette\""));
-    assert_eq!(count(&h, "role=\"group\""), 7);
-    assert_eq!(count(&h, "class=\"add-item\""), 18);
-    assert_eq!(count(&h, "class=\"add-icon\""), 18);
-    assert!(h.contains("viewBox=\"0 0 200 160\"") && !h.contains("class=\"swatch\""));
-    for (g, group) in ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
-        assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    let menu = tag_of(&h, "add-menu");
+    assert!(menu.contains(" hidden") && menu.contains("class=\"menu add-menu\""), "{menu}");
+    // A disclosure of a panel, not a menu: no popup role.
+    let button = button_tag(&h, "add-btn");
+    assert!(button.contains("aria-expanded=\"false\"") && button.contains("aria-controls=\"add-menu\"") && !button.contains("aria-haspopup"), "{button}");
+    assert_eq!(count(&h, "id=\"add-search\""), 1, "{h}");
+    assert!(tag_of(&h, "add-search").contains("type=\"search\""), "{h}");
+    assert!(h.contains("for=\"add-search\"") && h.contains(">Search what to add</label>"), "{h}");
+    let topics = tag_with(&h, "role=\"tablist\"");
+    assert!(topics.contains("aria-orientation=\"vertical\"") && topics.contains("aria-label=\"Topics\""), "{topics}");
+    assert_eq!(count(&h, "role=\"tab\""), 8, "{h}");
+    let names = ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Traffic calming", "Furniture", "Utilities"];
+    let mut last = 0;
+    for (t, name) in Topic::ALL.into_iter().zip(names) {
+        let at = h.find(&format!("id=\"add-topic-{}\"", t.id())).unwrap_or_else(|| panic!("{name}: {h}"));
+        assert!(at > last, "{name} in its place: {h}");
+        last = h[at..].find(&format!(">{name}</button>")).unwrap_or_else(|| panic!("{name}: {h}")) + at;
     }
-    assert!(h.contains("3.3 m") && h.contains("Goes after the selected piece."));
+    assert!(!h.contains("Transit stops") && !h.contains("Green infrastructure"), "{h}");
+    // The menu opens on Walking with nothing selected: its tab is chosen and the only one in the tab order.
+    let walking = tag_of(&h, "add-topic-walking");
+    assert!(walking.contains("role=\"tab\"") && walking.contains("aria-selected=\"true\"") && walking.contains("tabindex=\"0\""), "{walking}");
+    assert!(walking.contains("aria-controls=\"add-panel\""), "{walking}");
+    let cycling = tag_of(&h, "add-topic-cycling");
+    assert!(cycling.contains("aria-selected=\"false\"") && cycling.contains("tabindex=\"-1\""), "{cycling}");
+    let panel = tag_of(&h, "add-panel");
+    assert!(panel.contains("role=\"tabpanel\"") && panel.contains("aria-labelledby=\"add-topic-walking\""), "{panel}");
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "class=\"add-item\""), 1, "{panel}");
+    assert_eq!(count(panel, "class=\"add-icon\""), 1, "{panel}");
+    assert!(panel.contains("data-item=\"kind-sidewalk\"") && !panel.contains("aria-disabled"), "{panel}");
+    let hint = panel.find("id=\"add-hint-pieces\"").unwrap_or_else(|| panic!("{panel}"));
+    let said = panel.find(">Goes after the selected piece.<").unwrap_or_else(|| panic!("{panel}"));
+    assert!(hint < said && said < panel.find("<b>Sidewalk</b>").unwrap(), "the hint above the item: {panel}");
+    let sidewalk = KINDS.iter().find(|k| k.id == "sidewalk").unwrap().default_mm;
+    assert!(panel.contains(&format!("class=\"dw\">{}<", Units::Metres.length_fine_in(sidewalk, Locale::En))), "{panel}");
     s.set_units(Units::Feet);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains("10.8 ft"));
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(h.contains(&format!("class=\"dw\">{}<", Units::Feet.length_fine_in(sidewalk, Locale::En))), "{h}");
 }
 
 #[test]
-fn the_add_menu_lists_the_transit_stops_where_a_stop_can_go() {
-    use crate::shared::catalogue::Side;
-    let s = stop_street(&PARKED, Locale::En);
-    s.select_stop(Side::Right, 0);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert_eq!(
-        (count(&h, "role=\"group\""), count(&h, "class=\"add-item\"")),
-        (10, 18),
-        "the seven kinds, the bioswale, the traffic calming and the stops: {h}"
-    );
-    assert!(h.contains(">Transit stops</p>"), "{h}");
-    assert_eq!(count(&h, "class=\"add-item stop-add-item\""), 3, "{h}");
-    for name in ["Curb stop", "Curb extension", "Boarding island"] {
-        assert!(h.contains(&format!("<b>{name}</b>")), "{name}: {h}");
+fn the_add_menu_opens_on_the_topic_of_the_chosen_piece() {
+    let s = add_menu_on(&[("sidewalk", 3000, None), ("bike", 1800, None), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)], "bike", Locale::En);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(tag_of(&h, "add-topic-cycling").contains("aria-selected=\"true\""), "{h}");
+    assert!(tag_of(&h, "add-topic-walking").contains("aria-selected=\"false\""), "{h}");
+    assert!(tag_of(&h, "add-panel").contains("aria-labelledby=\"add-topic-cycling\""), "{h}");
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "class=\"add-item\""), 3, "{panel}");
+    for name in ["Bike lane", "Bike rack", "Bikeshare station"] {
+        assert!(panel.contains(&format!("<b>{name}</b>")), "{name}: {panel}");
     }
-    assert!(h.contains("8.0 m"), "the shortest a stop can be: {h}");
-    let h = street_html(|| view! { <page::AddMenu vm=street_shared(0)/> });
-    let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
-    let h2 = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
-    assert!(!h2.contains("Transit stops") && count(&h2, "stop-add-item") == 0, "{h2}");
-    drop(h);
-    let fr = stop_street(&PARKED, Locale::FrCa);
-    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
-    assert!(h.contains(">Arrêts de transport en commun</p>") && h.contains("<b>Avancée de trottoir</b>"), "{h}");
+    assert!(!panel.contains("<b>Sidewalk</b>"), "{panel}");
 }
 
 #[test]
-fn the_add_menu_offers_every_kind_of_green_where_green_can_go() {
-    let s = stop_street(&AT_THE_CURB, Locale::En);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains(">Green infrastructure</p>") && count(&h, "class=\"add-item green-add-item\"") == 4, "{h}");
-    let at = |name: &str| h.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {h}"));
-    assert!(at("Tree") < at("Planting bed") && at("Planting bed") < at("Rain garden") && at("Rain garden") < at("Bioswale"), "{h}");
-    // a street with no piece to stand a green element on has none
-    let none = stop_street(&[("travel", 3300, Some(1)), ("travel", 3300, Some(0))], Locale::En);
-    let h = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
-    assert!(!h.contains("Green infrastructure") && count(&h, "green-add-item") == 0, "{h}");
-    let fr = stop_street(&AT_THE_CURB, Locale::FrCa);
-    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
-    assert!(h.contains(">Infrastructure verte</p>") && h.contains("<b>Arbre</b>") && h.contains("<b>Noue végétalisée</b>"), "{h}");
+fn unavailable_items_are_greyed_with_their_reason() {
+    use crate::street::model::{StopKind, StopKindExt};
+    let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::En);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(tag_of(&h, "add-topic-transit").contains("aria-selected=\"true\""), "{h}");
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "class=\"add-item\""), 6, "{panel}");
+    assert_eq!(count(panel, "aria-disabled=\"true\""), 3, "{panel}");
+    assert_eq!(count(panel, "aria-describedby=\"add-reason-stops\""), 3, "{panel}");
+    for k in StopKind::ALL {
+        let item = tag_with(panel, &format!("data-item=\"{}\"", k.name_key()));
+        assert!(item.contains("aria-disabled=\"true\"") && item.contains("aria-describedby=\"add-reason-stops\""), "{item}");
+    }
+    // A piece is never greyed.
+    assert!(!tag_with(panel, "data-item=\"kind-bus\"").contains("aria-disabled"), "{panel}");
+    assert_eq!(count(panel, "id=\"add-reason-stops\""), 1, "the reason once, under its run: {panel}");
+    assert!(tag_of(panel, "add-reason-stops").contains("class=\"add-reason\""), "{panel}");
+    let at = |text: &str| panel.find(text).unwrap_or_else(|| panic!("{text}: {panel}"));
+    let reason = at(">Stops need a lane a bus can stop in on this street.<");
+    let (pieces, stops) = (at(">Goes after the selected piece.<"), at(">Goes into the chosen free stretch of its row.<"));
+    assert!(pieces < at("<b>Transit lane</b>") && at("<b>Bus station</b>") < stops && stops < at("<b>Curb stop</b>"), "{panel}");
+    assert!(at("<b>Boarding island</b>") < reason, "the reason under the run it applies to: {panel}");
+    assert!(tag_of(panel, "add-hint-stops").contains("class=\"hint\""), "{panel}");
+    // Where a bus can stop, nothing in Transit is greyed.
+    let s = add_menu_on(&PARKED, "bus", Locale::En);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    let panel = add_panel(&h);
+    assert!(tag_of(&h, "add-topic-transit").contains("aria-selected=\"true\""), "{h}");
+    assert_eq!(count(panel, "class=\"add-item\""), 6, "{panel}");
+    assert!(!panel.contains("aria-disabled") && !panel.contains("add-reason"), "{panel}");
+}
+
+#[test]
+fn the_add_menu_follows_the_language_and_the_street() {
+    use crate::street::vm::add_menu::Topic;
+    let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::En);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(h.contains(">Transit</button>") && h.contains(">Stops need a lane a bus can stop in on this street.<"), "{h}");
+    // What the menu draws from is watched: the street and the language change it. (Under an owner of its own, the
+    // one before put back after.)
+    Owner::new().with(|| {
+        let w = SheetWatch::new(s.clone());
+        let greyed = Memo::new(move |_| w.add_entries(Topic::Transit).iter().filter(|e| e.unavailable.is_some()).count());
+        let found = Memo::new(move |_| w.add_search("avancée").len());
+        assert_eq!((greyed.get(), found.get()), (3, 0));
+        let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+        assert!(s.edit(|e| e.add(parking, 2) != 0));
+        assert_eq!(greyed.get(), 0, "a curbside lane makes room for stops");
+        s.i18n().set(Locale::FrCa);
+        assert_eq!(found.get(), 1, "« Avancée de trottoir » is found in French");
+    });
+    // And the same view-model, switched, draws the menu in French.
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(h.contains(">Transport en commun</button>") && h.contains(">Chercher quoi ajouter</label>") && !h.contains(">Transit</button>"), "{h}");
+}
+
+#[test]
+fn the_add_menu_offers_every_kind_of_green_greyed_where_green_cannot_go() {
+    let planted = [("sidewalk", 3000, None), ("planting", 1500, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)];
+    let s = add_menu_on(&planted, "planting", Locale::En);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(tag_of(&h, "add-topic-greenery").contains("aria-selected=\"true\""), "{h}");
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "class=\"add-item\""), 6, "{panel}");
+    let at = |name: &str| panel.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {panel}"));
+    let order = ["Planting strip", "Planted median", "Tree", "Planting bed", "Rain garden", "Bioswale"];
+    assert!(order.windows(2).all(|p| at(p[0]) < at(p[1])), "{panel}");
+    assert!(panel.contains(">Goes at the first free place along the street.<") && !panel.contains("aria-disabled"), "{panel}");
+    // A street with no end to measure from: the green elements stay, greyed, with the reason.
+    let s = street_shared(1);
+    let u = s.view().segments.iter().find(|g| KINDS[g.kind].id == "planting").unwrap().uid;
+    s.select(Some(u));
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "aria-disabled=\"true\""), 4, "{panel}");
+    assert_eq!(count(panel, "aria-describedby=\"add-reason-green\""), 4, "{panel}");
+    let reason = crate::shared::testing::en(&crate::shared::said::Said::new("green-refused-no-anchor"));
+    let at = panel.find("id=\"add-reason-green\"").unwrap_or_else(|| panic!("{panel}"));
+    assert!(panel[at..].contains(&format!(">{reason}</p>")) && at > panel.find("<b>Bioswale</b>").unwrap(), "{reason}: {panel}");
+    let s = add_menu_on(&planted, "planting", Locale::FrCa);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(h.contains(">Verdure</button>") && h.contains("<b>Arbre</b>") && h.contains("<b>Noue végétalisée</b>"), "{h}");
 }
 
 #[test]
@@ -1033,11 +1144,17 @@ fn the_history_buttons_are_in_french() {
 
 #[test]
 fn the_add_menu_is_in_french() {
-    let s = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains("Ajouter un élément") && h.contains("Se place après l’élément sélectionné."), "{h}");
-    assert!(h.contains("class=\"add-group-h\">Marche<") && h.contains("<b>Trottoir</b>"), "{h}");
-    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains(">Sidewalk<"), "{h}");
+    let s = add_menu_on(&PARKED, "bus", Locale::FrCa);
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    for tab in ["Verdure", "Transport en commun", "Apaisement de la circulation"] {
+        assert!(h.contains(&format!(">{tab}</button>")), "{tab}: {h}");
+    }
+    assert!(h.contains("<b>Avancée de trottoir</b>"), "{h}");
+    let stop = Units::Metres.length_fine_in(crate::standards::model::stop_min_mm(), Locale::FrCa);
+    assert!(stop.starts_with("8,0") && h.contains(&format!("class=\"dw\">{stop}<")), "{stop}: {h}");
+    assert!(h.contains("Ajouter un élément") && h.contains(">Chercher quoi ajouter</label>") && h.contains("aria-label=\"Thèmes\""), "{h}");
+    assert!(h.contains(">Se place après l’élément sélectionné.<") && h.contains(">Se place dans le tronçon libre choisi de sa rangée.<"), "{h}");
+    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains("Search what to add"), "{h}");
 }
 
 #[test]
@@ -1162,8 +1279,8 @@ fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
 
 #[test]
 fn the_group_ids_are_those_of_the_add_menu() {
-    let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
-    assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
+    use crate::street::vm::add_menu::Topic;
+    assert_eq!(Topic::ALL.map(Topic::id), crate::shared::catalogue::GROUP_IDS);
 }
 
 #[test]
@@ -1175,7 +1292,7 @@ fn the_lengths_around_the_section_follow_the_language() {
     assert!(fr.contains(',') && fr.contains('\u{a0}') && en.contains('.'), "{fr} {en}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
     let sidewalk = KINDS.iter().find(|k| k.id == "sidewalk").expect("a sidewalk kind").default_mm;
     let fr_dw = Units::Metres.length_fine_in(sidewalk, Locale::FrCa);
     let en_dw = Units::Metres.length_fine_in(sidewalk, Locale::En);
@@ -1190,6 +1307,13 @@ fn the_lengths_around_the_section_follow_the_language() {
 fn the_street_ftl_files_have_the_same_messages_and_variables() {
     use crate::shared::i18n::tests::parity_problems;
     assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
+}
+
+#[test]
+fn the_street_french_writes_an_ordinary_space_before_a_colon() {
+    // The engine puts the no-break space in; one typed in the file would be a second source of it.
+    let typed: Vec<&str> = crate::street::RESOURCES.fr.lines().filter(|l| l.contains("\u{a0}:") || l.contains("\u{202f}:")).collect();
+    assert_eq!(typed, Vec::<&str>::new());
 }
 
 fn bendville_street(areas: &[(&str, crate::restriction::model::Rule)], locale: Locale) -> Rc<StreetVm> {
@@ -2581,20 +2705,22 @@ fn the_calming_tools_can_remove_the_chosen_element() {
 fn the_add_menu_lists_traffic_calming_where_an_element_can_go() {
     let s = calming_street(Locale::En);
     s.select_calming(1);
-    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
-    assert!(h.contains(">Traffic calming</p>"), "{h}");
-    assert_eq!(count(&h, "class=\"add-item calming-add-item\""), 4, "{h}");
-    let at = |name: &str| h.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {h}"));
-    assert!(at("Raised table") < at("Raised crossing") && at("Raised crossing") < at("Chicane") && at("Chicane") < at("Modal filter"), "{h}");
-    assert!(h.contains("7.0 m") && h.contains("24.0 m") && h.contains("2.0 m"), "each kind's default length: {h}");
-    // a street with no stretch to anchor an element on has none
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(tag_of(&h, "add-topic-calming").contains("aria-selected=\"true\"") && h.contains(">Traffic calming</button>"), "{h}");
+    let panel = add_panel(&h);
+    assert_eq!(count(panel, "class=\"add-item\""), 4, "{panel}");
+    let at = |name: &str| panel.find(&format!("<b>{name}</b>")).unwrap_or_else(|| panic!("{name}: {panel}"));
+    assert!(at("Raised table") < at("Raised crossing") && at("Raised crossing") < at("Chicane") && at("Chicane") < at("Modal filter"), "{panel}");
+    assert!(panel.contains("7.0 m") && panel.contains("24.0 m") && panel.contains("2.0 m"), "each kind's default length: {panel}");
+    assert!(!panel.contains("aria-disabled"), "{panel}");
+    // A street with no stretch to anchor an element on still has the topic.
     let none = street_shared(0);
-    let h = street_html(|| view! { <page::AddMenu vm=none.clone()/> });
-    assert!(!h.contains("Traffic calming") && count(&h, "calming-add-item") == 0, "{h}");
+    let h = street_html(|| view! { <add_menu::AddMenu vm=none.clone()/> });
+    assert!(h.contains("id=\"add-topic-calming\"") && h.contains(">Traffic calming</button>"), "{h}");
     let fr = calming_street(Locale::FrCa);
     fr.select_calming(1);
-    let h = street_html(|| view! { <page::AddMenu vm=fr.clone()/> });
-    assert!(h.contains(">Apaisement de la circulation</p>") && h.contains("<b>Plateau surélevé</b>"), "{h}");
+    let h = street_html(|| view! { <add_menu::AddMenu vm=fr.clone()/> });
+    assert!(h.contains(">Apaisement de la circulation</button>") && h.contains("<b>Plateau surélevé</b>"), "{h}");
 }
 
 #[test]

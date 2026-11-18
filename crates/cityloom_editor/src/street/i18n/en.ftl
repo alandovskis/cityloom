@@ -54,8 +54,6 @@ group-transit = Transit
 group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
-group-stops = Transit stops
-group-green = Green infrastructure
 group-calming = Traffic calming
 
 # How the pieces stand against the street's width, and what is said after an edit.
@@ -127,6 +125,16 @@ history-reset-title = Back to the street as it is today. Undo brings your change
 history-reset = Start over
 add-button = Add a piece
 add-hint = Goes after the selected piece.
+add-hint-green = Goes at the first free place along the street.
+add-hint-stretch = Goes into the chosen free stretch of its row.
+add-matches = { $count ->
+    [0] No matches
+    [one] One match
+   *[other] { $count } matches
+}
+add-search-label = Search what to add
+add-topics-label = Topics
+add-no-match = Nothing matches “{ $query }”.
 clock-time-of-day = Time of day
 clock-except = { $kind } except { $others }
 clock-window = { $kind } { $from }–{ $to }
@@ -848,3 +856,8 @@ goal-conflict-greenway-through-buses = a greenway has no bus lane and is not bui
 goal-conflict-pedestrian-through-buses = a pedestrian street cuts the buses that use it.
 goal-conflict-school-school-buses = the shared lane has no room for a bus lane.
 goal-conflict-bus-corridor-buses-school = the bus lane at the curb is where parents stop to drop children off.
+
+add-stops-no-lane = Stops need a lane a bus can stop in on this street.
+add-green-no-host = Trees and planting need a piece off the roadway, such as a sidewalk.
+add-calming-no-anchor = Both ends of this street are cut by the edge of the map, so traffic calming cannot be placed along it.
+green-refused-no-anchor = Both ends of this street are cut by the edge of the map, so trees and planting cannot be placed along it.

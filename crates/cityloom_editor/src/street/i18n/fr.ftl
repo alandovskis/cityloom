@@ -54,8 +54,6 @@ group-transit = Transport en commun
 group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
-group-stops = Arrêts de transport en commun
-group-green = Infrastructure verte
 group-calming = Apaisement de la circulation
 
 # Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
@@ -127,6 +125,16 @@ history-reset-title = Retour à la rue telle qu’elle est aujourd’hui. Annule
 history-reset = Recommencer
 add-button = Ajouter un élément
 add-hint = Se place après l’élément sélectionné.
+add-hint-green = Se place au premier endroit libre le long de la rue.
+add-hint-stretch = Se place dans le tronçon libre choisi de sa rangée.
+add-matches = { $count ->
+    [0] Aucun résultat
+    [one] Un résultat
+   *[other] { $count } résultats
+}
+add-search-label = Chercher quoi ajouter
+add-topics-label = Thèmes
+add-no-match = Rien ne correspond à « { $query } ».
 clock-time-of-day = Heure de la journée
 clock-except = { $kind } sauf { $others }
 clock-window = { $kind } { $from }–{ $to }
@@ -848,3 +856,8 @@ goal-conflict-greenway-through-buses = une voie verte n’a pas de voie d’auto
 goal-conflict-pedestrian-through-buses = une rue piétonne coupe les autobus qui l’empruntent.
 goal-conflict-school-school-buses = la voie partagée n’a pas la place d’une voie d’autobus.
 goal-conflict-bus-corridor-buses-school = la voie d’autobus à la bordure est l’endroit où les parents arrêtent pour déposer les enfants.
+
+add-stops-no-lane = Les arrêts demandent une voie où un autobus peut s’arrêter dans cette rue.
+add-green-no-host = Les arbres et les plantations demandent un élément hors de la chaussée, comme un trottoir.
+add-calming-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’éléments d’apaisement de la circulation.
+green-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arbres ni de plantations.

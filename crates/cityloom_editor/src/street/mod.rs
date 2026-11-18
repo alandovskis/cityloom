@@ -102,7 +102,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("fit-checks-slot", view! { <view::notes::FitChecks vm=vm.clone()/> }.into_any());
     mount("checks-n-slot", view! { <view::notes::ChecksBadge vm=vm.clone()/> }.into_any());
     mount("history", view! { <view::page::History vm=vm.clone()/> }.into_any());
-    mount("add", view! { <view::page::AddMenu vm=vm.clone()/> }.into_any());
+    mount("add", view! { <view::add_menu::AddMenu vm=vm.clone()/> }.into_any());
     mount("transform-slot", view! { <view::page::Transform vm=vm.clone()/> }.into_any());
     mount("clock-slot", view! { <view::page::Clock vm=vm.clone()/> }.into_any());
     mount("time-note", view! { <view::page::TimeNote vm=vm.clone()/> }.into_any());

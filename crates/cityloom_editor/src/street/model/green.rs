@@ -625,8 +625,7 @@ pub struct GreenRowView {
 
 impl Editor {
     fn green_length(&self) -> i32 {
-        let content = &self.states[self.cursor].content;
-        content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0)
+        self.street_length_mm().unwrap_or(0)
     }
 
     /// The Green row. Empty (and not offering an add) while the street's length is unknown.
@@ -824,7 +823,7 @@ impl Editor {
     /// anchored end, and `ends` (node `a`, node `b`) is read from that end.
     pub(super) fn green_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         let mut rows = vec![
             ("green-host", "check-label-green-host", "check-detail-green-host-ok"),
             ("green-clear-path", "check-label-green-clear-path", "check-detail-green-clear-path-ok"),
@@ -847,7 +846,7 @@ impl Editor {
     /// Every rule each element breaks, element by element in order: `rule` indexes the rows of `green_checks` (the seventh, `green-stop`, only when the street has a stop).
     fn green_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         let (near, far) = match content.from_end {
             ZoneEnd::First => (self.ends[0], self.ends[1]),
             ZoneEnd::Last => (self.ends[1], self.ends[0]),

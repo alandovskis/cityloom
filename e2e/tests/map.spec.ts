@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import {
+  addFromMenu,
   expect,
   live,
   mapReady,
@@ -622,8 +623,7 @@ test.describe("the zone boundaries on the map", () => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await page.locator("#zone-1").click();
-    await page.locator("#add-btn").click();
-    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+    await addFromMenu(page, "Driving lane");
     await page.goto("/map.html"); // leaving the page flushes the debounced write
     await mapReady(page);
     await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(1);
@@ -715,8 +715,7 @@ async function addPatio(page: Page, spacerM = 0) {
 async function addNamedStop(page: Page, name: string) {
   const cells = page.locator("#stop-strip-right").locator('[role="option"]');
   await page.locator("#stop-right-0").click();
-  await page.locator("#add-btn").click();
-  await page.locator(".stop-add-item", { hasText: "Curb extension" }).click();
+  await addFromMenu(page, "Curb extension");
   await page.locator("#stop-right-0").click();
   await page.locator("#stop-length").fill("12");
   await page.locator("#stop-length").press("Enter");

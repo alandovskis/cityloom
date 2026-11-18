@@ -2,6 +2,7 @@
 //! changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
+pub mod add_menu;
 pub mod impact;
 pub mod keys;
 pub mod level;
@@ -25,10 +26,12 @@ use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
+use crate::street::model::CalmingKindExt;
 use crate::street::model::{
     CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View,
     ZoneRefusal,
 };
+use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::impact::{Cause, Impact, Input};
 use crate::street::vm::level::Level;
 use crate::street::vm::row::{CurbRow, Row, StopRow};
@@ -588,6 +591,54 @@ impl StreetVm {
                 false
             }
         }
+    }
+
+    /// The topic the Add a piece menu opens on: that of what the details panel shows. For an event handler: nothing is
+    /// watched.
+    pub fn add_menu_opening(&self) -> Topic {
+        let v = self.view_now();
+        add_menu::opening_topic(level::shown(self.asked.get_untracked(), &v), &v)
+    }
+
+    /// A topic's items, each with the reason it cannot be added to the street as it is, if any. Watched.
+    pub fn add_entries(&self, topic: Topic) -> Vec<Entry> {
+        add_menu::entries(&self.view(), topic)
+    }
+
+    /// The items whose name in the page's language holds `query`, in topic order. Watched (the street and the language).
+    pub fn add_search(&self, query: &str) -> Vec<Entry> {
+        add_menu::search(&self.view(), &self.i18n, query)
+    }
+
+    /// Adds the item where the menu has always added it: a piece after the selected one, a stop or traffic calming
+    /// element into the chosen free stretch of its row, a green element at the first free place along the street. An
+    /// item that cannot be added to the street as it is adds nothing and says why.
+    pub fn add_item(&self, item: Item) -> bool {
+        let v = self.view_now();
+        if let Some(reason) = item.run().unavailable(&v) {
+            self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &reason));
+            return false;
+        }
+        match item {
+            Item::Piece(k) => {
+                let at = add_menu::insert_index(&v);
+                self.apply(|e| e.add(k, at) != 0)
+            }
+            Item::Stop(k) => {
+                self.pick_stop_kind(k);
+                self.add_stop(k, crate::standards::model::stop_min_mm())
+            }
+            Item::Calming(k) => {
+                self.pick_calming_kind(k);
+                self.add_calming(k, k.default_mm())
+            }
+            Item::Green(k) => self.add_green_clear(GreenForm::new(k)),
+        }
+    }
+
+    /// Says how many items the search matches.
+    pub fn say_matches(&self, count: usize) {
+        self.ports.announcer.say(&self.i18n.tr_now("add-matches", &Args::new().num("count", count as i64)));
     }
 
     fn say_refusal(&self, subject: Subject, refusal: CurbRefusal) {
@@ -4097,5 +4148,207 @@ mod level_tests {
         assert_eq!(path(&vm), ["Rue", "Zone 1", "*Trottoir"]);
         vm.select_curb(Side::Right, 0);
         assert_eq!(path(&vm), ["Rue", "*Tronçon libre"]);
+    }
+}
+
+#[cfg(test)]
+mod add_menu_tests {
+    //! The Add a piece menu: the topic it opens on, which items are greyed and why, the search, and what choosing an
+    //! item adds.
+    use super::*;
+    use crate::shared::catalogue::{KINDS, REGIONS, StreetClass, kind_index};
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::{CalmingKindExt, GreenKind, Piece, Street, StreetExt, ZoneEnd, ZoneFrame};
+    use crate::street::vm::add_menu::{Entry, Item, Topic, insert_index};
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+    }
+
+    fn rig_of(street: &Street, locale: Locale) -> Rig {
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(street, street, region).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(locale), editor, None), said }
+    }
+
+    /// The sample street (parking on both sides), 60 m long and anchored, so its strips can hold things.
+    fn sample_in(locale: Locale) -> Rig {
+        rig_of(&Street::sample(0, Side::Right), locale)
+    }
+
+    /// A street of these pieces, 60 m long and anchored.
+    fn street_in(pieces: &[(&str, i32, Option<usize>)], locale: Locale) -> Rig {
+        let pieces: Vec<Piece> =
+            pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        rig_of(&Street::imported(StreetClass::Local, Side::Right, &pieces), locale)
+    }
+
+    /// Sidewalks and a bike lane: no lane a bus can stop in.
+    const NO_BUS: [(&str, i32, Option<usize>); 3] = [("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)];
+    /// Right-hand traffic: sidewalk, parking, a bus lane each way, parking and a sidewalk.
+    const PARKED: [(&str, i32, Option<usize>); 6] =
+        [("sidewalk", 3000, None), ("parking", 2400, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2400, None), ("sidewalk", 3000, None)];
+
+    fn piece(id: &str) -> Item {
+        Item::Piece(kind_index(id).unwrap())
+    }
+
+    fn names(r: &Rig, entries: &[Entry]) -> Vec<String> {
+        entries.iter().map(|e| r.vm.i18n().tr_now(&e.item.name_key(), &Args::new())).collect()
+    }
+
+    #[test]
+    fn the_menu_opens_on_the_topic_of_what_is_chosen() {
+        let r = sample_in(Locale::En);
+        assert_eq!(r.vm.add_menu_opening(), Topic::Walking, "the street");
+        assert!(r.vm.add_item(piece("bike")));
+        assert_eq!(r.vm.level(), Level::Piece);
+        assert_eq!(r.vm.add_menu_opening(), Topic::Cycling, "a bike lane");
+        r.vm.select_stop(Side::Right, 0);
+        assert!(r.vm.add_stop(StopKind::Bulb, 8_000));
+        assert_eq!(r.vm.add_menu_opening(), Topic::Transit, "a stop");
+        assert!(r.vm.add_green_clear(GreenForm::new(GreenKind::Tree)));
+        assert_eq!(r.vm.add_menu_opening(), Topic::Greenery, "a tree");
+        r.vm.select_calming(0);
+        assert!(r.vm.add_calming(CalmingKind::Table, 7_000));
+        assert_eq!(r.vm.add_menu_opening(), Topic::Calming, "a raised table");
+
+        let r = sample_in(Locale::En);
+        r.vm.select_curb(Side::Right, 0);
+        assert_eq!(r.vm.level(), Level::Curb);
+        assert_eq!(r.vm.add_menu_opening(), Topic::Walking, "a curbside free stretch");
+        assert!(r.vm.add_curb(Use::Parking, 6_000));
+        assert_eq!(r.vm.add_menu_opening(), Topic::Roadway, "a parking use");
+        assert!(r.vm.set_curb_use(Use::Tree));
+        assert_eq!(r.vm.add_menu_opening(), Topic::Greenery, "a street tree on the curbside");
+    }
+
+    #[test]
+    fn unavailable_items_stay_listed_with_the_reason() {
+        let r = street_in(&NO_BUS, Locale::En);
+        let transit = r.vm.add_entries(Topic::Transit);
+        assert_eq!(transit.len(), 6);
+        assert!(transit[..3].iter().all(|e| e.unavailable.is_none()), "pieces can always be added");
+        assert!(transit[3..].iter().all(|e| e.unavailable == Some(Said::new("add-stops-no-lane"))), "{transit:?}");
+        assert!(transit.iter().all(|e| e.topic == Topic::Transit));
+    }
+
+    #[test]
+    fn entries_follow_the_view() {
+        let r = street_in(&PARKED, Locale::En);
+        assert!(r.vm.add_entries(Topic::Transit).iter().all(|e| e.unavailable.is_none()));
+        let gone: Vec<u32> = r.vm.view_now().segments.iter().filter(|s| matches!(KINDS[s.kind].id, "bus" | "parking")).map(|s| s.uid).collect();
+        assert_eq!(gone.len(), 4);
+        for uid in gone {
+            assert!(r.vm.apply(|e| e.remove(uid)));
+        }
+        let transit = r.vm.add_entries(Topic::Transit);
+        assert!(transit[3..].iter().all(|e| e.unavailable == Some(Said::new("add-stops-no-lane"))), "{transit:?}");
+    }
+
+    #[test]
+    fn search_matches_names_as_written_ignoring_case_and_accents() {
+        let r = street_in(&NO_BUS, Locale::En);
+        let lane = r.vm.add_search("lane");
+        assert_eq!(names(&r, &lane), ["Bike lane", "Transit lane", "Driving lane"]);
+        assert_eq!(lane.iter().map(|e| e.topic).collect::<Vec<_>>(), [Topic::Cycling, Topic::Transit, Topic::Roadway]);
+        assert!(r.vm.add_search("bus stop").is_empty(), "names as written only");
+        // "tree" is anywhere in a name, "Street lamp" too.
+        assert_eq!(names(&r, &r.vm.add_search("TREE")), ["Tree", "Street lamp"]);
+        assert!(r.vm.add_search("").is_empty() && r.vm.add_search("  ").is_empty());
+        let curb = r.vm.add_search("curb stop");
+        assert_eq!(names(&r, &curb), ["Curb stop"]);
+        assert_eq!(curb[0].unavailable, Some(Said::new("add-stops-no-lane")), "a greyed item matches and keeps its reason");
+
+        let r = street_in(&NO_BUS, Locale::FrCa);
+        let arret = r.vm.add_search("arret");
+        assert_eq!(names(&r, &arret), ["Arrêt au trottoir"]);
+        assert_eq!(r.vm.add_search("Arrêt"), arret);
+        assert_eq!(names(&r, &r.vm.add_search("cafe")), ["Terrasse de café"]);
+        assert_eq!(names(&r, &r.vm.add_search("station d'autobus")), ["Station d’autobus"], "a plain apostrophe finds a typographic one");
+    }
+
+    #[test]
+    fn the_search_follows_a_language_switch() {
+        let r = street_in(&NO_BUS, Locale::En);
+        assert_eq!(r.vm.add_search("banc").len(), 0);
+        r.vm.i18n().set(Locale::FrCa);
+        assert_eq!(names(&r, &r.vm.add_search("banc")), ["Banc"]);
+    }
+
+    #[test]
+    fn an_unavailable_item_adds_nothing_and_says_why() {
+        let r = street_in(&NO_BUS, Locale::En);
+        let before = r.vm.read(|e| e.snapshot());
+        assert!(!r.vm.add_item(Item::Stop(StopKind::Curb)));
+        assert_eq!(r.vm.read(|e| e.snapshot()), before, "nothing added");
+        assert_eq!(r.said.take(), ["Stops need a lane a bus can stop in on this street."]);
+    }
+
+    /// Two view-models of the same street: `a` adds through the menu's item, `b` the way the old menu did.
+    fn both() -> (Rig, Rig) {
+        (sample_in(Locale::En), sample_in(Locale::En))
+    }
+
+    fn street(r: &Rig) -> Street {
+        r.vm.read(|e| e.snapshot())
+    }
+
+    #[test]
+    fn each_item_adds_what_it_added_before() {
+        let bike = kind_index("bike").unwrap();
+        let (a, b) = both();
+        let uid = a.vm.view_now().segments[1].uid;
+        a.vm.select(Some(uid));
+        b.vm.select(Some(uid));
+        assert!(a.vm.add_item(Item::Piece(bike)));
+        assert!(b.vm.apply(|e| e.add(bike, insert_index(&b.vm.view_now())) != 0));
+        assert_eq!(a.vm.view_now().segments[2].kind, bike, "after the selected piece");
+        assert_eq!(street(&a), street(&b));
+        assert_eq!(a.said.take(), b.said.take(), "announced alike");
+
+        let (a, b) = both();
+        a.vm.select_stop(Side::Right, 0);
+        b.vm.select_stop(Side::Right, 0);
+        assert!(a.vm.add_item(Item::Stop(StopKind::Bulb)));
+        b.vm.pick_stop_kind(StopKind::Bulb);
+        assert!(b.vm.add_stop(StopKind::Bulb, crate::standards::model::stop_min_mm()));
+        let v = a.vm.view_now();
+        let cell = v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?)).unwrap();
+        assert_eq!((cell.kind, cell.to_mm - cell.from_mm), (Some(StopKind::Bulb), 8_000), "into the chosen free stretch");
+        assert_eq!(street(&a), street(&b));
+
+        let (a, b) = both();
+        a.vm.select_calming(0);
+        b.vm.select_calming(0);
+        assert!(a.vm.add_item(Item::Calming(CalmingKind::Chicane)));
+        b.vm.pick_calming_kind(CalmingKind::Chicane);
+        assert!(b.vm.add_calming(CalmingKind::Chicane, CalmingKind::Chicane.default_mm()));
+        assert_eq!(street(&a).calming.len(), 1);
+        assert_eq!(street(&a), street(&b));
+
+        let (a, b) = both();
+        assert!(a.vm.add_item(Item::Green(GreenKind::Bed)));
+        assert!(b.vm.add_green_clear(GreenForm::new(GreenKind::Bed)));
+        assert_eq!(street(&a).green.len(), 1);
+        assert_eq!(street(&a), street(&b));
+        assert_eq!(a.said.take(), b.said.take());
+    }
+
+    #[test]
+    fn the_matches_are_counted_in_both_languages() {
+        let r = sample_in(Locale::En);
+        r.vm.say_matches(0);
+        r.vm.say_matches(1);
+        r.vm.say_matches(3);
+        assert_eq!(r.said.take(), ["No matches", "One match", "3 matches"]);
+        let r = sample_in(Locale::FrCa);
+        r.vm.say_matches(0);
+        r.vm.say_matches(1);
+        r.vm.say_matches(3);
+        assert_eq!(r.said.take(), ["Aucun résultat", "Un résultat", "3 résultats"]);
     }
 }

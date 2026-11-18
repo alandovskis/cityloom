@@ -424,7 +424,7 @@ pub fn slug(name: &str) -> String {
     for c in name.chars().flat_map(char::to_lowercase) {
         if c.is_ascii_alphanumeric() {
             out.push(c);
-        } else if let Some(base) = unaccent(c) {
+        } else if let Some(base) = crate::shared::search::unaccent(c) {
             out.push(base);
         } else if !out.ends_with('-') && !out.is_empty() {
             out.push('-');
@@ -434,18 +434,6 @@ pub fn slug(name: &str) -> String {
     let out: String = out.chars().take(60).collect();
     let out = out.trim_end_matches('-');
     if out.is_empty() { "area".to_string() } else { out.to_string() }
-}
-
-fn unaccent(c: char) -> Option<char> {
-    Some(match c {
-        'à' | 'â' | 'ä' => 'a',
-        'ç' => 'c',
-        'è' | 'é' | 'ê' | 'ë' => 'e',
-        'î' | 'ï' => 'i',
-        'ô' | 'ö' => 'o',
-        'ù' | 'û' | 'ü' => 'u',
-        _ => return None,
-    })
 }
 
 #[cfg(test)]

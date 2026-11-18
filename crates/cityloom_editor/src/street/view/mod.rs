@@ -2,6 +2,7 @@
 //! details, where its width and kind are edited (a perspective has no handles to drag), and the arrows, plus and
 //! minus, Enter and Delete edit the street by key.
 
+pub mod add_menu;
 pub mod calming_strip;
 pub mod calming_tools;
 pub mod curb_strip;

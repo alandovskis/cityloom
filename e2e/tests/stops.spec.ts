@@ -1,6 +1,15 @@
 import type { Page } from "@playwright/test";
 
-import { expect, placesOnMap, streetLengthM, test } from "./fixtures";
+import {
+  addFromMenu,
+  expect,
+  live,
+  menuItem,
+  openPedestrianStreet,
+  placesOnMap,
+  streetLengthM,
+  test,
+} from "./fixtures";
 
 // The transit stops: the Stops rows under the zones, the checks, the 2.5D and the saved document.
 
@@ -33,8 +42,7 @@ async function openStopStreet(page: Page, minM: number, curbside = true) {
  *  gives it `metres`. */
 async function addStop(page: Page, cell: number, metres: number, kind = "Curb extension") {
   await page.locator("#stop-right-" + cell).click();
-  await page.locator("#add-btn").click();
-  await page.locator(".stop-add-item", { hasText: kind }).click();
+  await addFromMenu(page, kind);
   await page.locator("#stop-right-" + cell).click();
   await page.locator("#stop-length").fill(String(metres));
   await page.locator("#stop-length").press("Enter");
@@ -174,5 +182,25 @@ test.describe("the Stops row", () => {
     const row = page.locator("#checks li").filter({ hasText: "Stops have room to board" });
     await expect(row).toHaveClass("bad");
     await expect(row).toContainText("The sidewalk beside the stop is 1.5 m wide; 2.4 m or more is needed.");
+  });
+
+  test("a greyed item says why and adds nothing", async ({ page }) => {
+    await openPedestrianStreet(page);
+    await page.locator("#add-btn").click();
+    await page.locator("#add-topic-transit").click();
+    const stop = menuItem(page, "Curb stop");
+    await expect(stop).toHaveAttribute("aria-disabled", "true");
+    const reason = page.locator("#add-reason-stops");
+    await expect(reason).toHaveText("Stops need a lane a bus can stop in on this street.");
+    await expect(stop).toHaveAttribute("aria-describedby", "add-reason-stops");
+    // Playwright waits for an aria-disabled element to be enabled; a person can still press it.
+    await stop.click({ force: true });
+    await expect(page.locator("#add-menu")).toBeVisible();
+    await expect(live(page)).toHaveText("Stops need a lane a bus can stop in on this street.");
+    await expect(page.locator("#stop-strip-left, #stop-strip-right")).toHaveCount(0);
+    // Nothing was added: the one edit to undo is still making the street pedestrian.
+    await page.keyboard.press("Escape");
+    await page.locator("#undo").click();
+    await expect(live(page)).toHaveText(/ carries traffic again\.$/);
   });
 });

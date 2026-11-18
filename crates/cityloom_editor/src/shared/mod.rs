@@ -24,6 +24,7 @@ pub mod provenance;
 pub mod random;
 pub mod said;
 pub mod scoped;
+pub mod search;
 pub mod shortcut;
 pub mod sources;
 pub mod sources_view;
