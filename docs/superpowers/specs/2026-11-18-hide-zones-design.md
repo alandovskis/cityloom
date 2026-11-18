@@ -125,9 +125,8 @@ the Add a piece menu, at the start of the picked stretch where today it is "at t
 The plan replaces listboxes that are fully keyboard-operable today, so it must be too. My call on the shape, the
 builder may refine it:
 
-- The plan is one tab stop for the street itself: Left/Right move a point along the street by 1 m, Page Up/Page Down
-  by 10 m, Home/End to the ends; with Shift each of these extends the pick from where it started instead; Enter picks
-  the run at the point; Escape picks the whole street.
+- The plan is one tab stop for the street itself: Left/Right move a point along the street (1 m, Shift 10 m, Home/End
+  to the ends), Shift+Left/Right extend the pick from where it started, Enter picks the run at the point.
 - Each side's objects (curbside uses and stops, then calming, then green) stay reachable as listboxes, one tab stop
   each, with the arrow and Alt+arrow keys they have today. They may be the same `role="listbox"` markup drawn over the
   plan, or sr-only lists beside it; the e2e and a11y specs that drive the rows today must still pass with ids kept
