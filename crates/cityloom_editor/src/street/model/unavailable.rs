@@ -18,9 +18,8 @@ pub struct Unavailable {
 impl Editor {
     /// The first cause for each group, from the rows `view` has laid out (so the menu and the rows agree).
     pub(super) fn unavailable_from(&self, stops: &StopsView, calming: &CalmingStripView, green: &GreenRowView) -> Unavailable {
-        let stops = stops.sides.is_empty().then(|| {
-            Said::new(if self.street_length_mm().unwrap_or(0) <= 0 { "stop-refused-no-anchor" } else { "add-stops-no-lane" })
-        });
+        let stops =
+            stops.sides.is_empty().then(|| Said::new(if self.street_length_mm().unwrap_or(0) <= 0 { "stop-refused-no-anchor" } else { "add-stops-no-lane" }));
         let calming = calming.cells.is_empty().then(|| Said::new("add-calming-no-anchor"));
         let green = (!green.can_add).then(|| {
             Said::new(match self.curb_frame(true) {
