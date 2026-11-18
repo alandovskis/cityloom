@@ -429,6 +429,43 @@ mod tests {
         assert!(!r.vm.view_now().can_undo, "one step");
     }
 
+    #[test]
+    fn the_choices_offer_the_pedestrian_kinds_and_only_the_measures_that_fit() {
+        use crate::shared::catalogue::PEDESTRIAN_KINDS;
+        let r = rig(1);
+        let choices = r.vm.transform_choices();
+        let transit = |c: &TransformChoices| -> Vec<&'static str> { c.transit.iter().flat_map(|(_, codes)| codes.iter().copied()).collect() };
+        let kinds: Vec<usize> = PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect();
+        assert_eq!(choices.pedestrian, kinds);
+        let arrangeable: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
+        assert!(!arrangeable.is_empty());
+        assert_eq!(transit(&choices), arrangeable);
+        let view = r.vm.view_now();
+        for m in view.measures.iter().filter(|m| !m.can_apply) {
+            assert!(!transit(&choices).contains(&m.code), "{} will not fit", m.code);
+        }
+        // Choosing one arranges it as one undoable edit, and it is then this street's and no longer offered.
+        let code = transit(&choices)[0];
+        let steps = r.vm.view_now().revisions.len();
+        assert!(r.vm.apply_measure(code));
+        assert_eq!(r.vm.view_now().revisions.len(), steps + 1);
+        assert!(!transit(&r.vm.transform_choices()).contains(&code));
+        assert!(r.vm.undo());
+        assert!(transit(&r.vm.transform_choices()).contains(&code));
+    }
+
+    #[test]
+    fn a_street_with_no_motor_piece_has_no_pedestrian_choices_and_the_templates_are_always_offered() {
+        let r = rig(0);
+        assert!(r.vm.apply(|e| e.make_pedestrian(sidewalk())));
+        let choices = r.vm.transform_choices();
+        assert!(choices.pedestrian.is_empty());
+        let fits: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
+        let offered: Vec<&str> = choices.transit.iter().flat_map(|(_, codes)| codes.iter().copied()).collect();
+        assert_eq!(offered, fits, "the measures that fit are offered on a pedestrian street too");
+        assert!(!choices.is_empty(), "the templates are always listed");
+    }
+
     fn first_and_last(choices: &TransformChoices, g: Group) -> (Choice, Choice) {
         let all = choices.in_group(g);
         (all[0], *all.last().unwrap())

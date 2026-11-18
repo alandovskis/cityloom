@@ -431,11 +431,6 @@ impl SheetWatch {
         self.vm.with_value(|v| v.reset())
     }
 
-    /// What the Transform menu offers, drawing again when the street is edited.
-    pub fn transform_menu(&self) -> crate::street::vm::TransformMenu {
-        self.vm.with_value(|v| v.transform_menu())
-    }
-
     /// What the Transform dialog offers, drawing again when the street is edited.
     pub fn transform_choices(&self) -> crate::street::vm::transform::TransformChoices {
         self.vm.with_value(|v| v.transform_choices())

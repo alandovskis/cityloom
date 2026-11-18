@@ -38,7 +38,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     let inside = move |t: &leptos::web_sys::Element| {
         menu.get_untracked().is_some_and(|m| m.contains(Some(t))) || button.get_untracked().is_some_and(|b| b.contains(Some(t)))
     };
-    parts.listen(None, "#add-search", inside);
+    parts.listen("#add-search", inside);
     #[cfg(target_arch = "wasm32")]
     window_event_listener(leptos::ev::resize, move |_| narrow.set(is_narrow()));
     // Each opening starts again: the topic of what is selected, an empty search.

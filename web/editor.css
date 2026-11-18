@@ -3068,56 +3068,225 @@ svg pattern circle {
   }
 }
 
-/* ---- the Transform menu -------------------------------------------------- */
+/* ---- the Transform dialog ------------------------------------------------- */
 
-/* Fixed to the window like the Add menu, so the stage cannot clip it; the page sets its place. */
-.ped-menu {
-  position: fixed;
-  right: auto;
-  left: 8px;
-  top: 8px;
-  width: min(340px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
-  overflow-y: auto;
-}
-.ped-menu .hint {
-  padding: 0 0 8px;
-}
-.ped-list {
-  display: grid;
-  margin: 0;
+/* A modal <dialog> (street/view/transform.rs): the groups, the open group's choices and the preview side by side,
+   Cancel and Apply under them; one column under 720 px. Its text pairs are measured in shared/contrast.rs. */
+.transform-dialog {
+  width: min(960px, 100vw - 32px);
+  max-width: min(960px, 100vw - 32px);
+  max-height: calc(100vh - 32px);
   padding: 0;
-  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
 }
-.ped-menu .menu-h:not(:first-child) {
-  margin-top: 10px;
+.transform-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+/* The page behind is dimmed by the shadows' own slate, so the dialog reads as in front of it. */
+.transform-dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+}
+.transform-head,
+.transform-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.transform-head {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--rule);
+}
+.transform-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.transform-x {
+  width: 40px;
+  padding: 0;
+}
+.transform-foot {
+  justify-content: flex-end;
+  border-top: 1px solid var(--rule);
+}
+.transform-body {
+  display: grid;
+  grid-template-columns: minmax(150px, 200px) minmax(0, 1fr) minmax(0, 360px);
+  gap: 16px;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+.transform-groups,
+.transform-pick,
+.transform-preview,
+.transform-list,
+.transform-pair {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+.transform-groups,
+.transform-list {
+  gap: 2px;
+}
+.transform-pick,
+.transform-preview,
+.transform-pair {
+  gap: 8px;
+}
+/* A group's tab and a choice: the open or chosen one is washed, with the accent's bar at its start. */
+.transform-tab,
+.transform-item {
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.transform-tab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.transform-tab .count {
+  color: var(--ink-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.transform-tab:hover,
+.transform-item:hover {
+  background: var(--fill);
+}
+.transform-tab[aria-selected="true"],
+.transform-item[aria-selected="true"] {
+  border-inline-start-color: var(--accent);
+  background: var(--accent-wash);
+}
+.transform-pick .hint {
+  margin: 0;
+}
+.transform-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  border-radius: var(--r-ctl);
+}
+.transform-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.transform-family {
+  margin: 10px 0 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+.transform-list > [role="group"]:first-child .transform-family {
+  margin-top: 0;
+}
+.transform-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.transform-item b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.ped-item {
+  grid-template-columns: 88px 1fr;
 }
 .transit-item {
   grid-template-columns: 40px 1fr;
 }
-/* A template has a name and no mark. */
-.template-item {
-  grid-template-columns: 1fr;
-  padding-inline-start: 10px;
-}
-/* A template that does not suit the street stays listed: dimmed, with its reason as text under it (ink-2 on the
-   panel is measured in shared/contrast.rs). */
-.template-item[aria-disabled="true"] {
-  color: var(--ink-2);
-  cursor: not-allowed;
-}
-.template-item[aria-disabled="true"]:hover {
-  background: transparent;
-}
-.template-reason {
-  margin: 0;
-  padding: 0 10px 8px;
-  color: var(--ink-2);
-  font-size: 14px;
-}
 .transit-item .dirtag {
   margin: 0;
   text-align: center;
+}
+/* A template that does not suit the street stays listed, struck through, with its reason as text under it. */
+.template-item[aria-disabled="true"] {
+  color: var(--ink-2);
+}
+.template-item[aria-disabled="true"] b {
+  text-decoration: line-through;
+}
+.template-reason {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.transform-preview h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.transform-preview h4 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.transform-side {
+  margin: 0;
+}
+.transform-side figcaption {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The street's own 2.5D at the column's width; it is looked at, not pressed. */
+.transform-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.transform-empty,
+.transform-no {
+  margin: 0;
+  color: var(--ink-2);
+}
+.transform-report {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 14px;
+}
+.btn.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+}
+.btn.btn-primary:disabled {
+  border-color: var(--field-line);
+  background: var(--panel);
+}
+@media (max-width: 720px) {
+  .transform-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .transform-list {
+    max-height: none;
+  }
+}
+@media (forced-colors: active) {
+  .transform-tab[aria-selected="true"],
+  .transform-item[aria-selected="true"] {
+    border-inline-start-color: Highlight;
+  }
 }
 
 /* ---- touch, small screens, motion --------------------------------------------- */

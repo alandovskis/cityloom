@@ -1,4 +1,4 @@
-//! Street design templates: ready-made cross-sections a street can be arranged as from the Transform menu.
+//! Street design templates: ready-made cross-sections a street can be arranged as from the Transform dialog.
 //! A template is not stored and not a kind of piece: applying one lays ordinary pieces out in the selected zone
 //! (`Editor::apply_template`), fitted to the street's width, and the street is then edited, checked and undone
 //! like any other. Pure data and rules, no wording (a refusal is `Said` data).
@@ -12,7 +12,7 @@ use super::{Arg, Said, Segment};
 use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
 use crate::street::model::measures::{Dir, Spec, lay_out, sp};
 
-/// The templates, in the order the Transform menu lists them.
+/// The templates, in the order the Transform dialog lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum Template {
     /// Wide sidewalks with patios and loading at the curb, a lane each way.

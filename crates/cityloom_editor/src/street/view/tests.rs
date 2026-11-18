@@ -7,15 +7,16 @@ use leptos::prelude::*;
 
 use crate::city::model::EndView;
 use crate::shared::catalogue::KINDS;
-use crate::shared::i18n::Locale;
+use crate::shared::i18n::{Args, Locale};
 use crate::shared::live;
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::model::Editor;
 use crate::street::model::StreetExt;
-use crate::street::view::{self, add_menu, inspector, notes, page};
+use crate::street::view::{self, add_menu, inspector, notes, page, transform};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::Action as StreetAction;
+use crate::street::vm::transform::{Choice, DialogState, Group, Outcome};
 use crate::street::vm::watch::SheetWatch;
 // ---- what the keys do on the street ---------------------------------------------------
 
@@ -1396,153 +1397,295 @@ fn the_pedestrian_street_messages_exist_in_both_languages() {
     assert_eq!(fr.tr_now("street-traffic-again", &street), "Rue Rachel accueille de nouveau la circulation.");
 }
 
+// ---- the Transform dialog -------------------------------------------------------------
+
+/// The opening tag of the element whose `id` is `id`.
+fn tag_of<'a>(h: &'a str, id: &str) -> &'a str {
+    let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("no #{id}: {h}"));
+    let start = h[..at].rfind('<').unwrap();
+    &h[start..at + h[at..].find('>').unwrap() + 1]
+}
+
+/// The choices of one group of the dialog drawn to HTML, `chosen` chosen.
+fn choices_html(s: &Rc<StreetVm>, group: Group, chosen: Option<Choice>) -> String {
+    let s = s.clone();
+    street_html(move || {
+        let w = SheetWatch::new(s);
+        let choices = w.transform_choices();
+        let state = RwSignal::new(DialogState { group, chosen, pointed: None });
+        transform::choices_markup(w, &choices, group, state)
+    })
+}
+
+fn preview_html(s: &Rc<StreetVm>, shown: Option<Choice>) -> String {
+    let s = s.clone();
+    street_html(move || transform::preview_markup(SheetWatch::new(s), shown))
+}
+
 #[test]
-fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures_that_fit() {
+fn the_transform_button_opens_a_dialog() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    let button = button_tag(&h, "transform-btn");
+    assert!(button.contains("aria-haspopup=\"dialog\"") && button.contains("class=\"btn\""), "{button}");
+    assert!(h.contains(">Transform<"), "{h}");
+    let dialog = tag_of(&h, "transform-dialog");
+    assert!(dialog.starts_with("<dialog") && dialog.contains("aria-labelledby=\"transform-dialog-h\""), "{dialog}");
+    assert!(!dialog.contains(" open"), "closed until the button opens it: {dialog}");
+    assert!(tag_of(&h, "transform-dialog-h").starts_with("<h2"));
+    assert!(h.contains(">Transform this street<"), "{h}");
+    assert!(button_tag(&h, "transform-close").contains("aria-label=\"Close\""));
+    assert!(h.contains(">Cancel<") && h.contains(">Apply<"), "{h}");
+}
+
+#[test]
+fn the_dialog_has_a_tab_per_group_with_its_count() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    let choices = s.transform_choices();
+    let list = tag_of(&h, "transform-groups");
+    assert!(list.contains("role=\"tablist\"") && list.contains("aria-orientation=\"vertical\""), "{list}");
+    assert_eq!(count(&h, "role=\"tab\""), 3, "{h}");
+    let transit: usize = choices.transit.iter().map(|(_, codes)| codes.len()).sum();
+    let fit = choices.templates.iter().filter(|t| t.refusal.is_none()).count();
+    for (id, name, n, selected) in [
+        ("ped", "Make pedestrian", choices.pedestrian.len().to_string(), true),
+        ("transit", "Transit priority", transit.to_string(), false),
+        ("templates", "Street templates", format!("{fit} of 5"), false),
+    ] {
+        let tab = button_tag(&h, &format!("transform-tab-{id}"));
+        assert!(tab.contains("role=\"tab\"") && tab.contains("aria-controls=\"transform-choices\""), "{tab}");
+        assert!(tab.contains(&format!("aria-selected=\"{selected}\"")), "{tab}");
+        let body = &h[h.find(&tab).unwrap()..];
+        let body = &body[..body.find("</button>").unwrap()];
+        assert!(body.contains(name) && body.contains(&format!("class=\"count\">{n}<")), "{body}");
+    }
+    assert_eq!(choices.pedestrian.len(), 3);
+    assert!(transit > 0, "the sample is offered a measure");
+    // The first group is open: its choices are listed.
+    let list = tag_of(&h, "transform-choices");
+    assert!(list.contains("role=\"listbox\"") && list.contains("aria-labelledby=\"transform-tab-ped\""), "{list}");
+    assert_eq!(count(&h, "ped-item"), 3);
+}
+
+#[test]
+fn a_street_without_traffic_has_no_make_pedestrian_tab() {
     use crate::shared::catalogue::kind_index;
     let s = street_shared(1);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    let button = button_tag(&h, "transform-btn");
-    assert!(
-        button.contains("aria-haspopup=\"menu\"") && button.contains("aria-controls=\"transform-menu\"") && button.contains("aria-expanded=\"false\""),
-        "{button}"
-    );
-    assert!(h.contains(">Transform<") && h.contains("id=\"transform-menu\"") && h.contains("role=\"menu\"") && h.contains("hidden"), "{h}");
-    assert_eq!(count(&h, "role=\"group\""), 3, "{h}");
-    assert!(h.contains("Make pedestrian") && h.contains("Transit priority") && h.contains("Street templates"), "{h}");
-    for kind in ["Sidewalk", "Planting strip", "Café terrace"] {
-        assert!(h.contains(kind), "{kind}");
-    }
-    assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
-    // The mark and the name are apart in the text, so that a visible label read as one word is not what the
-    // item's name has to contain (WCAG 2.5.3).
-    // (A template has a name and no mark.)
-    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\"") - count(&h, "template-item"), "{h}");
-    // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
-    // reach it as the group's name and description.
-    for (group, heading, hint) in [
-        ("ped", "transform-ped-h", "transform-ped-hint"),
-        ("transit", "transform-transit-h", "transform-transit-hint"),
-        ("templates", "transform-templates-h", "transform-templates-hint"),
-    ] {
-        let tag = &h[h[..h.find(&format!("aria-labelledby=\"{heading}\"")).unwrap()].rfind('<').unwrap()..];
-        assert!(tag[..tag.find('>').unwrap()].contains(&format!("aria-describedby=\"{hint}\"")), "{group}: {tag}");
-        for id in [heading, hint] {
-            let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
-            let el = &h[h[..at].rfind('<').unwrap()..];
-            assert!(el[..el.find('>').unwrap()].contains("aria-hidden=\"true\""), "{id}: {el}");
+    assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    assert!(!h.contains("transform-tab-ped") && !h.contains("ped-item"), "{h}");
+    let first = if s.transform_choices().transit.is_empty() { "templates" } else { "transit" };
+    assert!(button_tag(&h, &format!("transform-tab-{first}")).contains("aria-selected=\"true\""));
+}
+
+#[test]
+fn the_transit_choices_are_grouped_by_family() {
+    let s = street_shared(1);
+    let choices = s.transform_choices();
+    let h = choices_html(&s, Group::Transit, None);
+    assert_eq!(count(&h, "role=\"group\""), choices.transit.len(), "{h}");
+    let i18n = crate::i18n_for(Locale::En);
+    for (family, codes) in &choices.transit {
+        let heading = format!("transform-family-{family}-h");
+        assert!(h.contains(&format!("role=\"group\" aria-labelledby=\"{heading}\"")), "{family}: {h}");
+        let name = i18n.tr_now(&format!("transform-family-{family}"), &Args::new());
+        assert!(tag_of(&h, &heading).contains("aria-hidden=\"true\""), "read as the group's name only");
+        let at = h.find(&format!("id=\"{heading}\"")).unwrap();
+        assert!(h[at..at + h[at..].find("</p>").unwrap()].ends_with(&format!(">{name}")), "{name}: {h}");
+        for code in codes {
+            let option = tag_of(&h, &format!("transform-opt-measure-{}", code.to_lowercase()));
+            assert!(option.contains("role=\"option\"") && option.contains("transit-item"), "{option}");
+            assert!(h.contains(&format!("<span class=\"dirtag\">{code}</span>")), "{code}");
         }
     }
-    assert_eq!(count(&h, "ped-item"), 3);
-    let fits = s.transform_menu().transit;
-    assert!(!fits.is_empty());
-    assert_eq!(count(&h, "transit-item"), fits.len());
-    for code in &fits {
-        assert!(h.contains(&format!(">{code}<")), "{code}");
-    }
-    let view = s.view_now();
-    for m in view.measures.iter().filter(|m| !m.can_apply) {
+    let flat: usize = choices.transit.iter().map(|(_, codes)| codes.len()).sum();
+    assert_eq!(count(&h, "role=\"option\""), flat);
+    assert!(h.contains("Center-Running Transit Lanes"), "{h}");
+    // A measure that does not fit, a junction measure and a freeway measure are not offered.
+    for m in s.view_now().measures.iter().filter(|m| !m.can_apply) {
         assert!(!h.contains(&format!(">{}<", m.code)), "{} will not fit and is not listed", m.code);
     }
-    assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"), "{h}");
-    assert!(!h.contains("Offset Queue-Jump Lanes"), "a junction measure is not here: {h}");
-    assert!(!h.contains("Transit Signal Priority"), "a measure that is not modelled is not here: {h}");
-    assert!(!h.contains("B2"), "a freeway measure is not offered on a street: {h}");
+    assert!(!h.contains("Offset Queue-Jump Lanes") && !h.contains("Transit Signal Priority") && !h.contains(">B2<"), "{h}");
+    // The hint comes first, outside the list, which it describes.
+    let hint = h.find("Arrange the street as one of these transit measures.").expect("the hint");
+    assert!(hint < h.find("role=\"listbox\"").unwrap());
+    let list = tag_of(&h, "transform-choices");
+    assert!(list.contains("aria-labelledby=\"transform-tab-transit\"") && list.contains("tabindex=\"0\""), "{list}");
+    assert!(list.contains("aria-describedby=\"transform-hint\""), "{list}");
     // A measure the street already is, is no longer offered.
     assert!(s.edit(|e| e.apply_measure("B3")));
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert!(!h.contains("Arrange the street as B3"), "{h}");
-    // Made pedestrian, the street has no motor piece: only the measures are left.
-    assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert!(!h.contains("Make pedestrian") && !h.contains("ped-item"), "a street without traffic has nothing to make pedestrian");
+    assert!(!choices_html(&s, Group::Transit, None).contains("transform-opt-measure-b3"));
 }
 
 #[test]
-fn the_transform_menu_names_the_measures_in_french() {
-    let s = street_shared_in(1, Locale::FrCa);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
-    assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"), "{h}");
-    assert!(h.contains("Priorité au transport en commun"), "{h}");
-    assert!(!h.contains("Center-Running Transit Lanes"), "{h}");
-}
-
-#[test]
-fn the_left_panel_holds_the_inspector_and_no_transit_table() {
-    let page = include_str!("../../../../../web/street.html");
-    assert!(page.contains("id=\"inspector\""));
-    assert!(!page.contains("transit-priority") && !page.contains("h-transit"), "the Transform menu is where the measures are arranged");
-}
-
-#[test]
-fn the_transform_menu_leaves_out_a_group_with_nothing_in_it_and_is_not_shown_empty() {
-    use crate::shared::catalogue::kind_index;
-    let s = street_shared(1);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert_eq!(count(&h, "role=\"group\""), 3);
-    assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
-    let menu = s.transform_menu();
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    if menu.is_empty() {
-        assert!(!h.contains("transform-btn"), "{h}");
-    } else {
-        let groups = 1 + usize::from(!menu.transit.is_empty());
-        assert_eq!(count(&h, "role=\"group\""), groups, "the templates, and the measures if any fit: {h}");
+fn every_family_has_a_heading_in_both_languages() {
+    for locale in Locale::ALL {
+        let i18n = crate::i18n_for(locale);
+        for family in 'a'..='f' {
+            assert!(i18n.has_message(&format!("transform-family-{family}"), locale), "{family} in {}", locale.tag());
+        }
     }
+    let fr = crate::i18n_for(Locale::FrCa);
+    assert_eq!(fr.tr_now("transform-family-a", &Args::new()), "Rues de transport en commun");
 }
 
 #[test]
-fn the_templates_are_all_listed_and_one_that_does_not_fit_is_disabled_with_its_reason_described() {
+fn every_option_is_named_and_a_disabled_template_says_why() {
     // Sample 2 is 12 m wide: the bus corridor needs 13.8 m.
     let s = street_shared(2);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert_eq!(count(&h, "template-item"), 5, "{h}");
+    let h = choices_html(&s, Group::Templates, None);
+    assert_eq!(count(&h, "role=\"option\""), 5, "{h}");
+    assert_eq!(count(&h, "id=\"transform-opt-template-"), 5, "{h}");
     for name in ["Commercial main street", "School street", "Neighbourhood greenway", "Bus corridor", "Industrial access street"] {
         assert!(h.contains(&format!("<b>{name}</b>")), "{name}");
     }
-    assert_eq!(count(&h, "aria-disabled=\"true\""), s.transform_menu().templates.iter().filter(|t| t.refusal.is_some()).count());
-    let tag = &h[h[..h.find("data-template=\"bus-corridor\"").unwrap()].rfind("<button").unwrap()..];
-    let tag = &tag[..tag.find('>').unwrap()];
+    let refused = s.transform_choices().templates.iter().filter(|t| t.refusal.is_some()).count();
+    assert_eq!(count(&h, "aria-disabled=\"true\""), refused);
+    let bus = tag_of(&h, "transform-opt-template-bus-corridor");
     assert!(
-        tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""),
-        "{tag}"
+        bus.contains("aria-disabled=\"true\"")
+            && bus.contains("template-disabled")
+            && bus.contains("data-template=\"bus-corridor\"")
+            && bus.contains("aria-describedby=\"template-reason-bus-corridor\""),
+        "{bus}"
     );
-    let reason = &h[h[..h.find("id=\"template-reason-bus-corridor\"").unwrap()].rfind("<p").unwrap()..];
-    assert!(reason[..reason.find('>').unwrap()].contains("aria-hidden=\"true\""), "a menu holds only items and groups: {reason}");
+    let reason = &h[h.find("id=\"template-reason-bus-corridor\"").unwrap()..];
     assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
-    let school = &h[h[..h.find("data-template=\"school\"").unwrap()].rfind("<button").unwrap()..];
-    assert!(!school[..school.find('>').unwrap()].contains("aria-disabled"), "{school}");
-    assert!(!h.contains("template-reason-school"), "a template that fits has no reason");
+    assert!(tag_of(&h, "template-reason-bus-corridor").contains("class=\"template-reason\""));
+    let school = tag_of(&h, "transform-opt-template-school");
+    assert!(!school.contains("aria-disabled") && !h.contains("template-reason-school"), "{school}");
+    // Every option of every group has its id, and the chosen one is the list's active descendant.
+    let s = street_shared(0);
+    let sidewalk = Choice::Pedestrian(crate::shared::catalogue::kind_index("sidewalk").unwrap());
+    let h = choices_html(&s, Group::Pedestrian, Some(sidewalk));
+    assert_eq!(count(&h, "role=\"option\""), 3);
+    for (id, name) in [("sidewalk", "Sidewalk"), ("planting", "Planting strip"), ("terrace", "Café terrace")] {
+        let option = tag_of(&h, &format!("transform-opt-ped-{id}"));
+        assert!(option.contains("ped-item") && option.contains("transform-item"), "{option}");
+        assert!(option.contains(&format!("aria-selected=\"{}\"", id == "sidewalk")), "{option}");
+        assert!(h.contains(&format!("<b>{name}</b>")), "{name}");
+    }
+    assert!(tag_of(&h, "transform-choices").contains("aria-activedescendant=\"transform-opt-ped-sidewalk\""));
 }
 
 #[test]
-fn the_templates_are_worded_in_french() {
+fn the_preview_is_empty_until_a_choice_is_shown() {
+    let s = street_shared(1);
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    let preview = tag_of(&h, "transform-preview");
+    assert!(preview.starts_with("<section") && preview.contains("aria-live=\"polite\""), "{preview}");
+    assert!(h.contains("class=\"transform-empty\">Choose a change to see what it does to the street.<"), "{h}");
+    assert!(!h.contains("transform-figure"), "{h}");
+    // A kind the motor pieces become: Now and After, at one scale, and what changes.
+    let sidewalk = Choice::Pedestrian(crate::shared::catalogue::kind_index("sidewalk").unwrap());
+    let h = preview_html(&s, Some(sidewalk));
+    assert!(!h.contains("transform-empty"));
+    assert!(tag_of(&h, "transform-preview-h").starts_with("<h3") && h.contains(">Sidewalk</h3>"), "{h}");
+    assert_eq!(count(&h, "class=\"transform-figure\""), 2, "{h}");
+    assert_eq!(count(&h, "role=\"img\""), 2, "{h}");
+    let preview = s.preview(sidewalk);
+    let Outcome::Changed { after, .. } = &preview.outcome else { panic!("the sample can be made pedestrian") };
+    let i18n = crate::i18n_for(Locale::En);
+    for v in [&preview.before, after] {
+        let alt = view::drawing::alt(v, &i18n, Units::Metres);
+        assert!(h.contains(&format!("aria-label=\"{alt}\"")), "{alt}: {h}");
+    }
+    assert!(h.contains(">Now<") && h.contains(">After<"), "{h}");
+    assert!(h.contains("<h4>What changes</h4>"), "{h}");
+    assert!(h.contains("impact-uses") || h.contains("impact-none"), "{h}");
+    assert!(!h.contains("transform-report"), "{h}");
+    // A measure is named by its code and name.
+    let h = preview_html(&s, Some(Choice::Measure("B1")));
+    assert!(h.contains(">B1 · Center-Running Transit Lanes</h3>"), "{h}");
+    // A template that does not fit: the street now, and why.
+    let s = street_shared(2);
+    let h = preview_html(&s, Some(Choice::Template(crate::street::model::Template::BusCorridor)));
+    assert_eq!(count(&h, "class=\"transform-figure\""), 1, "{h}");
+    assert!(h.contains(">Now<") && !h.contains(">After<") && !h.contains("What changes"), "{h}");
+    assert!(h.contains("class=\"transform-no\">Bus corridor needs a street at least 13.8 m wide."), "{h}");
+    // A template that has nothing to report lists nothing; School says what it did.
+    let h = preview_html(&s, Some(Choice::Template(crate::street::model::Template::Greenway)));
+    assert!(h.contains("What changes") && !h.contains("transform-report"), "{h}");
+    let h = preview_html(&s, Some(Choice::Template(crate::street::model::Template::School)));
+    assert!(h.contains("class=\"transform-report\"") && h.contains("30 km/h"), "{h}");
+}
+
+#[test]
+fn apply_is_disabled_until_a_choice_that_fits_is_chosen() {
+    use crate::street::model::Template;
+    let s = street_shared(2);
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    let apply = button_tag(&h, "transform-apply");
+    assert!(apply.contains("disabled") && apply.contains("btn-primary"), "{apply}");
+    assert!(!button_tag(&h, "transform-cancel").contains("disabled"));
+    let can = |c: Option<Choice>| {
+        let s = s.clone();
+        let mut out = false;
+        street_html(|| {
+            out = transform::can_apply(SheetWatch::new(s), c);
+            view! { <p></p> }
+        });
+        out
+    };
+    assert!(!can(None));
+    assert!(can(Some(Choice::Template(Template::School))));
+    assert!(!can(Some(Choice::Template(Template::BusCorridor))), "a template that does not fit");
+}
+
+#[test]
+fn the_transform_dialog_speaks_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    assert!(h.contains(">Transformer<") && h.contains(">Transformer cette rue<"), "{h}");
+    assert!(h.contains("Rendre piétonne") && h.contains("Priorité au transport en commun") && h.contains("Modèles de rue"), "{h}");
+    assert!(h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
+    assert!(h.contains(">Annuler<") && h.contains(">Appliquer<") && h.contains("aria-label=\"Fermer\""), "{h}");
+    let fit = s.transform_choices().templates.iter().filter(|t| t.refusal.is_none()).count();
+    assert!(h.contains(&format!("class=\"count\">{fit} sur 5<")), "{h}");
+    let h = choices_html(&s, Group::Transit, None);
+    assert!(h.contains("Voies centrales réservées au transport en commun") && !h.contains("Center-Running Transit Lanes"), "{h}");
+    let h = preview_html(&s, Some(Choice::Measure("B1")));
+    assert!(h.contains(">B1 · Voies centrales réservées au transport en commun</h3>") && h.contains(">Maintenant<") && h.contains(">Après<"), "{h}");
     let s = street_shared_in(2, Locale::FrCa);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    for name in ["Rue commerciale", "Rue scolaire", "Voie verte de quartier", "Corridor d’autobus", "Rue d’accès industriel", "Modèles de rue"] {
+    let h = choices_html(&s, Group::Templates, None);
+    for name in ["Rue commerciale", "Rue scolaire", "Voie verte de quartier", "Corridor d’autobus", "Rue d’accès industriel"] {
         assert!(h.contains(name), "{name}");
     }
     assert!(h.contains("Le modèle «\u{a0}Corridor d’autobus\u{a0}» demande une rue d’au moins 13,8\u{a0}m"), "{h}");
 }
 
 #[test]
-fn the_transform_menu_speaks_french() {
-    let s = street_shared_in(1, Locale::FrCa);
-    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
-    assert!(h.contains(">Transformer<") && h.contains("Rendre piétonne") && h.contains("Priorité au transport en commun"), "{h}");
-    assert!(h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
-    assert!(h.contains("Réorganiser la rue selon"), "{h}");
+fn the_left_panel_holds_the_inspector_and_no_transit_table() {
+    let page = include_str!("../../../../../web/street.html");
+    assert!(page.contains("id=\"inspector\""));
+    assert!(!page.contains("transit-priority") && !page.contains("h-transit"), "the Transform dialog is where the measures are arranged");
 }
 
 #[test]
 fn the_transform_messages_exist_in_both_languages() {
-    use crate::shared::i18n::{Args, Locale};
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
-    assert!(en.has_message("transform-button", Locale::En) && fr.has_message("transform-button", Locale::FrCa));
+    for id in [
+        "transform-button",
+        "transform-dialog-title",
+        "transform-close",
+        "transform-cancel",
+        "transform-apply",
+        "transform-preview-empty",
+        "transform-now",
+        "transform-after",
+        "transform-what-changes",
+        "transform-templates-fit",
+        "transform-measure-title",
+    ] {
+        assert!(en.has_message(id, Locale::En) && fr.has_message(id, Locale::FrCa), "{id}");
+    }
     assert_eq!(
         (en.tr_now("transform-button", &Args::new()), fr.tr_now("transform-button", &Args::new())),
         ("Transform".to_string(), "Transformer".to_string())
     );
+    let fit = Args::new().num("fit", 4).num("all", 5);
+    assert_eq!((en.tr_now("transform-templates-fit", &fit), fr.tr_now("transform-templates-fit", &fit)), ("4 of 5".to_string(), "4 sur 5".to_string()));
 }
 
 #[test]

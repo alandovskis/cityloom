@@ -22,6 +22,7 @@ pub mod stop_tools;
 pub mod strip;
 #[cfg(test)]
 mod tests;
+pub mod transform;
 pub mod zone_tools;
 
 use std::rc::Rc;

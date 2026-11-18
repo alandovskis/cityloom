@@ -119,6 +119,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Transit priority measures | Bus Bulbs | Avancées de trottoir pour autobus |  |
 | Transit priority measures | Transit Modal Filter | Filtre modal pour le transport en commun |  |
 | Transit priority measures | Yield-Controlled Bus Gates | Portes d’autobus à cédez le passage | Chosen form, to confirm (see below). |
+| Transit priority measures | Transit streets (family A, heading in the Transform dialog) | Rues de transport en commun | `transform-family-a`; the families group the measures by their code's letter. |
+| Transit priority measures | Centre-running lanes (family B) | Voies centrales | `transform-family-b` |
+| Transit priority measures | Edge-running lanes (family C) | Voies latérales | `transform-family-c` |
+| Transit priority measures | Offset lanes (family D) | Voies décalées | `transform-family-d` |
+| Transit priority measures | Curb-adjacent lanes (family E) | Voies en bordure de trottoir | `transform-family-e` |
+| Transit priority measures | Contraflow lanes (family F) | Voies à contresens | `transform-family-f` |
 | Piece panel | Surface / Planting (heading) | Revêtement / Plantation |  |
 | Piece panel | Other times | Autres périodes |  |
 | Piece panel | Two-way | Double sens |  |
