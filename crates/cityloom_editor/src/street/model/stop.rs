@@ -370,7 +370,7 @@ impl Editor {
     /// The stops rows: a cell per stop and per gap along the whole street, for each side that can have a stop.
     pub(super) fn stops_view(&self) -> StopsView {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         if length_mm <= 0 {
             // Without a length there is nothing to lay the stops along.
             return StripView { sides: Vec::new() };
@@ -432,7 +432,7 @@ impl Editor {
     /// extension, boarding island) that every zone it would overlap can take, else the curb stop.
     pub fn default_stop_kind(&self, side: Side, from_mm: i32) -> StopKind {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         let driving = REGIONS[self.region].drive_side;
         let sections = content.sections_over(from_mm, from_mm.saturating_add(standards::stop_min_mm()), length_mm);
         StopKind::ALL
@@ -475,7 +475,7 @@ impl Editor {
     /// Every rule each stop breaks, stop by stop in order: `rule` indexes the rows of `stop_checks`.
     fn stop_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         // The far end is measured from the frame's length, as the junction measures it (the two differ by up to the tolerance).
         let end_length_mm = self.frame.map_or(length_mm, |f| f.length_mm);
         let driving = REGIONS[self.region].drive_side;

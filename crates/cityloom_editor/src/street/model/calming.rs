@@ -348,7 +348,7 @@ impl Editor {
     /// the street has no length to lay them along.
     pub fn calming_free_stretches(&self) -> Vec<(i32, i32)> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         let mut out = Vec::new();
         let mut at = 0;
         for c in &content.calming {
@@ -384,7 +384,7 @@ impl Editor {
     /// The strip of the elements: none unless the street has a length to lay them along.
     pub(super) fn calming_strip_view(&self) -> CalmingStripView {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         if length_mm <= 0 {
             return CalmingStripView::default();
         }
@@ -539,7 +539,7 @@ impl Editor {
     /// Every rule each element breaks, element by element in order: `rule` indexes the rows of `calming_checks`.
     fn calming_failures(&self) -> Vec<Fail> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let length_mm = self.street_length_mm().unwrap_or(i32::MAX);
         // The far end is measured from the frame's length, as the junction measures it.
         let end_length_mm = self.frame.map_or(length_mm, |f| f.length_mm);
         let (near, far) = match content.from_end {

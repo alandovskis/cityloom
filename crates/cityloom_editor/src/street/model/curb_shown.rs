@@ -109,7 +109,7 @@ impl Editor {
     /// The stretch shown for the selected zone, and the length of the street it lies in. None without a length.
     pub(super) fn stretch(&self) -> Option<Stretch> {
         let content = &self.states[self.cursor].content;
-        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let length_mm = self.street_length_mm().unwrap_or(0);
         if length_mm <= 0 {
             return None;
         }

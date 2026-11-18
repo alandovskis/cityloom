@@ -1,7 +1,10 @@
 //! Why stops, traffic calming and green cannot be added to the street as it is, for the add menu to say beside the
 //! group it greys.
 
+use super::calming::CalmingStripView;
 use super::curb::CurbRefusal;
+use super::green::GreenRowView;
+use super::stop::StopsView;
 use super::{Editor, Said};
 
 /// Why the things that are not pieces cannot be added to the street as it is; `None` where they can.
@@ -13,12 +16,13 @@ pub struct Unavailable {
 }
 
 impl Editor {
-    /// The first cause for each group, from the same functions that lay out its row.
-    pub(super) fn unavailable(&self) -> Unavailable {
-        let length_mm = self.states[self.cursor].content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
-        let stops = self.stops_view().sides.is_empty().then(|| Said::new(if length_mm <= 0 { "stop-refused-no-anchor" } else { "add-stops-no-lane" }));
-        let calming = self.calming_strip_view().cells.is_empty().then(|| Said::new("add-calming-no-anchor"));
-        let green = (!self.green_row().can_add).then(|| {
+    /// The first cause for each group, from the rows `view` has laid out (so the menu and the rows agree).
+    pub(super) fn unavailable_from(&self, stops: &StopsView, calming: &CalmingStripView, green: &GreenRowView) -> Unavailable {
+        let stops = stops.sides.is_empty().then(|| {
+            Said::new(if self.street_length_mm().unwrap_or(0) <= 0 { "stop-refused-no-anchor" } else { "add-stops-no-lane" })
+        });
+        let calming = calming.cells.is_empty().then(|| Said::new("add-calming-no-anchor"));
+        let green = (!green.can_add).then(|| {
             Said::new(match self.curb_frame(true) {
                 Err(CurbRefusal::NoAnchor) => "green-refused-no-anchor",
                 Err(CurbRefusal::Elsewhere) => "green-refused-elsewhere",

@@ -1301,6 +1301,12 @@ impl Editor {
 
     // ---- read side -----------------------------------------------------
 
+    /// The street's length as the shown state keeps it, else the length of the road it is drawn on; `None` when
+    /// neither is known.
+    pub(super) fn street_length_mm(&self) -> Option<i32> {
+        self.states[self.cursor].content.length_mm.or(self.frame.map(|f| f.length_mm))
+    }
+
     pub fn view(&self) -> View {
         let segs = self.current();
         let total_mm = total(segs);
@@ -1308,6 +1314,8 @@ impl Editor {
         // Everything that measures the street does so as it is at the shown time.
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
+        let (stops, calming_strip, green) = (self.stops_view(), self.calming_strip_view(), self.green_row());
+        let unavailable = self.unavailable_from(&stops, &calming_strip, &green);
         View {
             name: title_of(self.street_name.as_deref(), self.class()),
             class: self.class(),
@@ -1335,15 +1343,15 @@ impl Editor {
             checks: self.street_checks(),
             zones: self.zones_view(),
             curb: self.curb_view(),
-            stops: self.stops_view(),
+            stops,
             calming: self.calming_view(),
-            calming_strip: self.calming_strip_view(),
+            calming_strip,
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             calming_shown: self.calming_shown(),
             green_shown: self.green_shown(),
-            green: self.green_row(),
-            unavailable: self.unavailable(),
+            green,
+            unavailable,
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
                 .into_iter()
