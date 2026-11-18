@@ -1308,6 +1308,13 @@ fn the_street_ftl_files_have_the_same_messages_and_variables() {
     assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
 }
 
+#[test]
+fn the_street_french_writes_an_ordinary_space_before_a_colon() {
+    // The engine puts the no-break space in; one typed in the file would be a second source of it.
+    let typed: Vec<&str> = crate::street::RESOURCES.fr.lines().filter(|l| l.contains("\u{a0}:") || l.contains("\u{202f}:")).collect();
+    assert_eq!(typed, Vec::<&str>::new());
+}
+
 fn bendville_street(areas: &[(&str, crate::restriction::model::Rule)], locale: Locale) -> Rc<StreetVm> {
     use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
     let (ports, _, storage) = crate::shared::ports::test_ports();
