@@ -99,7 +99,6 @@ failing =
         [one] 1 check fails
        *[other] { $n } checks fail
     }
-measure-arrange-label = Arrange the street as { $code } { $name }
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/view/page.rs).
 header-between = between

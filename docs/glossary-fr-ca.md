@@ -40,9 +40,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Bench | Banc |  |
 | Street page | Café terrace | Terrasse de café |  |
 | Street page | Pedestrian street | Rue piétonne | The class alone is the adjective `piétonne` (`class-pedestrian`), as in `Rue piétonne sans nom`. |
-| Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The menu's choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
-| Street page | Transform | Transformer | The menu button for Make pedestrian and the transit measures that fit. |
-| Street page | Street templates | Modèles de rue | The Transform menu's third group; `rev-template` words a change as `Modèle : Rue scolaire`. |
+| Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The Transform dialog's first group; its choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
+| Street page | Transform | Transformer | The button that opens the Transform dialog (`Transformer cette rue`): Make pedestrian, the transit measures that fit and the street templates, each previewed before Apply (`Appliquer`). |
+| Street page | Street templates | Modèles de rue | The Transform dialog's third group; `rev-template` words a change as `Modèle : Rue scolaire`. |
 | Street page | Commercial main street | Rue commerciale | Template. To confirm with the OQLF's `artère commerciale`. |
 | Street page | School street | Rue scolaire | Template. |
 | Street page | Neighbourhood greenway | Voie verte de quartier | Template. To confirm: `voie partagée de quartier` is the form some boroughs use. |

@@ -446,14 +446,6 @@ impl SheetWatch {
         self.vm.with_value(|v| v.apply_choice(choice))
     }
 
-    pub fn apply_measure(&self, code: &str) -> bool {
-        self.vm.with_value(|v| v.apply_measure(code))
-    }
-
-    pub fn apply_template(&self, template: crate::street::model::Template) -> bool {
-        self.vm.with_value(|v| v.apply_template(template))
-    }
-
     /// What a key on the section asks for, as far as it changes the street.
     /// Going to the width field, and letting go of a drag, are for the page.
     pub fn apply(&self, action: Action) {

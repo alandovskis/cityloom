@@ -99,7 +99,6 @@ failing =
         [one] { $n } vérification échoue
        *[other] { $n } vérifications échouent
     }
-measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/view/page.rs).
 header-between = entre
