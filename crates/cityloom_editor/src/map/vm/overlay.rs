@@ -1,5 +1,6 @@
 //! The city's places as GeoJSON for the map: each street along its real centreline, each junction a point
-//! (with `radius_m`), and where streets meet a disc that rounds them (a point with `joint_m`).
+//! (with `radius_m`), and where streets meet what joins them: a disc where two meet (a point with `joint_m`), a
+//! shape over their ends where more do (a polygon).
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,7 +34,7 @@ fn position(p: &Projection, x_mm: i32, y_mm: i32) -> [f64; 2] {
 }
 
 /// The streets and junctions of the city as a GeoJSON feature collection: each street a line, each junction a point
-/// with `radius_m`, and each joint (`joints`) a point with `joint_m` and the `hot` of the place it is drawn as. A street in `conflicts` (by uid) has what
+/// with `radius_m`, and each joint (`joints`) a point with `joint_m` or a polygon, with the `hot` of the place it is drawn as. A street in `conflicts` (by uid) has what
 /// the rule of an area it is inside does not allow.
 pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String {
     let mut features: Vec<Value> = Vec::with_capacity(v.edges.len() + v.nodes.len());
@@ -46,20 +47,27 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
     }
     // a junction's press target is never smaller than its ground, where a street there was widened past the widest
     let mut ground_m: BTreeMap<u32, f64> = BTreeMap::new();
-    for (whose, [x, y], row_mm) in joints(v) {
-        let joint_m = row_mm as f64 / 2000.0;
-        if let Whose::Junction(n) = whose {
-            ground_m.insert(n.uid, joint_m);
-        }
-        let properties = match whose {
-            Whose::Street(e) => {
-                json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "joint_m": joint_m, "conflict": conflicts.contains(&e.uid) })
+    for (whose, join) in joints(v) {
+        let mut properties = match whose {
+            Whose::Street(e) => json!({ "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "conflict": conflicts.contains(&e.uid) }),
+            Whose::Junction(n) => json!({ "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "conflict": false, "ground": true }),
+        };
+        let (geometry, reach_m) = match join {
+            Join::Disc { end: [x, y], row_mm } => {
+                let joint_m = row_mm as f64 / 2000.0;
+                properties["joint_m"] = json!(joint_m);
+                (json!({ "type": "Point", "coordinates": position(p, x, y) }), joint_m)
             }
-            Whose::Junction(n) => {
-                json!({ "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "joint_m": joint_m, "conflict": false, "ground": true })
+            Join::Middle { at, ring } => {
+                let reach_mm = ring.iter().map(|q| (q[0] - at[0] as f64).hypot(q[1] - at[1] as f64)).fold(0.0, f64::max);
+                let coordinates: Vec<[f64; 2]> = ring.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect();
+                (json!({ "type": "Polygon", "coordinates": [coordinates] }), reach_mm / 1000.0)
             }
         };
-        features.push(json!({ "type": "Feature", "properties": properties, "geometry": { "type": "Point", "coordinates": position(p, x, y) } }));
+        if let Whose::Junction(n) = whose {
+            ground_m.insert(n.uid, reach_m);
+        }
+        features.push(json!({ "type": "Feature", "properties": properties, "geometry": geometry }));
     }
     for n in v.nodes.iter().filter(|n| n.junction) {
         features.push(json!({
@@ -77,29 +85,84 @@ enum Whose<'a> {
     Junction(&'a NodeView),
 }
 
-/// Where streets meet end to end, the disc that rounds them there: one for each node two streets or more end at, at
-/// the end of the street of the second-widest end there, as wide as that street (`row_mm`). The streets are drawn with
-/// square ends, so streets meeting at an angle are joined round and none wider than another bulges past it where it
-/// goes on narrower. An end no other street meets (a dead end, or where the street leaves the map) stays square, so a
-/// short wide stub is not drawn as a disc. At a junction the disc is the junction's ground: it takes the junction's
-/// colour and state, so it lights and opens with the junction it is pressed for. Elsewhere it is that street's, and
-/// only fills the gap the streets' square ends leave (`style.rs` draws it under their lines).
-fn joints(v: &CityView) -> Vec<(Whose<'_>, [i32; 2], i32)> {
-    let mut ends: BTreeMap<u32, Vec<(&EdgeView, [i32; 2])>> = BTreeMap::new();
+/// How streets ending at one node are joined there.
+enum Join {
+    /// Two streets: a disc at the end of the narrower, as wide as it (`row_mm`). The streets are drawn with square
+    /// ends, so streets meeting at an angle are joined round, and the wider does not bulge past the narrower where it
+    /// goes on narrower.
+    Disc { end: [i32; 2], row_mm: i32 },
+    /// Three streets or more: the smallest convex shape over every corner of their square ends at the node `at` (a
+    /// closed ring, in layout millimetres), so wide streets crossing at an angle leave no corner sticking out, and a
+    /// narrow street off a wide one adds nothing past the wide one's sides.
+    Middle { at: [i32; 2], ring: Vec<[f64; 2]> },
+}
+
+/// Where streets meet, how they are joined (`Join`): one for each node two streets or more end at. An end no other
+/// street meets (a dead end, or where the street leaves the map) stays square, so a short wide stub is not rounded. At
+/// a junction the join is the junction's ground: it takes the junction's colour and state, so it lights and opens with
+/// the junction it is pressed for. Elsewhere it is the street's of the second-widest end there (`style.rs` draws a
+/// street's disc under the lines, filling only the gap their square ends leave, and every shape over them).
+fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
+    let mut ends: BTreeMap<u32, Vec<(&EdgeView, [i32; 2], Option<[i32; 2]>)>> = BTreeMap::new();
     for e in &v.edges {
         let (Some(&first), Some(&last)) = (e.shape_mm.first(), e.shape_mm.last()) else { continue };
-        ends.entry(e.a).or_default().push((e, first));
-        ends.entry(e.b).or_default().push((e, last));
+        ends.entry(e.a).or_default().push((e, first, e.shape_mm.iter().copied().find(|q| *q != first)));
+        ends.entry(e.b).or_default().push((e, last, e.shape_mm.iter().rev().copied().find(|q| *q != last)));
     }
     let junctions: BTreeMap<u32, &NodeView> = v.nodes.iter().filter(|n| n.junction).map(|n| (n.uid, n)).collect();
     ends.into_iter()
         .filter(|(_, at)| at.len() > 1)
         .map(|(node, mut at)| {
-            at.sort_by_key(|(e, _)| (Reverse(e.row_mm), e.uid));
-            let (e, end) = at[1];
-            (junctions.get(&node).map_or(Whose::Street(e), |n| Whose::Junction(n)), end, e.row_mm)
+            at.sort_by_key(|(e, _, _)| (Reverse(e.row_mm), e.uid));
+            let (e, end, _) = at[1];
+            let whose = junctions.get(&node).map_or(Whose::Street(e), |n| Whose::Junction(n));
+            let ring = if at.len() > 2 { middle(end, at.iter().filter_map(|&(e, _, next)| Some((next?, e.row_mm)))) } else { None };
+            (whose, ring.map_or(Join::Disc { end, row_mm: e.row_mm }, |ring| Join::Middle { at: end, ring }))
         })
         .collect()
+}
+
+/// The convex shape over the corners of streets' square ends at `at`, each given by the next point along it and its
+/// width: the closed ring, anticlockwise, or `None` where the corners make no area.
+fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Option<Vec<[f64; 2]>> {
+    let [x, y] = [at[0] as f64, at[1] as f64];
+    let mut corners: Vec<[f64; 2]> = Vec::new();
+    for (next, row_mm) in streets {
+        let (dx, dy) = (next[0] as f64 - x, next[1] as f64 - y);
+        let k = row_mm as f64 / 2.0 / dx.hypot(dy);
+        corners.push([x - dy * k, y + dx * k]);
+        corners.push([x + dy * k, y - dx * k]);
+    }
+    let ring = hull(corners);
+    (ring.len() >= 4).then_some(ring)
+}
+
+/// The convex hull of `points` (Andrew's monotone chain): a closed ring, anticlockwise, with no point repeated but
+/// the first; fewer than four points where they make no area.
+fn hull(mut points: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    points.dedup();
+    if points.len() < 3 {
+        return points;
+    }
+    let turn = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(points.len() + 1);
+    // the lower chain left to right, then the upper right to left, each without its last point (the other's first)
+    for pass in [points.clone(), points.iter().rev().copied().collect()] {
+        let start = ring.len();
+        for q in pass {
+            while ring.len() >= start + 2 && turn(ring[ring.len() - 2], ring[ring.len() - 1], q) <= 0.0 {
+                ring.pop();
+            }
+            ring.push(q);
+        }
+        ring.pop();
+    }
+    if ring.len() < 3 {
+        return ring;
+    }
+    ring.push(ring[0]);
+    ring
 }
 
 /// How far a zone tick reaches past each edge of the street, in millimetres.
@@ -605,6 +668,124 @@ mod tests {
         n
     }
 
+    /// Streets from one node at the origin, one for each `(lane width, bearing in degrees)`, each 100 m long. The node is
+    /// not marked a junction in the data, so the city does not take it for one, however many streets meet there.
+    fn star(arms: &[(f64, f64)]) -> Network {
+        let mut n = straight_road();
+        let template = n.roads[0].clone();
+        let mut node = n.junctions[0].clone();
+        n.junctions.truncate(1);
+        n.roads.clear();
+        for (i, &(lane_m, deg)) in arms.iter().enumerate() {
+            let id = i as u32 + 2;
+            let (s, c) = deg.to_radians().sin_cos();
+            node.id = NodeId(id);
+            node.provenance = Provenance::of_nodes([NodeRef::new(id as i64)]);
+            node.position = Point::new(100.0 * c, 100.0 * s);
+            n.junctions.push(node.clone());
+            let mut road = template.clone();
+            road.edge = Edge { id: RoadId(id), from: NodeId(1), to: NodeId(id) };
+            road.provenance = Provenance::of_ways([WayRef::new(id as i64 + 10)]);
+            road.name = format!("Arm {id}");
+            road.points = vec![Point::new(0.0, 0.0), node.position];
+            road.base_lanes_mut().iter_mut().for_each(|l| l.width_m = lane_m);
+            n.roads.push(road);
+        }
+        n
+    }
+
+    /// The shapes of `places` where three streets or more meet, as (feature, ring in metres east and north of `centre`).
+    fn middles(fc: &Value, p: &Projection, centre: [i32; 2]) -> Vec<(Value, Vec<[f64; 2]>)> {
+        let to_m = metres_from(p, centre);
+        fc["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f["geometry"]["type"] == "Polygon")
+            .map(|f| {
+                let ring = f["geometry"]["coordinates"][0].as_array().unwrap().iter().map(|c| to_m([c[0].as_f64().unwrap(), c[1].as_f64().unwrap()])).collect();
+                (f.clone(), ring)
+            })
+            .collect()
+    }
+
+    /// Metres east and north of the layout point `centre`, from a longitude and latitude.
+    fn metres_from(p: &Projection, centre: [i32; 2]) -> impl Fn([f64; 2]) -> [f64; 2] {
+        let [lon0, lat0] = p.lon_lat(centre[0], centre[1]);
+        move |[lon, lat]| [(lon - lon0) * 111_195.0 * lat0.to_radians().cos(), (lat - lat0) * 111_195.0]
+    }
+
+    /// The node every street of `v` ends at, in layout millimetres.
+    fn hub(v: &crate::city::model::CityView) -> [i32; 2] {
+        let e = &v.edges[0];
+        [e.shape_mm[0], *e.shape_mm.last().unwrap()]
+            .into_iter()
+            .find(|q| v.edges.iter().all(|o| o.shape_mm[0] == *q || *o.shape_mm.last().unwrap() == *q))
+            .expect("the streets meet at one node")
+    }
+
+    /// Whether `q` is inside the convex `ring` (closed, either winding) or within `slack` of its edge.
+    fn holds(ring: &[[f64; 2]], q: [f64; 2], slack: f64) -> bool {
+        let side = |a: [f64; 2], b: [f64; 2]| {
+            let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+            (ex * (q[1] - a[1]) - ey * (q[0] - a[0])) / ex.hypot(ey)
+        };
+        let sides: Vec<f64> = ring.windows(2).map(|w| side(w[0], w[1])).collect();
+        sides.iter().all(|&d| d >= -slack) || sides.iter().all(|&d| d <= slack)
+    }
+
+    /// The corners of each street's square end at `centre`, in metres east and north of it: half its width either side.
+    fn corners(v: &crate::city::model::CityView, p: &Projection, centre: [i32; 2]) -> Vec<[f64; 2]> {
+        let to_m = metres_from(p, centre);
+        v.edges
+            .iter()
+            .flat_map(|e| {
+                let next = if e.shape_mm[0] == centre { e.shape_mm[1] } else { e.shape_mm[e.shape_mm.len() - 2] };
+                let [x, y] = to_m(p.lon_lat(next[0], next[1]));
+                let len = x.hypot(y);
+                let h = e.row_mm as f64 / 2000.0;
+                [[-y / len * h, x / len * h], [y / len * h, -x / len * h]]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn where_three_streets_or_more_meet_one_shape_over_their_ends_covers_every_corner_of_them() {
+        let v = City::from_network(&star(&[(3.0, 0.0), (5.0, 100.0), (8.0, 215.0), (4.0, 290.0), (3.0, 330.0), (6.0, 160.0)]), "Bendville").view(0);
+        assert!(v.nodes.iter().all(|n| !n.junction), "six streets at a node not marked a junction");
+        let (p, centre) = (projection(&v), hub(&v));
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
+        let found = middles(&fc, &p, centre);
+        assert_eq!(found.len(), 1, "one shape where they meet");
+        assert!(joints(&fc).is_empty(), "and no disc there: {:?}", joints(&fc));
+        let (f, ring) = &found[0];
+        assert_eq!(ring.first(), ring.last(), "a closed ring");
+        for q in corners(&v, &p, centre) {
+            assert!(holds(ring, q, 0.2), "the corner {q:?} of a street's square end is under the shape {ring:?}");
+        }
+        let hot = f["properties"]["hot"].as_str().unwrap();
+        assert!(v.edges.iter().any(|e| format!("s-{}", e.uid) == hot), "one of the streets', lit and opened with it: {hot}");
+        assert_eq!(f["properties"]["status"], "ok");
+        assert_eq!(f["properties"]["conflict"], false);
+        assert!(f["properties"]["ground"].is_null() && f["properties"]["radius_m"].is_null(), "not a junction");
+    }
+
+    #[test]
+    fn a_narrow_street_meeting_a_wide_one_makes_no_shape_past_the_wide_streets_sides() {
+        // a wide street straight through, east-west, and a narrow one off it to the north
+        let v = City::from_network(&star(&[(6.0, 0.0), (6.0, 180.0), (1.5, 90.0)]), "Bendville").view(0);
+        let (p, centre) = (projection(&v), hub(&v));
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
+        let found = middles(&fc, &p, centre);
+        assert_eq!(found.len(), 1);
+        let wide = v.edges.iter().map(|e| e.row_mm).max().unwrap() as f64 / 1000.0;
+        let narrow = v.edges.iter().map(|e| e.row_mm).min().unwrap() as f64 / 1000.0;
+        for q in &found[0].1 {
+            assert!(q[1].abs() <= wide / 2.0 + 0.2, "inside the wide street's sides: {q:?}");
+            assert!(q[0].abs() <= narrow / 2.0 + 0.2, "no further along the wide street than the narrow one is wide: {q:?}");
+        }
+    }
+
     /// The joints of `places`: the discs that round the streets' ends, as (hot, radius in metres, position).
     fn joints(fc: &Value) -> Vec<(String, f64, Value)> {
         let all = fc["features"].as_array().unwrap();
@@ -657,7 +838,7 @@ mod tests {
     }
 
     #[test]
-    fn at_a_junction_the_joint_is_the_junctions_ground_so_it_lights_and_opens_with_the_junction() {
+    fn at_a_junction_the_shape_where_its_streets_meet_is_its_ground_so_it_lights_and_opens_with_the_junction() {
         let mut v = City::new().view(0); // the sample city has junctions
         v.nodes.iter_mut().filter(|n| n.junction).for_each(|n| n.edited = true);
         let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
@@ -665,41 +846,42 @@ mod tests {
         let all = fc["features"].as_array().unwrap();
         let mut grounds = 0;
         for n in v.nodes.iter().filter(|n| n.junction) {
-            let mut rows: Vec<i32> = v.edges.iter().filter(|e| e.a == n.uid).chain(v.edges.iter().filter(|e| e.b == n.uid)).map(|e| e.row_mm).collect();
-            if rows.len() < 2 {
+            if v.edges.iter().filter(|e| e.a == n.uid).chain(v.edges.iter().filter(|e| e.b == n.uid)).count() < 3 {
                 continue;
             }
-            rows.sort_unstable_by(|a, b| b.cmp(a));
-            let there: Vec<&Value> =
-                all.iter().filter(|f| f["properties"]["joint_m"].is_number() && f["properties"]["hot"] == format!("j-{}", n.uid)).collect();
-            assert_eq!(there.len(), 1, "one joint at junction {}, and it is the junction's: {there:?}", n.uid);
+            let there: Vec<&Value> = all.iter().filter(|f| f["properties"]["hot"] == format!("j-{}", n.uid) && f["properties"]["radius_m"].is_null()).collect();
+            assert_eq!(there.len(), 1, "one shape at junction {}, and it is the junction's: {there:?}", n.uid);
             let ground = there[0];
+            assert_eq!(ground["geometry"]["type"], "Polygon");
             assert_eq!(ground["properties"]["ground"], true);
             assert_eq!(ground["properties"]["status"], "changed", "it takes the junction's state");
             assert_eq!(ground["properties"]["conflict"], false, "a street's conflict is not the junction's");
-            assert!((ground["properties"]["joint_m"].as_f64().unwrap() - rows[1] as f64 / 2000.0).abs() < 1e-9, "as wide as the second-widest street");
             grounds += 1;
         }
-        assert!(grounds > 0, "the sample city has junctions streets meet at");
+        assert!(grounds > 0, "the sample city has junctions three streets meet at");
     }
 
     #[test]
     fn a_junctions_press_target_covers_its_ground_even_where_a_street_there_was_widened_past_the_widest() {
         let mut v = City::new().view(0); // the sample city has junctions
-        let n = v.nodes.iter().find(|n| n.junction && v.edges.iter().filter(|e| e.a == n.uid || e.b == n.uid).count() >= 2).unwrap();
-        let (uid, radius_mm) = (n.uid, n.radius_mm);
-        // every street there far wider than the widest was, so the second-widest is too
-        v.edges.iter_mut().filter(|e| e.a == uid || e.b == uid).for_each(|e| e.row_mm = 4 * radius_mm + 1); // an odd width, halved
+        let n = v.nodes.iter().find(|n| n.junction && v.edges.iter().filter(|e| e.a == n.uid || e.b == n.uid).count() >= 3).unwrap();
+        let (uid, radius_mm, centre) = (n.uid, n.radius_mm, [n.x_mm, n.y_mm]);
+        // every street there far wider than the widest was
+        v.edges.iter_mut().filter(|e| e.a == uid || e.b == uid).for_each(|e| e.row_mm = 4 * radius_mm + 1);
         let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
         let fc = parse(&places(&v, &p, &BTreeSet::new()));
-        let mine = |key: &str| {
-            fc["features"].as_array().unwrap().iter().find(|f| f["properties"]["hot"] == format!("j-{uid}") && f["properties"][key].is_number()).unwrap()["properties"][key]
-                .as_f64()
-                .unwrap()
-        };
-        let (target, ground) = (mine("radius_m"), mine("joint_m"));
-        assert!((ground - (4 * radius_mm + 1) as f64 / 2000.0).abs() < 1e-9, "the ground is the widened streets' half-width: {ground}");
-        assert!((target - ground).abs() < 1e-9, "a press anywhere on the ground opens the junction: target {target}, ground {ground}");
+        let target = fc["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["properties"]["hot"] == format!("j-{uid}") && f["properties"]["radius_m"].is_number())
+            .unwrap()["properties"]["radius_m"]
+            .as_f64()
+            .unwrap();
+        let ring = middles(&fc, &p, centre).into_iter().find(|(f, _)| f["properties"]["hot"] == format!("j-{uid}")).expect("the junction's ground").1;
+        let farthest = ring.iter().map(|q| q[0].hypot(q[1])).fold(0.0, f64::max);
+        assert!(farthest > radius_mm as f64 / 1000.0, "the ground reaches past the junction's own radius: {farthest}");
+        assert!(target >= farthest - 0.2, "a press anywhere on the ground opens the junction: target {target}, ground reaches {farthest}");
     }
 
     #[test]
@@ -724,6 +906,16 @@ mod tests {
         assert_eq!(joint["properties"]["conflict"], true);
         assert_eq!(joint["geometry"]["type"], "Point");
         assert!(joint["properties"]["radius_m"].is_null(), "a joint is not a junction");
+    }
+
+    #[test]
+    fn the_hull_is_the_outer_corners_anticlockwise_and_closed_without_inner_or_in_line_points() {
+        let square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        let mut points = vec![[5.0, 5.0], [5.0, 0.0], [10.0, 5.0]]; // inside, and on two sides
+        points.extend(square.iter().rev());
+        assert_eq!(hull(points), vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]);
+        assert!(hull(vec![[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]).len() < 4, "points in a line make no area");
+        assert!(middle([0, 0], [([0, 1_000], 4_000), ([0, -1_000], 4_000)].into_iter()).is_none(), "two ends straight on make no area");
     }
 
     #[test]

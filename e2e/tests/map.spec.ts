@@ -117,7 +117,8 @@ test.describe("the city map", () => {
     const kinds = await page.evaluate(() => [
       ...new Set((window as any).cityloomMap.querySourceFeatures("places").map((f: any) => f.geometry.type)),
     ]);
-    expect(kinds.sort()).toEqual(["LineString", "Point"]);
+    // streets, junctions and the discs where two streets meet, and the shapes where three or more do
+    expect(kinds.sort()).toEqual(["LineString", "Point", "Polygon"]);
   });
 
   test("has no list of places and no left panel: the map runs to the edge of the window", async ({ page }) => {
