@@ -461,7 +461,7 @@ fn the_add_menu_has_a_search_and_eight_topics() {
     assert!(button.contains("aria-expanded=\"false\"") && button.contains("aria-controls=\"add-menu\"") && !button.contains("aria-haspopup"), "{button}");
     assert_eq!(count(&h, "id=\"add-search\""), 1, "{h}");
     assert!(tag_of(&h, "add-search").contains("type=\"search\""), "{h}");
-    assert!(h.contains("for=\"add-search\"") && h.contains(">Search pieces</label>"), "{h}");
+    assert!(h.contains("for=\"add-search\"") && h.contains(">Search what to add</label>"), "{h}");
     let topics = tag_with(&h, "role=\"tablist\"");
     assert!(topics.contains("aria-orientation=\"vertical\"") && topics.contains("aria-label=\"Topics\""), "{topics}");
     assert_eq!(count(&h, "role=\"tab\""), 8, "{h}");
@@ -563,7 +563,7 @@ fn the_add_menu_follows_the_language_and_the_street() {
     assert_eq!(found.get(), 1, "« Avancée de trottoir » is found in French");
     // And the same view-model, switched, draws the menu in French.
     let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
-    assert!(h.contains(">Transport en commun</button>") && h.contains(">Rechercher un élément</label>") && !h.contains(">Transit</button>"), "{h}");
+    assert!(h.contains(">Transport en commun</button>") && h.contains(">Chercher quoi ajouter</label>") && !h.contains(">Transit</button>"), "{h}");
 }
 
 #[test]
@@ -1151,9 +1151,9 @@ fn the_add_menu_is_in_french() {
     assert!(h.contains("<b>Avancée de trottoir</b>"), "{h}");
     let stop = Units::Metres.length_fine_in(crate::standards::model::stop_min_mm(), Locale::FrCa);
     assert!(stop.starts_with("8,0") && h.contains(&format!("class=\"dw\">{stop}<")), "{stop}: {h}");
-    assert!(h.contains("Ajouter un élément") && h.contains(">Rechercher un élément</label>") && h.contains("aria-label=\"Thèmes\""), "{h}");
+    assert!(h.contains("Ajouter un élément") && h.contains(">Chercher quoi ajouter</label>") && h.contains("aria-label=\"Thèmes\""), "{h}");
     assert!(h.contains(">Se place après l’élément sélectionné.<") && h.contains(">Se place dans le tronçon libre choisi de sa rangée.<"), "{h}");
-    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains("Search pieces"), "{h}");
+    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains("Search what to add"), "{h}");
 }
 
 #[test]

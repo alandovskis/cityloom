@@ -131,7 +131,7 @@ add-matches = { $count ->
     [one] One match
    *[other] { $count } matches
 }
-add-search-label = Search pieces
+add-search-label = Search what to add
 add-topics-label = Topics
 add-no-match = Nothing matches “{ $query }”.
 clock-time-of-day = Time of day
