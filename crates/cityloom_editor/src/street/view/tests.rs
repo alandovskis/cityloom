@@ -549,18 +549,19 @@ fn the_add_menu_follows_the_language_and_the_street() {
     let s = add_menu_on(&NO_BUS_LANE, "busshelter", Locale::En);
     let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
     assert!(h.contains(">Transit</button>") && h.contains(">Stops need a lane a bus can stop in on this street.<"), "{h}");
-    let owner = Owner::new();
-    owner.set();
-    // What the menu draws from is watched: the street and the language change it.
-    let w = SheetWatch::new(s.clone());
-    let greyed = Memo::new(move |_| w.add_entries(Topic::Transit).iter().filter(|e| e.unavailable.is_some()).count());
-    let found = Memo::new(move |_| w.add_search("avancée").len());
-    assert_eq!((greyed.get(), found.get()), (3, 0));
-    let parking = crate::shared::catalogue::kind_index("parking").unwrap();
-    assert!(s.edit(|e| e.add(parking, 2) != 0));
-    assert_eq!(greyed.get(), 0, "a curbside lane makes room for stops");
-    s.i18n().set(Locale::FrCa);
-    assert_eq!(found.get(), 1, "« Avancée de trottoir » is found in French");
+    // What the menu draws from is watched: the street and the language change it. (Under an owner of its own, the
+    // one before put back after.)
+    Owner::new().with(|| {
+        let w = SheetWatch::new(s.clone());
+        let greyed = Memo::new(move |_| w.add_entries(Topic::Transit).iter().filter(|e| e.unavailable.is_some()).count());
+        let found = Memo::new(move |_| w.add_search("avancée").len());
+        assert_eq!((greyed.get(), found.get()), (3, 0));
+        let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+        assert!(s.edit(|e| e.add(parking, 2) != 0));
+        assert_eq!(greyed.get(), 0, "a curbside lane makes room for stops");
+        s.i18n().set(Locale::FrCa);
+        assert_eq!(found.get(), 1, "« Avancée de trottoir » is found in French");
+    });
     // And the same view-model, switched, draws the menu in French.
     let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
     assert!(h.contains(">Transport en commun</button>") && h.contains(">Chercher quoi ajouter</label>") && !h.contains(">Transit</button>"), "{h}");
