@@ -176,6 +176,11 @@ test.describe("the city map", () => {
             { layers: [layer] },
           )
           .map((f: any) => f.properties.hot);
+      // the junction is pressed on its target and on its ground where that is a shape
+      const junction = (px: number, py: number) => [
+        ...at("places-junction-hit", px, py),
+        ...at("places-ground", px, py),
+      ];
       for (const j of map.queryRenderedFeatures({ layers: ["places-junction-hit"] })) {
         const c = map.project(j.geometry.coordinates);
         for (const s of map.queryRenderedFeatures({ layers: ["places-street"] })) {
@@ -190,11 +195,11 @@ test.describe("the city map", () => {
             const [ux, uy] = [(next.x - end.x) / len, (next.y - end.y) / len];
             for (let d = 1; d < len - 4; d++) {
               const [x, y] = [end.x + ux * d, end.y + uy * d];
-              if (at("places-junction-hit", x, y).includes(j.properties.hot)) continue;
+              if (junction(x, y).includes(j.properties.hot)) continue;
               const [px, py] = [x + ux * 2, y + uy * 2]; // past the target's edge
               const street = at("places-street", px, py);
               if (street.length !== 1 || street[0] !== s.properties.hot) break;
-              if (at("places-junction-hit", px, py).length) break;
+              if (junction(px, py).length) break;
               if (px < 8 || py < 8 || px > r.width - 8 || py > r.height - 8) break;
               if (document.elementFromPoint(r.left + px, r.top + py) !== map.getCanvas()) break;
               if (!at("places-junction-hit", px, py, 6).length) break; // the case a reach round the pointer took

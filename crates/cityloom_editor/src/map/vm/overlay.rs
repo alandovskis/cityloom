@@ -103,9 +103,9 @@ fn target_m(n: &NodeView, ground: Option<&Ground>) -> f64 {
 enum Whose<'a> {
     Street(&'a EdgeView),
     Junction(&'a NodeView),
-    /// The shape where three streets or more meet that are not a junction, by its node's uid: drawn over every
-    /// street's end, it is no one street's, so it takes no street's state and is never lit or pressed; it is
-    /// editable where its point is in the view, as a junction is (`place_boxes`).
+    /// The shape where three streets or more meet that are not a junction, by its node's uid: it lies under every
+    /// street's end (`places-middle`, under the streets' lines) and is no one street's, so it takes no street's state
+    /// and is never lit or pressed; it is editable where every street that meets there is (`meetings`).
     Meeting(u32),
 }
 
@@ -125,7 +125,8 @@ enum Join {
 /// street meets (a dead end, or where the street leaves the map) stays square, so a short wide stub is not rounded. At
 /// a junction the join is the junction's ground: it takes the junction's colour and state, so it lights and opens with
 /// the junction it is pressed for. Elsewhere a disc is the street's of the narrower end (`style.rs` draws it under the
-/// lines, filling only the gap their square ends leave) and a shape is its own (`Whose::Meeting`), drawn over them.
+/// lines, filling only the gap their square ends leave) and a shape is its own (`Whose::Meeting`), drawn under the
+/// lines too (`places-middle`), filling only the gaps between their ends.
 fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
     let mut ends: BTreeMap<u32, Vec<(&EdgeView, [i32; 2], Option<[i32; 2]>)>> = BTreeMap::new();
     for e in &v.edges {
@@ -191,6 +192,30 @@ fn hull(mut points: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
     }
     ring.push(ring[0]);
     ring
+}
+
+/// The shapes where three streets or more meet that are not a junction (`Whose::Meeting`), each with the `hot` ids
+/// of the streets that meet there, sorted: what makes it editable (`editable::with_meetings`). A node whose streets'
+/// ends make no shape is named too, and harmless: nothing is drawn under its id.
+pub fn meetings(v: &CityView) -> Vec<(String, Vec<String>)> {
+    let mut streets: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut ends: BTreeMap<u32, usize> = BTreeMap::new();
+    for e in v.edges.iter().filter(|e| !e.shape_mm.is_empty()) {
+        for node in [e.a, e.b] {
+            streets.entry(node).or_default().insert(e.uid);
+            *ends.entry(node).or_default() += 1;
+        }
+    }
+    let junctions: BTreeSet<u32> = v.nodes.iter().filter(|n| n.junction).map(|n| n.uid).collect();
+    streets
+        .into_iter()
+        .filter(|(node, _)| ends[node] > 2 && !junctions.contains(node))
+        .map(|(node, uids)| {
+            let mut hot: Vec<String> = uids.into_iter().map(|uid| format!("s-{uid}")).collect();
+            hot.sort();
+            (format!("m-{node}"), hot)
+        })
+        .collect()
 }
 
 /// How far a zone tick reaches past each edge of the street, in millimetres.
@@ -464,12 +489,6 @@ pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
         let [lon, lat] = position(p, n.x_mm, n.y_mm);
         boxes.push((format!("j-{}", n.uid), [lon, lat, lon, lat]));
     }
-    for (whose, join) in joints(v) {
-        if let (Whose::Meeting(node), Join::Middle { at, .. }) = (whose, join) {
-            let [lon, lat] = position(p, at[0], at[1]);
-            boxes.push((format!("m-{node}"), [lon, lat, lon, lat]));
-        }
-    }
     boxes
 }
 
@@ -578,7 +597,15 @@ mod tests {
         let points: Vec<&Value> =
             fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "Point" && f["properties"]["joint_m"].is_null()).collect();
         assert_eq!(points.len(), v.nodes.iter().filter(|n| n.junction).count());
-        assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-") && f["properties"]["radius_m"].as_f64().unwrap() >= 0.0));
+        assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-")));
+        // pressed round its point as far as its own radius, except where its ground is a shape, pressed for itself
+        let shaped: BTreeSet<&str> =
+            fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "Polygon").filter_map(|f| f["properties"]["hot"].as_str()).collect();
+        assert!(!shaped.is_empty(), "the sample city has junctions three streets meet at");
+        for f in &points {
+            let (hot, r) = (f["properties"]["hot"].as_str().unwrap(), f["properties"]["radius_m"].as_f64().unwrap());
+            assert!(if shaped.contains(hot) { r == 0.0 } else { r > 0.0 }, "{hot}: {r}");
+        }
         let streets = fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "LineString").count();
         assert_eq!(streets, v.edges.len());
     }
@@ -801,11 +828,13 @@ mod tests {
         assert_eq!(f["properties"]["hot"], format!("m-{}", node.uid), "its own, not one street's: hovering a street never lights the others' ends");
         assert_eq!(f["properties"]["status"], "ok");
         assert_eq!(f["properties"]["conflict"], false);
-        // it is editable as a junction is, where its point is in the view
-        let b = place_boxes(&v, &p).into_iter().find(|(h, _)| *h == format!("m-{}", node.uid)).expect("a box to say when it is editable").1;
-        let [lon, lat] = position(&p, centre[0], centre[1]);
-        assert_eq!(b, [lon, lat, lon, lat]);
-        // drawn over every street's end, it takes none of their states
+        // it is editable where every street that meets there is (`editable::with_meetings`), so it is never solid
+        // under a muted street's translucent line
+        let mut streets: Vec<String> = v.edges.iter().map(|e| format!("s-{}", e.uid)).collect();
+        streets.sort();
+        assert_eq!(meetings(&v), vec![(format!("m-{}", node.uid), streets)]);
+        assert!(place_boxes(&v, &p).iter().all(|(h, _)| !h.starts_with("m-")), "no box of its own");
+        // under every street's end, it takes none of their states
         let mut v = v;
         v.edges.iter_mut().for_each(|e| (e.edited, e.ok) = (true, false));
         let fc = parse(&places(&v, &p, &v.edges.iter().map(|e| e.uid).collect()));

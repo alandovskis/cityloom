@@ -1317,7 +1317,8 @@ impl MapVm {
         if self.canvas.get_untracked() != CanvasState::Ready {
             return;
         }
-        let now = editable::editable(&overlay::place_boxes(&self.core.view_now(), &projection), view);
+        let city = self.core.view_now();
+        let now = editable::with_meetings(editable::editable(&overlay::place_boxes(&city, &projection), view), &overlay::meetings(&city));
         if self.editable.borrow().as_ref() == Some(&now) {
             return;
         }
