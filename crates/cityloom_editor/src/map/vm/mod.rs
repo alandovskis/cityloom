@@ -369,6 +369,9 @@ pub struct MapVm {
     viewport: Cell<Option<[f64; 4]>>,
     /// The places the open view makes editable, as last sent to the map; `None` until there is a view.
     editable: RefCell<Option<Vec<String>>>,
+    /// The shapes where streets meet and their streets (`overlay::meetings`), for the city view they were made from:
+    /// the view changes with the city, not with every move of the map.
+    meetings: RefCell<Option<(Rc<CityView>, Rc<Vec<(String, Vec<String>)>>)>>,
     /// The curbside uses and the stops as last sent to the map, as (layers, data): they are sent only when they change.
     sent_curbside: RefCell<(String, String)>,
     sent_stops: RefCell<(String, String)>,
@@ -447,6 +450,7 @@ impl MapVm {
             moved: Cell::new(false),
             viewport: Cell::new(None),
             editable: RefCell::new(None),
+            meetings: RefCell::new(None),
             sent_curbside: RefCell::new((String::new(), String::new())),
             sent_stops: RefCell::new((String::new(), String::new())),
             hot: ArcRwSignal::new(None),
@@ -1310,6 +1314,18 @@ impl MapVm {
         self.editable.borrow().as_ref().is_none_or(|set| set.iter().any(|h| h == hot))
     }
 
+    /// The shapes where streets meet in `city` and their streets, made once for each city view.
+    fn meetings_of(&self, city: &Rc<CityView>) -> Rc<Vec<(String, Vec<String>)>> {
+        if let Some((at, made)) = &*self.meetings.borrow()
+            && Rc::ptr_eq(at, city)
+        {
+            return made.clone();
+        }
+        let made = Rc::new(overlay::meetings(city));
+        *self.meetings.borrow_mut() = Some((city.clone(), made.clone()));
+        made
+    }
+
     /// Tells the map which places the open view makes editable, when that is not what it was last told.
     fn sync_editable(&self) {
         let Some(view) = self.viewport.get() else { return };
@@ -1318,7 +1334,7 @@ impl MapVm {
             return;
         }
         let city = self.core.view_now();
-        let now = editable::with_meetings(editable::editable(&overlay::place_boxes(&city, &projection), view), &overlay::meetings(&city));
+        let now = editable::with_meetings(editable::editable(&overlay::place_boxes(&city, &projection), view), &self.meetings_of(&city));
         if self.editable.borrow().as_ref() == Some(&now) {
             return;
         }
