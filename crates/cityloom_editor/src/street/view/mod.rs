@@ -57,12 +57,11 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             }
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
+        // Not while a dialog is open (the Transform dialog): nothing changes the street behind it until Apply.
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-            use crate::shared::shortcut::{Shortcut, shortcut};
-            if !(e.meta_key() || e.ctrl_key()) || typing(&e) {
-                return;
-            }
-            match shortcut(&e.key(), e.shift_key()) {
+            use crate::shared::shortcut::Shortcut;
+            let modal = document().query_selector("dialog[open]").ok().flatten().is_some();
+            match page_shortcut(e.meta_key() || e.ctrl_key(), typing(&e), modal, &e.key(), e.shift_key()) {
                 Some(Shortcut::Undo) => {
                     e.prevent_default();
                     w.undo();
@@ -144,6 +143,15 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             ></svg>
         </div>
     }
+}
+
+/// What Control or Command (`command`) with `key` does on the street page: undo or redo, unless the person is typing
+/// in a field or a dialog is open over the page (`modal`).
+pub fn page_shortcut(command: bool, typing: bool, modal: bool, key: &str, shift: bool) -> Option<crate::shared::shortcut::Shortcut> {
+    if !command || typing || modal {
+        return None;
+    }
+    crate::shared::shortcut::shortcut(key, shift)
 }
 
 /// Puts the keyboard on the drawing, as pressing it does.

@@ -1454,7 +1454,7 @@ fn the_dialog_has_a_tab_per_group_with_its_count() {
         ("templates", "Street templates", format!("{fit} of 5"), false),
     ] {
         let tab = button_tag(&h, &format!("transform-tab-{id}"));
-        assert!(tab.contains("role=\"tab\"") && tab.contains("aria-controls=\"transform-choices\""), "{tab}");
+        assert!(tab.contains("role=\"tab\"") && tab.contains("aria-controls=\"transform-panel\""), "{tab}");
         assert!(tab.contains(&format!("aria-selected=\"{selected}\"")), "{tab}");
         let body = &h[h.find(&tab).unwrap()..];
         let body = &body[..body.find("</button>").unwrap()];
@@ -1462,7 +1462,11 @@ fn the_dialog_has_a_tab_per_group_with_its_count() {
     }
     assert_eq!(choices.pedestrian.len(), 3);
     assert!(transit > 0, "the sample is offered a measure");
-    // The first group is open: its choices are listed.
+    // The first group is open: its tab names the panel, which holds its hint and its choices.
+    let panel = tag_of(&h, "transform-panel");
+    assert!(panel.contains("role=\"tabpanel\"") && panel.contains("aria-labelledby=\"transform-tab-ped\""), "{panel}");
+    let inside = &h[h.find("id=\"transform-panel\"").unwrap()..];
+    assert!(inside.find("id=\"transform-hint\"").unwrap() < inside.find("id=\"transform-choices\"").unwrap());
     let list = tag_of(&h, "transform-choices");
     assert!(list.contains("role=\"listbox\"") && list.contains("aria-labelledby=\"transform-tab-ped\""), "{list}");
     assert_eq!(count(&h, "ped-item"), 3);
@@ -1574,7 +1578,13 @@ fn the_preview_is_empty_until_a_choice_is_shown() {
     let s = street_shared(1);
     let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
     let preview = tag_of(&h, "transform-preview");
-    assert!(preview.starts_with("<section") && preview.contains("aria-live=\"polite\""), "{preview}");
+    assert!(preview.starts_with("<section") && !preview.contains("aria-live"), "the figures and details are not read out on every move: {preview}");
+    let said = tag_of(&h, "transform-said");
+    assert!(said.contains("aria-live=\"polite\"") && said.contains("aria-atomic=\"true\""), "{said}");
+    assert!(h.find("id=\"transform-preview\"").unwrap() < h.find("id=\"transform-said\"").unwrap(), "inside the preview");
+    assert_eq!(count(&h, "aria-live"), 1, "the said line is the dialog's only live region: {h}");
+    // Closed (as it opens and after it closes), the dialog holds no drawing.
+    assert!(!h.contains("<svg class=\"iso\""), "{h}");
     assert!(h.contains("class=\"transform-empty\">Choose a change to see what it does to the street.<"), "{h}");
     assert!(!h.contains("transform-figure"), "{h}");
     // A kind the motor pieces become: Now and After, at one scale, and what changes.
@@ -1609,6 +1619,69 @@ fn the_preview_is_empty_until_a_choice_is_shown() {
     assert!(h.contains("What changes") && !h.contains("transform-report"), "{h}");
     let h = preview_html(&s, Some(Choice::Template(crate::street::model::Template::School)));
     assert!(h.contains("class=\"transform-report\"") && h.contains("30 km/h"), "{h}");
+}
+
+#[test]
+fn the_live_line_says_the_shown_choice_and_its_outcome_and_nothing_else() {
+    let s = street_shared(2);
+    let said = |c: Option<Choice>| {
+        let s = s.clone();
+        let mut out = None;
+        street_html(|| {
+            out = transform::said_line(SheetWatch::new(s), c);
+            view! { <p></p> }
+        });
+        out
+    };
+    assert_eq!(said(None), None);
+    let sidewalk = Choice::Pedestrian(crate::shared::catalogue::kind_index("sidewalk").unwrap());
+    let Outcome::Changed { impact, .. } = s.preview(sidewalk).outcome else { panic!("the sample can be made pedestrian") };
+    assert!(!impact.is_empty());
+    assert_eq!(said(Some(sidewalk)), Some(("Sidewalk".to_string(), crate::shared::testing::en(&impact.verdict_said()))));
+    let (name, reason) = said(Some(Choice::Template(crate::street::model::Template::BusCorridor))).unwrap();
+    assert_eq!(name, "Bus corridor");
+    assert!(reason.starts_with("Bus corridor needs a street at least 13.8 m wide."), "{reason}");
+    // In the dialog, the live line holds those two and no figure or detail.
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    let at = h.find("id=\"transform-said\"").unwrap();
+    let line = &h[at..at + h[at..].find("</p>").unwrap()];
+    assert!(!line.contains("<svg") && !line.contains("<ul") && !line.contains("<h"), "{line}");
+}
+
+#[test]
+fn the_preview_s_drawings_have_ids_of_their_own() {
+    // The page's drawing keeps its ids; each preview figure carries its own, so neither shadows the other.
+    assert_eq!(
+        transform::scoped_ids(r#"<pattern id="iso-m-brick"/><path data-uid="3" fill="url(#iso-m-brick)" filter="url(#h-x)"/>"#, "transform-now-"),
+        r#"<pattern id="transform-now-iso-m-brick"/><path data-uid="3" fill="url(#transform-now-iso-m-brick)" filter="url(#h-x)"/>"#
+    );
+    let s = street_shared(0);
+    let h = preview_html(&s, Some(Choice::Pedestrian(crate::shared::catalogue::kind_index("sidewalk").unwrap())));
+    assert!(h.contains(" id=\"transform-now-iso-") && h.contains(" id=\"transform-after-iso-"), "{h}");
+    assert!(!h.contains(" id=\"iso-") && !h.contains("url(#iso-"), "{h}");
+    for reference in h.split("url(#").skip(1).map(|r| &r[..r.find(')').unwrap()]).filter(|r| r.starts_with("transform-")) {
+        assert!(h.contains(&format!(" id=\"{reference}\"")), "{reference} is defined in the preview");
+    }
+}
+
+#[test]
+fn the_dialog_opens_and_closes_with_nothing_chosen_so_it_keeps_no_drawing() {
+    let s = street_shared(0);
+    let choices = s.transform_choices();
+    let state = transform::opening(&choices);
+    assert_eq!((state.chosen, state.pointed, state.shown()), (None, None, None));
+    assert!(!preview_html(&s, state.shown()).contains("<svg"));
+}
+
+#[test]
+fn undo_and_redo_keys_wait_while_a_dialog_is_open() {
+    use crate::shared::shortcut::Shortcut;
+    assert_eq!(view::page_shortcut(true, false, false, "z", false), Some(Shortcut::Undo));
+    assert_eq!(view::page_shortcut(true, false, false, "y", false), Some(Shortcut::Redo));
+    assert_eq!(view::page_shortcut(true, false, true, "z", false), None, "the Transform dialog is open");
+    assert_eq!(view::page_shortcut(true, false, true, "y", false), None);
+    assert_eq!(view::page_shortcut(false, false, false, "z", false), None, "no Control or Command");
+    assert_eq!(view::page_shortcut(true, true, false, "z", false), None, "typing in a field");
 }
 
 #[test]

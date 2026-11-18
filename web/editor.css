@@ -3273,6 +3273,7 @@ svg pattern circle {
 .btn.btn-primary:disabled {
   border-color: var(--field-line);
   background: var(--panel);
+  color: var(--ink-3);
 }
 @media (max-width: 720px) {
   .transform-body {

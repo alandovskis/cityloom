@@ -77,8 +77,9 @@ pub fn can_apply(w: SheetWatch, chosen: Option<Choice>) -> bool {
     chosen.is_some_and(|c| w.preview(c).can_apply())
 }
 
-/// The dialog as it opens: its first group with something in it.
-fn opening(choices: &TransformChoices) -> DialogState {
+/// The dialog as it opens and as it is left when it closes: its first group with something in it, nothing chosen or
+/// pointed, so the closed dialog holds no preview.
+pub fn opening(choices: &TransformChoices) -> DialogState {
     DialogState::open(choices).unwrap_or(DialogState { group: Group::Templates, chosen: None, pointed: None })
 }
 
@@ -103,7 +104,7 @@ fn tabs_markup(w: SheetWatch, choices: &TransformChoices, state: RwSignal<Dialog
                     id=format!("transform-tab-{}", group_id(g))
                     class="transform-tab"
                     aria-selected=move || selected().to_string()
-                    aria-controls="transform-choices"
+                    aria-controls="transform-panel"
                     tabindex=move || if selected() { "0" } else { "-1" }
                     on:click=move |_| state.update(|s| s.set_group(g))
                 >
@@ -174,7 +175,7 @@ fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, sta
     }
 }
 
-/// The choices of `group`: its hint, then the list of them, labelled by the group's tab; the transit measures under
+/// The choices of `group`, in the tab panel of the group's tab: its hint, then the list of them, labelled by the group's tab; the transit measures under
 /// one heading per Atlas family (a group of the list named by its heading). The chosen one is the list's active
 /// descendant; leaving the list stops pointing.
 pub fn choices_markup(w: SheetWatch, choices: &TransformChoices, group: Group, state: RwSignal<DialogState>) -> impl IntoView + use<> {
@@ -200,30 +201,49 @@ pub fn choices_markup(w: SheetWatch, choices: &TransformChoices, group: Group, s
             .into_any(),
         Group::Templates => choices.templates.iter().map(|t| option_markup(w, Choice::Template(t.template), t.refusal, state)).collect_view().into_any(),
     };
+    let tab = format!("transform-tab-{}", group_id(group));
+    let panel_tab = tab.clone();
     view! {
+        <div role="tabpanel" id="transform-panel" class="transform-panel" aria-labelledby=panel_tab>
         <p class="hint" id="transform-hint">{word(w, hint)}</p>
         <div
             id="transform-choices"
             class="transform-list"
             role="listbox"
             tabindex="0"
-            aria-labelledby=format!("transform-tab-{}", group_id(group))
+            aria-labelledby=tab
             aria-describedby="transform-hint"
             aria-activedescendant=move || state.with(|s| s.chosen.map(|c| format!("transform-opt-{}", c.key())))
             on:mouseleave=move |_| state.update(|s| s.point(None))
         >
             {options}
         </div>
+        </div>
     }
 }
 
-/// One drawing of the preview: its caption, and the street in 2.5D named for a screen reader.
-fn figure(i18n: &I18n, caption: &'static str, svg: IsoSvg, alt: String) -> impl IntoView {
+/// `markup` with every id it defines put after `prefix`, and its references to them (`url(#…)`, `href="#…"`) with
+/// them, so that a drawing set beside another (the page's own) neither shadows the other's patterns and filters nor
+/// is shadowed by them. References to ids it does not define (the page's hatches) are left alone.
+pub fn scoped_ids(markup: &str, prefix: &str) -> String {
+    let ids: Vec<&str> = markup.split(" id=\"").skip(1).filter_map(|rest| rest.split('"').next()).collect();
+    let mut out = markup.to_string();
+    for id in ids {
+        out = out.replace(&format!(" id=\"{id}\""), &format!(" id=\"{prefix}{id}\""));
+        out = out.replace(&format!("url(#{id})"), &format!("url(#{prefix}{id})"));
+        out = out.replace(&format!("href=\"#{id}\""), &format!("href=\"#{prefix}{id}\""));
+    }
+    out
+}
+
+/// One drawing of the preview: its caption, and the street in 2.5D named for a screen reader, its ids after `prefix`.
+fn figure(i18n: &I18n, caption: &'static str, prefix: &str, svg: IsoSvg, alt: String) -> impl IntoView {
+    let markup = scoped_ids(&svg.markup, prefix);
     view! {
         <figure class="transform-side">
             <figcaption>{i18n.tr(caption, &Args::new())}</figcaption>
             <div class="transform-figure" role="img" aria-label=alt>
-                <svg class="iso" xmlns="http://www.w3.org/2000/svg" viewBox=format!("0 0 {} {}", svg.width, svg.height) inner_html=svg.markup></svg>
+                <svg class="iso" xmlns="http://www.w3.org/2000/svg" viewBox=format!("0 0 {} {}", svg.width, svg.height) inner_html=markup></svg>
             </div>
         </figure>
     }
@@ -251,8 +271,8 @@ pub fn preview_markup(w: SheetWatch, shown: Option<Choice>) -> AnyView {
             view! {
                 {title}
                 <div class="transform-pair">
-                    {figure(&i18n, "transform-now", now, drawing::alt(&before, &i18n, units))}
-                    {figure(&i18n, "transform-after", then, drawing::alt(&after, &i18n, units))}
+                    {figure(&i18n, "transform-now", "transform-now-", now, drawing::alt(&before, &i18n, units))}
+                    {figure(&i18n, "transform-after", "transform-after-", then, drawing::alt(&after, &i18n, units))}
                 </div>
                 <h4>{i18n.tr("transform-what-changes", &Args::new())}</h4>
                 {impact_details(&i18n, units, &impact, SubHeading::H5)}
@@ -264,12 +284,25 @@ pub fn preview_markup(w: SheetWatch, shown: Option<Choice>) -> AnyView {
             let now = iso_svg(&before, &i18n, TRANSFORM_PREVIEW_WIDTH);
             view! {
                 {title}
-                <div class="transform-pair">{figure(&i18n, "transform-now", now, drawing::alt(&before, &i18n, units))}</div>
+                <div class="transform-pair">{figure(&i18n, "transform-now", "transform-now-", now, drawing::alt(&before, &i18n, units))}</div>
                 <p class="transform-no">{say(&i18n, units, &said)}</p>
             }
             .into_any()
         }
     }
+}
+
+/// What the preview's live line says of `shown`: its name, and what it would do in one sentence (the verdict on the
+/// checks, or that it has no effect) or why it cannot be applied. Nothing while nothing is shown.
+pub fn said_line(w: SheetWatch, shown: Option<Choice>) -> Option<(String, String)> {
+    let c = shown?;
+    let (i18n, units) = (w.i18n(), w.units());
+    let outcome = match w.preview(c).outcome {
+        Outcome::Changed { impact, .. } if impact.is_empty() => i18n.tr("impact-no-effect", &Args::new()),
+        Outcome::Changed { impact, .. } => say(&i18n, units, &impact.verdict_said()),
+        Outcome::Refused(said) => say(&i18n, units, &said),
+    };
+    Some((choice_name(&i18n, c), outcome))
 }
 
 /// Puts the keyboard on the element whose id is `id`, if the page has it.
@@ -330,7 +363,7 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
     };
     // Every way the dialog closes (Apply, Cancel, the close button, Escape) ends here.
     let closed = move |_| {
-        state.update(|s| s.point(None));
+        state.set(opening(&choices.get_untracked()));
         if applied.get_value() {
             applied.set_value(false);
             focus_id("wrap");
@@ -399,9 +432,13 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
                 <section
                     id="transform-preview"
                     class="transform-preview"
-                    aria-live="polite"
                     aria-labelledby=move || shown.get().map(|_| "transform-preview-h")
                 >
+                    // The one live region: the shown choice's name and what it would do, not the figures and details,
+                    // which are redrawn on every move.
+                    <p id="transform-said" class="sr-only" aria-live="polite" aria-atomic="true">
+                        {move || said_line(w, shown.get()).map(|(name, outcome)| view! { <span>{name}</span> " " <span>{outcome}</span> })}
+                    </p>
                     {move || preview_markup(w, shown.get())}
                 </section>
             </div>

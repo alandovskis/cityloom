@@ -187,6 +187,13 @@ mod tests {
         let apply = rule(editor, ".btn.btn-primary");
         assert!(apply.contains("background: var(--accent);") && apply.contains("color: var(--accent-ink);"), "{apply}");
         assert!(rule(editor, ".btn.btn-primary:hover:not(:disabled)").contains("background: var(--accent);"));
+        // Disabled, Apply is a plain button: ink-3 on the panel, which the colour of `.btn.btn-primary` must not beat.
+        let off = rule(editor, ".btn.btn-primary:disabled");
+        assert!(off.contains("background: var(--panel);") && off.contains("color: var(--ink-3);"), "{off}");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, panel) = (pick(&token(app, "ink-3"), i).unwrap(), pick(&token(app, "panel"), i).unwrap());
+            assert!(contrast(&ink, &panel) >= 4.5, "disabled Apply {theme}: {:.2}", contrast(&ink, &panel));
+        }
     }
 
     /// The body of the rule whose selector line is `selector`.
