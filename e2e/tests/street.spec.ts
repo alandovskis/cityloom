@@ -668,9 +668,20 @@ test.describe("the Transform dialog", () => {
   test("is operated from the keyboard", async ({ page }) => {
     await page.locator("#transform-btn").focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#transform-choices")).toBeFocused();
+    const list = page.locator("#transform-choices");
+    await expect(list).toBeFocused();
+    // The first choice is the list's active one as it takes the focus (so a screen reader names it), not chosen.
+    await expect(list).toHaveAttribute("aria-activedescendant", "transform-opt-ped-sidewalk");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator("#transform-preview .transform-empty")).toBeVisible();
+    await expect(page.locator("#transform-apply")).toBeDisabled();
+    // Space chooses it, the arrows move and choose, and Enter applies the chosen one.
+    await page.keyboard.press(" ");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#transform-apply")).toBeEnabled();
     await page.keyboard.press("ArrowDown");
-    await expect(page.locator("#transform-choices")).toHaveAttribute("aria-activedescendant", /^transform-opt-/);
+    await expect(list).not.toHaveAttribute("aria-activedescendant", "transform-opt-ped-sidewalk");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "false");
     await expect(page.locator("#transform-apply")).toBeEnabled();
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText(/^Made pedestrian\./);

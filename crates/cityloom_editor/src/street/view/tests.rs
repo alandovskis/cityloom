@@ -1412,12 +1412,13 @@ fn choices_html(s: &Rc<StreetVm>, group: Group, chosen: Option<Choice>) -> Strin
     street_html(move || {
         let w = SheetWatch::new(s);
         let choices = w.transform_choices();
-        let state = RwSignal::new(DialogState { group, chosen, pointed: None });
+        let state = RwSignal::new(DialogState { group, chosen, pointed: None, active: chosen });
         transform::choices_markup(w, &choices, group, state)
     })
 }
 
 fn preview_html(s: &Rc<StreetVm>, shown: Option<Choice>) -> String {
+    let shown = shown.map(|c| (c, Rc::new(s.preview(c))));
     let s = s.clone();
     street_html(move || transform::preview_markup(SheetWatch::new(s), shown))
 }
@@ -1547,13 +1548,12 @@ fn every_option_is_named_and_a_disabled_template_says_why() {
     let refused = s.transform_choices().templates.iter().filter(|t| t.refusal.is_some()).count();
     assert_eq!(count(&h, "aria-disabled=\"true\""), refused);
     let bus = tag_of(&h, "transform-opt-template-bus-corridor");
-    assert!(
-        bus.contains("aria-disabled=\"true\"")
-            && bus.contains("template-disabled")
-            && bus.contains("data-template=\"bus-corridor\"")
-            && bus.contains("aria-describedby=\"template-reason-bus-corridor\""),
-        "{bus}"
-    );
+    assert!(bus.contains("aria-disabled=\"true\"") && bus.contains("template-disabled") && bus.contains("data-template=\"bus-corridor\""), "{bus}");
+    // Named by what it shows, its name and its reason (WCAG 2.5.3), so the reason is not also its description.
+    assert!(!bus.contains("aria-label") && !bus.contains("aria-describedby"), "{bus}");
+    let option = &h[h.find("id=\"transform-opt-template-bus-corridor\"").unwrap()..];
+    let option = &option[..option.find("</div>").unwrap()];
+    assert!(option.contains("<b>Bus corridor</b>") && option.contains("id=\"template-reason-bus-corridor\""), "{option}");
     let reason = &h[h.find("id=\"template-reason-bus-corridor\"").unwrap()..];
     assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
     assert!(tag_of(&h, "template-reason-bus-corridor").contains("class=\"template-reason\""));
@@ -1571,6 +1571,54 @@ fn every_option_is_named_and_a_disabled_template_says_why() {
         assert!(h.contains(&format!("<b>{name}</b>")), "{name}");
     }
     assert!(tag_of(&h, "transform-choices").contains("aria-activedescendant=\"transform-opt-ped-sidewalk\""));
+}
+
+#[test]
+fn the_list_s_first_choice_is_active_when_it_takes_the_focus_but_not_chosen() {
+    // The APG listbox: a screen reader hears an option as the list takes the focus, and nothing is chosen, previewed
+    // or applicable until Space, Enter or a click chooses it.
+    let s = street_shared(0);
+    let choices = s.transform_choices();
+    let mut state = transform::opening(&choices);
+    let h = choices_html(&s, state.group, None);
+    assert!(!tag_of(&h, "transform-choices").contains("aria-activedescendant"), "{h}");
+    state.focus(&choices);
+    let focused = state;
+    let w = s.clone();
+    let h = street_html(move || {
+        let w = SheetWatch::new(w);
+        let choices = w.transform_choices();
+        transform::choices_markup(w, &choices, focused.group, RwSignal::new(focused))
+    });
+    assert!(tag_of(&h, "transform-choices").contains("aria-activedescendant=\"transform-opt-ped-sidewalk\""), "{h}");
+    let first = tag_of(&h, "transform-opt-ped-sidewalk");
+    assert!(first.contains("transform-active") && first.contains("aria-selected=\"false\""), "{first}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 0, "{h}");
+    assert_eq!(count(&h, "transform-active"), 1, "{h}");
+    assert_eq!(focused.shown(), None);
+    assert!(preview_html(&s, focused.shown()).contains("transform-empty"));
+}
+
+#[test]
+fn the_dialog_makes_a_choice_s_preview_once_until_the_street_changes() {
+    let s = street_shared(0);
+    let sidewalk = Choice::Pedestrian(crate::shared::catalogue::kind_index("sidewalk").unwrap());
+    let w = s.clone();
+    street_html(move || {
+        let previews = transform::Previews::new(SheetWatch::new(w.clone()));
+        let (a, b) = (previews.of(sidewalk), previews.of(sidewalk));
+        assert!(Rc::ptr_eq(&a, &b), "the live line, the drawing and Apply share one preview");
+        assert!(!Rc::ptr_eq(&a, &previews.of(Choice::Measure("B1"))));
+        assert!(Rc::ptr_eq(&a, &previews.of(sidewalk)), "kept while other choices are previewed");
+        // The street changes (a reload from another device): it is made again, from the street as it now is.
+        assert!(w.apply(|e| e.make_pedestrian(crate::shared::catalogue::kind_index("planting").unwrap())));
+        let c = previews.of(sidewalk);
+        assert!(!Rc::ptr_eq(&a, &c));
+        assert!(!c.before.has_motor, "the street as it now is");
+        previews.clear();
+        assert!(!Rc::ptr_eq(&c, &previews.of(sidewalk)), "closing lets go of them");
+        view! { <p></p> }
+    });
 }
 
 #[test]
@@ -1628,7 +1676,7 @@ fn the_live_line_says_the_shown_choice_and_its_outcome_and_nothing_else() {
         let s = s.clone();
         let mut out = None;
         street_html(|| {
-            out = transform::said_line(SheetWatch::new(s), c);
+            out = transform::said_line(SheetWatch::new(s.clone()), c.map(|c| (c, Rc::new(s.preview(c)))));
             view! { <p></p> }
         });
         out
@@ -1690,13 +1738,13 @@ fn apply_is_disabled_until_a_choice_that_fits_is_chosen() {
     let s = street_shared(2);
     let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
     let apply = button_tag(&h, "transform-apply");
-    assert!(apply.contains("disabled") && apply.contains("btn-primary"), "{apply}");
+    assert!(apply.contains("disabled") && apply.contains("class=\"btn primary\""), "{apply}");
     assert!(!button_tag(&h, "transform-cancel").contains("disabled"));
     let can = |c: Option<Choice>| {
         let s = s.clone();
         let mut out = false;
         street_html(|| {
-            out = transform::can_apply(SheetWatch::new(s), c);
+            out = transform::can_apply(transform::Previews::new(SheetWatch::new(s)), c);
             view! { <p></p> }
         });
         out

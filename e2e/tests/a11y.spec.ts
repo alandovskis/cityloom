@@ -7,6 +7,7 @@ import {
   openLongStreet,
   openStreet,
   openPedestrianStreet,
+  openStreetWithUnfitTemplate,
   showZoneLevel,
   splitInto,
   test,
@@ -349,10 +350,44 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.locator("#transform-dialog")).toBeVisible();
     await page.locator("#transform-dialog .transform-item").first().click();
     await expect(page.locator("#transform-preview")).toBeVisible();
-    const found = await new AxeBuilder({ page })
-      .include("#transform-dialog")
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .analyze();
-    expect(found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+    await expectNoDialogViolations(page);
   });
+
+  test(`the street's Transform dialog, open on a previewed transit measure, has no axe violations in ${scheme}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-transit").click();
+    await expect(page.locator("#transform-dialog .transform-family").first()).toBeVisible();
+    await page.locator("#transform-dialog .transit-item").first().click();
+    await expect(page.locator("#transform-preview-h")).toContainText(/^[A-F]\d · /);
+    await expectNoDialogViolations(page);
+  });
+
+  test(`the street's Transform dialog, open on its templates with one refused and School previewed, has no axe violations in ${scheme}`, async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ colorScheme: scheme });
+    // A street of the fixture too narrow (or too wide) for some template: the dialog is left open on the templates.
+    await openStreetWithUnfitTemplate(page);
+    await expect(
+      page.locator('#transform-dialog [role=option][aria-disabled="true"] .template-reason').first(),
+    ).toBeVisible();
+    await page.locator('#transform-dialog [data-template="school"]').click({ force: true });
+    await expect(page.locator("#transform-preview-h")).toHaveText("School street");
+    await expectNoDialogViolations(page);
+  });
+}
+
+/** Runs axe (WCAG 2.2 AA, every rule) on the open Transform dialog alone and expects nothing found. */
+async function expectNoDialogViolations(page: Page): Promise<void> {
+  const found = await new AxeBuilder({ page })
+    .include("#transform-dialog")
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
 }

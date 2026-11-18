@@ -14,13 +14,13 @@ use crate::shared::atlas::name_key;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::symbols::icon;
-use crate::street::model::TemplateRefusal;
+use crate::street::model::{TemplateRefusal, View};
 use crate::street::view::drawing;
 use crate::street::view::iso::{IsoSvg, iso_pair, iso_svg};
 use crate::street::view::notes::{SubHeading, impact_details};
 use crate::street::vm::StreetVm;
 use crate::street::vm::text::say;
-use crate::street::vm::transform::{Choice, DialogState, Group, ListKey, Outcome, TransformChoices};
+use crate::street::vm::transform::{Choice, DialogState, Group, ListKey, Outcome, Preview, TransformChoices};
 use crate::street::vm::watch::SheetWatch;
 
 /// How wide the preview draws the street, in pixels; the picture is scaled to its column.
@@ -72,15 +72,52 @@ pub fn list_key(key: &str) -> Option<ListKey> {
     }
 }
 
+/// The previews the dialog has made, kept until the street changes, so the live line, the drawing and Apply share
+/// one: the street does not change while the dialog is open, but for a reload from another device, after which they
+/// are made again.
+#[derive(Clone, Copy)]
+pub struct Previews {
+    w: SheetWatch,
+    kept: StoredValue<(Option<Rc<View>>, Vec<(Choice, Rc<Preview>)>), LocalStorage>,
+}
+
+impl Previews {
+    pub fn new(w: SheetWatch) -> Previews {
+        Previews { w, kept: StoredValue::new_local((None, Vec::new())) }
+    }
+
+    /// What `c` would do to the street as it is; a reader is drawn again when the street changes.
+    pub fn of(&self, c: Choice) -> Rc<Preview> {
+        let street = self.w.view();
+        self.kept.update_value(|(at, kept)| {
+            if !at.as_ref().is_some_and(|at| Rc::ptr_eq(at, &street)) {
+                *at = Some(street);
+                kept.clear();
+            }
+        });
+        if let Some(p) = self.kept.with_value(|(_, kept)| kept.iter().find(|(k, _)| *k == c).map(|(_, p)| p.clone())) {
+            return p;
+        }
+        let p = Rc::new(self.w.preview(c));
+        self.kept.update_value(|(_, kept)| kept.push((c, p.clone())));
+        p
+    }
+
+    /// Lets go of every preview, as the dialog closes.
+    pub fn clear(&self) {
+        self.kept.set_value((None, Vec::new()));
+    }
+}
+
 /// Whether Apply can apply `chosen`: something is chosen and the edit does not refuse it.
-pub fn can_apply(w: SheetWatch, chosen: Option<Choice>) -> bool {
-    chosen.is_some_and(|c| w.preview(c).can_apply())
+pub fn can_apply(previews: Previews, chosen: Option<Choice>) -> bool {
+    chosen.is_some_and(|c| previews.of(c).can_apply())
 }
 
 /// The dialog as it opens and as it is left when it closes: its first group with something in it, nothing chosen or
 /// pointed, so the closed dialog holds no preview.
 pub fn opening(choices: &TransformChoices) -> DialogState {
-    DialogState::open(choices).unwrap_or(DialogState { group: Group::Templates, chosen: None, pointed: None })
+    DialogState::open(choices).unwrap_or(DialogState::of(Group::Templates))
 }
 
 /// A tab for each group: its name and how many choices it has; the open group's tab is the one the Tab key reaches.
@@ -118,16 +155,19 @@ fn tabs_markup(w: SheetWatch, choices: &TransformChoices, state: RwSignal<Dialog
 }
 
 /// One choice of the list: pointing at it previews it, a click chooses it. A template that does not fit is
-/// `aria-disabled` (still reached by the arrows, still previewed) with its reason under its name.
+/// `aria-disabled` (still reached by the arrows, still previewed) with its reason under its name; the option is named
+/// by what it shows, its name and that reason (WCAG 2.5.3: the visible words are in the name, so a screen reader
+/// reads the reason once).
 fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, state: RwSignal<DialogState>) -> AnyView {
     let id = format!("transform-opt-{}", c.key());
     let selected = move || state.with(|s| s.chosen == Some(c)).to_string();
+    let active = move || state.with(|s| s.active == Some(c));
     let point = move |_| state.update(|s| s.point(Some(c)));
     let choose = move |_| state.update(|s| s.choose(c));
     let name = move || choice_name(&w.i18n(), c);
     match c {
         Choice::Pedestrian(k) => view! {
-            <div role="option" id=id class="transform-item ped-item" aria-selected=selected on:mouseenter=point on:click=choose>
+            <div role="option" id=id class="transform-item ped-item" class:transform-active=active aria-selected=selected on:mouseenter=point on:click=choose>
                 <span class="add-icon" aria-hidden="true" inner_html=icon(KINDS[k].id)></span>
                 " "
                 <b>{name}</b>
@@ -137,7 +177,7 @@ fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, sta
         Choice::Measure(code) => {
             let name = move || w.i18n().tr(&name_key(code), &Args::new());
             view! {
-                <div role="option" id=id class="transform-item transit-item" aria-selected=selected on:mouseenter=point on:click=choose>
+                <div role="option" id=id class="transform-item transit-item" class:transform-active=active aria-selected=selected on:mouseenter=point on:click=choose>
                     <span class="dirtag">{code}</span>
                     " "
                     <b>{name}</b>
@@ -150,7 +190,7 @@ fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, sta
             let disabled = refusal.is_some();
             let reason = refusal.map(|r| {
                 let text = move || say(&w.i18n(), w.units(), &r.said(t));
-                view! { <p class="template-reason" id=reason_id.clone()>{text}</p> }
+                view! { <p class="template-reason" id=reason_id>{text}</p> }
             });
             view! {
                 <div
@@ -158,10 +198,9 @@ fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, sta
                     id=id
                     class="transform-item template-item"
                     class:template-disabled=disabled
+                    class:transform-active=active
                     aria-selected=selected
-                    aria-label=name
                     aria-disabled=disabled.then_some("true")
-                    aria-describedby=disabled.then(|| reason_id.clone())
                     data-template=t.id()
                     on:mouseenter=point
                     on:click=choose
@@ -176,8 +215,8 @@ fn option_markup(w: SheetWatch, c: Choice, refusal: Option<TemplateRefusal>, sta
 }
 
 /// The choices of `group`, in the tab panel of the group's tab: its hint, then the list of them, labelled by the group's tab; the transit measures under
-/// one heading per Atlas family (a group of the list named by its heading). The chosen one is the list's active
-/// descendant; leaving the list stops pointing.
+/// one heading per Atlas family (a group of the list named by its heading). The active choice (`DialogState::active`)
+/// is the list's active descendant; taking the focus makes the first one active; leaving the list stops pointing.
 pub fn choices_markup(w: SheetWatch, choices: &TransformChoices, group: Group, state: RwSignal<DialogState>) -> impl IntoView + use<> {
     let (_, hint) = group_words(group);
     let options = match group {
@@ -201,6 +240,7 @@ pub fn choices_markup(w: SheetWatch, choices: &TransformChoices, group: Group, s
             .into_any(),
         Group::Templates => choices.templates.iter().map(|t| option_markup(w, Choice::Template(t.template), t.refusal, state)).collect_view().into_any(),
     };
+    let focus_choices = choices.clone();
     let tab = format!("transform-tab-{}", group_id(group));
     let panel_tab = tab.clone();
     view! {
@@ -213,7 +253,8 @@ pub fn choices_markup(w: SheetWatch, choices: &TransformChoices, group: Group, s
             tabindex="0"
             aria-labelledby=tab
             aria-describedby="transform-hint"
-            aria-activedescendant=move || state.with(|s| s.chosen.map(|c| format!("transform-opt-{}", c.key())))
+            aria-activedescendant=move || state.with(|s| s.active.map(|c| format!("transform-opt-{}", c.key())))
+            on:focus=move |_| state.update(|s| s.focus(&focus_choices))
             on:mouseleave=move |_| state.update(|s| s.point(None))
         >
             {options}
@@ -252,16 +293,15 @@ fn figure(i18n: &I18n, caption: &'static str, prefix: &str, svg: IsoSvg, alt: St
 /// What the preview shows for `shown`: nothing yet, a line saying to choose; otherwise its name, the street now and
 /// after at one scale, and what changes in words (with a template's report, where it has one); or, for a choice the
 /// edit refuses, the street now and why.
-pub fn preview_markup(w: SheetWatch, shown: Option<Choice>) -> AnyView {
+pub fn preview_markup(w: SheetWatch, shown: Option<(Choice, Rc<Preview>)>) -> AnyView {
     let i18n = w.i18n();
-    let Some(c) = shown else {
+    let Some((c, preview)) = shown else {
         return view! { <p class="transform-empty">{i18n.tr("transform-preview-empty", &Args::new())}</p> }.into_any();
     };
     let units = w.units();
-    let preview = w.preview(c);
-    let before = preview.before;
+    let Preview { before, outcome } = Preview::clone(&preview);
     let title = view! { <h3 id="transform-preview-h">{choice_name(&i18n, c)}</h3> };
-    match preview.outcome {
+    match outcome {
         Outcome::Changed { after, impact, report } => {
             let (now, then) = iso_pair(&before, &after, &i18n, TRANSFORM_PREVIEW_WIDTH);
             let report = report.filter(|r| !r.applied.is_empty() || !r.skipped.is_empty()).map(|r| {
@@ -294,13 +334,13 @@ pub fn preview_markup(w: SheetWatch, shown: Option<Choice>) -> AnyView {
 
 /// What the preview's live line says of `shown`: its name, and what it would do in one sentence (the verdict on the
 /// checks, or that it has no effect) or why it cannot be applied. Nothing while nothing is shown.
-pub fn said_line(w: SheetWatch, shown: Option<Choice>) -> Option<(String, String)> {
-    let c = shown?;
+pub fn said_line(w: SheetWatch, shown: Option<(Choice, Rc<Preview>)>) -> Option<(String, String)> {
+    let (c, preview) = shown?;
     let (i18n, units) = (w.i18n(), w.units());
-    let outcome = match w.preview(c).outcome {
+    let outcome = match &preview.outcome {
         Outcome::Changed { impact, .. } if impact.is_empty() => i18n.tr("impact-no-effect", &Args::new()),
         Outcome::Changed { impact, .. } => say(&i18n, units, &impact.verdict_said()),
-        Outcome::Refused(said) => say(&i18n, units, &said),
+        Outcome::Refused(said) => say(&i18n, units, said),
     };
     Some((choice_name(&i18n, c), outcome))
 }
@@ -333,7 +373,22 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
     let state = RwSignal::new(opening(&choices.get_untracked()));
     let group = Memo::new(move |_| state.with(|s| s.group));
     let shown = Memo::new(move |_| state.with(|s| s.shown()));
-    let ok = Memo::new(move |_| can_apply(w, state.with(|s| s.chosen)));
+    let chosen = Memo::new(move |_| state.with(|s| s.chosen));
+    let previews = Previews::new(w);
+    // Made once for the shown choice, shared by the live line and the drawing.
+    let shown_preview = move || shown.get().map(|c| (c, previews.of(c)));
+    let ok = Memo::new(move |_| can_apply(previews, chosen.get()));
+    // A reload from another device can take away the open group or the chosen choice (`DialogState::reconcile`).
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        choices.with(|c| {
+            let mut s = state.get_untracked();
+            s.reconcile(c);
+            if s != state.get_untracked() {
+                state.set(s);
+            }
+        })
+    });
     let dialog = NodeRef::<leptos::html::Dialog>::new();
     // Whether the dialog closes on an Apply that changed the street: the focus then goes to the drawing.
     let applied = StoredValue::new(false);
@@ -364,6 +419,7 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
     // Every way the dialog closes (Apply, Cancel, the close button, Escape) ends here.
     let closed = move |_| {
         state.set(opening(&choices.get_untracked()));
+        previews.clear();
         if applied.get_value() {
             applied.set_value(false);
             focus_id("wrap");
@@ -377,10 +433,20 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
         choices.with_untracked(|c| state.update(|s| s.step_group(c, k)));
         focus_id(&format!("transform-tab-{}", group_id(state.get_untracked().group)));
     };
+    // Enter applies the chosen choice (and chooses the active one when it is not); Space chooses the active one.
     let list_keys = move |e: KeyboardEvent| {
         if e.key() == "Enter" {
             e.prevent_default();
-            apply();
+            let mut applies = false;
+            state.update(|s| applies = s.press_enter());
+            if applies {
+                apply();
+            }
+            return;
+        }
+        if e.key() == " " {
+            e.prevent_default();
+            state.update(|s| s.choose_active());
             return;
         }
         let Some(k) = list_key(&e.key()) else { return };
@@ -437,16 +503,16 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
                     // The one live region: the shown choice's name and what it would do, not the figures and details,
                     // which are redrawn on every move.
                     <p id="transform-said" class="sr-only" aria-live="polite" aria-atomic="true">
-                        {move || said_line(w, shown.get()).map(|(name, outcome)| view! { <span>{name}</span> " " <span>{outcome}</span> })}
+                        {move || said_line(w, shown_preview()).map(|(name, outcome)| view! { <span>{name}</span> " " <span>{outcome}</span> })}
                     </p>
-                    {move || preview_markup(w, shown.get())}
+                    {move || preview_markup(w, shown_preview())}
                 </section>
             </div>
             <div class="transform-foot">
                 <button type="button" id="transform-cancel" class="btn" on:click=move |_| close()>
                     {word(w, "transform-cancel")}
                 </button>
-                <button type="button" id="transform-apply" class="btn btn-primary" disabled=move || !ok.get() on:click=move |_| apply()>
+                <button type="button" id="transform-apply" class="btn primary" disabled=move || !ok.get() on:click=move |_| apply()>
                     {word(w, "transform-apply")}
                 </button>
             </div>

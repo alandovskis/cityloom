@@ -119,10 +119,12 @@ test.describe("street templates", () => {
       await openStreetWithUnfitTemplate(page);
       const before = await names(page);
       const item = page.locator('#transform-dialog [role=option][aria-disabled="true"]').first();
-      const reasonId = await item.getAttribute("aria-describedby");
-      expect(reasonId).toMatch(/^template-reason-/);
-      await expect(page.locator(`#${reasonId}`)).toBeVisible();
-      await expect(page.locator(`#${reasonId}`)).toContainText(/needs a street at least .+ wide|wider than/);
+      const reason = item.locator(".template-reason");
+      await expect(reason).toHaveAttribute("id", /^template-reason-/);
+      await expect(reason).toBeVisible();
+      await expect(reason).toContainText(/needs a street at least .+ wide|wider than/);
+      // The option is named by what it shows: its name and why it does not fit.
+      await expect(item).toHaveAccessibleName(/needs a street at least .+ wide|wider than/);
       // Pointing at it previews its reason, and Apply stays disabled even when it is chosen.
       await item.hover();
       await expect(page.locator("#transform-preview .transform-no")).toContainText(

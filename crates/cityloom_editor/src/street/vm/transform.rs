@@ -175,18 +175,28 @@ fn step(at: Option<usize>, len: usize, key: ListKey) -> Option<usize> {
     })
 }
 
-/// The Transform dialog's state: the group open, the choice chosen in it and the choice the pointer or focus is on.
+/// The Transform dialog's state: the group open, the choice chosen in it, the choice the pointer is on, and the list's
+/// active choice (the one the keyboard is on, which a screen reader names). Only Apply changes the street: choosing
+/// and pointing only preview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DialogState {
     pub group: Group,
     pub chosen: Option<Choice>,
     pub pointed: Option<Choice>,
+    /// The list's active descendant: the chosen choice once there is one; before, the first choice once the list has
+    /// had the focus (the APG listbox pattern), which is neither chosen nor previewed.
+    pub active: Option<Choice>,
 }
 
 impl DialogState {
+    /// `group` open, nothing chosen, pointed or active.
+    pub fn of(group: Group) -> DialogState {
+        DialogState { group, chosen: None, pointed: None, active: None }
+    }
+
     /// The dialog as it opens: the first group, nothing chosen or pointed; `None` when there is nothing to offer.
     pub fn open(choices: &TransformChoices) -> Option<DialogState> {
-        choices.groups().first().map(|&group| DialogState { group, chosen: None, pointed: None })
+        choices.groups().first().map(|&group| DialogState::of(group))
     }
 
     /// The choice the preview shows: the one pointed at, else the one chosen.
@@ -198,23 +208,49 @@ impl DialogState {
         self.pointed = c;
     }
 
+    /// Chooses `c`, which becomes the list's active choice.
     pub fn choose(&mut self, c: Choice) {
         self.chosen = Some(c);
+        self.active = Some(c);
     }
 
-    /// Opens another group, which starts with nothing chosen or pointed.
-    pub fn set_group(&mut self, g: Group) {
-        if g != self.group {
-            *self = DialogState { group: g, chosen: None, pointed: None };
+    /// The list takes the focus: with no active choice yet, its first becomes active, not chosen.
+    pub fn focus(&mut self, choices: &TransformChoices) {
+        if self.active.is_none() {
+            self.active = choices.in_group(self.group).first().copied();
         }
     }
 
-    /// Moves the choice within the open group (a refused template is still reached) and stops pointing.
+    /// Space: chooses the active choice, if there is one.
+    pub fn choose_active(&mut self) {
+        if let Some(c) = self.active {
+            self.choose(c);
+        }
+    }
+
+    /// Enter: true when it applies (the active choice is the chosen one); otherwise it chooses the active choice.
+    pub fn press_enter(&mut self) -> bool {
+        if self.chosen.is_some() && self.chosen == self.active {
+            return true;
+        }
+        self.choose_active();
+        false
+    }
+
+    /// Opens another group, which starts with nothing chosen, pointed or active.
+    pub fn set_group(&mut self, g: Group) {
+        if g != self.group {
+            *self = DialogState::of(g);
+        }
+    }
+
+    /// Moves the choice within the open group from the active one (a refused template is still reached) and stops
+    /// pointing.
     pub fn step_choice(&mut self, choices: &TransformChoices, k: ListKey) {
         let all = choices.in_group(self.group);
-        let at = self.chosen.and_then(|c| all.iter().position(|x| *x == c));
+        let at = self.active.or(self.chosen).and_then(|c| all.iter().position(|x| *x == c));
         if let Some(i) = step(at, all.len(), k) {
-            self.chosen = Some(all[i]);
+            self.choose(all[i]);
         }
         self.pointed = None;
     }
@@ -225,6 +261,24 @@ impl DialogState {
         let at = groups.iter().position(|g| *g == self.group);
         if let Some(i) = step(at, groups.len(), k) {
             self.set_group(groups[i]);
+        }
+    }
+
+    /// Follows `choices` when they change while the dialog is open (the street was reloaded from another device): a
+    /// group no longer offered gives way to the first one that is, as the dialog opens; a chosen, pointed or active
+    /// choice no longer offered in the open group is let go.
+    pub fn reconcile(&mut self, choices: &TransformChoices) {
+        if !choices.groups().contains(&self.group)
+            && let Some(open) = DialogState::open(choices)
+        {
+            *self = open;
+            return;
+        }
+        let offered = choices.in_group(self.group);
+        for c in [&mut self.chosen, &mut self.pointed, &mut self.active] {
+            if c.is_some_and(|c| !offered.contains(&c)) {
+                *c = None;
+            }
         }
     }
 }
@@ -475,7 +529,7 @@ mod tests {
     fn opening_selects_the_first_group_and_nothing_else() {
         let choices = rig(0).vm.transform_choices();
         let state = DialogState::open(&choices).unwrap();
-        assert_eq!(state, DialogState { group: Group::Pedestrian, chosen: None, pointed: None });
+        assert_eq!(state, DialogState::of(Group::Pedestrian));
         assert_eq!(state.shown(), None);
         let none = TransformChoices { pedestrian: Vec::new(), transit: Vec::new(), templates: Vec::new() };
         assert_eq!(DialogState::open(&none), None);
@@ -563,7 +617,94 @@ mod tests {
         state.set_group(Group::Pedestrian);
         assert!(state.chosen.is_some() && state.pointed.is_some(), "the same group keeps them");
         state.set_group(Group::Transit);
-        assert_eq!(state, DialogState { group: Group::Transit, chosen: None, pointed: None });
+        assert_eq!(state, DialogState::of(Group::Transit));
+    }
+
+    #[test]
+    fn focusing_the_list_makes_its_first_choice_active_without_choosing_it() {
+        let choices = rig(0).vm.transform_choices();
+        let (first, _) = first_and_last(&choices, Group::Pedestrian);
+        let mut state = DialogState::open(&choices).unwrap();
+        state.focus(&choices);
+        assert_eq!(state.active, Some(first), "a screen reader hears an option, not only the list");
+        assert_eq!((state.chosen, state.shown()), (None, None), "nothing is chosen or previewed");
+        // Down goes on from the active choice, and chooses as it moves.
+        state.step_choice(&choices, ListKey::Down);
+        assert_eq!(state.chosen, Some(choices.in_group(Group::Pedestrian)[1]));
+        assert_eq!(state.active, state.chosen);
+        // Focusing again keeps where the list was.
+        let before = state;
+        state.focus(&choices);
+        assert_eq!(state, before);
+        // A click chooses, and the click's choice is the active one.
+        state.choose(first);
+        assert_eq!((state.chosen, state.active), (Some(first), Some(first)));
+    }
+
+    #[test]
+    fn space_chooses_the_active_choice_and_enter_applies_only_a_chosen_one() {
+        let choices = rig(0).vm.transform_choices();
+        let (first, _) = first_and_last(&choices, Group::Pedestrian);
+        let mut state = DialogState::open(&choices).unwrap();
+        state.choose_active();
+        assert_eq!(state.chosen, None, "nothing active, nothing chosen");
+        state.focus(&choices);
+        state.choose_active();
+        assert_eq!(state.chosen, Some(first));
+        // Enter on an active choice that is not chosen chooses it; on the chosen one, it applies.
+        let mut state = DialogState::open(&choices).unwrap();
+        state.focus(&choices);
+        assert!(!state.press_enter());
+        assert_eq!(state.chosen, Some(first));
+        assert!(state.press_enter());
+        state.step_choice(&choices, ListKey::Down);
+        assert!(state.press_enter(), "the arrows choose");
+        assert!(!DialogState::open(&choices).unwrap().press_enter(), "nothing to apply");
+    }
+
+    #[test]
+    fn reconciling_keeps_what_is_still_offered_and_drops_the_rest() {
+        let r = rig(0);
+        let full = r.vm.transform_choices();
+        let ped = full.in_group(Group::Pedestrian);
+        let mut state = DialogState::open(&full).unwrap();
+        state.choose(ped[0]);
+        state.point(Some(ped[1]));
+        let kept = state;
+        state.reconcile(&full);
+        assert_eq!(state, kept, "nothing changed");
+        // The chosen choice is no longer offered: it, the active one and the pointed one go if gone.
+        let fewer = TransformChoices { pedestrian: full.pedestrian[1..].to_vec(), ..full.clone() };
+        state.reconcile(&fewer);
+        assert_eq!(state, DialogState { chosen: None, active: None, ..kept }, "the pointed one is still offered");
+        let other = TransformChoices { pedestrian: full.pedestrian[2..].to_vec(), ..full.clone() };
+        state.reconcile(&other);
+        assert_eq!(state, DialogState::of(Group::Pedestrian));
+        // The open group is gone (the street lost its last motor piece): the first group left opens.
+        let mut state = DialogState::open(&full).unwrap();
+        state.choose(ped[0]);
+        let none = TransformChoices { pedestrian: Vec::new(), ..full.clone() };
+        state.reconcile(&none);
+        assert_eq!(state, DialogState::open(&none).unwrap());
+        assert_ne!(state.group, Group::Pedestrian);
+        // A transit measure no longer offered goes; one still offered stays.
+        let mut state = DialogState::of(Group::Transit);
+        let codes = full.in_group(Group::Transit);
+        state.choose(codes[0]);
+        state.reconcile(&full);
+        assert_eq!(state.chosen, Some(codes[0]));
+        let first_family_gone = TransformChoices { transit: full.transit[1..].to_vec(), ..full.clone() };
+        state.reconcile(&first_family_gone);
+        if first_family_gone.groups().contains(&Group::Transit) {
+            assert_eq!(state, DialogState::of(Group::Transit));
+        } else {
+            assert_eq!(state, DialogState::open(&first_family_gone).unwrap());
+        }
+        // Nothing left at all: the group stays and nothing is chosen.
+        let mut state = DialogState::of(Group::Templates);
+        state.choose(Choice::Template(Template::School));
+        state.reconcile(&TransformChoices { pedestrian: Vec::new(), transit: Vec::new(), templates: Vec::new() });
+        assert_eq!(state, DialogState::of(Group::Templates));
     }
 
     #[test]
@@ -576,7 +717,7 @@ mod tests {
         let mut state = DialogState::open(&choices).unwrap();
         state.choose(choices.in_group(Group::Pedestrian)[0]);
         state.step_group(&choices, ListKey::Down);
-        assert_eq!(state, DialogState { group: Group::Templates, chosen: None, pointed: None });
+        assert_eq!(state, DialogState::of(Group::Templates));
         state.step_group(&choices, ListKey::Down);
         assert_eq!(state.group, Group::Templates, "stops at the last group");
         state.step_group(&choices, ListKey::Up);
