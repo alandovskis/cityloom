@@ -1,0 +1,29 @@
+What the steps and square ends still seen downtown are, at ed180aad (http://127.0.0.1:8144/map.html, the same view).
+
+26-28: every place streets end at one node, labelled from the map's own data (the places source):
+  "2"  (orange) a disc: two streets meeting end to end (overlay::Join::Disc). 92 in view.
+  "3+" (green)  a shape: three streets or more meeting (overlay::Join::Middle). 58 in view.
+The labels are page elements added for this capture only, and removed after.
+
+The steps on the edges of the crossing and the knot sit at "2" labels: two streets of different widths meeting end
+to end, where by design the wider is not rounded past the narrower (out of scope (a), two-street width steps).
+
+The streets under the two places the evidence check named, with how many streets end at each of their two ends
+(1 = its own end only: it joins nothing there, so the end is square):
+  The knot's large block (28, around the "3+" at the bottom left):
+    s-190 24.4 m, ends meet 1 and 6 streets
+    s-83  27.2 m, ends meet 6 and 1 streets
+    s-62  27.2 m, ends meet 5 and 6 streets
+    s-85  26.2 m, ends meet 6 and 2 streets
+    s-192 9.2 m and s-23 9.2 m, ends meet 1 and 6 / 6 and 2
+  -> the block's square sides are the far ends of s-190 and s-83, 24-27 m wide streets that join nothing there
+     (out of scope (b), pieces that join nothing drawn).
+  The step at the crossing's lower left (27):
+    s-60  25.4 m, ends meet 1 and 3 streets
+    s-138 24.8 m, ends meet 2 and 4 streets
+    s-180 10.6 m, ends meet 3 and 2 streets
+    s-54  5.4 m,  ends meet 3 and 4 streets
+  -> s-60's far end joins nothing (b), and s-138 and s-180 each meet one other street end to end there (a).
+Where three or more streets meet ("3+"), no corner sticks out: the shape covers every street end's corners
+(09: where_three_streets_or_more_meet_one_shape_over_their_ends_covers_every_corner_of_them, and every shape in the
+tests, 2,000 random meetings among them).

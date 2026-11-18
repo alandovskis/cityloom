@@ -1,0 +1,25 @@
+Downtown Montréal on René-Lévesque, worktree build at ed180aad, http://127.0.0.1:8144/map.html (266 places).
+Read from the page's map with window.cityloomMap (feature-state of the places source, and the details panel's text).
+
+Layers of the places, in drawing order:
+places-casing, places-joint-casing, places-middle-casing, places-joint, places-middle, places-street,
+places-ground, places-junction-ground, places-pedestrian, places-conflict, places-junction, places-junction-hit, ...
+(places-middle: the shape where streets meet that is no junction, under the streets' lines;
+ places-ground: a junction's shape, over them.)
+
+17. Pointer on the wide street s-215 (collector, 27.2 m) at the six-street crossing (the pink ring marks the pointer's
+    real position; the screenshot tool can draw its arrow away from it): feature-state hot = ["s-215"].
+    The narrow band drawn over its north edge is another street, s-237 (collector, 7.6 m), a separate way that runs
+    along it, from screen (565,79) to (611,112) in this view.
+18. Pointer on that band, at (592,98), the ring on it: feature-state hot = ["s-237"]: it is its own street, lit alone.
+19. Pointer on junction j-60's ground about 18 px from its marker (zoom 17.5): feature-state hot = ["j-60"].
+20. Press there: the details show the junction:
+    "Rue Mansfield and Boulevard René-Lévesque Ouest | Traffic signal, 4 streets"
+21. Press on the street just past the junction's ground: the details show the street:
+    "Rue Mansfield | Rue Mansfield and Rue Belmont to Rue Mansfield and Boulevard René-Lévesque Ouest · 9.2 m"
+22. With the details open the editable view is smaller and the streets outside it are muted (grey). Meeting shapes in
+    view with a muted street, and their feature-state editable:
+    m-59: editable false; streets there s-49 muted, s-181 editable, s-137 editable  (screenshot 22)
+    m-70: editable false; streets there s-117 muted, s-63, s-118, s-70, s-55 editable
+    m-68: editable false; streets there s-126 and s-62 muted, s-183, s-165, s-59 editable
+    places-middle's fill-opacity is 0 where editable is false: no solid shape under the muted street's translucent line.

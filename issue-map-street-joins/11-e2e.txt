@@ -1,0 +1,7 @@
+$ E2E_PORT=8151 just e2e   # at ed180aad
+Running 472 tests using 7 workers
+  472 passed (4.7m)
+Running 25 tests using 7 workers
+  25 passed (35.8s)
+Running 116 tests using 7 workers
+  116 passed (1.0m)

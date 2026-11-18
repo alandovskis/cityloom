@@ -1,0 +1,37 @@
+A meeting's shape takes none of its streets' states (status, conflict): the test, at ed180aad
+
+    fn where_three_streets_or_more_meet_one_shape_over_their_ends_covers_every_corner_of_them() {
+        let v = City::from_network(&star(&[(3.0, 0.0), (5.0, 100.0), (8.0, 215.0), (4.0, 290.0), (3.0, 330.0), (6.0, 160.0)]), "Bendville").view(0);
+        assert!(v.nodes.iter().all(|n| !n.junction), "six streets at a node not marked a junction");
+        let (p, centre) = (projection(&v), hub(&v));
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
+        let found = middles(&fc, &p, centre);
+        assert_eq!(found.len(), 1, "one shape where they meet");
+        assert!(joints(&fc).is_empty(), "and no disc there: {:?}", joints(&fc));
+        let (f, ring) = &found[0];
+        assert_eq!(ring.first(), ring.last(), "a closed ring");
+        for q in corners(&v, &p, centre) {
+            assert!(holds(ring, q, 0.2), "the corner {q:?} of a street's square end is under the shape {ring:?}");
+        }
+        let node = v.nodes.iter().find(|n| [n.x_mm, n.y_mm] == centre).expect("the node they meet at");
+        assert_eq!(f["properties"]["hot"], format!("m-{}", node.uid), "its own, not one street's: hovering a street never lights the others' ends");
+        assert_eq!(f["properties"]["status"], "ok");
+        assert_eq!(f["properties"]["conflict"], false);
+        // it is editable where every street that meets there is (`editable::with_meetings`), so it is never solid
+        // under a muted street's translucent line
+        let mut streets: Vec<String> = v.edges.iter().map(|e| format!("s-{}", e.uid)).collect();
+        streets.sort();
+        assert_eq!(meetings(&v), vec![(format!("m-{}", node.uid), streets)]);
+        assert!(place_boxes(&v, &p).iter().all(|(h, _)| !h.starts_with("m-")), "no box of its own");
+        // under every street's end, it takes none of their states
+        let mut v = v;
+        v.edges.iter_mut().for_each(|e| (e.edited, e.ok) = (true, false));
+        let fc = parse(&places(&v, &p, &v.edges.iter().map(|e| e.uid).collect()));
+        let f = &middles(&fc, &p, centre)[0].0;
+        assert_eq!((&f["properties"]["status"], &f["properties"]["conflict"]), (&json!("ok"), &json!(false)));
+        assert!(f["properties"]["ground"].is_null() && f["properties"]["radius_m"].is_null(), "not a junction");
+    }
+
+$ cargo test -p cityloom_editor --lib -- map::vm::overlay::tests::where_three_streets_or_more_meet_one_shape
+test map::vm::overlay::tests::where_three_streets_or_more_meet_one_shape_over_their_ends_covers_every_corner_of_them ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3275 filtered out; finished in 0.01s

@@ -1,0 +1,21 @@
+$ git rev-parse HEAD
+ed180aad9f35cdfe1e25e574027c8aca62134720
+
+Knock-out 1: three streets or more joined by a disc again, as before this change (overlay.rs: 'if at.len() > 2' -> 'if false')
+ crates/cityloom_editor/src/map/vm/overlay.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+test map::vm::overlay::tests::where_three_streets_or_more_meet_one_shape_over_their_ends_covers_every_corner_of_them ... FAILED
+test map::vm::overlay::tests::a_narrow_street_meeting_a_wide_one_makes_no_shape_past_the_wide_streets_sides ... FAILED
+test map::vm::tests::where_three_streets_meet_the_shape_between_them_is_editable_with_all_of_them_and_not_with_one_cut ... FAILED
+test map::vm::overlay::tests::a_junction_is_a_point_with_its_radius_and_a_street_end_is_not_drawn ... FAILED
+test map::vm::overlay::tests::where_a_junctions_ground_is_a_shape_its_press_target_is_the_shape_and_no_wider_circle ... FAILED
+test map::vm::overlay::tests::at_a_junction_the_shape_where_its_streets_meet_is_its_ground_so_it_lights_and_opens_with_the_junction ... FAILED
+test result: FAILED. 45 passed; 6 failed; 0 ignored; 0 measured; 3225 filtered out; finished in 0.77s
+
+Knock-out 2: sync_editable without editable::with_meetings (a meeting's shape editable only with every street there)
+ crates/cityloom_editor/src/map/vm/mod.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+test map::vm::tests::where_three_streets_meet_the_shape_between_them_is_editable_with_all_of_them_and_not_with_one_cut ... FAILED
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3275 filtered out; finished in 0.07s
+
+$ git status --short (restored, empty)
