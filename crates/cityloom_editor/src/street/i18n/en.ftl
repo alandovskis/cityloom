@@ -859,4 +859,5 @@ goal-conflict-bus-corridor-buses-school = the bus lane at the curb is where pare
 
 add-stops-no-lane = Stops need a lane a bus can stop in on this street.
 add-green-no-host = Trees and planting need a piece off the roadway, such as a sidewalk.
+add-calming-no-anchor = Both ends of this street are cut by the edge of the map, so traffic calming cannot be placed along it.
 green-refused-no-anchor = Both ends of this street are cut by the edge of the map, so trees and planting cannot be placed along it.

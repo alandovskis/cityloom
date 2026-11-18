@@ -17,7 +17,7 @@ impl Editor {
     pub(super) fn unavailable(&self) -> Unavailable {
         let length_mm = self.states[self.cursor].content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
         let stops = self.stops_view().sides.is_empty().then(|| Said::new(if length_mm <= 0 { "stop-refused-no-anchor" } else { "add-stops-no-lane" }));
-        let calming = self.calming_strip_view().cells.is_empty().then(|| Said::new("calming-refused-no-anchor"));
+        let calming = self.calming_strip_view().cells.is_empty().then(|| Said::new("add-calming-no-anchor"));
         let green = (!self.green_row().can_add).then(|| {
             Said::new(match self.curb_frame(true) {
                 Err(CurbRefusal::NoAnchor) => "green-refused-no-anchor",
@@ -64,7 +64,17 @@ mod tests {
         let e = editor(&ALL, None);
         let u = e.view().unavailable;
         assert_eq!(u.stops, Some(Said::new("stop-refused-no-anchor")));
-        assert_eq!(u.calming, Some(Said::new("calming-refused-no-anchor")));
+        assert_eq!(u.calming, Some(Said::new("add-calming-no-anchor")));
+        let calming = u.calming.unwrap();
+        assert_eq!(
+            crate::shared::testing::en(&calming),
+            "Both ends of this street are cut by the edge of the map, so traffic calming cannot be placed along it.",
+            "it names every kind it greys, not raised tables alone"
+        );
+        assert_eq!(
+            crate::shared::testing::fr(&calming),
+            "Les deux extrémités de cette rue sont coupées par le bord de la carte\u{a0}: on ne peut pas y placer d’éléments d’apaisement de la circulation."
+        );
         assert_eq!(u.green, Some(Said::new("green-refused-no-anchor")), "no anchor wins over any other cause");
     }
 

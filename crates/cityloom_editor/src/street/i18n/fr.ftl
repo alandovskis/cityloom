@@ -859,4 +859,5 @@ goal-conflict-bus-corridor-buses-school = la voie d’autobus à la bordure est 
 
 add-stops-no-lane = Les arrêts demandent une voie où un autobus peut s’arrêter dans cette rue.
 add-green-no-host = Les arbres et les plantations demandent un élément hors de la chaussée, comme un trottoir.
+add-calming-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’éléments d’apaisement de la circulation.
 green-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arbres ni de plantations.
