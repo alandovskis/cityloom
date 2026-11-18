@@ -127,12 +127,14 @@ test("nothing of the page is left in English once it is French, a piece selected
     await expectNoEnglish(page, `on the ${tab} tab`);
   }
 
-  // The add menu: its group and kind names and the default widths. It is closed again whatever happens.
+  // The add menu: its topic and kind names, the default widths and the search. It is closed again whatever happens.
   await page.locator("#add-btn").click();
   try {
     await expect(page.locator(".add-item").first()).toBeVisible();
     await expect(page.locator(".dw").first()).toHaveText(/^\d+,\d+/);
     await expectNoEnglish(page, "with the add menu open");
+    await expect(page.locator("#add-search")).toHaveAccessibleName("Chercher quoi ajouter");
+    await expect(page.locator("#add-search")).toHaveAttribute("placeholder", "Chercher quoi ajouter");
   } finally {
     await page.keyboard.press("Escape");
   }

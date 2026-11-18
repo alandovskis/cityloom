@@ -1,9 +1,11 @@
 import type { Page } from "@playwright/test";
 
 import {
+  addFromMenu,
   expect,
   live,
   mapReady,
+  menuItem,
   OPEN_ENDS_TILE,
   openStreet,
   showZoneLevel,
@@ -75,8 +77,7 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("a buffer as narrow as an imported curb's is selected with the arrow keys and announced", async ({ page }) => {
-    await page.locator("#add-btn").click();
-    await page.locator(".add-item", { hasText: "Buffer" }).click();
+    await addFromMenu(page, "Buffer");
     await page.locator("#wrap").focus();
     for (let k = 0; k < 6; k++) await page.keyboard.press("-");
     const last = (await pieces(page)) - 1; // a new piece goes at the end
@@ -175,7 +176,11 @@ test.describe("the street editor on a street of the city", () => {
     await expect(menu).toHaveAttribute("aria-expanded", "false");
     await menu.click();
     await expect(menu).toHaveAttribute("aria-expanded", "true");
-    await page.locator(".add-item", { hasText: "Bike lane" }).click();
+    await page.locator("#add-topic-cycling").click();
+    await expect(page.locator("#add-topic-cycling")).toHaveAttribute("aria-selected", "true");
+    await menuItem(page, "Bike lane").click();
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#add-menu")).toBeHidden();
     expect(await pieces(page)).toBe(before + 1);
     await expect(live(page)).toContainText("Add bike lane");
     await expect(page.locator("#fit")).toHaveText(/too wide/);
@@ -199,9 +204,13 @@ test.describe("the street editor on a street of the city", () => {
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
-      const last = page.locator(".add-item", { hasText: "Street lamp" });
+      await page.locator("#add-topic-utilities").click();
+      const last = menuItem(page, "Street lamp");
       await last.scrollIntoViewIfNeeded();
       const item = (await last.boundingBox())!;
+      expect(item.x).toBeGreaterThanOrEqual(0);
+      expect(item.y).toBeGreaterThanOrEqual(0);
+      expect(item.x + item.width).toBeLessThanOrEqual(width);
       expect(item.y + item.height).toBeLessThanOrEqual(height);
     });
   }
@@ -323,6 +332,70 @@ test.describe("the street editor on a street of the city", () => {
     const [field, area] = await Promise.all([page.locator("#width").boundingBox(), body.boundingBox()]);
     expect(field!.y).toBeGreaterThanOrEqual(area!.y - 1);
     expect(field!.y + field!.height).toBeLessThanOrEqual(area!.y + area!.height + 1);
+  });
+});
+
+test.describe("the add menu", () => {
+  test.beforeEach(async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+  });
+
+  test("search finds an item in another topic and adds it", async ({ page }) => {
+    const before = await pieces(page);
+    await page.locator("#add-btn").click();
+    await expect(page.locator("#add-search")).toBeFocused();
+    await expect(page.locator("#add-topic-walking")).toHaveAttribute("aria-selected", "true");
+    await page.locator("#add-search").fill("lamp");
+    const results = page.locator("#add-results .add-item");
+    await expect(results).toHaveCount(1);
+    await expect(results.locator("b")).toHaveText("Street lamp");
+    await expect(results.locator(".add-topic-name")).toHaveText("Utilities");
+    await expect(page.locator(".add-topics")).toHaveCount(0);
+    await expect(live(page)).toHaveText("One match");
+    await page.keyboard.press("ArrowDown");
+    await expect(results).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#add-menu")).toBeHidden();
+    await expect(page.locator("#add-btn")).toBeFocused();
+    expect(await pieces(page)).toBe(before + 1);
+  });
+
+  test("nothing matches says so and clearing returns to the topic", async ({ page }) => {
+    await page.locator("#add-btn").click();
+    await page.locator("#add-topic-furniture").click();
+    await page.locator("#add-search").fill("zzz");
+    await expect(page.locator(".add-none")).toHaveText("Nothing matches “zzz”.");
+    await expect(page.locator("#add-menu .add-item")).toHaveCount(0);
+    await expect(live(page)).toHaveText("0 matches");
+    await page.locator("#add-search").fill("");
+    await expect(page.locator(".add-none")).toHaveCount(0);
+    await expect(page.locator("#add-topic-furniture")).toHaveAttribute("aria-selected", "true");
+    await expect(menuItem(page, "Bench")).toBeVisible();
+  });
+
+  test("the menu opens on the chosen piece's topic", async ({ page }) => {
+    await addFromMenu(page, "Bike lane");
+    await page.locator("#piece-list [role=option]").filter({ hasText: "Bike lane" }).first().click();
+    await expect(page.locator("#p-piece")).toBeVisible();
+    await page.locator("#add-btn").click();
+    await expect(page.locator("#add-topic-cycling")).toHaveAttribute("aria-selected", "true");
+    await expect(menuItem(page, "Bike lane")).toBeVisible();
+  });
+
+  test("at phone width the topics are a row of tabs", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#add-btn").click();
+    const tabs = page.locator(".add-topics");
+    await expect(tabs).toHaveAttribute("aria-orientation", "horizontal");
+    const row = (await tabs.boundingBox())!;
+    const panel = (await page.locator("#add-panel").boundingBox())!;
+    expect(row.y + row.height).toBeLessThanOrEqual(panel.y);
+    const menu = (await page.locator("#add-menu").boundingBox())!;
+    expect(menu.x).toBeGreaterThanOrEqual(0);
+    expect(menu.y).toBeGreaterThanOrEqual(0);
+    expect(menu.x + menu.width).toBeLessThanOrEqual(390);
+    expect(menu.y + menu.height).toBeLessThanOrEqual(844);
   });
 });
 
@@ -711,8 +784,7 @@ test.describe("the zones of a street", () => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await page.locator("#zone-1").click();
-    await page.locator("#add-btn").click();
-    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+    await addFromMenu(page, "Driving lane");
   };
 
   test("the 2.5D says how long the transition is that leads into the zone beyond", async ({ page }) => {

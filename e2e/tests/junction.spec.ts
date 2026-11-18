@@ -1,4 +1,5 @@
 import {
+  addFromMenu,
   expect,
   live,
   openJunction,
@@ -1118,8 +1119,7 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     const strip = page.locator(`#stop-strip-${arm.side}`);
     const used = strip.locator('[role="option"].stop-cell:not(.gap)');
     await page.locator(`#stop-${arm.side}-0`).click();
-    await page.locator("#add-btn").click();
-    await page.locator(".stop-add-item", { hasText: "Curb stop" }).click();
+    await addFromMenu(page, "Curb stop");
     await page.locator(`#stop-${arm.side}-0`).click();
     await page.locator("#stop-length").fill(String(STOP_M));
     await page.locator("#stop-length").press("Enter");

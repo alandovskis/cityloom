@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, placesOnMap, streetLengthM, test } from "./fixtures";
+import { addFromMenu as addItem, expect, live, menuItem, placesOnMap, streetLengthM, test } from "./fixtures";
 
 // Street trees and green infrastructure: the tools, the Green row, the checks, the 2.5D and the saved document.
 
@@ -12,9 +12,20 @@ const SIGHTLINE = "Planting clear of the corners at junctions";
 /** Adds an element of `kind` ("Tree", "Planting bed", "Rain garden", "Bioswale") from the Add a piece menu, with the
  *  kind's defaults at the start of the street. It is the chosen element, so its settings are shown. */
 async function addFromMenu(page: Page, kind: string) {
-  await page.locator("#add-btn").click();
-  await page.locator(".green-add-item", { hasText: new RegExp(`^${kind}$`) }).click();
+  await addItem(page, kind);
   await expect(page.locator("#green-kind")).toBeVisible();
+}
+
+/** Whether the street cannot take a tree: the Add a piece menu's Tree is greyed. The menu is closed again. */
+async function treeGreyed(page: Page) {
+  await page.locator("#add-btn").click();
+  await page.locator("#add-search").fill("Tree");
+  const tree = menuItem(page, "Tree");
+  await expect(tree).toBeVisible();
+  const greyed = (await tree.getAttribute("aria-disabled")) === "true";
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#add-menu")).toBeHidden();
+  return greyed;
 }
 
 /** Takes back every green edit, one undo at a time. */
@@ -30,7 +41,7 @@ async function openGreenStreet(page: Page, minM: number) {
     await page.goto("/" + href);
     await expect(page.locator("#zone-0")).toBeVisible();
     if ((await streetLengthM(page)) < minM) continue;
-    if ((await page.locator(".green-add-item").count()) === 0) continue;
+    if (await treeGreyed(page)) continue;
     // The hosts are listed with the settings of a chosen element: add a tree to see them, and take it back.
     await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
@@ -68,7 +79,7 @@ async function openStreetWithAJunctionAtItsStart(page: Page) {
   for (const href of (await placesOnMap(page)).streets) {
     await page.goto("/" + href);
     await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < 30 || (await page.locator(".green-add-item").count()) === 0) continue;
+    if ((await streetLengthM(page)) < 30 || (await treeGreyed(page))) continue;
     await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
     if (!hosts.some((h) => /^Sidewalk/.test(h))) {

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, placesOnMap, streetLengthM, test } from "./fixtures";
+import { addFromMenu as addItem, expect, placesOnMap, streetLengthM, test } from "./fixtures";
 
 // Raised tables and crossings: the strip under the zones, its tools, the checks, the 2.5D and the saved document.
 
@@ -32,8 +32,7 @@ const KINDS = ["Raised table", "Raised crossing", "Chicane", "Modal filter"];
  *  piece menu, at the kind's default length. */
 async function addFromMenu(page: Page, cell: number, kind = "0") {
   await page.locator("#calming-" + cell).click();
-  await page.locator("#add-btn").click();
-  await page.locator(".calming-add-item", { hasText: KINDS[Number(kind)] }).click();
+  await addItem(page, KINDS[Number(kind)]);
   await page.locator("#calming-" + cell).click();
 }
 
@@ -129,8 +128,7 @@ test.describe("raised tables and crossings", () => {
     await openCalmingStreet(page, 40, true);
     // A stop at the start of the right side, then a table at the start of the street.
     await page.locator("#stop-right-0").click();
-    await page.locator("#add-btn").click();
-    await page.locator(".stop-add-item", { hasText: "Curb extension" }).click();
+    await addItem(page, "Curb extension");
     await page.locator("#stop-right-0").click();
     await page.locator("#stop-length").fill("12");
     await page.locator("#stop-length").press("Enter");
@@ -149,7 +147,7 @@ test.describe("raised tables and crossings", () => {
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await page.locator("#add-btn").click();
-    await expect(page.locator("#add-g-calming")).toHaveText("Apaisement de la circulation");
+    await expect(page.locator("#add-topic-calming")).toHaveText("Apaisement de la circulation");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Plateau surélevé/);
   });
   test("a chicane is added with the tools, drawn as build-outs, saved as version 14 and undone", async ({ page }) => {
