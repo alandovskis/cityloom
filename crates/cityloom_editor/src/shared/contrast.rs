@@ -321,15 +321,30 @@ mod tests {
     }
 
     #[test]
-    fn a_disabled_template_and_its_reason_are_ink_2_on_the_panel_at_4_5_to_1_in_both_themes() {
+    fn a_disabled_template_or_item_to_add_and_its_reason_are_ink_2_on_the_panel_at_4_5_to_1_in_both_themes() {
         let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let (ink, panel) = (pick(&token(app, "ink-2"), i), pick(&token(app, "panel"), i));
             assert!(contrast(&ink, &panel) >= 4.5, "ink-2 on the panel {theme}: {:.2}", contrast(&ink, &panel));
         }
-        for selector in [".template-item[aria-disabled=\"true\"]", ".template-reason"] {
+        for selector in [".template-item[aria-disabled=\"true\"]", ".template-reason", ".add-item[aria-disabled=\"true\"]", ".add-reason"] {
             assert!(rule(editor, selector).contains("color: var(--ink-2);"), "{selector}");
+        }
+    }
+
+    #[test]
+    fn the_add_menu_s_chosen_topic_is_bold_ink_on_the_fill_with_an_accent_bar_in_both_themes() {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        // Marked by more than colour: bold, a fill and a bar on its leading edge.
+        let chosen = rule(editor, ".add-topic[aria-selected=\"true\"]");
+        assert!(chosen.contains("font-weight: 700;") && chosen.contains("background: var(--fill);") && chosen.contains("var(--accent)"), "{chosen}");
+        assert!(chosen.contains("color: var(--ink);"), "{chosen}");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, accent, fill) = (pick(&token(app, "ink"), i), pick(&token(app, "accent"), i), pick(&token(app, "fill"), i));
+            assert!(contrast(&ink, &fill) >= 4.5, "ink on the fill {theme}: {:.2}", contrast(&ink, &fill));
+            assert!(contrast(&accent, &fill) >= 3.0, "the bar on the fill {theme}: {:.2}", contrast(&accent, &fill));
         }
     }
 

@@ -54,8 +54,6 @@ group-transit = Transport en commun
 group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
-group-stops = Arrêts de transport en commun
-group-green = Infrastructure verte
 group-calming = Apaisement de la circulation
 
 # Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
@@ -133,6 +131,9 @@ add-matches = { $count ->
     [one] Un résultat
    *[other] { $count } résultats
 }
+add-search-label = Rechercher un élément
+add-topics-label = Thèmes
+add-no-match = Rien ne correspond à « { $query } ».
 clock-time-of-day = Heure de la journée
 clock-except = { $kind } sauf { $others }
 clock-window = { $kind } { $from }–{ $to }

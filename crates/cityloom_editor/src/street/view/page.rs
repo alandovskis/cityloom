@@ -1,6 +1,6 @@
 //! The rest of the street page around the section: its heading, the status
-//! line, undo and redo, the menu to add a piece, the time of day, and the cue
-//! that says how to begin.
+//! line, undo and redo, the Transform menu (and what it shares with the menu to
+//! add a piece, `add_menu`), the time of day, and the cue that says how to begin.
 
 use std::rc::Rc;
 
@@ -8,38 +8,19 @@ use leptos::prelude::*;
 
 use crate::city::model::EndView;
 use crate::shared::atlas::name_key;
-use crate::shared::catalogue::{KINDS, group_key, kind_key};
+use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind, TemplateView};
-use crate::street::model::{CalmingKindExt, GreenKindExt, StopKindExt};
+use crate::street::model::{SegView, TemplateView};
 use crate::street::vm::StreetVm;
-use crate::street::vm::add_menu::insert_index;
 use crate::street::vm::keys::menu_step;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
-
-/// The pieces by what they are for, so eighteen rows read as seven lists: each group by its id
-/// (its name is the message `group-<id>`) and the kinds in it.
-pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
-    ("walking", &["sidewalk"]),
-    ("greenery", &["planting", "median"]),
-    ("cycling", &["bike", "bikerack", "bikeshare"]),
-    ("transit", &["bus", "busshelter", "busstation"]),
-    ("roadway", &["travel", "parking", "loading", "shoulder", "buffer"]),
-    ("furniture", &["bench", "terrace"]),
-    ("utilities", &["pole", "streetlamp"]),
-];
-
-/// The indices into the catalogue of the kinds in one group, those the catalogue has.
-pub fn group_kinds(ids: &[&str]) -> Vec<usize> {
-    ids.iter().filter_map(|id| KINDS.iter().position(|k| k.id == *id)).collect()
-}
 
 /// Minutes after midnight from `hh:mm`, or None when it is not a time.
 pub fn to_min(text: &str) -> Option<i32> {
@@ -131,7 +112,7 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
 // ---- the components ----------------------------------------------------------------------
 
 /// A word of the page, asked again when the language is switched.
-fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
+pub(super) fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
     move || w.i18n().tr(key, &Args::new())
 }
 
@@ -347,24 +328,24 @@ pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f
     MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
 }
 
-/// What the two menus (Add and Transform) share: the open flag, the button, the list and the selector of
-/// the list's items. The behaviour that differs (what counts as inside the widget) is passed to `listen` and
-/// `left_by`.
+/// What the two menus (Add and Transform, `add_menu::AddMenu`) share: the open flag, the button, the list and the
+/// selector of the list's items. The behaviour that differs (what counts as inside the widget, what takes the focus on
+/// opening) is passed to `listen` and `left_by`.
 #[derive(Clone, Copy)]
-struct MenuParts {
-    open: RwSignal<bool>,
-    button: NodeRef<leptos::html::Button>,
-    menu: NodeRef<leptos::html::Div>,
+pub(super) struct MenuParts {
+    pub(super) open: RwSignal<bool>,
+    pub(super) button: NodeRef<leptos::html::Button>,
+    pub(super) menu: NodeRef<leptos::html::Div>,
     item: &'static str,
 }
 
 impl MenuParts {
-    fn new(item: &'static str) -> Self {
+    pub(super) fn new(item: &'static str) -> Self {
         Self { open: RwSignal::new(false), button: NodeRef::new(), menu: NodeRef::new(), item }
     }
 
     /// The list's items, in order.
-    fn items(self) -> Vec<leptos::web_sys::HtmlElement> {
+    pub(super) fn items(self) -> Vec<leptos::web_sys::HtmlElement> {
         use leptos::wasm_bindgen::JsCast;
         let Some(menu) = self.menu.get_untracked() else { return Vec::new() };
         let list = menu.query_selector_all(self.item).ok();
@@ -372,7 +353,7 @@ impl MenuParts {
     }
 
     /// Closes the list, handing the focus back to the button when asked.
-    fn close(self, refocus: bool) {
+    pub(super) fn close(self, refocus: bool) {
         self.open.set(false);
         if refocus && let Some(b) = self.button.get_untracked() {
             let _ = leptos::web_sys::HtmlElement::from(b).focus();
@@ -392,16 +373,16 @@ impl MenuParts {
     }
 
     /// Whether a focus change moved the focus out of the widget, `inside` saying what is part of it.
-    fn left_by(e: &leptos::web_sys::FocusEvent, inside: impl Fn(&leptos::web_sys::Element) -> bool) -> bool {
+    pub(super) fn left_by(e: &leptos::web_sys::FocusEvent, inside: impl Fn(&leptos::web_sys::Element) -> bool) -> bool {
         use leptos::wasm_bindgen::JsCast;
         e.related_target().and_then(|t| t.dyn_into::<leptos::web_sys::Element>().ok()).is_some_and(|t| !inside(&t))
     }
 
     /// The list is fixed to the window, so the stage cannot clip it: it is put under its button (at most
-    /// `max_width` wide), the focus goes to the first item once it is shown, and it closes on a press outside
-    /// (`inside` saying what is part of the widget) and on Escape. Browser only.
+    /// `max_width` wide), the focus goes to the first element `first` picks in it once it is shown, and it closes on
+    /// a press outside (`inside` saying what is part of the widget) and on Escape. Browser only.
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
-    fn listen(self, max_width: Option<f64>, inside: impl Fn(&leptos::web_sys::Element) -> bool + 'static) {
+    pub(super) fn listen(self, max_width: Option<f64>, first: &'static str, inside: impl Fn(&leptos::web_sys::Element) -> bool + 'static) {
         #[cfg(target_arch = "wasm32")]
         {
             use leptos::wasm_bindgen::JsCast;
@@ -424,7 +405,8 @@ impl MenuParts {
                     // Once the list is shown, so that it can take the focus.
                     leptos::task::spawn_local(async move {
                         leptos::task::tick().await;
-                        if let Some(first) = self.items().first() {
+                        let first = self.menu.get_untracked().and_then(|m| m.query_selector(first).ok().flatten());
+                        if let Some(first) = first.and_then(|f| f.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
                             let _ = first.focus();
                         }
                     });
@@ -447,183 +429,6 @@ impl MenuParts {
 
 /// The widest the Transform list is drawn, in pixels (a measure's name wraps in it).
 const TRANSFORM_MENU_WIDTH: f64 = 380.0;
-
-/// The button that opens the list of pieces, and the list: arrows move through
-/// it, Escape closes it, and choosing a piece adds it after the selected one.
-#[component]
-pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
-    use leptos::web_sys::{FocusEvent, KeyboardEvent};
-
-    let w = SheetWatch::new(vm);
-    let parts = MenuParts::new(".add-item");
-    let MenuParts { open, button, menu, .. } = parts;
-    let close = move |refocus: bool| parts.close(refocus);
-    // The widget is the list and its button.
-    let inside = move |t: &leptos::web_sys::Element| {
-        menu.get_untracked().is_some_and(|m| m.contains(Some(t))) || button.get_untracked().is_some_and(|b| b.contains(Some(t)))
-    };
-    parts.listen(None, inside);
-    let menu_keys = move |e: KeyboardEvent| parts.keys(e);
-    let focus_out = move |e: FocusEvent| {
-        if MenuParts::left_by(&e, inside) {
-            open.set(false);
-        }
-    };
-    let groups = ADD_GROUPS
-        .iter()
-        .enumerate()
-        .map(|(g, (group, ids))| {
-            let rows = group_kinds(ids)
-                .into_iter()
-                .map(|k| {
-                    let kind = &KINDS[k];
-                    view! {
-                        <li>
-                            <button
-                                type="button"
-                                class="add-item"
-                                on:click=move |_| {
-                                    close(true);
-                                    let at = insert_index(&w.view_now());
-                                    w.edit(|e| e.add(k, at) != 0);
-                                }
-                            >
-                                <span class="add-icon" inner_html=icon(kind.id)></span>
-                                <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
-                                <span class="dw">{move || w.units().length_fine_in(kind.default_mm, w.i18n().locale())}</span>
-                            </button>
-                        </li>
-                    }
-                })
-                .collect_view();
-            view! {
-                <div class="add-group" role="group" aria-labelledby=format!("add-g-{g}")>
-                    <p class="add-group-h" id=format!("add-g-{g}")>{move || w.i18n().tr(&group_key(group), &Args::new())}</p>
-                    <ul class="add-sub">{rows}</ul>
-                </div>
-            }
-        })
-        .collect_view();
-    // The transit stops: not pieces but stops on a side's curb, added into the chosen free stretch of a stops row,
-    // so offered only where a street has such a row.
-    let stop_rows = move || !w.view().stops.sides.is_empty();
-    let stop_items = StopKind::ALL
-        .iter()
-        .map(|&k| {
-            view! {
-                <li>
-                    <button
-                        type="button"
-                        class="add-item stop-add-item"
-                        on:click=move |_| {
-                            close(true);
-                            w.pick_stop_kind(k);
-                            w.add_stop(k, crate::standards::model::stop_min_mm());
-                        }
-                    >
-                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
-                        <span class="dw">{move || w.units().length_fine_in(crate::standards::model::stop_min_mm(), w.i18n().locale())}</span>
-                    </button>
-                </li>
-            }
-        })
-        .collect_view();
-    // The green elements (a tree, a planting bed, a rain garden, a bioswale): not pieces but elements on a piece, added
-    // with the kind's defaults where the street has a piece to stand one on.
-    let can_add_green = move || w.view().green.can_add;
-    let green_items = GreenKind::ALL
-        .iter()
-        .map(|&k| {
-            view! {
-                <li>
-                    <button
-                        type="button"
-                        class="add-item green-add-item"
-                        on:click=move |_| {
-                            close(true);
-                            w.add_green_clear(GreenForm::new(k));
-                        }
-                    >
-                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
-                    </button>
-                </li>
-            }
-        })
-        .collect_view();
-    let green = view! {
-        <Show when=can_add_green>
-            <div class="add-group" role="group" aria-labelledby="add-g-green">
-                <p class="add-group-h" id="add-g-green">{say(w, "group-green")}</p>
-                <ul class="add-sub">{green_items.clone()}</ul>
-            </div>
-        </Show>
-    };
-    // Traffic calming: raised elements and chicanes on the roadway, added with the kind's default length into the chosen
-    // free stretch of the raised elements' strip, so offered only where the street has such a strip.
-    let calming_strip = move || !w.view().calming_strip.cells.is_empty();
-    let calming_items = CalmingKind::ALL
-        .iter()
-        .map(|&k| {
-            view! {
-                <li>
-                    <button
-                        type="button"
-                        class="add-item calming-add-item"
-                        on:click=move |_| {
-                            close(true);
-                            w.pick_calming_kind(k);
-                            w.add_calming(k, k.default_mm());
-                        }
-                    >
-                        <b>{move || w.i18n().tr(k.name_key(), &Args::new())}</b>
-                        <span class="dw">{move || w.units().length_fine_in(k.default_mm(), w.i18n().locale())}</span>
-                    </button>
-                </li>
-            }
-        })
-        .collect_view();
-    let calming = view! {
-        <Show when=calming_strip>
-            <div class="add-group" role="group" aria-labelledby="add-g-calming">
-                <p class="add-group-h" id="add-g-calming">{say(w, "group-calming")}</p>
-                <ul class="add-sub">{calming_items.clone()}</ul>
-            </div>
-        </Show>
-    };
-    let stops = view! {
-        <Show when=stop_rows>
-            <div class="add-group" role="group" aria-labelledby="add-g-stops">
-                <p class="add-group-h" id="add-g-stops">{say(w, "group-stops")}</p>
-                <ul class="add-sub">{stop_items.clone()}</ul>
-            </div>
-        </Show>
-    };
-    view! {
-        <button
-            type="button"
-            id="add-btn"
-            class="btn"
-            aria-expanded=move || open.get().to_string()
-            aria-controls="add-menu"
-            node_ref=button
-            on:click=move |_| open.update(|o| *o = !*o)
-            on:keydown=move |e: KeyboardEvent| {
-                if e.key() == "ArrowDown" && !open.get_untracked() {
-                    e.prevent_default();
-                    open.set(true);
-                }
-            }
-        >
-            <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>
-            {say(w, "add-button")}
-        </button>
-        <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys on:focusout=focus_out>
-            <p class="menu-h">{say(w, "add-button")}</p>
-            <p class="hint">{say(w, "add-hint")}</p>
-            <div id="palette" class="add-list">{groups}{green}{calming}{stops}</div>
-        </div>
-    }
-}
 
 /// One group of the Transform menu: its heading and hint are hidden from assistive technology and reach it as the
 /// group's name and description (a menu holds only menu items and groups). `id` names the group's elements.
@@ -710,7 +515,7 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
     let close = move |refocus: bool| parts.close(refocus);
     // The widget is the wrapper: the button and the list.
     let inside = move |t: &leptos::web_sys::Element| wrap.get_untracked().is_some_and(|m| m.contains(Some(t)));
-    parts.listen(Some(TRANSFORM_MENU_WIDTH), inside);
+    parts.listen(Some(TRANSFORM_MENU_WIDTH), ".transform-item", inside);
     let menu_keys = move |e: KeyboardEvent| parts.keys(e);
     // Tabbing out of the widget closes the list; a press elsewhere is the window listener's.
     let focus_out = move |e: FocusEvent| {
@@ -948,28 +753,6 @@ mod tests {
             let m = menu_box(l, b, w, h);
             assert!(m.left >= 0.0 && m.left + m.width <= w && m.top >= 0.0 && m.top + m.max_height <= h, "{w}x{h}");
         }
-    }
-
-    #[test]
-    fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {
-        let all: Vec<usize> = ADD_GROUPS.iter().flat_map(|(_, ids)| group_kinds(ids)).collect();
-        assert_eq!(all.len(), 18);
-        let mut seen = all.clone();
-        seen.sort_unstable();
-        seen.dedup();
-        assert_eq!(seen.len(), 18, "each kind is in one list");
-        assert_eq!(KINDS.len(), 18);
-        let ids = |group: &str| -> Vec<&str> {
-            let (_, ids) = ADD_GROUPS.iter().find(|(name, _)| *name == group).unwrap();
-            group_kinds(ids).into_iter().map(|k| KINDS[k].id).collect()
-        };
-        assert_eq!(ids("walking"), ["sidewalk"]);
-        assert_eq!(ids("greenery"), ["planting", "median"]);
-        assert_eq!(ids("transit"), ["bus", "busshelter", "busstation"]);
-        assert_eq!(ids("roadway"), ["travel", "parking", "loading", "shoulder", "buffer"]);
-        assert_eq!(ids("furniture"), ["bench", "terrace"]);
-        assert_eq!(ids("utilities"), ["pole", "streetlamp"]);
-        assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);
     }
 
     #[test]

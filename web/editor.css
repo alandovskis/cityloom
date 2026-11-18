@@ -2903,32 +2903,89 @@ svg pattern circle {
   max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
+.add-search {
+  width: 100%;
+  min-height: 40px;
+  margin: 0 0 12px;
+  padding: 0 12px;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.add-search::placeholder {
+  color: var(--ink-3);
+}
+/* The topics beside the chosen topic's items (one row of tabs across the top on a narrow screen, below), or the
+   search's results. */
+.add-body {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0 16px;
+  align-items: start;
+}
+#add-results,
+.add-none {
+  grid-column: 1 / -1;
+}
+.add-topics {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.add-topic {
+  min-height: 32px;
+  padding: 6px 12px 6px 9px;
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.add-topic:hover {
+  background: var(--fill);
+}
+/* The chosen topic: bold, filled and a bar on its leading edge, not colour alone (shared/contrast.rs). */
+.add-topic[aria-selected="true"] {
+  border-inline-start-color: var(--accent);
+  background: var(--fill);
+  color: var(--ink);
+  font-weight: 700;
+}
+@media (forced-colors: active) {
+  .add-topic {
+    border-inline-start-color: Canvas;
+  }
+  .add-topic[aria-selected="true"] {
+    border-inline-start-color: Highlight;
+  }
+}
 .add-menu .hint {
-  padding: 0 0 8px;
+  padding: 0 0 4px;
 }
-.add-group-h {
-  margin: 0 0 2px;
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
+.add-panel .add-sub + .hint,
+.add-panel .add-reason + .hint {
+  margin-top: 12px;
 }
-.add-list,
 .add-sub {
   display: grid;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.add-list {
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 12px 16px;
-  align-items: start;
-}
 .add-item {
   display: grid;
   grid-template-columns: 88px 1fr auto;
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
   width: 100%;
   padding: 5px 8px 5px 4px;
   border: 0;
@@ -2938,6 +2995,11 @@ svg pattern circle {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+/* Every name in the second column, whether or not the item has an icon; in the search's results its topic under it. */
+.add-icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
 }
 .add-icon,
 .add-icon .icon {
@@ -2953,12 +3015,57 @@ svg pattern circle {
   background: var(--fill);
 }
 .add-item b {
+  grid-column: 2;
   font-size: 15px;
   font-weight: 600;
 }
+.add-topic-name {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .add-item .dw {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   color: var(--ink-2);
   font-size: 14px;
+}
+/* An item the street cannot take stays listed, dimmed, with the reason as text under its run (ink-2 on the panel,
+   measured in shared/contrast.rs). */
+.add-item[aria-disabled="true"] {
+  color: var(--ink-2);
+  cursor: not-allowed;
+}
+.add-item[aria-disabled="true"]:hover {
+  background: transparent;
+}
+.add-reason {
+  margin: 0;
+  padding: 2px 8px 4px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.add-none {
+  margin: 0;
+  padding: 8px 4px;
+  color: var(--ink-2);
+}
+/* As narrow as menu_box makes the menu on a phone: the topics are one row of tabs across the top, scrolling sideways
+   (the page sets the tablist's aria-orientation to match: street/view/add_menu.rs). */
+@media (max-width: 560px) {
+  .add-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .add-topics {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .add-topic {
+    flex: none;
+  }
 }
 
 /* ---- the Transform menu -------------------------------------------------- */
@@ -3018,6 +3125,8 @@ svg pattern circle {
 @media (any-pointer: coarse) {
   /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
   .add-item,
+  .add-topic,
+  .add-search,
   .check,
   .fit-checks {
     min-height: 44px;

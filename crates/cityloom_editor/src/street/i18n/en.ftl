@@ -54,8 +54,6 @@ group-transit = Transit
 group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
-group-stops = Transit stops
-group-green = Green infrastructure
 group-calming = Traffic calming
 
 # How the pieces stand against the street's width, and what is said after an edit.
@@ -133,6 +131,9 @@ add-matches = { $count ->
     [one] One match
    *[other] { $count } matches
 }
+add-search-label = Search pieces
+add-topics-label = Topics
+add-no-match = Nothing matches “{ $query }”.
 clock-time-of-day = Time of day
 clock-except = { $kind } except { $others }
 clock-window = { $kind } { $from }–{ $to }
