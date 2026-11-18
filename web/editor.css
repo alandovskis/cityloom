@@ -3071,10 +3071,12 @@ svg pattern circle {
 /* ---- the Transform dialog ------------------------------------------------- */
 
 /* A modal <dialog> (street/view/transform.rs): the groups, the open group's choices and the preview side by side,
-   Cancel and Apply under them; one column under 720 px. Its text pairs are measured in shared/contrast.rs. */
+   Cancel and Apply under them; one column under 720 px. It keeps one height at every width, so that the options do not
+   move under the pointer when pointing at one shows its preview and the dialog, centred by the browser, would grow. Its text pairs are measured in shared/contrast.rs. */
 .transform-dialog {
   width: min(960px, 100vw - 32px);
   max-width: min(960px, 100vw - 32px);
+  height: min(720px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
   padding: 0;
   border: 1px solid var(--rule);
@@ -3275,13 +3277,6 @@ svg pattern circle {
   border-color: var(--field-line);
   background: var(--panel);
   color: var(--ink-3);
-}
-/* From 721 px up the dialog keeps one height, so that the options do not move under the pointer when pointing at one
-   shows its preview and the dialog, centred by the browser, grows. */
-@media (min-width: 721px) {
-  .transform-dialog {
-    height: min(720px, calc(100vh - 32px));
-  }
 }
 @media (max-width: 720px) {
   .transform-body {

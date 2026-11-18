@@ -5,7 +5,7 @@ import {
   live,
   openAnchoredStreet,
   openStreet,
-  placesOnMap,
+  openStreetWithUnfitTemplate,
   showStreetLevel,
   test,
   transform,
@@ -113,39 +113,29 @@ test.describe("street templates", () => {
   test.describe("on a street too narrow for one", () => {
     test.describe.configure({ timeout: 120_000 });
 
-    test("a template that does not fit is disabled, says why, and previews it instead of applying", async ({
+    test("a template that does not fit is disabled, says why, previews its reason and cannot be applied", async ({
       page,
     }) => {
-      await page.goto("/map.html");
-      const streets = (await placesOnMap(page)).streets;
-      let found = false;
-      for (const href of streets) {
-        await page.goto("/" + href);
-        await expect(page.locator("#transform-btn")).toBeVisible();
-        await page.locator("#transform-btn").click();
-        await page.locator("#transform-tab-templates").click();
-        if ((await page.locator('#transform-dialog [role=option][aria-disabled="true"]').count()) > 0) {
-          found = true;
-          break;
-        }
-        await page.keyboard.press("Escape");
-      }
-      expect(found, "a street of the Plateau tile is too narrow for some template").toBe(true);
+      await openStreetWithUnfitTemplate(page);
       const before = await names(page);
       const item = page.locator('#transform-dialog [role=option][aria-disabled="true"]').first();
       const reasonId = await item.getAttribute("aria-describedby");
       expect(reasonId).toMatch(/^template-reason-/);
       await expect(page.locator(`#${reasonId}`)).toBeVisible();
       await expect(page.locator(`#${reasonId}`)).toContainText(/needs a street at least .+ wide|wider than/);
-      // It is still reached with the arrows.
+      // Pointing at it previews its reason, and Apply stays disabled even when it is chosen.
+      await item.hover();
+      await expect(page.locator("#transform-preview .transform-no")).toContainText(
+        /needs a street at least .+ wide|wider than/,
+      );
+      await expect(page.locator("#transform-apply")).toBeDisabled();
+      // Playwright refuses to click an aria-disabled option, as it should a disabled control: press it anyway.
+      await item.click({ force: true });
+      await expect(page.locator("#transform-apply")).toBeDisabled();
+      // The arrows still reach the list's last choice.
       await page.locator("#transform-choices").focus();
       await page.keyboard.press("End");
       await expect(page.locator("#transform-choices")).toHaveAttribute("aria-activedescendant", /^transform-opt-/);
-      // Chosen, it shows its reason in the preview and Apply stays disabled: nothing is applied.
-      // Playwright refuses to click an aria-disabled option: press it anyway.
-      await item.click({ force: true });
-      await expect(page.locator("#transform-preview .transform-no")).toBeVisible();
-      await expect(page.locator("#transform-apply")).toBeDisabled();
       await page.locator("#transform-cancel").click();
       await expect(page.locator("#undo")).toBeDisabled();
       expect(await names(page)).toEqual(before);

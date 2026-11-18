@@ -288,3 +288,18 @@ export async function transform(page: Page, option: string, tab?: "ped" | "trans
   await page.locator(`#transform-dialog ${option}`).first().click();
   await page.locator("#transform-apply").click();
 }
+
+/** Opens the first street of the map that is too narrow for some street template, with the Transform dialog open on its
+ *  Street templates tab. Fails if the Plateau tile has none. */
+export async function openStreetWithUnfitTemplate(page: Page): Promise<void> {
+  await page.goto("/map.html");
+  for (const href of (await placesOnMap(page)).streets) {
+    await page.goto("/" + href);
+    await expect(page.locator("#transform-btn")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-templates").click();
+    if ((await page.locator('#transform-dialog [role=option][aria-disabled="true"]').count()) > 0) return;
+    await page.keyboard.press("Escape");
+  }
+  throw new Error("no street of the Plateau tile is too narrow for some template");
+}

@@ -8,7 +8,6 @@ import {
   menuItem,
   OPEN_ENDS_TILE,
   openStreet,
-  placesOnMap,
   showZoneLevel,
   splitInto,
   streetLengthM,
@@ -21,6 +20,9 @@ const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
   await page.keyboard.press("ArrowRight");
 };
+
+/** The street's pieces by name, in order. */
+const pieceNames = (page: Page) => page.locator("#piece-list .piece-name").allTextContents();
 
 const pieceCount = (page: Page) => page.locator("#drawing").getAttribute("aria-label");
 
@@ -619,65 +621,49 @@ test.describe("the Transform dialog", () => {
   });
 
   test("pointing at a choice previews it and nothing changes until Apply", async ({ page }) => {
-    const label = async () => await page.locator("#drawing").getAttribute("aria-label");
-    const before = await label();
+    const before = await pieceNames(page);
     await page.locator("#transform-btn").click();
     await page.locator("#transform-tab-transit").click();
-    const item = page.locator("#transform-dialog .transit-item").first();
-    await item.hover();
+    await page.locator("#transform-dialog .transit-item").first().hover();
     const preview = page.locator("#transform-preview");
     await expect(preview.locator("figcaption", { hasText: "Now" })).toBeVisible();
     await expect(preview.locator("figcaption", { hasText: "After" })).toBeVisible();
     await expect(preview.locator(".transform-empty")).toHaveCount(0);
     await expect(page.locator("#undo")).toBeDisabled();
-    expect(await label()).toBe(before);
+    expect(await pieceNames(page)).toEqual(before);
     await page.locator("#transform-cancel").click();
     await expect(page.locator("#undo")).toBeDisabled();
-    expect(await label()).toBe(before);
+    expect(await pieceNames(page)).toEqual(before);
     // Chosen and applied, the street changes, in one step.
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-tab-transit").click();
-    await page.locator("#transform-dialog .transit-item").first().click();
-    await expect(page.locator("#undo")).toBeDisabled();
-    await page.locator("#transform-apply").click();
+    await transform(page, ".transit-item", "transit");
     await expect(page.locator("#undo")).toBeEnabled();
-    expect(await label()).not.toBe(before);
+    expect(await pieceNames(page)).not.toEqual(before);
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText(/^Undone\./);
-    expect(await label()).toBe(before);
+    expect(await pieceNames(page)).toEqual(before);
   });
 
-  test("an unfit template previews its reason and cannot be applied", async ({ page }) => {
-    test.setTimeout(120_000); // it visits streets until one is too narrow for a template
-    // The Plateau's first street may fit every template: look for one a template does not fit.
-    await page.goto("/map.html");
-    const streets = (await placesOnMap(page)).streets;
-    let found = false;
-    for (const href of streets) {
-      await page.goto("/" + href);
-      await expect(page.locator("#transform-btn")).toBeVisible();
+  for (const width of [1280, 700]) {
+    test(`the options stay where they are when pointing at one shows its preview, at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
       await page.locator("#transform-btn").click();
-      await page.locator("#transform-tab-templates").click();
-      if ((await page.locator('#transform-dialog [role=option][aria-disabled="true"]').count()) > 0) {
-        found = true;
-        break;
-      }
-      await page.keyboard.press("Escape");
-    }
-    expect(found, "a street of the Plateau tile is too narrow for some template").toBe(true);
-    const item = page.locator('#transform-dialog [role=option][aria-disabled="true"]').first();
-    await item.hover();
-    await expect(page.locator("#transform-preview .transform-no")).toBeVisible();
-    await expect(page.locator("#transform-preview .transform-no")).toContainText(
-      /needs a street at least .+ wide|wider than/,
-    );
-    await expect(page.locator("#transform-apply")).toBeDisabled();
-    // Playwright refuses to click an aria-disabled option, as it should a disabled control: press it anyway.
-    await item.click({ force: true });
-    await expect(page.locator("#transform-apply")).toBeDisabled();
-    await page.locator("#transform-cancel").click();
-    await expect(page.locator("#undo")).toBeDisabled();
-  });
+      await page.locator("#transform-tab-transit").click();
+      const items = page.locator("#transform-dialog .transit-item");
+      const y = async (i: number) => (await items.nth(i).boundingBox())!.y;
+      const before = [await y(0), await y(1)];
+      // A jump when the preview appears is the dialog growing, tens of pixels; a pixel is the one-column layout's rounding.
+      const stays = async () => {
+        const now = [await y(0), await y(1)];
+        for (const i of [0, 1]) expect(Math.abs(now[i] - before[i])).toBeLessThanOrEqual(2);
+      };
+      await items.nth(1).hover();
+      await expect(page.locator("#transform-preview .transform-empty")).toHaveCount(0);
+      await stays();
+      await items.nth(0).hover();
+      await expect(page.locator("#transform-preview .transform-empty")).toHaveCount(0);
+      await stays();
+    });
+  }
 
   test("is operated from the keyboard", async ({ page }) => {
     await page.locator("#transform-btn").focus();
