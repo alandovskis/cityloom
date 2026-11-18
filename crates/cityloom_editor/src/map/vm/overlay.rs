@@ -118,8 +118,8 @@ enum Join {
     /// ends, so streets meeting at an angle are joined round, and the wider does not bulge past the narrower where it
     /// goes on narrower.
     Disc { end: [i32; 2], row_mm: i32 },
-    /// Three streets or more: the smallest convex shape over every corner of their square ends at their node (a
-    /// closed ring, in layout millimetres), so wide streets crossing at an angle leave no corner sticking out, and a
+    /// Three streets or more: the ground they share at their node, out to where their kerbs meet (`middle`, a
+    /// closed ring, in layout millimetres), over every corner of their square ends, so wide streets crossing at an angle leave no corner sticking out, and a
     /// narrow street off a wide one adds nothing past the wide one's sides.
     Middle { ring: Vec<[f64; 2]> },
 }
@@ -154,47 +154,65 @@ fn joints(v: &CityView) -> Vec<(Whose<'_>, Join)> {
         .collect()
 }
 
-/// The convex shape over the corners of streets' square ends at `at`, each given by the next point along it and its
-/// width: the closed ring, anticlockwise, or `None` where the corners make no area.
+/// The ground streets share where they meet at `at`, each street given by the next point along it and its width: the
+/// closed ring, anticlockwise round `at` along the kerbs, or `None` where it has no area. Each street's kerbs run on from its end until they meet
+/// the kerbs of the streets either side (no further than twice the widest half-width, so a sharp angle does not reach
+/// far); where the next street round goes straight on, the kerb on that side runs as far as the other. Two streets
+/// crossing make the square where their kerbs cross, a side street off a through street the box of the side street
+/// across it. The corners of the streets' square ends are always inside it.
 fn middle(at: [i32; 2], streets: impl Iterator<Item = ([i32; 2], i32)>) -> Option<Vec<[f64; 2]>> {
-    let [x, y] = [at[0] as f64, at[1] as f64];
-    let mut corners: Vec<[f64; 2]> = Vec::new();
-    for (next, row_mm) in streets {
-        let (dx, dy) = (next[0] as f64 - x, next[1] as f64 - y);
-        let k = row_mm as f64 / 2.0 / dx.hypot(dy);
-        corners.push([x - dy * k, y + dx * k]);
-        corners.push([x + dy * k, y - dx * k]);
-    }
-    let ring = hull(corners);
-    (ring.len() >= 4).then_some(ring)
-}
-
-/// The convex hull of `points` (Andrew's monotone chain): a closed ring, anticlockwise, with no point repeated but
-/// the first; fewer than four points where they make no area.
-fn hull(mut points: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
-    points.dedup();
-    if points.len() < 3 {
-        return points;
-    }
-    let turn = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(points.len() + 1);
-    // the lower chain left to right, then the upper right to left, each without its last point (the other's first)
-    for pass in [points.clone(), points.iter().rev().copied().collect()] {
-        let start = ring.len();
-        for q in pass {
-            while ring.len() >= start + 2 && turn(ring[ring.len() - 2], ring[ring.len() - 1], q) <= 0.0 {
-                ring.pop();
-            }
-            ring.push(q);
+    let o = [at[0] as f64, at[1] as f64];
+    // each street: its bearing, its direction and half its width
+    let mut arms: Vec<(f64, [f64; 2], f64)> = streets
+        .filter_map(|(next, row_mm)| {
+            let (dx, dy) = (next[0] as f64 - o[0], next[1] as f64 - o[1]);
+            let len = dx.hypot(dy);
+            (len > 0.0).then(|| (dy.atan2(dx), [dx / len, dy / len], row_mm as f64 / 2.0))
+        })
+        .collect();
+    arms.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let n = arms.len();
+    let cap = 2.0 * arms.iter().map(|a| a.2).fold(0.0, f64::max);
+    let left = |d: [f64; 2]| [-d[1], d[0]];
+    let cross = |a: [f64; 2], b: [f64; 2]| a[0] * b[1] - a[1] * b[0];
+    // how far along each street its left and right kerbs run before they meet the next street's round
+    let mut reach: Vec<[Option<f64>; 2]> = vec![[None, None]; n];
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let ((_, di, hi), (_, dj, hj)) = (arms[i], arms[j]);
+        let c = cross(di, dj);
+        if c < (10f64).to_radians().sin() {
+            continue; // straight on, or the turn to the next is the long way round: they do not meet ahead
         }
+        let (li, lj) = (left(di), left(dj));
+        let between = [-hj * lj[0] - hi * li[0], -hj * lj[1] - hi * li[1]];
+        reach[i][0] = Some(cross(between, dj) / c);
+        reach[j][1] = Some(cross(between, di) / c);
+    }
+    // round the node anticlockwise: each street's right kerb, then its left, where they stop; a kerb that meets the
+    // next street's is one point with it
+    let mut ring: Vec<[f64; 2]> = Vec::with_capacity(2 * n + 1);
+    for (&(_, d, h), &[l, r]) in arms.iter().zip(&reach) {
+        let kerb = |sign: f64, t: f64| {
+            let t = t.clamp(0.0, cap);
+            [o[0] + sign * h * -d[1] + t * d[0], o[1] + sign * h * d[0] + t * d[1]]
+        };
+        let (l, r) = (l.or(r).unwrap_or(0.0), r.or(l).unwrap_or(0.0));
+        for q in [kerb(-1.0, r), kerb(1.0, l)] {
+            if ring.last().is_none_or(|p: &[f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]) > 1.0) {
+                ring.push(q);
+            }
+        }
+    }
+    if ring.len() > 1 && (ring[0][0] - ring[ring.len() - 1][0]).hypot(ring[0][1] - ring[ring.len() - 1][1]) <= 1.0 {
         ring.pop();
     }
-    if ring.len() < 3 {
-        return ring;
+    let area: f64 = (0..ring.len()).map(|i| cross(ring[i], ring[(i + 1) % ring.len()])).sum();
+    if ring.len() < 3 || area.abs() < 1.0 {
+        return None;
     }
     ring.push(ring[0]);
-    ring
+    Some(ring)
 }
 
 /// The shapes where three streets or more meet that are not a junction (`Whose::Meeting`, as `joints` makes them),
@@ -781,14 +799,19 @@ mod tests {
             .expect("the streets meet at one node")
     }
 
-    /// Whether `q` is inside the convex `ring` (closed, either winding) or within `slack` of its edge.
+    /// Whether `q` is inside the closed `ring` (either winding) or within `slack` of its edge.
     fn holds(ring: &[[f64; 2]], q: [f64; 2], slack: f64) -> bool {
-        let side = |a: [f64; 2], b: [f64; 2]| {
+        let near = ring.windows(2).any(|w| {
+            let (a, b) = (w[0], w[1]);
             let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
-            (ex * (q[1] - a[1]) - ey * (q[0] - a[0])) / ex.hypot(ey)
-        };
-        let sides: Vec<f64> = ring.windows(2).map(|w| side(w[0], w[1])).collect();
-        sides.iter().all(|&d| d >= -slack) || sides.iter().all(|&d| d <= slack)
+            let t = (((q[0] - a[0]) * ex + (q[1] - a[1]) * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
+            (a[0] + t * ex - q[0]).hypot(a[1] + t * ey - q[1]) <= slack
+        });
+        let crossings = ring.windows(2).filter(|w| {
+            let (a, b) = (w[0], w[1]);
+            (a[1] > q[1]) != (b[1] > q[1]) && q[0] < a[0] + (q[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+        });
+        near || crossings.count() % 2 == 1
     }
 
     /// The corners of each street's square end at `centre`, in metres east and north of it: half its width either side.
@@ -999,14 +1022,55 @@ mod tests {
         assert!(joint["properties"]["radius_m"].is_null(), "a joint is not a junction");
     }
 
+    /// `middle` at the origin for streets of these widths (mm) on these bearings (degrees), its corners sorted.
+    fn middle_of(arms: &[(i32, f64)]) -> Vec<[f64; 2]> {
+        let streets = arms.iter().map(|&(row_mm, deg)| {
+            let (s, c) = deg.to_radians().sin_cos();
+            ([(100_000.0 * c).round() as i32, (100_000.0 * s).round() as i32], row_mm)
+        });
+        let mut ring = middle([0, 0], streets).expect("a shape");
+        ring.pop();
+        let mut ring: Vec<[f64; 2]> = ring.into_iter().map(|q| [q[0].round(), q[1].round()]).collect();
+        ring.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+        ring
+    }
+
     #[test]
-    fn the_hull_is_the_outer_corners_anticlockwise_and_closed_without_inner_or_in_line_points() {
-        let square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
-        let mut points = vec![[5.0, 5.0], [5.0, 0.0], [10.0, 5.0]]; // inside, and on two sides
-        points.extend(square.iter().rev());
-        assert_eq!(hull(points), vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]);
-        assert!(hull(vec![[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]).len() < 4, "points in a line make no area");
-        assert!(middle([0, 0], [([0, 1_000], 4_000), ([0, -1_000], 4_000)].into_iter()).is_none(), "two ends straight on make no area");
+    fn two_streets_straight_on_make_no_shape() {
+        assert!(middle([0, 0], [([0, 1_000], 4_000), ([0, -1_000], 4_000)].into_iter()).is_none());
+    }
+
+    #[test]
+    fn a_street_off_a_through_street_at_a_sharp_angle_puts_nothing_past_the_through_streets_far_kerb() {
+        // an 8 m street east-west, and a 4 m one leaving it 10 degrees off west, to the north
+        let ring = middle_of(&[(8_000, 0.0), (8_000, 180.0), (4_000, 170.0)]);
+        assert!(ring.iter().all(|q| q[1] >= -4_000.0 - 1.0), "nothing south of the south kerb: {ring:?}");
+        assert!(ring.iter().all(|q| q[0] <= 1.0), "nothing east of where the side street's kerbs leave it: {ring:?}");
+    }
+
+    #[test]
+    fn where_two_streets_cross_the_shape_is_the_whole_ground_they_share_out_to_their_kerbs() {
+        // two 8 m streets crossing square: the 8 m square where their kerbs meet, not the diamond of their ends' corners
+        assert_eq!(
+            middle_of(&[(8_000, 0.0), (8_000, 90.0), (8_000, 180.0), (8_000, 270.0)]),
+            vec![[-4_000.0, -4_000.0], [-4_000.0, 4_000.0], [4_000.0, -4_000.0], [4_000.0, 4_000.0]]
+        );
+    }
+
+    #[test]
+    fn where_a_side_street_meets_a_through_street_the_shape_is_the_box_of_the_side_street_across_it() {
+        // a 12 m street east-west, a 4 m one off it to the north: 4 m along the through street, all of it across
+        assert_eq!(
+            middle_of(&[(12_000, 0.0), (4_000, 90.0), (12_000, 180.0)]),
+            vec![[-2_000.0, -6_000.0], [-2_000.0, 6_000.0], [2_000.0, -6_000.0], [2_000.0, 6_000.0]]
+        );
+    }
+
+    #[test]
+    fn where_streets_meet_at_a_sharp_angle_the_shape_goes_no_further_than_twice_the_widest_half_width() {
+        let ring = middle_of(&[(8_000, 0.0), (8_000, 10.0), (8_000, 180.0)]);
+        assert!(ring.iter().all(|q| q[0].hypot(q[1]) <= 2.0 * 4_000.0 * 2f64.sqrt() + 1.0), "{ring:?}");
+        assert!(ring.iter().any(|q| q[0] > 4_000.0), "it reaches into the sharp angle: {ring:?}");
     }
 
     #[test]
