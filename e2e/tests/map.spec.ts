@@ -71,7 +71,10 @@ const streetSpots = (page: Page) =>
     for (const f of map.queryRenderedFeatures({ layers: ["places-street"] })) {
       const hot = f.properties.hot;
       if (seen.has(hot) || f.geometry.type !== "LineString") continue;
-      for (const c of f.geometry.coordinates) {
+      // its points and the middles of its segments: a short street's ends both lie on a junction's ground
+      const cs: number[][] = f.geometry.coordinates;
+      const along = [...cs, ...cs.slice(1).map((c, i) => [(c[0] + cs[i][0]) / 2, (c[1] + cs[i][1]) / 2])];
+      for (const c of along) {
         const p = map.project(c);
         const x = r.left + p.x;
         const y = r.top + p.y;
@@ -83,7 +86,7 @@ const streetSpots = (page: Page) =>
         ];
         const there = new Set(
           map
-            .queryRenderedFeatures(box, { layers: ["places-junction", "places-street"] })
+            .queryRenderedFeatures(box, { layers: ["places-junction-hit", "places-ground", "places-street"] })
             .map((g: any) => g.properties.hot),
         );
         if (there.size !== 1 || !there.has(hot)) continue;
@@ -114,7 +117,8 @@ test.describe("the city map", () => {
     const kinds = await page.evaluate(() => [
       ...new Set((window as any).cityloomMap.querySourceFeatures("places").map((f: any) => f.geometry.type)),
     ]);
-    expect(kinds.sort()).toEqual(["LineString", "Point"]);
+    // streets, junctions and the discs where two streets meet, and the shapes where three or more do
+    expect(kinds.sort()).toEqual(["LineString", "Point", "Polygon"]);
   });
 
   test("has no list of places and no left panel: the map runs to the edge of the window", async ({ page }) => {
@@ -152,6 +156,66 @@ test.describe("the city map", () => {
     expect(page.url()).toBe(here);
     await page.mouse.click(spot.x, spot.y);
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}&project=first$`));
+  });
+
+  test("just past a junction's press target the pointer is on the street, so a short street between two can be reached", async ({
+    page,
+  }) => {
+    await mapStill(page);
+    // a spot on a street a few pixels past where its junction's target ends, within a pointer's reach of it
+    const spot = await page.evaluate(() => {
+      const map = (window as any).cityloomMap;
+      const r = map.getCanvas().getBoundingClientRect();
+      const at = (layer: string, x: number, y: number, reach = 0) =>
+        map
+          .queryRenderedFeatures(
+            [
+              [x - reach, y - reach],
+              [x + reach, y + reach],
+            ],
+            { layers: [layer] },
+          )
+          .map((f: any) => f.properties.hot);
+      // the junction is pressed on its target and on its ground where that is a shape
+      const junction = (px: number, py: number) => [
+        ...at("places-junction-hit", px, py),
+        ...at("places-ground", px, py),
+      ];
+      for (const j of map.queryRenderedFeatures({ layers: ["places-junction-hit"] })) {
+        const c = map.project(j.geometry.coordinates);
+        for (const s of map.queryRenderedFeatures({ layers: ["places-street"] })) {
+          if (s.geometry.type !== "LineString") continue;
+          const cs = s.geometry.coordinates.map((q: number[]) => map.project(q));
+          for (const [end, next] of [
+            [cs[0], cs[1]],
+            [cs[cs.length - 1], cs[cs.length - 2]],
+          ]) {
+            if (Math.hypot(end.x - c.x, end.y - c.y) > 1) continue;
+            const len = Math.hypot(next.x - end.x, next.y - end.y);
+            const [ux, uy] = [(next.x - end.x) / len, (next.y - end.y) / len];
+            for (let d = 1; d < len - 4; d++) {
+              const [x, y] = [end.x + ux * d, end.y + uy * d];
+              if (junction(x, y).includes(j.properties.hot)) continue;
+              const [px, py] = [x + ux * 2, y + uy * 2]; // past the target's edge
+              const street = at("places-street", px, py);
+              if (street.length !== 1 || street[0] !== s.properties.hot) break;
+              if (junction(px, py).length) break;
+              if (px < 8 || py < 8 || px > r.width - 8 || py > r.height - 8) break;
+              if (document.elementFromPoint(r.left + px, r.top + py) !== map.getCanvas()) break;
+              if (!at("places-junction-hit", px, py, 6).length) break; // the case a reach round the pointer took
+              return { x: r.left + px, y: r.top + py, street: s.properties.hot, junction: j.properties.hot };
+            }
+          }
+        }
+      }
+      return null;
+    });
+    expect(spot, "a street running on past a junction's target").not.toBeNull();
+    await page.mouse.move(spot!.x, spot!.y);
+    const hot = (id: string) =>
+      page.evaluate((id) => (window as any).cityloomMap.getFeatureState({ source: "places", id }).hot === true, id);
+    await expect.poll(() => hot(spot!.street)).toBe(true);
+    expect(await hot(spot!.junction)).toBe(false);
   });
 
   test("a press on a place opens the details where they were closed, and says the place over the notes' own words", async ({
@@ -631,8 +695,8 @@ async function openProgrammeStreet(page: Page, minM: number) {
 }
 
 /** Adds a 6 m parking-lane use (a patio) to the right curbside strip. With `spacerM`, a tree of that length goes
- *  first, so the patio starts away from the street's end: a use there lies under the junction's disc (the layers
- *  are below `places-junction`, as the street's own line is), so a press on it opens the junction, not the street. */
+ *  first, so the patio starts away from the street's end: a use there lies on the junction's ground (its press
+ *  targets, `places-junction-hit` and `places-ground`, come first), so a press on it opens the junction, not the street. */
 async function addPatio(page: Page, spacerM = 0) {
   const cells = page.locator("#curb-strip-right").locator('[role="option"]');
   let count = 1;
@@ -931,7 +995,16 @@ const curbsideSpot = (page: Page) =>
             [p.x - 6, p.y - 6],
             [p.x + 6, p.y + 6],
           ],
-          { layers: ["places-junction", "places-street", "stops-dot", "stops-platform", "curbside-fill"] },
+          {
+            layers: [
+              "places-junction-hit",
+              "places-ground",
+              "places-street",
+              "stops-dot",
+              "stops-platform",
+              "curbside-fill",
+            ],
+          },
         );
         if (
           there.every((g: any) => g.properties.hot === f.properties.hot) &&

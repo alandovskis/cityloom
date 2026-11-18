@@ -369,6 +369,9 @@ pub struct MapVm {
     viewport: Cell<Option<[f64; 4]>>,
     /// The places the open view makes editable, as last sent to the map; `None` until there is a view.
     editable: RefCell<Option<Vec<String>>>,
+    /// The shapes where streets meet and their streets (`overlay::meetings`), for the city view they were made from:
+    /// the view changes with the city, not with every move of the map.
+    meetings: RefCell<Option<(Rc<CityView>, Rc<Vec<(String, Vec<String>)>>)>>,
     /// The curbside uses and the stops as last sent to the map, as (layers, data): they are sent only when they change.
     sent_curbside: RefCell<(String, String)>,
     sent_stops: RefCell<(String, String)>,
@@ -447,6 +450,7 @@ impl MapVm {
             moved: Cell::new(false),
             viewport: Cell::new(None),
             editable: RefCell::new(None),
+            meetings: RefCell::new(None),
             sent_curbside: RefCell::new((String::new(), String::new())),
             sent_stops: RefCell::new((String::new(), String::new())),
             hot: ArcRwSignal::new(None),
@@ -1310,6 +1314,18 @@ impl MapVm {
         self.editable.borrow().as_ref().is_none_or(|set| set.iter().any(|h| h == hot))
     }
 
+    /// The shapes where streets meet in `city` and their streets, made once for each city view.
+    fn meetings_of(&self, city: &Rc<CityView>) -> Rc<Vec<(String, Vec<String>)>> {
+        if let Some((at, made)) = &*self.meetings.borrow()
+            && Rc::ptr_eq(at, city)
+        {
+            return made.clone();
+        }
+        let made = Rc::new(overlay::meetings(city));
+        *self.meetings.borrow_mut() = Some((city.clone(), made.clone()));
+        made
+    }
+
     /// Tells the map which places the open view makes editable, when that is not what it was last told.
     fn sync_editable(&self) {
         let Some(view) = self.viewport.get() else { return };
@@ -1317,7 +1333,8 @@ impl MapVm {
         if self.canvas.get_untracked() != CanvasState::Ready {
             return;
         }
-        let now = editable::editable(&overlay::place_boxes(&self.core.view_now(), &projection), view);
+        let city = self.core.view_now();
+        let now = editable::with_meetings(editable::editable(&overlay::place_boxes(&city, &projection), view), &self.meetings_of(&city));
         if self.editable.borrow().as_ref() == Some(&now) {
             return;
         }
@@ -2290,8 +2307,6 @@ mod tests {
 
     /// `area_vm_all`, after `before` has changed the stored city.
     fn area_vm_over(before: impl FnOnce(&CityStore)) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
-        let (ports, said, storage) = test_ports();
-        let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id: u32, x_m, y_m| Junction {
             id: NodeId(id),
             provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
@@ -2313,6 +2328,16 @@ mod tests {
                 points: vec![Point::new(0.0, 0.0), Point::new(80.0, 0.0), Point::new(100.0, 50.0)],
             }],
         };
+        vm_on(network, before, test_ports())
+    }
+
+    /// A map view-model over `network`, kept for Bendville and opened there, after `before` has changed the stored city.
+    fn vm_on(
+        network: Network,
+        before: impl FnOnce(&CityStore),
+        (ports, said, storage): (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>),
+    ) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        let area = Area::new("Bendville", 45.5, -73.6);
         let stored = CityStore::for_area(storage.clone(), area.clone());
         assert!(stored.keep_network(&network));
         before(&stored);
@@ -2360,6 +2385,49 @@ mod tests {
         assert!(mapper.take().is_empty(), "the same set is not sent again");
         mapper.say(MapEvent::View { bounds: clipping(b) });
         assert_eq!(mapper.take(), vec![MapCall::Editable(vec![])]);
+    }
+
+    #[test]
+    fn where_three_streets_meet_the_shape_between_them_is_editable_with_all_of_them_and_not_with_one_cut() {
+        // three streets from one node not marked a junction, east, north and west, 100 m each
+        let node = |id: u32, x_m, y_m| Junction {
+            id: NodeId(id),
+            provenance: Provenance::of_nodes([NodeRef::new(id as i64)]),
+            position: Point::new(x_m, y_m),
+            junction: false,
+            control: Control::None,
+        };
+        let lane = |way| Lane { kind: LaneKind::Driving, direction: way, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
+        let arm = |id: u32, x_m: f64, y_m: f64| Road {
+            edge: Edge { id: RoadId(id), from: NodeId(1), to: NodeId(id) },
+            provenance: Provenance::of_ways([WayRef::new(id as i64 + 10)]),
+            name: format!("Arm {id}"),
+            road_type: RoadType::Local,
+            zones: vec![Zone::whole(vec![lane(Direction::Forward), lane(Direction::Backward)])],
+            points: vec![Point::new(0.0, 0.0), Point::new(x_m, y_m)],
+        };
+        let network = Network {
+            left_hand: false,
+            corridors: vec![],
+            junctions: vec![node(1, 0.0, 0.0), node(2, 100.0, 0.0), node(3, 0.0, 100.0), node(4, -100.0, 0.0)],
+            roads: vec![arm(2, 100.0, 0.0), arm(3, 0.0, 100.0), arm(4, -100.0, 0.0)],
+        };
+        let (vm, mapper, ..) = vm_on(network, |_| {}, test_ports());
+        mapper.say(COVERING);
+        mapper.take();
+        let city = vm.core.view_now();
+        let [(meeting, streets)] = &overlay::meetings(&city)[..] else { panic!("one meeting: {:?}", overlay::meetings(&city)) };
+        assert_eq!(streets.len(), 3);
+        let boxes = overlay::place_boxes(&city, &vm.projection().unwrap());
+        let all = boxes.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |[w, s, e, n], (_, b)| [w.min(b[0]), s.min(b[1]), e.max(b[2]), n.max(b[3])]);
+        mapper.say(MapEvent::View { bounds: around(all) });
+        let sent = mapper.take();
+        assert!(matches!(&sent[..], [MapCall::Editable(ids)] if ids.contains(meeting) && streets.iter().all(|s| ids.contains(s))), "{sent:?}");
+        // the east street cut by the view: it is muted, and the shape under its end with it
+        let cut = [all[0] - 1.0, all[1] - 1.0, (all[0] + all[2]) / 2.0 + (all[2] - all[0]) / 4.0, all[3] + 1.0];
+        mapper.say(MapEvent::View { bounds: cut });
+        let sent = mapper.take();
+        assert!(matches!(&sent[..], [MapCall::Editable(ids)] if !ids.contains(meeting) && ids.len() == 2), "{sent:?}");
     }
 
     #[test]
