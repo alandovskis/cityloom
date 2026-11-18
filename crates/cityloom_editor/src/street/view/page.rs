@@ -18,6 +18,7 @@ use crate::street::model::{CalmingKind, GreenForm, GreenKind, SegView, StopKind,
 use crate::street::model::{CalmingKindExt, GreenKindExt, StopKindExt};
 use crate::street::vm::StreetVm;
 use crate::street::vm::add_menu::insert_index;
+use crate::street::vm::keys::menu_step;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;
 
@@ -344,20 +345,6 @@ pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f
     let left = button_left.clamp(MARGIN, (window_w - width - MARGIN).max(MARGIN));
     let top = (button_bottom + MARGIN).min(window_h - MIN_HEIGHT - MARGIN).max(MARGIN);
     MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
-}
-
-/// Where the arrow, Home and End keys take the focus in a list of `len` items, given the item that has it (if
-/// any): down and up wrap round, with nothing focused down goes to the first and up to the last. `None` for any
-/// other key and for an empty list.
-pub fn menu_step(key: &str, at: Option<usize>, len: usize) -> Option<usize> {
-    let last = len.checked_sub(1)?;
-    match key {
-        "ArrowDown" => Some(at.map_or(0, |a| (a + 1) % len)),
-        "ArrowUp" => Some(at.map_or(last, |a| (a + last) % len)),
-        "Home" => Some(0),
-        "End" => Some(last),
-        _ => None,
-    }
 }
 
 /// What the two menus (Add and Transform) share: the open flag, the button, the list and the selector of
@@ -942,32 +929,6 @@ pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
 mod tests {
     use super::*;
     use crate::street::model::Editor;
-
-    #[test]
-    fn the_arrows_home_and_end_move_the_focus_through_a_list_and_wrap_round() {
-        assert_eq!(menu_step("ArrowDown", Some(0), 3), Some(1));
-        assert_eq!(menu_step("ArrowDown", Some(2), 3), Some(0));
-        assert_eq!(menu_step("ArrowUp", Some(2), 3), Some(1));
-        assert_eq!(menu_step("ArrowUp", Some(0), 3), Some(2));
-        assert_eq!(menu_step("Home", Some(2), 3), Some(0));
-        assert_eq!(menu_step("End", Some(0), 3), Some(2));
-        // Nothing focused yet: down enters at the first, up at the last.
-        assert_eq!(menu_step("ArrowDown", None, 3), Some(0));
-        assert_eq!(menu_step("ArrowUp", None, 3), Some(2));
-        assert_eq!(menu_step("Home", None, 3), Some(0));
-        assert_eq!(menu_step("End", None, 3), Some(2));
-        // One item: every key stays on it.
-        assert_eq!(menu_step("ArrowDown", Some(0), 1), Some(0));
-        assert_eq!(menu_step("ArrowUp", Some(0), 1), Some(0));
-        // An empty list has nowhere to go.
-        for k in ["ArrowDown", "ArrowUp", "Home", "End"] {
-            assert_eq!(menu_step(k, None, 0), None, "{k}");
-        }
-        // Other keys are not the menu's.
-        for k in ["Enter", "Tab", "a", "ArrowLeft", "Escape"] {
-            assert_eq!(menu_step(k, Some(1), 3), None, "{k}");
-        }
-    }
 
     #[test]
     fn the_menu_opens_under_its_button_and_never_leaves_the_window() {
