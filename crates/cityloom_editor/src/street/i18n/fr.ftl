@@ -848,3 +848,7 @@ goal-conflict-greenway-through-buses = une voie verte n’a pas de voie d’auto
 goal-conflict-pedestrian-through-buses = une rue piétonne coupe les autobus qui l’empruntent.
 goal-conflict-school-school-buses = la voie partagée n’a pas la place d’une voie d’autobus.
 goal-conflict-bus-corridor-buses-school = la voie d’autobus à la bordure est l’endroit où les parents arrêtent pour déposer les enfants.
+
+add-stops-no-lane = Les arrêts demandent une voie où un autobus peut s’arrêter dans cette rue.
+add-green-no-host = Les arbres et les plantations demandent un élément hors de la chaussée, comme un trottoir.
+green-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arbres ni de plantations.

@@ -848,3 +848,7 @@ goal-conflict-greenway-through-buses = a greenway has no bus lane and is not bui
 goal-conflict-pedestrian-through-buses = a pedestrian street cuts the buses that use it.
 goal-conflict-school-school-buses = the shared lane has no room for a bus lane.
 goal-conflict-bus-corridor-buses-school = the bus lane at the curb is where parents stop to drop children off.
+
+add-stops-no-lane = Stops need a lane a bus can stop in on this street.
+add-green-no-host = Trees and planting need a piece off the roadway, such as a sidewalk.
+green-refused-no-anchor = Both ends of this street are cut by the edge of the map, so trees and planting cannot be placed along it.

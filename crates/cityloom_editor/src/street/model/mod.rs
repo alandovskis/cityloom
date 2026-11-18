@@ -45,6 +45,7 @@ mod green;
 mod map_uses;
 mod stop;
 mod stop_end;
+mod unavailable;
 pub use calming::{
     CALMING_JUNCTION_CLEAR_MM, CALMING_STOP_CLEAR_MM, CHICANE_HEIGHT_MM, CHICANE_WIDTH_MM, CalmingExt, CalmingKindExt, CalmingRefusal, DEFAULT_TABLE_MM,
     FILTER_HEIGHT_MM, MAX_TABLE_SPEED_KMH, MIN_PLATEAU_MM, MIN_TABLE_MM, RAMP_MM, TABLE_HEIGHT_MM,
@@ -59,6 +60,7 @@ pub use green::{GreenCell, GreenExt, GreenForm, GreenKindExt, GreenRefusal, Gree
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, StopCell, StopKindExt, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
+pub use unavailable::Unavailable;
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -1341,6 +1343,7 @@ impl Editor {
             calming_shown: self.calming_shown(),
             green_shown: self.green_shown(),
             green: self.green_row(),
+            unavailable: self.unavailable(),
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
                 .into_iter()
@@ -1754,6 +1757,8 @@ pub struct View {
     pub green_shown: Vec<ShownGreen>,
     /// The Green row: every tree and planting along the street.
     pub green: GreenRowView,
+    /// Why stops, traffic calming and green cannot be added to the street as it is.
+    pub unavailable: Unavailable,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.
