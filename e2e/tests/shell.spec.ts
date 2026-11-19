@@ -327,8 +327,14 @@ for (const p of NOTICE_PAGES) {
           `the notice ${JSON.stringify(box)} covers a panel ${JSON.stringify(covered)}`,
         ).toBe(false);
       }
-      await notice.getByRole("button", { name: "Dismiss" }).click();
+      await notice.getByRole("button", { name: "Dismiss" }).press("Enter");
       await expect(notice).toHaveCount(0);
+      // a keyboard user keeps their place: focus goes to the drawing or the page's main, not back to the top
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.matches("#wrap, main") ?? false), {
+          message: "focus after Dismiss",
+        })
+        .toBe(true);
       await page.reload();
       await expect(page.locator(p.ready).first()).toBeAttached();
       await expect(notice).toHaveCount(0);

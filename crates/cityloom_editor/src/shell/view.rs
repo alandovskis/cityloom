@@ -69,13 +69,32 @@ pub fn EditsClearedNotice(vm: Rc<ShellVm>) -> impl IntoView {
                     view! {
                         <p class="shell-notice" role="status">
                             {i18n.tr("shell-edits-cleared", &Args::new())}
-                            <button type="button" on:click=move |_| vm.get_value().dismiss_edits_cleared()>
+                            <button
+                                type="button"
+                                on:click=move |_| {
+                                    vm.get_value().dismiss_edits_cleared();
+                                    focus_after_notice();
+                                }
+                            >
                                 {dismiss}
                             </button>
                         </p>
                     }
                 })
         }}
+    }
+}
+
+/// Where focus goes once the notice is closed, so a keyboard user keeps their place rather than starting again from
+/// the top of the page: the drawing (`#wrap`) where the page has one, else the page's `main`, which is made focusable
+/// from script only (`tabindex="-1"`) when it is not already.
+fn focus_after_notice() {
+    let target = by_id("wrap").or_else(|| document().query_selector("main").ok().flatten());
+    if let Some(el) = target.and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        if !el.has_attribute("tabindex") {
+            el.set_tab_index(-1);
+        }
+        let _ = el.focus();
     }
 }
 
