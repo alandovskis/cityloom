@@ -328,7 +328,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
-        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters 16 with scenarios and 17 with the import stamp.
+        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios
+        // and 17 with the import stamp.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
