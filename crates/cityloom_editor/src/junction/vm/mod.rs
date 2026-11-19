@@ -45,6 +45,12 @@ pub struct JunctionVm {
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
 type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 
+/// What an edit's announcement compares with afterwards, taken before it: what met in the plan and the calls' findings.
+struct Before {
+    meetings: Vec<Meeting>,
+    findings: Vec<crate::shared::said::Said>,
+}
+
 /// Whether an edit says which phases it took off their ready-made pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PatternNote {
@@ -192,7 +198,7 @@ impl JunctionVm {
             return R::default();
         }
         let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
-        let meeting = self.meetings();
+        let meeting = self.before();
         let r = self.edit(f);
         if r.into() {
             let lost = self.lost_since(before);
@@ -268,7 +274,7 @@ impl JunctionVm {
             self.say_refusal();
             return false;
         };
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
         if done {
             let lost: Vec<usize> = match pattern() {
@@ -297,12 +303,14 @@ impl JunctionVm {
     /// An edit of a crossing's calls: the edit's text and then the crossing's calls added up, or the refusal. It changes
     /// no phase, so nothing about the plan's conflicts or patterns is said.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        let (meeting, edits) = (self.before(), self.read(|j| j.revisions().count()));
         let done = self.edit(f);
-        if done {
+        // A rate it had already is no edit: nothing was done, so nothing is said (the last edit is some other one).
+        if done && self.read(|j| j.revisions().count()) != edits {
             let v = self.view_now();
             let edit = text::edit_text(&v, &self.i18n, self.units_now());
-            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)));
-        } else {
+            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&meeting)));
+        } else if !done {
             self.say_refusal();
         }
         done
@@ -339,7 +347,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.undo());
         if done {
             self.say_with_meetings(self.i18n.tr_now("jn-undone", &Args::new()), &meeting);
@@ -351,7 +359,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.redo());
         if done {
             self.say_edit_with(&[], &meeting);
@@ -363,7 +371,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.reset());
         if done {
             self.say_with_meetings(self.i18n.tr_now("jn-started-over", &Args::new()), &meeting);
@@ -422,20 +430,39 @@ impl JunctionVm {
 
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
     /// phase (from 0) the edit took off its ready-made pattern.
-    fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
+    fn say_edit_with(&self, lost: &[usize], meeting: &Before) {
         if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.say_parts(std::iter::once(t).chain(self.notes(meeting, lost)));
         }
     }
 
     /// Says `text`, then the sentence for the movements that meet now and did not before.
-    fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
-        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)));
+    fn say_with_meetings(&self, text: String, meeting: &Before) {
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(meeting)));
     }
 
-    /// The sentences that follow an edit's text: the movements that now meet, then the phases off their pattern.
-    fn notes(&self, meeting: &[Meeting], lost: &[usize]) -> Vec<String> {
-        self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)).collect()
+    /// The sentences that follow an edit's text: the movements that now meet, the crossings on call it left unserved,
+    /// then the phases off their pattern.
+    fn notes(&self, meeting: &Before, lost: &[usize]) -> Vec<String> {
+        self.meeting_note(meeting).into_iter().chain(self.findings_note(meeting)).chain(self.lost_note(lost)).collect()
+    }
+
+    /// What an edit is compared against afterwards: the movements that met and the calls' findings before it.
+    fn before(&self) -> Before {
+        Before { meetings: self.meetings(), findings: self.findings() }
+    }
+
+    /// The findings of the pedestrian calls now (`jn-calls-finding-unwalked`, `jn-calls-finding-cannot`).
+    fn findings(&self) -> Vec<crate::shared::said::Said> {
+        self.view_now().signal.as_ref().map(|s| s.calls.findings.clone()).unwrap_or_default()
+    }
+
+    /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
+    /// already is not said again. None when none arose.
+    fn findings_note(&self, before: &Before) -> Option<String> {
+        let new: Vec<String> =
+            self.findings().into_iter().filter(|f| !before.findings.contains(f)).map(|f| say_now(&self.i18n, self.units_now(), &f)).collect();
+        (!new.is_empty()).then(|| new.join(" "))
     }
 
     /// Announces the parts as one text.
@@ -450,9 +477,9 @@ impl JunctionVm {
 
     /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
     /// phases (and the first of them) when there are several. None when none arose (one that was there already is not said again).
-    fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
+    fn meeting_note(&self, before: &Before) -> Option<String> {
         let v = self.view_now();
-        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
+        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.meetings.iter().any(|(_, u, b)| u == uid && b == c)).collect();
         let (first, rest) = new.split_first()?;
         let first_said = say_now(&self.i18n, self.units_now(), &crate::junction::model::read_model::conflict_said(first.0, &first.2, &v.arms));
         if rest.is_empty() {
@@ -530,7 +557,7 @@ impl crate::shell::Target for JunctionVm {
             return false;
         }
         let before = self.pattern_state();
-        let meeting = self.meetings();
+        let meeting = self.before();
         let changed = self.edit(|j| j.set_region(region));
         if changed {
             let notes = self.notes(&meeting, &self.lost_since(before));
@@ -782,6 +809,43 @@ mod tests {
         fr.edit(|j| j.set_plan_for_test(only_east));
         assert!(!fr.set_on_call(n, true));
         assert_eq!(said.take(), vec!["Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel\u{a0}: ouvrez-le d’abord dans une phase."]);
+    }
+
+    #[test]
+    fn a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit() {
+        let r = rig(0);
+        let e = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+        assert!(r.vm.set_on_call(e, true));
+        r.said.take();
+        assert!(r.vm.set_call_rate(e, 12), "the rate it has: not refused");
+        assert!(r.said.take().is_empty(), "no revision was added, so nothing is said");
+    }
+
+    #[test]
+    fn a_signal_edit_that_leaves_a_crossing_on_call_unwalked_says_so_in_both_languages() {
+        for (locale, words) in [
+            (crate::shared::i18n::Locale::En, "The crossing of Sample Street 1 (east) is on call, but no phase walks it"),
+            (crate::shared::i18n::Locale::FrCa, "Le passage de Sample Street 1 (est) est sur appel, mais aucune phase ne l’ouvre"),
+        ] {
+            let (ports, said, _, _) = test_ports_with_time();
+            let vm = JunctionVm::new(ports, crate::i18n_for(locale), Junction::new(0), None);
+            let e = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+            assert!(vm.set_on_call(e, true));
+            let walking: Vec<usize> = vm.read(|j| {
+                let plan = crate::junction::model::signal::plan(j.current(), j.region).unwrap();
+                (0..plan.phases.len()).filter(|&i| plan.phases[i].walks.contains(&e)).collect()
+            });
+            let (last, rest) = walking.split_last().unwrap();
+            for &i in rest {
+                assert!(vm.toggle_phase_walk(i, e));
+            }
+            said.take();
+            assert!(vm.toggle_phase_walk(*last, e));
+            let t = said.take();
+            assert!(t[0].contains(words), "{t:?}");
+            // Walked again: no finding, so nothing of it is said.
+            assert!(vm.toggle_phase_walk(*last, e) && !said.take()[0].contains(words));
+        }
     }
 
     #[test]
