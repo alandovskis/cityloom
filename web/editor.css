@@ -3536,6 +3536,10 @@ svg pattern circle {
   overflow-x: auto;
   margin-top: 8px;
 }
+/* A crossing's name keeps a few words a line; the box scrolls sideways instead (it is a focusable region). */
+.calls-table th[scope="row"] {
+  min-width: 9em;
+}
 .calls-table caption {
   padding-bottom: 4px;
   text-align: start;

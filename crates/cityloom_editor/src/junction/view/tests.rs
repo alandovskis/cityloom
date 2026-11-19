@@ -459,6 +459,16 @@ fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_pla
     assert!(calls.contains("On call: walk 7 s + clearance "), "{calls}");
     assert_eq!(calls.matches("On recall:").count(), 3);
     assert!(calls.contains(r#"id="calls-totals""#) && calls.contains("Longest wait") && !calls.contains(r#"id="calls-none""#));
+    // Each table scrolls in a box the keys reach, named by its caption (a narrow panel cannot show every column).
+    for caption in ["calls-totals-caption", "calls-rows-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = calls.find(&labelled).unwrap_or_else(|| panic!("{caption}: {calls}"));
+        let tag = &calls[calls[..at].rfind("<div").unwrap()..at + calls[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+        assert!(calls.contains(&format!(r#"<caption id="{caption}">"#)), "{caption}: {calls}");
+    }
     assert!(calls.contains(r#"id="calls-rows""#) && calls.contains("Every call, one row each (12)"), "{calls}");
     let rows = &calls[calls.find(r#"id="calls-rows""#).unwrap()..];
     assert_eq!(rows.matches("<tr>").count(), 13, "a heading row and one per call");

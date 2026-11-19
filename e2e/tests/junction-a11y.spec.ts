@@ -248,6 +248,82 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
     await expect(page.locator("#calls-rows tbody tr").first()).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
+
+  /** How each table of the calls sits in the details panel: whether its box stays inside the panel, whether the table
+   *  is wider than its box and, if so, whether the box scrolls and is a labelled region the keys reach; whether each
+   *  column comes into view as the box is scrolled to it; and how wide the row headers (the crossings' names) are. */
+  async function callTables(page: Page) {
+    return page.evaluate(() =>
+      [...document.querySelectorAll<HTMLTableElement>("#signal-calls table")].map((table) => {
+        const panel = document.querySelector("#details-panel")!.getBoundingClientRect();
+        const box = (table.closest(".calls-table") as HTMLElement | null) ?? table.parentElement!;
+        const scrolls = box.scrollWidth > box.clientWidth + 1;
+        const overflow = getComputedStyle(box).overflowX;
+        const named = !!(box.getAttribute("aria-label") || box.getAttribute("aria-labelledby"));
+        const reachable = box.getAttribute("tabindex") === "0" && box.getAttribute("role") === "region" && named;
+        const b = box.getBoundingClientRect();
+        const inPanel = b.left >= panel.left - 0.5 && b.right <= panel.right + 0.5;
+        const unseen: string[] = [];
+        for (const th of table.querySelectorAll<HTMLElement>("thead th")) {
+          th.scrollIntoView({ block: "nearest", inline: "nearest" });
+          const r = th.getBoundingClientRect();
+          const c = box.getBoundingClientRect();
+          if (r.left < c.left - 0.5 || r.right > c.right + 0.5) unseen.push(th.innerText);
+        }
+        box.scrollLeft = 0;
+        const rowHeader = table.querySelector<HTMLElement>("tbody th")!.getBoundingClientRect().width;
+        return {
+          id: table.id || "rows",
+          inPanel,
+          scrolls,
+          scrollable: overflow === "auto" || overflow === "scroll",
+          reachable,
+          unseen,
+          rowHeader,
+        };
+      }),
+    );
+  }
+
+  for (const width of [1440, 280]) {
+    test(`at ${width} px every column of the calls' tables can be read in the panel, in English and French`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      // The fourth junction: four crossings, one too long to serve, so the totals have four rows and a finding.
+      await openJunction(page, 3);
+      await expect(page.locator("#drawing")).toBeVisible();
+      await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+      await page.locator("#jn-go-plan").click();
+      for (const box of await page.locator(".call-crossing input[type=checkbox]").all()) await box.click();
+      await expect(page.locator("#calls-totals tbody tr")).not.toHaveCount(0);
+      await page.locator("#calls-rows summary").click();
+      for (const lang of ["English", "Français"]) {
+        if (lang === "Français") {
+          await page.locator("#account-btn").click();
+          await page.getByRole("button", { name: "Français" }).click();
+          await expect(page.locator("#signal-calls")).toContainText("Appels piétons");
+          await page.keyboard.press("Escape");
+        }
+        const tables = await callTables(page);
+        expect(tables.length, lang).toBe(2);
+        for (const t of tables) {
+          expect(t.inPanel, `${lang} ${t.id}: its box stays inside the panel`).toBe(true);
+          expect(t.unseen, `${lang} ${t.id}: columns that cannot be brought into view`).toEqual([]);
+          if (t.scrolls) {
+            expect(
+              t.scrollable && t.reachable,
+              `${lang} ${t.id}: wider than its box, so the box scrolls and is a labelled region the keys reach`,
+            ).toBe(true);
+          }
+          expect(t.rowHeader, `${lang} ${t.id}: a crossing's name is not one word a line`).toBeGreaterThanOrEqual(110);
+        }
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+          .toBe(true);
+      }
+    });
+  }
 });
 
 test.describe("the drawing's label, focus and colours", () => {

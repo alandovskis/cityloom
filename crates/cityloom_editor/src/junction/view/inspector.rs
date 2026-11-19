@@ -1800,9 +1800,10 @@ fn calls_section(w: Watch) -> impl IntoView {
                 })
                 .collect_view();
             view! {
-                <div class="calls-table">
+                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
+                <div class="calls-table" role="region" tabindex="0" aria-labelledby="calls-totals-caption">
                     <table class="nt" id="calls-totals">
-                        <caption>{words(w, "jn-calls-totals-caption")}</caption>
+                        <caption id="calls-totals-caption">{words(w, "jn-calls-totals-caption")}</caption>
                         <thead>
                             <tr>
                                 <th scope="col">{words(w, "jn-calls-col-crossing")}</th>
@@ -1839,9 +1840,9 @@ fn calls_section(w: Watch) -> impl IntoView {
             view! {
                 <details class="jn-fold" id="calls-rows">
                     <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n as i64))}</summary>
-                    <div class="calls-table">
+                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="calls-rows-caption">
                         <table class="nt">
-                            <caption>{words(w, "jn-calls-rows-caption")}</caption>
+                            <caption id="calls-rows-caption">{words(w, "jn-calls-rows-caption")}</caption>
                             <thead>
                                 <tr>
                                     <th scope="col">{words(w, "jn-calls-col-crossing")}</th>
