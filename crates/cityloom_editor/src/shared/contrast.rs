@@ -619,4 +619,42 @@ mod tests {
         assert!(rule(home, ".btn.danger").contains("border-color: var(--map-bad);"));
         assert!(rule(home, ".project-create-go").contains("color: var(--accent-ink);"));
     }
+
+    /// The plan's two-tone lines, `(line, casing)`, each pair 3:1 to itself and, by one of its two tones, against
+    /// every material a band is drawn in and the panel the things beside the bands lie on, in both themes (the
+    /// tones, like the materials, are one colour in either theme).
+    fn two_tones_hold_on_the_plan(line: &str, casing: &str) {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let (line, casing) = (token(editor, line).0.unwrap(), token(editor, casing).0.unwrap());
+        assert!(contrast(&line, &casing) >= 3.0, "line against casing: {:.2}", contrast(&line, &casing));
+        let (panel_light, panel_dark) = token(app, "panel");
+        let mut grounds: Vec<(String, String)> =
+            crate::shared::catalogue::MATERIALS.iter().map(|m| (m.id.to_string(), token(app, &format!("mat-{}", m.id)).0.unwrap())).collect();
+        grounds.push(("panel light".to_string(), panel_light.unwrap()));
+        grounds.push(("panel dark".to_string(), panel_dark.unwrap()));
+        for (name, ground) in grounds {
+            let best = contrast(&line, &ground).max(contrast(&casing, &ground));
+            assert!(best >= 3.0, "{name}: {best:.2}");
+        }
+    }
+
+    #[test]
+    fn plan_pick_edge_has_3_to_1_on_every_band_material() {
+        two_tones_hold_on_the_plan("plan-pick-edge", "plan-pick-casing");
+        let editor = include_str!("../../../../web/editor.css");
+        for rule in [".plan-pick {", ".plan-pick-casing {", ".plan-handle {"] {
+            assert!(editor.contains(rule), "{rule}");
+        }
+        // The tint is the edge's colour, seen through.
+        assert_eq!(token(editor, "plan-pick").0, token(editor, "plan-pick-edge").0);
+    }
+
+    #[test]
+    fn the_plans_marks_have_3_to_1_on_every_band_material() {
+        two_tones_hold_on_the_plan("plan-mark", "plan-mark-casing");
+        let editor = include_str!("../../../../web/editor.css");
+        for rule in [".plan-boundary-casing,\n.plan-cut-casing {", ".plan-boundary-line,\n.plan-cut-line {", ".plan-thing-mark {"] {
+            assert!(editor.contains(rule), "{rule}");
+        }
+    }
 }

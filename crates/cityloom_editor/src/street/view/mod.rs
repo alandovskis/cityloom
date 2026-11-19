@@ -17,6 +17,7 @@ pub mod notes_tray;
 pub mod page;
 pub mod panel_path;
 pub mod piece_list;
+pub mod plan;
 pub mod speed_view;
 pub mod stop_tools;
 pub mod strip;

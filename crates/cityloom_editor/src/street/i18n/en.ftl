@@ -362,6 +362,8 @@ zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
        *[base] the base section
     }, { $n } of { $total }
 zone-cut-off = Cut off by the edge of the map
+# The plan (src/street/view/plan/): the mark on an end of the street cut by the edge of the area.
+plan-cut = Cut by the edge of the map
 
 # The piece list (src/street/view/piece_list.rs).
 st-pieces-heading = Pieces of the street

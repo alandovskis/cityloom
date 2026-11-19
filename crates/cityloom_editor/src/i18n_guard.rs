@@ -119,6 +119,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/view/iso/sign.rs", include_str!("street/view/iso/sign.rs")),
     ("src/street/view/iso/solids.rs", include_str!("street/view/iso/solids.rs")),
     ("src/street/view/iso/surface.rs", include_str!("street/view/iso/surface.rs")),
+    ("src/street/view/plan/mod.rs", include_str!("street/view/plan/mod.rs")),
+    ("src/street/view/plan/scale.rs", include_str!("street/view/plan/scale.rs")),
     ("src/shell/vm.rs", include_str!("shell/vm.rs")),
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/share_view.rs", include_str!("shell/share_view.rs")),
@@ -233,6 +235,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("hint archive-error", "two CSS classes of the design archive's refusal line"),
     ("an archive serialises", "a panic message about the code, never shown"),
     ("lit warn", "two CSS classes of a movement in a phase drawing"),
+    ("plan-thing plan-chosen", "two CSS classes of the chosen thing on the street's plan (street/view/plan/mod.rs)"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
     ("Microsoft", "a provider's brand name, not translated"),
@@ -808,6 +811,13 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("conflict-note", "the id of an element of the junction page"),
     ("data-lane", "the name of a data- attribute of a lane on the junction plan"),
     ("dead-cap", "a CSS class of the junction plan"),
+    ("plan-boundary-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-boundary-line", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-cut-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-cut-line", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-chosen-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-thing-mark", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-thing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.
