@@ -33,6 +33,8 @@ mod profile;
 mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod matching;
+mod pick;
+pub use pick::{Pick, PickRefusal, Run};
 mod replay;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
@@ -379,8 +381,13 @@ pub struct Editor {
     states: Vec<State>,
     cursor: usize,
     next_uid: u32,
-    /// The zone the edits act on. A setting, not part of the history; 0 for a street with no zones.
+    /// The zone the edits act on: the one at the pick's left end on the plan. A setting, not part of the history; 0
+    /// for a street with no zones.
     zone: usize,
+    /// The stretch the edits act on, or the whole street. A setting, not part of the history.
+    pick: Pick,
+    /// The pick as it was when the drag under way began, which cancelling the drag puts back.
+    pick_before_gesture: Pick,
     /// Where the street lies as loaded (its length and its real end), once the page knows it.
     frame: Option<ZoneFrame>,
     /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
@@ -493,6 +500,8 @@ impl Editor {
             cursor: 0,
             next_uid: now.next_uid.max(1),
             zone: 0,
+            pick: Pick::Whole,
+            pick_before_gesture: Pick::Whole,
             frame: None,
             ends: [EndInfo::default(); 2],
             selected: None,
@@ -534,24 +543,25 @@ impl Editor {
         self.green_choice = from.green_choice.chosen_only();
     }
 
-    /// Chooses the zone the edits act on. Refused when there is no such zone, or it lies beyond the loaded end. The selected piece is cleared when
-    /// the zone changes.
+    /// Chooses the zone the edits act on, picking its span. Refused when there is no such zone, or it lies beyond the
+    /// loaded end. The selected piece is cleared when the zone changes.
     pub fn select_zone(&mut self, zone: usize) -> bool {
         if zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
             return false;
         }
         if zone != self.zone {
-            self.zone = zone;
             self.selected = None;
         }
+        self.follow_zone(zone);
         true
     }
 
     /// Says where the street lies as loaded. A setting, outside the history.
     pub fn with_frame(mut self, frame: Option<ZoneFrame>) -> Editor {
         self.frame = frame;
-        if self.is_cut_off(self.zone) {
-            self.zone = 0;
+        let before = self.zone;
+        self.clamp_pick();
+        if self.zone != before {
             self.selected = None;
         }
         self
@@ -613,12 +623,8 @@ impl Editor {
         let (curb_move, stop_move, green_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved(), self.green_choice.take_moved());
         let calming_move = self.calming_choice.take_moved();
         self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move });
-        self.clamp_zone();
-    }
-
-    /// Settling can leave fewer zones than there were: the selected one falls back to the last.
-    fn clamp_zone(&mut self) {
-        self.zone = self.zone.min(self.states[self.cursor].content.zone_count() - 1);
+        // Settling can leave fewer zones than there were: the shown one is found again from the pick.
+        self.clamp_pick();
     }
 
     /// Makes the revisions since state `from` one, labelled `label`: what a command made of several edits leaves.
@@ -645,6 +651,7 @@ impl Editor {
     pub fn begin_gesture(&mut self) {
         if self.gesture.is_none() {
             self.gesture = Some(self.states[self.cursor].content.clone());
+            self.pick_before_gesture = self.pick;
             self.pending_label = None;
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
@@ -683,6 +690,9 @@ impl Editor {
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
             self.states[self.cursor].content = baseline;
+            // A boundary moved by the drag is back where it started: so is the pick that followed it.
+            self.pick = self.pick_before_gesture;
+            self.clamp_pick();
             // The use or stop is back where it started: so is the choice.
             self.curb_choice.cancel();
             self.stop_choice.cancel();
@@ -1257,14 +1267,15 @@ impl Editor {
             return false;
         }
         self.push_state(State { label: Said::new("rev-reset"), ..first });
-        self.clamp_zone();
+        self.clamp_pick();
         self.selected = None;
         true
     }
 
-    /// After the history moved: the selected zone and piece fall back when they no longer exist.
+    /// After the history moved: the pick is clamped to the street, and the selected piece falls back when it no longer
+    /// exists.
     fn reselect(&mut self) {
-        self.clamp_zone();
+        self.clamp_pick();
         if let Some(uid) = self.selected
             && !self.current().iter().any(|s| s.uid == uid)
         {

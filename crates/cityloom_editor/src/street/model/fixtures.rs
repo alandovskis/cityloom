@@ -114,6 +114,8 @@ impl Editor {
             cursor: 0,
             next_uid: 1,
             zone: 0,
+            pick: Pick::Whole,
+            pick_before_gesture: Pick::Whole,
             frame: None,
             ends: [EndInfo::default(); 2],
             selected: None,
