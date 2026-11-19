@@ -63,6 +63,7 @@ pub fn mount_page(editor: &Editor) {
     mount("title-block", view! { <view::page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <view::page::Fit vm=vm.clone()/> }.into_any());
     mount("history", view! { <view::page::History vm=vm.clone()/> }.into_any());
+    mount("scenario-slot", view! { <view::page::Scenarios vm=vm.clone()/> }.into_any());
     mount("plan-key", view! { <view::page::Key vm=vm.clone()/> }.into_any());
     mount("turns", view! { <view::turns::Turns vm=vm.clone()/> }.into_any());
     mount("inspector", view! { <view::inspector::Inspector vm=vm.clone()/> }.into_any());

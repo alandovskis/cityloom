@@ -25,6 +25,7 @@ pub mod provenance;
 pub mod random;
 pub mod said;
 pub mod scenarios;
+pub mod scenarios_view;
 pub mod scoped;
 pub mod search;
 pub mod shortcut;
