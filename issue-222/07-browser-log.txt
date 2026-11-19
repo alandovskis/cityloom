@@ -1,4 +1,4 @@
-seeded: one edit on street.html?street=1; localStorage holds 7 keys
+seeded: one edit on street.html?street=1; design and sync keys: cityloom-edits@first, cityloom-projects, cityloom-sync
 street read-only: #undo present: false
 street read-only: #redo present: false
 street read-only: #reset present: false
@@ -11,7 +11,10 @@ street read-only: tag (screen reader): This design is open read-only: you can lo
 street read-only: pressed "+": live region says: This design is open read-only: nothing can be changed.
 street read-only: pressed Ctrl+Z: live region says: This design is open read-only: nothing can be changed.; changes badge: 1
 street read-only: links on the page: ["index.html","index.html","about.html","credits.html","intersection.html?junction=1&project=first&view=1","street.html?street=140&project=first&view=1","street.html?street=2&project=first&view=1"]
+street read-only: key hint: Arrows select.
+street read-only: region menu disabled: true
 street read-only fr-CA: tag (screen reader): Cet aménagement est ouvert en lecture seule : vous pouvez le consulter, mais pas le modifier.
+street read-only fr-CA: key hint: Les flèches sélectionnent.
 intersection read-only: #undo present: false
 intersection read-only: #redo present: false
 intersection read-only: #reset present: false
@@ -19,5 +22,15 @@ intersection read-only: number fields: 2, first disabled: true
 intersection read-only: cross-section link: street.html?street=140&project=first&view=1
 intersection read-only: pressed Ctrl+Z: live region says: This design is open read-only: nothing can be changed.
 map read-only: #declare-area present: false
+map read-only: areas lead: This design has no area rules.
+map read-only: region menu disabled: false
 map read-only: first search result link: intersection.html?junction=16&project=first&view=1
-localStorage (all keys but the language) identical before and after the read-only visits: true
+map read-only: camera at start: {"zoom":15.764,"lng":-73.595071,"lat":45.52649}
+map read-only: after the zoom-in button: {"zoom":16.25,"lng":-73.595071,"lat":45.52649}
+map read-only: after ArrowRight: {"zoom":16.25,"lng":-73.594349,"lat":45.52649} (east: true)
+map read-only: after dragging 120 px right and 80 px down: {"zoom":16.25,"lng":-73.595432,"lat":45.526995} (moved: true)
+timeline read-only: link back to the map: map.html?project=first&view=1
+roads cache removed: ["cityloom-network:45.5261,-73.5978","cityloom-checksum:45.5261,-73.5978"]
+map read-only on a device without the roads: roads kept again: ["cityloom-network:45.5261,-73.5978"]
+map read-only on a device without the roads: places found: 8
+design and sync keys identical before and after the read-only visits: true

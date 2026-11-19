@@ -1,3 +1,4 @@
+# Run during the first capture, with the spec as of 65dd8b1d. Since then the spec only gained a longer timeout on the junction test (ecc5d93b) and clicks the found row instead of pressing Enter (a13fb7e0); its assertions on #read-only-tag are unchanged.
 $ git checkout --detach origin/main   # 6ee5bf907a6061e6d315ebe600f2c1c40b2b7a0d, the commit the branch starts from, without the change
 $ just build && just server && just e2e-fixtures
 $ npx playwright test (the branch's e2e/tests/read-only.spec.ts, copied unchanged)
