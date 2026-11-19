@@ -305,17 +305,11 @@ mod tests {
         let mut s = two_zones(true).snapshot();
         s.from_end = ZoneEnd::Last;
         let e = Editor::from_street(&s, &s, 0).with_frame(frame(100_000, ZoneEnd::Last));
-        let t = e.transitions().into_iter().next().expect("the sections differ").1;
         let p = plan(&e);
         assert_eq!(marks(&p), [(50_000, 1)]);
-        let taper = p.boundaries[0].taper.expect("a taper");
-        assert_eq!(taper.1 - taper.0, t.length_mm, "at its true length");
-        // Zone 0 (the near one) lies right of the boundary on the plan, zone 1 left of it.
-        let expected = match t.host {
-            Host::Near => (50_000, 50_000 + t.length_mm),
-            Host::Far => (50_000 - t.length_mm, 50_000),
-        };
-        assert_eq!(taper, expected);
+        // Zone 1, the one with a lane fewer, still hosts the 53.3 m taper; it now lies left of the boundary, so the
+        // taper runs from the boundary leftward, past the plan's left end.
+        assert_eq!(p.boundaries[0].taper, Some((-3_300, 50_000)));
     }
 
     /// The sample street, anchored at `from_end`, `LEN` long, with a parking use on the left, a stop on the right, a
