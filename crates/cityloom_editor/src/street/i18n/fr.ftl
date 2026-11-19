@@ -362,7 +362,7 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
        *[base] la coupe de base
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
-# The plan (src/street/view/plan/): the mark on an end of the street cut by the edge of the area.
+# Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
 plan-cut = Coupée par le bord de la carte
 
 # La liste des éléments (src/street/view/piece_list.rs).
