@@ -35,6 +35,8 @@ pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod matching;
 mod pick;
 pub use pick::{Pick, PickRefusal, Run};
+mod plan;
+pub use plan::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing, PlanView};
 mod replay;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
@@ -1413,8 +1415,9 @@ impl Editor {
         // Everything that measures the street does so as it is at the shown time.
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
-        let (stops, calming_strip, green) = (self.stops_view(), self.calming_strip_view(), self.green_row());
+        let (curb, stops, calming_strip, green) = (self.curb_view(), self.stops_view(), self.calming_strip_view(), self.green_row());
         let unavailable = self.unavailable_from(&stops, &calming_strip, &green);
+        let plan = self.plan_view(&curb, &stops, &calming_strip, &green);
         View {
             name: title_of(self.street_name.as_deref(), self.class()),
             class: self.class(),
@@ -1441,7 +1444,7 @@ impl Editor {
             outcomes: outcomes(&now, &existing_now),
             checks: self.street_checks(),
             zones: self.zones_view(),
-            curb: self.curb_view(),
+            curb,
             stops,
             calming: self.calming_view(),
             calming_strip,
@@ -1450,6 +1453,7 @@ impl Editor {
             calming_shown: self.calming_shown(),
             green_shown: self.green_shown(),
             green,
+            plan,
             unavailable,
             measures: self.measure_views(segs, &now),
             templates: Template::ALL
@@ -1864,6 +1868,8 @@ pub struct View {
     pub green_shown: Vec<ShownGreen>,
     /// The Green row: every tree and planting along the street.
     pub green: GreenRowView,
+    /// The plan of the whole street, first end on the left.
+    pub plan: PlanView,
     /// Why stops, traffic calming and green cannot be added to the street as it is.
     pub unavailable: Unavailable,
     /// The Atlas lane measures: which this section forms, and what each lacks.
