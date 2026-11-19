@@ -489,13 +489,15 @@ impl Run {
             return Applied::Left;
         }
         // A stale street or junction (made against a network from before the cutoff, `edits::is_stale`) is no record
-        // to keep: any copy here goes, and its removal goes up on top of the server's revision, so it is dropped there
-        // too. The entry is written on the document the caller saves (a mark would be overwritten by that save).
+        // to keep. A stamped copy here (`local::read` gives no stale one), waiting or synced, stays and goes up again on
+        // top of the server's revision, replacing the stale record there; otherwise any stale copy here goes and the
+        // removal goes up. The entry is written on the document the caller saves (a mark would be overwritten by it).
         if matches!(id.kind, Kind::Street | Kind::Junction) && !remote.deleted && remote.body.as_ref().is_some_and(crate::city::edits::is_stale) {
-            if !local::remove(storage, &id) {
+            let stamped = local::read(storage, &id).is_some();
+            if !stamped && !local::remove(storage, &id) {
                 return Applied::Failed;
             }
-            let entry = Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: true, rev: remote.rev, blocked: false };
+            let entry = Entry { edited_at: model::stamp(storage.now_ms()), pending: true, deleted: !stamped, rev: remote.rev, blocked: false };
             doc.records.insert(id.name(), entry);
             return Applied::Done;
         }

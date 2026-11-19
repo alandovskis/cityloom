@@ -15,7 +15,7 @@ Keeps a signed-in person's work on the server when they chose "Store my work on 
 
 `kind` (`street`, `junction`, `rule`, `area`, `project`, `milestone`), `key` (wire key: place key, rule id, or `current` for the area, bare for the `first` project and `<project>:<key>` for any other; a `project` record's key is the project id; max 200 chars of letters, digits, `~_.:-`), `rev` (account counter), `edited_at` (UTC to the ms, compares as text; server caps a future time at its clock), `deleted` tombstone (purged after 90 days), `body` (JSON sealed with AD `work.<kind>.<key>.<user_id>`). Keys, times, revisions are unsealed: the server matches and sorts on them.
 
-A stale street or junction record (`city::edits::is_stale`) is not listed or read; one pulled is not written and is answered with a tombstone.
+A stale street or junction record (`city::edits::is_stale`) is not listed or read; one pulled (or answering a push as `superseded`) is not written: a stamped local copy, waiting or synced, is kept and resent on top of its revision; otherwise any local copy is removed and the record answered with a tombstone.
 
 ## Projects
 

@@ -1406,3 +1406,56 @@ fn a_pulled_stamped_record_is_kept_as_before() {
     assert!(!entry.pending && !entry.deleted && entry.rev == 4, "the server's record is what this device has");
     assert!(work.calls().is_empty(), "nothing goes back");
 }
+
+/// Keeps a stamped copy of street `key` on the device, its entry waiting to be sent or synced at revision 2.
+fn stamped_copy(storage: &Rc<MemoryStorage>, key: &str, pending: bool) -> Value {
+    let root: Rc<dyn Storage> = storage.clone();
+    let mine = stamped(json!({"ways": [1], "street": {"mine": true}}));
+    assert!(local::write(&root, &street_id(key), &mine));
+    let mut doc = model::open(&**storage).unwrap();
+    let entry = model::Entry { edited_at: "2027-01-15T07:30:00.000Z".into(), pending, deleted: false, rev: 2, blocked: false };
+    doc.records.insert(street_id(key).name(), entry);
+    assert!(model::save(&**storage, &doc));
+    mine
+}
+
+/// The one push the fake was asked, as (key, deleted, base_rev, body).
+fn the_push(work: &FakeWorkSync) -> (String, bool, i64, Option<Value>) {
+    match work.calls().as_slice() {
+        [WorkCall::Push { batch, .. }] if batch.len() == 1 => (batch[0].key.clone(), batch[0].deleted, batch[0].base_rev, batch[0].body.clone()),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_pulled_stale_record_does_not_remove_a_stamped_copy_which_is_sent_over_it_waiting_or_not() {
+    for pending in [true, false] {
+        let (work, storage, vm) = pulling();
+        let mine = stamped_copy(&storage, "w1~n1~n2", pending);
+        vm.known(&ada());
+        let stale = live_street("w1~n1~n2", 4, json!({"ways": [1], "street": {"from": "an older build"}}));
+        assert!(work.answer(WorkReply::Page(Ok(WorkPage { records: vec![stale], ..page(4) }))));
+        let root: Rc<dyn Storage> = storage.clone();
+        assert_eq!(local::read(&root, &street_id("w1~n1~n2")), Some(mine.clone()), "pending {pending}: the copy is kept");
+        let entry = model::open(&*storage).unwrap().entry(&street_id("w1~n1~n2")).cloned().unwrap();
+        assert!(entry.pending && !entry.deleted, "pending {pending}");
+        assert_eq!((entry.rev, entry.edited_at), (4, model::stamp(T0)), "pending {pending}: on top of the stale revision, edited now");
+        assert_eq!(the_push(&work), ("w1~n1~n2".to_string(), false, 4, Some(mine)), "pending {pending}");
+    }
+}
+
+#[test]
+fn a_stale_record_that_supersedes_a_stamped_copy_does_not_remove_it_and_the_copy_goes_again_over_it() {
+    let (work, storage, vm) = pulling();
+    let mine = stamped_copy(&storage, "w1~n1~n2", true);
+    vm.known(&ada());
+    assert!(work.answer(WorkReply::Page(Ok(page(2)))));
+    assert_eq!(the_push(&work).3, Some(mine.clone()), "the copy goes up");
+    // an older build's tab got there first: the server answers with its stale record
+    let stale = live_street("w1~n1~n2", 5, json!({"ways": [1], "street": {"from": "an older build"}}));
+    let superseded = WorkResult { kind: "street".into(), key: "w1~n1~n2".into(), status: WorkStatus::Superseded, rev: 5, record: Some(stale) };
+    assert!(work.answer(WorkReply::Pushed(Ok(WorkPushed { rev: 5, results: vec![superseded] }))));
+    let root: Rc<dyn Storage> = storage.clone();
+    assert_eq!(local::read(&root, &street_id("w1~n1~n2")), Some(mine.clone()), "the copy is kept");
+    assert_eq!(the_push(&work), ("w1~n1~n2".to_string(), false, 5, Some(mine)), "and sent again on top of the stale revision");
+}
