@@ -37,7 +37,7 @@ pub enum Group {
     Templates,
 }
 
-/// What the Transform dialog offers (`StreetVm::transform_choices`): the same choices the Transform menu offered.
+/// What the Transform dialog offers (`StreetVm::transform_choices`), by group.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransformChoices {
     /// Catalogue indices of the kinds the motor pieces can become; none when no piece is a motor piece.
