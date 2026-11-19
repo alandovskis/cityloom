@@ -32,6 +32,7 @@ pub use school::{SCHOOL_KMH, SCHOOL_ZONE_MM, TemplateReport};
 mod profile;
 mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
+mod matching;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod templates;
