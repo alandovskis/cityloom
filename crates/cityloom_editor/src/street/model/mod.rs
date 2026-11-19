@@ -388,6 +388,11 @@ pub struct Editor {
     pick: Pick,
     /// The pick as it was when the drag under way began, which cancelling the drag puts back.
     pick_before_gesture: Pick,
+    /// Once a step of the drag under way changed a section: the content as that step found it, split at the pick's
+    /// ends, and the zones the pick covers in it. Every step is made again from it (`over_pick`).
+    gesture_pick: Option<(Content, std::ops::Range<usize>)>,
+    /// Where the last edit over the pick missed (`Editor::missed`).
+    missed: Vec<(i32, i32)>,
     /// Where the street lies as loaded (its length and its real end), once the page knows it.
     frame: Option<ZoneFrame>,
     /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
@@ -404,6 +409,29 @@ pub struct Editor {
     /// The same for the green elements (see `State.green_move`).
     green_choice: green::GreenChoice,
     pending_label: Option<Said>,
+}
+
+/// Brings a piece whose kind an edit replayed onto it changed inside what that kind allows, as a piece made of the
+/// kind would be: a surface or curb the kind does not take becomes the kind's own (`Segment::new`), the direction
+/// follows `direction_for`, a tram runs only on a transit lane, other-times types stay only where the kind may take
+/// them, and the width is brought inside the bounds.
+fn fit_to_kind(s: &mut Segment) {
+    let k = &KINDS[s.kind];
+    let own = Segment::new(s.uid, s.kind, s.width_mm);
+    if !k.materials.contains(&s.material) {
+        s.material = own.material;
+    }
+    if !k.has_curb || s.curb.is_some_and(|c| !k.curbs.contains(&c)) {
+        s.curb = own.curb;
+    }
+    s.direction = direction_for(s.kind, s.direction);
+    if k.id != "bus" {
+        s.tram = false;
+    }
+    let alts = s.alt_kinds();
+    s.variants.retain(|v| alts.contains(&v.kind));
+    let (lo, hi) = s.bounds();
+    s.width_mm = s.width_mm.clamp(lo, hi);
 }
 
 /// The direction a piece takes when it becomes `kind`, keeping the one it has.
@@ -502,6 +530,8 @@ impl Editor {
             zone: 0,
             pick: Pick::Whole,
             pick_before_gesture: Pick::Whole,
+            gesture_pick: None,
+            missed: Vec::new(),
             frame: None,
             ends: [EndInfo::default(); 2],
             selected: None,
@@ -544,9 +574,10 @@ impl Editor {
     }
 
     /// Chooses the zone the edits act on, picking its span. Refused when there is no such zone, or it lies beyond the
-    /// loaded end. The selected piece is cleared when the zone changes.
+    /// loaded end, or while a drag is under way. The selected piece is cleared when the zone changes.
     pub fn select_zone(&mut self, zone: usize) -> bool {
-        if zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
+        // A drag's edits belong to the stretch it started on: nothing is chosen while one is under way.
+        if self.gesture.is_some() || zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
             return false;
         }
         if zone != self.zone {
@@ -577,26 +608,56 @@ impl Editor {
         self.frame
     }
 
-    /// Runs an edit on a copy of the selected zone's section, then either records it as a revision (the zoning
-    /// settled), or, inside a gesture, applies it without recording.
+    /// Runs an edit on a copy of the shown zone's section, then makes it on every zone in the pick (`over_pick`): the
+    /// shown zone gets the section the edit made, every other one the edit replayed onto its own (`replay`: the same
+    /// piece, by uid then by kind; where it has none, the edit missed there). Refusals come from the edit on the shown
+    /// section alone. Recorded as one revision, or, inside a gesture, applied without recording.
     fn edit<F>(&mut self, label: Said, f: F) -> bool
     where
         F: FnOnce(&mut Vec<Segment>) -> bool,
     {
-        let mut section = self.current().to_vec();
-        if !f(&mut section) {
+        let mut after = self.current().to_vec();
+        if !f(&mut after) {
             return false;
         }
-        let zone = self.zone;
-        if self.gesture.is_some() {
-            *self.states[self.cursor].content.section_mut(zone) = section;
-            self.pending_label = Some(label);
-            return true;
-        }
-        self.edit_content(label, |content| {
-            *content.section_mut(zone) = section;
-            true
+        // What the edit is read against: the shown section as the drag under way left it once split, else as it is.
+        let before = self.gesture_pick.as_ref().map_or(self.current(), |(base, _)| base.section(self.zone)).to_vec();
+        self.over_pick(label, |c, range, shown, whole| {
+            c.change_sections(range, shown, whole, |is_shown, section| {
+                if is_shown {
+                    (after.clone(), false)
+                } else {
+                    let replayed = replay::replay(&before, &after, section);
+                    (replayed.section, replayed.missed)
+                }
+            })
         })
+    }
+
+    /// Runs `f` on the section of every zone in the pick, each on its own, as one edit (`over_pick`).
+    fn edit_each<F: Fn(&mut Vec<Segment>) -> bool>(&mut self, label: Said, f: F) -> bool {
+        self.over_pick(label, |c, range, shown, whole| {
+            c.change_sections(range, shown, whole, |_, section| {
+                let mut section = section.to_vec();
+                f(&mut section);
+                (section, false)
+            })
+        })
+    }
+
+    /// Gives every zone in the pick `section`, as one edit (`over_pick`): the pick becomes one run.
+    #[cfg_attr(not(test), expect(dead_code, reason = "measures and templates give the pick one section from a later change"))]
+    fn edit_uniform(&mut self, label: Said, section: Vec<Segment>) -> bool {
+        self.over_pick(label, |c, range, shown, whole| c.change_sections(range, shown, whole, |_, _| (section.clone(), false)))
+    }
+
+    /// The shown zone's section as the drag under way found it (as its first changing step split it, once it did).
+    fn gesture_section(&self) -> Option<&[Segment]> {
+        match (&self.gesture_pick, &self.gesture) {
+            (Some((base, _)), _) => Some(base.section(self.zone)),
+            (None, Some(start)) => Some(start.section(self.zone)),
+            (None, None) => None,
+        }
     }
 
     /// Runs an edit on a copy of the whole content and records it as a revision when it changed anything.
@@ -604,6 +665,7 @@ impl Editor {
     where
         F: FnOnce(&mut Content) -> bool,
     {
+        self.missed.clear();
         let mut next = self.states[self.cursor].content.clone();
         if !f(&mut next) {
             return false;
@@ -652,6 +714,7 @@ impl Editor {
         if self.gesture.is_none() {
             self.gesture = Some(self.states[self.cursor].content.clone());
             self.pick_before_gesture = self.pick;
+            self.gesture_pick = None;
             self.pending_label = None;
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
@@ -665,6 +728,12 @@ impl Editor {
             return false;
         };
         let mut now = self.states[self.cursor].content.clone();
+        // The zones the drag's edits acted on join their identical neighbours, as any edit's do.
+        if let Some((_, range)) = self.gesture_pick.take()
+            && self.elsewhere().is_none()
+        {
+            now.join_alike(range);
+        }
         now.settle();
         // The live state was mutated in place; restore it, then record it.
         self.states[self.cursor].content = baseline.clone();
@@ -690,6 +759,7 @@ impl Editor {
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
             self.states[self.cursor].content = baseline;
+            self.gesture_pick = None;
             // A boundary moved by the drag is back where it started: so is the pick that followed it.
             self.pick = self.pick_before_gesture;
             self.clamp_pick();
@@ -1113,7 +1183,7 @@ impl Editor {
         if kind >= KINDS.len() || !PEDESTRIAN_KINDS.contains(&KINDS[kind].id) {
             return false;
         }
-        self.edit(Said::new("rev-made-pedestrian"), |segs| {
+        self.edit_each(Said::new("rev-made-pedestrian"), |segs| {
             let mut changed = false;
             for s in segs.iter_mut().filter(|s| s.has_motor()) {
                 *s = Segment::new(s.uid, kind, s.width_mm);
@@ -1135,7 +1205,7 @@ impl Editor {
     /// the sum of the pair fixed. `delta_mm` is measured from the gesture
     /// start, so a drag is idempotent per pointer position.
     pub fn resize_boundary(&mut self, left_index: usize, delta_mm: i32) -> bool {
-        let Some(base) = self.gesture.as_ref().map(|g| g.section(self.zone).to_vec()) else {
+        let Some(base) = self.gesture_section().map(<[Segment]>::to_vec) else {
             return false;
         };
         if left_index + 1 >= base.len() {
@@ -1160,7 +1230,7 @@ impl Editor {
     /// Resizes one segment from its gesture-start width, taking the space
     /// from, or giving it to, the unassigned width of the street.
     pub fn resize_edge(&mut self, uid: u32, delta_mm: i32) -> bool {
-        let Some(base) = self.gesture.as_ref().map(|g| g.section(self.zone).to_vec()) else {
+        let Some(base) = self.gesture_section().map(<[Segment]>::to_vec) else {
             return false;
         };
         let Some(s) = base.iter().find(|s| s.uid == uid) else {
@@ -1218,15 +1288,16 @@ impl Editor {
         true
     }
 
-    /// Sets the speed limit to one of `SPEED_CHOICES`, or to none (`None`). The selected zone's when the street has
-    /// several zones, else the street's. False, with no revision, for any other value (an imported one outside the
-    /// choices is kept, never set) or when it is the speed already.
+    /// Sets the speed limit to one of `SPEED_CHOICES`, or to none (`None`), for the pick (`over_pick`): every zone in
+    /// a stretch gets it; for the whole street it is the street's, and no zone keeps one of its own (but a zone cut
+    /// off keeps the one it has). False, with no revision, for any other value (an imported one outside the choices
+    /// is kept, never set) or when every zone in the pick has that speed already.
     pub fn set_speed(&mut self, kmh: Option<u16>) -> bool {
         let content = &self.states[self.cursor].content;
         let z = self.zone;
-        let zoned = content.zones.len() > 1;
-        let current = if zoned { speed_in(content.speed, &content.zones, z) } else { content.speed };
-        if kmh.is_some_and(|n| !standards::speed_choices().contains(&n)) || current.kmh() == kmh {
+        let zoned = content.zones.len() > 1 && self.pick != Pick::Whole;
+        let already = self.zones_in_pick().all(|z| speed_in(content.speed, &content.zones, z).kmh() == kmh);
+        if kmh.is_some_and(|n| !standards::speed_choices().contains(&n)) || already {
             return false;
         }
         let label = match (zoned, kmh) {
@@ -1235,27 +1306,36 @@ impl Editor {
             (true, Some(n)) => Said::new("rev-zone-speed").with("zone", Arg::Said(Box::new(self.label_of(z)))).with("kmh", Arg::Num(i64::from(n))),
             (true, None) => Said::new("rev-zone-speed-not-set").with("zone", Arg::Said(Box::new(self.label_of(z)))),
         };
-        self.edit_content(label, |c| {
-            match c.zones.get_mut(z) {
-                Some(zone) if zoned => zone.speed = Speed::from_kmh(kmh),
-                _ => c.speed = Speed::from_kmh(kmh),
+        let speed = Speed::from_kmh(kmh);
+        self.over_pick(label, |c, range, _, whole| {
+            if c.zones.is_empty() {
+                c.speed = speed;
+            } else if whole {
+                let street = c.speed;
+                for zone in c.zones[range.end..].iter_mut().filter(|g| g.speed.is_undecided()) {
+                    zone.speed = street;
+                }
+                c.speed = speed;
+                c.zones[range].iter_mut().for_each(|g| g.speed = Speed::Undecided);
+            } else {
+                c.zones[range].iter_mut().for_each(|g| g.speed = speed);
             }
-            true
+            Vec::new()
         })
     }
 
-    /// Gives the selected zone the street's speed limit again. False, with no revision, for a street of one zone or a
-    /// zone that follows the street already.
+    /// Gives every zone in the pick the street's speed limit again (`over_pick`). False, with no revision, for a
+    /// street of one zone or a pick whose zones all follow the street already.
     pub fn follow_street_speed(&mut self) -> bool {
         let z = self.zone;
         let content = &self.states[self.cursor].content;
-        if content.zones.len() < 2 || content.zones[z].speed.is_undecided() {
+        if content.zones.len() < 2 || self.zones_in_pick().all(|z| content.zones[z].speed.is_undecided()) {
             return false;
         }
         let label = Said::new("rev-zone-speed-street").with("zone", Arg::Said(Box::new(self.label_of(z))));
-        self.edit_content(label, |c| {
-            c.zones[z].speed = Speed::Undecided;
-            true
+        self.over_pick(label, |c, range, _, _| {
+            c.zones[range].iter_mut().for_each(|g| g.speed = Speed::Undecided);
+            Vec::new()
         })
     }
 
@@ -1267,6 +1347,7 @@ impl Editor {
             return false;
         }
         self.push_state(State { label: Said::new("rev-reset"), ..first });
+        self.missed.clear();
         self.clamp_pick();
         self.selected = None;
         true
@@ -1275,6 +1356,7 @@ impl Editor {
     /// After the history moved: the pick is clamped to the street, and the selected piece falls back when it no longer
     /// exists.
     fn reselect(&mut self) {
+        self.missed.clear();
         self.clamp_pick();
         if let Some(uid) = self.selected
             && !self.current().iter().any(|s| s.uid == uid)
@@ -2987,6 +3069,7 @@ mod tests {
         let base = e.snapshot().segments;
         assert_eq!(e.view().class, StreetClass::Local);
         assert!(e.view().has_motor);
+        assert!(e.select_zone(0));
         assert!(e.make_pedestrian(sidewalk));
         let s = e.snapshot();
         assert_eq!((s.class, s.class_before), (StreetClass::Local, None), "zones 1 and 2 still carry cars");
@@ -3000,7 +3083,9 @@ mod tests {
         assert!(e.view().has_motor, "has_motor follows the selected zone");
         assert!(e.make_pedestrian(sidewalk));
         assert_eq!(e.snapshot().class, StreetClass::Local);
-        assert!(e.select_zone(2));
+        // Zones 0 and 1, alike now, joined: the last zone is the second.
+        assert_eq!(e.snapshot().zones.len(), 2);
+        assert!(e.select_zone(1));
         assert!(e.make_pedestrian(sidewalk));
         let s = e.snapshot();
         assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(StreetClass::Local)));
@@ -3029,12 +3114,13 @@ mod tests {
     fn the_class_change_is_reported_only_when_the_street_class_changes() {
         let mut e = zoned_editor();
         let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
-        for zone in 0..3 {
+        // Zones 0 and 1, alike once both are pedestrian, join: the last zone is then the second.
+        for (zone, last) in [(0, false), (1, false), (1, true)] {
             assert!(e.select_zone(zone));
             let before = e.view().class;
             assert!(e.make_pedestrian(sidewalk));
             let after = e.view().class;
-            assert_eq!(before != after, zone == 2, "zone {zone}");
+            assert_eq!(before != after, last, "zone {zone}");
         }
     }
 
@@ -3062,7 +3148,9 @@ mod tests {
         assert!(e.set_width(g.uid, g.width_mm + 100));
         assert!(e.snapshot().zones[1].segments.is_some());
         assert!(e.set_width(g.uid, g.width_mm));
-        assert_eq!(e.snapshot().zones[1].segments, None);
+        // Alike again, it joins its neighbours, which are on the base: the street is one section.
+        assert!(e.snapshot().zones.is_empty());
+        assert_eq!(e.snapshot().segments, e.states[0].content.segments);
     }
 
     #[test]

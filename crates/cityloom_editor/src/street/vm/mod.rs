@@ -2446,6 +2446,8 @@ mod tests {
         assert_eq!(o[0].label, "Same as the street: 50 km/h");
         assert_eq!(o.iter().filter(|x| x.selected).count(), 1);
         r.said.take();
+        r.vm.select_zone(0);
+        r.said.take();
         assert!(r.vm.set_speed(Some(30)));
         assert!(r.said.take()[0].starts_with("Speed limit 30 km/h: Zone 1"));
         let o = r.vm.speed_options();
@@ -2453,7 +2455,8 @@ mod tests {
         assert_eq!(o.iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(30)));
         assert!(r.vm.follow_street_speed());
         assert!(r.said.take()[0].starts_with("Speed limit back to the street's: Zone 1"));
-        assert!(r.vm.speed_options()[0].selected);
+        // Alike again, the two zones joined: the street's own speed is shown.
+        assert_eq!(r.vm.speed_options().iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(50)));
         assert!(!r.vm.follow_street_speed());
         // a street of one zone has no such choice
         assert!(speed_rig(crate::street::model::Speed::Kmh(50)).vm.speed_options().iter().all(|x| !x.street));

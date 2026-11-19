@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(e.view().speed_kmh, None);
         assert!(!e.set_speed(None), "already so");
         assert!(e.follow_street_speed());
-        assert_eq!(e.snapshot().zones[1].speed, Speed::Undecided);
+        assert!(e.snapshot().zones.is_empty(), "following the street again, it joins the zone before it");
         assert!(!e.follow_street_speed(), "already follows");
     }
 
@@ -131,7 +131,9 @@ mod tests {
         let mut e = split(Speed::Kmh(50));
         assert!(e.set_speed(Some(30)));
         assert!(e.set_speed(Some(50)));
-        assert_eq!(e.snapshot().zones[1].speed, Speed::Undecided);
+        let s = e.snapshot();
+        assert!(s.zones.is_empty(), "the street's speed again, the zone joins the one before it");
+        assert_eq!(s.speed, Speed::Kmh(50));
     }
 
     #[test]

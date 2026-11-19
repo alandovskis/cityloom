@@ -24,9 +24,9 @@ pub(super) struct Replayed {
 ///   else right before the counterpart of its right neighbour, else at the same end (failing those, beside the nearest
 ///   piece that has a counterpart, else at the nearer end).
 /// - A piece the edit moved (its order among the pieces kept changed) has its counterpart placed in the same way.
+/// - A piece whose kind the edit changed is then brought inside what the new kind allows (`fit_to_kind`).
 /// - A piece with no counterpart leaves the target as it was for that piece; when the edit changed, removed or moved
 ///   it, the replay `missed`.
-#[cfg_attr(not(test), expect(dead_code, reason = "the edits over a pick replay with it from a later change"))]
 pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) -> Replayed {
     let to_target = counterpart(before, target);
     let to_after: Vec<Option<usize>> = before.iter().map(|b| after.iter().position(|a| a.uid == b.uid)).collect();
@@ -70,9 +70,11 @@ pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) 
     Replayed { section: out.into_iter().map(|(_, piece)| piece).collect(), missed }
 }
 
-/// Sets on `target` each field that differs between `before` and `after`, to `after`'s value.
+/// Sets on `target` each field that differs between `before` and `after`, to `after`'s value. A piece whose kind
+/// changed is then brought inside what its new kind allows (`fit_to_kind`): the fields the edit left may not suit it.
 fn carry(target: &mut Segment, before: &Segment, after: &Segment) {
-    if before.kind != after.kind {
+    let kind_changed = before.kind != after.kind;
+    if kind_changed {
         target.kind = after.kind;
     }
     if before.width_mm != after.width_mm {
@@ -92,6 +94,9 @@ fn carry(target: &mut Segment, before: &Segment, after: &Segment) {
     }
     if before.variants != after.variants {
         target.variants.clone_from(&after.variants);
+    }
+    if kind_changed {
+        super::fit_to_kind(target);
     }
 }
 
@@ -319,5 +324,23 @@ mod tests {
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 12, 13, 9]);
         assert!(!out.missed);
+    }
+
+    #[test]
+    fn a_kind_change_leaves_no_surface_or_curb_the_new_kind_does_not_take() {
+        // The shown sidewalk becomes a travel lane keeping its concrete; the target's brick and curb do not suit one.
+        let before = vec![seg(1, "sidewalk", 2000)];
+        let travel = kind_index("travel").unwrap();
+        let after = vec![Segment { kind: travel, direction: Some(1), curb: None, ..before[0].clone() }];
+        let mut target = vec![seg(11, "sidewalk", 1800)];
+        target[0].material = 3;
+        target[0].curb = Some(4);
+        let out = replay(&before, &after, &target).section;
+        let k = &crate::shared::catalogue::KINDS[travel];
+        assert_eq!(out[0].kind, travel);
+        assert_eq!(out[0].material, k.materials[0], "brick is no travel surface: the kind's own");
+        assert_eq!((out[0].curb, out[0].direction), (None, Some(1)));
+        let (lo, hi) = crate::standards::model::kind_bounds(travel);
+        assert!((lo..=hi).contains(&out[0].width_mm), "the width is within the kind's");
     }
 }

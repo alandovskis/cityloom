@@ -116,6 +116,8 @@ impl Editor {
             zone: 0,
             pick: Pick::Whole,
             pick_before_gesture: Pick::Whole,
+            gesture_pick: None,
+            missed: Vec::new(),
             frame: None,
             ends: [EndInfo::default(); 2],
             selected: None,

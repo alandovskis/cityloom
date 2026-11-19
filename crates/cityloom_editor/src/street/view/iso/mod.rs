@@ -935,8 +935,8 @@ mod tests {
         assert!(own(&one).contains(&top), "the widened top lies in the selected zone's section");
         assert!(!own(&zero).contains(&top));
         assert!(one[one.find("iso-across").unwrap()..].split("<g class=\"iso-section\">").next().is_some_and(|across| !across.contains(&top)));
-        // Putting the width back puts the drawing back.
-        assert!(e.set_width(uid, w));
+        // Undoing the edit puts the drawing back. (Putting the width back would join the zone to its neighbours.)
+        assert!(e.undo());
         assert_eq!(drawn(&e), zero);
         assert!(e.set_width(uid, w + 300));
         assert!(e.select_zone(0));
