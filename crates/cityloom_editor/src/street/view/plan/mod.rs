@@ -2,8 +2,8 @@
 //! Each run is a stack of bands, one per piece, in the section's order top to bottom, as wide across as the piece is
 //! at one scale across for the whole plan (the widest run fills `BANDS_H`); along the street the scale is the ground's,
 //! so a change along the street is drawn where it happens. What stands on a side (a curbside use, a stop) is drawn
-//! in a lane beside the bands on that side, what lies across the street or on its pieces (a raised element, a green
-//! element) over them. A boundary between runs is a line across the bands, with its taper drawn at its true length
+//! in a lane beside the bands on that side; a raised element across the roadway's bands of the run where it starts,
+//! a green element on the band of the piece it stands on there. A boundary between runs is a line across the bands, with its taper drawn at its true length
 //! and cut at the street's ends; the picked stretch is a tint with a handle at each end; an end cut by the edge of the
 //! map is a zigzag.
 //!
@@ -14,7 +14,7 @@ mod scale;
 
 pub use scale::{MIN_PX_PER_M, mm_per_px, x_px};
 
-use crate::shared::catalogue::{KINDS, MATERIALS, Side};
+use crate::shared::catalogue::{KINDS, MATERIALS, Side, is_roadway};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::{esc, f1};
 use crate::shared::said::say;
@@ -49,8 +49,9 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
         h = f1(HEIGHT),
     );
     let across = BANDS_H / p.runs.iter().map(run_total).max().unwrap_or(0).max(1) as f64;
-    for r in &p.runs {
-        out.push_str(&run(r, at.span(r.from_mm, r.to_mm), across));
+    let stacks: Vec<Vec<(f64, f64)>> = p.runs.iter().map(|r| stack(r, across)).collect();
+    for (r, ys) in p.runs.iter().zip(&stacks) {
+        out.push_str(&run(r, ys, at.span(r.from_mm, r.to_mm)));
     }
     let pick = p.pick.and_then(|(a, b)| at.cut_span(a, b));
     if let Some((from, to)) = pick {
@@ -79,7 +80,7 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
     }
     for o in &p.objects {
         if let Some(span) = at.cut_span(o.from_mm, o.to_mm) {
-            out.push_str(&thing(o, span, i18n, units));
+            out.push_str(&thing(o, span, across_of(o, p, &stacks), i18n, units));
         }
     }
     if let Some((from, to)) = pick {
@@ -153,12 +154,24 @@ fn run_total(r: &PlanRun) -> i32 {
     r.bands.iter().map(|b| b.width_mm).sum()
 }
 
-/// A run's bands over `(from, to)` px, `across` px to the millimetre across, centred on the plan's centre line.
-fn run(r: &PlanRun, (from, to): (f64, f64), across: f64) -> String {
-    let mut out = format!("<g class=\"plan-run\" data-zone=\"{}\">", r.zone);
+/// Each of a run's bands as `(y, height)`, `across` px to the millimetre across, the stack centred on the plan's centre
+/// line.
+fn stack(r: &PlanRun, across: f64) -> Vec<(f64, f64)> {
     let mut y = LANE_H + (BANDS_H - run_total(r) as f64 * across) / 2.0;
-    for b in &r.bands {
-        let h = b.width_mm as f64 * across;
+    r.bands
+        .iter()
+        .map(|b| {
+            let h = b.width_mm as f64 * across;
+            y += h;
+            (y - h, h)
+        })
+        .collect()
+}
+
+/// A run's bands, laid across as `ys`, over `(from, to)` px.
+fn run(r: &PlanRun, ys: &[(f64, f64)], (from, to): (f64, f64)) -> String {
+    let mut out = format!("<g class=\"plan-run\" data-zone=\"{}\">", r.zone);
+    for (b, &(y, h)) in r.bands.iter().zip(ys) {
         out.push_str(&format!(
             "<rect class=\"plan-band k-{} mat-{}\" data-uid=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>",
             KINDS[b.kind].id,
@@ -169,7 +182,6 @@ fn run(r: &PlanRun, (from, to): (f64, f64), across: f64) -> String {
             f1(to - from),
             f1(h)
         ));
-        y += h;
     }
     out.push_str("</g>");
     out
@@ -185,13 +197,32 @@ fn thing_id(t: PlanThing) -> String {
     }
 }
 
-/// A thing over `(from, to)` px: in the lane on its side, or over the bands when it has none; named by its label.
-fn thing(o: &PlanObject, (from, to): (f64, f64), i18n: &I18n, units: Units) -> String {
-    let (y, h) = match o.side {
-        Some(Side::Left) => (LANE_GAP, LANE_H - 2.0 * LANE_GAP),
-        Some(Side::Right) => (LANE_H + BANDS_H + LANE_GAP, LANE_H - 2.0 * LANE_GAP),
-        None => (LANE_H, BANDS_H),
-    };
+/// Where a thing lies across, as `(y, height)`: in the lane on its side; on its host's band, or across the roadway's
+/// bands for what lies across the street, in the run where it starts; else over all the bands.
+fn across_of(o: &PlanObject, p: &PlanView, stacks: &[Vec<(f64, f64)>]) -> (f64, f64) {
+    match o.side {
+        Some(Side::Left) => return (LANE_GAP, LANE_H - 2.0 * LANE_GAP),
+        Some(Side::Right) => return (LANE_H + BANDS_H + LANE_GAP, LANE_H - 2.0 * LANE_GAP),
+        None => {}
+    }
+    let whole = (LANE_H, BANDS_H);
+    let Some(k) = p.runs.iter().position(|r| r.from_mm <= o.from_mm && o.from_mm < r.to_mm) else { return whole };
+    let laid = || p.runs[k].bands.iter().zip(&stacks[k]);
+    match (o.thing, o.host) {
+        (PlanThing::Green { .. }, Some(uid)) => laid().find(|(b, _)| b.uid == uid).map_or(whole, |(_, &ys)| ys),
+        (PlanThing::Calming { .. }, _) => {
+            let road: Vec<(f64, f64)> = laid().filter(|(b, _)| is_roadway(b.kind)).map(|(_, &ys)| ys).collect();
+            match (road.first(), road.last()) {
+                (Some(&(top, _)), Some(&(y, h))) => (top, y + h - top),
+                _ => whole,
+            }
+        }
+        _ => whole,
+    }
+}
+
+/// A thing over `(from, to)` px and `(y, h)` across, named by its label.
+fn thing(o: &PlanObject, (from, to): (f64, f64), (y, h): (f64, f64), i18n: &I18n, units: Units) -> String {
     let rect = |class: &str| format!("<rect class=\"{class}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>", f1(from), f1(y), f1(to - from), f1(h));
     format!(
         "<g class=\"{}\" data-thing=\"{}\"><title>{}</title>{}{}</g>",
@@ -431,6 +462,44 @@ mod tests {
         let escaped = said.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
         assert!(svg.contains(&format!("<title>{escaped}</title>")), "{svg}");
         assert!(!svg.contains("<A>"));
+    }
+
+    /// The `(top, bottom)` of band `uid` in the run of zone `zone`.
+    fn band_ys(svg: &str, zone: usize, uid: u32) -> (f64, f64) {
+        let band = tags(run_group(svg, zone), "plan-band").into_iter().find(|t| attr(t, "data-uid") == uid.to_string()).expect("the band");
+        (num(band, "y"), num(band, "y") + num(band, "height"))
+    }
+
+    fn mark_ys(svg: &str, n: usize) -> (f64, f64) {
+        let mark = tags(svg, "plan-thing-mark")[n];
+        (num(mark, "y"), num(mark, "y") + num(mark, "height"))
+    }
+
+    #[test]
+    fn a_green_element_lies_on_the_piece_it_stands_on() {
+        // A tree on the right sidewalk (uid 3) of the first run.
+        let tree = PlanObject { host: Some(3), ..thing(PlanThing::Green { i: 0 }, 5_000, 6_000, None, Said::new("plan-cut"), false) };
+        let svg = drawn(&PlanView { objects: vec![tree], ..two_runs() });
+        let (top, bottom) = mark_ys(&svg, 0);
+        let (side_top, side_bottom) = band_ys(&svg, 0, 3);
+        assert!(top >= side_top - 0.051 && bottom <= side_bottom + 0.051, "{top}..{bottom} on {side_top}..{side_bottom}");
+        let (_, travel_bottom) = band_ys(&svg, 0, 2);
+        assert!(top >= travel_bottom - 0.051, "not over the travel lane");
+        // The same tree from 30 m on lies on the second run's right sidewalk, below its bike lane.
+        let tree = PlanObject { host: Some(3), ..thing(PlanThing::Green { i: 0 }, 30_000, 31_000, None, Said::new("plan-cut"), false) };
+        let svg = drawn(&PlanView { objects: vec![tree], ..two_runs() });
+        let (top, _) = mark_ys(&svg, 0);
+        assert!((top - band_ys(&svg, 1, 3).0).abs() < 0.11);
+    }
+
+    #[test]
+    fn a_raised_element_spans_the_roadway_of_its_run_and_not_the_sidewalks() {
+        let table = thing(PlanThing::Calming { cell: 0 }, 30_000, 37_000, None, Said::new("plan-cut"), false);
+        let svg = drawn(&PlanView { objects: vec![table], ..two_runs() });
+        let (top, bottom) = mark_ys(&svg, 0);
+        // The travel lane and the bike lane are the roadway; the sidewalks either side are not.
+        assert!((top - band_ys(&svg, 1, 2).0).abs() < 0.11, "{top}");
+        assert!((bottom - band_ys(&svg, 1, 4).1).abs() < 0.11, "{bottom}");
     }
 
     #[test]
