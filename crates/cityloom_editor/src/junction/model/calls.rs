@@ -202,7 +202,19 @@ struct Asked {
 /// yellow and all-red kept, so every phase after it starts that much later. A phase that cannot fit the walk and
 /// clearance even so does not serve that crossing: they are never shortened. A crossing no phase can serve has its
 /// calls not served. The calls come back in the order they were made (crossings in the order given at the same second).
+///
+/// A phase takes at least a second in the run, so time moves on whatever a document's timing says (it is not clamped
+/// when read): every call that can be served is, within a cycle of being made.
 fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
+    serve_turns(plan, asked, MAX_TURNS)
+}
+
+/// A bound on the phases `serve` runs, only a guard: a phase lasts a second or more, and the plan at most a few dozen,
+/// so every call is served long before.
+const MAX_TURNS: usize = 1_000_000;
+
+/// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
+fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The phases (places in the plan) that can serve each crossing.
     let serving: Vec<Vec<usize>> = asked
         .iter()
@@ -223,8 +235,7 @@ fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
     let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
     let mut missed = vec![false; calls.len()];
     let (mut start, mut turn) = (0u32, 0usize);
-    // Every phase has a length, so time moves on and each cycle serves whatever waits; the bound is only a guard.
-    while !waiting.is_empty() && !plan.phases.is_empty() && turn < 1_000_000 {
+    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns {
         let k = turn % plan.phases.len();
         let phase = &plan.phases[k];
         let serves = |x: usize| serving[x].contains(&k);
@@ -238,7 +249,7 @@ fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
             c.extended_s = short;
             c.outcome = if missed[i] { Outcome::Delayed } else { Outcome::Served };
         }
-        let end = start + phase.length_s + extension;
+        let end = start + (phase.length_s + extension).max(1);
         // A call made while this phase walks its crossing has missed that walk.
         for &i in &later {
             if serves(calls[i].0) && calls[i].1.at_s > start && calls[i].1.at_s < end {
@@ -248,6 +259,9 @@ fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
         waiting = later;
         start = end;
         turn += 1;
+    }
+    for i in waiting {
+        calls[i].1.outcome = Outcome::NotServed;
     }
     calls.into_iter().map(|(_, c)| c).collect()
 }
@@ -373,6 +387,36 @@ mod tests {
         // No phase at all: not served, and nothing waits for it.
         let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[])]);
         assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
+    }
+
+    /// A phase of street `uid` that takes no time at all (a document's timing is not clamped when it is read).
+    fn empty(uid: u32, walks: &[u32]) -> Phase {
+        let timing = Timing { green_s: 0, yellow_s: 0, all_red_s: 0, transit_lead_s: 0 };
+        Phase { uid, timing, length_s: 0, walks: walks.to_vec(), rides: vec![], moves: vec![] }
+    }
+
+    #[test]
+    fn a_plan_whose_phases_take_no_time_still_ends_at_once_and_serves_its_calls() {
+        let plan = plan_of(vec![empty(1, &[9]), empty(2, &[])]);
+        let asked = [Asked { arm: 9, need_s: 10, at_s: vec![0, 100, 3_599] }];
+        let started = std::time::Instant::now();
+        let calls = serve(&plan, &asked);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
+        // The first phase's green of 0 s is lengthened by the 10 s the crossing needs; a phase that takes no time
+        // takes a second in the run, so the walk comes round again.
+        assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 10));
+        assert!(calls.iter().all(|c| c.outcome != Outcome::NotServed && c.wait_s < 60 && c.extended_s == 10), "{calls:?}");
+    }
+
+    #[test]
+    fn a_call_still_waiting_when_the_run_stops_is_not_served_never_served_with_no_wait() {
+        let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
+        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 10, 40] }];
+        // Two turns: the first phase (serving the call at 0 s), then the second; the others are still waiting.
+        assert_eq!(
+            serve_turns(&plan, &asked, 2),
+            vec![call(9, 0, Outcome::Served, 0, 0), call(9, 10, Outcome::NotServed, 0, 0), call(9, 40, Outcome::NotServed, 0, 0)]
+        );
     }
 
     #[test]
