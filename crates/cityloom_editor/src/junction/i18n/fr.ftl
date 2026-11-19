@@ -593,6 +593,63 @@ jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
 
+## Appels piétons (src/junction/model/calls.rs, #60) : un passage sur appel n’est ouvert que si un piéton appuie sur le bouton
+jn-refusal-call-not-walked = Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel : ouvrez-le d’abord dans une phase.
+jn-refusal-call-already = Le passage est déjà réglé ainsi.
+jn-refusal-not-on-call = Seul un passage sur appel a un nombre d’appels par heure.
+jn-refusal-call-rate-out-of-range = Ce nombre d’appels par heure dépasse la borne provisoire indiquée.
+jn-rev-call-on = Passage de { $arm } sur appel
+jn-rev-call-off = Passage de { $arm } remis en rappel
+jn-rev-call-rate =
+    Passage de { $arm } : { $rate ->
+        [one] 1 appel par heure
+       *[other] { $rate } appels par heure
+    }
+jn-calls-heading = Appels piétons
+jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton appuie sur le bouton. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
+jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; les appels sont répartis sur une heure.
+jn-calls-group = Passage de { $street }
+jn-calls-on-call = Sur appel (bouton-poussoir)
+jn-calls-on-call-box = Passage de { $street } sur appel
+jn-calls-rate = Appels par heure
+jn-calls-rate-field = Appels par heure au passage de { $street }
+jn-calls-rate-range = De { $min } à { $max } appels par heure (borne provisoire)
+jn-calls-recall = En rappel : ouvert chaque fois que ses phases passent; les appels ne changent rien à son service.
+jn-calls-need = Sur appel : marche { $walk } s + dégagement { $clearance } s = { $need } s de vert.
+jn-calls-unwalked = Aucune phase n’ouvre ce passage : il ne peut pas être sur appel.
+jn-calls-none = Aucun passage n’est sur appel : chaque passage est ouvert chaque fois que ses phases passent.
+jn-calls-totals-caption = Appels en une heure, par passage
+jn-calls-col-crossing = Passage
+jn-calls-col-calls = Appels
+jn-calls-col-served = Servis
+jn-calls-col-delayed = Retardés
+jn-calls-col-extended = Vert prolongé
+jn-calls-col-not-served = Non servis
+jn-calls-col-longest = Attente la plus longue
+jn-calls-col-at = Appel à
+jn-calls-col-outcome = Résultat
+jn-calls-seconds = { $seconds } s
+jn-calls-rows =
+    { $n ->
+        [one] L’appel, une ligne
+       *[other] Chaque appel, une ligne par appel ({ $n })
+    }
+jn-calls-rows-caption = Chaque appel de l’heure, dans l’ordre où il a été fait
+jn-calls-at = { $minutes } min { $seconds } s
+jn-calls-outcome-served = Servi après { $wait } s
+jn-calls-outcome-served-extended = Servi après { $wait } s, vert prolongé de { $extended } s
+jn-calls-outcome-delayed = Retardé de { $wait } s
+jn-calls-outcome-delayed-extended = Retardé de { $wait } s, vert prolongé de { $extended } s
+jn-calls-outcome-not-served = Non servi
+jn-calls-findings = Constats
+jn-calls-finding-cannot = Le passage de { $arm } ne peut pas être servi en sécurité : la marche et le dégagement demandent { $need } s de vert, et aucune phase qui l’ouvre ne peut donner plus de { $most } s.
+jn-calls-finding-unwalked = Le passage de { $arm } est sur appel, mais aucune phase ne l’ouvre : ses appels ne sont pas servis. Ouvrez-le dans une phase ou remettez-le en rappel.
+jn-calls-said =
+    Passage de { $arm } : { $calls ->
+        [one] 1 appel
+       *[other] { $calls } appels
+    } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; attente la plus longue { $wait } s.
+
 ## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
 jn-conflict-vehicles = Phase { $n } : { $a } croisent { $b }.

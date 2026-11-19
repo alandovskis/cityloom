@@ -4,6 +4,7 @@
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
 pub mod beyond;
+pub mod calls;
 pub mod curbside;
 pub mod geometry;
 pub mod read_model;
@@ -313,6 +314,11 @@ pub struct Arm {
     /// the junction's control is a signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<Timing>,
+    /// The arm's crossing is on call (#60): walked only when a pedestrian has pushed the button, at this many calls an
+    /// hour (the scenario `calls::summary` serves). None: on recall, walked every time its phases run, as before. Saved
+    /// only once set, so a junction with no crossing on call is written as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calls: Option<u32>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -506,6 +512,7 @@ impl Arm {
             rule: 0,
             filter: false,
             timing: None,
+            calls: None,
             walked: false,
         }
     }
@@ -826,10 +833,14 @@ pub enum Refusal {
     NoBikeLane,
     ScrambleWalks,
     MovementAlready,
+    CallNotWalked,
+    CallAlready,
+    NotOnCall,
+    CallRateOutOfRange,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 33] = [
+    pub const ALL: [Refusal; 37] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -863,6 +874,10 @@ impl Refusal {
         Refusal::NoBikeLane,
         Refusal::ScrambleWalks,
         Refusal::MovementAlready,
+        Refusal::CallNotWalked,
+        Refusal::CallAlready,
+        Refusal::NotOnCall,
+        Refusal::CallRateOutOfRange,
     ];
 
     /// The message that says why.
@@ -901,6 +916,10 @@ impl Refusal {
             Refusal::NoBikeLane => "jn-refusal-no-bike-lane",
             Refusal::ScrambleWalks => "jn-refusal-scramble-walks",
             Refusal::MovementAlready => "jn-refusal-movement-already",
+            Refusal::CallNotWalked => "jn-refusal-call-not-walked",
+            Refusal::CallAlready => "jn-refusal-call-already",
+            Refusal::NotOnCall => "jn-refusal-not-on-call",
+            Refusal::CallRateOutOfRange => "jn-refusal-call-rate-out-of-range",
         }
     }
 }
@@ -1567,6 +1586,50 @@ impl Junction {
             s.signal_plan = Some(kept);
             true
         })
+    }
+
+    /// Puts the crossing of arm `uid` on call (`on`), walked only when someone pushes the button, at
+    /// `calls::DEFAULT_CALLS_PER_HOUR` calls an hour until a rate is set; or back on recall, walked every time its
+    /// phases run. On call needs a signal and a phase of its plan that walks the crossing (`calls::refusal`); recall is
+    /// always allowed, so a crossing an edit has left unwalked can be taken off call. Refused when it is that already.
+    pub fn set_on_call(&mut self, uid: u32, on: bool) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.calls.is_some() == on {
+            return self.refuse(Refusal::CallAlready);
+        }
+        if on && let Some(why) = calls::refusal(self.current(), self.region, uid) {
+            return self.refuse(why);
+        }
+        self.arm_edit(
+            uid,
+            |a| about(if on { "jn-rev-call-on" } else { "jn-rev-call-off" }, a),
+            |a| {
+                a.calls = on.then_some(calls::DEFAULT_CALLS_PER_HOUR);
+                true
+            },
+        )
+    }
+
+    /// Sets how many times an hour the crossing of arm `uid`, on call, is called: 0 to `calls::MAX_CALLS_PER_HOUR`. A
+    /// crossing on recall has no rate. A rate it has already is not an edit.
+    pub fn set_call_rate(&mut self, uid: u32, rate: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = arm.calls else { return self.refuse(Refusal::NotOnCall) };
+        let Ok(rate) = u32::try_from(rate) else { return self.refuse(Refusal::CallRateOutOfRange) };
+        if rate > calls::MAX_CALLS_PER_HOUR {
+            return self.refuse(Refusal::CallRateOutOfRange);
+        }
+        if rate == now {
+            return true;
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-call-rate", a).with("rate", Arg::Num(i64::from(rate))),
+            |a| {
+                a.calls = Some(rate);
+                true
+            },
+        )
     }
 
     /// Gives the junction the suggested plan again, in place of the one the person edited.
@@ -2353,7 +2416,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 33);
+        assert_eq!(Refusal::ALL.len(), 37);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

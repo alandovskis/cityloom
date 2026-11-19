@@ -6,6 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::junction::model::beyond;
+use crate::junction::model::calls;
 use crate::junction::model::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
@@ -220,6 +221,29 @@ pub fn arm_reaches(s: &State, region: usize) -> Vec<(u32, i32)> {
         .zip(&lay.arms)
         .map(|(a, l)| (a.uid, if judged && !a.is_pedestrian() { l.mouth.round() as i32 + a.crossing.map_or(0, |c| c.setback_mm + c.width_mm) } else { 0 }))
         .collect()
+}
+
+/// Where a person steps off and onto the curb crossing arm `a`, laterally: its curbs, brought in by a curb extension
+/// where it has one.
+fn crossing_curbs(a: &Arm, l: &ArmLayout) -> (f64, f64) {
+    let bulb_l = if a.bulb[0] { l.prof.park[0] as f64 } else { 0.0 };
+    let bulb_r = if a.bulb[1] { l.prof.park[1] as f64 } else { 0.0 };
+    (l.cl + bulb_l, l.cr - bulb_r)
+}
+
+/// How far a person walks to cross arm `a`, curb to curb, whatever its island: the crossing's length.
+fn crossing_distance_mm(a: &Arm, l: &ArmLayout) -> i32 {
+    let (cl, cr) = crossing_curbs(a, l);
+    (cr - cl).round() as i32
+}
+
+/// The length of each crossing the junction has as it is drawn (`CrossingView.distance_mm`), by street uid, in the
+/// order of the arms. Empty when the junction cannot be drawn.
+pub fn crossing_distances(s: &State, region: usize) -> Vec<(u32, i32)> {
+    let in_force = in_force(s);
+    let s: &State = &in_force;
+    let Some(lay) = layout(s, region) else { return Vec::new() };
+    s.arms.iter().zip(&lay.arms).filter(|(a, _)| a.crossing.is_some()).map(|(a, l)| (a.uid, crossing_distance_mm(a, l))).collect()
 }
 
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
@@ -716,6 +740,95 @@ pub struct SignalView {
     pub phases: Vec<PhaseView>,
     /// The plan is the suggestion: the person has not edited it.
     pub suggested: bool,
+    /// Pedestrian calls (#60): which crossings are on call, and how the plan serves an hour of their calls.
+    pub calls: CallsView,
+}
+
+/// The pedestrian calls of a signal: every crossing with its mode, one row per call of the hour, and the findings.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct CallsView {
+    /// Every crossing the junction has, and any street left on call without one, in the order of the bearings.
+    pub crossings: Vec<CallCrossingView>,
+    /// Every call of the hour, in the order made.
+    pub rows: Vec<CallRowView>,
+    /// What the person should act on, each a sentence naming the crossing.
+    pub findings: Vec<Said>,
+}
+
+/// One crossing as the calls see it: on call (with its rate) or on recall, whether some phase walks it (else it cannot
+/// go on call), and its calls added up while it is on call and walked.
+#[derive(Clone, Debug, Serialize)]
+pub struct CallCrossingView {
+    pub uid: u32,
+    pub label: Said,
+    pub on_call: bool,
+    pub rate: u32,
+    pub walked: bool,
+    pub totals: Option<calls::Totals>,
+}
+
+/// One call: its crossing, when it was made ("12 min 5 s") and what happened ("Delayed 34 s, green extended by 3 s").
+#[derive(Clone, Debug, Serialize)]
+pub struct CallRowView {
+    pub uid: u32,
+    pub label: Said,
+    pub at: Said,
+    pub outcome: Said,
+}
+
+/// The calls of `plan` on `s` in words: `arms` names the streets and gives each crossing's length.
+fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let distances: Vec<(u32, i32)> = arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (a.uid, c.distance_mm))).collect();
+    let summary = calls::summary(s, plan, &distances);
+    let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.crossing.is_some() || a.calls.is_some()).collect();
+    listed.sort_by_key(|a| a.bearing);
+    let crossings = listed
+        .into_iter()
+        .map(|a| CallCrossingView {
+            uid: a.uid,
+            label: name(a.uid),
+            on_call: a.calls.is_some(),
+            rate: a.calls.unwrap_or(0),
+            walked: a.crossing.is_some() && calls::walked(plan, a.uid),
+            totals: summary.totals.iter().find(|t| t.arm == a.uid).copied(),
+        })
+        .collect();
+    let rows = summary
+        .calls
+        .iter()
+        .map(|c| CallRowView {
+            uid: c.arm,
+            label: name(c.arm),
+            at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(c.at_s / 60))).with("seconds", Arg::Num(i64::from(c.at_s % 60))),
+            outcome: outcome_said(c),
+        })
+        .collect();
+    let findings = summary
+        .findings
+        .iter()
+        .map(|f| match *f {
+            calls::Finding::CannotServe { arm, need_s, most_s } => Said::new("jn-calls-finding-cannot")
+                .with("arm", Arg::Said(Box::new(name(arm))))
+                .with("need", Arg::Num(i64::from(need_s)))
+                .with("most", Arg::Num(i64::from(most_s))),
+            calls::Finding::NotWalked { arm } => Said::new("jn-calls-finding-unwalked").with("arm", Arg::Said(Box::new(name(arm)))),
+        })
+        .collect();
+    CallsView { crossings, rows, findings }
+}
+
+/// What happened to a call, in a few words.
+fn outcome_said(c: &calls::Call) -> Said {
+    let wait = Arg::Num(i64::from(c.wait_s));
+    let extended = Arg::Num(i64::from(c.extended_s));
+    match (c.outcome, c.extended_s > 0) {
+        (calls::Outcome::NotServed, _) => Said::new("jn-calls-outcome-not-served"),
+        (calls::Outcome::Served, false) => Said::new("jn-calls-outcome-served").with("wait", wait),
+        (calls::Outcome::Served, true) => Said::new("jn-calls-outcome-served-extended").with("wait", wait).with("extended", extended),
+        (calls::Outcome::Delayed, false) => Said::new("jn-calls-outcome-delayed").with("wait", wait),
+        (calls::Outcome::Delayed, true) => Said::new("jn-calls-outcome-delayed-extended").with("wait", wait).with("extended", extended),
+    }
 }
 
 /// One street's turn: its numbers, and what runs with it besides its own traffic.
@@ -825,7 +938,8 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
+    let calls = calls_view(s, &plan, arms);
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls })
 }
 
 /// The movements that take part in the conflicts, each once.
@@ -1153,14 +1267,12 @@ impl Junction {
             widen(at(l.bearing, l.pr, len));
 
             // Crossing.
-            let bulb_l = if a.bulb[0] { l.prof.park[0] as f64 } else { 0.0 };
-            let bulb_r = if a.bulb[1] { l.prof.park[1] as f64 } else { 0.0 };
-            let (cl, cr) = (l.cl + bulb_l, l.cr - bulb_r);
+            let (cl, cr) = crossing_curbs(a, l);
             let crossing_present = cx.is_some();
             let crossing = cx.map(|c| {
                 let t0 = l.mouth + c.setback_mm as f64;
                 let t1 = t0 + c.width_mm as f64;
-                let distance = (cr - cl).round() as i32;
+                let distance = crossing_distance_mm(a, l);
                 let island = c.island.then(|| {
                     let mid = (cl + cr) / 2.0;
                     poly(&strip(l.bearing, mid - ISLAND_MM as f64 / 2.0, mid + ISLAND_MM as f64 / 2.0, t0 - 1_000.0, t1 + 1_000.0))

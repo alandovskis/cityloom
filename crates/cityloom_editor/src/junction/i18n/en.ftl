@@ -593,6 +593,63 @@ jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
 jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.
 
+## Pedestrian calls (src/junction/model/calls.rs, #60): a crossing on call is walked only when someone pushes the button
+jn-refusal-call-not-walked = No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first.
+jn-refusal-call-already = The crossing is set that way already.
+jn-refusal-not-on-call = Only a crossing on call has calls an hour.
+jn-refusal-call-rate-out-of-range = That many calls an hour is outside the placeholder bound shown.
+jn-rev-call-on = Crossing of { $arm } on call
+jn-rev-call-off = Crossing of { $arm } back on recall
+jn-rev-call-rate =
+    Crossing of { $arm }: { $rate ->
+        [one] 1 call an hour
+       *[other] { $rate } calls an hour
+    }
+jn-calls-heading = Pedestrian calls
+jn-calls-intro = A crossing on call is walked only when someone pushes the button. One on recall is walked every time its phases run, and calls cannot change its service.
+jn-calls-bounds = Placeholder figures: walk { $walk } s, then clearance at { $speed } m/s, rounded up to the second; a green is extended by at most { $max } s; the calls are spread over one hour.
+jn-calls-group = Crossing of { $street }
+jn-calls-on-call = On call (push button)
+jn-calls-on-call-box = Crossing of { $street } on call
+jn-calls-rate = Calls an hour
+jn-calls-rate-field = Calls an hour at the crossing of { $street }
+jn-calls-rate-range = { $min } to { $max } calls an hour (placeholder bound)
+jn-calls-recall = On recall: walked every time its phases run; calls cannot change its service.
+jn-calls-need = On call: walk { $walk } s + clearance { $clearance } s = { $need } s of green.
+jn-calls-unwalked = No phase walks this crossing, so it cannot be on call.
+jn-calls-none = No crossing is on call: every crossing is walked every time its phases run.
+jn-calls-totals-caption = Calls in one hour, by crossing
+jn-calls-col-crossing = Crossing
+jn-calls-col-calls = Calls
+jn-calls-col-served = Served
+jn-calls-col-delayed = Delayed
+jn-calls-col-extended = Green extended
+jn-calls-col-not-served = Not served
+jn-calls-col-longest = Longest wait
+jn-calls-col-at = Called at
+jn-calls-col-outcome = Outcome
+jn-calls-seconds = { $seconds } s
+jn-calls-rows =
+    { $n ->
+        [one] The call, one row
+       *[other] Every call, one row each ({ $n })
+    }
+jn-calls-rows-caption = Each call of the hour, in the order made
+jn-calls-at = { $minutes } min { $seconds } s
+jn-calls-outcome-served = Served after { $wait } s
+jn-calls-outcome-served-extended = Served after { $wait } s, green extended by { $extended } s
+jn-calls-outcome-delayed = Delayed { $wait } s
+jn-calls-outcome-delayed-extended = Delayed { $wait } s, green extended by { $extended } s
+jn-calls-outcome-not-served = Not served
+jn-calls-findings = Findings
+jn-calls-finding-cannot = The crossing of { $arm } cannot be served safely: its walk and clearance need { $need } s of green, and no phase that walks it can give more than { $most } s.
+jn-calls-finding-unwalked = The crossing of { $arm } is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall.
+jn-calls-said =
+    Crossing of { $arm }: { $calls ->
+        [one] 1 call
+       *[other] { $calls } calls
+    } in the hour; served { $served }, delayed { $delayed }, green extended { $extended }, not served { $not_served }; longest wait { $wait } s.
+
 ## Warnings: movements of a phase that meet (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = cars from the { $from } side going { $turn }
 jn-conflict-vehicles = Phase { $n }: { $a } cross { $b }.
