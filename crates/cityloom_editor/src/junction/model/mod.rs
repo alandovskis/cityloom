@@ -957,6 +957,7 @@ impl Junction {
     /// eased (small corners, no offsets, no roundabout) before it is given up
     /// for `today`. None when not even `today` can be drawn.
     pub fn from_city(name: Said, today: &State, now: &State, region: usize) -> Option<Junction> {
+        let kept_now = now;
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
@@ -979,6 +980,17 @@ impl Junction {
         if let Some(now) = now.filter(|n| !same(n, &today)) {
             j.states.push(State { label: earlier(), ..now });
             j.cursor = 1;
+        }
+        // Crossings kept on call off a signal (a record from before calls went with the timing, or a sync) are taken off
+        // as it opens: the history says so, as it would of an edit, until the next edit writes the record without them.
+        let lost = kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count();
+        if lost > 0 {
+            if j.cursor == 0 {
+                j.states.push(State { label: earlier(), ..today });
+                j.cursor = 1;
+            }
+            let label = calls_lost_label(earlier(), lost);
+            j.states[1].label = label;
         }
         Some(j)
     }

@@ -514,6 +514,16 @@ mod tests {
         kept.arms[0].calls = Some(12);
         let opened = Junction::from_city(crate::street::model::named_said("J"), &kept, &kept, 0).unwrap();
         assert!(opened.current().arms.iter().all(|a| a.calls.is_none()));
+        // ...and says so, in the history, as an edit that took them off would.
+        let label = &opened.current().label;
+        assert_eq!(label.key, "jn-rev-calls-lost", "{label:?}");
+        assert_eq!(label.args[1], ("n", crate::shared::said::Arg::Num(1)));
+        assert!(matches!(&label.args[0].1, crate::shared::said::Arg::Said(inner) if inner.key == crate::junction::model::earlier().key));
+        // A signal keeps its calls, and opens as it did.
+        let mut signal = Junction::new(0).current().clone();
+        signal.arms[0].calls = Some(12);
+        let opened = Junction::from_city(crate::street::model::named_said("J"), Junction::new(0).current(), &signal, 0).unwrap();
+        assert_eq!((opened.current().arms[0].calls, opened.current().label.key), (Some(12), crate::junction::model::earlier().key));
     }
 
     #[test]
