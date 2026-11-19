@@ -812,6 +812,31 @@ mod tests {
     }
 
     #[test]
+    fn a_control_change_that_takes_crossings_off_call_counts_them_in_both_languages() {
+        use crate::junction::model::PRIORITY;
+        for (locale, one, two) in [
+            (crate::shared::i18n::Locale::En, "; 1 crossing no longer on call", "; 2 crossings no longer on call"),
+            (crate::shared::i18n::Locale::FrCa, "; 1 passage qui n’est plus sur appel", "; 2 passages qui ne sont plus sur appel"),
+        ] {
+            for (count, words) in [(1, one), (2, two)] {
+                let (ports, said, _, _) = test_ports_with_time();
+                let vm = JunctionVm::new(ports, crate::i18n_for(locale), Junction::new(0), None);
+                let (e, w) = vm.read(|j| {
+                    let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+                    (at(90), at(270))
+                });
+                for &u in &[e, w][..count] {
+                    assert!(vm.set_on_call(u, true));
+                }
+                said.take();
+                assert!(vm.apply(|j| j.set_control(PRIORITY)));
+                let t = said.take();
+                assert!(t[0].contains(words), "{t:?}");
+            }
+        }
+    }
+
+    #[test]
     fn a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit() {
         let r = rig(0);
         let e = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);

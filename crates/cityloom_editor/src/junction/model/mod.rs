@@ -764,6 +764,11 @@ pub fn arm_name(a: &Arm) -> Said {
 }
 
 /// Something said about one arm.
+/// `change`, followed by how many crossings it took off call (`jn-rev-calls-lost`).
+fn calls_lost_label(change: Said, n: usize) -> Said {
+    Said::new("jn-rev-calls-lost").with("change", Arg::Said(Box::new(change))).with("n", Arg::Num(n as i64))
+}
+
 fn about(key: &'static str, a: &Arm) -> Said {
     Said::new(key).with("arm", Arg::Said(Box::new(arm_name(a))))
 }
@@ -1887,9 +1892,9 @@ impl Junction {
             (true, true, true) => "jn-rev-control-all",
         };
         // Crossings on call go with the signal, and the revision says so as it says the timing did.
-        let calls_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.calls.is_some() && b.calls.is_none());
+        let calls_lost = self.current().arms.iter().zip(&after.arms).filter(|(a, b)| a.calls.is_some() && b.calls.is_none()).count();
         let label = Said::new(key).with("control", Arg::MsgLower(control_key(control)));
-        let label = if calls_lost { Said::new("jn-rev-calls-lost").with("change", Arg::Said(Box::new(label))) } else { label };
+        let label = if calls_lost > 0 { calls_lost_label(label, calls_lost) } else { label };
         self.edit_why(why, label, |s| {
             s.control = control;
             true
