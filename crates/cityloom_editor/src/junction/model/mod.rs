@@ -2130,12 +2130,6 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     signal::settle(s, region);
 }
 
-/// What every edit and every load does to a state to keep it true to itself (`settle_table_and_boxes`), for the tests.
-#[cfg(test)]
-pub(crate) fn settle_for_test(s: &mut State, region: usize) {
-    settle_table_and_boxes(s, region);
-}
-
 /// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
 /// widens stays inside its street's property line: otherwise it goes. While it stands there is no bus lane across the
 /// island, no queue jump, no ring size of its own, crossings are at least 6 m from the ring, and the entry lanes are

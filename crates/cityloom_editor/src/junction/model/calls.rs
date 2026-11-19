@@ -508,13 +508,12 @@ mod tests {
         let label = &j.current().label;
         assert_eq!(label.key, "jn-rev-calls-lost", "the revision says the calls went: {label:?}");
         assert!(matches!(&label.args[0].1, crate::shared::said::Arg::Said(inner) if inner.key.starts_with("jn-rev-control")));
-        // A document saved with calls on a junction that is not a signal reads without them.
+        // A document saved with calls on a junction that is not a signal opens without them.
         let mut kept = Junction::new(0).current().clone();
         kept.control = PRIORITY;
         kept.arms[0].calls = Some(12);
-        let mut back = kept.clone();
-        crate::junction::model::settle_for_test(&mut back, 0);
-        assert!(back.arms.iter().all(|a| a.calls.is_none()));
+        let opened = Junction::from_city(crate::street::model::named_said("J"), &kept, &kept, 0).unwrap();
+        assert!(opened.current().arms.iter().all(|a| a.calls.is_none()));
     }
 
     #[test]
