@@ -3081,7 +3081,7 @@ svg pattern circle {
 /* ---- the Transform dialog ------------------------------------------------- */
 
 /* A modal <dialog> (street/view/transform.rs): the groups, the open group's choices and the preview side by side,
-   Cancel and Apply under them; one column under 720 px. It keeps one height at every width, so that the options do not
+   Cancel and Apply under them; one column under 720 px, the list capped there so the preview under it stays near. It keeps one height at every width, so that the options do not
    move under the pointer when pointing at one shows its preview and the dialog, centred by the browser, would grow. Its text pairs are measured in shared/contrast.rs. */
 .transform-dialog {
   width: min(960px, 100vw - 32px);
@@ -3134,6 +3134,9 @@ svg pattern circle {
   min-height: 0;
   padding: 16px;
   overflow: auto;
+  /* Rows stay at the top: stretched to fill the body while it is short, they would shrink, and move the list, as soon
+     as a preview makes it scroll. */
+  align-content: start;
 }
 .transform-groups,
 .transform-pick,
@@ -3284,8 +3287,9 @@ svg pattern circle {
   .transform-body {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The list keeps to part of the height, so the preview under it stays in reach of the choice that shows it. */
   .transform-list {
-    max-height: none;
+    max-height: 35vh;
   }
 }
 @media (forced-colors: active) {

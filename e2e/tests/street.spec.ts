@@ -700,6 +700,16 @@ test.describe("the Transform dialog", () => {
     await expect(page.locator("#transform-apply")).toBeVisible();
   });
 
+  test("on a phone, the preview of the last transit measure shows without scrolling past the list", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-transit").click();
+    await page.locator("#transform-dialog .transit-item").last().click();
+    await expect(page.locator("#transform-preview h3")).toBeInViewport();
+  });
+
   test("the dialog fits a phone-width window", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 740 });
     await page.locator("#transform-btn").click();
