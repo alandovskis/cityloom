@@ -116,6 +116,16 @@ impl Watch {
         self.vm.with_value(|v| v.toggle_phase_ride(index, uid))
     }
 
+    /// Puts the crossing of street `uid` on call or back on recall as the person does. Whether it was done.
+    pub fn set_on_call(&self, uid: u32, on: bool) -> bool {
+        self.vm.with_value(|v| v.set_on_call(uid, on))
+    }
+
+    /// Sets the calls an hour of the crossing of street `uid` as the person does. Whether it was done.
+    pub fn set_call_rate(&self, uid: u32, rate: i32) -> bool {
+        self.vm.with_value(|v| v.set_call_rate(uid, rate))
+    }
+
     pub fn undo(&self) -> bool {
         self.vm.with_value(|v| v.undo())
     }

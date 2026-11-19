@@ -220,6 +220,36 @@ test.describe("the junction's parts are reached without a pointer, and with one 
   });
 });
 
+test.describe("pedestrian calls in the signal plan (#60)", () => {
+  test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const crossing = page.locator(".call-crossing").first();
+    const name = (await crossing.locator(".call-name").innerText()).trim();
+    await expect(page.getByRole("group", { name: `Crossing of ${name}` })).toHaveCount(1);
+    const box = crossing.getByRole("checkbox", { name: "On call (push button)" });
+    await expect(box).toHaveAccessibleDescription(/^On recall: walked every time its phases run/);
+    // Space puts it on call; its rate is a labelled field, and the description says what a call needs of the green.
+    await box.focus();
+    await page.keyboard.press("Space");
+    await expect(box).toBeChecked();
+    await expect(box).toBeFocused();
+    await expect(live(page)).toContainText("on call.");
+    await expect(box).toHaveAccessibleDescription(/^On call: walk 7 s \+ clearance \d+ s = \d+ s of green\.$/);
+    await expect(crossing.getByRole("textbox", { name: "Calls an hour" })).toHaveAccessibleDescription(
+      "0 to 60 calls an hour (placeholder bound)",
+    );
+    await page.locator("#calls-rows summary").click();
+    await expect(page.locator("#calls-rows tbody tr").first()).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("the drawing's label, focus and colours", () => {
   test("the drawing is an image with a label that says it is the junction in 2.5D and how many streets, and the group says how to use it", async ({
     page,

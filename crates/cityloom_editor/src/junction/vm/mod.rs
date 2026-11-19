@@ -282,6 +282,32 @@ impl JunctionVm {
         done
     }
 
+    /// The person puts the crossing of street `uid` on call (`on`), or back on recall. Announced by what was done and
+    /// how the plan then serves the crossing's calls; a refusal is said with its reason (no phase walks it, say).
+    pub fn set_on_call(&self, uid: u32, on: bool) -> bool {
+        self.call_edit(uid, |j| j.set_on_call(uid, on))
+    }
+
+    /// The person sets how many times an hour the crossing of street `uid`, on call, is called. Announced as
+    /// `set_on_call` is.
+    pub fn set_call_rate(&self, uid: u32, rate: i32) -> bool {
+        self.call_edit(uid, |j| j.set_call_rate(uid, rate))
+    }
+
+    /// An edit of a crossing's calls: the edit's text and then the crossing's calls added up, or the refusal. It changes
+    /// no phase, so nothing about the plan's conflicts or patterns is said.
+    fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        let done = self.edit(f);
+        if done {
+            let v = self.view_now();
+            let edit = text::edit_text(&v, &self.i18n, self.units_now());
+            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)));
+        } else {
+            self.say_refusal();
+        }
+        done
+    }
+
     /// A selection the person made, announced by what is selected.
     pub fn select(&self, target: Target) {
         self.plan.set(false);
@@ -713,6 +739,49 @@ mod tests {
         assert!(!r.vm.apply(|j| j.set_corner(n, 99_000)));
         assert_eq!(r.said.take(), vec!["That change does not fit."]);
         assert_eq!(r.vm.version().get_untracked(), 2, "a refused edit still asks the views to look again");
+    }
+
+    #[test]
+    fn a_crossing_put_on_call_is_announced_with_how_its_calls_are_served_and_a_refusal_says_why_in_both_languages() {
+        let r = rig(0);
+        let (n, e) = r.vm.read(|j| {
+            let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+            (at(0), at(90))
+        });
+        assert!(r.vm.set_on_call(e, true));
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Crossing of Sample Street 1 (east) on call."), "{t:?}");
+        assert!(t[0].contains("Crossing of Sample Street 1 (east): 12 calls in the hour; served "), "{t:?}");
+        assert!(r.vm.set_call_rate(e, 1));
+        assert!(r.said.take()[0].contains(": 1 call in the hour;"));
+        assert!(!r.vm.set_call_rate(e, 61));
+        assert_eq!(r.said.take(), vec!["That many calls an hour is outside the placeholder bound shown."]);
+        // A plan with no phase that walks the north street's crossing: on call is refused, and says why.
+        let only_east = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: e, to: n }],
+                walks: vec![],
+                rides: vec![],
+                arm: None,
+            }],
+        };
+        r.vm.edit(|j| j.set_plan_for_test(only_east.clone()));
+        assert!(!r.vm.set_on_call(n, true));
+        assert_eq!(r.said.take(), vec!["No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first."]);
+        // The east crossing, left on call with no walk, is a finding of the plan.
+        let findings = r.vm.view_now().signal.as_ref().unwrap().calls.findings.clone();
+        assert_eq!(findings.iter().map(|f| f.key).collect::<Vec<_>>(), vec!["jn-calls-finding-unwalked"]);
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.set_on_call(e, true));
+        let t = said.take();
+        assert!(t[0].starts_with("Passage de Sample Street 1 (est) sur appel."), "{t:?}");
+        assert!(t[0].contains("12\u{a0}appels dans l’heure") || t[0].contains("12 appels dans l’heure"), "{t:?}");
+        fr.edit(|j| j.set_plan_for_test(only_east));
+        assert!(!fr.set_on_call(n, true));
+        assert_eq!(said.take(), vec!["Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel\u{a0}: ouvrez-le d’abord dans une phase."]);
     }
 
     #[test]

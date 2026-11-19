@@ -434,6 +434,75 @@ fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_b
 }
 
 #[test]
+fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_placeholders() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).expect("a section for the pedestrian calls")..];
+    assert!(calls.contains("Pedestrian calls") && calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
+    assert!(calls.contains("at most 15 s"), "{calls}");
+    let crossings = s.view_now().signal.as_ref().unwrap().calls.crossings.clone();
+    assert_eq!(crossings.len(), 4, "every crossing is listed");
+    for c in &crossings {
+        assert!(calls.contains(&format!(r#"id="call-on-{}""#, c.uid)), "a box for each crossing: {calls}");
+    }
+    assert_eq!(calls.matches("On recall: walked every time its phases run").count(), 4, "each on recall to begin with");
+    assert!(calls.contains(r#"id="calls-none""#) && !calls.contains(r#"id="calls-totals""#));
+    // On call: its rate field, what it needs of the green, the totals, and every call in a fold.
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(calls.contains(&format!(r#"<label for="call-rate-{e}">Calls an hour</label>"#)), "{calls}");
+    assert!(calls.contains(&format!(r#"id="call-rate-{e}""#)) && calls.contains(r#"value="12""#), "{calls}");
+    assert!(calls.contains("0 to 60 calls an hour (placeholder bound)"));
+    assert!(calls.contains("On call: walk 7 s + clearance "), "{calls}");
+    assert_eq!(calls.matches("On recall:").count(), 3);
+    assert!(calls.contains(r#"id="calls-totals""#) && calls.contains("Longest wait") && !calls.contains(r#"id="calls-none""#));
+    assert!(calls.contains(r#"id="calls-rows""#) && calls.contains("Every call, one row each (12)"), "{calls}");
+    let rows = &calls[calls.find(r#"id="calls-rows""#).unwrap()..];
+    assert_eq!(rows.matches("<tr>").count(), 13, "a heading row and one per call");
+    assert!(rows.contains(" min ") && (rows.contains("Served after") || rows.contains("Delayed")), "{rows}");
+}
+
+#[test]
+fn a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_is_a_finding() {
+    let s = shared(0);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    assert!(s.set_on_call(e, true));
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: e, to: n }],
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(calls.contains("No phase walks this crossing, so it cannot be on call."), "{calls}");
+    let status = format!(r#"aria-describedby="call-status-{n}""#);
+    assert!(calls.contains(&status), "the box is described by its reason: {calls}");
+    assert!(calls.contains(r#"id="calls-findings""#) && calls.contains("is on call, but no phase walks it"), "{calls}");
+}
+
+#[test]
+fn the_pedestrian_calls_speak_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    for words in ["Appels piétons", "Valeurs provisoires", "1,0 m/s", "Sur appel (bouton-poussoir)", "En rappel", "Appels par heure", "Attente la plus longue"]
+    {
+        assert!(calls.contains(words), "{words}: {calls}");
+    }
+    assert!(!calls.contains("Pedestrian calls") && !calls.contains("On recall"), "no English left: {calls}");
+}
+
+#[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
     let h = panel(&s);

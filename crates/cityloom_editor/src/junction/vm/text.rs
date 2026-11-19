@@ -74,6 +74,24 @@ pub fn edit_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
     v.revisions.last().map(|r| i18n.tr_now("jn-edit", &Args::new().str("edit", say_now(i18n, units, &r.label)).str("fit", fit_text_now(v, i18n))))
 }
 
+/// How the plan serves the calls at the crossing of street `uid`, said after its mode or rate changes: "Crossing of
+/// Main Street (north): 12 calls in the hour; served 9, delayed 3, ...". None while it is on recall or no phase walks
+/// it (the findings say why).
+pub fn calls_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
+    let calls = &v.signal.as_ref()?.calls;
+    let crossing = calls.crossings.iter().find(|c| c.uid == uid)?;
+    let t = crossing.totals?;
+    let args = Args::new()
+        .str("arm", say_now(i18n, Units::Metres, &crossing.label))
+        .num("calls", i64::from(t.served + t.delayed + t.not_served))
+        .num("served", i64::from(t.served))
+        .num("delayed", i64::from(t.delayed))
+        .num("extended", i64::from(t.extended))
+        .num("not_served", i64::from(t.not_served))
+        .num("wait", i64::from(t.longest_wait_s));
+    Some(i18n.tr_now("jn-calls-said", &args))
+}
+
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {

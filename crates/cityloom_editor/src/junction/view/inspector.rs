@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
+use crate::junction::model::calls::{CLEARANCE_MM_PER_S, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, WALK_S};
 use crate::junction::model::read_model::{CrossingView, JView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::{
@@ -1688,6 +1689,186 @@ fn signal_overview(w: Watch) -> impl IntoView {
                             {words(w, "jn-sig-restore")}
                         </button>
                     </div> })}
+                </section>
+                {calls_section(w)}
+            }
+        })
+    }
+}
+
+/// Pedestrian calls (#60), in the plan's level: each crossing on call (walked only when someone pushes the button,
+/// with its calls an hour) or on recall (walked every time its phases run, which calls cannot change), the placeholder
+/// figures that bound the service, the calls of the hour added up by crossing, the findings, and every call in a fold.
+/// A crossing no phase walks says so, and a box put on call there is refused with that reason. It decides nothing:
+/// the modes, rows, totals and findings all come from the view.
+fn calls_section(w: Watch) -> impl IntoView {
+    let calls = move || w.view().signal.as_ref().map(|s| s.calls.clone()).unwrap_or_default();
+    let uids = Memo::new(move |_| calls().crossings.iter().map(|c| c.uid).collect::<Vec<u32>>());
+    let crossing = move |uid: u32| w.view().signal.as_ref().and_then(|s| s.calls.crossings.iter().find(|c| c.uid == uid).cloned());
+    let bounds = move || {
+        let speed = Units::Metres.fixed_in(CLEARANCE_MM_PER_S as i32, 1, w.i18n().locale());
+        tr(w, "jn-calls-bounds", Args::new().num("walk", i64::from(WALK_S)).str("speed", speed).num("max", i64::from(MAX_EXTENSION_S)))
+    };
+    let item = move |uid: u32| {
+        let street = move || crossing(uid).map(|c| w.say(&c.label)).unwrap_or_default();
+        let on = move || crossing(uid).is_some_and(|c| c.on_call);
+        let (box_id, rate_id, status_id, range_id) =
+            (format!("call-on-{uid}"), format!("call-rate-{uid}"), format!("call-status-{uid}"), format!("call-range-{uid}"));
+        let status = move || match crossing(uid) {
+            Some(c) if c.on_call && c.totals.is_some() => {
+                let t = c.totals.unwrap_or_default();
+                tr(w, "jn-calls-need", Args::new().num("walk", i64::from(WALK_S)).num("clearance", i64::from(t.clearance_s)).num("need", i64::from(t.need_s)))
+            }
+            Some(c) if !c.walked => w.tr("jn-calls-unwalked"),
+            Some(c) if c.on_call => String::new(),
+            _ => w.tr("jn-calls-recall"),
+        };
+        let rate_value = move || crossing(uid).map(|c| c.rate.to_string()).unwrap_or_default();
+        let set_rate = move |v: f64| {
+            // A typed number is rounded to a whole call; one that is not finite or is out of range is refused by the model.
+            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+                w.set_call_rate(uid, v.round() as i32);
+            }
+        };
+        let described = status_id.clone();
+        let rate = move || {
+            let (field, hint) = (rate_id.clone(), range_id.clone());
+            on().then(|| {
+                view! {
+                    <span class="call-rate">
+                        <label for=field.clone()>{words(w, "jn-calls-rate")}</label>
+                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
+                            value=rate_value prop:value=rate_value
+                            on:keydown=move |ev| {
+                                if let Some(dir) = step_key(&ev.key()) {
+                                    ev.prevent_default();
+                                    let now = crossing(uid).map_or(0, |c| c.rate as i32);
+                                    w.set_call_rate(uid, now.saturating_add(dir));
+                                }
+                            }
+                            on:change=move |ev| {
+                                let input = event_target::<HtmlInputElement>(&ev);
+                                commit_typed(&input.value(), &set_rate);
+                                // What the field holds is the model's rate, whether it took the edit or refused it.
+                                input.set_value(&rate_value());
+                            } />
+                        <span class="insp-range" id=hint>
+                            {move || tr(w, "jn-calls-rate-range", Args::new().num("min", 0).num("max", i64::from(MAX_CALLS_PER_HOUR)))}
+                        </span>
+                    </span>
+                }
+            })
+        };
+        let focus = box_id.clone();
+        view! {
+            <li class="call-crossing" role="group" aria-label=move || tr(w, "jn-calls-group", Args::new().str("street", street()))>
+                <span class="call-name">{street}</span>
+                <label class="phase-move">
+                    <input type="checkbox" id=box_id checked=on prop:checked=on aria-describedby=move || (!status().is_empty()).then(|| described.clone())
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            if !w.set_on_call(uid, input.checked()) {
+                                input.set_checked(on());
+                            }
+                            focus_after_swap(focus.clone());
+                        } />
+                    <span>{words(w, "jn-calls-on-call")}</span>
+                </label>
+                {rate}
+                <p class="insp-range" id=status_id>{status}</p>
+            </li>
+        }
+    };
+    let totals = move || calls().crossings.into_iter().filter_map(|c| c.totals.map(|t| (c.uid, t))).collect::<Vec<_>>();
+    let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    let totals_table = move || {
+        let rows = totals();
+        (!rows.is_empty()).then(|| {
+            let body = rows
+                .into_iter()
+                .map(|(uid, t)| {
+                    let name = crossing(uid).map(|c| w.say(&c.label)).unwrap_or_default();
+                    view! {
+                        <tr>
+                            <th scope="row">{name}</th>
+                            <td>{t.served}</td>
+                            <td>{t.delayed}</td>
+                            <td>{t.extended}</td>
+                            <td>{seconds(t.longest_wait_s)}</td>
+                        </tr>
+                    }
+                })
+                .collect_view();
+            view! {
+                <div class="calls-table">
+                    <table class="nt" id="calls-totals">
+                        <caption>{words(w, "jn-calls-totals-caption")}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{words(w, "jn-calls-col-crossing")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-served")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-delayed")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-extended")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-longest")}</th>
+                            </tr>
+                        </thead>
+                        <tbody>{body}</tbody>
+                    </table>
+                </div>
+            }
+        })
+    };
+    let findings = move || {
+        let found = calls().findings;
+        (!found.is_empty()).then(|| {
+            let items = found.iter().map(|f| view! { <li>{w.say(f)}</li> }).collect_view();
+            view! {
+                <h4 class="phase-moves-h" id="calls-findings-h">{words(w, "jn-calls-findings")}</h4>
+                <ul class="calls-findings" id="calls-findings" aria-labelledby="calls-findings-h">{items}</ul>
+            }
+        })
+    };
+    let every_call = move || {
+        let rows = calls().rows;
+        (!rows.is_empty()).then(|| {
+            let n = rows.len();
+            let body = rows
+                .iter()
+                .map(|r| view! { <tr><th scope="row">{w.say(&r.label)}</th><td>{w.say(&r.at)}</td><td>{w.say(&r.outcome)}</td></tr> })
+                .collect_view();
+            view! {
+                <details class="jn-fold" id="calls-rows">
+                    <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n as i64))}</summary>
+                    <div class="calls-table">
+                        <table class="nt">
+                            <caption>{words(w, "jn-calls-rows-caption")}</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">{words(w, "jn-calls-col-crossing")}</th>
+                                    <th scope="col">{words(w, "jn-calls-col-at")}</th>
+                                    <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
+                                </tr>
+                            </thead>
+                            <tbody>{body}</tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        })
+    };
+    let none_on_call = move || !calls().crossings.iter().any(|c| c.on_call);
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
+                    <h3 class="note-h" id="i-h-calls">{words(w, "jn-calls-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-calls-intro")}</p>
+                    <p class="insp-range" id="calls-bounds">{bounds}</p>
+                    <ul class="calls-crossings"><For each=move || uids.get() key=|u| *u children=item/></ul>
+                    {move || none_on_call().then(|| view! { <p class="insp-range" id="calls-none">{words(w, "jn-calls-none")}</p> })}
+                    {totals_table}
+                    {findings}
+                    {every_call}
                 </section>
             }
         })
