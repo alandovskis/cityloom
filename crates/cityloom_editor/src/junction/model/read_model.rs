@@ -789,7 +789,7 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
             uid: a.uid,
             label: name(a.uid),
             on_call: a.calls.is_some(),
-            rate: a.calls.unwrap_or(0),
+            rate: calls::rate_of(a).unwrap_or(0),
             walked: a.crossing.is_some() && calls::walked(plan, a.uid),
             totals: summary.totals.iter().find(|t| t.arm == a.uid).copied(),
         })

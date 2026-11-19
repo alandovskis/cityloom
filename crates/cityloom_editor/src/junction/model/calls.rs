@@ -47,9 +47,9 @@ fn splitmix(state: &mut u64) -> u64 {
 
 /// The seconds into the hour at which the crossing of street `uid` is called, `rate` times an hour: the hour is cut
 /// into `rate` equal slots and each slot gets one call at a point the generator, seeded from the street and the rate,
-/// picks. In order, each second at most once.
+/// picks. In order, each second at most once. A rate past `MAX_CALLS_PER_HOUR` is read as that.
 pub fn arrivals(uid: u32, rate: u32) -> Vec<u32> {
-    let rate = rate.min(HOUR_S);
+    let rate = rate.min(MAX_CALLS_PER_HOUR);
     let mut seed = (u64::from(uid) << 32) | u64::from(rate);
     (0..rate)
         .map(|k| {
@@ -142,11 +142,17 @@ pub struct Summary {
     pub findings: Vec<Finding>,
 }
 
+/// The calls an hour of arm `a`'s crossing, if it is on call, never past `MAX_CALLS_PER_HOUR`: a document from a sync
+/// or written by hand can hold any number. Read it here, never from `Arm.calls`.
+pub fn rate_of(a: &Arm) -> Option<u32> {
+    a.calls.map(|r| r.min(MAX_CALLS_PER_HOUR))
+}
+
 /// The on-call crossings of `s` in the order of the bearings, each with its rate.
 fn on_call(s: &State) -> Vec<(&Arm, u32)> {
     let mut arms: Vec<&Arm> = s.arms.iter().collect();
     arms.sort_by_key(|a| a.bearing);
-    arms.into_iter().filter_map(|a| a.calls.map(|r| (a, r))).collect()
+    arms.into_iter().filter_map(|a| rate_of(a).map(|r| (a, r))).collect()
 }
 
 /// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call. `distances` is each
@@ -417,6 +423,26 @@ mod tests {
             serve_turns(&plan, &asked, 2),
             vec![call(9, 0, Outcome::Served, 0, 0), call(9, 10, Outcome::NotServed, 0, 0), call(9, 40, Outcome::NotServed, 0, 0)]
         );
+    }
+
+    #[test]
+    fn a_rate_past_the_bound_in_a_document_is_read_as_the_bound() {
+        assert_eq!(arrivals(7, u32::MAX).len(), MAX_CALLS_PER_HOUR as usize);
+        assert_eq!(arrivals(7, u32::MAX), arrivals(7, MAX_CALLS_PER_HOUR), "the same calls as at the bound");
+        let mut s = cross();
+        let e = at(&s, 90);
+        let mut text = serde_json::to_value(&s).unwrap();
+        let arm = text["arms"].as_array_mut().unwrap().iter_mut().find(|a| a["uid"] == e).unwrap();
+        arm["calls"] = serde_json::json!(4_294_967_295u32);
+        let mut loaded: State = serde_json::from_value(text).unwrap();
+        // The streets are the city's, never saved with the junction: put back as the city does when it opens it.
+        for (a, b) in loaded.arms.iter_mut().zip(&s.arms) {
+            a.section = b.section.clone();
+        }
+        s = loaded;
+        assert_eq!(rate_of(s.arms.iter().find(|a| a.uid == e).unwrap()), Some(MAX_CALLS_PER_HOUR));
+        let sum = summary_of(&s, &[(e, 9_000)]);
+        assert_eq!((sum.totals[0].rate, sum.calls.len()), (MAX_CALLS_PER_HOUR, MAX_CALLS_PER_HOUR as usize));
     }
 
     #[test]
