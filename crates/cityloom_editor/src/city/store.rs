@@ -9,6 +9,7 @@ use cityloom_model::Network;
 
 use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits, JUNCTIONS, JunctionRecord, STREETS, StreetRecord};
 use crate::city::model::{City, Layout};
+use crate::city::scenario::{Refusal, Scenarios};
 use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
 use crate::shared::ports::Storage;
@@ -22,6 +23,15 @@ pub const NETWORK_KEY: &str = "cityloom-network";
 /// The checksum of the metro tile an area's network was made from, where it was; the area's key follows.
 pub const CHECKSUM_KEY: &str = "cityloom-checksum";
 pub const REGION_KEY: &str = "cityloom-region";
+
+/// Why a scenario action of a place was not done.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScenarioFailure {
+    /// The action itself was refused, for this reason.
+    Refused(Refusal),
+    /// The place has no key of its own, or what was made could not be written.
+    NotKept,
+}
 
 #[derive(Clone)]
 pub struct CityStore {
@@ -182,7 +192,14 @@ impl CityStore {
         if !city.keep_street(edge, street) {
             return false;
         }
-        let Some((key, mut record)) = city.street_record(edge) else { return false };
+        let Some((key, record)) = city.street_record(edge) else { return false };
+        self.put_street(&city, edge, key, record)
+    }
+
+    /// Keeps `record` as street `edge`'s, under `key`, in place of the record the street took its edit from where that
+    /// was kept under another key. Every write of a street, its baseline or a scenario, goes through here.
+    fn put_street(&self, city: &City, edge: u32, key: String, mut record: StreetRecord) -> bool {
+        // stamped with the importer of the network kept, whatever the write: a record without it is stale
         record.import = self.importer();
         // the record the street took, under another key, is replaced: left, it would bring the older edit back
         let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
@@ -216,7 +233,12 @@ impl CityStore {
         if !city.keep_junction(node, state) {
             return false;
         }
-        let Some((key, mut record)) = city.junction_record(node) else { return false };
+        let Some((key, record)) = city.junction_record(node) else { return false };
+        self.put_junction(&city, node, key, record)
+    }
+
+    /// As `put_street`, for the junction at `node`.
+    fn put_junction(&self, city: &City, node: u32, key: String, mut record: JunctionRecord) -> bool {
         record.import = self.importer();
         let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
         let unedited = self
@@ -241,6 +263,45 @@ impl CityStore {
             self.mark_written(Kind::Junction, &key, changed, replaced.as_deref());
         }
         kept
+    }
+
+    /// Changes the scenarios of street `edge` (`change` is given them and the baseline, as its record keeps both) and
+    /// keeps the record. Its answer, or why nothing was changed: refused by `change`, or not kept (the street has no
+    /// key of its own, or the document could not be written).
+    pub fn change_street_scenarios<R>(
+        &self,
+        edge: u32,
+        change: impl FnOnce(&mut Scenarios<Street>, &Street) -> Result<R, Refusal>,
+    ) -> Result<R, ScenarioFailure> {
+        let city = self.open();
+        let Some((key, mut record)) = city.street_record(edge) else { return Err(ScenarioFailure::NotKept) };
+        let answer = change(&mut record.scenarios, &record.street).map_err(ScenarioFailure::Refused)?;
+        if self.put_street(&city, edge, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
+    }
+
+    /// The same for the junction at `node` (each arm's `edge` 0 in the baseline and the scenarios, as kept).
+    pub fn change_junction_scenarios<R>(
+        &self,
+        node: u32,
+        change: impl FnOnce(&mut Scenarios<State>, &State) -> Result<R, Refusal>,
+    ) -> Result<R, ScenarioFailure> {
+        let city = self.open();
+        let Some((key, mut record)) = city.junction_record(node) else { return Err(ScenarioFailure::NotKept) };
+        let answer = change(&mut record.scenarios, &record.state).map_err(ScenarioFailure::Refused)?;
+        if self.put_junction(&city, node, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
+    }
+
+    /// Takes `street` as the design of scenario `id` of street `edge` (an edit made within it), leaving the baseline
+    /// alone. Says whether it was taken and kept.
+    pub fn write_street_scenario(&self, edge: u32, id: u32, street: Street) -> bool {
+        let Some(design) = self.open().street_design(edge, street) else { return false };
+        self.change_street_scenarios(edge, |scenarios, _| scenarios.set_design(id, design)).is_ok()
+    }
+
+    /// The same for the junction at `node`.
+    pub fn write_junction_scenario(&self, node: u32, id: u32, state: State) -> bool {
+        let Some(design) = self.open().junction_design(node, state) else { return false };
+        self.change_junction_scenarios(node, |scenarios, _| scenarios.set_design(id, design)).is_ok()
     }
 
     /// The city as first laid out, with no edit: what a place's record is until the person changes it.
@@ -1183,6 +1244,100 @@ mod tests {
         assert!(store.write_junction(node, j.snapshot()));
         let gone = marked(&storage, "junction/n1").unwrap();
         assert_eq!((gone.pending, gone.deleted), (true, true), "the record it replaced is a removal other devices must learn");
+    }
+
+    /// The document as kept with `design` kept beside the first street record (or junction record) as scenario "Wider".
+    fn with_a_scenario(storage: &MemoryStorage, junction: bool) {
+        let mut e = document(storage);
+        if junction {
+            let record = e.junctions.values_mut().next().unwrap();
+            let design = record.state.clone();
+            record.scenarios.create("Wider", design).unwrap();
+        } else {
+            let record = e.streets.values_mut().next().unwrap();
+            let design = record.street.clone();
+            record.scenarios.create("Wider", design).unwrap();
+        }
+        storage.remember(EDITS_KEY, &e.to_json());
+    }
+
+    #[test]
+    fn a_baseline_write_keeps_the_street_s_scenarios() {
+        let (store, storage) = store();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        with_a_scenario(&storage, false);
+        let mut again = narrowed(&store, 1);
+        again.segments[0].width_mm -= 100;
+        again.segments[1].width_mm += 100;
+        assert!(store.write_street(1, again));
+        let e = document(&storage);
+        let kept = &e.streets.values().next().unwrap().scenarios;
+        assert_eq!(kept.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Wider"], "the baseline write dropped the scenarios");
+    }
+
+    #[test]
+    fn a_baseline_write_keeps_the_junction_s_scenarios() {
+        let (store, storage) = store();
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 7_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        with_a_scenario(&storage, true);
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 6_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        assert_eq!(document(&storage).junctions.values().next().unwrap().scenarios.len(), 1, "the baseline write dropped the scenarios");
+    }
+
+    #[test]
+    fn a_street_scenario_starts_as_the_baseline_and_an_edit_in_it_leaves_the_baseline_alone() {
+        let (store, storage) = store();
+        let baseline = store.open().street_editor(1, 0).unwrap().snapshot();
+        let id = store.change_street_scenarios(1, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        let scenario = |store: &CityStore| store.open().street_editor_in(1, 0, Some(id)).unwrap().snapshot();
+        assert_eq!(scenario(&store), baseline, "a new scenario is the baseline's design");
+        assert!(store.write_street_scenario(1, id, narrowed(&store, 1)));
+        assert_eq!(scenario(&store), narrowed(&store, 1));
+        assert_eq!(store.open().street_editor(1, 0).unwrap().snapshot(), baseline, "the baseline is as it was");
+        assert_eq!(store.open().street_editor_in(1, 0, None).unwrap().snapshot(), baseline);
+        assert_eq!(store.open().view(0).edited, 0, "the map reads the baseline");
+        assert!(marked(&storage, &format!("street/{}", document(&storage).streets.keys().next().unwrap())).unwrap().pending, "the sync carries it");
+        assert!(store.open().street_editor_in(1, 0, Some(id + 1)).is_none(), "no such scenario");
+        assert!(!store.write_street_scenario(1, id + 1, narrowed(&store, 1)));
+    }
+
+    #[test]
+    fn a_street_scenario_is_duplicated_renamed_and_deleted_and_each_refusal_comes_back() {
+        let (store, _) = store();
+        let first = store.change_street_scenarios(1, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        assert!(store.write_street_scenario(1, first, narrowed(&store, 1)));
+        let copy = store.change_street_scenarios(1, |s, _| s.duplicate(first, "Parking kept")).unwrap();
+        assert_eq!(store.open().street_editor_in(1, 0, Some(copy)).unwrap().snapshot(), narrowed(&store, 1));
+        assert_eq!(store.change_street_scenarios(1, |s, _| s.rename(copy, "wider BIKE lane")), Err(ScenarioFailure::Refused(Refusal::NameTaken)));
+        store.change_street_scenarios(1, |s, _| s.rename(copy, "Parking kept, wider")).unwrap();
+        store.change_street_scenarios(1, |s, _| s.delete(first)).unwrap();
+        let names: Vec<String> = store.open().street_scenarios(1).unwrap().iter().map(|s| s.name.clone()).collect();
+        assert_eq!(names, ["Parking kept, wider"]);
+        let (keyless, _) = (CityStore::sample_without_osm_ids(test_ports().0.storage), ());
+        assert_eq!(keyless.change_street_scenarios(1, |s, base| s.create("A", base.clone())), Err(ScenarioFailure::NotKept), "a place with no key keeps none");
+    }
+
+    #[test]
+    fn a_junction_scenario_starts_as_the_baseline_and_an_edit_in_it_leaves_the_baseline_alone() {
+        let (store, _) = store();
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let state = |j: crate::junction::model::Junction| j.snapshot();
+        let baseline = state(store.open().junction_editor(node, 0).unwrap());
+        let id = store.change_junction_scenarios(node, |s, base| s.create("Raised", base.clone())).unwrap();
+        assert_eq!(state(store.open().junction_editor_in(node, 0, Some(id)).unwrap()), baseline);
+        let mut j = store.open().junction_editor_in(node, 0, Some(id)).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 7_000));
+        assert!(store.write_junction_scenario(node, id, j.snapshot()));
+        let unlabelled = |s: State| State { label: crate::junction::model::earlier(), ..s };
+        assert_eq!(state(store.open().junction_editor_in(node, 0, Some(id)).unwrap()), unlabelled(j.snapshot()), "the label is not kept");
+        assert_eq!(state(store.open().junction_editor(node, 0).unwrap()), baseline, "the baseline is as it was");
+        let kept = store.open().junction_scenarios(node).unwrap().get(id).unwrap().design.clone();
+        assert!(kept.arms.iter().all(|a| a.edge == 0), "kept as the record keeps its state");
     }
 
     #[test]
