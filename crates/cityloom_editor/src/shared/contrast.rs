@@ -223,7 +223,7 @@ mod tests {
 
     /// Inside a page's locked controls (`shared::locked`, a disabled fieldset on a page shown read-only), a surface or
     /// curb choice, a field and a junction's turn look disabled: muted ink already pinned on the panel (ink-3, 4.5:1;
-    /// the chosen one and a field's value ink-2, 4.5:1), no pointer and no hover fill or accent wash.
+    /// the chosen one and a field's value ink-2, 4.5:1; a chosen read-only turn ink-2 on the fill, 4.5:1, as a destination chip holds text), no pointer and no hover fill or accent wash.
     #[test]
     fn a_locked_choice_field_and_turn_look_disabled_in_pinned_inks() {
         let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
@@ -252,7 +252,8 @@ mod tests {
                 assert!(contrast(&c, &panel) >= 4.5, "{name} on the panel {theme}: {:.2}", contrast(&c, &panel));
             }
             let ink = pick(&token(app, "ink-2"), i);
-            assert!(contrast(&ink, &fill) >= 3.0, "a chosen turn's glyph, ink-2 on the fill {theme}: {:.2}", contrast(&ink, &fill));
+            // a chosen destination chip (`.turn.dest`) carries its street's 13px tag as well as the glyph: text, 4.5:1
+            assert!(contrast(&ink, &fill) >= 4.5, "a chosen turn's glyph and tag, ink-2 on the fill {theme}: {:.2}", contrast(&ink, &fill));
         }
     }
 
