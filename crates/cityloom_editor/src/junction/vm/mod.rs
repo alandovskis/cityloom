@@ -149,18 +149,25 @@ impl JunctionVm {
     }
 
     /// Changes the junction, tells whatever watches it, and sees that it is kept. Shown read-only, whatever `f` did to
-    /// the junction's history is put back (what is chosen stays) and nothing is kept: the commands refuse first, and
-    /// this holds for any change that reaches the junction some other way.
-    pub fn edit<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+    /// the junction's history is put back (what is chosen stays), the refusal is said, `R::default()` (false, none) is
+    /// returned and nothing is kept: the commands refuse first, and this holds for any change that reaches the junction
+    /// some other way.
+    pub fn edit<R: Default>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         if self.read_only() {
-            return self.core.edit(|j| {
+            let (r, put_back) = self.core.edit(|j| {
                 let kept = j.clone();
                 let r = f(j);
-                if !j.same_history(&kept) {
+                let put_back = !j.same_history(&kept);
+                if put_back {
                     *j = kept;
                 }
-                r
+                (r, put_back)
             });
+            if put_back {
+                self.refuse_read_only();
+                return R::default();
+            }
+            return r;
         }
         let r = self.core.edit(f);
         if let Some(k) = &self.keeper {
@@ -904,8 +911,9 @@ mod read_only_tests {
         let before = stored(&r.storage);
         let junction = r.vm.read(|j| j.snapshot());
         let arm = r.vm.view_now().arms[0].uid;
-        assert!(r.vm.edit(|j| j.set_corner(arm, 9_000)), "the model took it");
+        assert!(!r.vm.edit(|j| j.set_corner(arm, 9_000)), "the model took it, and the page refuses it: no edit to announce");
         assert_eq!(r.vm.read(|j| j.snapshot()), junction, "and it was put back");
+        assert_eq!(r.said.take(), ["This design is open read-only: nothing can be changed."]);
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(stored(&r.storage), before);

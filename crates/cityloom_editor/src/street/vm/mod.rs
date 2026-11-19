@@ -257,31 +257,39 @@ impl StreetVm {
     /// added) shows it in the details panel. The commands that add to a strip ask for their level themselves (see
     /// `level::new_piece` for why a strip is not read here).
     ///
-    /// Shown read-only, whatever `f` did to the street's history is put back (what is chosen and shown stays): the
-    /// commands refuse first, and this holds for any change that reaches the editor some other way.
-    fn core_edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
+    /// Shown read-only, whatever `f` did to the street's history is put back (what is chosen and shown stays), the
+    /// refusal is said and there is no result (None), so nothing announces or records an edit: the commands refuse
+    /// first, and this holds for any change that reaches the editor some other way.
+    fn core_edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> Option<R> {
         let before = self.view_now();
         let r = if self.read_only() {
-            self.core.edit(|e| {
+            let (r, put_back) = self.core.edit(|e| {
                 let kept = e.clone();
                 let r = f(e);
-                if !e.same_history(&kept) {
+                let put_back = !e.same_history(&kept);
+                if put_back {
                     *e = kept;
                 }
-                r
-            })
+                (r, put_back)
+            });
+            if put_back {
+                self.refuse_read_only();
+                return None;
+            }
+            r
         } else {
             self.core.edit(f)
         };
         if level::new_piece(&before, &self.view_now()).is_some() {
             self.ask(Level::Piece);
         }
-        r
+        Some(r)
     }
 
-    /// Changes the street, tells whatever watches it, and sees that it is kept.
-    pub fn edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
-        let r = self.core_edit(f);
+    /// Changes the street, tells whatever watches it, and sees that it is kept. Shown read-only, a change that reached
+    /// the street's history is refused (`core_edit`) and `R::default()` (false, none) is returned.
+    pub fn edit<R: Default>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
+        let Some(r) = self.core_edit(f) else { return R::default() };
         // A choice of the section to keep was asked about the zones as they stood: any other change withdraws it.
         if self.merge.get_untracked().is_some() {
             self.merge.set(None);
@@ -312,7 +320,7 @@ impl StreetVm {
     }
 
     /// A change that is not announced, as each step of a drag is.
-    pub fn quiet<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
+    pub fn quiet<R: Default>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
         self.edit(f)
     }
 
@@ -449,7 +457,7 @@ impl StreetVm {
             return false;
         }
         let before = self.before();
-        let result = self.core_edit(|e| e.apply_template(template));
+        let Some(result) = self.core_edit(|e| e.apply_template(template)) else { return false };
         match result {
             Ok(report) => {
                 self.touch();
@@ -491,7 +499,8 @@ impl StreetVm {
             return false;
         }
         let before = self.before();
-        match self.core_edit(f) {
+        let Some(result) = self.core_edit(f) else { return false };
+        match result {
             Ok(()) => {
                 self.touch();
                 self.merge.set(None);
@@ -613,7 +622,8 @@ impl StreetVm {
             return false;
         }
         let before = self.before();
-        match self.core_edit(f) {
+        let Some(result) = self.core_edit(f) else { return false };
+        match result {
             Ok(()) => {
                 self.touch();
                 self.say_edit(&before);
@@ -860,7 +870,8 @@ impl StreetVm {
             return false;
         }
         let before = self.before();
-        match self.core_edit(f) {
+        let Some(result) = self.core_edit(f) else { return false };
+        match result {
             Ok(()) => {
                 self.touch();
                 self.say_edit(&before);
@@ -1231,7 +1242,8 @@ impl StreetVm {
             return false;
         }
         let (before, revisions) = (self.before(), self.view_now().revisions.len());
-        match self.core_edit(f) {
+        let Some(result) = self.core_edit(f) else { return false };
+        match result {
             Ok(()) if self.view_now().revisions.len() == revisions => false,
             Ok(()) => {
                 self.touch();
@@ -4478,16 +4490,19 @@ mod read_only_tests {
         let before = stored(&r.storage);
         let street = r.vm.read(|e| e.snapshot());
         let uid = r.vm.view_now().segments[0].uid;
-        r.vm.edit(|e| e.nudge_width(uid, 100));
-        r.vm.quiet(|e| e.remove(uid));
+        let refused = "This design is open read-only: nothing can be changed.";
+        assert!(!r.vm.edit(|e| e.nudge_width(uid, 100)), "the model took it, and the page refuses it: no edit to announce");
+        assert_eq!(r.said.take(), [refused]);
+        assert!(!r.vm.quiet(|e| e.remove(uid)));
         r.vm.quiet(|e| e.begin_gesture());
-        r.vm.quiet(|e| e.nudge_width(uid, 100));
+        assert!(!r.vm.quiet(|e| e.nudge_width(uid, 100)));
         r.vm.end_gesture(true);
         assert_eq!(r.vm.read(|e| e.snapshot()), street);
         r.time.advance(1_000);
         r.vm.flush();
         assert_eq!(stored(&r.storage), before);
-        assert!(!r.said.take().iter().any(|s| s.contains("not keeping")), "nothing was refused by the storage: nothing was asked of it");
+        let said = r.said.take();
+        assert!(!said.is_empty() && said.iter().all(|s| s == refused), "each change refused and said, none announced as an edit: {said:?}");
     }
 
     #[test]
