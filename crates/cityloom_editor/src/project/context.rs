@@ -45,7 +45,8 @@ fn search_of(ports: &Ports) -> String {
 
 /// A page's storage for project `id` over the root `storage`: it keeps nothing once the project is no longer listed (a
 /// tab deleted it; no sync need say so), so an editor still open cannot bring the project back. On a page whose address
-/// opens the project read-only (`search` holds `project_id::VIEW`) it keeps nothing at all.
+/// opens the project read-only (`search` holds `project_id::VIEW`) it keeps none of the design and marks nothing
+/// (`ScopedStorage::only_to_read`); the person's caches and preferences are still kept.
 fn page_storage(storage: &Rc<dyn Storage>, id: &str, search: &str) -> Rc<ScopedStorage> {
     let (root, project) = (storage.clone(), id.to_string());
     let scoped = ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some());
