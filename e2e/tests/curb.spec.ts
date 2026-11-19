@@ -89,8 +89,8 @@ test.describe("the curbside strip", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /One curbside use is shown\./);
     await expect(page.locator('#drawing .iso-piece:has(> title:text-is("Patio"))').first()).toBeAttached();
 
-    // Kept: the document is version 8 and the use is still there after a reload.
-    await expect.poll(() => editsVersion(page)).toBe(8);
+    // Kept: the document is version 17 (the import stamp) and the use is still there after a reload.
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(page.locator(".curb-strip").first().locator('[role="option"]').nth(0)).toHaveAttribute(

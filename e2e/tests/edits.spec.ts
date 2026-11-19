@@ -92,8 +92,8 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  // The speed is unchanged from OpenStreetMap's, so the record holds none (it follows the import): version 5.
-  expect(doc.version).toBe(5);
+  // The speed is unchanged from OpenStreetMap's, so the record holds none (it follows the import); the document is version 17, the import stamp.
+  expect(doc.version).toBe(17);
   expect(Object.values<any>(doc.streets)[0].street).not.toHaveProperty("speed_kmh");
   expect(Object.keys(doc.streets)).toHaveLength(1);
   expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
@@ -102,7 +102,7 @@ test("an edit is kept under the street's OSM key", async ({ page }) => {
   expect(keys.filter((k) => k.startsWith("cityloom-city:"))).toEqual([]);
 });
 
-test("a speed the designer changed is kept with the record: version 7", async ({ page }) => {
+test("a speed the designer changed is kept with the record", async ({ page }) => {
   const href = await openStreet(page, 0);
   await showStreetLevel(page);
   const speed = page.locator("#speed-limit");
@@ -113,7 +113,7 @@ test("a speed the designer changed is kept with the record: version 7", async ({
   await page.goto("/map.html");
   await mapReady(page);
   const doc = await edits(page);
-  expect(doc.version).toBe(7);
+  expect(doc.version).toBe(17);
   expect(Object.values<any>(doc.streets)[0].street.speed_kmh).toBe(Number(chosen));
   await page.goto("/" + href);
   await expect(speed).toHaveValue(chosen);

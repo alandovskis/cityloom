@@ -116,8 +116,8 @@ test.describe("street trees and green infrastructure", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Trees and plantings shown: /);
     await expect(crowns(page).first()).toBeAttached();
 
-    // Version 11 is the edits document that can hold green elements.
-    await expect.poll(() => editsVersion(page)).toBe(11);
+    // Version 17 is the document that holds the import stamp every street record carries.
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#green-strip").locator('[role="option"]')).toHaveCount(1);
 

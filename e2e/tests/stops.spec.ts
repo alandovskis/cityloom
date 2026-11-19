@@ -83,8 +83,8 @@ test.describe("the Stops row", () => {
     await expect(page.locator("#drawing .iso-stop-sign").first()).toBeAttached();
     await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(0);
 
-    // Kept: the document is version 9 and the stop is still there after a reload.
-    await expect.poll(() => editsVersion(page)).toBe(9);
+    // Kept: the document is version 17 (the import stamp) and the stop is still there after a reload.
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /12\.0 m long/);

@@ -51,7 +51,6 @@ test.describe("raised tables and crossings", () => {
     await openCalmingStreet(page, 20);
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#undo")).toBeDisabled();
-    const before = await editsVersion(page);
 
     await addElement(page, 0, 8);
     await expect(cells(page)).toHaveCount(2);
@@ -68,14 +67,13 @@ test.describe("raised tables and crossings", () => {
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Raised elements long enough" })).toHaveCount(1);
 
-    // Kept: the document takes the raised tables' version, and the table is there after a reload.
-    expect(before).not.toBe(12);
-    await expect.poll(() => editsVersion(page)).toBe(12);
+    // Kept: the document is written as version 17 whatever it holds: every street record carries the importer stamp, and the table is there after a reload.
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Raised table.*8\.0 m long/);
 
-    // Undo takes it away, and the saved document goes back to what it was.
+    // Undo takes it away.
     await page.locator("#undo").click();
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#drawing .iso-table")).toHaveCount(0);
@@ -150,7 +148,7 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#add-topic-calming")).toHaveText("Apaisement de la circulation");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Plateau surélevé/);
   });
-  test("a chicane is added with the tools, drawn as build-outs, saved as version 14 and undone", async ({ page }) => {
+  test("a chicane is added with the tools, drawn as build-outs, saved and undone", async ({ page }) => {
     await openCalmingStreet(page, 30);
     await addFromMenu(page, 0, "2");
     // Only a chicane has a side to start on.
@@ -170,16 +168,15 @@ test.describe("raised tables and crossings", () => {
     // Its checks include the lane row, and the document takes the chicanes' version only while one is held.
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Chicanes clear of bus and bike lanes" })).toHaveCount(1);
-    await expect.poll(() => editsVersion(page)).toBe(14);
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane/);
 
-    // Undo takes it away, and the saved document goes back to what it was.
+    // Undo takes it away.
     await page.locator("#undo").click();
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#drawing .iso-chicane")).toHaveCount(0);
-    await expect.poll(() => editsVersion(page)).not.toBe(14);
   });
 
   test("a chicane that is too short is refused with its minimum", async ({ page }) => {
@@ -190,9 +187,7 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#live")).toContainText("This element must be at least");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane.*24\.0 m long/);
   });
-  test("a modal filter is added with the tools, drawn as one block, saved as version 15 and undone", async ({
-    page,
-  }) => {
+  test("a modal filter is added with the tools, drawn as one block, saved and undone", async ({ page }) => {
     await openCalmingStreet(page, 30);
     await addFromMenu(page, 0, "3");
     // Only a chicane has a side to start on.
@@ -208,13 +203,13 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /modal filter/);
     await page.screenshot({ path: "test-results/modal-filter.png", fullPage: true });
 
-    // Its checks include the bus-lane and passage rows, and the document takes version 15 only while one is held.
+    // Its checks include the bus-lane and passage rows, and the document is version 17 (the import stamp, held whatever the street holds).
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Modal filters clear of bus lanes" })).toHaveCount(1);
     await expect(
       page.locator("#checks li").filter({ hasText: "Modal filters passable on foot and by bike" }),
     ).toHaveCount(1);
-    await expect.poll(() => editsVersion(page)).toBe(15);
+    await expect.poll(() => editsVersion(page)).toBe(17);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter/);
@@ -222,7 +217,6 @@ test.describe("raised tables and crossings", () => {
     await page.locator("#undo").click();
     await expect(cells(page)).toHaveCount(1);
     await expect(page.locator("#drawing .iso-filter")).toHaveCount(0);
-    await expect.poll(() => editsVersion(page)).not.toBe(15);
   });
 
   test("a modal filter shorter than its minimum is refused", async ({ page }) => {
