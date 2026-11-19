@@ -221,6 +221,34 @@ mod tests {
         assert!(hover < checked);
     }
 
+    /// Inside a page's locked controls (`shared::locked`, a disabled fieldset on a page shown read-only), a surface or
+    /// curb choice, a field and a junction's turn look disabled: muted ink already pinned on the panel (ink-3, 4.5:1;
+    /// the chosen one and a field's value ink-2, 4.5:1), no pointer and no hover fill or accent wash.
+    #[test]
+    fn a_locked_choice_field_and_turn_look_disabled_in_pinned_inks() {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let off = rule(editor, ".opt[role=\"radio\"]:disabled");
+        assert!(off.contains("color: var(--ink-3);") && off.contains("cursor: default;"), "{off}");
+        assert!(rule(editor, ".opt[role=\"radio\"]:disabled:hover").contains("background: transparent;"));
+        let chosen = rule(editor, ".opt[role=\"checkbox\"][aria-checked=\"true\"]:disabled,\n.opt[role=\"radio\"][aria-checked=\"true\"]:disabled");
+        assert!(chosen.contains("background: transparent;") && chosen.contains("color: var(--ink-2);"), "{chosen}");
+        let field = rule(editor, ".wfield input:disabled,\n.var select:disabled,\n.var input[type=\"time\"]:disabled,\n.inspector select:disabled");
+        assert!(field.contains("color: var(--ink-2);") && field.contains("cursor: default;") && field.contains("border-color: var(--rule);"), "{field}");
+        let turn = rule(editor, ".turn[aria-pressed=\"true\"]:disabled");
+        assert!(turn.contains("background: var(--fill);") && turn.contains("color: var(--ink-2);"), "{turn}");
+        assert!(editor.contains(".turn[aria-pressed=\"false\"]::after {"), "a banned turn keeps its stroke when disabled");
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (panel, fill) = (pick(&token(app, "panel"), i), pick(&token(app, "fill"), i));
+            for name in ["ink-2", "ink-3"] {
+                let c = pick(&token(app, name), i);
+                assert!(contrast(&c, &panel) >= 4.5, "{name} on the panel {theme}: {:.2}", contrast(&c, &panel));
+            }
+            let ink = pick(&token(app, "ink-2"), i);
+            assert!(contrast(&ink, &fill) >= 3.0, "a chosen turn's glyph, ink-2 on the fill {theme}: {:.2}", contrast(&ink, &fill));
+        }
+    }
+
     #[test]
     fn the_drawing_group_shows_its_focus_in_the_accent_ring_not_its_faint_line() {
         let editor = include_str!("../../../../web/editor.css");

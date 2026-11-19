@@ -1944,6 +1944,16 @@ svg pattern circle {
   border-color: var(--warn-line);
   color: var(--warn);
 }
+/* A field inside a page's locked controls: its value still read in ink-2, its frame faint, no text cursor. */
+.wfield input:disabled,
+.var select:disabled,
+.var input[type="time"]:disabled,
+.inspector select:disabled {
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: default;
+}
 .inspector select {
   width: 100%;
 }
@@ -2084,6 +2094,20 @@ svg pattern circle {
 }
 .opt[role="radio"][aria-disabled="true"] {
   cursor: default;
+}
+/* Inside a page's locked controls (`shared::locked`, a disabled fieldset on a page shown read-only) a choice is greyed:
+   ink-3, the chosen one ink-2 with its tick and no wash, no pointer and no hover fill (pinned in shared/contrast.rs). */
+.opt[role="radio"]:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+.opt[role="radio"]:disabled:hover {
+  background: transparent;
+}
+.opt[role="checkbox"][aria-checked="true"]:disabled,
+.opt[role="radio"][aria-checked="true"]:disabled {
+  background: transparent;
+  color: var(--ink-2);
 }
 .opt .turn-ico {
   fill: none;
@@ -2374,7 +2398,7 @@ svg pattern circle {
   color: var(--ink-3);
   cursor: default;
 }
-.turn[aria-pressed="false"]:not(:disabled)::after {
+.turn[aria-pressed="false"]::after {
   content: "";
   position: absolute;
   inset: 5px;
@@ -2401,6 +2425,12 @@ svg pattern circle {
   color: var(--ink-3);
   opacity: 0.7;
 }
+/* A turn inside a page's locked controls: allowed ones on the fill in ink-2, banned ones keep their stroke, no wash. */
+.turn[aria-pressed="true"]:disabled {
+  border-color: var(--rule);
+  background: var(--fill);
+  color: var(--ink-2);
+}
 .turn.dest {
   width: auto;
   min-width: 52px;
@@ -2414,7 +2444,7 @@ svg pattern circle {
   width: 14px;
   height: 14px;
 }
-.turn.dest[aria-pressed="false"]:not(:disabled)::after {
+.turn.dest[aria-pressed="false"]::after {
   inset: 5px 4px;
 }
 
