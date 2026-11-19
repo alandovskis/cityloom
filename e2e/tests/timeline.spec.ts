@@ -11,8 +11,10 @@ const EDITS_KEY = "cityloom-edits@first";
 async function keepStreets(page: Page, streets: [string, string, number][]) {
   await page.evaluate(
     ({ key, streets }) => {
-      const doc = { version: 5, streets: {} as Record<string, unknown> };
-      for (const [k, name, width] of streets) doc.streets[k] = { ways: [1], street: { name, row_mm: width } };
+      // Stamped with the importer version, as a saved record is: one without it is stale and discarded.
+      const doc = { version: 17, streets: {} as Record<string, unknown> };
+      for (const [k, name, width] of streets)
+        doc.streets[k] = { ways: [1], import: 11, street: { name, row_mm: width } };
       localStorage.setItem(key, JSON.stringify(doc));
     },
     { key: EDITS_KEY, streets },
