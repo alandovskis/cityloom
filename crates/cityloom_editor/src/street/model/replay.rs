@@ -6,7 +6,7 @@
 //! section alone. It reports whether a changed, removed or moved piece had no counterpart in the target.
 
 use super::Segment;
-use super::matching::counterpart;
+use super::matching::{counterpart, rising};
 
 /// The target section after the replay, and whether some of the edit found nowhere to land in it.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,29 +96,13 @@ fn carry(target: &mut Segment, before: &Segment, after: &Segment) {
 }
 
 /// Which pieces of `before` the edit moved, given each one's place in `after`: of the pieces kept, those outside the
-/// longest run whose places in `after` rise with their places in `before` (the first of equal runs is kept), so a piece
-/// moved across several others is the only one moved.
+/// longest run whose places in `after` rise with their places in `before` (`rising`), so a piece moved across several
+/// others is the only one moved.
 fn moved(to_after: &[Option<usize>]) -> Vec<bool> {
     let kept: Vec<(usize, usize)> = to_after.iter().enumerate().filter_map(|(i, a)| a.map(|a| (i, a))).collect();
-    let mut run = vec![1usize; kept.len()];
-    let mut back: Vec<Option<usize>> = vec![None; kept.len()];
-    for k in 0..kept.len() {
-        for p in 0..k {
-            if kept[p].1 < kept[k].1 && run[p] + 1 > run[k] {
-                run[k] = run[p] + 1;
-                back[k] = Some(p);
-            }
-        }
-    }
     let mut moved = vec![false; to_after.len()];
-    for &(i, _) in &kept {
-        moved[i] = true;
-    }
-    let longest = run.iter().copied().max().unwrap_or(0);
-    let mut at = run.iter().position(|&r| r == longest);
-    while let Some(k) = at {
-        moved[kept[k].0] = false;
-        at = back[k];
+    for (&(i, _), rises) in kept.iter().zip(rising(&kept.iter().map(|&(_, a)| a).collect::<Vec<_>>())) {
+        moved[i] = !rises;
     }
     moved
 }
@@ -282,6 +266,58 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(13, "travel", 3500)];
         let out = replay(&before, &after, &target);
         assert_eq!(widths(&out.section), vec![1800, 3200]);
+        assert!(!out.missed);
+    }
+
+    #[test]
+    fn a_moved_piece_the_target_lacks_is_a_miss() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "bike", 1500), seg(3, "parking", 2400), seg(4, "travel", 3500)];
+        let after = vec![seg(1, "sidewalk", 2000), seg(3, "parking", 2400), seg(4, "travel", 3500), seg(2, "bike", 1500)];
+        let target = vec![seg(11, "sidewalk", 1800), seg(13, "parking", 2000), seg(14, "travel", 3200)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(out.section, target);
+        assert!(out.missed);
+    }
+
+    #[test]
+    fn a_kind_change_reaches_a_piece_matched_by_kind() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "parking", 2400), seg(3, "travel", 3500)];
+        let mut after = before.clone();
+        after[1] = seg(2, "bike", 2400);
+        let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2000), seg(13, "travel", 3200)];
+        let out = replay(&before, &after, &target);
+        let bike = &out.section[1];
+        assert_eq!((bike.uid, bike.kind, bike.width_mm), (12, kind_index("bike").unwrap(), 2000));
+        assert_eq!((bike.material, bike.curb, bike.direction), (after[1].material, after[1].curb, after[1].direction));
+        assert_eq!(out.section[0], target[0]);
+        assert_eq!(out.section[2], target[2]);
+        assert!(!out.missed);
+    }
+
+    #[test]
+    fn an_added_piece_whose_neighbours_the_target_lacks_goes_beside_the_nearest_piece_it_has() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "bike", 1500), seg(3, "bus", 3300), seg(4, "travel", 3500), seg(5, "sidewalk", 2000)];
+        let after = vec![
+            seg(1, "sidewalk", 2000),
+            seg(2, "bike", 1500),
+            seg(9, "planting", 1500),
+            seg(3, "bus", 3300),
+            seg(4, "travel", 3500),
+            seg(5, "sidewalk", 2000),
+        ];
+        let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2400), seg(14, "travel", 3200), seg(15, "sidewalk", 2200)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![11, 9, 12, 14, 15]);
+        assert!(!out.missed);
+    }
+
+    #[test]
+    fn an_added_last_piece_whose_left_neighbour_the_target_lacks_goes_at_the_right_end() {
+        let before = vec![seg(1, "sidewalk", 2000), seg(2, "travel", 3500), seg(3, "bike", 1500)];
+        let after = vec![seg(1, "sidewalk", 2000), seg(2, "travel", 3500), seg(3, "bike", 1500), seg(9, "sidewalk", 2000)];
+        let target = vec![seg(11, "sidewalk", 1800), seg(12, "travel", 3200), seg(13, "parking", 2400)];
+        let out = replay(&before, &after, &target);
+        assert_eq!(uids(&out.section), vec![11, 12, 13, 9]);
         assert!(!out.missed);
     }
 }

@@ -26,22 +26,7 @@ pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usi
     // longest increasing subsequence), so a piece moved across several others is the only one split. The first of
     // equal runs is kept.
     let matched: Vec<(usize, usize)> = to_far.iter().enumerate().filter_map(|(i, j)| j.map(|j| (i, j))).collect();
-    let mut run = vec![1usize; matched.len()];
-    let mut back: Vec<Option<usize>> = vec![None; matched.len()];
-    for k in 0..matched.len() {
-        for p in 0..k {
-            if matched[p].1 < matched[k].1 && run[p] + 1 > run[k] {
-                run[k] = run[p] + 1;
-                back[k] = Some(p);
-            }
-        }
-    }
-    let mut keep = vec![false; matched.len()];
-    let mut at = (0..matched.len()).rev().max_by_key(|&k| run[k]);
-    while let Some(k) = at {
-        keep[k] = true;
-        at = back[k];
-    }
+    let keep = rising(&matched.iter().map(|&(_, j)| j).collect::<Vec<_>>());
     for (&(i, j), &kept) in matched.iter().zip(&keep) {
         if !kept {
             to_far[i] = None;
@@ -67,6 +52,28 @@ pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usi
     }
     out.extend((j..far.len()).filter(|&j| !taken[j]).map(|j| (None, Some(j))));
     out
+}
+
+/// Which of `places` belong to the longest run of them that rises (the longest increasing subsequence); the first of
+/// equal runs is kept. Pieces outside it are the ones that crossed others: as few as it takes.
+pub(super) fn rising(places: &[usize]) -> Vec<bool> {
+    let mut run = vec![1usize; places.len()];
+    let mut back: Vec<Option<usize>> = vec![None; places.len()];
+    for k in 0..places.len() {
+        for p in 0..k {
+            if places[p] < places[k] && run[p] + 1 > run[k] {
+                run[k] = run[p] + 1;
+                back[k] = Some(p);
+            }
+        }
+    }
+    let mut keep = vec![false; places.len()];
+    let mut at = (0..places.len()).rev().max_by_key(|&k| run[k]);
+    while let Some(k) = at {
+        keep[k] = true;
+        at = back[k];
+    }
+    keep
 }
 
 /// For each piece of `a`, its index in `b`, paired by `match_pieces`; `None` where `b` has no such piece.
