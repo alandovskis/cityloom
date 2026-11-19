@@ -270,6 +270,10 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
           const c = box.getBoundingClientRect();
           if (r.left < c.left - 0.5 || r.right > c.right + 0.5) unseen.push(th.innerText);
         }
+        // Scrolled to its far end, the crossing's name stays at the box's left edge (its column is sticky).
+        box.scrollLeft = box.scrollWidth;
+        const nameAt = table.querySelector<HTMLElement>("tbody th")!.getBoundingClientRect().left;
+        const stuck = !scrolls || Math.abs(nameAt - box.getBoundingClientRect().left) <= 1;
         box.scrollLeft = 0;
         const rowHeader = table.querySelector<HTMLElement>("tbody th")!.getBoundingClientRect().width;
         return {
@@ -280,6 +284,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
           reachable,
           unseen,
           rowHeader,
+          stuck,
         };
       }),
     );
@@ -317,6 +322,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
             ).toBe(true);
           }
           expect(t.rowHeader, `${lang} ${t.id}: a crossing's name is not one word a line`).toBeGreaterThanOrEqual(110);
+          expect(t.stuck, `${lang} ${t.id}: scrolled to its end, the crossing's name stays in view`).toBe(true);
         }
         await expect
           .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))

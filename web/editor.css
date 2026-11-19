@@ -3536,9 +3536,16 @@ svg pattern circle {
   overflow-x: auto;
   margin-top: 8px;
 }
-/* A crossing's name keeps a few words a line; the box scrolls sideways instead (it is a focusable region). */
+/* A crossing's name keeps a few words a line; the box scrolls sideways instead (it is a focusable region), and the
+   names' column (with its heading) stays at the left edge on the panel's own background, in either theme. */
 .calls-table th[scope="row"] {
   min-width: 9em;
+}
+.calls-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
 }
 .calls-table caption {
   padding-bottom: 4px;
