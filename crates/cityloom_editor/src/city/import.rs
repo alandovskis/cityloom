@@ -62,7 +62,18 @@ fn shape_mm(points: &[Point], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(
 /// Gives `street`, made from the first zone of `road`, a zone for each of the road's, measured along it as `frame`
 /// says: each with its own pieces (uids the street issues) and speed limit, then settled, so a zone like the first
 /// is the street's base. From the last end the zones are listed from that end, the road's last piece first.
+/// Zones that would make the street unsound (a piece with no lanes, starts the same once rounded) are not opened:
+/// the street keeps its first zone only, since an unsound street is never kept, so an edit to it would be lost.
 fn open_zones(street: &mut Street, road: &Road, frame: ZoneFrame) {
+    let mut zoned = street.clone();
+    fill_zones(&mut zoned, road, frame);
+    if zoned.is_sound() {
+        *street = zoned;
+    }
+}
+
+/// `open_zones` without the check that the zoned street is sound.
+fn fill_zones(street: &mut Street, road: &Road, frame: ZoneFrame) {
     let length_m = road.length_m();
     if road.zones.len() < 2 || length_m <= 0.0 {
         return;
@@ -730,6 +741,23 @@ mod tests {
         let street = &Layout::from_network(&zoned_road(197.0), "x").edges[0].section;
         assert_eq!(street.zones.len(), 2);
         assert!(street.is_sound());
+    }
+
+    #[test]
+    fn zones_that_would_make_an_unsound_street_leave_it_with_its_first_zone() {
+        // a later piece with no lanes: an empty section
+        let mut lane_less = zoned_road(80.0);
+        lane_less.roads[0].zones[1].lanes.clear();
+        // two starts under a millimetre apart: the same start once rounded
+        let mut crowded = zoned_road(80.0);
+        crowded.roads[0].zones.push(Zone { from: cityloom_model::Coordinate::new(80.0002), speed_kmh: Some(50), lanes: two_lanes() });
+        for net in [lane_less, crowded] {
+            let street = &Layout::from_network(&net, "x").edges[0].section;
+            assert!(street.zones.is_empty(), "{:?}", street.zones);
+            assert_eq!((street.length_mm, street.next_uid), (None, 3), "as a road of one zone opens");
+            assert_eq!(kinds_and_widths(&street.segments), imported(&two_lanes()));
+            assert!(street.is_sound());
+        }
     }
 
     #[test]
