@@ -815,7 +815,9 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("plan-boundary-line", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
     ("plan-cut-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
     ("plan-cut-line", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
-    ("plan-chosen-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-thing-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-taper-casing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
+    ("plan-taper", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
     ("plan-thing-mark", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
     ("plan-thing", "a CSS class of the street's plan (street/view/plan/mod.rs)"),
 ];

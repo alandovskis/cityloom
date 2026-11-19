@@ -51,10 +51,9 @@
   --zone-edge: light-dark(#536070, #9aa6b2);
   --zone-sel: light-dark(#1f5ee0, #8ab4ff);
   /* The plan (street/view/plan/): the picked stretch, a tint of its edge's blue with a light edge on a dark casing,
-     and the plan's marks (a boundary, a cut end, a thing), a light line on a dark casing; the same in both themes like
+     and the plan's marks (a boundary, a cut end, a taper, a thing), a light line on a dark casing; the same in both themes like
      the materials the bands are drawn in, so that one of each two tones is 3:1 against any material and the panel
      (tests in shared/contrast.rs). */
-  --plan-pick: #8ab4ff;
   --plan-pick-edge: #8ab4ff;
   --plan-pick-casing: #0b1220;
   --plan-mark: #fbfbf8;
@@ -1218,18 +1217,16 @@ svg pattern circle {
 .plan-band.mat-rain_garden {
   fill: var(--mat-rain_garden);
 }
-/* The picked stretch: a tint over the bands, edged in two tones, a handle at each end. */
-.plan-pick-casing,
-.plan-pick {
-  fill: none;
-  stroke-linejoin: round;
-}
+/* The picked stretch: a tint over the bands, edged in two tones, a handle at each end. Every mark on the plan is a
+   light line over a dark casing twice its width, so one of the two is 3:1 on any band and the panel; the fills only
+   tint (shared/contrast.rs). */
 .plan-pick-casing {
+  fill: none;
   stroke: var(--plan-pick-casing);
   stroke-width: 4;
 }
 .plan-pick {
-  fill: var(--plan-pick);
+  fill: var(--plan-pick-edge);
   fill-opacity: 0.3;
   stroke: var(--plan-pick-edge);
   stroke-width: 2;
@@ -1239,45 +1236,42 @@ svg pattern circle {
   stroke: var(--plan-pick-edge);
   stroke-width: 1.5;
 }
-/* A boundary between runs: a light line on a dark casing; its taper a dashed outline over the bands it reaches. */
+/* A boundary between runs, a cut end, a taper (dashed, over the bands it reaches) and a thing along the street. */
 .plan-boundary-casing,
-.plan-cut-casing {
+.plan-cut-casing,
+.plan-taper-casing,
+.plan-thing-casing {
+  fill: none;
   stroke: var(--plan-mark-casing);
   stroke-width: 4;
-  fill: none;
 }
 .plan-boundary-line,
 .plan-cut-line {
+  fill: none;
   stroke: var(--plan-mark);
   stroke-width: 2;
-  fill: none;
 }
 .plan-taper {
   fill: var(--plan-mark);
   fill-opacity: 0.15;
-  stroke: var(--plan-mark-casing);
-  stroke-width: 1;
+  stroke: var(--plan-mark);
+  stroke-width: 2;
   stroke-dasharray: 4 3;
 }
-/* A thing along the street: a light mark edged dark, translucent where it lies over the bands; the chosen one in
-   the pick's two tones. */
 .plan-thing-mark {
   fill: var(--plan-mark);
   fill-opacity: 0.6;
-  stroke: var(--plan-mark-casing);
-  stroke-width: 1.5;
+  stroke: var(--plan-mark);
+  stroke-width: 2;
 }
-.plan-thing[data-thing^="green-"] .plan-thing-mark {
-  fill: var(--s-tree);
-}
-.plan-chosen-casing {
-  fill: none;
+/* The chosen thing is edged in the pick's two tones. */
+.plan-chosen .plan-thing-casing {
   stroke: var(--plan-pick-casing);
-  stroke-width: 5;
+  stroke-width: 4;
 }
 .plan-chosen .plan-thing-mark {
   stroke: var(--plan-pick-edge);
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 /* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */

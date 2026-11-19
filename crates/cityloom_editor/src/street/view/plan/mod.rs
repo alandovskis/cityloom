@@ -63,13 +63,15 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
     for b in &p.boundaries {
         out.push_str(&format!("<g class=\"plan-boundary\" data-zone=\"{}\">", b.zone));
         if let Some((from, to)) = b.taper.and_then(|(a, z)| at.cut_span(a, z)) {
-            out.push_str(&format!(
-                "<rect class=\"plan-taper\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>",
-                f1(from),
-                f1(LANE_H),
-                f1(to - from),
-                f1(BANDS_H)
-            ));
+            for class in ["plan-taper-casing", "plan-taper"] {
+                out.push_str(&format!(
+                    "<rect class=\"{class}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>",
+                    f1(from),
+                    f1(LANE_H),
+                    f1(to - from),
+                    f1(BANDS_H)
+                ));
+            }
         }
         let x = f1(at.x(b.at_mm));
         let (y1, y2) = (f1(LANE_H), f1(LANE_H + BANDS_H));
@@ -229,7 +231,7 @@ fn thing(o: &PlanObject, (from, to): (f64, f64), (y, h): (f64, f64), i18n: &I18n
         if o.chosen { "plan-thing plan-chosen" } else { "plan-thing" },
         thing_id(o.thing),
         esc(&say(i18n, units, &o.label)),
-        if o.chosen { rect("plan-chosen-casing") } else { String::new() },
+        rect("plan-thing-casing"),
         rect("plan-thing-mark"),
     )
 }

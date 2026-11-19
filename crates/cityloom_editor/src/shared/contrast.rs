@@ -622,7 +622,8 @@ mod tests {
 
     /// The plan's two-tone lines, `(line, casing)`, each pair 3:1 to itself and, by one of its two tones, against
     /// every material a band is drawn in and the panel the things beside the bands lie on, in both themes (the
-    /// tones, like the materials, are one colour in either theme).
+    /// tones, like the materials, are one colour in either theme). The contrast of a mark is carried by these edge
+    /// strokes, a light line on a wider dark casing, never by the translucent fills inside them, which only tint.
     fn two_tones_hold_on_the_plan(line: &str, casing: &str) {
         let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
         let (line, casing) = (token(editor, line).0.unwrap(), token(editor, casing).0.unwrap());
@@ -638,23 +639,43 @@ mod tests {
         }
     }
 
+    /// `rule` declares each of `declarations`.
+    fn declares(css: &str, selector: &str, declarations: &[&str]) {
+        let body = rule(css, selector);
+        for d in declarations {
+            assert!(body.contains(d), "{selector} declares {d}");
+        }
+    }
+
     #[test]
     fn plan_pick_edge_has_3_to_1_on_every_band_material() {
         two_tones_hold_on_the_plan("plan-pick-edge", "plan-pick-casing");
         let editor = include_str!("../../../../web/editor.css");
-        for rule in [".plan-pick {", ".plan-pick-casing {", ".plan-handle {"] {
-            assert!(editor.contains(rule), "{rule}");
-        }
-        // The tint is the edge's colour, seen through.
-        assert_eq!(token(editor, "plan-pick").0, token(editor, "plan-pick-edge").0);
+        // The pick and the chosen thing: the light edge drawn over a casing twice its width, so the casing shows on
+        // both sides of it; a handle is the casing edged in the light tone.
+        declares(editor, ".plan-pick-casing", &["stroke: var(--plan-pick-casing);", "stroke-width: 4;"]);
+        declares(editor, ".plan-pick", &["stroke: var(--plan-pick-edge);", "stroke-width: 2;", "fill: var(--plan-pick-edge);"]);
+        declares(editor, ".plan-handle", &["fill: var(--plan-pick-casing);", "stroke: var(--plan-pick-edge);"]);
+        declares(editor, ".plan-chosen .plan-thing-casing", &["stroke: var(--plan-pick-casing);", "stroke-width: 4;"]);
+        declares(editor, ".plan-chosen .plan-thing-mark", &["stroke: var(--plan-pick-edge);", "stroke-width: 2;"]);
+        assert!(!editor.contains("--plan-pick:"), "the tint is the edge's colour, not a token of its own");
     }
 
     #[test]
     fn the_plans_marks_have_3_to_1_on_every_band_material() {
         two_tones_hold_on_the_plan("plan-mark", "plan-mark-casing");
         let editor = include_str!("../../../../web/editor.css");
-        for rule in [".plan-boundary-casing,\n.plan-cut-casing {", ".plan-boundary-line,\n.plan-cut-line {", ".plan-thing-mark {"] {
-            assert!(editor.contains(rule), "{rule}");
-        }
+        // Every mark (a boundary, a cut end, a taper, a thing) is the light line over the dark casing, twice as wide.
+        declares(
+            editor,
+            ".plan-boundary-casing,\n.plan-cut-casing,\n.plan-taper-casing,\n.plan-thing-casing",
+            &["stroke: var(--plan-mark-casing);", "stroke-width: 4;"],
+        );
+        declares(editor, ".plan-boundary-line,\n.plan-cut-line", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        declares(editor, ".plan-taper", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        declares(editor, ".plan-thing-mark", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        // No kind of thing has an edge of its own that the pair above does not measure.
+        assert_eq!(editor.matches("\n.plan-thing-mark {").count(), 1);
+        assert!(!editor.contains(".plan-thing["), "no thing is drawn in colours of its own");
     }
 }
