@@ -258,6 +258,28 @@ impl CityStore {
         change(&mut draft) && self.storage.remember(EDITS_KEY, &draft.to_json())
     }
 
+    /// Removes every stale street and junction record (`edits::is_stale`: made against a network from before the
+    /// cutoff) from the document, keeps it once, and marks each removal for the sync so other devices drop it too.
+    /// Says how many it removed: none where the document is empty, a newer build's or damaged (left as it is: the next
+    /// edit copies a damaged one aside), or could not be kept.
+    pub fn discard_stale(&self) -> usize {
+        let Ok(mut draft) = edits::draft(self.storage.recall(EDITS_KEY).as_deref()) else { return 0 };
+        let mut stale = Vec::new();
+        for (kind, section) in [(Kind::Street, STREETS), (Kind::Junction, JUNCTIONS)] {
+            for key in draft.raw_keys(section) {
+                if draft.get_raw(section, &key).is_some_and(edits::is_stale) {
+                    draft.remove_raw(section, &key);
+                    stale.push((kind, key));
+                }
+            }
+        }
+        if stale.is_empty() || !self.storage.remember(EDITS_KEY, &draft.to_json()) {
+            return 0;
+        }
+        crate::sync::model::mark_all(&*self.storage, &stale, true);
+        stale.len()
+    }
+
     /// The index of the region the person chose, which the pages share; the
     /// first when none is chosen or it is unknown.
     pub fn region(&self) -> usize {
@@ -414,6 +436,50 @@ mod tests {
         let e = document(&storage);
         assert_eq!(e.streets.len(), 2);
         assert_eq!(e.streets["w500~n8~n9"], record);
+    }
+
+    #[test]
+    fn discarding_removes_every_stale_record_marks_each_deleted_and_keeps_the_stamped_ones() {
+        let (store, storage) = store();
+        let doc = serde_json::json!({
+            "version": edits::IMPORT_STAMP_VERSION,
+            "streets": {"w1~n1~n2": {"ways": [1]}, "w2~n2~n3": {"ways": [2], "import": edits::STALE_BEFORE_IMPORT}},
+            "junctions": {"n7": {"nodes": [7], "import": 10}},
+        });
+        storage.remember(EDITS_KEY, &doc.to_string());
+        assert_eq!(store.discard_stale(), 2);
+        let after: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
+        assert_eq!(after["streets"], serde_json::json!({"w2~n2~n3": {"ways": [2], "import": edits::STALE_BEFORE_IMPORT}}));
+        assert_eq!(after["junctions"], serde_json::json!({}));
+        let sync = crate::sync::model::open(&*storage).unwrap();
+        for name in ["street/w1~n1~n2", "junction/n7"] {
+            let entry = &sync.records[name];
+            assert!(entry.pending && entry.deleted, "{name} goes up as a removal");
+        }
+        assert!(!sync.records.contains_key("street/w2~n2~n3"), "the stamped record is not marked");
+        assert_eq!(store.discard_stale(), 0, "nothing stale is left");
+    }
+
+    #[test]
+    fn discarding_leaves_a_newer_builds_document_alone() {
+        let (store, storage) = store();
+        let newer = format!(r#"{{"version":{},"streets":{{"w1~n1~n2":{{"ways":[1]}}}},"junctions":{{}}}}"#, edits::NEWEST + 1);
+        storage.remember(EDITS_KEY, &newer);
+        assert_eq!(store.discard_stale(), 0);
+        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer.as_str()));
+        assert_eq!(storage.recall("cityloom-sync"), None, "nothing is marked");
+    }
+
+    #[test]
+    fn discarding_writes_nothing_for_an_empty_or_a_damaged_document() {
+        let (store, storage) = store();
+        assert_eq!(store.discard_stale(), 0);
+        assert_eq!(storage.recall(EDITS_KEY), None, "no document is made");
+        storage.remember(EDITS_KEY, "{broken");
+        assert_eq!(store.discard_stale(), 0);
+        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some("{broken"));
+        assert_eq!(storage.recall(DAMAGED_KEY), None, "not copied aside: the next edit does that");
+        assert_eq!(storage.recall("cityloom-sync"), None);
     }
 
     #[test]

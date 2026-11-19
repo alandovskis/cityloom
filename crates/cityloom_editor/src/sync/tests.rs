@@ -253,6 +253,13 @@ fn width(d: &Device, edge: u32) -> i32 {
     CityStore::sample(first(&d.ports.storage)).open().street_editor(edge, 0).unwrap().snapshot().segments[0].width_mm
 }
 
+/// A street or junction record's `body` stamped as made against the importer of the cutoff, so that it is not stale
+/// (`city::edits::is_stale`): the sync neither keeps nor sends a stale one.
+fn stamped(mut body: Value) -> Value {
+    body["import"] = json!(crate::city::edits::STALE_BEFORE_IMPORT);
+    body
+}
+
 fn street_id(key: &str) -> Id {
     Id::new(Kind::Street, key)
 }
@@ -296,11 +303,11 @@ fn a_local_record_never_marked_counts_as_edited_when_storage_is_turned_on() {
     let d = device(&server, T0 + 10_000);
     // work from before anything was marked (an older build's): written to the store with no mark
     let key = "w9~n1~n2";
-    assert!(local::write(&d.ports.storage, &street_id(key), &json!({"old": true})));
-    server.seed("street", key, json!({"newer": true}), "2027-01-15T07:00:00.000Z");
+    assert!(local::write(&d.ports.storage, &street_id(key), &stamped(json!({"old": true}))));
+    server.seed("street", key, stamped(json!({"newer": true})), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     let row = server.row("street", key).unwrap();
-    assert_eq!(row.body, Some(json!({"old": true})), "edited at the moment storage was turned on, so later than the server's");
+    assert_eq!(row.body, Some(stamped(json!({"old": true}))), "edited at the moment storage was turned on, so later than the server's");
     assert_eq!(row.edited_at, model::stamp(T0 + 10_000));
 }
 
@@ -351,13 +358,13 @@ fn a_second_account_on_the_same_browser_starts_at_revision_zero_and_sends_no_del
     let d = device(&ada_server, T0 + 100_000);
     let own = edit_street(&d, 1, 100);
     d.vm.known(&ada());
-    ada_server.seed("street", "w5~n1~n2", json!({}), "2027-01-15T07:00:00.000Z");
+    ada_server.seed("street", "w5~n1~n2", stamped(json!({})), "2027-01-15T07:00:00.000Z");
     d.vm.refresh();
     assert_eq!(model::open(&*d.storage).unwrap().rev, 2, "Ada's revision");
     d.vm.stop();
     let bob_server = ServerSim::new();
     for key in ["w9~n1~n2", "w9~n2~n3", "w9~n3~n4"] {
-        bob_server.seed("street", key, json!({"bob": key}), "2027-01-15T07:00:00.000Z");
+        bob_server.seed("street", key, stamped(json!({"bob": key})), "2027-01-15T07:00:00.000Z");
     }
     let calls_before = ada_server.calls.borrow().len();
     let bobs = SyncVm::new(Ports { work: bob_server.clone(), ..d.ports.clone() }, crate::i18n_for(Locale::En));
@@ -435,7 +442,7 @@ fn a_newer_edits_document_pauses_the_streets_but_the_rules_still_sync_and_it_is_
     d.storage.remember(FIRST_EDITS, newer);
     let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
     RestrictionStore::new(first(&d.ports.storage)).add("Zone", Rule::CarFree, ring).unwrap();
-    server.seed("street", "w2~n1~n2", json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
+    server.seed("street", "w2~n1~n2", stamped(json!({"theirs": true})), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     assert_eq!(d.vm.status(), Status::Paused);
     assert_eq!(server.live(), ["rule/r1", "street/w2~n1~n2"], "the rule went up");
@@ -671,7 +678,7 @@ fn a_pull_of_several_pages_is_not_started_over_by_a_tombstone_purged_meanwhile()
     hub::reset();
     let server = ServerSim::new();
     for i in 0..600 {
-        server.seed("street", &format!("w{i}~n1~n2"), json!({"n": i}), "2027-01-15T07:00:00.000Z");
+        server.seed("street", &format!("w{i}~n1~n2"), stamped(json!({"n": i})), "2027-01-15T07:00:00.000Z");
     }
     server.seed("rule", "old", json!({}), "2027-01-15T07:00:00.000Z");
     server.purge("rule", "old"); // its tombstone was purged: the floor (602) is above every revision the pages go on from
@@ -688,7 +695,7 @@ fn a_run_that_skipped_a_record_does_not_move_the_revision_on_so_the_record_comes
     let server = ServerSim::new();
     let d = device(&server, T0);
     d.storage.remember(FIRST_EDITS, r#"{"version":99,"streets":{}}"#);
-    server.seed("street", "w2~n1~n2", json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
+    server.seed("street", "w2~n1~n2", stamped(json!({"theirs": true})), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     assert_eq!(d.vm.status(), Status::Paused);
     assert_eq!(model::open(&*d.storage).unwrap().rev, 0, "the street was skipped, so the revision stays where it was");
@@ -907,7 +914,7 @@ fn a_record_the_server_superseded_is_published_so_an_open_editor_reloads_and_is_
         rev: 5,
         edited_at: model::stamp(T0 + 60_000),
         deleted: false,
-        body: Some(json!({"theirs": true})),
+        body: Some(stamped(json!({"theirs": true}))),
         error: None,
     };
     let results = vec![
@@ -1067,14 +1074,14 @@ fn a_store_that_was_unusable_at_the_first_claim_still_has_its_records_claimed_as
     // the sync document is damaged, and for a while the edits document is a newer build's
     d.storage.remember(model::SYNC_KEY, "{damaged");
     d.storage.remember(FIRST_EDITS, r#"{"version":99}"#);
-    server.seed("street", &key, json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
+    server.seed("street", &key, stamped(json!({"theirs": true})), "2027-01-15T07:00:00.000Z");
     d.vm.known(&ada());
     // the build is back (a rule keeps the document busy meanwhile), later
     d.storage.remember(FIRST_EDITS, &edits);
     d.storage.set_now(T0 + 600_000);
     d.vm.refresh();
-    assert_eq!(record_of(&d, &street_id(&key)), Some(json!({"theirs": true})), "the server's copy won over the street that came back");
-    assert_eq!(server.row("street", &key).unwrap().body, Some(json!({"theirs": true})));
+    assert_eq!(record_of(&d, &street_id(&key)), Some(stamped(json!({"theirs": true}))), "the server's copy won over the street that came back");
+    assert_eq!(server.row("street", &key).unwrap().body, Some(stamped(json!({"theirs": true}))));
 }
 
 #[test]
@@ -1082,7 +1089,7 @@ fn a_corrupt_record_in_a_pull_does_not_move_the_revision_past_it_and_comes_back_
     hub::reset();
     let server = ServerSim::new();
     let d = device(&server, T0);
-    server.seed("street", "w1~n1~n2", json!({"fine": true}), "2027-01-15T07:00:00.000Z");
+    server.seed("street", "w1~n1~n2", stamped(json!({"fine": true})), "2027-01-15T07:00:00.000Z");
     server.seed_corrupt("street", "w2~n1~n2", "2027-01-15T07:00:01.000Z");
     d.vm.known(&ada());
     assert!(record_of(&d, &street_id("w1~n1~n2")).is_some(), "the readable record is applied");
@@ -1092,10 +1099,10 @@ fn a_corrupt_record_in_a_pull_does_not_move_the_revision_past_it_and_comes_back_
     // the server can open it now
     server.rows.borrow_mut().get_mut(&("street".to_string(), "w2~n1~n2".to_string())).map(|r| {
         r.corrupt = false;
-        r.body = Some(json!({"repaired": true}));
+        r.body = Some(stamped(json!({"repaired": true})));
     });
     d.vm.refresh();
-    assert_eq!(record_of(&d, &street_id("w2~n1~n2")), Some(json!({"repaired": true})));
+    assert_eq!(record_of(&d, &street_id("w2~n1~n2")), Some(stamped(json!({"repaired": true}))));
     assert_eq!(model::open(&*d.storage).unwrap().rev, 2);
 }
 
@@ -1348,4 +1355,54 @@ fn numbered_rules_of_every_project_are_renamed_once_under_their_project() {
     for project in ["first", p.id.as_str()] {
         assert!(RestrictionStore::new(in_project(&d, project)).raw("r1").is_none(), "{project}");
     }
+}
+
+/// A browser whose server answers with a fake the test drives, its first pull asked and not yet answered.
+fn pulling() -> (Rc<FakeWorkSync>, Rc<MemoryStorage>, Rc<SyncVm>) {
+    hub::reset();
+    let (mut ports, _, storage, _) = test_ports_with_time();
+    let work = Rc::new(FakeWorkSync::default());
+    ports.work = work.clone();
+    storage.set_now(T0);
+    let vm = SyncVm::new(ports, crate::i18n_for(Locale::En));
+    (work, storage, vm)
+}
+
+/// The server's live street `key`, at revision `rev`.
+fn live_street(key: &str, rev: i64, body: Value) -> WorkRecord {
+    WorkRecord { kind: "street".into(), key: key.into(), rev, edited_at: "2027-01-15T07:00:00.000Z".into(), deleted: false, body: Some(body), error: None }
+}
+
+#[test]
+fn a_pulled_stale_record_is_not_kept_and_is_answered_with_its_removal() {
+    let (work, storage, vm) = pulling();
+    // this device still holds its own stale copy of the place
+    storage.remember(FIRST_EDITS, &json!({"version": 5, "streets": {"w1~n1~n2": {"ways": [1]}}}).to_string());
+    vm.known(&ada());
+    let stale = live_street("w1~n1~n2", 4, json!({"ways": [1], "street": {"from": "an older build"}}));
+    assert!(work.answer(WorkReply::Page(Ok(WorkPage { records: vec![stale], ..page(4) }))));
+    assert!(!storage.recall(FIRST_EDITS).unwrap().contains("w1~n1~n2"), "neither the pulled record nor the local copy is kept");
+    let entry = model::open(&*storage).unwrap().entry(&street_id("w1~n1~n2")).cloned().unwrap();
+    assert!(entry.pending && entry.deleted && !entry.blocked);
+    assert_eq!((entry.rev, entry.edited_at), (4, model::stamp(T0)), "on top of the server's revision, edited now");
+    match work.calls().as_slice() {
+        [WorkCall::Push { batch, .. }] => {
+            assert_eq!(batch.len(), 1);
+            assert_eq!((batch[0].key.as_str(), batch[0].deleted, batch[0].base_rev, &batch[0].body), ("w1~n1~n2", true, 4, &None));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_pulled_stamped_record_is_kept_as_before() {
+    let (work, storage, vm) = pulling();
+    vm.known(&ada());
+    let body = json!({"ways": [1], "street": {"x": 1}, "import": crate::city::edits::STALE_BEFORE_IMPORT});
+    assert!(work.answer(WorkReply::Page(Ok(WorkPage { records: vec![live_street("w1~n1~n2", 4, body.clone())], ..page(4) }))));
+    let root: Rc<dyn Storage> = storage.clone();
+    assert_eq!(local::read(&root, &street_id("w1~n1~n2")), Some(body));
+    let entry = model::open(&*storage).unwrap().entry(&street_id("w1~n1~n2")).cloned().unwrap();
+    assert!(!entry.pending && !entry.deleted && entry.rev == 4, "the server's record is what this device has");
+    assert!(work.calls().is_empty(), "nothing goes back");
 }
