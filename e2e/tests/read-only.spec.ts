@@ -132,7 +132,8 @@ test.describe("a design opened read-only", () => {
     await page.locator("#search").fill("e");
     const found = page.locator("#search-results a.place-row").first();
     await expect(found).toHaveAttribute("href", /&project=first&view=1$/);
-    await page.keyboard.press("Enter");
+    // the row itself is followed: Enter pressed before the list takes it would open nothing
+    await found.click();
     await expect(page).toHaveURL(/\.html\?(street|junction)=\d+&project=first&view=1$/);
     await expect(page.locator("#read-only-tag")).toBeVisible();
     expect(await kept(page)).toEqual(before);
