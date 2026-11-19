@@ -619,7 +619,7 @@ fn a_page_shown_read_only_takes_no_region_says_nothing_on_load_and_refuses_a_cho
     );
     let before = street.read(|e| e.snapshot());
     let shell = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), street.clone(), "details-details", vec![], false, true);
-    assert!(shell.read_only());
+    assert!(shell.read_only() && shell.region_locked());
     assert!(said.take().is_empty(), "nothing said on load");
     assert_eq!(street.read(|e| e.snapshot()), before, "the design keeps its drive side");
     let own = shell.region();
@@ -628,5 +628,28 @@ fn a_page_shown_read_only_takes_no_region_says_nothing_on_load_and_refuses_a_cho
     assert_eq!(said.take(), ["This design is open read-only: nothing can be changed."]);
     assert_eq!((shell.region(), street.read(|e| e.snapshot())), (own, before));
     assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("united-kingdom"), "the region kept is not changed");
+    crate::sync::hub::reset();
+}
+
+/// A map shown read-only: its region is only how the city is shown (the person's preference, not the design), so it
+/// is chosen, kept and said as on any page.
+#[test]
+fn a_map_shown_read_only_still_takes_a_region_keeps_it_and_says_it() {
+    use crate::shared::ports::{RecordingAnnouncer, Storage};
+    use crate::shell::vm::REGION_KEY;
+    use std::rc::Rc;
+    crate::sync::hub::reset();
+    let (mut ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let said = Rc::new(RecordingAnnouncer::default());
+    ports.announcer = said.clone();
+    *page.path.borrow_mut() = "/map.html?project=p1&view=1".into();
+    let target = Rc::new(crate::shell::Bare::in_project(Some("p1".into())));
+    let shell = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true);
+    assert!(shell.read_only() && !shell.region_locked());
+    shell.choose_region("japan");
+    assert_eq!(shell.region(), "japan");
+    assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("japan"));
+    let words = said.take();
+    assert!(words.len() == 1 && words[0].contains("Japan"), "{words:?}");
     crate::sync::hub::reset();
 }

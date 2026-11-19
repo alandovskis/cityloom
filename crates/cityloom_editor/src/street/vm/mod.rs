@@ -1594,6 +1594,11 @@ impl StreetVm {
 }
 
 impl crate::shell::Target for StreetVm {
+    /// The drive side is the design's: a page shown read-only cannot choose it.
+    fn region_is_design(&self) -> bool {
+        true
+    }
+
     fn set_units(&self, units: Units) {
         StreetVm::set_units(self, units);
     }
@@ -4451,6 +4456,7 @@ mod read_only_tests {
     fn a_region_is_not_taken_and_nothing_is_said() {
         use crate::shell::Target;
         let r = rig();
+        assert!(r.vm.region_is_design(), "the drive side is the design's");
         let (street, region) = (r.vm.read(|e| e.snapshot()), r.vm.region_id());
         let left = crate::shared::catalogue::REGIONS.iter().position(|g| g.id == "united-kingdom").unwrap();
         assert_ne!(region, "united-kingdom");

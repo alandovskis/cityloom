@@ -1860,6 +1860,17 @@ mod tests {
         vm.results().iter().map(|r| name_of(vm, r)).collect()
     }
 
+    /// The map's region is only how the city is shown (the person's preference): the shell lets it be chosen even
+    /// on a map shown read-only.
+    #[test]
+    fn the_map_s_region_is_no_part_of_the_design() {
+        use crate::shell::Target;
+        let (vm, ..) = vm();
+        assert!(!vm.region_is_design());
+        assert!(vm.apply_region(3));
+        assert_eq!(vm.region_id(), "united-kingdom");
+    }
+
     #[test]
     fn nothing_is_found_until_something_is_searched_for_and_the_places_list_is_whole() {
         let (vm, ..) = vm();
