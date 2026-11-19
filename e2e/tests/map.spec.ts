@@ -554,12 +554,18 @@ async function splitOneStreet(page: Page) {
   return name;
 }
 
+// The Plateau's blocks that the importer merged into one road (a zone for each piece) have boundaries of their own:
+// three, each with a transition, so each is a band. A street the designer splits adds to them.
+const MERGED_BOUNDARIES = 3;
+
 test.describe("the zone boundaries on the map", () => {
-  test("a street without zones adds no ticks", async ({ page }) => {
+  test("a street without zones adds no ticks, only the merged blocks' boundaries are there", async ({ page }) => {
     await page.goto("/map.html");
     await mapReady(page);
     await expect.poll(() => page.evaluate(() => !!(window as any).cityloomMap.getLayer("zone-ticks"))).toBe(true);
-    expect(await ticks(page)).toHaveLength(0);
+    const found = await ticks(page);
+    expect(found).toHaveLength(MERGED_BOUNDARIES);
+    expect(found.every((t: any) => t.band)).toBe(true);
   });
 
   test("a zone boundary is a tick across its street", async ({ page }) => {
@@ -572,8 +578,8 @@ test.describe("the zone boundaries on the map", () => {
         }),
       )
       .toBe(true);
-    await expect.poll(async () => (await ticks(page)).length).toBe(1);
-    const [tick] = await ticks(page);
+    await expect.poll(async () => (await ticks(page)).length).toBe(MERGED_BOUNDARIES + 1);
+    const [tick] = (await ticks(page)).filter((t: any) => !t.band);
     expect(tick.type).toBe("LineString");
     expect(tick.coordinates).toHaveLength(2);
     // the two points lie on opposite sides of the street's centreline
@@ -626,8 +632,8 @@ test.describe("the zone boundaries on the map", () => {
     await addFromMenu(page, "Driving lane");
     await page.goto("/map.html"); // leaving the page flushes the debounced write
     await mapReady(page);
-    await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(1);
-    expect(await ticks(page), "the band replaces the tick").toHaveLength(1);
+    await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(MERGED_BOUNDARIES + 1);
+    expect(await ticks(page), "the band replaces the tick").toHaveLength(MERGED_BOUNDARIES + 1);
   });
 
   test("the street's label gives its zone count", async ({ page }) => {
@@ -640,7 +646,7 @@ test.describe("the zone boundaries on the map", () => {
 
   test("a theme change keeps the ticks", async ({ page }) => {
     await splitOneStreet(page);
-    await expect.poll(async () => (await ticks(page)).length).toBe(1);
+    await expect.poll(async () => (await ticks(page)).length).toBe(MERGED_BOUNDARIES + 1);
     const light = await land(page);
     await page.locator("#account-btn").click();
     await page.locator('[data-theme-set="dark"]').click();
@@ -657,7 +663,7 @@ test.describe("the zone boundaries on the map", () => {
         }),
       )
       .toBe(true);
-    expect(await ticks(page)).toHaveLength(1);
+    expect(await ticks(page)).toHaveLength(MERGED_BOUNDARIES + 1);
   });
 });
 
