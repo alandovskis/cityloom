@@ -52,12 +52,17 @@ roads. It lives in its own module beside `merge.rs`, in the same style: pure ove
 there.
 
 **A node is merged away when all of these hold:**
-- it is not a junction (`Junction::junction == false`: not osm2streets' `Intersection`);
-- its control is `Control::None` (a mid-block signalled or signed crossing keeps its node);
-- exactly two road ends meet at it, counting the roads left after unnamed roads were dropped and the
-  carriageways merged;
+- exactly two osm2streets roads meet at it, counting unnamed ones (so an alley or driveway keeps the node);
+- it is not signalled, and none of its OSM nodes is tagged `highway=stop`, `highway=give_way` or
+  `highway=traffic_signals` (a mid-block crossing with signals or signs keeps its node);
+- at merge time, exactly two road ends of the network meet at it (after unnamed roads were dropped and the
+  carriageways merged);
 - the two roads have the same name and the same `RoadType` (a road has only one type, so a change of class
   keeps two roads in one corridor).
+
+osm2streets' own kind for the node and its control are not used. It classes two two-way roads meeting as an
+`Intersection`, and it marks every OSM node `Signed` unless it is signalled, so neither tells a split point
+from a junction. (Changed during Task 1, when the first rule merged nothing on real data.)
 
 **Chains:** a maximal run of roads joined by such nodes becomes one road. A run that closes on itself with no other
 end (a ring of connections) is left alone.
