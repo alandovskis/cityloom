@@ -1,0 +1,6 @@
+On head 8982c2e44d24a064e8d3dacbfe9173d9f5370b18, E2E_PORT=8461, 88 passed in junction.spec.ts + junction-a11y.spec.ts. The new tests:
+✓  10 [ui] › tests/junction-a11y.spec.ts:224:3 › pedestrian calls in the signal plan (#60) › each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways (7.1s)
+✓  11 [ui] › tests/junction-a11y.spec.ts:289:5 › pedestrian calls in the signal plan (#60) › at 1440 px every column of the calls' tables can be read in the panel, in English and French (7.9s)
+✓  12 [ui] › tests/junction-a11y.spec.ts:289:5 › pedestrian calls in the signal plan (#60) › at 280 px every column of the calls' tables can be read in the panel, in English and French (7.8s)
+✓  68 [ui] › tests/junction.spec.ts:880:3 › signal timing on a junction of the city › a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French (8.7s)
+✓  69 [ui] › tests/junction.spec.ts:960:3 › signal timing on a junction of the city › a crossing too long for any phase's green, even extended by 15 s, is a finding (15.7s)

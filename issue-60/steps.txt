@@ -1,0 +1,29 @@
+01-recall.png
+  Signal plan opened: every crossing on recall, the placeholder figures shown
+  live region: That change does not fit.
+02-refused.png
+  Walk taken out of every phase for the first crossing, then On call pressed: refused, with the reason
+  live region: No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first.
+03-on-call-30.png
+  Second crossing put on call, 30 calls an hour: its walk + clearance, and the totals for the hour
+  live region: Crossing of Boulevard Saint-Laurent (south-east): 30 calls an hour. One check needs attention: time to cross. Crossing of Boulevard Saint-Laurent (south-east): 30 calls in the hour; served 20, delayed 10, green extended 0, not served 0; longest wait 59 s.
+04-rate-refused.png
+  61 calls an hour typed: refused as outside the placeholder bound, the rate stays 30
+  live region: That many calls an hour is outside the placeholder bound shown.
+04b-after-reload.png
+  Page reloaded and the plan reopened: the crossing is still on call at 30 calls an hour (saved with the junction)
+  live region: (empty)
+05-totals-scrolled.png
+  Totals table focused (a labelled region) and scrolled to its last column, Longest wait
+  live region: (empty)
+06-every-call.png
+  Every call, one row each (30): arrival time and outcome (served after / delayed)
+  live region: (empty)
+07-french.png
+  Switched to fr-CA: the same section in French, with OQLF spacing
+  live region: Langue : français.
+08 totals table text: Calls in one hour, by crossing Crossing Served Delayed Green extended Longest wait Rue Saint-Viateur Est (north-east) 9 3 12 20 s Avenue Casgrain (south-east) 4 8 12 19 s Rue Saint-Viateur Est (south-west) 7 5 12 26 s Avenue Casgrain (north-west) 0 0 0 0 s
+08 rows with an extension: 36, first: Avenue Casgrain (south-east) 2 min 16 s Served after 4 s, green extended by 13 s
+08-finding.png
+  Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)
+  live region: Avenue Casgrain (north-west): green 5 s. One check needs attention: time to cross.

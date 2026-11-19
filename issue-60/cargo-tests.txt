@@ -1,0 +1,32 @@
+head 8982c2e44d24a064e8d3dacbfe9173d9f5370b18
+$ cargo test -p cityloom_editor --lib -- junction::model::calls
+test junction::model::calls::tests::the_clearance_is_the_length_at_one_metre_a_second_rounded_up_and_the_walk_comes_first ... ok
+test junction::model::calls::tests::the_calls_of_an_hour_are_the_same_every_time_spread_over_the_hour_in_order ... ok
+test junction::model::calls::tests::a_phase_that_cannot_fit_the_walk_and_clearance_even_lengthened_does_not_serve_the_call ... ok
+test junction::model::calls::tests::a_call_is_served_when_the_next_phase_that_walks_its_crossing_starts_and_delayed_if_it_missed_one ... ok
+test junction::model::calls::tests::a_short_green_is_lengthened_by_the_shortfall_and_every_phase_after_it_starts_later ... ok
+test junction::model::calls::tests::no_crossing_on_call_means_no_calls_and_no_findings ... ok
+test junction::model::calls::tests::fixed_inputs_give_a_fixed_summary ... ok
+test junction::model::calls::tests::a_crossing_that_no_phase_can_serve_is_a_finding_and_its_calls_are_counted_as_not_served ... ok
+test junction::model::calls::tests::a_crossing_left_on_call_that_no_phase_walks_is_a_finding_and_is_kept ... ok
+test junction::model::calls::tests::a_crossing_can_go_on_call_only_where_the_plan_walks_it ... ok
+test junction::model::calls::tests::on_call_is_refused_with_its_reason_where_no_phase_walks_the_crossing ... ok
+test junction::model::calls::tests::on_call_is_set_and_taken_off_and_the_rate_is_kept_within_its_bound ... ok
+test junction::model::calls::tests::a_junction_saved_before_calls_loads_unchanged_and_one_with_none_on_call_is_written_as_before ... ok
+test junction::model::calls::tests::an_edit_that_takes_the_walk_away_keeps_the_crossing_on_call_as_a_finding ... ok
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 3343 filtered out; finished in 0.01s
+$ cargo test -p cityloom_editor --lib -- city::edits::tests::a_build_before_calls_leaves_a_document_with_them_alone
+test city::edits::tests::a_build_before_calls_leaves_a_document_with_them_alone ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3356 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib -- junction::vm::tests::a_crossing_put_on_call
+test junction::vm::tests::a_crossing_put_on_call_is_announced_with_how_its_calls_are_served_and_a_refusal_says_why_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3356 filtered out; finished in 0.05s
+$ cargo test -p cityloom_editor --lib -- junction::view::tests::the_plan_marks_each_crossing
+test junction::view::tests::the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_placeholders ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3356 filtered out; finished in 0.04s
+$ cargo test -p cityloom_editor --lib -- junction::view::tests::a_crossing_no_phase_walks
+test junction::view::tests::a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_is_a_finding ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3356 filtered out; finished in 0.02s
+$ cargo test -p cityloom_editor --lib -- junction::view::tests::the_pedestrian_calls_speak_french
+test junction::view::tests::the_pedestrian_calls_speak_french ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3356 filtered out; finished in 0.03s
