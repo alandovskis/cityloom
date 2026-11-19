@@ -572,7 +572,8 @@ impl AreasVm {
         let selected = self.selected.get_untracked().filter(|_| draw == Draw::Idle);
         let moving = self.moving.get_untracked().filter(|(id, _)| Some(id) == selected.as_ref());
         let list = self.list.get_untracked();
-        let areas = overlay::areas(&list, selected.as_deref(), moving.as_ref().map(|(_, ring)| ring.as_slice()));
+        // Shown read-only, the selected area has no corners to take hold of: a press there pans the map.
+        let areas = overlay::areas(&list, selected.as_deref(), moving.as_ref().map(|(_, ring)| ring.as_slice()), !self.read_only());
         self.ports.mapper.set_restrictions(&style::area_layers(), &areas);
         self.ports.mapper.set_draft(&style::draft_layers(), &overlay::draft(draw.corners()));
     }
@@ -1356,6 +1357,13 @@ mod tests {
         let before = snapshot();
         vm.select(Some(&kept.id));
         assert_eq!(vm.selected_id_now(), Some(kept.id.clone()), "choosing works");
+        mapper.take();
+        vm.sync();
+        let calls = mapper.take();
+        assert!(
+            matches!(&calls[0], MapCall::Restrictions { data, .. } if data.contains("\"selected\":true") && !data.contains("\"i\":")),
+            "marked as chosen, with no corner to take hold of: {calls:?}"
+        );
         said.take();
         let refused = "This design is open read-only: nothing can be changed.";
         assert!(!vm.start());

@@ -562,9 +562,10 @@ fn closed(ring: &[LonLat]) -> Vec<[f64; 2]> {
     c
 }
 
-/// The restrictions as GeoJSON: each a polygon with its id and rule, the selected one marked and its corners as
-/// points to drag. `moving` is the selected one's outline while a corner of it is dragged.
-pub fn areas(list: &[Restriction], selected: Option<&str>, moving: Option<&[LonLat]>) -> String {
+/// The restrictions as GeoJSON: each a polygon with its id and rule, the selected one marked and, with `handles` (not
+/// on a map shown read-only), its corners as points to drag. `moving` is the selected one's outline while a corner of
+/// it is dragged.
+pub fn areas(list: &[Restriction], selected: Option<&str>, moving: Option<&[LonLat]>, handles: bool) -> String {
     let mut features: Vec<Value> = Vec::new();
     for r in list {
         let on = selected == Some(r.id.as_str());
@@ -574,7 +575,7 @@ pub fn areas(list: &[Restriction], selected: Option<&str>, moving: Option<&[LonL
             "properties": { "area": r.id, "rule": r.rule.id(), "selected": on },
             "geometry": { "type": "Polygon", "coordinates": [closed(ring)] },
         }));
-        if on {
+        if on && handles {
             for (i, c) in ring.iter().enumerate() {
                 features.push(json!({
                     "type": "Feature",
@@ -798,7 +799,7 @@ mod tests {
     #[test]
     fn an_area_is_a_closed_polygon_with_its_id_and_rule_and_the_selected_one_has_its_corners() {
         let list = [area("r1", Rule::CarFree), area("r2", Rule::SpeedLimit { kmh: 30 })];
-        let fc = parse(&areas(&list, Some("r2"), None));
+        let fc = parse(&areas(&list, Some("r2"), None, true));
         let f = fc["features"].as_array().unwrap();
         assert_eq!(f.len(), 2 + 3, "two outlines and the selected one's three corners");
         assert_eq!(f[0]["geometry"]["type"], "Polygon");
@@ -811,16 +812,20 @@ mod tests {
         assert_eq!(f[1]["properties"]["selected"], true);
         assert_eq!(f[2]["geometry"]["type"], "Point");
         assert_eq!((f[2]["properties"]["area"].as_str(), f[2]["properties"]["i"].as_u64()), (Some("r2"), Some(0)));
+        let fc = parse(&areas(&list, Some("r2"), None, false));
+        let f = fc["features"].as_array().unwrap();
+        assert_eq!(f.len(), 2, "without handles (a map shown read-only) no corner is sent");
+        assert_eq!(f[1]["properties"]["selected"], true, "the selected one is still marked");
     }
 
     #[test]
     fn the_selected_area_is_drawn_where_its_corner_is_being_dragged() {
         let list = [area("r1", Rule::CarFree)];
         let moved = [[-73.61, 45.5], [-73.59, 45.5], [-73.59, 45.51]];
-        let fc = parse(&areas(&list, Some("r1"), Some(&moved)));
+        let fc = parse(&areas(&list, Some("r1"), Some(&moved), true));
         assert_eq!(fc["features"][0]["geometry"]["coordinates"][0][0], serde_json::json!([-73.61, 45.5]));
         assert_eq!(fc["features"][1]["geometry"]["coordinates"], serde_json::json!([-73.61, 45.5]));
-        let fc = parse(&areas(&list, None, Some(&moved)));
+        let fc = parse(&areas(&list, None, Some(&moved), true));
         assert_eq!(fc["features"][0]["geometry"]["coordinates"][0][0], serde_json::json!([-73.6, 45.5]), "only the selected one moves");
     }
 
