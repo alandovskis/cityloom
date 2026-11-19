@@ -3306,6 +3306,8 @@ svg pattern circle {
   .add-item,
   .add-topic,
   .add-search,
+  .transform-tab,
+  .transform-item,
   .check,
   .fit-checks {
     min-height: 44px;
@@ -3326,6 +3328,10 @@ svg pattern circle {
   }
   .turn {
     min-width: 44px;
+    min-height: 44px;
+  }
+  .transform-x {
+    width: 44px;
     min-height: 44px;
   }
   .focus-hint {
