@@ -7,11 +7,16 @@ use crate::shared::units::Units;
 /// What the last command did, as data: the words follow a language switch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    Exported { name: String, count: usize },
+    Exported {
+        name: String,
+        count: usize,
+    },
     ExportEmpty,
     ExportFailed,
     Imported(Applied),
     NothingNew,
+    /// Nothing was left to import because every street and junction record was stale.
+    StaleOnly,
     Cancelled,
     Failed(ArchiveError),
 }
@@ -52,6 +57,7 @@ fn parts(outcome: &Outcome) -> Option<(&'static str, Args)> {
             Args::new().num("added", a.added as i64).num("replaced", a.replaced as i64).num("kept", a.kept as i64).num("same", a.same as i64),
         ),
         Outcome::NothingNew => ("archive-nothing-new", Args::new()),
+        Outcome::StaleOnly => ("archive-stale-only", Args::new()),
         Outcome::Cancelled => ("archive-cancelled", Args::new()),
         Outcome::Failed(_) => return None,
     })

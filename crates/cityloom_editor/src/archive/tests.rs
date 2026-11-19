@@ -380,6 +380,37 @@ fn a_stale_record_in_an_archive_is_not_imported() {
     assert_eq!(kept["streets"].as_object().unwrap().keys().collect::<Vec<_>>(), ["w1~n2~n3"]);
 }
 
+const STALE_ONLY: &str =
+    "Nothing to import: this archive was saved before the map was rebuilt with one street per block, so its street and junction edits no longer apply.";
+
+fn import_text_of(text: &str, locale: Locale) -> String {
+    let b = device();
+    let vm = ArchiveVm::new(b.ports.clone(), crate::i18n_for(locale));
+    vm.import_text(text);
+    vm.result_text().unwrap()
+}
+
+#[test]
+fn an_archive_holding_only_stale_records_says_so_and_not_that_everything_is_already_here() {
+    let streets = json!({"w1~n2~n3": {"street": {}}, "w4~n5~n6": {"street": {}, "import": 10}});
+    let text = raw(edits_with(17, streets), Value::Null);
+    assert_eq!(model::parse_and_validate(&text).unwrap().stale(), 2);
+    assert_eq!(import_text_of(&text, Locale::En), STALE_ONLY);
+    assert!(import_text_of(&text, Locale::FrCa).starts_with("Rien à importer\u{a0}: cette archive a été enregistrée avant"));
+}
+
+#[test]
+fn an_archive_of_stale_and_current_records_that_are_already_here_keeps_the_usual_outcome() {
+    let a = device();
+    design(&a.ports.storage);
+    let mut doc = valid();
+    doc["edits"]["streets"]["w9~n8~n7"] = json!({"street": {}});
+    let text = doc.to_string();
+    let vm = ArchiveVm::new(a.ports.clone(), crate::i18n_for(Locale::En));
+    vm.import_text(&text);
+    assert_eq!(vm.result_text().unwrap(), "Nothing to import: everything in this archive is already on this device.");
+}
+
 #[test]
 fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_version_their_content_needs() {
     // (content of one street record, the version a document holding it is written as)

@@ -339,3 +339,11 @@ fn the_link_back_to_the_map_keeps_the_project_and_a_read_only_view() {
     let vm = TimelineVm::new(Ports { storage: look, ..ports }, crate::i18n_for(Locale::En), context());
     assert_eq!(vm.back_href(), "map.html?project=p1&view=1", "a timeline shown read-only leads back to its map read-only");
 }
+
+#[test]
+fn a_stale_milestone_has_its_own_refusal_in_both_languages() {
+    assert_eq!(super::text::refused_key(super::model::Refused::Stale), "timeline-refused-stale");
+    for locale in [Locale::En, Locale::FrCa] {
+        assert!(!crate::i18n_for(locale).tr_now("timeline-refused-stale", &Default::default()).is_empty());
+    }
+}

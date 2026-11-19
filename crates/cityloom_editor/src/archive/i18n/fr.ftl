@@ -15,6 +15,7 @@ archive-export-empty = Vous n’avez pas encore de travail de conception à expo
 archive-export-failed = Le fichier n’a pas pu être proposé au téléchargement. Votre travail sur cet appareil n’a pas été modifié.
 archive-imported = Importation terminée. Ajouts : { $added }. Remplacements : { $replaced }. Conservés tels quels ici : { $kept }. Déjà identiques : { $same }.
 archive-nothing-new = Rien à importer : tout le contenu de cette archive est déjà sur cet appareil.
+archive-stale-only = Rien à importer : cette archive a été enregistrée avant que la carte soit reconstruite avec une rue par îlot; ses modifications des rues et des intersections ne s’appliquent donc plus.
 archive-cancelled = Importation annulée. Rien n’a été modifié sur cet appareil.
 archive-confirm-heading = Certains lieux diffèrent de ceux de cet appareil
 archive-confirm-summary = Dans cette archive, { $differ } diffèrent des mêmes lieux sur cet appareil, et { $new } sont nouveaux ici et seront ajoutés dans les deux cas. Rien n’a encore été modifié.
