@@ -865,6 +865,35 @@ mod tests {
     }
 
     #[test]
+    fn a_crossing_whose_calls_are_not_served_is_said_to_have_none_served_not_a_wait_of_0_s() {
+        use crate::junction::model::{TimingField, junction_of};
+        for (locale, words, not) in [
+            (crate::shared::i18n::Locale::En, "not served 12; no call was served.", "longest wait"),
+            (crate::shared::i18n::Locale::FrCa, "non servis 12; aucun appel n’a été servi.", "attente la plus longue"),
+        ] {
+            // Five lanes of 3.5 m and 5 s greens: no phase can fit the walk and clearance.
+            let mut j = junction_of(&[
+                ("sidewalk", 2000),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("sidewalk", 2000),
+            ]);
+            for u in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+                assert!(j.set_timing(u, TimingField::Green, 5));
+            }
+            let (ports, said, _, _) = test_ports_with_time();
+            let vm = JunctionVm::new(ports, crate::i18n_for(locale), j, None);
+            let e = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+            assert!(vm.set_on_call(e, true));
+            let t = said.take();
+            assert!(t[0].contains(words) && !t[0].contains(not), "{t:?}");
+        }
+    }
+
+    #[test]
     fn a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit() {
         let r = rig(0);
         let e = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);

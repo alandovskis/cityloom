@@ -113,12 +113,15 @@ pub struct Totals {
     /// The clearance and the walk plus the clearance its length needs (0 when it has no crossing).
     pub clearance_s: u32,
     pub need_s: u32,
+    /// Every call of the hour: served, delayed and not served.
+    pub calls: u32,
     pub served: u32,
     pub delayed: u32,
     pub not_served: u32,
     /// The calls whose green was lengthened, served or delayed.
     pub extended: u32,
-    pub longest_wait_s: u32,
+    /// The longest a call waited for its walk; None when none was served or delayed, so there is no wait to give.
+    pub longest_wait_s: Option<u32>,
 }
 
 /// Something about an on-call crossing the person should act on. By street uid; no wording.
@@ -186,8 +189,11 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
                 Outcome::Delayed => t.delayed += 1,
                 Outcome::NotServed => t.not_served += 1,
             }
+            t.calls += 1;
             t.extended += u32::from(c.extended_s > 0);
-            t.longest_wait_s = t.longest_wait_s.max(c.wait_s);
+            if c.outcome != Outcome::NotServed {
+                t.longest_wait_s = Some(t.longest_wait_s.unwrap_or(0).max(c.wait_s));
+            }
         }
     }
     out
@@ -561,11 +567,15 @@ mod tests {
         assert_eq!(sum.findings, vec![Finding::CannotServe { arm: e, need_s: 26, most_s: 25 }]);
         assert!(sum.calls.iter().all(|c| c.outcome == Outcome::NotServed), "{sum:?}");
         assert_eq!((sum.totals[0].not_served, sum.totals[0].served, sum.totals[0].clearance_s), (6, 0, 19));
+        // Every call is counted, and with none served or delayed there is no wait to give: none, not 0 s.
+        assert_eq!((sum.totals[0].calls, sum.totals[0].longest_wait_s), (6, None));
         // 7 s + 12 s = 19 s fits with 9 s more: every call is served lengthened.
         let sum = summary_of(&s, &[(e, 11_500)]);
         assert!(sum.findings.is_empty());
         assert!(sum.calls.iter().all(|c| c.extended_s == 9 && c.outcome != Outcome::NotServed), "{sum:?}");
         assert_eq!(sum.totals[0].extended, 6);
+        assert_eq!(sum.totals[0].calls, 6);
+        assert!(sum.totals[0].longest_wait_s.is_some(), "calls served: the longest wait is given");
     }
 
     #[test]
@@ -604,8 +614,8 @@ mod tests {
                 call(e, 3067, Outcome::Delayed, 59, 0),
             ],
             totals: vec![
-                Totals { arm: e, rate: 3, clearance_s: 9, need_s: 16, served: 2, delayed: 1, not_served: 0, extended: 0, longest_wait_s: 59 },
-                Totals { arm: w, rate: 2, clearance_s: 21, need_s: 28, served: 1, delayed: 1, not_served: 0, extended: 2, longest_wait_s: 42 },
+                Totals { arm: e, rate: 3, clearance_s: 9, need_s: 16, calls: 3, served: 2, delayed: 1, not_served: 0, extended: 0, longest_wait_s: Some(59) },
+                Totals { arm: w, rate: 2, clearance_s: 21, need_s: 28, calls: 2, served: 1, delayed: 1, not_served: 0, extended: 2, longest_wait_s: Some(42) },
             ],
             findings: vec![],
         };

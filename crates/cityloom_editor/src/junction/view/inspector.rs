@@ -1795,13 +1795,16 @@ fn calls_section(w: Watch) -> impl IntoView {
     let totals = move || calls.with(|c| c.crossings.iter().filter_map(|c| c.totals.map(|t| (t, c.label.clone()))).collect::<Vec<_>>());
     let has_totals = Memo::new(move |_| calls.with(|c| c.crossings.iter().any(|c| c.totals.is_some())));
     let total_row = move |(t, label): (Totals, Said)| {
-        let waited = t.served + t.delayed > 0;
-        let longest =
-            move || if waited { tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(t.longest_wait_s))) } else { w.tr("jn-calls-no-wait") };
+        // The longest wait as the totals give it; with none, a dash for the eye and words for a screen reader.
+        let longest = move || match t.longest_wait_s {
+            Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
+            None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-calls-no-wait-said")}</span> }
+                .into_any(),
+        };
         view! {
             <tr>
                 <th scope="row">{move || w.say(&label)}</th>
-                <td>{t.served + t.delayed + t.not_served}</td>
+                <td>{t.calls}</td>
                 <td>{t.served}</td>
                 <td>{t.delayed}</td>
                 // Calls the crossing could not serve are a problem, marked as the checks mark one.

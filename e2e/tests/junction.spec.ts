@@ -998,7 +998,8 @@ test.describe("signal timing on a junction of the city", () => {
       "Green extended",
       "Longest wait",
     ]);
-    await expect(row.locator("td")).toHaveText(["12", "0", "0", "12", "0", "–"]);
+    await expect(row.locator("td")).toHaveText(["12", "0", "0", "12", "0", "–none served"]);
+    await expect(row.locator("td").last().locator("[aria-hidden=true]")).toHaveText("–");
     await expect(row.locator("td").nth(3)).toHaveClass("bad");
     await page.locator("#calls-rows summary").click();
     await expect(page.locator("#calls-rows tbody tr").filter({ hasText: name }).first()).toContainText("Not served");

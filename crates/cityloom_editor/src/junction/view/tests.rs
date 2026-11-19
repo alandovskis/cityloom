@@ -497,7 +497,9 @@ fn the_totals_count_every_call_and_mark_the_ones_not_served() {
     assert_eq!(heads, ["Crossing", "Calls", "Served", "Delayed", "Not served", "Green extended", "Longest wait"]);
     let row = &totals[totals.find("<tbody>").unwrap()..];
     let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[..t.find("</td>").unwrap()]).collect();
-    assert_eq!(cells, [">12", ">0", ">0", r#" class="bad">12"#, ">0", ">–"], "{row}");
+    // The dash is for the eye; a screen reader is told the words.
+    let none = r#"><span aria-hidden="true">–</span><span class="sr-only">none served</span>"#;
+    assert_eq!(cells, [">12", ">0", ">0", r#" class="bad">12"#, ">0", none], "{row}");
     // A crossing whose calls are all served has no mark.
     let s = shared(0);
     assert!(s.set_on_call(arm(&s, 90), true));

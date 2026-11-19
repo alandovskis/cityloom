@@ -638,6 +638,7 @@ jn-calls-col-at = Appel à
 jn-calls-col-outcome = Résultat
 jn-calls-seconds = { $seconds } s
 jn-calls-no-wait = –
+jn-calls-no-wait-said = aucun appel servi
 jn-calls-rows =
     { $n ->
         [one] L’appel, une ligne
@@ -658,6 +659,11 @@ jn-calls-said =
         [one] 1 appel
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; attente la plus longue { $wait } s.
+jn-calls-said-no-wait =
+    Passage de { $arm } : { $calls ->
+        [one] 1 appel
+       *[other] { $calls } appels
+    } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; aucun appel n’a été servi.
 
 ## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
