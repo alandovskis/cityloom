@@ -767,12 +767,11 @@ pub struct CallCrossingView {
 }
 
 /// One call: its crossing, when it was made ("12 min 5 s") and what happened ("Delayed 34 s, green extended by 3 s").
+/// Its street's name is the crossing's (`CallCrossingView.label`), by `call.arm`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct CallRowView {
     /// The call itself: its crossing, when, and what happened to it (a row's identity).
     pub call: calls::Call,
-    pub uid: u32,
-    pub label: Said,
     pub at: Said,
     pub outcome: Said,
 }
@@ -799,8 +798,6 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
         .iter()
         .map(|c| CallRowView {
             call: *c,
-            uid: c.arm,
-            label: name(c.arm),
             at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(c.at_s / 60))).with("seconds", Arg::Num(i64::from(c.at_s % 60))),
             outcome: outcome_said(c),
         })

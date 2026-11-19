@@ -959,6 +959,59 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(section).not.toContainText("On recall");
   });
 
+  test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
+    page,
+  }) => {
+    const first = page.locator(".call-crossing input[type=checkbox]").first();
+    const uid = (await first.getAttribute("id"))!.replace("call-on-", "");
+    await first.click();
+    await expect(first).toBeChecked();
+    const listed = page
+      .locator(`#call-on-${uid}`)
+      .locator("xpath=ancestor::div[contains(@class,'call-crossing')]")
+      .locator(".call-name");
+    const was = (await listed.innerText()).trim();
+    // Turn its street a step at a time until its compass point changes: a step that small leaves the phases, and so the
+    // numbers, as they were, and only the name changes.
+    const bearing = page.locator('#inspector input[aria-labelledby="i-h-bearing"]');
+    const toStreet = async () => {
+      await page.locator("#jn-path-up-0").click(); // the plan's path: back to the Junction level
+      await page.locator(`#jn-go-${uid}`).click();
+      if (!(await bearing.isVisible())) await page.locator("#jn-fold-position summary").click();
+    };
+    const totalsBefore = await page.locator("#calls-totals tbody td").allInnerTexts();
+    turning: for (const way of ["clockwise", "anticlockwise"]) {
+      for (let step = 0; step < 12; step++) {
+        await toStreet();
+        const at = await bearing.inputValue();
+        await page.getByRole("button", { name: new RegExp(`^Turn ${way} by`) }).click();
+        if ((await bearing.inputValue()) === at) break; // too close to a neighbour that way
+        await page.locator("#wrap").focus();
+        await page.keyboard.press("Escape");
+        await openPlan(page);
+        if ((await listed.innerText()).trim() !== was) break turning;
+      }
+    }
+    const name = (await listed.innerText()).trim();
+    expect(name).not.toBe(was);
+    // The case that matters: the same numbers, a new name.
+    expect(await page.locator("#calls-totals tbody td").allInnerTexts()).toEqual(totalsBefore);
+    await expect(page.locator("#calls-totals tbody th")).toHaveText([name]);
+    await page.locator("#calls-rows summary").click();
+    const rows = page.locator("#calls-rows tbody th");
+    expect(new Set((await rows.allInnerTexts()).map((t) => t.trim()))).toEqual(new Set([name]));
+    // Undo and redo with the plan open: the rows keep their numbers, and follow the name back and forth.
+    for (const [button, now] of [
+      ["#undo", was],
+      ["#redo", name],
+    ]) {
+      await page.locator(button).click();
+      await expect(listed).toHaveText(now);
+      await expect(page.locator("#calls-totals tbody th")).toHaveText([now]);
+      await expect.poll(async () => [...new Set((await rows.allInnerTexts()).map((t) => t.trim()))]).toEqual([now]);
+    }
+  });
+
   test("a crossing too long for any phase's green, even extended by 15 s, is a finding", async ({ page }) => {
     // The fourth junction of the Plateau has a crossing that takes 14 s to clear: walk 7 s + 14 s = 21 s, more than
     // the shortest green (5 s) and the most it can be extended (15 s).

@@ -23,7 +23,6 @@ use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::locked::locked;
-use crate::shared::said::Said;
 use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
@@ -1792,9 +1791,12 @@ fn calls_section(w: Watch) -> impl IntoView {
         }
     };
     // One row a crossing, keyed by its totals: a row is made again only when its numbers change.
-    let totals = move || calls.with(|c| c.crossings.iter().filter_map(|c| c.totals.map(|t| (t, c.label.clone()))).collect::<Vec<_>>());
+    let totals = move || calls.with(|c| c.crossings.iter().filter_map(|c| c.totals).collect::<Vec<_>>());
+    // A row's street is looked up by its uid, never copied in: a turn or an undo can rename a street and leave its
+    // numbers (the row's key) as they were.
+    let street_of = move |uid: u32| calls.with(|c| c.crossings.iter().find(|x| x.uid == uid).map(|x| w.say(&x.label)).unwrap_or_default());
     let has_totals = Memo::new(move |_| calls.with(|c| c.crossings.iter().any(|c| c.totals.is_some())));
-    let total_row = move |(t, label): (Totals, Said)| {
+    let total_row = move |t: Totals| {
         // The longest wait as the totals give it; with none, a dash for the eye and words for a screen reader.
         let longest = move || match t.longest_wait_s {
             Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
@@ -1803,7 +1805,7 @@ fn calls_section(w: Watch) -> impl IntoView {
         };
         view! {
             <tr>
-                <th scope="row">{move || w.say(&label)}</th>
+                <th scope="row">{move || street_of(t.arm)}</th>
                 <td>{t.calls}</td>
                 <td>{t.served}</td>
                 <td>{t.delayed}</td>
@@ -1832,7 +1834,7 @@ fn calls_section(w: Watch) -> impl IntoView {
                                 <th scope="col">{words(w, "jn-calls-col-longest")}</th>
                             </tr>
                         </thead>
-                        <tbody><For each=totals key=|(t, _)| *t children=total_row/></tbody>
+                        <tbody><For each=totals key=|t| *t children=total_row/></tbody>
                     </table>
                 </div>
             }
@@ -1852,7 +1854,7 @@ fn calls_section(w: Watch) -> impl IntoView {
     let n_rows = Memo::new(move |_| calls.with(|c| c.rows.len()));
     let rows = move || calls.with(|c| c.rows.clone());
     let call_row = move |r: CallRowView| {
-        view! { <tr><th scope="row">{move || w.say(&r.label)}</th><td>{move || w.say(&r.at)}</td><td>{move || w.say(&r.outcome)}</td></tr> }
+        view! { <tr><th scope="row">{move || street_of(r.call.arm)}</th><td>{move || w.say(&r.at)}</td><td>{move || w.say(&r.outcome)}</td></tr> }
     };
     let every_call = move || {
         (n_rows.get() > 0).then(|| {
