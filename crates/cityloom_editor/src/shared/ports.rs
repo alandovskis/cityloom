@@ -33,9 +33,10 @@ pub trait Storage {
     fn project(&self) -> Option<String> {
         None
     }
-    /// Whether this storage keeps nothing a page writes, because the page shows the project read-only: every write is
-    /// refused, and the view-models refuse every edit before it gets that far. False unless a page made it so
-    /// (`ScopedStorage::only_to_read`).
+    /// Whether the page shows the project read-only: this storage refuses every write of the design and of the sync
+    /// (a project's own keys, the sync document and the list of projects: `scoped::DESIGN_KEYS`) while still keeping
+    /// the person's caches and preferences, and the view-models refuse every edit before it gets that far. False
+    /// unless a page made it so (`ScopedStorage::only_to_read`).
     fn read_only(&self) -> bool {
         false
     }
