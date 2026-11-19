@@ -66,11 +66,15 @@ export const OPEN_ENDS_TILE = generated("open-ends");
 /** The answer to a request for a metro tile: the network tile in `file`. */
 export const tileFrom = (file: string) => ({ contentType: "application/json", body: readFileSync(file) });
 
-/** What the Plateau needs where there is no network: a metro tile of it. */
+/** What the Plateau needs where there is no network: a metro tile of it, with a checksum, which the area is kept
+ *  with and the importer's version after it, so an edit made on it is stamped with that version (without one, an
+ *  edit is unstamped and so stale). */
 export async function serveWorld(page: Page) {
   if (FROM_ARCHIVE) return;
   await page.route("**/data/metro/index.json", (route) =>
-    route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    route.fulfill({
+      json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } },
+    }),
   );
   await page.route("**/data/metro/0_0.json", (route) => route.fulfill(tileFrom(PLATEAU_TILE)));
 }

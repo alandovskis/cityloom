@@ -854,7 +854,8 @@ impl City {
     }
 
     /// The key and the record to keep for street `edge` as it now stands; None where the street has no key, or one
-    /// another place shares, so that what is written is always what comes back.
+    /// another place shares, so that what is written is always what comes back. Stamped as this build's importer
+    /// made it; `CityStore` stamps what it writes with the importer of the network it holds instead.
     pub fn street_record(&self, edge: u32) -> Option<(String, StreetRecord)> {
         let e = self.edge_index(edge)?;
         let key = self.street_keys[e].clone()?;
@@ -903,6 +904,7 @@ impl City {
 
     /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
     /// own, or an arm's street could not be found again from what the record says of it.
+    /// Stamped as `street_record` is.
     pub fn junction_record(&self, node: u32) -> Option<(String, JunctionRecord)> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let key = self.junction_keys[n].clone()?;

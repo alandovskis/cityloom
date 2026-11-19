@@ -2381,7 +2381,8 @@ mod tests {
     ) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let area = Area::new("Bendville", 45.5, -73.6);
         let stored = CityStore::for_area(storage.clone(), area.clone());
-        assert!(stored.keep_network(&network));
+        // kept as this build's tiles make it, so what `before` writes is fresh
+        assert!(stored.keep_network_from(&network, Some(&cityloom_model::with_importer("test"))));
         before(&stored);
         assert!(CityStore::choose(&*storage, &area));
         let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));

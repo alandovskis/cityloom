@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use cityloom_model::Network;
 
-use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits, JUNCTIONS, STREETS};
+use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits, JUNCTIONS, JunctionRecord, STREETS, StreetRecord};
 use crate::city::model::{City, Layout};
 use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
@@ -120,6 +120,17 @@ impl CityStore {
         self.storage.recall(&self.key(CHECKSUM_KEY)).filter(|c| !c.is_empty())
     }
 
+    /// The version of the importer that made the network the store holds, read from its checksum (`+i<N>`): what
+    /// a record written over it is stamped with. None where the checksum does not say (none kept, or one without the
+    /// version), so such a record is unstamped and stale. The tests' hand-made city is this build's.
+    fn importer(&self) -> Option<u32> {
+        #[cfg(test)]
+        if self.sample {
+            return Some(cityloom_model::IMPORTER_VERSION);
+        }
+        cityloom_model::importer_of(&self.checksum()?)
+    }
+
     /// Whether the area's street network is kept.
     pub fn has_network(&self) -> bool {
         #[cfg(test)]
@@ -171,10 +182,15 @@ impl CityStore {
         if !city.keep_street(edge, street) {
             return false;
         }
-        let Some((key, record)) = city.street_record(edge) else { return false };
+        let Some((key, mut record)) = city.street_record(edge) else { return false };
+        record.import = self.importer();
         // the record the street took, under another key, is replaced: left, it would bring the older edit back
         let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
-        let unedited = self.unedited().street_record(edge).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
+        let unedited = self
+            .unedited()
+            .street_record(edge)
+            .filter(|(k, _)| *k == key)
+            .and_then(|(_, r)| serde_json::to_value(StreetRecord { import: record.import, ..r }).ok());
         let (mut changed, mut replaced) = (false, None);
         let kept = self.upsert(|draft| {
             let before = draft.get_raw(STREETS, &key).cloned().or_else(|| unedited.clone());
@@ -200,9 +216,14 @@ impl CityStore {
         if !city.keep_junction(node, state) {
             return false;
         }
-        let Some((key, record)) = city.junction_record(node) else { return false };
+        let Some((key, mut record)) = city.junction_record(node) else { return false };
+        record.import = self.importer();
         let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
-        let unedited = self.unedited().junction_record(node).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
+        let unedited = self
+            .unedited()
+            .junction_record(node)
+            .filter(|(k, _)| *k == key)
+            .and_then(|(_, r)| serde_json::to_value(JunctionRecord { import: record.import, ..r }).ok());
         let (mut changed, mut replaced) = (false, None);
         let kept = self.upsert(|draft| {
             let before = draft.get_raw(JUNCTIONS, &key).cloned().or_else(|| unedited.clone());
@@ -295,6 +316,12 @@ mod tests {
     use crate::shared::catalogue::StreetClass;
     use crate::shared::ports::{MemoryStorage, test_ports};
     use crate::street::model::{Street, pedestrianised};
+
+    /// Keeps `network` as the tiles of this build's importer make it (a checksum with its `+i<N>`), so a record
+    /// written over it is fresh.
+    fn fresh(store: &CityStore, network: &Network) -> bool {
+        store.keep_network_from(network, Some(&cityloom_model::with_importer("test")))
+    }
 
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
@@ -416,7 +443,7 @@ mod tests {
     fn an_area_s_edit_does_not_remove_the_records_of_other_areas() {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        area.keep_network(&tiny_network());
+        fresh(&area, &tiny_network());
         let mut elsewhere = Edits::new();
         let record = StreetRecord {
             ways: [500].into(),
@@ -436,6 +463,43 @@ mod tests {
         let e = document(&storage);
         assert_eq!(e.streets.len(), 2);
         assert_eq!(e.streets["w500~n8~n9"], record);
+    }
+
+    /// The record a write keeps for the one street of `tiny_network`, kept from a tile whose checksum is `checksum`.
+    fn written_over_a_network_kept_as(checksum: Option<&str>) -> serde_json::Value {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(area.keep_network_from(&tiny_network(), checksum));
+        let street = area.open().view(0).edges[0].uid;
+        let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(area.write_street(street, s));
+        let doc: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
+        doc["streets"].as_object().unwrap().values().next().unwrap().clone()
+    }
+
+    #[test]
+    fn a_record_written_over_a_network_kept_by_importer_10_is_stale() {
+        let record = written_over_a_network_kept_as(Some("ab12+i10"));
+        assert_eq!(record["import"], serde_json::json!(10), "stamped with the importer of the network it was made on");
+        assert!(edits::is_stale(&record));
+    }
+
+    #[test]
+    fn a_record_written_over_a_network_kept_by_importer_11_is_fresh() {
+        let record = written_over_a_network_kept_as(Some("ab12+i11"));
+        assert_eq!(record["import"], serde_json::json!(11));
+        assert!(!edits::is_stale(&record));
+    }
+
+    #[test]
+    fn a_record_written_over_a_network_whose_importer_is_unknown_is_unstamped() {
+        for checksum in [None, Some("ab12")] {
+            let record = written_over_a_network_kept_as(checksum);
+            assert!(record.get("import").is_none(), "{checksum:?}: no version to stamp");
+            assert!(edits::is_stale(&record));
+        }
     }
 
     #[test]
@@ -666,14 +730,14 @@ mod tests {
     fn edited_before_and_imported_again() -> (CityStore, Rc<MemoryStorage>, u32, Street) {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
-        assert!(area.keep_network(&curbed_network(true)));
+        assert!(fresh(&area, &curbed_network(true)));
         let street = area.open().view(0).edges[0].uid;
         let mut saved = area.open().street_editor(street, 0).unwrap().snapshot();
         assert_eq!(saved.row_mm, 11_200, "the curbs were two 600 mm medians");
         saved.segments[0].width_mm -= 100;
         saved.segments[2].width_mm += 100;
         assert!(area.write_street(street, saved.clone()));
-        assert!(area.keep_network(&curbed_network(false)));
+        assert!(fresh(&area, &curbed_network(false)));
         (area, storage, street, saved)
     }
 
@@ -698,7 +762,7 @@ mod tests {
     fn edited_with_a_one_way_bike_lane_and_imported_again() -> (CityStore, Rc<MemoryStorage>, u32, Street) {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
-        assert!(area.keep_network(&network_with_bike_lane(false)));
+        assert!(fresh(&area, &network_with_bike_lane(false)));
         let street = area.open().view(0).edges[0].uid;
         let mut saved = area.open().street_editor(street, 0).unwrap().snapshot();
         let was = saved.row_mm;
@@ -706,7 +770,7 @@ mod tests {
         saved.segments[2].width_mm += 100;
         assert_eq!(saved.row_mm, was);
         assert!(area.write_street(street, saved.clone()));
-        assert!(area.keep_network(&network_with_bike_lane(true)));
+        assert!(fresh(&area, &network_with_bike_lane(true)));
         (area, storage, street, saved)
     }
 
@@ -730,7 +794,7 @@ mod tests {
         again.segments[2].width_mm -= 50;
         assert!(area.write_street(street, again.clone()));
         assert_eq!(document(&storage).streets.values().next().unwrap().street.row_mm, saved.row_mm);
-        assert!(area.keep_network(&network_with_bike_lane(true)));
+        assert!(fresh(&area, &network_with_bike_lane(true)));
         assert_eq!(area.open().view(0).edited, 1, "found by that width at every import");
         let mut editor = area.open().street_editor(street, 0).unwrap();
         assert!(editor.reset());
@@ -749,11 +813,11 @@ mod tests {
             n.roads[0].base_lanes_mut().insert(0, network_with_bike_lane(two_way).roads[0].base_lanes()[0].clone());
             n
         };
-        assert!(area.keep_network(&curbed_one_way(true, false)));
+        assert!(fresh(&area, &curbed_one_way(true, false)));
         let street = area.open().view(0).edges[0].uid;
         let saved = area.open().street_editor(street, 0).unwrap().snapshot();
         assert!(area.write_street(street, saved.clone()));
-        assert!(area.keep_network(&curbed_one_way(false, true)));
+        assert!(fresh(&area, &curbed_one_way(false, true)));
         assert_eq!(area.open().view(0).edited, 1);
         assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), saved);
     }
@@ -783,10 +847,10 @@ mod tests {
     fn a_street_whose_width_did_not_change_takes_its_edit_by_that_width_as_before() {
         let (ports, _, _) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
-        assert!(area.keep_network(&tiny_network()));
+        assert!(fresh(&area, &tiny_network()));
         let (street, edited) = shifted_street(&area, 100);
         assert!(area.write_street(street, edited.clone()));
-        assert!(area.keep_network(&tiny_network()));
+        assert!(fresh(&area, &tiny_network()));
         assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), edited);
         // a width that is neither is no match
         let mut wrong = edited;
@@ -814,7 +878,7 @@ mod tests {
         assert_eq!(record.row_mm, 11_200, "the width it had");
         assert_eq!(record.segments, again.segments, "its pieces as the user left them");
         assert_ne!(record.segments, saved.segments);
-        assert!(area.keep_network(&curbed_network(false)), "imported again");
+        assert!(fresh(&area, &curbed_network(false)), "imported again");
         let city = area.open();
         assert_eq!(city.view(0).edited, 1, "it is found by the legacy width at every import");
         let editor = city.street_editor(street, 0).unwrap();
@@ -842,7 +906,7 @@ mod tests {
         assert!(!s.has_network());
         let v = s.open().view(0);
         assert_eq!((v.name.as_str(), v.places), ("Testville", 0));
-        assert!(s.keep_network(&tiny_network()));
+        assert!(fresh(&s, &tiny_network()));
         assert!(s.has_network());
         let v = s.open().view(0);
         assert_eq!((v.name.as_str(), v.edges.len()), ("Testville", 1));
@@ -856,7 +920,7 @@ mod tests {
     fn what_is_edited_in_an_area_is_found_again_there_and_is_not_taken_by_another_city() {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
-        area.keep_network(&tiny_network());
+        fresh(&area, &tiny_network());
         let street = area.open().view(0).edges[0].uid;
         let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -875,7 +939,7 @@ mod tests {
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let mut network = tiny_network();
         network.junctions[1].provenance.clear(); // where the road is cut at the area's box
-        area.keep_network(&network);
+        fresh(&area, &network);
         let street = area.open().view(0).edges[0].uid;
         let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -901,9 +965,9 @@ mod tests {
         let a = CityStore::for_area(ports.storage.clone(), Area::new("A", 1.0, 2.0));
         let mut cut = tiny_network();
         cut.junctions[1].provenance.clear();
-        a.keep_network(&cut);
+        fresh(&a, &cut);
         let b = CityStore::for_area(ports.storage, Area::new("B", 1.0, 3.0));
-        b.keep_network(&tiny_network());
+        fresh(&b, &tiny_network());
         let (street, first) = shifted_street(&a, 100);
         assert!(a.write_street(street, first.clone()));
         assert_eq!(b.open().street_editor(street, 0).unwrap().snapshot(), first, "B's street takes A's edit by the ways and nodes they share");
@@ -942,7 +1006,7 @@ mod tests {
         let mut twin = network.roads[0].clone();
         twin.edge.id = cityloom_model::RoadId(2);
         network.roads.push(twin);
-        area.keep_network(&network);
+        fresh(&area, &network);
         let street = area.open().view(0).edges[0].uid;
         let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
@@ -1009,7 +1073,7 @@ mod tests {
         assert_eq!(store.area(), &chosen);
         assert!(!store.has_network());
         assert_eq!(store.open().view(0).places, 0);
-        store.keep_network(&tiny_network());
+        fresh(&store, &tiny_network());
         assert_eq!(CityStore::current(ports.storage.clone()).open().view(0).name, "Testville");
         storage.remember(AREA_KEY, "area=nonsense");
         assert_eq!(CityStore::current_area(&*storage), default_area());

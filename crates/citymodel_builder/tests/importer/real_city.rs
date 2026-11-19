@@ -244,7 +244,8 @@ mod two_way_track {
         let now = importer::import(FIXTURE.as_bytes()).unwrap();
         let storage = Rc::new(MemoryStorage::default());
         let store = CityStore::for_area(storage.clone() as Rc<dyn Storage>, Area::new("Saint-Marc", 45.4935, -73.58));
-        assert!(store.keep_network(&before));
+        // kept as this build's tiles are, so the record written over it is stamped and applies
+        assert!(store.keep_network_from(&before, Some(&cityloom_model::with_importer("test"))));
         // way 330153470's street
         let index = before
             .roads
@@ -258,7 +259,7 @@ mod two_way_track {
         edited.next_uid += 1;
         assert!(store.write_street(uid, edited.clone()));
 
-        assert!(store.keep_network(&now));
+        assert!(store.keep_network_from(&now, Some(&cityloom_model::with_importer("test"))));
         let city = store.open();
         let view = city.view(0);
         let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();

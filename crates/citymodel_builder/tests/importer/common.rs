@@ -15,10 +15,11 @@ use cityloom_editor::place::area::Area;
 use cityloom_editor::shared::ports::{MemoryStorage, Storage};
 use citymodel_builder::importer::Network;
 
-/// A store of `area` in `storage`, holding `network` as the area's roads.
+/// A store of `area` in `storage`, holding `network` as the area's roads, kept as this build's tiles are (a checksum
+/// with the importer's version), so the records written over it are stamped and fresh.
 pub fn store_with(storage: &Rc<MemoryStorage>, area: Area, network: &Network) -> CityStore {
     let store = CityStore::for_area(storage.clone() as Rc<dyn Storage>, area);
-    assert!(store.keep_network(network));
+    assert!(store.keep_network_from(network, Some(&cityloom_model::with_importer("test"))));
     store
 }
 

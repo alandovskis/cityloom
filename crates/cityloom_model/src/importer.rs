@@ -44,6 +44,12 @@ pub fn with_importer(checksum: &str) -> String {
     format!("{checksum}+i{IMPORTER_VERSION}")
 }
 
+/// The version of the importer that made an area kept with `checksum` (`with_importer`'s `+i<N>`); none where the
+/// checksum does not say.
+pub fn importer_of(checksum: &str) -> Option<u32> {
+    checksum.rsplit_once("+i")?.1.parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +58,15 @@ mod tests {
     fn a_checksum_is_kept_with_the_importer_version() {
         assert_eq!(with_importer("ab12"), "ab12+i11");
         assert_eq!(IMPORTER_VERSION, 11);
+    }
+
+    #[test]
+    fn the_importer_version_is_read_back_from_a_kept_checksum() {
+        assert_eq!(importer_of(&with_importer("ab12")), Some(IMPORTER_VERSION));
+        assert_eq!(importer_of("ab12+i10"), Some(10));
+        assert_eq!(importer_of("ab12"), None, "a checksum kept without the importer's version");
+        assert_eq!(importer_of("ab12+i"), None);
+        assert_eq!(importer_of("ab12+ix"), None);
+        assert_eq!(importer_of(""), None);
     }
 }
