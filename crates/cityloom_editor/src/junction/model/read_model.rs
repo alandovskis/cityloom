@@ -750,6 +750,8 @@ pub struct CallsView {
     pub rows: Vec<CallRowView>,
     /// What the person should act on, each a sentence naming the crossing.
     pub findings: Vec<Said>,
+    /// The same findings as the model has them, in the same order: what one is, apart from the words.
+    pub found: Vec<calls::Finding>,
 }
 
 /// One crossing as the calls see it: on call (with its rate) or on recall, whether some phase walks it (else it cannot
@@ -814,7 +816,7 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
             calls::Finding::NotWalked { arm } => Said::new("jn-calls-finding-unwalked").with("arm", Arg::Said(Box::new(name(arm)))),
         })
         .collect();
-    CallsView { crossings, rows, findings }
+    CallsView { crossings, rows, findings, found: summary.findings }
 }
 
 /// What happened to a call, in a few words.

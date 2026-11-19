@@ -135,6 +135,17 @@ pub enum Finding {
     NotWalked { arm: u32 },
 }
 
+impl Finding {
+    /// What the finding is about, whatever its figures: its kind and its street. An edit that changes a crossing's
+    /// name or what it needs leaves this alone, so a finding that was there is not taken for a new one.
+    pub fn about(&self) -> (u8, u32) {
+        match *self {
+            Finding::CannotServe { arm, .. } => (0, arm),
+            Finding::NotWalked { arm } => (1, arm),
+        }
+    }
+}
+
 /// How the plan serves the calls of one hour.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Summary {

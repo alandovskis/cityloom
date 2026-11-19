@@ -48,7 +48,8 @@ type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 /// What an edit's announcement compares with afterwards, taken before it: what met in the plan and the calls' findings.
 struct Before {
     meetings: Vec<Meeting>,
-    findings: Vec<crate::shared::said::Said>,
+    /// What each finding was about (`calls::Finding::about`), not its words: a renamed street is no new finding.
+    findings: Vec<(u8, u32)>,
     /// The crossings kept on call while the signal was suspended.
     kept: usize,
 }
@@ -311,7 +312,7 @@ impl JunctionVm {
         if done && self.read(|j| j.revisions().count()) != edits {
             let v = self.view_now();
             let edit = text::edit_text(&v, &self.i18n, self.units_now());
-            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&meeting)));
+            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&meeting.findings)));
         } else if !done {
             self.say_refusal();
         }
@@ -440,13 +441,13 @@ impl JunctionVm {
 
     /// Says `text`, then the sentence for the movements that meet now and did not before.
     fn say_with_meetings(&self, text: String, meeting: &Before) {
-        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(meeting)).chain(self.kept_note(meeting)));
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(&meeting.findings)).chain(self.kept_note(meeting)));
     }
 
     /// The sentences that follow an edit's text: the movements that now meet, the crossings on call it left unserved,
     /// then the phases off their pattern.
     fn notes(&self, meeting: &Before, lost: &[usize]) -> Vec<String> {
-        self.meeting_note(meeting).into_iter().chain(self.findings_note(meeting)).chain(self.kept_note(meeting)).chain(self.lost_note(lost)).collect()
+        self.meeting_note(meeting).into_iter().chain(self.findings_note(&meeting.findings)).chain(self.kept_note(meeting)).chain(self.lost_note(lost)).collect()
     }
 
     /// What an edit is compared against afterwards: the movements that met and the calls' findings before it.
@@ -454,9 +455,9 @@ impl JunctionVm {
         Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept }
     }
 
-    /// The findings of the pedestrian calls now (`jn-calls-finding-unwalked`, `jn-calls-finding-cannot`).
-    fn findings(&self) -> Vec<crate::shared::said::Said> {
-        self.view_now().signal.as_ref().map(|s| s.calls.findings.clone()).unwrap_or_default()
+    /// What the findings of the pedestrian calls are about now, each its kind and street.
+    fn findings(&self) -> Vec<(u8, u32)> {
+        self.view_now().signal.as_ref().map(|s| s.calls.found.iter().map(|f| f.about()).collect()).unwrap_or_default()
     }
 
     /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
@@ -468,9 +469,16 @@ impl JunctionVm {
 
     /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
     /// already is not said again. None when none arose.
-    fn findings_note(&self, before: &Before) -> Option<String> {
-        let new: Vec<String> =
-            self.findings().into_iter().filter(|f| !before.findings.contains(f)).map(|f| say_now(&self.i18n, self.units_now(), &f)).collect();
+    fn findings_note(&self, before: &[(u8, u32)]) -> Option<String> {
+        let v = self.view_now();
+        let calls = &v.signal.as_ref()?.calls;
+        let new: Vec<String> = calls
+            .found
+            .iter()
+            .zip(&calls.findings)
+            .filter(|(f, _)| !before.contains(&f.about()))
+            .map(|(_, said)| say_now(&self.i18n, self.units_now(), said))
+            .collect();
         (!new.is_empty()).then(|| new.join(" "))
     }
 
@@ -891,6 +899,27 @@ mod tests {
             let t = said.take();
             assert!(t[0].contains(words) && !t[0].contains(not), "{t:?}");
         }
+    }
+
+    #[test]
+    fn a_finding_already_there_is_not_said_again_when_an_edit_renames_its_street() {
+        use crate::junction::model::{TimingField, junction_of};
+        // Five lanes of 3.5 m and 5 s greens: the north crossing on call cannot be served, a finding from the start.
+        let mut j =
+            junction_of(&[("sidewalk", 2000), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("sidewalk", 2000)]);
+        for u in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_timing(u, TimingField::Green, 5));
+        }
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+        let n = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid);
+        assert!(vm.set_on_call(n, true));
+        assert!(said.take()[0].contains("cannot be served safely"), "said when it arises");
+        // Turned into the north-east: the street's name changes, the finding does not.
+        assert!(vm.apply(|j| j.set_bearing(n, 30)));
+        let t = said.take();
+        assert!(t[0].contains("(north-east)") || t[0].contains("bearing"), "{t:?}");
+        assert!(!t[0].contains("cannot be served"), "the same finding, not said again: {t:?}");
     }
 
     #[test]
