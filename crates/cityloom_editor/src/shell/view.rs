@@ -277,6 +277,8 @@ fn bind_units(vm: &Rc<ShellVm>) {
 
 fn bind_region(vm: &Rc<ShellVm>) {
     let Some(pick) = by_id("region").and_then(|e| e.dyn_into::<HtmlSelectElement>().ok()) else { return };
+    // Shown read-only, the region is the design's drive side: it is shown and cannot be chosen (`ShellVm::choose_region`).
+    pick.set_disabled(vm.read_only());
     let v = vm.clone();
     let p = pick.clone();
     listen(&pick, "change", move |_: Event| v.choose_region(&p.value()));

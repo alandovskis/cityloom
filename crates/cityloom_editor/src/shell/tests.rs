@@ -595,3 +595,38 @@ fn a_page_shown_read_only_says_so_and_its_links_keep_it_read_only() {
     assert!(fr.contains(">Lecture seule<"), "{fr}");
     assert!(fr.contains("Cet aménagement est ouvert en lecture seule\u{a0}: vous pouvez le consulter, mais pas le modifier."), "{fr}");
 }
+
+/// A street shown read-only, opened where the other drive side's region is kept: the shell gives the street that region
+/// on load, which is not taken and says nothing. Choosing a region there is refused like any edit: it is said, the
+/// street keeps its own, the menu shows that one, and neither the region kept nor "region chosen" is said or written.
+#[test]
+fn a_page_shown_read_only_takes_no_region_says_nothing_on_load_and_refuses_a_choice() {
+    use crate::shared::ports::{RecordingAnnouncer, Storage};
+    use crate::shell::vm::REGION_KEY;
+    use std::rc::Rc;
+    crate::sync::hub::reset();
+    let (mut ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let said = Rc::new(RecordingAnnouncer::default());
+    ports.announcer = said.clone();
+    *page.path.borrow_mut() = "/street.html?street=7&project=p1&view=1".into();
+    storage.remember(REGION_KEY, "united-kingdom");
+    let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), "p1").only_to_read());
+    let street = crate::street::vm::StreetVm::new(
+        crate::shared::ports::Ports { storage: view, ..ports.clone() },
+        crate::i18n_for(Locale::En),
+        crate::street::model::Editor::new(0),
+        None,
+    );
+    let before = street.read(|e| e.snapshot());
+    let shell = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), street.clone(), "details-details", vec![], false, true);
+    assert!(shell.read_only());
+    assert!(said.take().is_empty(), "nothing said on load");
+    assert_eq!(street.read(|e| e.snapshot()), before, "the design keeps its drive side");
+    let own = shell.region();
+    assert_ne!(own, "united-kingdom", "the menu shows the street's region");
+    shell.choose_region("japan");
+    assert_eq!(said.take(), ["This design is open read-only: nothing can be changed."]);
+    assert_eq!((shell.region(), street.read(|e| e.snapshot())), (own, before));
+    assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("united-kingdom"), "the region kept is not changed");
+    crate::sync::hub::reset();
+}

@@ -289,8 +289,16 @@ impl ShellVm {
         self.region.get()
     }
 
-    /// The person chose a region: the page takes it, it is remembered, and said.
+    /// The person chose a region: the page takes it, it is remembered, and said. On a page shown read-only the region
+    /// is the design's drive side, so the choice is refused like any edit: the refusal is said, the page keeps its own
+    /// (the menu shows it again), and the region kept for the other pages is neither written nor announced, so what is
+    /// kept and what the page shows never disagree. The menu is disabled there too (`view::bind_region`).
     pub fn choose_region(&self, id: &str) {
+        if self.read_only() {
+            self.ports.announcer.say(&self.i18n.tr_now("read-only-refused", &Args::new()));
+            self.region.set(self.target.region_id());
+            return;
+        }
         self.take_region(Some(id));
         self.ports.storage.remember(REGION_KEY, id);
         if let Some(r) = REGIONS.iter().find(|r| r.id == self.target.region_id()) {

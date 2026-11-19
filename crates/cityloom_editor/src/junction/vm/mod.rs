@@ -492,7 +492,12 @@ impl crate::shell::Target for JunctionVm {
         JunctionVm::project(self)
     }
 
+    /// Shown read-only the junction keeps its own region (its drive side is the design): not taken and nothing said,
+    /// so the region the shell gives on load, which may be the other side's, makes no edit and no refusal.
     fn apply_region(&self, region: usize) -> bool {
+        if self.read_only() {
+            return false;
+        }
         let before = self.pattern_state();
         let meeting = self.meetings();
         let changed = self.edit(|j| j.set_region(region));
@@ -866,6 +871,20 @@ mod read_only_tests {
     }
 
     const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+
+    /// The region (the shell gives the one kept, on load and when chosen) changes the junction's drive side: shown
+    /// read-only it is not taken, and nothing is said, so a page opened with the other side kept says nothing on load.
+    #[test]
+    fn a_region_is_not_taken_and_nothing_is_said() {
+        use crate::shell::Target;
+        let r = rig();
+        let (junction, region) = (r.vm.read(|j| j.snapshot()), r.vm.region_id());
+        let left = crate::shared::catalogue::REGIONS.iter().position(|g| g.id == "united-kingdom").unwrap();
+        assert_ne!(region, "united-kingdom");
+        assert!(!r.vm.apply_region(left));
+        assert_eq!((r.vm.read(|j| j.snapshot()), r.vm.region_id()), (junction, region));
+        assert!(r.said.take().is_empty());
+    }
 
     #[test]
     fn the_junction_says_it_is_read_only_and_one_opened_to_edit_is_not() {
