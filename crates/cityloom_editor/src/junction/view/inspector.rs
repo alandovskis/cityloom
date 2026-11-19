@@ -8,8 +8,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
-use crate::junction::model::calls::{CLEARANCE_MM_PER_S, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, WALK_S};
-use crate::junction::model::read_model::{CrossingView, JView};
+use crate::junction::model::calls::{CLEARANCE_MM_PER_S, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WALK_S};
+use crate::junction::model::read_model::{CallRowView, CrossingView, JView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
@@ -23,6 +23,7 @@ use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::locked::locked;
+use crate::shared::said::Said;
 use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
@@ -1702,9 +1703,10 @@ fn signal_overview(w: Watch) -> impl IntoView {
 /// A crossing no phase walks says so, and a box put on call there is refused with that reason. It decides nothing:
 /// the modes, rows, totals and findings all come from the view.
 fn calls_section(w: Watch) -> impl IntoView {
-    let calls = move || w.view().signal.as_ref().map(|s| s.calls.clone()).unwrap_or_default();
-    let uids = Memo::new(move |_| calls().crossings.iter().map(|c| c.uid).collect::<Vec<u32>>());
-    let crossing = move |uid: u32| w.view().signal.as_ref().and_then(|s| s.calls.crossings.iter().find(|c| c.uid == uid).cloned());
+    // Everything below reads the calls through this memo, so an edit that leaves them as they were redraws none of it.
+    let calls = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.calls.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| calls.with(|c| c.crossings.iter().map(|c| c.uid).collect::<Vec<u32>>()));
+    let crossing = move |uid: u32| calls.with(|c| c.crossings.iter().find(|c| c.uid == uid).cloned());
     let bounds = move || {
         let speed = Units::Metres.fixed_in(CLEARANCE_MM_PER_S as i32, 1, w.i18n().locale());
         tr(w, "jn-calls-bounds", Args::new().num("walk", i64::from(WALK_S)).str("speed", speed).num("max", i64::from(MAX_EXTENSION_S)))
@@ -1760,45 +1762,50 @@ fn calls_section(w: Watch) -> impl IntoView {
             })
         };
         let focus = box_id.clone();
+        // The item stays a list item; the group that names the crossing is inside it.
         view! {
-            <li class="call-crossing" role="group" aria-label=move || tr(w, "jn-calls-group", Args::new().str("street", street()))>
-                <span class="call-name">{street}</span>
-                <label class="phase-move">
-                    <input type="checkbox" id=box_id checked=on prop:checked=on aria-describedby=move || (!status().is_empty()).then(|| described.clone())
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            if !w.set_on_call(uid, input.checked()) {
-                                input.set_checked(on());
-                            }
-                            focus_after_swap(focus.clone());
-                        } />
-                    <span>{words(w, "jn-calls-on-call")}</span>
-                </label>
-                {rate}
-                <p class="insp-range" id=status_id>{status}</p>
+            <li>
+                <div class="call-crossing" role="group" aria-label=move || tr(w, "jn-calls-group", Args::new().str("street", street()))>
+                    <span class="call-name">{street}</span>
+                    <label class="phase-move">
+                        <input type="checkbox" id=box_id checked=on prop:checked=on aria-describedby=move || (!status().is_empty()).then(|| described.clone())
+                            on:change=move |ev| {
+                                let input = event_target::<HtmlInputElement>(&ev);
+                                if !w.set_on_call(uid, input.checked()) {
+                                    input.set_checked(on());
+                                }
+                                focus_after_swap(focus.clone());
+                            } />
+                        <span>{words(w, "jn-calls-on-call")}</span>
+                    </label>
+                    {rate}
+                    <p class="insp-range" id=status_id>{status}</p>
+                </div>
             </li>
         }
     };
-    let totals = move || calls().crossings.into_iter().filter_map(|c| c.totals.map(|t| (c.uid, t))).collect::<Vec<_>>();
-    let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    // One row a crossing, keyed by its totals: a row is made again only when its numbers change.
+    let totals = move || calls.with(|c| c.crossings.iter().filter_map(|c| c.totals.map(|t| (t, c.label.clone()))).collect::<Vec<_>>());
+    let has_totals = Memo::new(move |_| calls.with(|c| c.crossings.iter().any(|c| c.totals.is_some())));
+    let total_row = move |(t, label): (Totals, Said)| {
+        let waited = t.served + t.delayed > 0;
+        let longest =
+            move || if waited { tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(t.longest_wait_s))) } else { w.tr("jn-calls-no-wait") };
+        view! {
+            <tr>
+                <th scope="row">{move || w.say(&label)}</th>
+                <td>{t.served + t.delayed + t.not_served}</td>
+                <td>{t.served}</td>
+                <td>{t.delayed}</td>
+                // Calls the crossing could not serve are a problem, marked as the checks mark one.
+                <td class=(t.not_served > 0).then_some("bad")>{t.not_served}</td>
+                <td>{t.extended}</td>
+                <td>{longest}</td>
+            </tr>
+        }
+    };
     let totals_table = move || {
-        let rows = totals();
-        (!rows.is_empty()).then(|| {
-            let body = rows
-                .into_iter()
-                .map(|(uid, t)| {
-                    let name = crossing(uid).map(|c| w.say(&c.label)).unwrap_or_default();
-                    view! {
-                        <tr>
-                            <th scope="row">{name}</th>
-                            <td>{t.served}</td>
-                            <td>{t.delayed}</td>
-                            <td>{t.extended}</td>
-                            <td>{seconds(t.longest_wait_s)}</td>
-                        </tr>
-                    }
-                })
-                .collect_view();
+        has_totals.get().then(|| {
             view! {
                 // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
                 <div class="calls-table" role="region" tabindex="0" aria-labelledby="calls-totals-caption">
@@ -1807,39 +1814,41 @@ fn calls_section(w: Watch) -> impl IntoView {
                         <thead>
                             <tr>
                                 <th scope="col">{words(w, "jn-calls-col-crossing")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-calls")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-served")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-delayed")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-not-served")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-extended")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-longest")}</th>
                             </tr>
                         </thead>
-                        <tbody>{body}</tbody>
+                        <tbody><For each=totals key=|(t, _)| *t children=total_row/></tbody>
                     </table>
                 </div>
             }
         })
     };
     let findings = move || {
-        let found = calls().findings;
+        let found = calls.with(|c| c.findings.clone());
         (!found.is_empty()).then(|| {
-            let items = found.iter().map(|f| view! { <li>{w.say(f)}</li> }).collect_view();
+            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
             view! {
                 <h4 class="phase-moves-h" id="calls-findings-h">{words(w, "jn-calls-findings")}</h4>
                 <ul class="calls-findings" id="calls-findings" aria-labelledby="calls-findings-h">{items}</ul>
             }
         })
     };
+    // Every call, keyed by the call itself: a row is made again only when what happened to it changes.
+    let n_rows = Memo::new(move |_| calls.with(|c| c.rows.len()));
+    let rows = move || calls.with(|c| c.rows.clone());
+    let call_row = move |r: CallRowView| {
+        view! { <tr><th scope="row">{move || w.say(&r.label)}</th><td>{move || w.say(&r.at)}</td><td>{move || w.say(&r.outcome)}</td></tr> }
+    };
     let every_call = move || {
-        let rows = calls().rows;
-        (!rows.is_empty()).then(|| {
-            let n = rows.len();
-            let body = rows
-                .iter()
-                .map(|r| view! { <tr><th scope="row">{w.say(&r.label)}</th><td>{w.say(&r.at)}</td><td>{w.say(&r.outcome)}</td></tr> })
-                .collect_view();
+        (n_rows.get() > 0).then(|| {
             view! {
                 <details class="jn-fold" id="calls-rows">
-                    <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n as i64))}</summary>
+                    <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
                     <div class="calls-table" role="region" tabindex="0" aria-labelledby="calls-rows-caption">
                         <table class="nt">
                             <caption id="calls-rows-caption">{words(w, "jn-calls-rows-caption")}</caption>
@@ -1850,14 +1859,14 @@ fn calls_section(w: Watch) -> impl IntoView {
                                     <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
                                 </tr>
                             </thead>
-                            <tbody>{body}</tbody>
+                            <tbody><For each=rows key=|r| r.call children=call_row/></tbody>
                         </table>
                     </div>
                 </details>
             }
         })
     };
-    let none_on_call = move || !calls().crossings.iter().any(|c| c.on_call);
+    let none_on_call = Memo::new(move |_| calls.with(|c| !c.crossings.iter().any(|c| c.on_call)));
     move || {
         (!uids.with(Vec::is_empty)).then(|| {
             view! {
@@ -1866,7 +1875,7 @@ fn calls_section(w: Watch) -> impl IntoView {
                     <p class="insp-range">{words(w, "jn-calls-intro")}</p>
                     <p class="insp-range" id="calls-bounds">{bounds}</p>
                     <ul class="calls-crossings"><For each=move || uids.get() key=|u| *u children=item/></ul>
-                    {move || none_on_call().then(|| view! { <p class="insp-range" id="calls-none">{words(w, "jn-calls-none")}</p> })}
+                    {move || none_on_call.get().then(|| view! { <p class="insp-range" id="calls-none">{words(w, "jn-calls-none")}</p> })}
                     {totals_table}
                     {findings}
                     {every_call}

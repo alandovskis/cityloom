@@ -742,7 +742,7 @@ pub struct SignalView {
 }
 
 /// The pedestrian calls of a signal: every crossing with its mode, one row per call of the hour, and the findings.
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct CallsView {
     /// Every crossing the junction has, and any street left on call without one, in the order of the bearings.
     pub crossings: Vec<CallCrossingView>,
@@ -754,7 +754,7 @@ pub struct CallsView {
 
 /// One crossing as the calls see it: on call (with its rate) or on recall, whether some phase walks it (else it cannot
 /// go on call), and its calls added up while it is on call and walked.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct CallCrossingView {
     pub uid: u32,
     pub label: Said,
@@ -765,8 +765,10 @@ pub struct CallCrossingView {
 }
 
 /// One call: its crossing, when it was made ("12 min 5 s") and what happened ("Delayed 34 s, green extended by 3 s").
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct CallRowView {
+    /// The call itself: its crossing, when, and what happened to it (a row's identity).
+    pub call: calls::Call,
     pub uid: u32,
     pub label: Said,
     pub at: Said,
@@ -794,6 +796,7 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
         .calls
         .iter()
         .map(|c| CallRowView {
+            call: *c,
             uid: c.arm,
             label: name(c.arm),
             at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(c.at_s / 60))).with("seconds", Arg::Num(i64::from(c.at_s % 60))),

@@ -932,7 +932,9 @@ test.describe("signal timing on a junction of the city", () => {
     const totals = page.locator("#calls-totals tbody tr");
     await expect(totals).toHaveCount(1);
     const cells = (await totals.first().locator("td").allInnerTexts()).map((t) => t.trim());
-    expect(Number(cells[0]) + Number(cells[1])).toBe(30);
+    expect(cells[0]).toBe("30");
+    expect(Number(cells[1]) + Number(cells[2])).toBe(30);
+    expect(cells[3]).toBe("0");
     await expect(totals.first().locator("td").last()).toHaveText(/^\d+ s$/);
     // Every call, one row each, in a fold.
     const rows = page.locator("#calls-rows");
@@ -985,6 +987,19 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#calls-findings")).toHaveText(
       `The crossing of ${name} cannot be served safely: its walk and clearance need 21 s of green, and no phase that walks it can give more than 20 s.`,
     );
+    // Its totals count its calls and mark them not served, with no wait to report.
+    const row = page.locator("#calls-totals tbody tr").filter({ hasText: name });
+    await expect(page.locator("#calls-totals thead th")).toHaveText([
+      "Crossing",
+      "Calls",
+      "Served",
+      "Delayed",
+      "Not served",
+      "Green extended",
+      "Longest wait",
+    ]);
+    await expect(row.locator("td")).toHaveText(["12", "0", "0", "12", "0", "–"]);
+    await expect(row.locator("td").nth(3)).toHaveClass("bad");
     await page.locator("#calls-rows summary").click();
     await expect(page.locator("#calls-rows tbody tr").filter({ hasText: name }).first()).toContainText("Not served");
   });

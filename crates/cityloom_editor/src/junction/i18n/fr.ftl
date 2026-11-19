@@ -611,9 +611,7 @@ jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton app
 jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; les appels sont répartis sur une heure.
 jn-calls-group = Passage de { $street }
 jn-calls-on-call = Sur appel (bouton-poussoir)
-jn-calls-on-call-box = Passage de { $street } sur appel
 jn-calls-rate = Appels par heure
-jn-calls-rate-field = Appels par heure au passage de { $street }
 jn-calls-rate-range = De { $min } à { $max } appels par heure (borne provisoire)
 jn-calls-recall = En rappel : ouvert chaque fois que ses phases passent; les appels ne changent rien à son service.
 jn-calls-need = Sur appel : marche { $walk } s + dégagement { $clearance } s = { $need } s de vert.
@@ -630,6 +628,7 @@ jn-calls-col-longest = Attente la plus longue
 jn-calls-col-at = Appel à
 jn-calls-col-outcome = Résultat
 jn-calls-seconds = { $seconds } s
+jn-calls-no-wait = –
 jn-calls-rows =
     { $n ->
         [one] L’appel, une ligne

@@ -83,7 +83,7 @@ pub fn refusal(s: &State, region: usize, uid: u32) -> Option<Refusal> {
 }
 
 /// What happened to one call.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum Outcome {
     /// Served at the start of the first phase that walks its crossing after it was made.
     Served,
@@ -95,7 +95,7 @@ pub enum Outcome {
 
 /// One call: the street whose crossing was called, when (seconds into the hour), what happened, how long it waited for
 /// its walk, and how many seconds the green that served it was lengthened for it (0: it fitted).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Call {
     pub arm: u32,
     pub at_s: u32,
@@ -105,7 +105,7 @@ pub struct Call {
 }
 
 /// The calls of one on-call crossing, added up.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Totals {
     pub arm: u32,
     /// Its calls an hour.

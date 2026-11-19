@@ -476,6 +476,49 @@ fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_pla
 }
 
 #[test]
+fn the_totals_count_every_call_and_mark_the_ones_not_served() {
+    use crate::junction::model::{SIGNAL, TimingField, junction_of};
+    // Five lanes of 3.5 m: 18 s to clear, 25 s with the walk, more than a 5 s green extended by 15 s.
+    let mut j =
+        junction_of(&[("sidewalk", 2000), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("sidewalk", 2000)]);
+    assert_eq!(j.current().control, SIGNAL, "the fixture is a signal");
+    let uids: Vec<u32> = j.current().arms.iter().map(|a| a.uid).collect();
+    for &u in &uids {
+        assert!(j.set_timing(u, TimingField::Green, 5));
+    }
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    s.show_plan();
+    let h = panel(&s);
+    let totals = &h[h.find(r#"id="calls-totals""#).unwrap()..];
+    let totals = &totals[..totals.find("</table>").unwrap()];
+    let heads: Vec<&str> = totals.split("<th scope=\"col\">").skip(1).map(|t| &t[..t.find('<').unwrap()]).collect();
+    assert_eq!(heads, ["Crossing", "Calls", "Served", "Delayed", "Not served", "Green extended", "Longest wait"]);
+    let row = &totals[totals.find("<tbody>").unwrap()..];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[..t.find("</td>").unwrap()]).collect();
+    assert_eq!(cells, [">12", ">0", ">0", r#" class="bad">12"#, ">0", ">–"], "{row}");
+    // A crossing whose calls are all served has no mark.
+    let s = shared(0);
+    assert!(s.set_on_call(arm(&s, 90), true));
+    s.show_plan();
+    let h = panel(&s);
+    let totals = &h[h.find(r#"id="calls-totals""#).unwrap()..];
+    assert!(!totals[..totals.find("</table>").unwrap()].contains("class=\"bad\""));
+}
+
+#[test]
+fn each_crossing_is_a_list_item_holding_a_group_named_for_it() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let list = &h[h.find(r#"class="calls-crossings""#).unwrap()..];
+    let item = &list[list.find("<li").unwrap()..];
+    assert!(item.starts_with("<li>") || item.starts_with("<li class="), "a plain list item: {item}");
+    assert!(item[..item.find("</li>").unwrap()].contains(r#"role="group""#) && !item[..item.find('>').unwrap()].contains("role="), "{item}");
+}
+
+#[test]
 fn a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_is_a_finding() {
     let s = shared(0);
     let (n, e) = (arm(&s, 0), arm(&s, 90));

@@ -611,9 +611,7 @@ jn-calls-intro = A crossing on call is walked only when someone pushes the butto
 jn-calls-bounds = Placeholder figures: walk { $walk } s, then clearance at { $speed } m/s, rounded up to the second; a green is extended by at most { $max } s; the calls are spread over one hour.
 jn-calls-group = Crossing of { $street }
 jn-calls-on-call = On call (push button)
-jn-calls-on-call-box = Crossing of { $street } on call
 jn-calls-rate = Calls an hour
-jn-calls-rate-field = Calls an hour at the crossing of { $street }
 jn-calls-rate-range = { $min } to { $max } calls an hour (placeholder bound)
 jn-calls-recall = On recall: walked every time its phases run; calls cannot change its service.
 jn-calls-need = On call: walk { $walk } s + clearance { $clearance } s = { $need } s of green.
@@ -630,6 +628,7 @@ jn-calls-col-longest = Longest wait
 jn-calls-col-at = Called at
 jn-calls-col-outcome = Outcome
 jn-calls-seconds = { $seconds } s
+jn-calls-no-wait = –
 jn-calls-rows =
     { $n ->
         [one] The call, one row
