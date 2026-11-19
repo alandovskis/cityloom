@@ -306,13 +306,14 @@ impl JunctionVm {
     /// An edit of a crossing's calls: the edit's text and then the crossing's calls added up, or the refusal. It changes
     /// no phase, so nothing about the plan's conflicts or patterns is said.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
-        let (meeting, edits) = (self.before(), self.read(|j| j.revisions().count()));
+        // Only the findings are compared: a crossing's calls move no phase, so nothing about meetings can change.
+        let (findings, edits) = (self.findings(), self.read(|j| j.revisions().count()));
         let done = self.edit(f);
         // A rate it had already is no edit: nothing was done, so nothing is said (the last edit is some other one).
         if done && self.read(|j| j.revisions().count()) != edits {
             let v = self.view_now();
             let edit = text::edit_text(&v, &self.i18n, self.units_now());
-            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&meeting.findings)));
+            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&findings)));
         } else if !done {
             self.say_refusal();
         }
