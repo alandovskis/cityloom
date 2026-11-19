@@ -366,6 +366,8 @@ impl Editor {
         } else {
             self.edit_content(label, set);
         }
+        // The pick is the zone's span, which has moved with its start.
+        self.follow_zone(z);
         Ok(())
     }
 
