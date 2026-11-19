@@ -122,19 +122,23 @@ archives and milestones.
   again; raising the constant is a deliberate decision. (Builder-check point; my call: the user asked for one
   discard, now.)
 - A stale record is never applied to a place and never matched by a junction arm.
-- **Locally:** on the first write of a project's edits document after the change, every stale record is
-  removed. The removal is marked for the sync, so its tombstone goes up.
-- **Sync:** a pulled stale record is not written into the document and is answered with a tombstone. A stale
-  record pushed later by a tab on the old build is dropped the same way by every new build.
+- **Locally:** when any page of a project opens (the shell, which knows the page's project), every stale record of
+  that project's edits document is removed and each removal is marked for the sync, so its tombstone goes up.
+  (Changed after the code survey: waiting for the first write would let the sync push stale records as live
+  meanwhile.)
+- **Sync:** `sync::local` neither lists nor reads a stale record, so one in a project not opened yet is never
+  pushed. A pulled stale record is not written locally and is answered with a tombstone. A stale record pushed
+  later by a tab on the old build is dropped the same way by every new build.
 - **Archive:** a stale record in an archive being imported is not put back.
 - **Milestones (decided by the user):** milestones are kept as history and can still be compared with now.
   Restoring a milestone that holds any stale street or junction record is refused with a new refusal
   (`Refused::Stale`, worded in `timeline/i18n` in both languages): it would only remove today's work.
 - **Notice (decided by the user):** the person is told once, in English and French, that their street and junction
-  edits were cleared because the map was rebuilt. No local copy is kept aside. My call on where: the discard
-  records, per project, that it removed something (a flag in the project's storage). The next street, junction or
-  map page opened in that project shows the notice once, through the shell's existing status area, and then clears
-  the flag. A project with nothing stale shows nothing.
+  edits were cleared because the map was rebuilt. No local copy is kept aside. My call on where: the shell's discard
+  at page open returns how many records it removed; when that is more than none, the shell shows a visible,
+  dismissible `role="status"` notice under the top bar and says it through the live region. A second open finds
+  nothing stale, so the notice shows once per project without a stored flag. A project with nothing stale shows
+  nothing.
 - The document's `version` gets a new number for the field (the next free one, per the rule in
   `city/CLAUDE.md`), so an older build leaves a new document alone instead of writing records back without the
   field.
