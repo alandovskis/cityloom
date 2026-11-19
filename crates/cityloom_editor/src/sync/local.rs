@@ -354,7 +354,7 @@ mod tests {
             zone.segments = Some(own);
             zone.name = Some(format!("Zone {i}"));
         }
-        let record = StreetRecord { ways: [7].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street, scenarios: Default::default() };
+        let record = StreetRecord { ways: [7].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street, scenarios: Default::default(), import: None };
         serde_json::to_value(record).unwrap()
     }
 

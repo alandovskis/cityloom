@@ -17,7 +17,7 @@ mod neighbours;
 mod network_read;
 pub use network_read::{ArmRead, EndRead, NetworkRead, NodeRead, StreetRead};
 
-use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart};
+use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart, is_stale_record};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
@@ -787,7 +787,7 @@ impl City {
 
     fn apply_streets(&mut self, edits: &Edits) {
         let places: Vec<Ids> = (0..self.layout.edges.len()).map(|e| self.layout.street_ids(e, self.street_keys[e].clone())).collect();
-        let records: Vec<(&String, &StreetRecord)> = edits.streets.iter().collect();
+        let records: Vec<(&String, &StreetRecord)> = edits.streets.iter().filter(|(_, r)| !is_stale_record(*r)).collect();
         let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_street_record(k, r)).collect();
         for (e, taken) in assign(&places, &ids).into_iter().enumerate() {
             let Some(ri) = taken else { continue };
@@ -810,7 +810,7 @@ impl City {
     fn apply_junctions(&mut self, edits: &Edits) {
         let nodes: Vec<usize> = (0..self.layout.nodes.len()).filter(|&n| self.layout.nodes[n].junction).collect();
         let places: Vec<Ids> = nodes.iter().map(|&n| self.layout.junction_ids(n, self.junction_keys[n].clone())).collect();
-        let records: Vec<(&String, &JunctionRecord)> = edits.junctions.iter().collect();
+        let records: Vec<(&String, &JunctionRecord)> = edits.junctions.iter().filter(|(_, r)| !is_stale_record(*r)).collect();
         let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_junction_record(k, r)).collect();
         for (i, taken) in assign(&places, &ids).into_iter().enumerate() {
             let Some(ri) = taken else { continue };
@@ -864,7 +864,17 @@ impl City {
         if self.today_streets.get(&edge).is_some_and(|today| today.speed == street.speed) {
             street.speed = Speed::Undecided;
         }
-        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street, scenarios: Default::default() }))
+        Some((
+            key,
+            StreetRecord {
+                ways: ids.ways,
+                nodes: ids.nodes,
+                leaving: ids.leaving,
+                street,
+                scenarios: Default::default(),
+                import: Some(cityloom_model::IMPORTER_VERSION),
+            },
+        ))
     }
 
     /// The junction at `uid` as first laid out, made now if it was not yet. None for a node that is no junction.
@@ -909,7 +919,16 @@ impl City {
             arm_streets.insert(arm.uid, street);
             arm.edge = 0;
         }
-        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets, scenarios: Default::default() }))
+        Some((
+            key,
+            JunctionRecord {
+                nodes: self.layout.junction_ids(n, None).nodes,
+                state,
+                arm_streets,
+                scenarios: Default::default(),
+                import: Some(cityloom_model::IMPORTER_VERSION),
+            },
+        ))
     }
 
     /// The key of the record street `edge` took its edit from when the city was loaded, if it took one. When the
@@ -2152,6 +2171,61 @@ mod tests {
         }
         let back = City::load(&edits);
         assert_eq!(back.junction(node_uid(1)).unwrap().ring_extra_mm, back.today_junction(node_uid(1)).unwrap().ring_extra_mm);
+    }
+
+    /// A city with a street and a junction edited, and the document of them.
+    fn edited_city() -> (City, Edits) {
+        let mut city = City::new();
+        let mut e = city.street_editor(1, 0).unwrap();
+        let uid = e.view().segments[2].uid;
+        assert!(e.set_width(uid, 2_700));
+        assert!(city.keep_street(1, e.snapshot()));
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 4_500));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        let edits = edits_of(&city);
+        assert!(!edits.streets.is_empty() && !edits.junctions.is_empty());
+        (city, edits)
+    }
+
+    #[test]
+    fn a_record_the_city_writes_is_stamped_with_the_importer_version() {
+        let city = City::new();
+        assert_eq!(city.street_record(1).unwrap().1.import, Some(cityloom_model::IMPORTER_VERSION));
+        assert_eq!(city.junction_record(node_uid(1)).unwrap().1.import, Some(cityloom_model::IMPORTER_VERSION));
+    }
+
+    #[test]
+    fn a_stale_street_record_is_not_applied() {
+        let (city, mut edits) = edited_city();
+        edits.streets.values_mut().for_each(|r| r.import = None);
+        let back = City::load(&edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1], "the street is as imported");
+        assert!(back.took_street(1).is_none());
+        edits.streets.values_mut().for_each(|r| r.import = Some(10));
+        assert_eq!(City::load(&edits).streets[&1], City::load(&edits).today_streets[&1]);
+        edits.streets.values_mut().for_each(|r| r.import = Some(cityloom_model::IMPORTER_VERSION));
+        assert_eq!(City::load(&edits).streets, city.streets);
+    }
+
+    #[test]
+    fn a_stale_junction_record_is_not_applied() {
+        let (_, mut edits) = edited_city();
+        edits.junctions.values_mut().for_each(|r| r.import = None);
+        let back = City::load(&edits);
+        assert!(same_junction(back.junction(node_uid(1)).unwrap(), back.today_junction(node_uid(1)).unwrap()));
+        assert!(back.took_junction(node_uid(1)).is_none());
+    }
+
+    #[test]
+    fn a_record_stamped_by_a_newer_importer_is_applied() {
+        let (city, mut edits) = edited_city();
+        edits.streets.values_mut().for_each(|r| r.import = Some(cityloom_model::IMPORTER_VERSION + 1));
+        edits.junctions.values_mut().for_each(|r| r.import = Some(cityloom_model::IMPORTER_VERSION + 1));
+        let back = City::load(&edits);
+        assert_eq!(back.streets, city.streets);
+        assert!(back.took_junction(node_uid(1)).is_some());
     }
 
     #[test]

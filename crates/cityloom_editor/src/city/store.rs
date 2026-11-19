@@ -339,7 +339,10 @@ mod tests {
         let zoned = e.snapshot();
         assert_eq!(zoned.zones.len(), 2);
         assert!(store.write_street(2, zoned.clone()));
-        assert!(storage.recall(EDITS_KEY).unwrap().contains("\"version\":6"), "a document holding zones is version 6");
+        assert!(
+            storage.recall(EDITS_KEY).unwrap().contains(&format!("\"version\":{}", edits::IMPORT_STAMP_VERSION)),
+            "a stamped document is the import stamp version"
+        );
         assert_eq!(store.open().street_editor(2, 0).unwrap().snapshot(), zoned);
         assert_eq!(store.open().view(0).edited, 1);
     }
@@ -373,8 +376,14 @@ mod tests {
     fn a_record_that_matches_no_place_survives_a_write_of_another_place() {
         let (store, storage) = store();
         let mut stranger = Edits::new();
-        let record =
-            StreetRecord { ways: [77].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street: narrowed(&store, 3), scenarios: Default::default() };
+        let record = StreetRecord {
+            ways: [77].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            street: narrowed(&store, 3),
+            scenarios: Default::default(),
+            import: None,
+        };
         stranger.streets.insert("w77~n1~n2".into(), record.clone());
         storage.remember(EDITS_KEY, &stranger.to_json());
         assert!(store.write_street(1, narrowed(&store, 1)));
@@ -392,6 +401,7 @@ mod tests {
             nodes: [8, 9].into(),
             leaving: [(8, 90)].into(),
             scenarios: Default::default(),
+            import: None,
             street: CityStore::sample(ports.storage).open().street_editor(1, 0).unwrap().snapshot(),
         };
         elsewhere.streets.insert("w500~n8~n9".into(), record.clone());
@@ -462,7 +472,7 @@ mod tests {
         let (store, storage) = store();
         assert!(store.write_street(1, narrowed(&store, 1)));
         let current = storage.recall(EDITS_KEY).unwrap();
-        let previous = current.replacen(&format!("\"version\":{}", edits::VERSION), "\"version\":3", 1);
+        let previous = current.replacen(&format!("\"version\":{}", edits::IMPORT_STAMP_VERSION), "\"version\":3", 1);
         assert_ne!(previous, current);
         storage.remember(EDITS_KEY, &previous);
         assert_eq!(store.open().view(0).edited, 0, "an earlier version's document is not read");
