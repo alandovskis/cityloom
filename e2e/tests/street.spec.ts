@@ -422,8 +422,7 @@ test.describe("the add menu", () => {
 
   test("undoing with an item focused keeps the focus on it as its greying changes", async ({ page }) => {
     // A pedestrian street has no lane a bus can stop in, so its stops are greyed.
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await transform(page, ".ped-item", "ped");
     await page.locator("#add-btn").click();
     await page.locator("#add-topic-transit").click();
     await expect(menuItem(page, "Curb stop")).toHaveAttribute("aria-disabled", "true");

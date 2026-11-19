@@ -256,13 +256,12 @@ export async function openAnchoredStreet(page: Page, minM: number) {
   throw new Error(`no street of ${minM} m or more with a real end`);
 }
 
-/** Opens the first street of the city and makes it pedestrian with the Transform menu: it then has no lane a bus can
+/** Opens the first street of the city and makes it pedestrian with the Transform dialog: it then has no lane a bus can
  *  stop in, so no Stops row, and the Add a piece menu greys its stops. Every street of the Plateau has such a lane. */
 export async function openPedestrianStreet(page: Page) {
   await openStreet(page);
   await expect(page.locator("#drawing")).toBeVisible();
-  await page.locator("#transform-btn").click();
-  await page.locator("#transform-menu .ped-item").first().click();
+  await transform(page, ".ped-item", "ped");
   await expect(live(page)).toHaveText(/^Made pedestrian\. /);
   await expect(page.locator("#stop-strip-left, #stop-strip-right")).toHaveCount(0);
 }

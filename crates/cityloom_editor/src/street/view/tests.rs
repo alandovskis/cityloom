@@ -1399,13 +1399,6 @@ fn the_pedestrian_street_messages_exist_in_both_languages() {
 
 // ---- the Transform dialog -------------------------------------------------------------
 
-/// The opening tag of the element whose `id` is `id`.
-fn tag_of<'a>(h: &'a str, id: &str) -> &'a str {
-    let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("no #{id}: {h}"));
-    let start = h[..at].rfind('<').unwrap();
-    &h[start..at + h[at..].find('>').unwrap() + 1]
-}
-
 /// The choices of one group of the dialog drawn to HTML, `chosen` chosen.
 fn choices_html(s: &Rc<StreetVm>, group: Group, chosen: Option<Choice>) -> String {
     let s = s.clone();

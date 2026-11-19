@@ -11,11 +11,9 @@ use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
-use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::SegView;
 use crate::street::vm::StreetVm;
-use crate::street::vm::keys::menu_step;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;
 
@@ -355,18 +353,6 @@ impl MenuParts {
         self.open.set(false);
         if refocus && let Some(b) = self.button.get_untracked() {
             let _ = leptos::web_sys::HtmlElement::from(b).focus();
-        }
-    }
-
-    /// The arrows, Home and End move the focus through the items (`menu_step`).
-    fn keys(self, e: leptos::web_sys::KeyboardEvent) {
-        use leptos::wasm_bindgen::JsCast;
-        let list = self.items();
-        let active = document().active_element();
-        let at = list.iter().position(|i| active.as_ref() == Some(i.unchecked_ref::<leptos::web_sys::Element>()));
-        if let Some(to) = menu_step(&e.key(), at, list.len()) {
-            e.prevent_default();
-            let _ = list[to].focus();
         }
     }
 
