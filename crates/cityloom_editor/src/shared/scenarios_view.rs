@@ -54,7 +54,9 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
     let refusal = move || host.with_value(|h| h.scenario_state().refusal()).map(|why| words.with_value(|i18n| say(i18n, Units::Metres, &why)));
     let refused = move || refusal().is_some().then_some("true");
     let asking = move || host.with_value(|h| h.scenario_state().asking_delete());
-    let delete_label = move || words.with_value(|i18n| i18n.tr(if asking() { "scenario-delete-confirm" } else { "scenario-delete" }, &Args::new()));
+    // The label shown (`swap-on`) and the other (`swap-off`, hidden, and so in no accessible name), in one cell: the
+    // button is always as wide as the longer, so asking to confirm moves nothing.
+    let swap = move |confirming: bool| move || if asking() == confirming { "swap-on" } else { "swap-off" };
     // An action on the name typed: the field is emptied when it is done.
     let with_name = move |act: fn(&dyn ScenarioHost, &str) -> bool| {
         move |_| {
@@ -102,7 +104,10 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
                         {tr("scenario-rename")}
                     </button>
                     <button type="button" class="btn" id="scenario-delete" disabled=baseline_shown on:click=delete>
-                        {delete_label}
+                        <span class="swap">
+                            <span class=swap(false)>{tr("scenario-delete")}</span>
+                            <span class=swap(true)>{tr("scenario-delete-confirm")}</span>
+                        </span>
                     </button>
                 </div>
             </details>
