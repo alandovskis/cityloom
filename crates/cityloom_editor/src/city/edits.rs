@@ -149,7 +149,7 @@ impl Edits {
     /// junction record holds
     /// an edited signal plan, `STOP_VERSION` while a street record holds transit stops, `CURB_VERSION` while one holds
     /// curbside uses, `SPEED_VERSION` while one holds a speed (set, or decided to have none), `ZONES_VERSION` while one
-    /// holds zones, else `VERSION`.
+    /// holds zones, else `VERSION`; never below `IMPORT_STAMP_VERSION` once read at it (`stamp_floor`).
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
@@ -163,13 +163,20 @@ impl Edits {
         let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
         let scenarios = self.streets.values().any(|r| !r.scenarios.is_empty()) || self.junctions.values().any(|r| !r.scenarios.is_empty());
         let import = self.streets.values().any(|r| r.import.is_some()) || self.junctions.values().any(|r| r.import.is_some());
-        version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
+        version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios).max(stamp_floor(self.version.into()))
     }
 
     pub fn to_json(&self) -> String {
         let written = Edits { version: self.written_version(), streets: self.streets.clone(), junctions: self.junctions.clone() };
         serde_json::to_string(&written).expect("the edits serialise")
     }
+}
+
+/// The least version a document read or written as `version` is written as again: once it has been at
+/// `IMPORT_STAMP_VERSION`, never below it, even with no stamped record left (all discarded, say), or an older build's
+/// tab would write unstamped records into it, which this build then discards again.
+fn stamp_floor(version: u64) -> u32 {
+    if version >= u64::from(IMPORT_STAMP_VERSION) { IMPORT_STAMP_VERSION } else { 0 }
 }
 
 /// The version a document is written as, from what its street records hold.
@@ -316,7 +323,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Err(Document::Empty) };
     let damaged = || Document::Damaged(raw.to_string());
     let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
-    match doc.get("version").and_then(Value::as_u64) {
+    let read = doc.get("version").and_then(Value::as_u64);
+    match read {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
@@ -338,7 +346,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_chicane(&doc),
         holds_filter(&doc),
         holds_scenarios(&doc),
-    );
+    )
+    .max(stamp_floor(read.unwrap_or_default()));
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
@@ -422,6 +431,13 @@ impl Draft {
         self.remove(section, key);
     }
 
+    /// Keeps the document at `IMPORT_STAMP_VERSION` at least from now on, whatever its records hold: what discarding
+    /// the stale records writes, so an older build's tab leaves it alone rather than writing unstamped records back.
+    pub fn hold_import_stamp_version(&mut self) {
+        let version = self.doc.get("version").and_then(Value::as_u64).unwrap_or_default().max(IMPORT_STAMP_VERSION.into());
+        self.doc.insert("version".into(), version.into());
+    }
+
     /// Keeps `record` under `key`. Says whether it could be.
     pub fn put_street(&mut self, key: &str, record: &StreetRecord) -> bool {
         self.put(STREETS, key, serde_json::to_value(record))
@@ -448,9 +464,11 @@ impl Draft {
     /// `STOP_VERSION` while any holds transit stops, else
     /// `CURB_VERSION` while one holds curbside uses, else
     /// `SPEED_VERSION` while any holds a speed, else
-    /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`.
+    /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`; never below
+    /// `IMPORT_STAMP_VERSION` once read at it (`stamp_floor`).
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
+        let floor = stamp_floor(doc.get("version").and_then(Value::as_u64).unwrap_or_default());
         let written = version_for(
             holds_import(&doc),
             holds_zones(&doc),
@@ -464,7 +482,8 @@ impl Draft {
             holds_chicane(&doc),
             holds_filter(&doc),
             holds_scenarios(&doc),
-        );
+        )
+        .max(floor);
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
     }
@@ -761,6 +780,25 @@ mod tests {
         let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
         assert_eq!(back, Edits { version: IMPORT_STAMP_VERSION, ..e.clone() });
         assert!(e.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+    }
+
+    #[test]
+    fn a_document_read_at_the_import_stamp_version_stays_there_when_its_last_record_goes() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), StreetRecord { import: Some(11), ..street_record() });
+        let kept = e.to_json();
+        assert!(kept.contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+        let Ok(mut draft) = draft(Some(&kept)) else { panic!("a draft") };
+        draft.remove_street("w7~n1~n2");
+        let back: serde_json::Value = serde_json::from_str(&draft.to_json()).unwrap();
+        assert_eq!(back["version"], IMPORT_STAMP_VERSION, "an older build must not write unstamped records into it again");
+        // nor when no stamped record is left in a document read at it
+        let unstamped = format!(r#"{{"version":{IMPORT_STAMP_VERSION},"streets":{{"w1~n1~n2":{{"ways":[1]}}}},"junctions":{{}}}}"#);
+        let Document::Current(read) = parse(Some(&unstamped)) else { panic!("read") };
+        assert_eq!(read.version, IMPORT_STAMP_VERSION);
+        assert!(read.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+        let Ok(draft) = super::draft(Some(&unstamped)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
     }
 
     fn street_record() -> StreetRecord {

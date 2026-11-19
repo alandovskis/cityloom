@@ -280,7 +280,7 @@ impl CityStore {
     }
 
     /// Removes every stale street and junction record (`edits::is_stale`: made against a network from before the
-    /// cutoff) from the document, keeps it once, and marks each removal for the sync so other devices drop it too.
+    /// cutoff) from the document, keeps it once, at `IMPORT_STAMP_VERSION` at least, and marks each removal for the sync so other devices drop it too.
     /// Says how many it removed: none where the document is empty, a newer build's or damaged (left as it is: the next
     /// edit copies a damaged one aside), or could not be kept.
     pub fn discard_stale(&self) -> usize {
@@ -294,6 +294,7 @@ impl CityStore {
                 }
             }
         }
+        draft.hold_import_stamp_version();
         if stale.is_empty() || !self.storage.remember(EDITS_KEY, &draft.to_json()) {
             return 0;
         }
@@ -522,6 +523,18 @@ mod tests {
         }
         assert!(!sync.records.contains_key("street/w2~n2~n3"), "the stamped record is not marked");
         assert_eq!(store.discard_stale(), 0, "nothing stale is left");
+    }
+
+    #[test]
+    fn a_document_discarding_empties_is_kept_at_the_import_stamp_version() {
+        for version in [edits::VERSION, edits::SCENARIO_VERSION, edits::IMPORT_STAMP_VERSION] {
+            let (store, storage) = store();
+            let doc = serde_json::json!({"version": version, "streets": {"w1~n1~n2": {"ways": [1]}}, "junctions": {"n7": {"nodes": [7], "import": 10}}});
+            storage.remember(EDITS_KEY, &doc.to_string());
+            assert_eq!(store.discard_stale(), 2);
+            let after: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
+            assert_eq!(after["version"], edits::IMPORT_STAMP_VERSION, "read at {version}: an older build must leave it alone");
+        }
     }
 
     #[test]
