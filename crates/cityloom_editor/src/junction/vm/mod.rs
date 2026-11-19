@@ -49,6 +49,8 @@ type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 struct Before {
     meetings: Vec<Meeting>,
     findings: Vec<crate::shared::said::Said>,
+    /// The crossings kept on call while the signal was suspended.
+    kept: usize,
 }
 
 /// Whether an edit says which phases it took off their ready-made pattern.
@@ -438,23 +440,30 @@ impl JunctionVm {
 
     /// Says `text`, then the sentence for the movements that meet now and did not before.
     fn say_with_meetings(&self, text: String, meeting: &Before) {
-        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(meeting)));
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(meeting)).chain(self.kept_note(meeting)));
     }
 
     /// The sentences that follow an edit's text: the movements that now meet, the crossings on call it left unserved,
     /// then the phases off their pattern.
     fn notes(&self, meeting: &Before, lost: &[usize]) -> Vec<String> {
-        self.meeting_note(meeting).into_iter().chain(self.findings_note(meeting)).chain(self.lost_note(lost)).collect()
+        self.meeting_note(meeting).into_iter().chain(self.findings_note(meeting)).chain(self.kept_note(meeting)).chain(self.lost_note(lost)).collect()
     }
 
     /// What an edit is compared against afterwards: the movements that met and the calls' findings before it.
     fn before(&self) -> Before {
-        Before { meetings: self.meetings(), findings: self.findings() }
+        Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept }
     }
 
     /// The findings of the pedestrian calls now (`jn-calls-finding-unwalked`, `jn-calls-finding-cannot`).
     fn findings(&self) -> Vec<crate::shared::said::Said> {
         self.view_now().signal.as_ref().map(|s| s.calls.findings.clone()).unwrap_or_default()
+    }
+
+    /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
+    /// else. None otherwise.
+    fn kept_note(&self, before: &Before) -> Option<String> {
+        let n = self.view_now().calls_kept;
+        (n > 0 && before.kept == 0).then(|| self.i18n.tr_now("jn-calls-kept", &Args::new().num("n", n as i64)))
     }
 
     /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
@@ -834,6 +843,25 @@ mod tests {
                 assert!(t[0].contains(words), "{t:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_change_that_suspends_the_signal_says_its_crossings_stay_on_call() {
+        let (suspended, today) = crate::junction::view::tests::suspended_with_a_call();
+        // Today the junction is suspended; now its streets carry traffic again. Undo goes back to today.
+        let mut now = Junction::new(0).current().clone();
+        for (a, b) in now.arms.iter_mut().zip(&today.arms) {
+            a.edge = b.edge;
+            a.calls = b.calls;
+        }
+        let j = Junction::from_city(crate::street::model::named_said("Test"), &today, &now, 0).unwrap();
+        drop(suspended);
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+        assert_eq!(vm.view_now().calls_kept, 0);
+        assert!(vm.undo());
+        let t = said.take();
+        assert!(t[0].contains("1 crossing stays on call for when the signal runs again."), "{t:?}");
     }
 
     #[test]

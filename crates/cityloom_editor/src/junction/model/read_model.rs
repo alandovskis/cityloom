@@ -1027,6 +1027,9 @@ pub struct JView {
     pub control_index: usize,
     /// How many of the junction's streets carry traffic.
     pub traffic_arms: usize,
+    /// The crossings kept on call while the signal is suspended (`in_force`: one street of traffic), for when it runs
+    /// again; 0 while it runs, or off a signal.
+    pub calls_kept: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
     /// The turbo the roundabout has, if any.
@@ -1658,6 +1661,11 @@ impl Junction {
             control: CONTROLS[s.control].id,
             control_index: s.control,
             traffic_arms: traffic_arms(s),
+            calls_kept: if self.current().control == SIGNAL && s.control != SIGNAL {
+                self.current().arms.iter().filter(|a| a.calls.is_some()).count()
+            } else {
+                0
+            },
             ring: ring.map(|r| {
                 let cycle = s.cycle.unwrap_or(0);
                 let (lanes, dividers, island_edge, road_edge, outer_edge) = match &turbo_shape {

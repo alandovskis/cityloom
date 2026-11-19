@@ -507,6 +507,42 @@ fn the_totals_count_every_call_and_mark_the_ones_not_served() {
     assert!(!totals[..totals.find("</table>").unwrap()].contains("class=\"bad\""));
 }
 
+/// A signal whose streets are all walkways but the north one: one street of traffic, so the signal is suspended, with
+/// the north street's crossing kept on call.
+pub(crate) fn suspended_with_a_call() -> (Junction, State) {
+    use crate::shared::catalogue::{Side, StreetClass};
+    use crate::street::model::Street;
+    let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[]);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid;
+        if a.bearing == 0 {
+            a.calls = Some(12);
+        } else {
+            a.section = Some(walkway.clone());
+        }
+    }
+    (Junction::from_city(crate::street::model::named_said("Test"), &state, &state, 0).expect("it draws"), state)
+}
+
+#[test]
+fn a_suspended_signal_says_which_crossings_stay_on_call_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "1 crossing stays on call for when the signal runs again."),
+        (Locale::FrCa, "1 passage reste sur appel pour quand les feux fonctionneront de nouveau."),
+    ] {
+        let (j, _) = suspended_with_a_call();
+        assert_eq!(j.view().calls_kept, 1);
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        let h = panel(&s);
+        assert!(h.contains(r#"id="calls-kept""#) && h.contains(words), "{h}");
+    }
+    // A signal running, or a junction with none on call, says nothing of it.
+    assert_eq!(Junction::new(0).view().calls_kept, 0);
+    assert!(!panel(&shared(0)).contains(r#"id="calls-kept""#));
+}
+
 #[test]
 fn each_crossing_is_a_list_item_holding_a_group_named_for_it() {
     let s = shared(0);

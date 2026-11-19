@@ -621,6 +621,11 @@ jn-calls-recall = On recall: walked every time its phases run; calls cannot chan
 jn-calls-need = On call: walk { $walk } s + clearance { $clearance } s = { $need } s of green.
 jn-calls-unwalked = No phase walks this crossing, so it cannot be on call.
 jn-calls-none = No crossing is on call: every crossing is walked every time its phases run.
+jn-calls-kept =
+    { $n ->
+        [one] 1 crossing stays on call for when the signal runs again.
+       *[other] { $n } crossings stay on call for when the signal runs again.
+    }
 jn-calls-totals-caption = Calls in one hour, by crossing
 jn-calls-col-crossing = Crossing
 jn-calls-col-calls = Calls

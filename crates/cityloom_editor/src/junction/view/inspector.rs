@@ -586,7 +586,14 @@ fn control_section(w: Watch) -> impl IntoView {
                 w,
                 "i-h-control",
                 "jn-insp-control",
-                view! { <p class="insp-range">{move || tr(w, "jn-insp-control-pedestrian", Args::new().num("n", w.view().traffic_arms as i64))}</p> },
+                view! {
+                    <p class="insp-range">{move || tr(w, "jn-insp-control-pedestrian", Args::new().num("n", w.view().traffic_arms as i64))}</p>
+                    // A signal suspended keeps its crossings on call: say so, or they would be nowhere to be seen.
+                    {move || {
+                        let n = w.view().calls_kept;
+                        (n > 0).then(|| view! { <p class="insp-range" id="calls-kept">{move || tr(w, "jn-calls-kept", Args::new().num("n", n as i64))}</p> })
+                    }}
+                },
             )
             .into_any()
         } else {

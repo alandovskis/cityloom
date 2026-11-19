@@ -621,6 +621,11 @@ jn-calls-recall = En rappel : ouvert chaque fois que ses phases passent; les app
 jn-calls-need = Sur appel : marche { $walk } s + dégagement { $clearance } s = { $need } s de vert.
 jn-calls-unwalked = Aucune phase n’ouvre ce passage : il ne peut pas être sur appel.
 jn-calls-none = Aucun passage n’est sur appel : chaque passage est ouvert chaque fois que ses phases passent.
+jn-calls-kept =
+    { $n ->
+        [one] 1 passage reste sur appel pour quand les feux fonctionneront de nouveau.
+       *[other] { $n } passages restent sur appel pour quand les feux fonctionneront de nouveau.
+    }
 jn-calls-totals-caption = Appels en une heure, par passage
 jn-calls-col-crossing = Passage
 jn-calls-col-calls = Appels
