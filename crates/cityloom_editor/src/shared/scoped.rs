@@ -30,11 +30,13 @@ pub struct ScopedStorage {
     /// Asked before each write: whether the project is still here. None for a storage the caller vouches for (the sync,
     /// which writes a project's places before listing it; the migration, before it lists `first`).
     still_here: Option<Box<dyn Fn() -> bool>>,
+    /// The page shows the project read-only: nothing is ever written through this storage (`only_to_read`).
+    read_only: bool,
 }
 
 impl ScopedStorage {
     pub fn new(inner: Rc<dyn Storage>, project: &str) -> ScopedStorage {
-        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false), still_here: None }
+        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false), still_here: None, read_only: false }
     }
 
     /// A page's storage: every write (the project's documents, and a mark, which would name the project) is refused
@@ -42,6 +44,13 @@ impl ScopedStorage {
     /// this one. `shared` knows no project list: the caller (`project::context`) says how to ask.
     pub fn guarded(inner: Rc<dyn Storage>, project: &str, still_here: impl Fn() -> bool + 'static) -> ScopedStorage {
         ScopedStorage { still_here: Some(Box::new(still_here)), ..ScopedStorage::new(inner, project) }
+    }
+
+    /// The same storage for a page that shows the project read-only (`project_id::VIEW`): every write is refused, the
+    /// project's documents and a mark alike, so nothing the page does reaches the design or the sync. Reads go on, and
+    /// `Storage::read_only` says so, for the view-models to refuse their edits before they are made.
+    pub fn only_to_read(self) -> ScopedStorage {
+        ScopedStorage { read_only: true, ..self }
     }
 
     /// From now on every write is refused, so a page whose project is gone cannot bring its work back (an editor's
@@ -61,7 +70,7 @@ impl Storage for ScopedStorage {
     }
 
     fn remember(&self, key: &str, value: &str) -> bool {
-        !self.closed.get() && self.still_here.as_ref().is_none_or(|here| here()) && self.inner.remember(&self.name(key), value)
+        !self.read_only && !self.closed.get() && self.still_here.as_ref().is_none_or(|here| here()) && self.inner.remember(&self.name(key), value)
     }
 
     /// Every key of the inner storage, scoped ones under their suffixed names: nothing is hidden.
@@ -83,6 +92,10 @@ impl Storage for ScopedStorage {
 
     fn project(&self) -> Option<String> {
         Some(self.project.clone())
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -122,6 +135,21 @@ mod tests {
         assert!(!a.remember("cityloom-sync", "{}"), "a mark would name the project");
         assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
         assert_eq!(inner.recall("cityloom-sync"), None);
+    }
+
+    #[test]
+    fn a_storage_only_to_read_keeps_nothing_and_says_so_and_still_reads() {
+        let inner = Rc::new(MemoryStorage::default());
+        inner.remember("cityloom-edits@a", "A");
+        let a = ScopedStorage::new(inner.clone(), "a").only_to_read();
+        assert!(a.read_only());
+        assert!(!ScopedStorage::new(inner.clone(), "a").read_only());
+        assert!(!a.remember("cityloom-edits", "B"));
+        assert!(!a.remember("cityloom-sync", "{}"), "a mark would name the project");
+        assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
+        assert_eq!(inner.recall("cityloom-edits@a"), Some("A".into()));
+        assert_eq!(inner.recall("cityloom-sync"), None);
+        assert_eq!(a.project(), Some("a".into()));
     }
 
     #[test]

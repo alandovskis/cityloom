@@ -33,6 +33,12 @@ pub trait Storage {
     fn project(&self) -> Option<String> {
         None
     }
+    /// Whether this storage keeps nothing a page writes, because the page shows the project read-only: every write is
+    /// refused, and the view-models refuse every edit before it gets that far. False unless a page made it so
+    /// (`ScopedStorage::only_to_read`).
+    fn read_only(&self) -> bool {
+        false
+    }
 }
 
 /// Runs something after a delay, which can be called off.
