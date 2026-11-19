@@ -5,6 +5,7 @@ theme-dark = Dark
 theme-announced = { $theme } theme.
 notes-shown = Notes shown.
 not-kept = This browser is not keeping your changes, so other pages will not see them.
+read-only-refused = This design is open read-only: nothing can be changed.
 notes-hidden = Notes hidden.
 details-shown = { $what } shown.
 details-hidden = { $what } hidden.

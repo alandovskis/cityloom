@@ -341,7 +341,7 @@ impl Content {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct State {
     label: Said,
     content: Content,
@@ -433,6 +433,13 @@ impl Editor {
 
     fn class_before(&self) -> Option<StreetClass> {
         self.states[self.cursor].class_before
+    }
+
+    /// Whether `other` has the same history as this one: the same revisions, the same one shown, the same uids given out
+    /// and the same drag under way. What is chosen, the zone and the settings (region, time of day) are not history: a
+    /// page that shows the street read-only puts back an editor whose history a command changed, and keeps the rest.
+    pub fn same_history(&self, other: &Editor) -> bool {
+        self.cursor == other.cursor && self.next_uid == other.next_uid && self.gesture == other.gesture && self.states == other.states
     }
 
     /// The street as it is now, for the city to keep.
@@ -3381,6 +3388,29 @@ mod tests {
         assert!(e.set_width(g, w + 100));
         assert_eq!(e.view().speed_kmh, Some(25));
         assert_eq!(e.snapshot().speed, Speed::Kmh(25));
+    }
+
+    #[test]
+    fn the_history_is_the_revisions_and_a_drag_and_not_what_is_chosen_or_shown() {
+        let e = Editor::new(0);
+        let uid = e.view().segments[0].uid;
+        let mut chosen = e.clone();
+        chosen.select(Some(uid));
+        assert!(chosen.set_time(8 * 60));
+        assert!(chosen.same_history(&e));
+        let mut edited = e.clone();
+        assert!(edited.nudge_width(uid, 100));
+        assert!(!edited.same_history(&e));
+        let mut undone = edited.clone();
+        assert!(undone.undo());
+        assert!(!undone.same_history(&edited), "the revision shown is history");
+        let mut dragged = e.clone();
+        dragged.begin_gesture();
+        assert!(!dragged.same_history(&e), "a drag under way is");
+        assert!(dragged.nudge_width(uid, 100));
+        let mut started = e.clone();
+        started.begin_gesture();
+        assert!(!dragged.same_history(&started), "and so is what it moved, in place");
     }
 
     #[test]

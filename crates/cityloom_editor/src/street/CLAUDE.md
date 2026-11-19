@@ -6,6 +6,8 @@ The street's data types are `cityloom_model::street` (re-exported by `street::mo
 
 Every strip/list on the page (zones, pieces, curb, stops, green, calming) is a WAI-ARIA listbox: one tab stop, `aria-activedescendant`, keys from `keys::` (`on_strip`: arrows/Home/End choose, Alt+arrow moves 1 m, Shift+Alt 10 m).
 
+**Read-only (#222).** `StreetVm::read_only()` is the page's storage's (`Storage::read_only`, a page opened with `view=1`). Every edit command refuses first and says `read-only-refused` (shell's message): `apply` (so `SheetWatch::edit` and the key actions), `undo`/`redo`/`reset`, `apply_template`, `apply_measure`, `add_item`, `add_curb`/`add_stop`/`add_calming`, `begin_merge`, the begin of every drag, and the helpers `zone_edit`, `row_edit`, `calming_edit`, `green_edit`. Behind them `core_edit` puts back any change to the street's history that reaches the editor another way (`quiet`, `edit`: `Editor::same_history` compares revisions, cursor, uids and the drag under way, so a choice or the time of day stays), and the keeper is never touched, so nothing is flushed or marked. `link` keeps `view=1` (`project_id::link_for`).
+
 ## Street zones (`street/model/zones.rs`, `zone_tools.rs`, `strip.rs`)
 
 - `Street.zones: Vec<Zone>` (`Zone { from_mm, segments: Option<Vec<Segment>>, name }`; `None` = base section; first zone at 0), `from_end` (`ZoneEnd`: end positions are measured from), `length_mm` (length drawn on).

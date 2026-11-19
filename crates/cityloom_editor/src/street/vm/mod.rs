@@ -173,9 +173,24 @@ impl StreetVm {
         self.ports.storage.project()
     }
 
-    /// `href` to another page of the street's project (`shared::project_id::link`).
+    /// `href` to another page of the street's project (`shared::project_id::link_for`): read-only where this one is.
     pub fn link(&self, href: &str) -> String {
-        crate::shared::project_id::link(href, self.project().as_deref())
+        crate::shared::project_id::link_for(href, &*self.ports.storage)
+    }
+
+    /// Whether the street is shown read-only (`Storage::read_only`): every edit is refused and said, and nothing is
+    /// kept; choosing and looking go on. The page offers no edit then.
+    pub fn read_only(&self) -> bool {
+        self.ports.storage.read_only()
+    }
+
+    /// Says so, and is true, when the street is shown read-only: the command that asks makes no edit.
+    fn refuse_read_only(&self) -> bool {
+        let read_only = self.read_only();
+        if read_only {
+            self.say_now_key("read-only-refused");
+        }
+        read_only
     }
 
     // ---- what the views read ----
@@ -241,9 +256,23 @@ impl StreetVm {
     /// Every change of the editor goes through here: an edit that chose a piece the section did not have (one just
     /// added) shows it in the details panel. The commands that add to a strip ask for their level themselves (see
     /// `level::new_piece` for why a strip is not read here).
+    ///
+    /// Shown read-only, whatever `f` did to the street's history is put back (what is chosen and shown stays): the
+    /// commands refuse first, and this holds for any change that reaches the editor some other way.
     fn core_edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
         let before = self.view_now();
-        let r = self.core.edit(f);
+        let r = if self.read_only() {
+            self.core.edit(|e| {
+                let kept = e.clone();
+                let r = f(e);
+                if !e.same_history(&kept) {
+                    *e = kept;
+                }
+                r
+            })
+        } else {
+            self.core.edit(f)
+        };
         if level::new_piece(&before, &self.view_now()).is_some() {
             self.ask(Level::Piece);
         }
@@ -257,15 +286,23 @@ impl StreetVm {
         if self.merge.get_untracked().is_some() {
             self.merge.set(None);
         }
-        if let Some(k) = &self.keeper {
-            k.touch();
-        }
+        self.touch();
         r
     }
 
+    /// Sees that the street is kept a moment after the last change; nothing is kept while it is shown read-only.
+    fn touch(&self) {
+        if let Some(k) = self.keeper.as_ref().filter(|_| !self.read_only()) {
+            k.touch();
+        }
+    }
+
     /// An edit the person made: announced by what it was and how the pieces
-    /// stand. A refused edit says nothing.
+    /// stand. A refused edit says nothing; shown read-only, it says so.
     pub fn apply(&self, f: impl FnOnce(&mut Editor) -> bool) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let done = self.edit(f);
         if done {
@@ -366,6 +403,9 @@ impl StreetVm {
     }
 
     pub fn undo(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let done = self.edit(|e| e.undo());
         if done {
@@ -377,6 +417,9 @@ impl StreetVm {
     }
 
     pub fn redo(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let done = self.edit(|e| e.redo());
         if done {
@@ -388,6 +431,9 @@ impl StreetVm {
     }
 
     pub fn reset(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let done = self.edit(|e| e.reset());
         if done {
@@ -399,13 +445,14 @@ impl StreetVm {
 
     /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
     pub fn apply_template(&self, template: Template) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let result = self.core_edit(|e| e.apply_template(template));
         match result {
             Ok(report) => {
-                if let Some(k) = &self.keeper {
-                    k.touch();
-                }
+                self.touch();
                 self.merge.set(None);
                 self.say_edit(&before);
                 if let Some(said) = text::template_report(&self.i18n, self.units_now(), &report) {
@@ -422,6 +469,9 @@ impl StreetVm {
 
     /// Arranges the roadway as an Atlas measure, or says it does not suit.
     pub fn apply_measure(&self, code: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         let done = self.edit(|e| e.apply_measure(code));
         if done {
@@ -437,12 +487,13 @@ impl StreetVm {
     /// A zone edit the person made: announced like any edit, and a refusal is said in the page's words and
     /// changes nothing (not even what is kept).
     fn zone_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), ZoneRefusal>) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         match self.core_edit(f) {
             Ok(()) => {
-                if let Some(k) = &self.keeper {
-                    k.touch();
-                }
+                self.touch();
                 self.merge.set(None);
                 self.say_edit(&before);
                 true
@@ -487,6 +538,9 @@ impl StreetVm {
     /// Merges the selected zone with the next (or previous) one at once when the two have the same section; else
     /// waits for the choice of the one to keep (`finish_merge`, or `cancel_merge`). False when it was refused.
     pub fn begin_merge(&self, next: bool) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if self.core.read(|e| e.merge_needs_choice(next)) {
             // A choice that could not be carried out is not asked for: the refusal comes first.
             if let Some(refusal) = self.core.read(|e| e.structure_blocked()) {
@@ -533,7 +587,7 @@ impl StreetVm {
     /// Starts a drag of a boundary. False, with the reason said, while another drag (of a boundary or a curbside use)
     /// is under way: then nothing is dragged and `end_boundary_drag` is not to be called.
     pub fn begin_boundary_drag(&self) -> bool {
-        if self.refuse_while_dragging() {
+        if self.refuse_read_only() || self.refuse_while_dragging() {
             return false;
         }
         self.edit(|e| e.begin_gesture());
@@ -555,12 +609,13 @@ impl StreetVm {
     /// An edit of a row the person made: announced like any edit; a refusal is said in the words of what was edited
     /// and changes nothing.
     fn row_edit(&self, subject: Subject, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         match self.core_edit(f) {
             Ok(()) => {
-                if let Some(k) = &self.keeper {
-                    k.touch();
-                }
+                self.touch();
                 self.say_edit(&before);
                 true
             }
@@ -592,6 +647,9 @@ impl StreetVm {
     /// element into the chosen free stretch of its row, a green element at the first free place along the street. An
     /// item that cannot be added to the street as it is adds nothing and says why.
     pub fn add_item(&self, item: Item) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let v = self.view_now();
         if let Some(reason) = item.run().unavailable(&v) {
             self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &reason));
@@ -698,6 +756,9 @@ impl StreetVm {
     /// Starts a drag of the chosen thing. False, with the reason said, while another drag is under way or when none
     /// is chosen: then nothing is dragged and `end_cell_drag` is not to be called.
     pub fn begin_cell_drag<R: Row>(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if !matches!(self.chosen::<R>(), Some((_, Some(_), _))) {
             self.say_now_key(R::CHOOSE_THING_KEY);
             return false;
@@ -738,6 +799,9 @@ impl StreetVm {
     /// Adds a use of `length_mm` at the start of the chosen gap. False, with the reason said, when no gap is chosen or
     /// it was refused.
     pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         match self.chosen::<CurbRow>() {
             Some((side, None, from_mm)) => self.added(Level::Curb, self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_))),
             _ => {
@@ -792,12 +856,13 @@ impl StreetVm {
     /// An edit of the raised elements the person made: announced like any edit; a refusal is said in words and
     /// changes nothing.
     fn calming_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), CalmingRefusal>) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let before = self.before();
         match self.core_edit(f) {
             Ok(()) => {
-                if let Some(k) = &self.keeper {
-                    k.touch();
-                }
+                self.touch();
                 self.say_edit(&before);
                 true
             }
@@ -898,6 +963,9 @@ impl StreetVm {
     /// Adds an element of `kind` and `length_mm` at the start of the chosen free stretch. False, with the reason
     /// said, when no free stretch is chosen or it was refused. A chicane starts on the side picked.
     pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         match self.calming_chosen() {
             Some((None, from_mm)) => {
                 let first = Some(self.calming_first_pick.get_untracked());
@@ -944,6 +1012,9 @@ impl StreetVm {
     /// stop or an element) is under way or when no element is chosen: then nothing is dragged and `end_calming_drag`
     /// has nothing to end.
     pub fn begin_calming_drag(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if !matches!(self.calming_chosen(), Some((Some(_), _))) {
             self.say_now_key("calming-choose-element");
             return false;
@@ -1056,6 +1127,9 @@ impl StreetVm {
     /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap, with the shelter ticked for that gap.
     /// False, with the reason said, when no gap is chosen or it was refused.
     pub fn add_stop(&self, kind: StopKind, length_mm: i32) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         match self.chosen::<StopRow>() {
             Some((side, None, from_mm)) => {
                 let shelter = self.stop_shelter_pick.get_untracked().is_some_and(|p| (p.0, p.1) == (side, from_mm) && p.2);
@@ -1149,6 +1223,9 @@ impl StreetVm {
     /// nothing. A command is not a drag, so it is refused while one is under way (the model lets a move through
     /// inside a gesture, which is how a drag moves). False, and silent, when the edit changed nothing.
     fn green_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), GreenRefusal>) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if self.core.read(|e| e.dragging()) {
             self.say_green_refusal(GreenRefusal::Dragging);
             return false;
@@ -1157,9 +1234,7 @@ impl StreetVm {
         match self.core_edit(f) {
             Ok(()) if self.view_now().revisions.len() == revisions => false,
             Ok(()) => {
-                if let Some(k) = &self.keeper {
-                    k.touch();
-                }
+                self.touch();
                 self.say_edit(&before);
                 true
             }
@@ -1228,6 +1303,9 @@ impl StreetVm {
     /// Starts a drag of the chosen element. False, with the reason said, while another drag is under way or when none
     /// is chosen; then `end_green_drag` is not to be called.
     pub fn begin_green_drag(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if self.core.read(|e| e.selected_green()).is_none() {
             self.say_now_key("green-choose-element");
             return false;
@@ -4293,5 +4371,153 @@ mod add_menu_tests {
         r.vm.say_matches(1);
         r.vm.say_matches(3);
         assert_eq!(r.said.take(), ["Aucun résultat", "Un résultat", "3 résultats"]);
+    }
+}
+
+/// A street shown read-only (`Storage::read_only`, a page opened with `project_id::VIEW`): every edit is refused, by the
+/// page or by a command called as it is, and nothing reaches the city or the sync; choosing and looking still work.
+#[cfg(test)]
+mod read_only_tests {
+    use super::*;
+    use crate::city::binding::Place;
+    use crate::city::store::CityStore;
+    use crate::shared::catalogue::{Side, kind_index};
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
+    use crate::shared::scoped::ScopedStorage;
+    use crate::street::model::{GreenKind, Template};
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+        time: Rc<ManualScheduler>,
+        storage: Rc<MemoryStorage>,
+    }
+
+    /// Every key the browser holds, with its value.
+    fn stored(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
+        let mut keys = storage.keys();
+        keys.sort();
+        keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect()
+    }
+
+    /// A street of project `p1` edited once before (so there is something to undo and start over from), opened on a
+    /// page that views the project read-only, in `locale`.
+    fn rig_in(locale: Locale) -> Rig {
+        let (ports, said, storage, time) = test_ports_with_time();
+        let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+        let store = CityStore::sample(own);
+        let edge = store.open().view(0).edges[0].uid;
+        let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm += 100;
+        assert!(store.write_street(edge, s));
+        let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let store = CityStore::sample(view.clone());
+        let street = store.open().street_editor(edge, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        let vm = StreetVm::new(Ports { storage: view, ..ports }, crate::i18n_for(locale), street, Some(binding));
+        Rig { vm, said, time, storage }
+    }
+
+    fn rig() -> Rig {
+        rig_in(Locale::En)
+    }
+
+    const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+
+    #[test]
+    fn the_street_says_it_is_read_only_and_one_opened_to_edit_is_not() {
+        assert!(rig().vm.read_only());
+        let (ports, ..) = test_ports_with_time();
+        assert!(!StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None).read_only());
+    }
+
+    #[test]
+    fn every_edit_command_is_refused_and_said_and_leaves_the_street_and_the_storage_as_they_were() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let street = r.vm.read(|e| e.snapshot());
+        let uid = r.vm.view_now().segments[0].uid;
+        let (revisions, can) = (r.vm.view_now().revisions.len(), (r.vm.view_now().can_undo, r.vm.view_now().changed));
+        assert!(can.0 && can.1, "the earlier edit can be undone and started over from");
+        let travel = kind_index("travel").unwrap();
+        let refused: Vec<(&str, Box<dyn Fn(&StreetVm) -> bool>)> = vec![
+            ("apply", Box::new(move |vm| vm.apply(|e| e.nudge_width(uid, 100)))),
+            ("undo", Box::new(|vm| vm.undo())),
+            ("redo", Box::new(|vm| vm.redo())),
+            ("reset", Box::new(|vm| vm.reset())),
+            ("template", Box::new(|vm| vm.apply_template(Template::School))),
+            ("measure", Box::new(|vm| vm.apply_measure("B1"))),
+            ("add a piece", Box::new(move |vm| vm.add_item(Item::Piece(travel)))),
+            ("add green", Box::new(|vm| vm.add_green_clear(GreenForm::new(GreenKind::Bed)))),
+            ("split", Box::new(|vm| vm.split_zone(None))),
+            ("merge", Box::new(|vm| vm.begin_merge(true))),
+            ("boundary", Box::new(|vm| vm.move_boundary(10_000))),
+            ("boundary drag", Box::new(|vm| vm.begin_boundary_drag())),
+            ("name zone", Box::new(|vm| vm.name_zone("Here"))),
+            ("speed", Box::new(|vm| vm.set_speed(Some(30)))),
+            ("calming", Box::new(|vm| vm.add_calming(CalmingKind::Table, 7_000))),
+        ];
+        for (what, command) in &refused {
+            assert!(!command(&r.vm), "{what} is refused");
+            assert_eq!(r.said.take(), [REFUSED], "{what} says why");
+            assert_eq!(r.vm.read(|e| e.snapshot()), street, "{what} changes nothing");
+        }
+        r.vm.end_gesture(true);
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.read(|e| e.snapshot()), street);
+        assert_eq!(r.vm.view_now().revisions.len(), revisions, "the earlier edit and nothing more");
+        assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
+    }
+
+    #[test]
+    fn a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let street = r.vm.read(|e| e.snapshot());
+        let uid = r.vm.view_now().segments[0].uid;
+        r.vm.edit(|e| e.nudge_width(uid, 100));
+        r.vm.quiet(|e| e.remove(uid));
+        r.vm.quiet(|e| e.begin_gesture());
+        r.vm.quiet(|e| e.nudge_width(uid, 100));
+        r.vm.end_gesture(true);
+        assert_eq!(r.vm.read(|e| e.snapshot()), street);
+        r.time.advance(1_000);
+        r.vm.flush();
+        assert_eq!(stored(&r.storage), before);
+        assert!(!r.said.take().iter().any(|s| s.contains("not keeping")), "nothing was refused by the storage: nothing was asked of it");
+    }
+
+    #[test]
+    fn choosing_and_looking_still_work() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let uid = r.vm.view_now().segments[1].uid;
+        r.vm.select(Some(uid));
+        assert_eq!(r.vm.view_now().selected, Some(uid));
+        assert!(!r.said.take().is_empty(), "the choice is said");
+        r.vm.select_relative(1);
+        assert_ne!(r.vm.view_now().selected, Some(uid));
+        r.vm.show_level(Level::Street);
+        assert_eq!(r.vm.level(), Level::Street);
+        r.vm.quiet(|e| e.set_time(8 * 60));
+        assert_eq!(r.vm.view_now().time_min, 8 * 60, "the time of day shown is not the street");
+        r.vm.select_curb(Side::Right, 0);
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(stored(&r.storage), before);
+    }
+
+    #[test]
+    fn the_refusal_is_said_in_the_language_of_the_page() {
+        let r = rig_in(Locale::FrCa);
+        assert!(!r.vm.undo());
+        assert_eq!(r.said.take(), ["Cet aménagement est ouvert en lecture seule\u{a0}: rien ne peut y être modifié."]);
+    }
+
+    #[test]
+    fn a_link_from_the_street_keeps_the_project_read_only() {
+        assert_eq!(rig().vm.link("map.html"), "map.html?project=p1&view=1");
     }
 }
