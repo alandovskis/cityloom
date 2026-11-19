@@ -85,6 +85,9 @@ pub struct PlanObject {
     pub side: Option<Side>,
     pub label: Said,
     pub chosen: bool,
+    /// The piece it stands on, by uid in the section where it starts, for a green element on a piece; `None` for
+    /// anything else.
+    pub host: Option<u32>,
 }
 
 impl Editor {
@@ -145,29 +148,34 @@ impl Editor {
             .collect();
         boundaries.sort_by_key(|b| b.at_mm);
         let mut objects = Vec::new();
-        let mut put = |thing: PlanThing, from_mm: i32, to_mm: i32, side: Option<Side>, label: &Said, chosen: bool| {
+        let mut put = |thing: PlanThing, from_mm: i32, to_mm: i32, side: Option<Side>, label: &Said, chosen: bool, host: Option<u32>| {
             let (from_mm, to_mm) = self.left_span(from_mm, to_mm);
             // A thing drawn on a longer road may lie past the loaded end: it is cut to the plan, or left out.
             let (from_mm, to_mm) = (from_mm.max(0), to_mm.min(length));
             if from_mm < to_mm {
-                objects.push(PlanObject { thing, from_mm, to_mm, side, label: label.clone(), chosen });
+                objects.push(PlanObject { thing, from_mm, to_mm, side, label: label.clone(), chosen, host });
             }
         };
         for side in &curb.sides {
             for (cell, c) in side.cells.iter().enumerate().filter(|(_, c)| c.instance.is_some()) {
-                put(PlanThing::Curb { side: side.side, cell }, c.from_mm, c.to_mm, Some(side.side), &c.label, side.selected == Some(cell));
+                put(PlanThing::Curb { side: side.side, cell }, c.from_mm, c.to_mm, Some(side.side), &c.label, side.selected == Some(cell), None);
             }
         }
         for side in &stops.sides {
             for (cell, c) in side.cells.iter().enumerate().filter(|(_, c)| c.instance.is_some()) {
-                put(PlanThing::Stop { side: side.side, cell }, c.from_mm, c.to_mm, Some(side.side), &c.label, side.selected == Some(cell));
+                put(PlanThing::Stop { side: side.side, cell }, c.from_mm, c.to_mm, Some(side.side), &c.label, side.selected == Some(cell), None);
             }
         }
         for (cell, c) in calming.cells.iter().enumerate().filter(|(_, c)| c.element.is_some()) {
-            put(PlanThing::Calming { cell }, c.from_mm, c.to_mm, None, &c.label, calming.selected == Some(cell));
+            put(PlanThing::Calming { cell }, c.from_mm, c.to_mm, None, &c.label, calming.selected == Some(cell), None);
         }
         for (i, c) in green.cells.iter().enumerate() {
-            put(PlanThing::Green { i }, c.from_mm, c.to_mm, None, &c.label, green.selected == Some(i));
+            // The host is an index into the section where the element starts, as the Green row lays it (`green_row`).
+            let host = c.host.and_then(|h| {
+                let sections = content.sections_over(c.from_mm, c.to_mm, length);
+                sections.first().copied().unwrap_or(&content.segments).get(h).map(|s| s.uid)
+            });
+            put(PlanThing::Green { i }, c.from_mm, c.to_mm, None, &c.label, green.selected == Some(i), host);
         }
         objects.sort_by_key(|o| o.from_mm);
         PlanView {
@@ -365,6 +373,19 @@ mod tests {
             [(14_000, 15_000, None), (18_000, 30_000, Some(Side::Right)), (33_000, 40_000, None), (44_000, 50_000, Some(Side::Left))]
         );
         assert!(matches!(p.objects[0].thing, PlanThing::Green { .. }));
+    }
+
+    #[test]
+    fn a_green_element_names_the_piece_it_stands_on_by_uid() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let p = plan(&with_things(from_end));
+            let segs = sample().segments;
+            let under = super::super::host_at(&segs, 1_500).expect("the tree stands on a piece");
+            let hosts: Vec<(bool, Option<u32>)> = p.objects.iter().map(|o| (matches!(o.thing, PlanThing::Green { .. }), o.host)).collect();
+            for (green, host) in hosts {
+                assert_eq!(host, if green { Some(segs[under].uid) } else { None }, "{from_end:?}");
+            }
+        }
     }
 
     #[test]

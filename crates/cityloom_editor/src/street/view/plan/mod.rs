@@ -392,7 +392,7 @@ mod tests {
     }
 
     fn thing(thing: PlanThing, from_mm: i32, to_mm: i32, side: Option<Side>, label: Said, chosen: bool) -> PlanObject {
-        PlanObject { thing, from_mm, to_mm, side, label, chosen }
+        PlanObject { thing, from_mm, to_mm, side, label, chosen, host: None }
     }
 
     #[test]
