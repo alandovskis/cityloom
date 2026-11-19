@@ -30,7 +30,7 @@ use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, speed_un
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
-use crate::shared::project_id::link;
+use crate::shared::project_id::link_in;
 use crate::shared::said::{self, Arg, Said};
 use crate::shared::units::Units;
 
@@ -77,11 +77,11 @@ fn parse_hot(hot: &str) -> Option<Hot> {
     }
 }
 
-/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`.
-fn href_of(hot: &str, project: Option<&str>) -> Option<String> {
+/// The place a `hot` name (`s-7`, `j-3`) opens, in `project`, read-only where the map is.
+fn href_of(hot: &str, project: Option<&str>, read_only: bool) -> Option<String> {
     match parse_hot(hot)? {
-        Hot::Street(uid) => Some(street_href(uid, project)),
-        Hot::Junction(uid) => Some(junction_href(uid, project)),
+        Hot::Street(uid) => Some(street_href(uid, project, read_only)),
+        Hot::Junction(uid) => Some(junction_href(uid, project, read_only)),
     }
 }
 
@@ -192,14 +192,15 @@ pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
     label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
 
-/// The street page of street `uid`, in `project` where the map is opened in one.
-pub fn street_href(uid: u32, project: Option<&str>) -> String {
-    link(&format!("street.html?street={uid}"), project)
+/// The street page of street `uid`, in `project` where the map is opened in one, read-only where the map is
+/// (`project_id::link_in`).
+pub fn street_href(uid: u32, project: Option<&str>, read_only: bool) -> String {
+    link_in(&format!("street.html?street={uid}"), project, read_only)
 }
 
-/// The junction page of junction `uid`, in `project` where the map is opened in one.
-pub fn junction_href(uid: u32, project: Option<&str>) -> String {
-    link(&format!("intersection.html?junction={uid}"), project)
+/// The junction page of junction `uid`, in `project` where the map is opened in one, read-only where the map is.
+pub fn junction_href(uid: u32, project: Option<&str>, read_only: bool) -> String {
+    link_in(&format!("intersection.html?junction={uid}"), project, read_only)
 }
 
 // ---- what the view binds to ----------------------------------------------------------------
@@ -493,6 +494,22 @@ impl MapVm {
         self.ports.storage.project()
     }
 
+    /// Whether the map shows its project read-only (`Storage::read_only`): the selected streets cannot be changed and
+    /// no area drawn, renamed or deleted (each command refuses and says so); choosing, searching, moving the map, the
+    /// checks and the report go on, and the places it opens open read-only.
+    pub fn read_only(&self) -> bool {
+        self.ports.storage.read_only()
+    }
+
+    /// Says so, and is true, when the map shows its project read-only: the command that asks changes nothing.
+    fn refuse_read_only(&self) -> bool {
+        let read_only = self.read_only();
+        if read_only {
+            self.ports.announcer.say(&self.i18n.tr_now("read-only-refused", &Args::new()));
+        }
+        read_only
+    }
+
     /// The message `key`, for a view: drawn again when the language is switched.
     pub fn word(&self, key: &str) -> String {
         self.i18n.tr(key, &Args::new())
@@ -539,13 +556,13 @@ impl MapVm {
 
     /// The junctions, in the order of their numbers, as rows to open.
     pub fn junction_rows(&self) -> Vec<PlaceRow> {
-        let (v, project) = (self.view(), self.project());
-        Self::junctions(&v).into_iter().map(|n| Self::junction_row(n, project.as_deref())).collect()
+        let (v, project, read_only) = (self.view(), self.project(), self.read_only());
+        Self::junctions(&v).into_iter().map(|n| Self::junction_row(n, project.as_deref(), read_only)).collect()
     }
 
-    fn junction_row(n: &NodeView, project: Option<&str>) -> PlaceRow {
+    fn junction_row(n: &NodeView, project: Option<&str>, read_only: bool) -> PlaceRow {
         PlaceRow {
-            href: junction_href(n.uid, project),
+            href: junction_href(n.uid, project, read_only),
             hot: format!("j-{}", n.uid),
             name: n.name.clone(),
             sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
@@ -556,13 +573,13 @@ impl MapVm {
     /// The streets, as rows to open. The width in the small print is written in the units and with the
     /// decimal mark of the page now; the rows are made again when either changes.
     pub fn street_rows(&self) -> Vec<PlaceRow> {
-        let (v, project) = (self.view(), self.project());
-        v.edges.iter().map(|e| self.street_row(e, project.as_deref())).collect()
+        let (v, project, read_only) = (self.view(), self.project(), self.read_only());
+        v.edges.iter().map(|e| self.street_row(e, project.as_deref(), read_only)).collect()
     }
 
-    fn street_row(&self, e: &EdgeView, project: Option<&str>) -> PlaceRow {
+    fn street_row(&self, e: &EdgeView, project: Option<&str>, read_only: bool) -> PlaceRow {
         PlaceRow {
-            href: street_href(e.uid, project),
+            href: street_href(e.uid, project, read_only),
             hot: format!("s-{}", e.uid),
             name: e.called.clone(),
             sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
@@ -720,11 +737,11 @@ impl MapVm {
         let mut all = Vec::new();
         let project = self.project();
         for n in Self::junctions(v) {
-            all.push((junction_href(n.uid, project.as_deref()), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
+            all.push((junction_href(n.uid, project.as_deref(), self.read_only()), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
             let name = street_note(e.called.clone(), e.ends.clone());
-            all.push((street_href(e.uid, project.as_deref()), name, e.ok, e.edited, e.failing.as_slice()));
+            all.push((street_href(e.uid, project.as_deref(), self.read_only()), name, e.ok, e.edited, e.failing.as_slice()));
         }
         all
     }
@@ -924,8 +941,12 @@ impl MapVm {
             .iter()
             .take(NETWORK_PLACES)
             .map(|p| match p.kind {
-                PlaceKind::Street => NetworkPlace { href: street_href(p.uid, project.as_deref()), hot: format!("s-{}", p.uid), name: self.say(&p.name) },
-                PlaceKind::Junction => NetworkPlace { href: junction_href(p.uid, project.as_deref()), hot: format!("j-{}", p.uid), name: self.say(&p.name) },
+                PlaceKind::Street => {
+                    NetworkPlace { href: street_href(p.uid, project.as_deref(), self.read_only()), hot: format!("s-{}", p.uid), name: self.say(&p.name) }
+                }
+                PlaceKind::Junction => {
+                    NetworkPlace { href: junction_href(p.uid, project.as_deref(), self.read_only()), hot: format!("j-{}", p.uid), name: self.say(&p.name) }
+                }
             })
             .collect();
         (links, (hidden > 0).then(|| self.i18n.tr("net-more-places", &Args::new().num("n", hidden as i64))))
@@ -1116,7 +1137,7 @@ impl MapVm {
     /// that place, or opens it when it is shown already; otherwise it chooses the `area` pressed, or none.
     fn press_idle(&self, hot: Option<&str>, area: Option<&str>) {
         let place = hot.filter(|h| self.can_edit(h));
-        match place.and_then(|hot| href_of(hot, self.project().as_deref()).map(|href| (hot, href))) {
+        match place.and_then(|hot| href_of(hot, self.project().as_deref(), self.read_only()).map(|href| (hot, href))) {
             // A first press shows the place in the details; a second on it opens it.
             Some((hot, href)) => {
                 if self.shown.get_untracked() == MapLevel::Place(hot.to_string()) {
@@ -1233,10 +1254,10 @@ impl MapVm {
     /// The row of the place shown: its name, small print, state and the address of its editor.
     pub fn picked_row(&self) -> Option<PlaceRow> {
         let hot = parse_hot(&self.picked()?)?;
-        let (v, project) = (self.view(), self.project());
+        let (v, project, read_only) = (self.view(), self.project(), self.read_only());
         match hot {
-            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref())),
-            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref())),
+            Hot::Street(uid) => v.edges.iter().find(|e| e.uid == uid).map(|e| self.street_row(e, project.as_deref(), read_only)),
+            Hot::Junction(uid) => v.nodes.iter().find(|n| n.uid == uid && n.junction).map(|n| Self::junction_row(n, project.as_deref(), read_only)),
         }
     }
 
@@ -1461,6 +1482,9 @@ impl MapVm {
     /// Tries the picked change on every selected street, on copies, and shows which can take it and which cannot,
     /// with the reason. Nothing is changed. Nothing is selected, nothing to review.
     pub fn review_corridor(&self) {
+        if self.refuse_read_only() {
+            return;
+        }
         let streets = self.selection.streets_now();
         if streets.is_empty() {
             return;
@@ -1477,6 +1501,9 @@ impl MapVm {
     /// Makes the reviewed change on the streets that can take it; the others are left as they are. The map shows
     /// the result. Only from a review.
     pub fn apply_corridor(&self) {
+        if self.refuse_read_only() {
+            return;
+        }
         let Stage::Reviewing(plan) = self.corridor.get_untracked() else { return };
         // Only what was reviewed as ready is made; what the review refused stays in the report as it was said.
         let mut report = corridor::apply(&self.store, plan.op, &plan.ready());
@@ -1500,6 +1527,9 @@ impl MapVm {
     /// Takes the last change back, all of it or none: refused, and said so, when a street it changed was edited
     /// since (here or on its own page, by sync or another tab).
     pub fn undo_corridor(&self) {
+        if self.refuse_read_only() {
+            return;
+        }
         let Some((op, undo)) = self.undoable.get_untracked() else { return };
         let name = self.say_now(&op.name());
         let said = match corridor::undo(&self.store, &undo) {
@@ -1600,9 +1630,10 @@ impl MapVm {
         &self.areas
     }
 
-    /// Whether an area can be drawn: there is a map to draw it on, and the document is not a newer build's.
+    /// Whether an area can be drawn: there is a map to draw it on, the document is not a newer build's and the map does
+    /// not show its project read-only.
     pub fn can_declare(&self) -> bool {
-        self.canvas.get() == CanvasState::Ready && !self.areas.is_future()
+        self.canvas.get() == CanvasState::Ready && !self.areas.is_future() && !self.read_only()
     }
 
     /// What the panel says first: why nothing can be drawn where there is no map, else the areas' own lead.
@@ -1647,7 +1678,7 @@ impl MapVm {
                 found.push(AreaStreet {
                     area: r.id.clone(),
                     uid: e.uid,
-                    href: street_href(e.uid, project.as_deref()),
+                    href: street_href(e.uid, project.as_deref(), self.read_only()),
                     name,
                     rule: r.rule,
                     conflicts,
@@ -3630,5 +3661,112 @@ mod tests {
         let label = vm.street_label(e.uid);
         assert!(label.contains(" de large, en 2 zones, 1 usage du bord de rue."), "{label}");
         assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones \u{b7} 1 usage du bord de rue"));
+    }
+}
+
+/// The map of a project shown read-only (`Storage::read_only`, a page opened with `project_id::VIEW`): the selected
+/// streets cannot be changed and nothing reaches the city or the sync; choosing, searching and moving the map go on.
+#[cfg(test)]
+mod read_only_tests {
+    use super::*;
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{FakeMapper, MapEvent, MemoryStorage, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
+    use crate::shared::scoped::ScopedStorage;
+
+    fn stored(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
+        let mut keys = storage.keys();
+        keys.sort();
+        keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect()
+    }
+
+    struct Rig {
+        vm: Rc<MapVm>,
+        said: Rc<RecordingAnnouncer>,
+        storage: Rc<MemoryStorage>,
+        navigator: Rc<RecordingNavigator>,
+        mapper: Rc<FakeMapper>,
+    }
+
+    /// The sample city of project `p1`, on a page that views the project read-only, in `locale`.
+    fn rig_in(locale: Locale) -> Rig {
+        let (ports, said, storage) = test_ports();
+        let (navigator, mapper) = (Rc::new(RecordingNavigator::default()), Rc::new(FakeMapper::default()));
+        let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let vm = MapVm::on_sample(Ports { storage: view, navigator: navigator.clone(), mapper: mapper.clone(), ..ports }, crate::i18n_for(locale));
+        Rig { vm, said, storage, navigator, mapper }
+    }
+
+    const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+
+    /// A street of the sample city that takes the Greenway.
+    fn greenway_street(vm: &MapVm) -> u32 {
+        let city = vm.store.open();
+        (1..=22u32).find(|&s| corridor::plan(&city, 0, Op::Template(crate::street::model::Template::Greenway), &[s]).ready() == vec![s]).unwrap()
+    }
+
+    #[test]
+    fn the_map_says_it_is_read_only_and_one_opened_to_edit_is_not() {
+        assert!(rig_in(Locale::En).vm.read_only());
+        let (ports, ..) = test_ports();
+        assert!(!MapVm::on_sample(ports, crate::i18n_for(Locale::En)).read_only());
+    }
+
+    #[test]
+    fn the_selected_streets_can_be_chosen_but_not_reviewed_changed_or_changed_back() {
+        let r = rig_in(Locale::En);
+        let before = stored(&r.storage);
+        let ok = greenway_street(&r.vm);
+        let street = r.vm.store.open().street_editor(ok, 0).unwrap().snapshot();
+        r.vm.toggle_selected(Some(&format!("s-{ok}")));
+        assert_eq!(r.vm.selection().streets(), vec![ok], "choosing works");
+        r.vm.set_corridor_op("greenway");
+        r.said.take();
+        r.vm.review_corridor();
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert_eq!(r.vm.corridor_stage(), Stage::Idle, "no review to apply");
+        r.vm.apply_corridor();
+        assert_eq!(r.said.take(), [REFUSED]);
+        r.vm.undo_corridor();
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert_eq!(r.vm.corridor_undo_label(), None);
+        assert_eq!(r.vm.store.open().street_editor(ok, 0).unwrap().snapshot(), street);
+        assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
+    }
+
+    #[test]
+    fn no_area_can_be_declared_and_every_place_opens_read_only() {
+        let r = rig_in(Locale::En);
+        r.vm.attach();
+        r.mapper.say(MapEvent::Ready);
+        assert!(!r.vm.can_declare(), "the map is ready, but nothing can be drawn");
+        for row in r.vm.street_rows().iter().chain(&r.vm.junction_rows()) {
+            assert!(row.href.ends_with("&project=p1&view=1"), "{}", row.href);
+        }
+        let hot = format!("s-{}", r.vm.view().edges[0].uid);
+        r.mapper.say(MapEvent::Press { at: [0.0, 0.0], hot: Some(hot.clone()), area: None, vertex: None });
+        r.mapper.say(MapEvent::Press { at: [0.0, 0.0], hot: Some(hot), area: None, vertex: None });
+        assert_eq!(r.navigator.take(), vec![format!("street.html?street={}&project=p1&view=1", r.vm.view().edges[0].uid)]);
+    }
+
+    #[test]
+    fn looking_still_works_and_writes_nothing() {
+        let r = rig_in(Locale::En);
+        let before = stored(&r.storage);
+        r.vm.set_search("a");
+        assert!(!r.vm.results().is_empty());
+        r.vm.move_active(1);
+        assert!(r.vm.press_key("ArrowLeft") && r.vm.press_key("+"));
+        r.vm.show_areas();
+        r.vm.show_city();
+        assert_eq!(stored(&r.storage), before);
+    }
+
+    #[test]
+    fn the_refusal_is_said_in_the_language_of_the_page() {
+        let r = rig_in(Locale::FrCa);
+        r.vm.toggle_selected(Some("s-1"));
+        r.said.take();
+        r.vm.review_corridor();
+        assert_eq!(r.said.take(), ["Cet aménagement est ouvert en lecture seule\u{a0}: rien ne peut y être modifié."]);
     }
 }

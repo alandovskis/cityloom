@@ -15,6 +15,10 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 - No kept roads for the area: no places, no map, page says so (`NO_ROADS`). A map that cannot start (no WebGL) says `map-canvas-missing`.
 - The city is read on open, on `pageshow` and when another tab writes edits; edits made on a street/junction page show on next load (known limit).
 
+## Read-only (#222)
+
+`MapVm::read_only()` and `AreasVm::read_only()` are the page's storage's (`Storage::read_only`, `view=1`). `review_corridor`, `apply_corridor`, `undo_corridor` and, in `AreasVm`, `start`, `start_redraw`, `save`, `change` (`rename`, `set_rule`), `delete`, `undo_delete` and a corner drop (`drag_vertex` with `done`; its moves show nothing) refuse and say `read-only-refused` (shell's message); `can_declare` is false. Selection, search, the camera, the levels, the checks and the report go on. `street_href`/`junction_href`/`href_of` take `read_only`, so every place the map opens opens read-only (`project_id::link_in`).
+
 ## Selected streets (`map/vm/selection.rs`, `selection_view.rs`; #66)
 - `SelectionVm` (held by `MapVm::selection()`) is a page-long list of street uids in the order added, not kept. A Shift-click on the map (`web/mapcanvas.js` emits `MapEvent::Toggle`, not `Press`) or Shift+Enter on a search result (`MapVm::toggle_chosen`) adds a street or drops it; a junction or blank map says `sel-not-a-street`, a street not wholly in view says `map-not-editable` (a selected one can always be dropped).
 - `Mapper::set_selected` sends the `s-<uid>` ids; the adapter sets feature-state `selected` on the `places` source (re-applied with the places) and `style.rs`'s `places-selected` draws a dashed dark-blue line down those streets (a pattern, not colour alone).
