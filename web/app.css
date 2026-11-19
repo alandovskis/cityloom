@@ -1978,17 +1978,24 @@ body.map-page {
   color: var(--warn);
   box-shadow: inset 0 0 0 1px var(--warn-line);
 }
-/* Where the bar floats, so do the stage and the panels: the notice floats just below the bar, above them, below the bar's menus. */
+/* Where the bar floats, so do the stage and the panels: the notice floats just below the bar, above the stage,
+   below the bar's menus, centred between the side panels as the status bar is (`--lw` / `--rw`), so it never
+   covers their heads. A page with no panel (the timeline) gives it the whole width. */
 @media (min-width: 900px) {
   .shell-notice {
     position: fixed;
     z-index: 25;
     top: calc(var(--pad) + var(--bar-h) + 12px);
-    left: 50%;
+    left: calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);
     transform: translateX(-50%);
-    max-width: min(640px, calc(100% - var(--pad) * 2));
+    max-width: min(640px, calc(100% - var(--lw) - var(--rw) - var(--pad) * 2));
+    width: max-content;
     margin: 0;
     box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--warn-line);
+  }
+  body:not(:has(.panel)) .shell-notice {
+    --lw: 0px;
+    --rw: 0px;
   }
 }
 .shell-notice button {

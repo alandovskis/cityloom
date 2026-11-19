@@ -280,7 +280,8 @@ for (const p of PAGES) {
 
 // A project's street or junction edit saved before the importer merged a block's pieces has no `import` stamp: it is
 // stale, discarded when one of the project's pages opens, and the page says so once. The notice floats below the
-// fixed bar where the bar floats, so it must be seen, in the viewport, and reachable at both widths.
+// fixed bar where the bar floats, so it must be seen, in the viewport, and reachable at every width; at a laptop's
+// width the side panels leave it less room, and it must not cover their heads.
 const CLEARED =
   "The map was rebuilt with one street per block, so your earlier street and junction edits were cleared.";
 const NOTICE_PAGES = [
@@ -291,8 +292,13 @@ const NOTICE_PAGES = [
 ];
 const WIDTHS = [
   { name: "desktop", width: 1440, height: 900 },
+  { name: "laptop", width: 1280, height: 800 },
   { name: "phone", width: 390, height: 844 },
 ];
+
+/** Whether two boxes share any area. */
+const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 for (const p of NOTICE_PAGES) {
   for (const w of WIDTHS) {
@@ -313,6 +319,14 @@ for (const p of NOTICE_PAGES) {
       await expect(notice).toContainText(CLEARED);
       await expect(notice).toBeVisible();
       await expect(notice).toBeInViewport({ ratio: 1 });
+      const box = (await notice.boundingBox())!;
+      for (const panel of await page.locator(".panel:visible").all()) {
+        const covered = (await panel.boundingBox())!;
+        expect(
+          overlap(box, covered),
+          `the notice ${JSON.stringify(box)} covers a panel ${JSON.stringify(covered)}`,
+        ).toBe(false);
+      }
       await notice.getByRole("button", { name: "Dismiss" }).click();
       await expect(notice).toHaveCount(0);
       await page.reload();
