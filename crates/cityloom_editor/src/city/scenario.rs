@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::shared::said::{Arg, Said};
+
 /// The most scenarios one place keeps: a record stays well inside the server's `MAX_RECORD_BYTES`.
 pub const MAX_SCENARIOS: usize = 8;
 /// The longest name, in characters.
@@ -32,6 +34,57 @@ pub enum Refusal {
     Full,
     /// No scenario has this id.
     Missing,
+}
+
+impl Refusal {
+    /// What the refusal says, for a scenario that was to be called `name` (as typed).
+    pub fn said(self, name: &str) -> Said {
+        let max = |key, max: usize| Said::new(key).with("max", Arg::Num(max as i64));
+        match self {
+            Refusal::NameEmpty => Said::new("scenario-name-empty"),
+            Refusal::NameTooLong => max("scenario-name-too-long", MAX_NAME_CHARS),
+            Refusal::NameTaken => Said::new("scenario-name-taken").with("name", Arg::Text(name.trim().to_string())),
+            Refusal::Full => max("scenario-full", MAX_SCENARIOS),
+            Refusal::Missing => Said::new("scenario-missing"),
+        }
+    }
+}
+
+/// What a scenario action did, or what it asks, to be said to the person.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum News {
+    /// A scenario made from the baseline, now shown.
+    Created(String),
+    /// Scenario `from` copied as `name`, now shown.
+    Duplicated {
+        from: String,
+        name: String,
+    },
+    Renamed {
+        from: String,
+        name: String,
+    },
+    /// A scenario deleted; the baseline is shown.
+    Deleted(String),
+    /// Deleting this scenario waits for the person to confirm it.
+    AskDelete(String),
+    /// The design now shown: a scenario by name, or the baseline.
+    Showing(Option<String>),
+}
+
+impl News {
+    pub fn said(&self) -> Said {
+        let text = |s: &String| Arg::Text(s.clone());
+        match self {
+            News::Created(name) => Said::new("scenario-created").with("name", text(name)),
+            News::Duplicated { from, name } => Said::new("scenario-duplicated").with("from", text(from)).with("name", text(name)),
+            News::Renamed { from, name } => Said::new("scenario-renamed").with("from", text(from)).with("name", text(name)),
+            News::Deleted(name) => Said::new("scenario-deleted").with("name", text(name)),
+            News::AskDelete(name) => Said::new("scenario-delete-ask").with("name", text(name)),
+            News::Showing(None) => Said::new("scenario-switched-baseline"),
+            News::Showing(Some(name)) => Said::new("scenario-switched").with("name", text(name)),
+        }
+    }
 }
 
 /// The scenarios of one place, in the order they were made.
@@ -213,6 +266,53 @@ mod tests {
         assert_eq!(s.act(Action::Rename(4, "Copied".into()), &7), Ok(None));
         assert_eq!(s.act(Action::Delete(4), &7), Ok(None));
         assert_eq!(s.act(Action::Delete(4), &7), Err(Refusal::Missing));
+    }
+
+    fn said(said: &Said, locale: crate::shared::i18n::Locale) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(locale), crate::shared::units::Units::Metres, said)
+    }
+
+    #[test]
+    fn each_refusal_is_worded_in_both_languages() {
+        use crate::shared::i18n::Locale::{En, FrCa};
+        let both = |r: Refusal| (said(&r.said("  Parking kept "), En), said(&r.said("  Parking kept "), FrCa));
+        assert_eq!(both(Refusal::NameEmpty), ("Give the scenario a name.".into(), "Donnez un nom au scénario.".into()));
+        assert_eq!(
+            both(Refusal::NameTooLong),
+            ("A scenario name can be at most 60 characters long.".into(), "Un nom de scénario compte au plus 60 caractères.".into())
+        );
+        assert_eq!(
+            both(Refusal::NameTaken),
+            ("Another scenario is already called “Parking kept”.".into(), "Un autre scénario s’appelle déjà «\u{a0}Parking kept\u{a0}».".into())
+        );
+        assert_eq!(
+            both(Refusal::Full),
+            (
+                "A place keeps at most 8 scenarios. Delete one to make another.".into(),
+                "Un lieu garde au plus 8 scénarios. Supprimez-en un pour en créer un autre.".into()
+            )
+        );
+        assert_eq!(both(Refusal::Missing), ("That scenario is no longer here.".into(), "Ce scénario n’existe plus.".into()));
+    }
+
+    #[test]
+    fn the_news_of_each_action_is_worded_in_both_languages() {
+        use crate::shared::i18n::Locale::{En, FrCa};
+        let name = || "Wider bike lane".to_string();
+        assert_eq!(said(&News::Created(name()).said(), En), "Scenario “Wider bike lane” made from the baseline. Now editing it.");
+        assert_eq!(said(&News::Showing(None).said(), FrCa), "La référence est maintenant affichée.");
+        let ask = said(&News::AskDelete(name()).said(), FrCa);
+        assert_eq!(ask, "Supprimer le scénario «\u{a0}Wider bike lane\u{a0}»? Appuyez sur Confirmer la suppression pour le supprimer.");
+        for news in [
+            News::Duplicated { from: name(), name: "Copy".into() },
+            News::Renamed { from: name(), name: "Copy".into() },
+            News::Deleted(name()),
+            News::Showing(Some(name())),
+        ] {
+            for locale in [En, FrCa] {
+                assert!(said(&news.said(), locale).contains("Wider bike lane"), "{news:?} {locale:?}");
+            }
+        }
     }
 
     #[test]

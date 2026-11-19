@@ -31,6 +31,11 @@ pub fn say_now(i18n: &I18n, units: Units, said: &Said) -> String {
     crate::shared::said::say_now(i18n, units, said)
 }
 
+/// What a scenario action did, or why it did nothing (`city::binding::scenario_actions`).
+pub fn scenario_text(said: &Said, i18n: &I18n, units: Units) -> String {
+    say_now(i18n, units, said)
+}
+
 /// Said when the street is put back as it is today.
 pub fn started_over(i18n: &I18n) -> String {
     i18n.tr_now("started-over", &Args::new())

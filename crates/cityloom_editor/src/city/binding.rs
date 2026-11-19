@@ -4,6 +4,8 @@ use crate::city::scenario::Action;
 use crate::city::store::{CityStore, ScenarioFailure};
 use crate::junction::model::State;
 use crate::shared::project_id::wire_key;
+use crate::shared::said::Said;
+use crate::shared::scenarios::ScenarioHost;
 use crate::street::model::Street;
 use crate::sync::model::{Id, Kind};
 
@@ -93,6 +95,138 @@ impl CityBinding {
         };
         let key = self.store.project().map_or_else(|| key.clone(), |project| wire_key(&project, &key));
         Some(Id { kind, key })
+    }
+}
+
+/// A page that edits a place's scenarios (the street's and the junction's view-models): what the scenario actions
+/// (`scenario_actions`) need of it.
+pub trait ScenarioPage: ScenarioHost {
+    /// The place in the city the page edits; none for a sandbox, which keeps no scenarios.
+    fn binding(&self) -> Option<&CityBinding>;
+    /// Writes what waits to be kept, now (to the design shown).
+    fn flush(&self);
+    /// Shows design `id` (None: the baseline) as the city keeps it, starting a history of its own: what could be
+    /// undone in the design shown before is not carried over. Whether it could be shown.
+    fn show_design(&self, id: Option<u32>) -> bool;
+    /// Tells the person (the live region).
+    fn tell(&self, said: &Said);
+}
+
+/// The scenario actions of a page, whichever kind of place it edits. Each keeps what the page shows before it acts,
+/// so no edit is lost, and tells the person what it did or why it did nothing.
+pub mod scenario_actions {
+    use super::{Action, ScenarioFailure, ScenarioPage};
+    use crate::city::scenario::{News, Refusal};
+    use crate::shared::said::Said;
+
+    /// Lists the place's scenarios as kept now.
+    pub fn refresh(page: &impl ScenarioPage) {
+        if let Some(binding) = page.binding() {
+            page.scenario_state().list(binding.scenarios());
+        }
+    }
+
+    /// Shows scenario `id`, or the baseline.
+    pub fn switch(page: &impl ScenarioPage, id: Option<u32>) -> bool {
+        if page.binding().is_none() {
+            return false;
+        }
+        page.flush();
+        let state = page.scenario_state();
+        if !page.show_design(id) {
+            // gone since it was listed (deleted in another tab, say)
+            refresh(page);
+            let why = Refusal::Missing.said("");
+            state.refuse(why.clone());
+            page.tell(&why);
+            return false;
+        }
+        state.show(id);
+        page.tell(&News::Showing(id.and_then(|id| state.name_now(id))).said());
+        true
+    }
+
+    /// Does `action` on the place, `name` the name it was given (as typed): what it made, or None where it was
+    /// refused or not kept (and the person told why).
+    fn act(page: &impl ScenarioPage, action: Action, name: &str) -> Option<Option<u32>> {
+        let binding = page.binding()?;
+        page.flush();
+        let state = page.scenario_state();
+        match binding.act(action) {
+            Ok(made) => {
+                refresh(page);
+                Some(made)
+            }
+            Err(ScenarioFailure::Refused(why)) => {
+                let why = why.said(name);
+                state.refuse(why.clone());
+                page.tell(&why);
+                None
+            }
+            Err(ScenarioFailure::NotKept) => {
+                state.settle();
+                page.tell(&Said::new("not-kept"));
+                None
+            }
+        }
+    }
+
+    /// Shows scenario `made`, just made, and says `news` of it.
+    fn show_made(page: &impl ScenarioPage, made: u32, news: impl FnOnce(String) -> News) -> bool {
+        if !page.show_design(Some(made)) {
+            return false;
+        }
+        let state = page.scenario_state();
+        state.show(Some(made));
+        page.tell(&news(state.name_now(made).unwrap_or_default()).said());
+        true
+    }
+
+    pub fn create(page: &impl ScenarioPage, name: &str) -> bool {
+        let Some(Some(made)) = act(page, Action::Create(name.to_string()), name) else { return false };
+        show_made(page, made, News::Created)
+    }
+
+    /// Duplicates the scenario shown; nothing on the baseline (a new scenario is made from it).
+    pub fn duplicate(page: &impl ScenarioPage, name: &str) -> bool {
+        let state = page.scenario_state();
+        let Some(from) = state.active_now() else { return false };
+        let from_name = state.name_now(from).unwrap_or_default();
+        let Some(Some(made)) = act(page, Action::Duplicate(from, name.to_string()), name) else { return false };
+        show_made(page, made, |name| News::Duplicated { from: from_name, name })
+    }
+
+    /// Renames the scenario shown; the baseline has no name of its own.
+    pub fn rename(page: &impl ScenarioPage, name: &str) -> bool {
+        let state = page.scenario_state();
+        let Some(id) = state.active_now() else { return false };
+        let from = state.name_now(id).unwrap_or_default();
+        if act(page, Action::Rename(id, name.to_string()), name).is_none() {
+            return false;
+        }
+        state.settle();
+        page.tell(&News::Renamed { from, name: state.name_now(id).unwrap_or_default() }.said());
+        true
+    }
+
+    /// Deletes the scenario shown, the second time it is asked with nothing done in between, and shows the
+    /// baseline; the baseline cannot be deleted.
+    pub fn delete(page: &impl ScenarioPage) -> bool {
+        let state = page.scenario_state();
+        let Some(id) = state.active_now() else { return false };
+        let name = state.name_now(id).unwrap_or_default();
+        if !state.asking_delete_now() {
+            state.ask_delete();
+            page.tell(&News::AskDelete(name).said());
+            return false;
+        }
+        if act(page, Action::Delete(id), "").is_none() {
+            return false;
+        }
+        page.show_design(None);
+        state.show(None);
+        page.tell(&News::Deleted(name).said());
+        true
     }
 }
 

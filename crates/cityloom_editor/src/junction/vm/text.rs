@@ -155,6 +155,11 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
     })
 }
 
+/// What a scenario action did, or why it did nothing (`city::binding::scenario_actions`).
+pub fn scenario_text(said: &Said, i18n: &I18n, units: Units) -> String {
+    say_now(i18n, units, said)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
