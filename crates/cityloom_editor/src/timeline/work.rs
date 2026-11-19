@@ -180,6 +180,10 @@ pub struct Restored {
 pub fn restore(storage: &Rc<dyn Storage>, id: &str, backup_name: &str, app_version: &str, author: Option<&str>) -> Result<Restored, Refused> {
     let milestones = MilestoneStore::new(storage.clone());
     let target = milestones.snapshot(id).ok_or(Refused::Unknown)?;
+    let stale = records_of(&target).into_iter().any(|((kind, _), record)| kind != Kind::Rule && edits::is_stale(&record));
+    if stale {
+        return Err(Refused::Stale);
+    }
     let now = capture(storage)?;
     let differences = compare(&target, &now);
     if differences.is_empty() {
@@ -271,11 +275,12 @@ mod tests {
     }
 
     fn work(streets: &[(&str, i64)], rules: &[(&str, &str)]) -> (String, String) {
-        let streets: serde_json::Map<String, Value> = streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "street": { "n": n } }))).collect();
+        let streets: serde_json::Map<String, Value> =
+            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "n": n } }))).collect();
         let ring = json!([[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]]);
         let restrictions: serde_json::Map<String, Value> =
             rules.iter().map(|(id, name)| ((*id).to_string(), json!({ "name": name, "rule": { "kind": "car_free" }, "ring": ring }))).collect();
-        (json!({ "version": 5, "streets": streets }).to_string(), json!({ "version": 1, "next_id": 9, "restrictions": restrictions }).to_string())
+        (json!({ "version": 17, "streets": streets }).to_string(), json!({ "version": 1, "next_id": 9, "restrictions": restrictions }).to_string())
     }
 
     fn keep(storage: &Rc<dyn Storage>, streets: &[(&str, i64)], rules: &[(&str, &str)]) {
@@ -285,6 +290,22 @@ mod tests {
 
     fn marked(memory: &MemoryStorage, kind: Kind, key: &str) -> Option<(bool, bool)> {
         open(memory)?.entry(&Id::new(kind, key)).map(|e| (e.pending, e.deleted))
+    }
+
+    #[test]
+    fn a_milestone_holding_stale_work_cannot_be_restored() {
+        let (storage, _) = setup();
+        keep(&storage, &[("w1", 1)], &[]);
+        let milestones = MilestoneStore::new(storage.clone());
+        let stale = json!({ "version": 5, "streets": { "w9": { "ways": [9], "street": { "n": 1 } } } }).to_string();
+        let snapshot = Snapshot { edits: serde_json::from_str(&stale).ok(), restrictions: None };
+        let old = milestones
+            .create(Draft { name: "Old".into(), auto: false, app_version: "1".into(), author: None, summary: summary_of(&records_of(&snapshot)), snapshot })
+            .unwrap();
+        let (before, count) = (storage.recall(EDITS_KEY), milestones.list().len());
+        assert_eq!(restore(&storage, &old.id, "Backup", "1", None).err(), Some(Refused::Stale));
+        assert_eq!(milestones.list().len(), count, "no backup milestone");
+        assert_eq!(storage.recall(EDITS_KEY), before);
     }
 
     #[test]
@@ -454,8 +475,9 @@ mod tests {
     }
 
     fn keep_streets_only(storage: &Rc<dyn Storage>, streets: &[(&str, i64)]) {
-        let streets: serde_json::Map<String, Value> = streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "street": { "n": n } }))).collect();
-        assert!(storage.remember(EDITS_KEY, &json!({ "version": 5, "streets": streets }).to_string()));
+        let streets: serde_json::Map<String, Value> =
+            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "n": n } }))).collect();
+        assert!(storage.remember(EDITS_KEY, &json!({ "version": 17, "streets": streets }).to_string()));
     }
 
     #[test]

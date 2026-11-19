@@ -92,3 +92,4 @@ timeline-refused-long = A milestone name has at most 80 characters.
 timeline-refused-large = The work is too large to keep as one milestone.
 timeline-refused-full = The milestones of this project take all the room they may on this device. Delete one to make room.
 timeline-refused-unusable = The milestones or the work on this device could not be read or changed.
+timeline-refused-stale = This milestone was saved before the map was rebuilt with one street per block, so it cannot be restored. You can still compare it with now.

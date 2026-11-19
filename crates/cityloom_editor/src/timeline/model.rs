@@ -79,6 +79,8 @@ pub enum Refused {
     Unknown,
     /// The document is damaged or a newer build's, or storage refused.
     Unusable,
+    /// The milestone holds street or junction work from before importer 11, which would only be removed.
+    Stale,
 }
 
 /// The name as kept: trimmed, 1 to 80 characters.

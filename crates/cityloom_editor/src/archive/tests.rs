@@ -340,7 +340,7 @@ fn fields_this_build_does_not_know_are_ignored_and_reserved_ones_are_neither_rea
         "kind": "cityloom-design", "format_version": 1, "app_version": "9.9.9", "created_at": "2030-01-01T00:00:00.000Z",
         "source": {"area_key": "1,2", "something_new": [1]}, "future_top_level": {"a": 1},
         "notes": {"w1~n2~n3": "a note"}, "scenarios": [{"name": "later"}],
-        "edits": edits_with(5, json!({"w1~n2~n3": {"ways": [1], "street": {}, "from_a_newer_build": {"x": [1, 2]}}})),
+        "edits": edits_with(5, json!({"w1~n2~n3": {"ways": [1], "import": 11, "street": {}, "from_a_newer_build": {"x": [1, 2]}}})),
     })
     .to_string();
     let archive = model::parse_and_validate(&text).expect("unknown fields are not an error");
@@ -367,9 +367,23 @@ fn a_minimal_version_1_archive_is_read() {
 }
 
 #[test]
+fn a_stale_record_in_an_archive_is_not_imported() {
+    let stamped = json!({"street": {}, "import": 11});
+    let streets = json!({"w1~n2~n3": stamped, "w4~n5~n6": {"street": {}}, "w7~n8~n9": {"street": {}, "import": 10}});
+    let archive = model::parse_and_validate(&raw(edits_with(17, streets), Value::Null)).unwrap();
+    assert_eq!(archive.streets(), 1);
+    let b = device();
+    let plan = model::plan_import(&archive, &b.ports.storage).unwrap();
+    assert_eq!(plan.entries.len(), 1);
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    let kept = stored(&b.storage, EDITS_KEY);
+    assert_eq!(kept["streets"].as_object().unwrap().keys().collect::<Vec<_>>(), ["w1~n2~n3"]);
+}
+
+#[test]
 fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_version_their_content_needs() {
     // (content of one street record, the version a document holding it is written as)
-    let plain = json!({"street": {}});
+    let plain = json!({"street": {}, "import": 11});
     let cases = [
         (4, plain.clone(), 5),
         (5, plain.clone(), 5),
@@ -387,20 +401,25 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (NEWEST.into(), plain.clone(), 5),
     ];
     assert_eq!(NEWEST, 17, "a new edits version needs a row here");
-    for (version, record, written) in cases {
+    for (version, mut record, written) in cases {
+        record["import"] = json!(11); // an unstamped record is stale and never imported
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
         let archive = model::parse_and_validate(&text).unwrap_or_else(|e| panic!("version {version}: {e:?}"));
         let b = device();
         assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1, "version {version}");
-        assert_eq!(stored(&b.storage, EDITS_KEY)["version"], written, "version {version}");
+        // the import stamp every imported record needs makes the document version 17, whatever else the record holds
+        let _ = written;
+        assert_eq!(stored(&b.storage, EDITS_KEY)["version"], NEWEST, "version {version}");
     }
     // a signal plan needs version 10
     let signal = json!({"state": {"signal_plan": {"phases": []}}});
     let doc = json!({"version": 5, "streets": {}, "junctions": {"n7": signal}});
+    let mut doc = doc;
+    doc["junctions"]["n7"]["import"] = json!(11);
     let b = device();
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
-    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], crate::city::edits::SIGNAL_VERSION);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], NEWEST);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }
@@ -410,7 +429,7 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
 fn new_records_join_a_document_that_holds_others_and_the_others_are_not_touched() {
     let b = device();
     b.storage.remember(EDITS_KEY, &edits_with(5, json!({"w9~n8~n7": {"street": {}, "theirs": 1}})).to_string());
-    let archive = model::parse_and_validate(&raw(edits_with(5, json!({"w1~n2~n3": {"street": {}}})), Value::Null)).unwrap();
+    let archive = model::parse_and_validate(&raw(edits_with(5, json!({"w1~n2~n3": {"street": {}, "import": 11}})), Value::Null)).unwrap();
     model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap();
     let doc = stored(&b.storage, EDITS_KEY);
     assert_eq!(doc["streets"]["w9~n8~n7"], json!({"street": {}, "theirs": 1}));

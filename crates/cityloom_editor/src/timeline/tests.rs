@@ -20,8 +20,8 @@ fn en() -> (Rc<TimelineVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
 /// Keeps streets `(key, name, width)` as the project's edits.
 fn keep(storage: &MemoryStorage, streets: &[(&str, &str, i64)]) {
     let streets: serde_json::Map<String, serde_json::Value> =
-        streets.iter().map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "street": { "name": name, "row_mm": w } }))).collect();
-    assert!(storage.remember(EDITS_KEY, &json!({ "version": 5, "streets": streets }).to_string()));
+        streets.iter().map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "name": name, "row_mm": w } }))).collect();
+    assert!(storage.remember(EDITS_KEY, &json!({ "version": 17, "streets": streets }).to_string()));
 }
 
 #[test]

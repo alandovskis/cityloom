@@ -287,6 +287,12 @@ fn section(draft: &Draft, name: &str, part: &'static str) -> Result<Records, Arc
     Ok(out)
 }
 
+/// Without the records made before importer 11 (or unstamped), which are never applied, listed or sent.
+fn fresh(mut records: Records) -> Records {
+    records.retain(|_, record| !edits::is_stale(record));
+    records
+}
+
 fn read_edits(value: Option<&Value>) -> Result<(Records, Records), ArchiveError> {
     let Some(value) = value.filter(|v| !v.is_null()) else { return Ok((Records::new(), Records::new())) };
     let damaged = ArchiveError::Damaged(PART_EDITS);
@@ -298,7 +304,7 @@ fn read_edits(value: Option<&Value>) -> Result<(Records, Records), ArchiveError>
         Some(_) => {}
     }
     match edits::draft(Some(&value.to_string())) {
-        Ok(draft) => Ok((section(&draft, STREETS, PART_EDITS)?, section(&draft, JUNCTIONS, PART_EDITS)?)),
+        Ok(draft) => Ok((fresh(section(&draft, STREETS, PART_EDITS)?), fresh(section(&draft, JUNCTIONS, PART_EDITS)?))),
         Err(Document::Future) => Err(ArchiveError::EditsNewer(NEWEST as u64 + 1)),
         Err(_) => Err(damaged),
     }
