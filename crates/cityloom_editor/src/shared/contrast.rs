@@ -241,8 +241,8 @@ mod tests {
         assert!(editor.contains(".turn.dest[aria-pressed=\"false\"]:not(:disabled)::after,\n.turn.dest.read-only[aria-pressed=\"false\"]::after {"));
         let turn = rule(editor, ".turn.read-only[aria-pressed=\"true\"]");
         assert!(turn.contains("background: var(--fill);") && turn.contains("color: var(--ink-2);"), "{turn}");
-        // an unserved turn keeps its warning read-only: the colours of `.turn.bad[aria-pressed="true"]`
-        let bad = rule(editor, ".turn.read-only.bad[aria-pressed=\"true\"]");
+        // an unserved turn keeps its warning read-only: one rule with `.turn.bad[aria-pressed="true"]`, so they cannot drift
+        let bad = rule(editor, ".turn.bad[aria-pressed=\"true\"],\n.turn.read-only.bad[aria-pressed=\"true\"]");
         assert!(bad.contains("background: var(--warn-wash);") && bad.contains("color: var(--warn);"), "{bad}");
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
         for (theme, i) in [("light", 0), ("dark", 1)] {
