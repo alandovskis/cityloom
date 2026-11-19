@@ -179,9 +179,9 @@ impl Editor {
                 Pick::Whole => None,
                 Pick::Stretch { from_mm, to_mm } => Some(self.left_span(from_mm, to_mm)),
             },
-            // The frame is measured from the first end when it is a real end, else from the last: an end it is not
-            // measured from because it is cut is the first. Whether the other end is cut too, the editor is not told.
-            cut: [frame.from_end == ZoneEnd::Last, false],
+            // The frame is measured from the first end when it is a real end, else from the last, so a frame from the
+            // last end says the first is cut; the city says of each end whether the area's edge cuts it.
+            cut: [frame.from_end == ZoneEnd::Last || self.ends[0].cut, self.ends[1].cut],
             elsewhere: self.elsewhere().is_some(),
         }
     }
@@ -196,7 +196,7 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::super::fixtures::{two_zones, zoned};
-    use super::super::{Calming, CalmingKind, Green, GreenKind, Instance, Stop, StopKind, Street, StreetExt, TreeSize, Use, ZoneFrame};
+    use super::super::{Calming, CalmingKind, EndInfo, Green, GreenKind, Instance, Stop, StopKind, Street, StreetExt, TreeSize, Use, ZoneFrame};
     use super::*;
 
     const LEN: i32 = 60_000;
@@ -408,5 +408,9 @@ mod tests {
         assert_eq!(plan(&editor(&s, None)).cut, [true, true], "no end to measure from: both are cut");
         assert_eq!(plan(&editor(&s, frame(LEN, ZoneEnd::Last))).cut, [true, false], "measured from the last end: the first is cut");
         assert_eq!(plan(&editor(&s, frame(LEN, ZoneEnd::First))).cut, [false, false]);
+        // Measured from the first end, the city says whether the last end is cut by the area's edge.
+        let cut_at = |ends: [bool; 2]| editor(&s, frame(LEN, ZoneEnd::First)).with_ends(ends.map(|cut| EndInfo { cut, ..Default::default() }));
+        assert_eq!(plan(&cut_at([false, true])).cut, [false, true]);
+        assert_eq!(plan(&cut_at([false, false])).cut, [false, false]);
     }
 }

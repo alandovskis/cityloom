@@ -966,7 +966,7 @@ impl City {
 
     /// What the junctions say of the two ends of a street, node `a` first: whether the end is a junction, whether it
     /// has a pedestrian crossing on this street's arm, and, for a street with transit stops, how far the junction
-    /// reaches along it. A plain connection, a map edge and a street not in the city are no junction and have
+    /// reaches along it; and whether the end is cut by the area's box (no OpenStreetMap node, as `zone_frame` reads it). A plain connection, a map edge and a street not in the city are no junction and have
     /// neither of the others.
     pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
         self.street_end_infos_of(edge, region, false)
@@ -992,7 +992,7 @@ impl City {
                 }
                 _ => 0,
             };
-            EndInfo { crossing, reach_mm, junction: self.layout.nodes[n].junction }
+            EndInfo { crossing, reach_mm, junction: self.layout.nodes[n].junction, cut: self.layout.nodes[n].source.is_empty() }
         };
         [at(a, true), at(b, false)]
     }
@@ -1545,6 +1545,29 @@ mod tests {
         assert!(city.streets.get(&edge).is_some_and(|s| s.stops.is_empty()), "and it is so with no stops to measure");
         assert!(ends.iter().all(|x| x.reach_mm == 0), "the reach is still filled only for a street with stops");
         assert!(city.street_end_infos(999, 0).iter().all(|x| !x.junction));
+    }
+
+    #[test]
+    fn end_infos_say_which_end_is_cut_by_the_box() {
+        // Every node of the sample is an OpenStreetMap node: no end is cut, a plain connection as much as a junction.
+        let city = City::new();
+        let e = &city.layout.edges[0];
+        assert!(city.street_end_infos(1, 0).iter().all(|x| !x.cut));
+        let plain = city
+            .layout
+            .edges
+            .iter()
+            .position(|e| !city.layout.nodes[e.a].junction || !city.layout.nodes[e.b].junction)
+            .expect("a street ending at a plain node");
+        let ends = city.street_end_infos(plain as u32 + 1, 0);
+        assert!(ends.iter().any(|x| !x.junction) && ends.iter().all(|x| !x.cut), "a plain connection is not cut");
+        // The box cuts the street at its first end: that end has no node of its own.
+        let mut layout = Layout::sample();
+        let far = e.a;
+        layout.nodes[far].source.clear();
+        let cut = City::on(layout);
+        assert_eq!(cut.street_end_infos(1, 0).map(|x| x.cut), [true, false]);
+        assert!(!cut.street_end_infos(999, 0)[0].cut, "a street the city does not have says nothing");
     }
 
     fn junction_number(node: usize) -> usize {
