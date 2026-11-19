@@ -173,8 +173,8 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
     }
     for a in &asked {
         let walking = || plan.phases.iter().filter(|p| p.walks.contains(&a.arm));
-        if !walking().any(|p| p.timing.green_s + MAX_EXTENSION_S >= a.need_s) {
-            let most_s = walking().map(|p| p.timing.green_s).max().unwrap_or(0) + MAX_EXTENSION_S;
+        if !walking().any(|p| p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s) {
+            let most_s = walking().map(|p| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
             out.findings.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
         }
     }
@@ -209,15 +209,16 @@ struct Asked {
 /// clearance even so does not serve that crossing: they are never shortened. A crossing no phase can serve has its
 /// calls not served. The calls come back in the order they were made (crossings in the order given at the same second).
 ///
-/// A phase takes at least a second in the run, so time moves on whatever a document's timing says (it is not clamped
-/// when read): every call that can be served is, within a cycle of being made.
+/// A phase takes at least a second in the run, and the clock counts in u64 (a settled timing is within its range,
+/// but the run holds any), so time moves on: every call that can be served is, within a cycle of being made, and the
+/// run stops a whole cycle past the last call, whatever is still waiting then not served.
 fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
     serve_turns(plan, asked, MAX_TURNS)
 }
 
-/// A bound on the phases `serve` runs, only a guard: a phase lasts a second or more, and the plan at most a few dozen,
-/// so every call is served long before.
-const MAX_TURNS: usize = 1_000_000;
+/// A bound on the phases `serve` runs, only a guard: the run stops a cycle past the last call of the hour, and a phase
+/// lasts a second or more, so it takes at most about an hour and a cycle of one-second phases.
+const MAX_TURNS: usize = 100_000;
 
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
 fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
@@ -225,7 +226,9 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     let serving: Vec<Vec<usize>> = asked
         .iter()
         .map(|a| {
-            (0..plan.phases.len()).filter(|&k| plan.phases[k].walks.contains(&a.arm) && plan.phases[k].timing.green_s + MAX_EXTENSION_S >= a.need_s).collect()
+            (0..plan.phases.len())
+                .filter(|&k| plan.phases[k].walks.contains(&a.arm) && plan.phases[k].timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s)
+                .collect()
         })
         .collect();
     let mut calls: Vec<(usize, Call)> = asked
@@ -240,25 +243,30 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The calls still waiting for their walk (places in `calls`), and whether each has missed one.
     let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
     let mut missed = vec![false; calls.len()];
-    let (mut start, mut turn) = (0u32, 0usize);
-    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns {
+    // The clock, in u64 so no timing can wrap it, and when to stop: a whole cycle past the last call.
+    let length = |k: usize| u64::from(plan.phases[k].length_s);
+    let cycle: u64 = (0..plan.phases.len()).map(|k| length(k).max(1)).sum();
+    let last = calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0);
+    let (mut start, mut turn) = (0u64, 0usize);
+    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= last + cycle {
         let k = turn % plan.phases.len();
         let phase = &plan.phases[k];
         let serves = |x: usize| serving[x].contains(&k);
-        let (now, later): (Vec<usize>, Vec<usize>) = waiting.iter().partition(|&&i| calls[i].1.at_s <= start && serves(calls[i].0));
+        let (now, later): (Vec<usize>, Vec<usize>) = waiting.iter().partition(|&&i| u64::from(calls[i].1.at_s) <= start && serves(calls[i].0));
         let mut extension = 0;
         for &i in &now {
             let short = asked[calls[i].0].need_s.saturating_sub(phase.timing.green_s);
             extension = extension.max(short);
             let c = &mut calls[i].1;
-            c.wait_s = start - c.at_s;
+            c.wait_s = u32::try_from(start - u64::from(c.at_s)).unwrap_or(u32::MAX);
             c.extended_s = short;
             c.outcome = if missed[i] { Outcome::Delayed } else { Outcome::Served };
         }
-        let end = start + (phase.length_s + extension).max(1);
+        let end = start + (length(k) + u64::from(extension)).max(1);
         // A call made while this phase walks its crossing has missed that walk.
         for &i in &later {
-            if serves(calls[i].0) && calls[i].1.at_s > start && calls[i].1.at_s < end {
+            let at = u64::from(calls[i].1.at_s);
+            if serves(calls[i].0) && at > start && at < end {
                 missed[i] = true;
             }
         }
@@ -313,7 +321,7 @@ mod tests {
     }
 
     fn plan_of(phases: Vec<Phase>) -> Plan {
-        let cycle_s = phases.iter().map(|p| p.length_s).sum();
+        let cycle_s = phases.iter().fold(0u32, |sum, p| sum.saturating_add(p.length_s));
         Plan { phases, cycle_s, suggested: false }
     }
 
@@ -412,6 +420,51 @@ mod tests {
         // takes a second in the run, so the walk comes round again.
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 10));
         assert!(calls.iter().all(|c| c.outcome != Outcome::NotServed && c.wait_s < 60 && c.extended_s == 10), "{calls:?}");
+    }
+
+    /// A phase of street `uid` with any green, yellow 3 s and all-red 2 s, walking `walks`: a document's timing is not
+    /// bounded until it is settled, so the run must hold whatever it is given.
+    fn huge(uid: u32, green_s: u32, walks: &[u32]) -> Phase {
+        let timing = Timing { green_s, yellow_s: 3, all_red_s: 2, transit_lead_s: 0 };
+        Phase { uid, timing, length_s: green_s.saturating_add(5), walks: walks.to_vec(), rides: vec![], moves: vec![] }
+    }
+
+    #[test]
+    fn timings_too_long_for_the_clock_end_the_run_at_once_without_wrapping() {
+        // Four phases of 2^30 s: a cycle of exactly 2^32 s, which a u32 clock wraps back to 0.
+        let g = (1u32 << 30) - 5;
+        let plan = plan_of(vec![huge(1, g, &[9]), huge(2, g, &[]), huge(3, g, &[]), huge(4, g, &[])]);
+        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 100] }];
+        let started = std::time::Instant::now();
+        let calls = serve(&plan, &asked);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
+        assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
+        // The second call missed the first walk, and the next starts a whole 2^32 s cycle later: counted, not wrapped.
+        assert_eq!(calls[1], call(9, 100, Outcome::Delayed, u32::MAX - 99, 0));
+        // A green so long that adding the extension to it would overflow.
+        let plan = plan_of(vec![huge(1, u32::MAX - 3, &[9]), phase(2, 25, &[])]);
+        let calls = serve(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0, 50] }]);
+        assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
+        // The first phase lasts as long as a u32 goes: its next walk is a cycle on, counted without wrapping.
+        assert_eq!(calls[1], call(9, 50, Outcome::Delayed, u32::MAX - 20, 0));
+        // A call that would wait past a cycle after the last one is not served: the run stops there.
+        let plan = plan_of(vec![huge(1, 25, &[]), huge(2, 25, &[9])]);
+        let calls = serve_turns(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0] }], 1);
+        assert_eq!(calls, vec![call(9, 0, Outcome::NotServed, 0, 0)], "still waiting when the run stops");
+    }
+
+    #[test]
+    fn a_document_with_timings_past_their_range_reads_them_within_it() {
+        use crate::junction::model::TimingField;
+        let mut now = Junction::new(0).current().clone();
+        now.arms[0].timing = Some(Timing { green_s: (1 << 30) - 5, yellow_s: u32::MAX, all_red_s: 0, transit_lead_s: 99 });
+        let j = Junction::from_city(crate::street::model::named_said("J"), Junction::new(0).current(), &now, 0).unwrap();
+        let t = j.current().arms.iter().find(|a| a.uid == now.arms[0].uid).unwrap().timing.unwrap();
+        for f in TimingField::ALL {
+            let (lo, hi) = f.range();
+            assert!((lo as u32..=hi as u32).contains(&f.get(&t)), "{f:?} is {} on load", f.get(&t));
+        }
+        assert_eq!(t.transit_lead_s, 0, "no transit lane: no early green, as an edit settles it");
     }
 
     #[test]

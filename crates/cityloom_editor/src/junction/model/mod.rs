@@ -2104,8 +2104,16 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     for (a, stands) in s.arms.iter_mut().zip(stands) {
         a.protected = a.protected && stands;
     }
-    // Timing and pedestrian calls belong to a signal, and an early green to a transit lane.
+    // Timing and pedestrian calls belong to a signal, and an early green to a transit lane. A document can hold any
+    // number (a sync, a hand): each is brought within its range here, on load as after an edit, so no reader sees one
+    // past it.
     let signal = s.control == SIGNAL;
+    for t in s.arms.iter_mut().filter_map(|a| a.timing.as_mut()) {
+        for f in TimingField::ALL {
+            let (lo, hi) = f.range();
+            f.put(t, f.get(t).clamp(lo as u32, hi as u32));
+        }
+    }
     for a in &mut s.arms {
         if !signal {
             a.timing = None;
