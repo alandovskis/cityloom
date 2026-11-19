@@ -303,8 +303,10 @@ impl JunctionVm {
         self.call_edit(uid, |j| j.set_call_rate(uid, rate))
     }
 
-    /// An edit of a crossing's calls: the edit's text and then the crossing's calls added up, or the refusal. It changes
-    /// no phase, so nothing about the plan's conflicts or patterns is said.
+    /// An edit of a crossing's calls: the edit's text, the crossing's calls added up and any calls finding that arose,
+    /// or the refusal. It changes no phase, so nothing about the plan's conflicts or patterns is said. A rate the crossing
+    /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, and only an
+    /// edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
         // Only the findings are compared: a crossing's calls move no phase, so nothing about meetings can change.
         let (findings, edits) = (self.findings(), self.read(|j| j.revisions().count()));
@@ -469,7 +471,9 @@ impl JunctionVm {
     }
 
     /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
-    /// already is not said again. None when none arose.
+    /// already (the same kind at the same street, `calls::Finding::about`, whatever its words now) is not said again.
+    /// Every announcement of a change says it: an edit of the calls or of the signal, an undo, a redo, a reset and a
+    /// change of region. None when none arose.
     fn findings_note(&self, before: &[(u8, u32)]) -> Option<String> {
         let v = self.view_now();
         let calls = &v.signal.as_ref()?.calls;
