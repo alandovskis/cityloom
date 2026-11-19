@@ -3614,3 +3614,41 @@ fn the_current_step_of_the_junction_s_path_is_drawn_as_the_street_s_is() {
     let h = panel(&s);
     assert!(h.contains(r#"class="path-here""#), "the street page's current step, with its focus outline: {h}");
 }
+
+// ---- the junction's scenarios ---------------------------------------------------------------
+
+/// A junction of the sample city, bound to it, so that it keeps scenarios.
+fn city_junction() -> Rc<JunctionVm> {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(ports.storage.clone());
+    let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+    let junction = store.open().junction_editor(node, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Junction(node) };
+    JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding))
+}
+
+fn scenarios_drawn(s: &Rc<JunctionVm>) -> String {
+    let s = s.clone();
+    html(move || view! { <page::Scenarios vm=s/> }.into_any())
+}
+
+#[test]
+fn the_junction_s_scenarios_are_a_labelled_menu_and_a_name_field_with_its_refusal() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    let s = city_junction();
+    let h = scenarios_drawn(&s);
+    assert!(
+        h.contains(r#"<label for="scenario-pick">Design shown</label>"#) && h.contains(r#"<option value="">Baseline (what the map shows)</option>"#),
+        "{h}"
+    );
+    assert!(button_tag(&h, "scenario-delete").contains("disabled"), "{h}");
+    assert!(s.create_scenario("Raised"));
+    assert!(!s.create_scenario("raised"));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(">Raised</option>") && h.contains("Scenario “Raised”: edits change this scenario only."), "{h}");
+    assert!(h.contains(r#"aria-invalid="true""#) && h.contains("Another scenario is already called “raised”."), "{h}");
+    assert!(!button_tag(&h, "scenario-delete").contains("disabled"));
+    assert!(!scenarios_drawn(&shared(0)).contains("scenario"), "a sample junction keeps none");
+}
