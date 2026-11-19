@@ -148,7 +148,8 @@ fn fixture_writes_one_tile_of_the_whole_input_in_its_own_frame() {
     commands::fixture(&input, &out).unwrap();
     let bytes = fs::read(&out).unwrap();
     let tile: NetworkTile = serde_json::from_slice(&bytes).unwrap();
-    assert!(tile.network.roads.len() > 150, "{} roads", tile.network.roads.len());
+    // 149 since the pieces of a block are one road (153 before)
+    assert!(tile.network.roads.len() > 140, "{} roads", tile.network.roads.len());
     let (network, frame) = citymodel_builder::importer::import_whole(&fs::read(&input).unwrap()).unwrap();
     assert_eq!(tile, NetworkTile { frame, network });
     assert!(!bytes.contains(&b'\n'), "compact JSON");

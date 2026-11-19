@@ -378,3 +378,53 @@ fn an_imported_network_has_corridors_for_the_users_its_lanes_serve() {
     // the boulevard's bus lane is a timed one, so the boulevard is a transit corridor
     assert!(net.corridors_of(UserClass::Transit).next().is_some());
 }
+
+const SPLIT_BLOCK: &[u8] = include_bytes!("split_block.osm");
+
+#[test]
+fn a_block_split_where_its_lanes_change_is_one_road_with_a_zone_for_each_piece() {
+    let net = import(SPLIT_BLOCK).unwrap();
+    let tests: Vec<_> = net.roads.iter().filter(|r| r.name == "Rue Test").collect();
+    assert_eq!(tests.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, r.edge)).collect::<Vec<_>>());
+    let road = tests[0];
+    let zones: Vec<(usize, Option<u16>)> =
+        road.zones.iter().map(|z| (z.lanes.iter().filter(|l| l.kind == importer::LaneKind::Driving).count(), z.speed_kmh)).collect();
+    // the order of the zones is the road's direction
+    assert!(zones == [(2, Some(30)), (4, Some(40))] || zones == [(4, Some(40)), (2, Some(30))], "{zones:?}");
+    assert!(road.has_way(10) && road.has_way(11), "{:?}", road.provenance);
+}
+
+/// `split_block.osm` with `with` in place of `the`.
+fn split_block_with(the: &str, with: &str) -> importer::Network {
+    let osm = std::str::from_utf8(SPLIT_BLOCK).unwrap();
+    assert!(osm.contains(the), "{the}");
+    import(osm.replace(the, with).as_bytes()).unwrap()
+}
+
+const MIDDLE: &str = r#"<node id="2" lat="45.5000" lon="-73.6000"/>"#;
+
+#[test]
+fn a_block_split_at_a_stop_sign_or_signals_stays_two_roads() {
+    for value in ["stop", "give_way", "traffic_signals"] {
+        let net = split_block_with(MIDDLE, &format!(r#"<node id="2" lat="45.5000" lon="-73.6000"><tag k="highway" v="{value}"/></node>"#));
+        assert_eq!(net.roads.iter().filter(|r| r.name == "Rue Test").count(), 2, "{value}");
+    }
+}
+
+#[test]
+fn a_block_split_where_an_alley_with_no_name_meets_it_stays_two_roads() {
+    let alley = r#"<node id="8" lat="45.4995" lon="-73.6000"/>
+ <way id="30"><nd ref="2"/><nd ref="8"/><tag k="highway" v="service"/></way>
+</osm>"#;
+    let net = split_block_with("</osm>", alley);
+    assert!(net.roads.iter().all(|r| !r.has_way(30)), "the alley has no name, so it is not a road");
+    assert_eq!(net.roads.iter().filter(|r| r.name == "Rue Test").count(), 2);
+}
+
+#[test]
+fn streets_of_two_names_meeting_end_to_end_share_a_corridor() {
+    let net = import(include_bytes!("split_name.osm")).unwrap();
+    let ids: Vec<_> = net.roads.iter().filter(|r| r.name == "Rue Test" || r.name == "Rue Autre").map(|r| r.edge.id).collect();
+    assert_eq!(ids.len(), 2, "{:#?}", net.roads.iter().map(|r| (&r.name, r.edge)).collect::<Vec<_>>());
+    assert!(net.corridors_of(importer::UserClass::Driver).any(|c| ids.iter().all(|id| c.roads.contains(id))), "{:?} in {:?}", ids, net.corridors);
+}

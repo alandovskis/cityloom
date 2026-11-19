@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+ <bounds minlat="45.4990" minlon="-73.6020" maxlat="45.5010" maxlon="-73.5980"/>
+ <node id="1" lat="45.5000" lon="-73.6010"/>
+ <node id="2" lat="45.5000" lon="-73.6000"/>
+ <node id="3" lat="45.5000" lon="-73.5990"/>
+ <node id="4" lat="45.5005" lon="-73.6010"/>
+ <node id="5" lat="45.4995" lon="-73.6010"/>
+ <node id="6" lat="45.5005" lon="-73.5990"/>
+ <node id="7" lat="45.4995" lon="-73.5990"/>
+ <way id="10"><nd ref="1"/><nd ref="2"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/><tag k="maxspeed" v="30"/></way>
+ <way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="4"/><tag k="maxspeed" v="40"/></way>
+ <way id="20"><nd ref="4"/><nd ref="1"/><nd ref="5"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Croisée"/></way>
+ <way id="21"><nd ref="6"/><nd ref="3"/><nd ref="7"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Croisée"/></way>
+</osm>

@@ -5,12 +5,13 @@
 //! hands the result on as a small, stable shape of its own, so the editor
 //! depends on that shape and not on osm2streets.
 
+mod blocks;
 mod merge;
 
 use abstutil::{Tags, Timer};
 pub use cityloom_model::*;
 use osm2streets::{Direction as StreetsDirection, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use osm2streets::osm::WayID;
 use streets_reader::osm_reader::Way as OsmWay;
@@ -49,7 +50,11 @@ fn read_network(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<(Network, geom::
     let (mut streets, doc) = read_streets(osm, clip, config, &mut timer)?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
+    // counted on osm2streets' roads, those with no name too, so a node an alley meets keeps its roads apart
+    let through = through_nodes(&streets, &doc);
     merge::merge_dual_carriageways(&mut network);
+    // after the carriageways, whose merge leaves out a road of more than one zone
+    blocks::merge_blocks(&mut network, &through);
     // merging changes a road's lanes, so their shapes are laid out last
     network.roads.iter_mut().for_each(Road::lay_out_lanes);
     // and the corridors, which name the roads that are left
@@ -347,6 +352,21 @@ fn distance_to_segment(p: geom::Pt2D, a: geom::Pt2D, b: geom::Pt2D) -> f64 {
     let len2 = dx * dx + dy * dy;
     let t = if len2 == 0.0 { 0.0 } else { (((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) / len2).clamp(0.0, 1.0) };
     (p.x() - (a.x() + t * dx)).hypot(p.y() - (a.y() + t * dy))
+}
+
+/// The nodes where a street only goes on: exactly two of osm2streets' roads meet there (named or not), it is not
+/// signalled, and none of its OSM nodes is tagged as a stop, a give-way or signals. osm2streets' own kind for such a
+/// node (two two-way roads meeting make an `Intersection`) and its control (every OSM node is `Signed` unless it is
+/// signalled) do not tell it from a junction.
+fn through_nodes(streets: &StreetNetwork, doc: &Document) -> HashSet<NodeId> {
+    let controlled =
+        |n: &osm2streets::osm::NodeID| doc.nodes.get(n).is_some_and(|node| ["stop", "give_way", "traffic_signals"].iter().any(|v| node.tags.is("highway", v)));
+    streets
+        .intersections
+        .iter()
+        .filter(|(_, i)| i.roads.len() == 2 && i.control != IntersectionControl::Signalled && !i.osm_ids.iter().any(controlled))
+        .map(|(id, _)| NodeId(id.0 as u32))
+        .collect()
 }
 
 fn convert(streets: &StreetNetwork, doc: &Document) -> Network {

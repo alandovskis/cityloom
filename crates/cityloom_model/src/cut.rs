@@ -628,6 +628,29 @@ mod tests {
     }
 
     #[test]
+    fn a_zoned_road_cut_by_a_frame_keeps_each_zone_where_it_lies() {
+        // two roads of 300 m, each cut 150 m along by the box: road 1 runs out of it at x 600 with a zone from 100 m,
+        // road 2 runs into it at x 400 with a zone from 200 m
+        let mut out = road(1, 1, 2, &[(450.0, 500.0), (750.0, 500.0)]);
+        out.zones.push(Zone { from: crate::Coordinate::new(100.0), speed_kmh: Some(40), lanes: vec![lane(LaneKind::Bus)] });
+        let mut into = road(2, 3, 4, &[(250.0, 450.0), (550.0, 450.0)]);
+        into.zones.push(Zone { from: crate::Coordinate::new(200.0), speed_kmh: Some(30), lanes: vec![lane(LaneKind::Bike)] });
+        let place = network(vec![out, into]).clip_to(&frame(), &middle());
+        let zones = |way: i64| {
+            let piece = place.roads.iter().find(|r| r.has_way(way)).unwrap_or_else(|| panic!("no piece of {way} in {place:?}"));
+            assert!(Road::is_zoned(&piece.zones), "{:?}", piece.zones);
+            assert!((piece.length_m() - 150.0).abs() < 0.01, "{}", piece.length_m());
+            piece.zones.iter().map(|z| (z.from.metres(), z.speed_kmh)).collect::<Vec<_>>()
+        };
+        let starts = zones(501);
+        assert_eq!(starts.len(), 2, "{starts:?}");
+        assert!(starts[0] == (0.0, None) && (starts[1].0 - 100.0).abs() < 0.01 && starts[1].1 == Some(40), "the piece starts where the road did: {starts:?}");
+        let starts = zones(502);
+        assert_eq!(starts.len(), 2, "{starts:?}");
+        assert!(starts[0] == (0.0, None) && (starts[1].0 - 50.0).abs() < 0.01 && starts[1].1 == Some(30), "the piece starts 150 m along: {starts:?}");
+    }
+
+    #[test]
     fn clip_to_keeps_whole_a_road_inside_that_starts_or_ends_with_a_repeated_point() {
         let net =
             network(vec![road(1, 1, 2, &[(450.0, 450.0), (450.0, 450.0), (550.0, 550.0)]), road(2, 3, 4, &[(450.0, 500.0), (550.0, 500.0), (550.0, 500.0)])]);
