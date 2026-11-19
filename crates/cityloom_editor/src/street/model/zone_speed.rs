@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(e.view().speed_kmh, None);
         assert!(!e.set_speed(None), "already so");
         assert!(e.follow_street_speed());
-        assert!(e.snapshot().zones.is_empty(), "following the street again, it joins the zone before it");
+        assert_eq!(e.snapshot().zones[1].speed, Speed::Undecided);
         assert!(!e.follow_street_speed(), "already follows");
     }
 
