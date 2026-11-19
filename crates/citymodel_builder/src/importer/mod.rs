@@ -52,14 +52,22 @@ fn read_network(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<(Network, geom::
     let mut network = convert(&streets, &doc);
     // counted on osm2streets' roads, those with no name too, so a node an alley meets keeps its roads apart
     let through = through_nodes(&streets, &doc);
-    merge::merge_dual_carriageways(&mut network);
-    // after the carriageways, whose merge leaves out a road of more than one zone
-    blocks::merge_blocks(&mut network, &through);
+    merge_streets(&mut network, through);
     // merging changes a road's lanes, so their shapes are laid out last
     network.roads.iter_mut().for_each(Road::lay_out_lanes);
     // and the corridors, which name the roads that are left
     network.derive_corridors();
     Ok((network, streets.gps_bounds))
+}
+
+/// Merges the carriageways of each divided street, then the pieces of each block (`through`: the nodes where the
+/// data says only two ways meet, with no signals or signs). The blocks come after the carriageways, whose merge
+/// leaves out a road of more than one zone.
+fn merge_streets(network: &mut Network, mut through: HashSet<NodeId>) {
+    // a node that took in another meets the ways of both, which the data did not count together
+    let folded = merge::merge_dual_carriageways(network);
+    through.retain(|id| !folded.contains(id));
+    blocks::merge_blocks(network, &through);
 }
 
 /// `streets_reader::osm_to_street_network`, with the sidewalk tags made explicit before the lanes are worked out
@@ -493,6 +501,54 @@ fn bus_hours(tags: &Tags) -> Option<String> {
 mod tests {
     use super::*;
     use geom::Speed;
+
+    /// A node that is not a junction, with no control.
+    fn plain_node(id: u32, x_m: f64, y_m: f64) -> Junction {
+        Junction { id: NodeId(id), provenance: Provenance::default(), position: Point::new(x_m, y_m), junction: false, control: Control::None }
+    }
+
+    fn street(id: u32, name: &str, from: u32, to: u32, points: &[(f64, f64)], lanes: &[Direction]) -> Road {
+        let lane = |&direction: &Direction| Lane { kind: LaneKind::Driving, direction, width_m: 3.0, buffer_type: None, windows: vec![], shape: vec![] };
+        Road {
+            edge: Edge { id: RoadId(id), from: NodeId(from), to: NodeId(to) },
+            provenance: Provenance::of_ways([WayRef::new(id as i64)]),
+            name: name.into(),
+            road_type: RoadType::Arterial,
+            zones: vec![Zone::whole(lanes.iter().map(lane).collect())],
+            points: points.iter().map(|&(x, y)| Point::new(x, y)).collect(),
+        }
+    }
+
+    #[test]
+    fn a_node_that_took_in_another_in_the_carriageway_merge_is_not_passed_through() {
+        // Boulevard's eastbound half (1) runs from node 1 to node 2, its westbound half (2) from node 6 to node 5, 20 m
+        // north; the cross street's stub (3) joins 1 and 5. Node 5 also meets Boulevard going on west (4): in the data
+        // three ways meet there, so it is not one to pass through, while node 1 (the half and the stub) is. The
+        // merge folds 5 into 1.
+        use Direction::*;
+        let mut net = Network {
+            left_hand: false,
+            corridors: vec![],
+            junctions: vec![
+                plain_node(1, 0.0, 0.0),
+                plain_node(2, 300.0, 0.0),
+                plain_node(5, 0.0, 20.0),
+                plain_node(6, 300.0, 20.0),
+                plain_node(7, -200.0, 20.0),
+            ],
+            roads: vec![
+                street(1, "Boulevard", 1, 2, &[(0.0, 0.0), (150.0, -10.0), (300.0, 0.0)], &[Forward, Forward]),
+                street(2, "Boulevard", 6, 5, &[(300.0, 20.0), (150.0, 30.0), (0.0, 20.0)], &[Forward, Forward]),
+                street(3, "Cross", 1, 5, &[(0.0, 0.0), (0.0, 20.0)], &[Backward, Forward]),
+                street(4, "Boulevard", 5, 7, &[(0.0, 20.0), (-200.0, 20.0)], &[Backward, Forward]),
+            ],
+        };
+        merge_streets(&mut net, [NodeId(1), NodeId(2), NodeId(6)].into_iter().collect());
+        let boulevards: Vec<(RoadId, NodeId, NodeId)> =
+            net.roads.iter().filter(|r| r.name == "Boulevard").map(|r| (r.edge.id, r.edge.from, r.edge.to)).collect();
+        assert_eq!(boulevards.len(), 2, "the carriageways are one road, and the road going on west is another: {boulevards:?}");
+        assert!(net.junctions.iter().any(|j| j.id == NodeId(1)), "the node where they meet stays");
+    }
 
     #[test]
     fn a_speed_is_whole_kilometres_per_hour_and_zero_is_none() {

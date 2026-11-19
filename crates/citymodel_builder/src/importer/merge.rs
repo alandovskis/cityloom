@@ -1,7 +1,7 @@
 //! Roads divided by a median: two one-way carriageways of one street, running side by side
 //! in opposite directions, are one street with a median between its two halves.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::importer::{Direction, Lane, LaneKind, Local, Network, NodeId, Point, Road, RoadId, Zone};
 
@@ -91,8 +91,9 @@ fn side_of(a: &[Point], b: &[Point]) -> f64 {
 /// A pair is two one-way roads of the same name and kind of street that run in opposite directions, begin
 /// and end near each other (at one junction or at two close together, the crossing street's stub between them)
 /// and run beside each other. Their ends become one node each, in the middle; a road left joining a node to itself
-/// by that (the crossing street's stub) is dropped.
-pub fn merge_dual_carriageways(net: &mut Network) {
+/// by that (the crossing street's stub) is dropped. Gives back every node another was merged into: what meets there is
+/// no longer what the data says meets at it.
+pub fn merge_dual_carriageways(net: &mut Network) -> HashSet<NodeId> {
     // the first junction of an id wins, as a linear search would find it
     let mut index: HashMap<NodeId, usize> = HashMap::with_capacity(net.junctions.len());
     for (k, n) in net.junctions.iter().enumerate() {
@@ -144,7 +145,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         }
     }
     if pairs.is_empty() {
-        return;
+        return HashSet::new();
     }
 
     let mut moved: Vec<(NodeId, NodeId)> = Vec::new(); // (node, the node it is merged into)
@@ -250,6 +251,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         }
     }
     drop_unknown_priority(net);
+    into_of.into_values().collect()
 }
 
 /// Takes from every priority control the roads the network does not have, so it never names one that is gone.
@@ -431,9 +433,10 @@ mod tests {
             zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Direction::Forward, 3.0), lane(LaneKind::Driving, Direction::Backward, 3.0)])],
             points: vec![Point::new(0.0, 0.0), Point::new(0.0, 20.0)],
         });
-        merge_dual_carriageways(&mut net);
+        let folded = merge_dual_carriageways(&mut net);
         assert_eq!(net.roads.iter().filter(|r| r.name == "Boulevard").count(), 1);
         assert!(net.roads.iter().all(|r| r.edge.id != RoadId(9)), "the stub between the halves is gone");
+        assert_eq!(folded, [NodeId(1), NodeId(2)].into_iter().collect(), "the nodes 5 and 6 went into");
         // the node the two ends became keeps the version of each OSM node it stands for
         let joined = net.junctions.iter().find(|n| n.provenance.has_node(1)).unwrap();
         assert!(joined.provenance.has_node(5), "{joined:?}");

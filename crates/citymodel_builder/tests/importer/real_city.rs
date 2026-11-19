@@ -29,7 +29,7 @@ fn a_real_neighbourhood_becomes_a_city_whose_places_can_all_be_opened() {
 fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_junctions() {
     let net = import(PLATEAU).expect("the extract reads");
     assert!(!net.left_hand);
-    // 149 since the pieces of a block are one road (153 before)
+    // 150 since the pieces of a block are one road (153 before)
     assert!(net.roads.len() > 140, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
     for r in net.roads.iter() {
@@ -280,7 +280,7 @@ fn the_meetings_kept_as_junctions_are_the_same_as_when_corners_were_tuned_while_
         City::from_network(&import(osm).expect("the extract reads"), name).view(0).nodes.iter().filter(|n| n.junction).map(|n| n.uid).collect()
     };
     assert_eq!(junctions(KREUZBERG, "Kreuzberg"), [11, 12, 23, 31, 47, 75]);
-    assert_eq!(junctions(PLATEAU, "Plateau"), [1, 2, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 21, 28, 36, 43, 46, 49, 54, 60, 62, 73, 75, 94, 95, 97, 98]);
+    assert_eq!(junctions(PLATEAU, "Plateau"), [1, 2, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 21, 28, 37, 44, 47, 50, 55, 61, 63, 74, 76, 95, 96, 98, 99]);
 }
 
 /// A meeting of three streets that cannot be drawn with its corners as the node prefers them, and can once they are
