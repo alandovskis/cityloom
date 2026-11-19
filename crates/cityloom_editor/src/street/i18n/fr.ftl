@@ -371,6 +371,8 @@ edit-missed = Aucun changement de { $from } à { $to } : ce tronçon est sans { 
 # Le nom du plan pour un lecteur d’écran, et la ligne sous le plan qui nomme le tronçon choisi.
 st-plan-label = La rue de sa première extrémité à sa dernière, { $length } de long
 st-stretch = De { $from } à { $to } · { $length } de long
+# Où se trouve le point du plan au clavier, dit tant qu’il se déplace seul (src/street/vm/text.rs, point_said).
+st-point = À { $at }
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }

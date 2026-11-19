@@ -193,6 +193,11 @@ pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
     })
 }
 
+/// Where the plan's keyboard point is, `at_mm` from the plan's left end.
+pub fn point_said(at_mm: i32) -> Said {
+    Said::new("st-point").with("at", Arg::Length(at_mm))
+}
+
 /// The plan's name for a screen reader: the street from end to end, and how long. Nothing for a street with no length.
 pub fn plan_label(plan: &PlanView) -> Option<Said> {
     plan.length_mm.map(|length| Said::new("st-plan-label").with("length", Arg::Length(length)))
@@ -295,6 +300,8 @@ mod tests {
             words(&fr(), picked_said(&plan, what())),
             "De 10,0\u{a0}m à 30,0\u{a0}m, 20,0\u{a0}m de long\u{a0}: piste cyclable en plus à droite, sans stationnement à gauche et une limite de 30\u{a0}km/h."
         );
+        assert_eq!(words(&en(), Some(point_said(12_300))), "At 12.3 m");
+        assert_eq!(words(&fr(), Some(point_said(12_300))), "À 12,3\u{a0}m");
         assert_eq!(words(&en(), missed_said(&[(20_000, 40_000)], "parking").pop()), "Not changed from 20.0 m to 40.0 m: that stretch has no parking.");
         assert_eq!(
             words(&fr(), missed_said(&[(20_000, 40_000)], "parking").pop()),

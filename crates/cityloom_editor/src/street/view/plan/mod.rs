@@ -10,8 +10,12 @@
 //! Like the 2.5D it is a pure function returning SVG markup (`plan_svg`); what a press on it means is the
 //! view-model's.
 
+mod component;
+mod hit;
 mod scale;
 
+pub use component::Plan;
+pub use hit::{Hit, TARGET_PX, hit, plan_mm};
 pub use scale::{MIN_PX_PER_M, mm_per_px, x_px};
 
 use crate::shared::catalogue::{KINDS, MATERIALS, Side, is_roadway};
@@ -111,6 +115,13 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
     out
 }
 
+/// How wide the plan is drawn for a column `width_px` wide (wider for a street too long to fit at `MIN_PX_PER_M`), and
+/// where `at_mm` from its left end lies on it (its left edge on a schematic plan).
+pub fn plan_layout(p: &PlanView, width_px: f64, at_mm: i32) -> (f64, f64) {
+    let at = Along::of(p, width_px);
+    (at.width, if at.length_mm.is_some() { at.x(at_mm) } else { 0.0 })
+}
+
 /// Where along the plan a position lies.
 struct Along {
     /// The plan's length, `None` when it is schematic.
@@ -132,6 +143,14 @@ impl Along {
 
     fn x(&self, at_mm: i32) -> f64 {
         x_px(at_mm, self.mm_per_px)
+    }
+
+    /// Where `x` px from the left edge lies along the street, kept on it; 0 on a schematic plan.
+    fn mm(&self, x: f64) -> i32 {
+        match self.length_mm {
+            Some(length) => ((x * self.mm_per_px).round() as i32).clamp(0, length),
+            None => 0,
+        }
     }
 
     /// A run's span in pixels: where it lies, or the whole width on a schematic plan, whatever its positions.

@@ -371,6 +371,8 @@ edit-missed = Not changed from { $from } to { $to }: that stretch has no { $kind
 # The plan's name for a screen reader, and the line under it naming the picked stretch.
 st-plan-label = The street from its first end to its last, { $length } long
 st-stretch = From { $from } to { $to } · { $length } long
+# Where the plan's keyboard point is, said while it moves on its own (src/street/vm/text.rs, point_said).
+st-point = At { $at }
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }

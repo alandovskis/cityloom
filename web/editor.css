@@ -1274,6 +1274,99 @@ svg pattern circle {
   stroke-width: 2;
 }
 
+/* The plan on the street page (street/view/plan/component.rs): the street's ends above it, the drawing in a box that
+   scrolls sideways for a street too long to fit at the plan's smallest scale (never the page), the stretch picked under
+   it. */
+.plan-section {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.plan-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 2px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.plan-box {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* room for the point's focus ring at the plan's edges */
+  padding: 4px 0;
+}
+.plan-canvas {
+  position: relative;
+  /* a sideways drag picks; the page still scrolls up and down over the plan */
+  touch-action: pan-y;
+  user-select: none;
+  cursor: crosshair;
+}
+.plan-canvas[data-hover="edge"] {
+  cursor: ew-resize;
+}
+.plan-canvas[data-hover="thing"] {
+  cursor: grab;
+}
+.plan-svg svg {
+  display: block;
+}
+/* The keyboard's point along the street: a target wide, a line in the pick's two tones down its middle, seen while it
+   has the focus; presses go through it to the plan. */
+#plan-point {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  margin-left: -12px;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(var(--plan-pick-edge), var(--plan-pick-edge)) center / 2px 100% no-repeat,
+    linear-gradient(var(--plan-pick-casing), var(--plan-pick-casing)) center / 6px 100% no-repeat;
+}
+#plan-point:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--plan-pick-edge);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--plan-pick-casing);
+}
+.plan-picked {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.plan-notice:empty {
+  margin: 0;
+}
+.plan-notice {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+/* The rows of what stands along the street, under the plan: out of sight (the plan draws what they hold) until the
+   keyboard is in one of them, then shown as they always were. */
+.plan-rows {
+  display: contents;
+}
+.plan-rows:not(:focus-within) {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
 
 .zone-strip-section {

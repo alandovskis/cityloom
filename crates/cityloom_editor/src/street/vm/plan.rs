@@ -6,7 +6,7 @@
 use leptos::prelude::*;
 
 use crate::shared::catalogue::Side;
-use crate::shared::said::{Said, say_now};
+use crate::shared::said::{Said, say, say_now};
 use crate::street::model::{Editor, MIN_ZONE_MM, Pick, PickRefusal, PlanThing, ZoneEnd};
 use crate::street::vm::keys::PlanKey;
 use crate::street::vm::row::{CurbRow, StopRow};
@@ -90,6 +90,19 @@ impl StreetVm {
     /// The plan's keyboard point, from its left end. Watched.
     pub fn plan_point(&self) -> i32 {
         self.point.get()
+    }
+
+    /// The words of the plan's point (its `aria-valuetext`): where it is while it has moved on its own since the stretch
+    /// was last picked (the arrows alone, or an extension still too short to pick), else the pick as it is said when
+    /// made. Watched.
+    pub fn plan_point_text(&self) -> String {
+        let units = self.units();
+        if self.point_alone.get() {
+            return say(&self.i18n, units, &text::point_said(self.point.get()));
+        }
+        let plan = self.view().plan.clone();
+        let what = self.read(|e| e.pick_differs());
+        text::picked_said(&plan, what).map(|said| say(&self.i18n, units, &said)).unwrap_or_default()
     }
 
     /// Picks the stretch between `a_mm` and `b_mm` (from the plan's left end, either order), saying what was picked or
@@ -278,6 +291,7 @@ impl StreetVm {
     fn move_point(&self, to_mm: i32) {
         self.extend_from.set(None);
         self.point.set(to_mm);
+        self.point_alone.set(true);
     }
 
     /// Moves the keyboard point to `to_mm`, picking from where the extension started once that is at least
@@ -286,8 +300,8 @@ impl StreetVm {
         let from = self.extend_from.get().unwrap_or_else(|| self.point.get_untracked());
         self.extend_from.set(Some(from));
         self.point.set(to_mm);
-        if (to_mm - from).abs() >= MIN_ZONE_MM {
-            self.pick_between(from, to_mm);
+        if (to_mm - from).abs() < MIN_ZONE_MM || !self.pick_between(from, to_mm) {
+            self.point_alone.set(true);
         }
     }
 
@@ -328,6 +342,7 @@ impl StreetVm {
         let Some(picked) = picked else { return false };
         match picked {
             Ok(_) => {
+                self.point_alone.set(false);
                 if let Some(said) = self.pick_text() {
                     self.ports.announcer.say(&said);
                 }
@@ -796,6 +811,26 @@ mod pick_tests {
         assert_eq!((r.vm.picked(), r.vm.view_now().selected), (Some((25_000, 40_000)), Some(uid)));
         assert_eq!(r.vm.view_now().revisions.len(), revisions + 1);
         assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn the_point_speaks_where_it_is_while_it_moves_alone_and_the_pick_once_one_is_made() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        let text = || r.vm.plan_point_text();
+        assert_eq!(text(), "The whole street, 60.0 m long.", "at first the whole street is picked");
+        r.vm.plan_key(PlanKey::Move(10_000));
+        assert_eq!(text(), "At 10.0 m");
+        // An extension under the shortest stretch picks nothing yet: the point says where it is.
+        r.vm.plan_key(PlanKey::Extend(3_000));
+        assert_eq!(text(), "At 13.0 m");
+        r.vm.plan_key(PlanKey::Extend(2_000));
+        assert_eq!(text(), "From 10.0 m to 15.0 m, 5.0 m long.");
+        // Shrunk back under the shortest stretch, the pick stays as it was and the point says where it is.
+        r.vm.plan_key(PlanKey::Extend(-1_000));
+        assert_eq!((r.vm.picked(), text()), (Some((10_000, 15_000)), "At 14.0 m".to_string()));
+        // A pick by the pointer says the pick again.
+        r.vm.pick_run_at(30_000);
+        assert_eq!(text(), "The whole street, 60.0 m long.");
     }
 
     #[test]
