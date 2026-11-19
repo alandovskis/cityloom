@@ -735,8 +735,10 @@ impl Editor {
             now.join_alike(range);
         }
         now.settle();
-        // The live state was mutated in place; restore it, then record it.
+        // The live state was mutated in place; restore it, then record it. A split the drag made is undone with it,
+        // so the shown zone is found again from the pick (recording does that too, in `push`).
         self.states[self.cursor].content = baseline.clone();
+        self.clamp_pick();
         if now == baseline {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();

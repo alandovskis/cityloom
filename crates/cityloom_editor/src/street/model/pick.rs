@@ -968,4 +968,24 @@ mod tests {
         assert_eq!(starts(&e), [0, 30_000, 40_000]);
         assert_eq!(widths_of(&e, 0), [3_300, 3_400, 3_300]);
     }
+
+    #[test]
+    fn a_drag_back_to_where_it_started_leaves_the_shown_zone_the_picked_one() {
+        // The drag splits the middle run at 25 m and 35 m; back where it started, the split is undone.
+        let mut e = three_runs();
+        e.pick_stretch(25_000, 35_000).unwrap();
+        let zoned = e.snapshot();
+        let uid = uid_of(&e, 0);
+        e.begin_gesture();
+        assert!(e.resize_edge(uid, 300));
+        assert!(e.resize_edge(uid, 0));
+        assert!(!e.end_gesture());
+        assert_eq!(e.snapshot(), zoned);
+        assert_eq!((e.pick(), e.zone()), (stretch(25_000, 35_000), 1));
+        // The next edit is made on the picked run's own section, not on another run's pieces.
+        assert!(e.set_width(uid, 3_000));
+        assert_eq!(starts(&e), [0, 20_000, 25_000, 35_000, 40_000]);
+        assert_eq!(widths_of(&e, 0), [3_300, 3_400, 3_000, 3_400, 3_300]);
+        assert_eq!(&e.snapshot().sections()[2][1..], &zoned.sections()[1][1..]);
+    }
 }
