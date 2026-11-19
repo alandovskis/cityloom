@@ -600,6 +600,7 @@ jn-refusal-not-on-call = Seul un passage sur appel a un nombre d’appels par he
 jn-refusal-call-rate-out-of-range = Ce nombre d’appels par heure dépasse la borne provisoire indiquée.
 jn-rev-call-on = Passage de { $arm } sur appel
 jn-rev-call-off = Passage de { $arm } remis en rappel
+jn-rev-calls-lost = { $change }; passages retirés de l’appel
 jn-rev-call-rate =
     Passage de { $arm } : { $rate ->
         [one] 1 appel par heure

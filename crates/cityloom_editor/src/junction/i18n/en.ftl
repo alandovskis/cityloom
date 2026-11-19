@@ -600,6 +600,7 @@ jn-refusal-not-on-call = Only a crossing on call has calls an hour.
 jn-refusal-call-rate-out-of-range = That many calls an hour is outside the placeholder bound shown.
 jn-rev-call-on = Crossing of { $arm } on call
 jn-rev-call-off = Crossing of { $arm } back on recall
+jn-rev-calls-lost = { $change }; crossings taken off call
 jn-rev-call-rate =
     Crossing of { $arm }: { $rate ->
         [one] 1 call an hour

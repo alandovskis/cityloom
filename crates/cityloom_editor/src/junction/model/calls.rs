@@ -446,6 +446,25 @@ mod tests {
     }
 
     #[test]
+    fn a_junction_that_stops_being_a_signal_takes_its_crossings_off_call_and_says_so() {
+        let mut j = Junction::new(0);
+        let e = at(j.current(), 90);
+        assert!(j.set_on_call(e, true));
+        assert!(j.set_control(PRIORITY));
+        assert_eq!(j.arm(e).unwrap().calls, None, "no signal, no calls: nothing is left on call where no section shows it");
+        let label = &j.current().label;
+        assert_eq!(label.key, "jn-rev-calls-lost", "the revision says the calls went: {label:?}");
+        assert!(matches!(&label.args[0].1, crate::shared::said::Arg::Said(inner) if inner.key.starts_with("jn-rev-control")));
+        // A document saved with calls on a junction that is not a signal reads without them.
+        let mut kept = Junction::new(0).current().clone();
+        kept.control = PRIORITY;
+        kept.arms[0].calls = Some(12);
+        let mut back = kept.clone();
+        crate::junction::model::settle_for_test(&mut back, 0);
+        assert!(back.arms.iter().all(|a| a.calls.is_none()));
+    }
+
+    #[test]
     fn a_crossing_can_go_on_call_only_where_the_plan_walks_it() {
         let mut s = cross();
         let (n, e) = (at(&s, 0), at(&s, 90));

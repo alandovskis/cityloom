@@ -1886,7 +1886,11 @@ impl Junction {
             (false, true, true) => "jn-rev-control-protected-timing",
             (true, true, true) => "jn-rev-control-all",
         };
-        self.edit_why(why, Said::new(key).with("control", Arg::MsgLower(control_key(control))), |s| {
+        // Crossings on call go with the signal, and the revision says so as it says the timing did.
+        let calls_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.calls.is_some() && b.calls.is_none());
+        let label = Said::new(key).with("control", Arg::MsgLower(control_key(control)));
+        let label = if calls_lost { Said::new("jn-rev-calls-lost").with("change", Arg::Said(Box::new(label))) } else { label };
+        self.edit_why(why, label, |s| {
             s.control = control;
             true
         })
@@ -2100,16 +2104,23 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     for (a, stands) in s.arms.iter_mut().zip(stands) {
         a.protected = a.protected && stands;
     }
-    // Timing belongs to a signal, and an early green to a transit lane.
+    // Timing and pedestrian calls belong to a signal, and an early green to a transit lane.
     let signal = s.control == SIGNAL;
     for a in &mut s.arms {
         if !signal {
             a.timing = None;
+            a.calls = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
     }
     signal::settle(s, region);
+}
+
+/// What every edit and every load does to a state to keep it true to itself (`settle_table_and_boxes`), for the tests.
+#[cfg(test)]
+pub(crate) fn settle_for_test(s: &mut State, region: usize) {
+    settle_table_and_boxes(s, region);
 }
 
 /// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
