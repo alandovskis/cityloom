@@ -11,8 +11,8 @@ use leptos::web_sys::HtmlElement;
 
 use crate::shared::i18n::Args;
 use crate::street::model::{GreenCell, snap};
-use crate::street::view::strip::is_boundary_drag;
 use crate::street::vm::keys::{ZoneAction, on_strip};
+use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::text::green_cell_text;
 use crate::street::vm::watch::SheetWatch;
 

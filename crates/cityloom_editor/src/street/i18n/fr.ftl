@@ -353,6 +353,23 @@ pick-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le
 pick-refused-too-short = Un tronçon doit mesurer au moins { $min }.
 pick-refused-outside = Cette position est hors de la rue.
 pick-refused-dragging = Terminez le glissement avant de choisir un autre tronçon.
+# Ce qui est dit du tronçon choisi sur le plan (src/street/vm/text.rs, picked_said); positions depuis l’extrémité gauche du plan.
+stretch-picked = De { $from } à { $to }, { $length } de long.
+stretch-picked-differs = De { $from } à { $to }, { $length } de long : { $what }.
+stretch-whole = Toute la rue, { $length } de long.
+# Ce qui distingue un tronçon choisi de celui d’à côté, énuméré dans $what ci-dessus.
+stretch-what-added = { $kind } en plus { $side }
+stretch-what-dropped = sans { $kind } { $side }
+stretch-what-width = { $kind } de { $width } { $side }
+stretch-what-speed = une limite de { $kmh }{" "}km/h
+stretch-what-no-speed = aucune limite de vitesse
+stretch-what-pair = { $a } et { $b }
+stretch-what-more = { $a }, { $b }
+# Dit après une modification du tronçon choisi qui n’a pas pu se faire là où l’élément modifié manquait.
+edit-missed = Aucun changement de { $from } à { $to } : ce tronçon est sans { $kind }.
+# Le nom du plan pour un lecteur d’écran, et la ligne sous le plan qui nomme le tronçon choisi.
+st-plan-label = La rue de sa première extrémité à sa dernière, { $length } de long
+st-stretch = De { $from } à { $to } · { $length } de long
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }

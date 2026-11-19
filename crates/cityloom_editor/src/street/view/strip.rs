@@ -12,11 +12,10 @@ use crate::shared::said::say;
 use crate::street::model::{MIN_ZONE_MM, ZoneEnd, ZoneView, snap};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::{ZoneAction, on_strip};
+use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::text::zone_text;
 use crate::street::vm::watch::SheetWatch;
 
-/// A press moves a boundary only after it has moved this far.
-const DRAG_START_PX: f64 = 4.0;
 /// No zone's cell is narrower than this share of the strip, so a short zone of a long street is still a target.
 const MIN_SHARE: f64 = 0.06;
 
@@ -83,11 +82,6 @@ pub fn basis_by_length(lengths: &[i32]) -> Vec<f64> {
             pinned[i] = true;
         }
     }
-}
-
-/// Whether a press on a boundary has moved far enough to be a drag.
-pub fn is_boundary_drag(dx_px: f64) -> bool {
-    dx_px.abs() >= DRAG_START_PX
 }
 
 /// The id of the cell of zone `index`.
@@ -413,11 +407,5 @@ mod tests {
         assert_eq!(pair_boundary_mm(100.0, &tight), 20_000, "no room: the boundary stays");
         let none = PairSpan { cells_px: 0.0, ..span() };
         assert_eq!(pair_boundary_mm(100.0, &none), 20_000);
-    }
-
-    #[test]
-    fn a_press_is_a_drag_only_after_a_few_pixels() {
-        assert!(!is_boundary_drag(3.9) && !is_boundary_drag(-3.9));
-        assert!(is_boundary_drag(4.0) && is_boundary_drag(-4.0) && is_boundary_drag(40.0));
     }
 }

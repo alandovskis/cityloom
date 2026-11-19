@@ -6,8 +6,10 @@
 
 use std::ops::Range;
 
+use super::matching::match_pieces;
 use super::zones::MIN_ZONE_MM;
 use super::{Arg, Content, Editor, Said, Segment, Speed, Zone, ZoneEnd, ZoneFrame, snap};
+use crate::shared::catalogue::KINDS;
 use cityloom_model::street::{same_pieces, speed_in};
 
 /// What the edits act on: the whole street, or a stretch of it (anchored millimetres, `from_mm < to_mm`).
@@ -142,6 +144,46 @@ impl Editor {
         self.left_mm(left_mm)
     }
 
+    /// What sets the picked run apart from the run beside it on the plan's left (else the one on its right): each
+    /// piece one of them has and the other lacks, each piece whose width differs, in section order, and the speed
+    /// limit. Empty unless the pick is exactly one run of several.
+    pub fn pick_differs(&self) -> Vec<Said> {
+        let Pick::Stretch { from_mm, to_mm } = self.pick else { return Vec::new() };
+        let runs = self.runs();
+        let Some(i) = runs.iter().position(|r| (r.from_mm, r.to_mm) == (from_mm, to_mm)) else { return Vec::new() };
+        let (before, after) = (i.checked_sub(1), Some(i + 1).filter(|&n| n < runs.len()));
+        let beside = match self.anchor_end() {
+            ZoneEnd::First => before.or(after),
+            ZoneEnd::Last => after.or(before),
+        };
+        let Some(n) = beside else { return Vec::new() };
+        let content = &self.states[self.cursor].content;
+        let (zone, other_zone) = (runs[i].zones.start, runs[n].zones.start);
+        let (run, other) = (content.section(zone), content.section(other_zone));
+        let piece = |key: &'static str, s: &[Segment], j: usize| {
+            Said::new(key).with("kind", Arg::KindLower(KINDS[s[j].kind].id)).with("side", Arg::Msg(side_word(s, j)))
+        };
+        let mut what = Vec::new();
+        for pair in match_pieces(other, run) {
+            match pair {
+                (None, Some(j)) => what.push(piece("stretch-what-added", run, j)),
+                (Some(k), None) => what.push(piece("stretch-what-dropped", other, k)),
+                (Some(k), Some(j)) if other[k].width_mm != run[j].width_mm => {
+                    what.push(piece("stretch-what-width", run, j).with("width", Arg::Length(run[j].width_mm)));
+                }
+                _ => {}
+            }
+        }
+        let speed = speed_in(content.speed, &content.zones, zone);
+        if speed != speed_in(content.speed, &content.zones, other_zone) {
+            what.push(match speed {
+                Speed::Kmh(kmh) => Said::new("stretch-what-speed").with("kmh", Arg::Num(i64::from(kmh))),
+                _ => Said::new("stretch-what-no-speed"),
+            });
+        }
+        what
+    }
+
     /// Picks the span of zone `z` and shows it, keeping the chosen piece: what the zone strip's commands do.
     pub(super) fn follow_zone(&mut self, z: usize) {
         let length = self.pick_length_mm();
@@ -272,7 +314,7 @@ impl Editor {
     }
 
     /// The end positions are measured from: the street's own once it keeps one, else its road's.
-    fn anchor_end(&self) -> ZoneEnd {
+    pub fn anchor_end(&self) -> ZoneEnd {
         let content = &self.states[self.cursor].content;
         if !content.zones.is_empty() || content.length_mm.is_some() { content.from_end } else { self.frame.map_or(ZoneEnd::First, |f| f.from_end) }
     }
@@ -301,6 +343,13 @@ impl Editor {
             ZoneEnd::Last => self.zone_at(to_mm, true),
         }
     }
+}
+
+/// The side of the section piece `j` lies on, by its middle: the word for it.
+fn side_word(section: &[Segment], j: usize) -> &'static str {
+    let before: i32 = section[..j].iter().map(|s| s.width_mm).sum();
+    let total: i32 = section.iter().map(|s| s.width_mm).sum();
+    if 2 * before + section[j].width_mm < total { "side-word-left" } else { "side-word-right" }
 }
 
 impl Content {

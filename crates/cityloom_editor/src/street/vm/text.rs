@@ -8,7 +8,9 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{CalmingStripView, Check, GreenRowView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal};
+use crate::street::model::{
+    CalmingStripView, Check, GreenRowView, PlanView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal,
+};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -177,6 +179,48 @@ pub fn template_report(i18n: &I18n, units: Units, report: &TemplateReport) -> Op
     (!parts.is_empty()).then(|| parts.join(" "))
 }
 
+/// What is said of the pick: the stretch from the plan's left end, with `what` sets it apart from the run beside it
+/// (`Editor::pick_differs`) when there is anything, or the whole street. Nothing for a street with no length to
+/// measure along.
+pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
+    let Some((from, to)) = plan.pick else {
+        return plan.length_mm.map(|length| Said::new("stretch-whole").with("length", Arg::Length(length)));
+    };
+    let span = |key| Said::new(key).with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from));
+    Some(match listed(what) {
+        Some(what) => span("stretch-picked-differs").with("what", Arg::Said(Box::new(what))),
+        None => span("stretch-picked"),
+    })
+}
+
+/// The plan's name for a screen reader: the street from end to end, and how long. Nothing for a street with no length.
+pub fn plan_label(plan: &PlanView) -> Option<Said> {
+    plan.length_mm.map(|length| Said::new("st-plan-label").with("length", Arg::Length(length)))
+}
+
+/// The line under the plan: the picked stretch and how long it is. Nothing for the whole street.
+pub fn stretch_label(plan: &PlanView) -> Option<Said> {
+    plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from)))
+}
+
+/// Where an edit did not reach (`spans`, from the plan's left end), each a sentence naming what that stretch lacks
+/// (`kind`, a catalogue id).
+pub fn missed_said(spans: &[(i32, i32)], kind: &'static str) -> Vec<Said> {
+    spans
+        .iter()
+        .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("kind", Arg::KindLower(kind)))
+        .collect()
+}
+
+/// `items` as one list: "a, b and c".
+fn listed(items: Vec<Said>) -> Option<Said> {
+    let mut items = items.into_iter().rev();
+    let last = items.next()?;
+    let Some(before) = items.next() else { return Some(last) };
+    let pair = |key, a: Said, b: Said| Said::new(key).with("a", Arg::Said(Box::new(a))).with("b", Arg::Said(Box::new(b)));
+    Some(items.fold(pair("stretch-what-pair", before, last), |list, item| pair("stretch-what-more", item, list)))
+}
+
 /// What a check is called where it is listed: a failing check of a street with several zones says which zone
 /// it fails in.
 pub fn check_label(check: &Check) -> Said {
@@ -221,6 +265,41 @@ mod tests {
 
     fn uid(e: &Editor, i: usize) -> u32 {
         e.view().segments[i].uid
+    }
+
+    #[test]
+    fn the_pick_the_plan_and_what_sets_a_stretch_apart_are_worded_in_both_languages() {
+        use crate::street::model::{ZoneEnd, ZoneFrame};
+        let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        let words = |i18n: &I18n, said: Option<Said>| say_now(i18n, Units::Metres, &said.expect("something to say"));
+        let plan = e.view().plan;
+        assert_eq!(words(&en(), picked_said(&plan, Vec::new())), "The whole street, 60.0 m long.");
+        assert_eq!(words(&en(), plan_label(&plan)), "The street from its first end to its last, 60.0 m long");
+        assert_eq!(stretch_label(&plan), None, "no line for the whole street");
+        e.pick_stretch(10_000, 30_000).unwrap();
+        let plan = e.view().plan;
+        assert_eq!(words(&en(), picked_said(&plan, Vec::new())), "From 10.0 m to 30.0 m, 20.0 m long.");
+        assert_eq!(words(&fr(), stretch_label(&plan)), "De 10,0\u{a0}m à 30,0\u{a0}m · 20,0\u{a0}m de long");
+        let what = || {
+            vec![
+                Said::new("stretch-what-added").with("kind", Arg::KindLower("bike")).with("side", Arg::Msg("side-word-right")),
+                Said::new("stretch-what-dropped").with("kind", Arg::KindLower("parking")).with("side", Arg::Msg("side-word-left")),
+                Said::new("stretch-what-speed").with("kmh", Arg::Num(30)),
+            ]
+        };
+        assert_eq!(
+            words(&en(), picked_said(&plan, what())),
+            "From 10.0 m to 30.0 m, 20.0 m long: bike lane added on the right, no parking on the left and a speed limit of 30 km/h."
+        );
+        assert_eq!(
+            words(&fr(), picked_said(&plan, what())),
+            "De 10,0\u{a0}m à 30,0\u{a0}m, 20,0\u{a0}m de long\u{a0}: piste cyclable en plus à droite, sans stationnement à gauche et une limite de 30\u{a0}km/h."
+        );
+        assert_eq!(words(&en(), missed_said(&[(20_000, 40_000)], "parking").pop()), "Not changed from 20.0 m to 40.0 m: that stretch has no parking.");
+        assert_eq!(
+            words(&fr(), missed_said(&[(20_000, 40_000)], "parking").pop()),
+            "Aucun changement de 20,0\u{a0}m à 40,0\u{a0}m\u{a0}: ce tronçon est sans stationnement."
+        );
     }
 
     #[test]

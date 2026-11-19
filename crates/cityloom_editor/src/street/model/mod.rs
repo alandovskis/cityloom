@@ -565,10 +565,12 @@ impl Editor {
         self.zone
     }
 
-    /// Takes the stretches chosen on `from`'s strips (curbside, stops, raised elements, green), as a reload of the same
-    /// street keeps them; a move under way belongs to `from`'s history and is not taken. A place no longer on a
+    /// Takes `from`'s pick, clamped to this street (which shows the zone at its left end), and the stretches chosen on
+    /// its strips (curbside, stops, raised elements, green), as a reload of the same street keeps them; a move under way belongs to `from`'s history and is not taken. A place no longer on a
     /// strip simply finds no cell.
     pub fn keep_choices(&mut self, from: &Editor) {
+        self.pick = from.pick;
+        self.clamp_pick();
         self.curb_choice.at = from.curb_choice.at;
         self.stop_choice.at = from.stop_choice.at;
         self.calming_choice.at = from.calming_choice.at;

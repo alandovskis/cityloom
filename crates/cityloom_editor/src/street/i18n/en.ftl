@@ -353,6 +353,23 @@ pick-refused-no-anchor = Both ends of this street are cut by the edge of the map
 pick-refused-too-short = A stretch must be at least { $min } long.
 pick-refused-outside = That position is outside the street.
 pick-refused-dragging = Finish the drag before picking another stretch.
+# What is said of the stretch picked on the plan (src/street/vm/text.rs, picked_said); positions from the plan's left end.
+stretch-picked = From { $from } to { $to }, { $length } long.
+stretch-picked-differs = From { $from } to { $to }, { $length } long: { $what }.
+stretch-whole = The whole street, { $length } long.
+# What sets a picked stretch apart from the one beside it, listed in $what above.
+stretch-what-added = { $kind } added on the { $side }
+stretch-what-dropped = no { $kind } on the { $side }
+stretch-what-width = { $kind } on the { $side } { $width } wide
+stretch-what-speed = a speed limit of { $kmh } km/h
+stretch-what-no-speed = no speed limit
+stretch-what-pair = { $a } and { $b }
+stretch-what-more = { $a }, { $b }
+# Said after an edit that changed the picked stretch except where it lacked the piece changed.
+edit-missed = Not changed from { $from } to { $to }: that stretch has no { $kind }.
+# The plan's name for a screen reader, and the line under it naming the picked stretch.
+st-plan-label = The street from its first end to its last, { $length } long
+st-stretch = From { $from } to { $to } · { $length } long
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }
