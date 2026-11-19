@@ -120,6 +120,8 @@ test.describe("a street's scenarios", () => {
     await expect(live(page)).toHaveText("Scenario “Wider lane, parking kept” deleted. Now showing the baseline.");
     await expect(pick(page)).toHaveValue("");
     await expect(pick(page).locator("option")).toHaveText(["Baseline (what the map shows)", "Wider lane"]);
+    // the pressed button is disabled on the baseline: the person goes on from the menu of designs, not the page's start
+    await expect(pick(page)).toBeFocused();
   });
 
   test("in French a name already taken is refused, under the field and in the live region", async ({ page }) => {

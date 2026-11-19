@@ -22,6 +22,16 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
     let host = StoredValue::new_local(host);
     // the name typed, kept apart from the model: an action that is done clears it
     let name = RwSignal::new(String::new());
+    let picker = NodeRef::<leptos::html::Select>::new();
+    // A delete shows the baseline, on which the pressed button is disabled: the focus goes to the menu of designs, so
+    // the person goes on from where they were rather than from the start of the page.
+    let delete = move |_| {
+        if host.with_value(|h| h.delete_scenario())
+            && let Some(select) = picker.get_untracked()
+        {
+            let _ = select.focus();
+        }
+    };
     let tr = move |key: &'static str| move || words.with_value(|i18n| i18n.tr(key, &Args::new()));
     let shown = move || host.with_value(|h| h.scenario_state().active());
     let baseline_shown = move || shown().is_none();
@@ -64,7 +74,7 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
             <h2 id="scenario-h" class="scenario-h">{tr("scenario-heading")}</h2>
             <div class="scenario-row">
                 <label for="scenario-pick">{tr("scenario-pick")}</label>
-                <select id="scenario-pick" aria-describedby="scenario-mode" prop:value=move || shown().map(|id| id.to_string()).unwrap_or_default() on:change=switch>
+                <select node_ref=picker id="scenario-pick" aria-describedby="scenario-mode" prop:value=move || shown().map(|id| id.to_string()).unwrap_or_default() on:change=switch>
                     <option value="" prop:selected=baseline_shown>{tr("scenario-baseline")}</option>
                     {options}
                 </select>
@@ -91,7 +101,7 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
                     <button type="button" class="btn" id="scenario-rename" disabled=baseline_shown on:click=with_name(|h, n| h.rename_scenario(n))>
                         {tr("scenario-rename")}
                     </button>
-                    <button type="button" class="btn" id="scenario-delete" disabled=baseline_shown on:click=move |_| { host.with_value(|h| h.delete_scenario()); }>
+                    <button type="button" class="btn" id="scenario-delete" disabled=baseline_shown on:click=delete>
                         {delete_label}
                     </button>
                 </div>
