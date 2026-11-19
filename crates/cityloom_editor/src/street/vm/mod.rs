@@ -184,6 +184,12 @@ impl StreetVm {
         self.ports.storage.read_only()
     }
 
+    /// The message the hint under the drawing says when the keyboard is in it: every key it names, or, shown
+    /// read-only, only the arrows that choose (the others are refused).
+    pub fn focus_hint_key(&self) -> &'static str {
+        if self.read_only() { "st-focus-hint-read-only" } else { "st-focus-hint" }
+    }
+
     /// Says so, and is true, when the street is shown read-only: the command that asks makes no edit.
     fn refuse_read_only(&self) -> bool {
         let read_only = self.read_only();
@@ -4442,6 +4448,17 @@ mod read_only_tests {
         assert!(rig().vm.read_only());
         let (ports, ..) = test_ports_with_time();
         assert!(!StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None).read_only());
+    }
+
+    /// The hint under the drawing names only the keys that work: shown read-only, the arrows that choose.
+    #[test]
+    fn the_focus_hint_names_only_what_the_keys_still_do() {
+        assert_eq!(rig().vm.focus_hint_key(), "st-focus-hint-read-only");
+        let (ports, ..) = test_ports_with_time();
+        assert_eq!(StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None).focus_hint_key(), "st-focus-hint");
+        let tr = |locale| crate::i18n_for(locale).tr_now("st-focus-hint-read-only", &crate::shared::i18n::Args::new());
+        assert_eq!(tr(Locale::En), "Arrows select.");
+        assert_eq!(tr(Locale::FrCa), "Les flèches sélectionnent.");
     }
 
     #[test]

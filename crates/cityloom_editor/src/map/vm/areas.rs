@@ -186,6 +186,8 @@ impl AreasVm {
             return self.word("restriction-future");
         }
         match self.list.with(Vec::len) {
+            // Shown read-only, none can be declared: the lead does not ask for one.
+            0 if self.read_only() => self.word("restriction-lead-none-read-only"),
             0 => self.word("restriction-lead-none"),
             n => self.i18n.tr("restriction-lead-some", &Args::new().num("n", n as i64)),
         }
@@ -1347,13 +1349,19 @@ mod tests {
         let kept = RestrictionStore::new(own).add("A", Rule::CarFree, SQUARE.to_vec()).unwrap();
         let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
         let mapper = Rc::new(FakeMapper::default());
-        let vm = AreasVm::new(Ports { storage: view, mapper: mapper.clone(), ..ports }, crate::i18n_for(Locale::En));
+        let vm = AreasVm::new(Ports { storage: view, mapper: mapper.clone(), ..ports.clone() }, crate::i18n_for(Locale::En));
         assert!(vm.read_only());
         let snapshot = || {
             let mut keys = storage.keys();
             keys.sort();
             keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect::<Vec<_>>()
         };
+        let empty: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p2").only_to_read());
+        let none = AreasVm::new(Ports { storage: empty, ..ports.clone() }, crate::i18n_for(Locale::En));
+        assert_eq!(none.lead(), "This design has no area rules.", "none can be declared: the lead does not ask for one");
+        let empty: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p2").only_to_read());
+        let none = AreasVm::new(Ports { storage: empty, ..ports.clone() }, crate::i18n_for(Locale::FrCa));
+        assert_eq!(none.lead(), "Cet aménagement n’a aucune règle de zone.");
         let before = snapshot();
         vm.select(Some(&kept.id));
         assert_eq!(vm.selected_id_now(), Some(kept.id.clone()), "choosing works");

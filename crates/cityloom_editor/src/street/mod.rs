@@ -78,6 +78,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let neighbours = city.as_ref().map(|(edge, city)| city.street_neighbours(*edge));
     // A street shown read-only offers its editing panels disabled; the strips, the drawing and the path still choose.
     let read_only = vm.read_only();
+    // The hint under the drawing names only the keys that work; the shell words it (`data-i18n`) in either language.
+    let _ = at("focus-hint").set_attribute("data-i18n", vm.focus_hint_key());
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };

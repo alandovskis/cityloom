@@ -13,6 +13,7 @@ st-key-undo = annuler
 st-key-view = coupe, 2,5D
 st-street-2-5d = Rue en 2,5D
 st-focus-hint = Les flèches sélectionnent. Maj + flèches réordonnent. + et − redimensionnent, avec Maj pour de plus grands pas. Entrée modifie la largeur.
+st-focus-hint-read-only = Les flèches sélectionnent.
 st-space-heading = Où va la largeur
 st-people-moved = Personnes déplacées
 st-sample-numbers = chiffres d’exemple

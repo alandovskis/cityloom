@@ -68,6 +68,7 @@ restriction-restored = Zone rétablie : « { $area } ».
 ## Le chapeau de l’onglet
 restriction-future = Ces règles de zone ont été enregistrées par une version plus récente de CityLoom; elles ne peuvent pas être affichées ni modifiées ici.
 restriction-lead-none = Aucune règle de zone pour l’instant. Déclarez-en une pour vérifier les rues qu’elle contient.
+restriction-lead-none-read-only = Cet aménagement n’a aucune règle de zone.
 restriction-lead-some = { $n ->
     [one] { $n } règle de zone.
    *[other] { $n } règles de zone.

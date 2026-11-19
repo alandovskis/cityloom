@@ -713,6 +713,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("clock-slot", "the id of an element of the street page"),
     ("time-note", "the id of an element of the street page"),
     ("welcome-slot", "the id of an element of the street page"),
+    ("focus-hint", "the id of the street page's hint under the drawing"),
     ("transform-slot", "the id of the element of the street page the Transform dialog mounts into"),
     ("transform-btn", "the id of the street page's Transform button, which the focus returns to when the dialog closes"),
     ("transform-choices", "the id of the Transform dialog's list of choices, which takes the focus when the dialog opens"),
