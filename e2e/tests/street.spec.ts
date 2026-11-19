@@ -13,12 +13,16 @@ import {
   streetLengthM,
   test,
   tileFrom,
+  transform,
 } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
   await page.keyboard.press("ArrowRight");
 };
+
+/** The street's pieces by name, in order. */
+const pieceNames = (page: Page) => page.locator("#piece-list .piece-name").allTextContents();
 
 const pieceCount = (page: Page) => page.locator("#drawing").getAttribute("aria-label");
 
@@ -299,8 +303,7 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
-    await page.locator("#transform-btn").click();
-    await page.locator('#transform-menu [role="menuitem"].transit-item').first().click();
+    await transform(page, ".transit-item", "transit");
     await expect(page.locator("#undo")).toBeEnabled();
     await expect(live(page)).not.toBeEmpty();
     await page.locator("#undo").click();
@@ -419,8 +422,7 @@ test.describe("the add menu", () => {
 
   test("undoing with an item focused keeps the focus on it as its greying changes", async ({ page }) => {
     // A pedestrian street has no lane a bus can stop in, so its stops are greyed.
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await transform(page, ".ped-item", "ped");
     await page.locator("#add-btn").click();
     await page.locator("#add-topic-transit").click();
     await expect(menuItem(page, "Curb stop")).toHaveAttribute("aria-disabled", "true");
@@ -513,7 +515,7 @@ test.describe("what the street editor keeps in the city", () => {
   });
 });
 
-test.describe("the Transform menu", () => {
+test.describe("the Transform dialog", () => {
   test.beforeEach(async ({ page }) => {
     await openStreet(page);
     await expect(page.locator("#drawing")).toBeVisible();
@@ -523,86 +525,163 @@ test.describe("the Transform menu", () => {
     page,
   }) => {
     const before = await pieces(page);
-    await expect(page.locator("#transform-menu")).toBeHidden();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
     await page.locator("#transform-btn").click();
-    await expect(page.locator("#transform-menu")).toBeVisible();
-    await page.locator("#transform-menu .ped-item").first().click();
+    await expect(page.locator("#transform-dialog")).toBeVisible();
+    await page.locator("#transform-tab-ped").click();
+    await page.locator("#transform-dialog .ped-item").first().click();
+    await page.locator("#transform-apply").click();
     await expect(live(page)).toHaveText(/^Made pedestrian\. .+ is now a pedestrian street\.$/);
     // Without traffic the Make pedestrian group is gone; the button stays only while a transit measure fits.
-    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(0);
+    await expect(page.locator("#transform-dialog")).toBeHidden();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-tab-ped")).toHaveCount(0);
+    await page.keyboard.press("Escape");
     // The choice hands the focus to the drawing, whose keys edit the street.
-    await expect(page.locator("#wrap")).toBeFocused();
-    expect(await pieces(page)).toBe(before);
     await page.locator("#t-checks").click();
+    expect(await pieces(page)).toBe(before);
     await expect(page.locator("#checks")).toContainText("No roadway, so no sidewalk is asked for");
     await expect(page.locator("#checks")).toContainText(/unbroken/);
   });
 
+  test("applying hands the focus to the drawing", async ({ page }) => {
+    await transform(page, ".ped-item", "ped");
+    await expect(page.locator("#transform-dialog")).toBeHidden();
+    await expect(page.locator("#wrap")).toBeFocused();
+  });
+
   test("is one edit that undo takes back, and the street carries traffic again", async ({ page }) => {
-    await page.locator("#transform-btn").click();
-    await page.locator("#transform-menu .ped-item").first().click();
-    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(0);
+    await transform(page, ".ped-item", "ped");
+    await expect(page.locator("#transform-dialog")).toBeHidden();
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText(/ carries traffic again\.$/);
     await expect(page.locator("#transform-btn")).toBeVisible();
     await page.locator("#transform-btn").click();
-    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(3);
+    await page.locator("#transform-tab-ped").click();
+    await expect(page.locator("#transform-dialog .ped-item")).toHaveCount(3);
   });
 
-  test("the menu closes with Escape and gives the focus back to its button", async ({ page }) => {
+  test("the dialog closes with Escape and gives the focus back to its button", async ({ page }) => {
     await page.locator("#transform-btn").click();
-    await expect(page.locator("#transform-menu")).toBeVisible();
+    await expect(page.locator("#transform-dialog")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#transform-menu")).toBeHidden();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
     await expect(page.locator("#transform-btn")).toBeFocused();
   });
 
-  test("has a group for making the street pedestrian, one for the transit measures that fit and one for the street templates", async ({
+  test("Cancel closes the dialog without changing the street and gives the focus back to its button", async ({
     page,
   }) => {
     await page.locator("#transform-btn").click();
-    const menu = page.locator("#transform-menu");
-    await expect(menu).toHaveAttribute("role", "menu");
-    await expect(menu.getByRole("group")).toHaveCount(3);
-    await expect(menu.getByRole("group", { name: "Street templates" }).getByRole("menuitem")).toHaveCount(5);
-    await expect(menu.getByRole("group", { name: "Make pedestrian" }).getByRole("menuitem")).toHaveCount(3);
-    const transit = menu.getByRole("group", { name: "Transit priority" });
-    const offered = await transit.getByRole("menuitem").count();
-    expect(offered).toBeGreaterThan(0);
-    await expect(page.locator("#transform-btn")).toHaveAttribute("aria-expanded", "true");
+    await page.locator("#transform-dialog .ped-item").first().click();
+    await page.locator("#transform-cancel").click();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
+    await expect(page.locator("#transform-btn")).toBeFocused();
+    await expect(page.locator("#undo")).toBeDisabled();
+  });
+
+  test("has a tab for making the street pedestrian, one for the transit measures that fit and one for the street templates", async ({
+    page,
+  }) => {
+    await page.locator("#transform-btn").click();
+    const dialog = page.locator("#transform-dialog");
+    await expect(dialog).toHaveAttribute("aria-labelledby", "transform-dialog-h");
+    await expect(dialog.getByRole("tab")).toHaveCount(3);
+    await expect(dialog.getByRole("tab", { name: /Make pedestrian/ })).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: /Transit priority/ })).toBeVisible();
+    await dialog.getByRole("tab", { name: /Street templates/ }).click();
+    await expect(dialog.getByRole("option")).toHaveCount(5);
+    await dialog.getByRole("tab", { name: /Make pedestrian/ }).click();
+    await expect(dialog.getByRole("option")).toHaveCount(3);
+    await dialog.getByRole("tab", { name: /Transit priority/ }).click();
+    expect(await dialog.getByRole("option").count()).toBeGreaterThan(0);
+    await expect(page.locator("#transform-btn")).toHaveAttribute("aria-haspopup", "dialog");
   });
 
   test("a transit measure is arranged as one edit, announced, and Undo takes it back", async ({ page }) => {
     const before = await pieces(page);
     await page.locator("#transform-btn").click();
-    const item = page.locator("#transform-menu .transit-item").first();
+    await page.locator("#transform-tab-transit").click();
+    const item = page.locator("#transform-dialog .transit-item").first();
     const code = (await item.locator(".dirtag").textContent()) ?? "";
     await item.click();
+    await page.locator("#transform-apply").click();
     await expect(page.locator("#undo")).toBeEnabled();
     await expect(live(page)).not.toBeEmpty();
     await expect(page.locator("#wrap")).toBeFocused();
-    await expect(page.locator("#transform-menu")).toBeHidden();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
     await page.locator("#transform-btn").click();
-    await expect(page.locator("#transform-menu .transit-item", { hasText: code })).toHaveCount(0);
+    await page.locator("#transform-tab-transit").click();
+    await expect(page.locator("#transform-dialog .transit-item", { hasText: code })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText(/^Undone\./);
     expect(await pieces(page)).toBe(before);
   });
 
+  test("pointing at a choice previews it and nothing changes until Apply", async ({ page }) => {
+    const before = await pieceNames(page);
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-transit").click();
+    await page.locator("#transform-dialog .transit-item").first().hover();
+    const preview = page.locator("#transform-preview");
+    await expect(preview.locator("figcaption", { hasText: "Now" })).toBeVisible();
+    await expect(preview.locator("figcaption", { hasText: "After" })).toBeVisible();
+    await expect(preview.locator(".transform-empty")).toHaveCount(0);
+    await expect(page.locator("#undo")).toBeDisabled();
+    expect(await pieceNames(page)).toEqual(before);
+    await page.locator("#transform-cancel").click();
+    await expect(page.locator("#undo")).toBeDisabled();
+    expect(await pieceNames(page)).toEqual(before);
+    // Chosen and applied, the street changes, in one step.
+    await transform(page, ".transit-item", "transit");
+    await expect(page.locator("#undo")).toBeEnabled();
+    expect(await pieceNames(page)).not.toEqual(before);
+    await page.locator("#undo").click();
+    await expect(live(page)).toHaveText(/^Undone\./);
+    expect(await pieceNames(page)).toEqual(before);
+  });
+
+  for (const width of [1280, 700]) {
+    test(`the options stay where they are when pointing at one shows its preview, at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.locator("#transform-btn").click();
+      await page.locator("#transform-tab-transit").click();
+      const items = page.locator("#transform-dialog .transit-item");
+      const y = async (i: number) => (await items.nth(i).boundingBox())!.y;
+      const before = [await y(0), await y(1)];
+      // A jump when the preview appears is the dialog growing, tens of pixels; a pixel is the one-column layout's rounding.
+      const stays = async () => {
+        const now = [await y(0), await y(1)];
+        for (const i of [0, 1]) expect(Math.abs(now[i] - before[i])).toBeLessThanOrEqual(2);
+      };
+      await items.nth(1).hover();
+      await expect(page.locator("#transform-preview .transform-empty")).toHaveCount(0);
+      await stays();
+      await items.nth(0).hover();
+      await expect(page.locator("#transform-preview .transform-empty")).toHaveCount(0);
+      await stays();
+    });
+  }
+
   test("is operated from the keyboard", async ({ page }) => {
-    const button = page.locator("#transform-btn");
-    await button.focus();
+    await page.locator("#transform-btn").focus();
+    await page.keyboard.press("Enter");
+    const list = page.locator("#transform-choices");
+    await expect(list).toBeFocused();
+    // The first choice is the list's active one as it takes the focus (so a screen reader names it), not chosen.
+    await expect(list).toHaveAttribute("aria-activedescendant", "transform-opt-ped-sidewalk");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator("#transform-preview .transform-empty")).toBeVisible();
+    await expect(page.locator("#transform-apply")).toBeDisabled();
+    // Space chooses it, the arrows move and choose, and Enter applies the chosen one.
+    await page.keyboard.press(" ");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#transform-apply")).toBeEnabled();
     await page.keyboard.press("ArrowDown");
-    const items = page.locator("#transform-menu [role=menuitem]");
-    await expect(items.first()).toBeFocused();
-    await page.keyboard.press("End");
-    await expect(items.last()).toBeFocused();
-    await page.keyboard.press("Home");
-    await expect(items.first()).toBeFocused();
-    await page.keyboard.press("ArrowUp");
-    await expect(items.last()).toBeFocused();
-    await page.keyboard.press("Home");
+    await expect(list).not.toHaveAttribute("aria-activedescendant", "transform-opt-ped-sidewalk");
+    await expect(page.locator("#transform-opt-ped-sidewalk")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator("#transform-apply")).toBeEnabled();
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText(/^Made pedestrian\./);
     await expect(page.locator("#wrap")).toBeFocused();
@@ -612,12 +691,34 @@ test.describe("the Transform menu", () => {
     await page.setViewportSize({ width: 390, height: 780 });
     await page.emulateMedia({ forcedColors: "active" });
     await page.locator("#transform-btn").click();
-    const box = await page.locator("#transform-menu").boundingBox();
+    const box = await page.locator("#transform-dialog").boundingBox();
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
     expect(box!.y + box!.height).toBeLessThanOrEqual(780);
-    await expect(page.locator("#transform-menu .transform-item").first()).toBeVisible();
+    await expect(page.locator("#transform-dialog .transform-item").first()).toBeVisible();
+    await expect(page.locator("#transform-apply")).toBeVisible();
+  });
+
+  test("on a phone, the preview of the last transit measure shows without scrolling past the list", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-transit").click();
+    await page.locator("#transform-dialog .transit-item").last().click();
+    await expect(page.locator("#transform-preview h3")).toBeInViewport();
+  });
+
+  test("the dialog fits a phone-width window", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 740 });
+    await page.locator("#transform-btn").click();
+    const dialog = page.locator("#transform-dialog");
+    await expect(dialog).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+    expect(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
+    await page.locator("#transform-apply").scrollIntoViewIfNeeded();
+    await expect(page.locator("#transform-apply")).toBeInViewport();
   });
 });
 

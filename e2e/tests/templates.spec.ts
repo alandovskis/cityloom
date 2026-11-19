@@ -1,9 +1,18 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openAnchoredStreet, openStreet, placesOnMap, showStreetLevel, test } from "./fixtures";
+import {
+  expect,
+  live,
+  openAnchoredStreet,
+  openStreet,
+  openStreetWithUnfitTemplate,
+  showStreetLevel,
+  test,
+  transform,
+} from "./fixtures";
 
 const names = (page: Page) => page.locator("#piece-list .piece-name").allTextContents();
-const template = (page: Page, id: string) => page.locator(`#transform-menu [data-template="${id}"]`);
+const template = (page: Page, id: string) => page.locator(`#transform-dialog [data-template="${id}"]`);
 
 /** Gives the street a speed limit above a school zone's, which the Plateau's streets may not have; the Undo it
  *  leaves is the first of the street's history. */
@@ -12,15 +21,15 @@ async function fasterThanSchool(page: Page) {
   await page.locator("#speed-limit").selectOption("50");
 }
 
-// Street templates (#65): ready-made cross-sections in the Transform menu. Applying one lays out ordinary pieces in
+// Street templates (#65): ready-made cross-sections in the Transform dialog. Applying one lays out ordinary pieces in
 // one undoable edit; one that does not suit the street stays listed, disabled, with its reason.
 
 test.describe("street templates", () => {
-  test("all five are listed in the Transform menu under their own group", async ({ page }) => {
+  test("all five are listed in the Transform dialog under their own tab", async ({ page }) => {
     await openStreet(page);
     await page.locator("#transform-btn").click();
-    const group = page.locator("#transform-menu").getByRole("group", { name: "Street templates" });
-    await expect(group.getByRole("menuitem")).toHaveText([
+    await page.getByRole("tab", { name: /Street templates/ }).click();
+    await expect(page.locator("#transform-dialog .template-item b")).toHaveText([
       "Commercial main street",
       "School street",
       "Neighbourhood greenway",
@@ -35,9 +44,11 @@ test.describe("street templates", () => {
     await openStreet(page);
     const before = await names(page);
     await page.locator("#transform-btn").click();
+    await page.getByRole("tab", { name: /Street templates/ }).click();
     const school = template(page, "school");
     await expect(school).not.toHaveAttribute("aria-disabled", "true");
     await school.click();
+    await page.locator("#transform-apply").click();
     await expect(page.locator("#wrap")).toBeFocused();
     await expect(live(page)).not.toBeEmpty();
     await expect(page.locator("#undo")).toBeEnabled();
@@ -49,8 +60,7 @@ test.describe("street templates", () => {
     await expect(live(page)).toHaveText(/^Undone\./);
     expect(await names(page)).toEqual(before);
     // And Start over restores the street after a template.
-    await page.locator("#transform-btn").click();
-    await template(page, "greenway").click();
+    await transform(page, '[data-template="greenway"]', "templates");
     await page.locator("#reset").click();
     expect(await names(page)).toEqual(before);
   });
@@ -60,8 +70,7 @@ test.describe("street templates", () => {
   }) => {
     await openStreet(page);
     await fasterThanSchool(page);
-    await page.locator("#transform-btn").click();
-    await template(page, "school").click();
+    await transform(page, '[data-template="school"]', "templates");
     await expect(live(page)).toContainText("The speed limit there is 30 km/h.");
     await expect(live(page)).toContainText("No separate school zone was made");
     await expect(page.locator("#undo")).toBeEnabled();
@@ -76,8 +85,7 @@ test.describe("street templates", () => {
       const table = page.locator("#calming-strip").locator('[role="option"]');
       await expect(zones).toHaveCount(1);
       await fasterThanSchool(page);
-      await page.locator("#transform-btn").click();
-      await template(page, "school").click();
+      await transform(page, '[data-template="school"]', "templates");
 
       await expect(zones).toHaveCount(3);
       await expect(page.locator("#zone-1")).toHaveAttribute("aria-selected", "true");
@@ -105,36 +113,32 @@ test.describe("street templates", () => {
   test.describe("on a street too narrow for one", () => {
     test.describe.configure({ timeout: 120_000 });
 
-    test("a template that does not fit is disabled, says why, and announces it instead of applying", async ({
+    test("a template that does not fit is disabled, says why, previews its reason and cannot be applied", async ({
       page,
     }) => {
-      await page.goto("/map.html");
-      const streets = (await placesOnMap(page)).streets;
-      let found = false;
-      for (const href of streets) {
-        await page.goto("/" + href);
-        await expect(page.locator("#transform-btn")).toBeVisible();
-        if ((await page.locator('#transform-menu [role=menuitem][aria-disabled="true"]').count()) > 0) {
-          found = true;
-          break;
-        }
-      }
-      expect(found, "a street of the Plateau tile is too narrow for some template").toBe(true);
+      await openStreetWithUnfitTemplate(page);
       const before = await names(page);
-      await page.locator("#transform-btn").click();
-      const item = page.locator('#transform-menu [role=menuitem][aria-disabled="true"]').first();
-      const reasonId = await item.getAttribute("aria-describedby");
-      expect(reasonId).toMatch(/^template-reason-/);
-      await expect(page.locator(`#${reasonId}`)).toBeVisible();
-      await expect(page.locator(`#${reasonId}`)).toContainText(/needs a street at least .+ wide|wider than/);
-      // It is still reached with the arrows.
+      const item = page.locator('#transform-dialog [role=option][aria-disabled="true"]').first();
+      const reason = item.locator(".template-reason");
+      await expect(reason).toHaveAttribute("id", /^template-reason-/);
+      await expect(reason).toBeVisible();
+      await expect(reason).toContainText(/needs a street at least .+ wide|wider than/);
+      // The option is named by what it shows: its name and why it does not fit.
+      await expect(item).toHaveAccessibleName(/needs a street at least .+ wide|wider than/);
+      // Pointing at it previews its reason, and Apply stays disabled even when it is chosen.
+      await item.hover();
+      await expect(page.locator("#transform-preview .transform-no")).toContainText(
+        /needs a street at least .+ wide|wider than/,
+      );
+      await expect(page.locator("#transform-apply")).toBeDisabled();
+      // Playwright refuses to click an aria-disabled option, as it should a disabled control: press it anyway.
+      await item.click({ force: true });
+      await expect(page.locator("#transform-apply")).toBeDisabled();
+      // The arrows still reach the list's last choice.
+      await page.locator("#transform-choices").focus();
       await page.keyboard.press("End");
-      await expect(page.locator("#transform-menu [role=menuitem]").last()).toBeFocused();
-      const reason = (await page.locator(`#${reasonId}`).textContent()) ?? "";
-      // Playwright's click refuses an aria-disabled item, as it should a disabled control: choose it by the key.
-      await item.focus();
-      await page.keyboard.press("Enter");
-      await expect(live(page)).toHaveText(reason);
+      await expect(page.locator("#transform-choices")).toHaveAttribute("aria-activedescendant", /^transform-opt-/);
+      await page.locator("#transform-cancel").click();
       await expect(page.locator("#undo")).toBeDisabled();
       expect(await names(page)).toEqual(before);
     });

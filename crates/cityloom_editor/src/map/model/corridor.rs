@@ -9,7 +9,7 @@ use crate::shared::catalogue::{PEDESTRIAN_KINDS, kind_index};
 use crate::shared::said::{Arg, Said};
 use crate::street::model::{Editor, Street, Template};
 
-/// What can be done to several streets: a template of the Transform menu, or making them pedestrian.
+/// What can be done to several streets: a template of the Transform dialog, or making them pedestrian.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Op {
     Template(Template),
@@ -39,7 +39,7 @@ impl Op {
         Op::ALL.into_iter().find(|o| o.id() == id)
     }
 
-    /// What it is called, as the street page's Transform menu calls it.
+    /// What it is called, as the street page's Transform dialog calls it.
     pub fn name(self) -> Said {
         match self {
             Op::Template(t) => Said::new(t.name_key()),

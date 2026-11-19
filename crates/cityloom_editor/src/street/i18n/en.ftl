@@ -69,6 +69,7 @@ edit-redone = Redone. { $fit }.
 selection-position = { $kind }, { $width }, { $index } of { $total }
 started-over = Started over from the street as it is today. Undo brings your changes back.
 measure-refused = That measure does not suit this street.
+transform-refused = This change does not suit this street.
 
 # The notes beside the section.
 units-metres = metres
@@ -98,7 +99,6 @@ failing =
         [one] 1 check fails
        *[other] { $n } checks fail
     }
-measure-arrange-label = Arrange the street as { $code } { $name }
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/view/page.rs).
 header-between = between
@@ -302,6 +302,23 @@ make-pedestrian-button = Make pedestrian
 make-pedestrian-hint = Every driving, parking, loading, bus and shoulder piece becomes the kind you pick.
 transform-button = Transform
 transform-transit-hint = Arrange the street as one of these transit measures. Each one rebuilds the roadway as one change you can undo.
+# The Transform dialog (src/street/view/transform.rs): its title, buttons, preview and the Atlas families of the transit measures.
+transform-dialog-title = Transform this street
+transform-close = Close
+transform-cancel = Cancel
+transform-apply = Apply
+transform-preview-empty = Choose a change to see what it does to the street.
+transform-now = Now
+transform-after = After
+transform-what-changes = What changes
+transform-templates-fit = { $fit } of { $all }
+transform-measure-title = { $code } · { $name }
+transform-family-a = Transit streets
+transform-family-b = Centre-running lanes
+transform-family-c = Edge-running lanes
+transform-family-d = Offset lanes
+transform-family-e = Curb-adjacent lanes
+transform-family-f = Contraflow lanes
 rev-made-pedestrian = Made pedestrian
 rev-speed = Speed limit { $kmh } km/h
 rev-speed-not-set = Speed limit not set
@@ -788,7 +805,7 @@ src-applies-stop-bike = Bike lane behind a boarding island: the Ville de Montré
 src-applies-clear-path = Clear path beside planting: the Ville de Montréal's walking-corridor tool gives 1.8 m as its recommended minimum width (1.5 m is the provincial absolute minimum), and more where foot traffic is heavier. CityLoom's 1.8 m matches that minimum.
 src-applies-pedestrian-access = Pedestrian street access: the Ville de Montréal's walking-corridor tool targets 2.0 to 2.3 m where foot traffic is low and 2.5 to 3.3 m where it is medium, never under 1.8 m. CityLoom asks an unbroken 3.0 m run; its figure is a placeholder within the medium-traffic range.
 src-applies-raised-crossing = Raised crossing at a minor intersection: the Ville de Montréal's sheet makes the platform wider than 2.8 m along the street, typically 150 mm high, with vehicle ramps of 12.5 % (8 % at the least). CityLoom's raised elements follow it: a plateau of at least 3 m, 150 mm high, with 1.2 m ramps (12.5 %).
-src-applies-atlas = Transit priority measures: the Transform menu takes the codes and names of its measures from the Atlas toolbox. What each one does here (the lanes it needs, the widths it checks) is CityLoom's own placeholder, not the Atlas's guidance.
+src-applies-atlas = Transit priority measures: the Transform dialog takes the codes and names of its measures from the Atlas toolbox. What each one does here (the lanes it needs, the widths it checks) is CityLoom's own placeholder, not the Atlas's guidance.
 src-atlas-junction-label = Transit priority at junctions
 src-applies-atlas-junction = Transit priority measures at a junction: the codes and names of the measures an approach can have (queue-jump lanes, bus gates and the like) come from the Atlas toolbox. What each one does here is CityLoom's own placeholder, not the Atlas's guidance.
 

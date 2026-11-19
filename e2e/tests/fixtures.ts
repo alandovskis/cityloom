@@ -256,13 +256,12 @@ export async function openAnchoredStreet(page: Page, minM: number) {
   throw new Error(`no street of ${minM} m or more with a real end`);
 }
 
-/** Opens the first street of the city and makes it pedestrian with the Transform menu: it then has no lane a bus can
+/** Opens the first street of the city and makes it pedestrian with the Transform dialog: it then has no lane a bus can
  *  stop in, so no Stops row, and the Add a piece menu greys its stops. Every street of the Plateau has such a lane. */
 export async function openPedestrianStreet(page: Page) {
   await openStreet(page);
   await expect(page.locator("#drawing")).toBeVisible();
-  await page.locator("#transform-btn").click();
-  await page.locator("#transform-menu .ped-item").first().click();
+  await transform(page, ".ped-item", "ped");
   await expect(live(page)).toHaveText(/^Made pedestrian\. /);
   await expect(page.locator("#stop-strip-left, #stop-strip-right")).toHaveCount(0);
 }
@@ -278,4 +277,28 @@ export async function openLongStreet(page: Page, minM: number) {
     if ((await streetLengthM(page)) >= minM) return href;
   }
   throw new Error(`no street of ${minM} m or more`);
+}
+
+/** Opens the Transform dialog, chooses the option matching `option` (its tab first, when the option is not in the
+ *  tab the dialog opens on) and applies it. The dialog closes and the focus goes to the drawing. */
+export async function transform(page: Page, option: string, tab?: "ped" | "transit" | "templates"): Promise<void> {
+  await page.locator("#transform-btn").click();
+  if (tab) await page.locator(`#transform-tab-${tab}`).click();
+  await page.locator(`#transform-dialog ${option}`).first().click();
+  await page.locator("#transform-apply").click();
+}
+
+/** Opens the first street of the map that is too narrow for some street template, with the Transform dialog open on its
+ *  Street templates tab. Fails if the Plateau tile has none. */
+export async function openStreetWithUnfitTemplate(page: Page): Promise<void> {
+  await page.goto("/map.html");
+  for (const href of (await placesOnMap(page)).streets) {
+    await page.goto("/" + href);
+    await expect(page.locator("#transform-btn")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-templates").click();
+    if ((await page.locator('#transform-dialog [role=option][aria-disabled="true"]').count()) > 0) return;
+    await page.keyboard.press("Escape");
+  }
+  throw new Error("no street of the Plateau tile is too narrow for some template");
 }

@@ -48,7 +48,7 @@ use leptos::prelude::*;
 
 use crate::shared::catalogue::{Mode, mode_key};
 use crate::street::vm::StreetVm;
-use crate::street::vm::impact::Verdict;
+use crate::street::vm::impact::{Impact, Verdict};
 use crate::street::vm::watch::SheetWatch;
 
 fn mode_class(mode: crate::shared::catalogue::Mode) -> String {
@@ -199,54 +199,76 @@ pub fn LastChange(vm: Rc<StreetVm>) -> impl IntoView {
             return view! { <p class="fine impact-empty">{plain(&i18n, "st-impact-empty")}</p> }.into_any();
         };
         let headline = say(&i18n, units, &impact.headline);
-        if impact.is_empty() {
-            return view! {
-                <p class="impact-what">{headline}</p>
-                <p class="impact-none">{plain(&i18n, "impact-no-effect")}</p>
-            }
-            .into_any();
-        }
-        let uses = (!impact.uses.is_empty()).then(|| {
-            let items = impact
-                .uses
-                .iter()
-                .map(|u| view! { <li><span class=format!("mc mc-{}", mode_class(u.mode)) aria-hidden="true"></span>{say(&i18n, units, &u.said())}</li> })
-                .collect_view();
-            view! {
-                <h3 class="impact-sub">{plain(&i18n, "impact-space-heading")}</h3>
-                <ul class="impact-uses">{items}</ul>
-            }
+        // The verdict leads: it answers what the change did; the detail follows. A change with no effect has none.
+        let verdict = (!impact.is_empty()).then(|| {
+            let class = match impact.verdict {
+                Verdict::Improved => "improved",
+                Verdict::Regressed => "regressed",
+                Verdict::Mixed => "mixed",
+                Verdict::Unchanged => "unchanged",
+            };
+            view! { <p class=format!("impact-verdict {class}")>{say(&i18n, units, &impact.verdict_said())}</p> }
         });
-        let class = impact.class.as_ref().map(|c| view! { <p class="impact-class">{say(&i18n, units, c)}</p> });
-        let checks = |heading: &'static str, ok: bool, list: &[crate::shared::said::Said]| {
-            (!list.is_empty()).then(|| {
-                let items = list
-                    .iter()
-                    .map(|s| view! { <li class=if ok { "ok" } else { "bad" }>{icon(ok)}<div><b>{say(&i18n, units, s)}</b></div></li> })
-                    .collect_view();
-                view! {
-                    <h3 class="impact-sub">{plain(&i18n, heading)}</h3>
-                    <ul class="checks impact-checks">{items}</ul>
-                }
-            })
-        };
-        let verdict = match impact.verdict {
-            Verdict::Improved => "improved",
-            Verdict::Regressed => "regressed",
-            Verdict::Mixed => "mixed",
-            Verdict::Unchanged => "unchanged",
-        };
-        // The verdict leads: it answers what the change did; the detail follows.
         view! {
-            <p class=format!("impact-verdict {verdict}")>{say(&i18n, units, &impact.verdict_said())}</p>
+            {verdict}
             <p class="impact-what">{headline}</p>
-            {uses}
-            {class}
-            {checks("impact-passing-heading", true, &impact.now_passing)}
-            {checks("impact-failing-heading", false, &impact.now_failing)}
+            {impact_details(&i18n, units, &impact, SubHeading::H3)}
         }
         .into_any()
     }
+}
+
+/// The level of the headings `impact_details` puts over its lists: one under the heading of where it is shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubHeading {
+    /// Under the Notes tray's card (an `h2`).
+    H3,
+    /// Under the Transform dialog's "What changes" (an `h4`).
+    H5,
+}
+
+/// What a change did, after its headline: the width each use gained or lost, the class it changed to, the design
+/// checks that now pass and the ones that now fail; or, for a change with no effect, a line that says so.
+pub fn impact_details(i18n: &I18n, units: Units, impact: &Impact, level: SubHeading) -> AnyView {
+    if impact.is_empty() {
+        return view! { <p class="impact-none">{plain(i18n, "impact-no-effect")}</p> }.into_any();
+    }
+    let heading = |key: &'static str| {
+        let text = plain(i18n, key);
+        match level {
+            SubHeading::H3 => view! { <h3 class="impact-sub">{text}</h3> }.into_any(),
+            SubHeading::H5 => view! { <h5 class="impact-sub">{text}</h5> }.into_any(),
+        }
+    };
+    let uses = (!impact.uses.is_empty()).then(|| {
+        let items = impact
+            .uses
+            .iter()
+            .map(|u| view! { <li><span class=format!("mc mc-{}", mode_class(u.mode)) aria-hidden="true"></span>{say(i18n, units, &u.said())}</li> })
+            .collect_view();
+        view! {
+            {heading("impact-space-heading")}
+            <ul class="impact-uses">{items}</ul>
+        }
+    });
+    let class = impact.class.as_ref().map(|c| view! { <p class="impact-class">{say(i18n, units, c)}</p> });
+    let checks = |key: &'static str, ok: bool, list: &[crate::shared::said::Said]| {
+        (!list.is_empty()).then(|| {
+            let items =
+                list.iter().map(|s| view! { <li class=if ok { "ok" } else { "bad" }>{icon(ok)}<div><b>{say(i18n, units, s)}</b></div></li> }).collect_view();
+            view! {
+                {heading(key)}
+                <ul class="checks impact-checks">{items}</ul>
+            }
+        })
+    };
+    view! {
+        {uses}
+        {class}
+        {checks("impact-passing-heading", true, &impact.now_passing)}
+        {checks("impact-failing-heading", false, &impact.now_failing)}
+    }
+    .into_any()
 }
 
 /// How many people the street moves in an hour, today and in the design.
@@ -356,7 +378,7 @@ pub fn GoalGuide(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// Where the Transform menu's transit measures come from: the Atlas toolbox, for their codes and names only.
+/// Where the Transform dialog's transit measures come from: the Atlas toolbox, for their codes and names only.
 #[component]
 pub fn AtlasSource(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);

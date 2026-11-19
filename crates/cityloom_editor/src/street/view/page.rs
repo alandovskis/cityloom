@@ -1,22 +1,19 @@
 //! The rest of the street page around the section: its heading, the status
-//! line, undo and redo, the Transform menu (and what it shares with the menu to
-//! add a piece, `add_menu`), the time of day, and the cue that says how to begin.
+//! line, undo and redo, what the menu to add a piece (`add_menu`) is built on,
+//! the time of day, and the cue that says how to begin.
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
 use crate::city::model::EndView;
-use crate::shared::atlas::name_key;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
-use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
-use crate::street::model::{SegView, TemplateView};
+use crate::street::model::SegView;
 use crate::street::vm::StreetVm;
-use crate::street::vm::keys::menu_step;
 use crate::street::vm::text::status_text;
 use crate::street::vm::watch::SheetWatch;
 
@@ -328,9 +325,8 @@ pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f
     MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
 }
 
-/// What the two menus (Add and Transform, `add_menu::AddMenu`) share: the open flag, the button, the list and the
-/// selector of the list's items. The behaviour that differs (what counts as inside the widget, what takes the focus on
-/// opening) is passed to `listen` and `left_by`.
+/// The Add menu's parts (`add_menu::AddMenu`): the open flag, the button, the list and the selector of the list's
+/// items. What counts as inside the widget and what takes the focus on opening are passed to `listen` and `left_by`.
 #[derive(Clone, Copy)]
 pub(super) struct MenuParts {
     pub(super) open: RwSignal<bool>,
@@ -360,29 +356,17 @@ impl MenuParts {
         }
     }
 
-    /// The arrows, Home and End move the focus through the items (`menu_step`).
-    fn keys(self, e: leptos::web_sys::KeyboardEvent) {
-        use leptos::wasm_bindgen::JsCast;
-        let list = self.items();
-        let active = document().active_element();
-        let at = list.iter().position(|i| active.as_ref() == Some(i.unchecked_ref::<leptos::web_sys::Element>()));
-        if let Some(to) = menu_step(&e.key(), at, list.len()) {
-            e.prevent_default();
-            let _ = list[to].focus();
-        }
-    }
-
     /// Whether a focus change moved the focus out of the widget, `inside` saying what is part of it.
     pub(super) fn left_by(e: &leptos::web_sys::FocusEvent, inside: impl Fn(&leptos::web_sys::Element) -> bool) -> bool {
         use leptos::wasm_bindgen::JsCast;
         e.related_target().and_then(|t| t.dyn_into::<leptos::web_sys::Element>().ok()).is_some_and(|t| !inside(&t))
     }
 
-    /// The list is fixed to the window, so the stage cannot clip it: it is put under its button (at most
-    /// `max_width` wide), the focus goes to the first element `first` picks in it once it is shown, and it closes on
-    /// a press outside (`inside` saying what is part of the widget) and on Escape. Browser only.
+    /// The list is fixed to the window, so the stage cannot clip it: it is put under its button, the focus goes to
+    /// the first element `first` picks in it once it is shown, and it closes on a press outside (`inside` saying what
+    /// is part of the widget) and on Escape. Browser only.
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
-    pub(super) fn listen(self, max_width: Option<f64>, first: &'static str, inside: impl Fn(&leptos::web_sys::Element) -> bool + 'static) {
+    pub(super) fn listen(self, first: &'static str, inside: impl Fn(&leptos::web_sys::Element) -> bool + 'static) {
         #[cfg(target_arch = "wasm32")]
         {
             use leptos::wasm_bindgen::JsCast;
@@ -391,8 +375,7 @@ impl MenuParts {
                 let size = |v: Result<leptos::wasm_bindgen::JsValue, _>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let r = b.get_bounding_client_rect();
                 let at = menu_box(r.left(), r.bottom(), size(win.inner_width()), size(win.inner_height()));
-                let width = max_width.map_or(at.width, |m| at.width.min(m));
-                let _ = m.set_attribute("style", &format!("left:{}px;top:{}px;width:{width}px;max-height:{}px", at.left, at.top, at.max_height));
+                let _ = m.set_attribute("style", &format!("left:{}px;top:{}px;width:{}px;max-height:{}px", at.left, at.top, at.width, at.max_height));
             };
             window_event_listener(leptos::ev::resize, move |_| {
                 if self.open.get_untracked() {
@@ -424,184 +407,6 @@ impl MenuParts {
                 }
             });
         }
-    }
-}
-
-/// The widest the Transform list is drawn, in pixels (a measure's name wraps in it).
-const TRANSFORM_MENU_WIDTH: f64 = 380.0;
-
-/// One group of the Transform menu: its heading and hint are hidden from assistive technology and reach it as the
-/// group's name and description (a menu holds only menu items and groups). `id` names the group's elements.
-fn menu_group(w: SheetWatch, id: &'static str, heading: &'static str, hint: &'static str, items: impl IntoView + 'static) -> impl IntoView {
-    view! {
-        <div role="group" aria-labelledby=format!("transform-{id}-h") aria-describedby=format!("transform-{id}-hint")>
-            <p class="menu-h" id=format!("transform-{id}-h") aria-hidden="true">{say(w, heading)}</p>
-            <p class="hint" id=format!("transform-{id}-hint") aria-hidden="true">{say(w, hint)}</p>
-            <ul class="ped-list" role="none">{items}</ul>
-        </div>
-    }
-}
-
-/// One item of the Transform menu: a menu item named `label`, showing `mark` and `name`, that runs `choose`.
-fn menu_item(
-    class: &'static str,
-    label: impl Fn() -> String + Send + Sync + 'static,
-    choose: impl Fn() + 'static,
-    mark: impl IntoView + 'static,
-    name: impl Fn() -> String + Send + Sync + 'static,
-) -> impl IntoView {
-    view! {
-        <li role="none">
-            <button type="button" role="menuitem" tabindex="-1" class=format!("add-item transform-item {class}") aria-label=label on:click=move |_| choose()>
-                {mark}
-                " "
-                <b>{name}</b>
-            </button>
-        </li>
-    }
-}
-
-/// One street template in the Transform menu. Unlike the measures, a template that does not suit the street stays
-/// in the list: it is `aria-disabled` (still reached by the arrows), its reason is visible under it (hidden from
-/// assistive technology, since a menu holds only items and groups: `aria-describedby` still reads it)
-/// and `aria-describedby` points at that, and choosing it says the reason instead of applying anything.
-fn template_item(w: SheetWatch, view: TemplateView, choose: impl Fn() + 'static) -> impl IntoView {
-    let t = view.template;
-    let name = move || w.i18n().tr(t.name_key(), &Args::new());
-    let reason_id = format!("template-reason-{}", t.id());
-    let reason = view.refusal.map(|r| {
-        let text = move || said::say(&w.i18n(), w.units(), &r.said(t));
-        view! { <p class="template-reason" id=reason_id.clone() aria-hidden="true">{text}</p> }
-    });
-    let disabled = view.refusal.is_some();
-    view! {
-        <li role="none">
-            <button
-                type="button"
-                role="menuitem"
-                tabindex="-1"
-                class="add-item transform-item template-item"
-                class:template-disabled=disabled
-                aria-label=name
-                aria-disabled=disabled.then_some("true")
-                aria-describedby=disabled.then(|| reason_id.clone())
-                data-template=t.id()
-                on:click=move |_| choose()
-            >
-                <b>{name}</b>
-            </button>
-            {reason}
-        </li>
-    }
-}
-
-/// The Transform menu, one button for the things that change the whole street at once. It has up to three groups:
-/// Make pedestrian (while the street has a motor piece: the three things the space of its motor pieces can become,
-/// `Editor::make_pedestrian`) and Transit priority (only the Atlas measures the street can be arranged as and is not
-/// already, the Notes table's Arrange rows, `StreetVm::apply_measure`) and Street templates (all five, always: one
-/// that does not suit the street is disabled and says why, `StreetVm::apply_template`). A group with nothing in it
-/// is left out. Choosing is one undoable edit and hands the focus to the drawing (whose keys
-/// edit the street); a refusal keeps it on the button. It is a WAI-ARIA menu button: the list is fixed to the
-/// window (so the stage cannot clip it) and kept inside it by `menu_box`; the arrows, Home and End move through the
-/// items, Escape closes it and returns to the button, and leaving it closes it.
-#[component]
-pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
-    use leptos::web_sys::{FocusEvent, HtmlElement, KeyboardEvent};
-
-    let w = SheetWatch::new(vm);
-    let parts = MenuParts::new(".transform-item");
-    let MenuParts { open, button, menu, .. } = parts;
-    let wrap = NodeRef::<leptos::html::Div>::new();
-    let close = move |refocus: bool| parts.close(refocus);
-    // The widget is the wrapper: the button and the list.
-    let inside = move |t: &leptos::web_sys::Element| wrap.get_untracked().is_some_and(|m| m.contains(Some(t)));
-    parts.listen(Some(TRANSFORM_MENU_WIDTH), ".transform-item", inside);
-    let menu_keys = move |e: KeyboardEvent| parts.keys(e);
-    // Tabbing out of the widget closes the list; a press elsewhere is the window listener's.
-    let focus_out = move |e: FocusEvent| {
-        if MenuParts::left_by(&e, inside) {
-            open.set(false);
-        }
-    };
-    // A menu holds only menu items and groups, so a group's heading and hint are hidden from assistive technology
-    // and reach it as the group's name and description (both still read from hidden elements).
-    // After a choice: the drawing takes the focus when the street was changed, the button keeps it on a refusal.
-    let chosen = move |done: bool| {
-        close(false);
-        if done {
-            if let Some(wrap) = document().get_element_by_id("wrap") {
-                let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
-            }
-        } else if let Some(b) = button.get_untracked() {
-            let _ = HtmlElement::from(b).focus();
-        }
-    };
-    let pedestrian = move |kinds: Vec<usize>| {
-        let items = kinds
-            .into_iter()
-            .map(|k| {
-                let kind = &KINDS[k];
-                let label = move || w.i18n().tr(&kind_key(kind.id), &Args::new());
-                menu_item(
-                    "ped-item",
-                    label,
-                    move || chosen(w.edit(|e| e.make_pedestrian(k))),
-                    view! { <span class="add-icon" inner_html=icon(kind.id)></span> },
-                    label,
-                )
-            })
-            .collect_view();
-        menu_group(w, "ped", "make-pedestrian-button", "make-pedestrian-hint", items)
-    };
-    let transit = move |codes: Vec<&'static str>| {
-        let items = codes
-            .into_iter()
-            .map(|code| {
-                let name = move || w.i18n().tr(&name_key(code), &Args::new());
-                let label = move || w.i18n().tr("measure-arrange-label", &Args::new().str("code", code).str("name", name()));
-                menu_item("transit-item", label, move || chosen(w.apply_measure(code)), view! { <span class="dirtag">{code}</span> }, name)
-            })
-            .collect_view();
-        menu_group(w, "transit", "st-transit-heading", "transform-transit-hint", items)
-    };
-    let templates = move |views: Vec<TemplateView>| {
-        let items = views.into_iter().map(|v| template_item(w, v, move || chosen(w.apply_template(v.template)))).collect_view();
-        menu_group(w, "templates", "transform-templates-heading", "transform-templates-hint", items)
-    };
-    view! {
-        <div node_ref=wrap on:focusout=focus_out style="display: contents">
-            {move || {
-                let choices = w.transform_menu();
-                (!choices.is_empty())
-                    .then(|| {
-                        view! {
-                            <button
-                                type="button"
-                                id="transform-btn"
-                                class="btn"
-                                aria-haspopup="menu"
-                                aria-expanded=move || open.get().to_string()
-                                aria-controls="transform-menu"
-                                node_ref=button
-                                on:click=move |_| open.update(|o| *o = !*o)
-                                on:keydown=move |e: KeyboardEvent| {
-                                    if e.key() == "ArrowDown" && !open.get_untracked() {
-                                        e.prevent_default();
-                                        open.set(true);
-                                    }
-                                }
-                            >
-                                {say(w, "transform-button")}
-                            </button>
-                            <div id="transform-menu" class="menu ped-menu" role="menu" aria-labelledby="transform-btn" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
-                                {(!choices.pedestrian.is_empty()).then(|| pedestrian(choices.pedestrian.clone()))}
-                                {(!choices.transit.is_empty()).then(|| transit(choices.transit.clone()))}
-                                {(!choices.templates.is_empty()).then(|| templates(choices.templates.clone()))}
-                            </div>
-                        }
-                    })
-            }}
-        </div>
     }
 }
 

@@ -162,6 +162,49 @@ mod tests {
         assert!(rule(editor, ".rev-step").contains("color: var(--ink-3);"));
     }
 
+    #[test]
+    fn the_transform_dialog_s_text_is_4_5_to_1_on_the_panel_a_pointed_choice_and_a_chosen_one() {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() };
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            // A choice's name, a tab's count, a family's heading, a template's reason and the captions; the dark wash is
+            // translucent, so it is measured over the panel by the audit, the light one is a colour.
+            let grounds =
+                [("panel", pick(&token(app, "panel"), i)), ("fill", pick(&token(app, "fill"), i)), ("accent-wash", pick(&token(app, "accent-wash"), i))];
+            for (ground, g) in grounds {
+                let Some(g) = g else { continue };
+                for name in ["ink", "ink-2"] {
+                    let c = pick(&token(app, name), i).unwrap();
+                    assert!(contrast(&c, &g) >= 4.5, "{name} on {ground} {theme}: {:.2}", contrast(&c, &g));
+                }
+            }
+        }
+        // The active choice's ring is the accent, 3:1 against what is under it (a non-text contrast).
+        assert!(rule(editor, ".transform-list:focus-visible .transform-item.transform-active").contains("outline: 2px solid var(--accent);"));
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let accent = pick(&token(app, "accent"), i).unwrap();
+            for ground in ["panel", "fill", "accent-wash"] {
+                let Some(g) = pick(&token(app, ground), i) else { continue };
+                assert!(contrast(&accent, &g) >= 3.0, "the active ring on {ground} {theme}: {:.2}", contrast(&accent, &g));
+            }
+        }
+        assert!(rule(editor, ".transform-item[aria-selected=\"true\"]").contains("background: var(--accent-wash);"));
+        assert!(rule(editor, ".transform-item:hover").contains("background: var(--fill);"));
+        assert!(rule(editor, ".transform-tab .count").contains("color: var(--ink-2);"));
+        assert!(rule(editor, ".template-reason").contains("color: var(--ink-2);"));
+        // Apply is the accent under its ink (measured with the accent), and stays so under the pointer.
+        let apply = rule(editor, ".btn.primary");
+        assert!(apply.contains("background: var(--accent);") && apply.contains("color: var(--accent-ink);"), "{apply}");
+        assert!(rule(editor, ".btn.primary:hover:not(:disabled)").contains("background: var(--accent);"));
+        // Disabled, Apply is a plain button: ink-3 on the panel, which the colour of `.btn.primary` must not beat.
+        let off = rule(editor, ".btn.primary:disabled");
+        assert!(off.contains("background: var(--panel);") && off.contains("color: var(--ink-3);"), "{off}");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, panel) = (pick(&token(app, "ink-3"), i).unwrap(), pick(&token(app, "panel"), i).unwrap());
+            assert!(contrast(&ink, &panel) >= 4.5, "disabled Apply {theme}: {:.2}", contrast(&ink, &panel));
+        }
+    }
+
     /// The body of the rule whose selector line is `selector`.
     fn rule<'a>(css: &'a str, selector: &str) -> &'a str {
         let at = css.find(&format!("{selector} {{")).unwrap_or_else(|| panic!("{selector}"));

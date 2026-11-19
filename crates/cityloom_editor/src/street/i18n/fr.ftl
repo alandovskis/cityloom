@@ -69,6 +69,7 @@ edit-redone = Rétabli. { $fit }.
 selection-position = { $kind }, { $width }, { $index } sur { $total }
 started-over = Retour à la rue telle qu’elle est aujourd’hui. Annulez pour retrouver vos modifications.
 measure-refused = Cette mesure ne convient pas à cette rue.
+transform-refused = Ce changement ne convient pas à cette rue.
 
 # Les notes à côté de la coupe.
 units-metres = mètres
@@ -98,7 +99,6 @@ failing =
         [one] { $n } vérification échoue
        *[other] { $n } vérifications échouent
     }
-measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/view/page.rs).
 header-between = entre
@@ -302,6 +302,23 @@ make-pedestrian-button = Rendre piétonne
 make-pedestrian-hint = Chaque voie de circulation, espace de stationnement, zone de chargement, voie réservée ou accotement devient le genre d’élément choisi.
 transform-button = Transformer
 transform-transit-hint = Réorganisez la rue selon l’une de ces mesures pour le transport en commun. Chacune reconstruit la chaussée en une seule modification annulable.
+# La boîte de dialogue Transformer (src/street/view/transform.rs) : titre, boutons, aperçu et familles de l’Atlas des mesures de transport en commun.
+transform-dialog-title = Transformer cette rue
+transform-close = Fermer
+transform-cancel = Annuler
+transform-apply = Appliquer
+transform-preview-empty = Choisissez un changement pour voir ce qu’il fait à la rue.
+transform-now = Maintenant
+transform-after = Après
+transform-what-changes = Ce qui change
+transform-templates-fit = { $fit } sur { $all }
+transform-measure-title = { $code } · { $name }
+transform-family-a = Rues de transport en commun
+transform-family-b = Voies centrales
+transform-family-c = Voies latérales
+transform-family-d = Voies décalées
+transform-family-e = Voies en bordure de trottoir
+transform-family-f = Voies à contresens
 rev-made-pedestrian = Rendue piétonne
 rev-speed = Limite de vitesse : { $kmh }{" "}km/h
 rev-speed-not-set = Limite de vitesse non indiquée
@@ -788,7 +805,7 @@ src-applies-stop-bike = Bande cyclable derrière un îlot d’embarquement : la 
 src-applies-clear-path = Passage libre à côté de la plantation : l’outil sur la largeur des corridors piétons de la Ville de Montréal donne 1,8 m comme largeur minimale recommandée (1,5 m est le minimum absolu du ministère), et plus là où la circulation piétonne est forte. Le 1,8 m de CityLoom correspond à ce minimum.
 src-applies-pedestrian-access = Accès d’une rue piétonne : l’outil sur la largeur des corridors piétons de la Ville de Montréal vise de 2,0 à 2,3 m là où la circulation piétonne est faible et de 2,5 à 3,3 m là où elle est moyenne, jamais moins de 1,8 m. CityLoom demande une section continue de 3,0 m; son chiffre est provisoire et se situe dans la plage de circulation moyenne.
 src-applies-raised-crossing = Traversée surélevée à une petite intersection : la fiche de la Ville de Montréal rend le plateau plus large que 2,8 m le long de la rue, typiquement de 150 mm de hauteur, avec des rampes pour véhicules de 12,5 % (8 % au minimum). Les éléments surélevés de CityLoom la suivent : un plateau d’au moins 3 m, de 150 mm de hauteur, avec des rampes de 1,2 m (12,5 %).
-src-applies-atlas = Mesures de priorité au transport en commun : le menu Transformer reprend les codes et les noms de ses mesures de la boîte à outils de l’Atlas. Ce que chacune fait ici (les voies qu’elle exige, les largeurs qu’elle vérifie) est un paramètre provisoire de CityLoom, et non les indications de l’Atlas.
+src-applies-atlas = Mesures de priorité au transport en commun : la boîte de dialogue Transformer reprend les codes et les noms de ses mesures de la boîte à outils de l’Atlas. Ce que chacune fait ici (les voies qu’elle exige, les largeurs qu’elle vérifie) est un paramètre provisoire de CityLoom, et non les indications de l’Atlas.
 src-atlas-junction-label = Priorité au transport en commun aux intersections
 src-applies-atlas-junction = Mesures de priorité au transport en commun à une intersection : les codes et les noms des mesures que peut avoir une approche (voies de dépassement, portes pour autobus et autres) viennent de la boîte à outils de l’Atlas. Ce que chacune fait ici est un paramètre provisoire de CityLoom, et non les indications de l’Atlas.
 

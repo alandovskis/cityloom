@@ -364,6 +364,7 @@ struct State {
 
 pub use crate::standards::model::SPEED_CHOICES;
 
+#[derive(Clone)]
 pub struct Editor {
     /// What the street is called, where it has a name of its own.
     street_name: Option<String>,
@@ -3387,5 +3388,16 @@ mod tests {
         let uk = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
         let s = Street::sample(0, Side::Left);
         assert_eq!(Editor::from_street(&s, &s, uk).view().side, Side::Left);
+    }
+
+    #[test]
+    fn a_clone_is_edited_apart_from_the_editor_it_was_cloned_from() {
+        let e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 33_000, from_end: ZoneEnd::Last }));
+        let mut c = e.clone();
+        assert!(c.make_pedestrian(kind_index("sidewalk").unwrap()));
+        assert_ne!(e.snapshot(), c.snapshot());
+        assert!(e.view().has_motor);
+        assert!(!c.view().has_motor);
+        assert_eq!(serde_json::to_value(e.clone().view()).unwrap(), serde_json::to_value(e.view()).unwrap());
     }
 }

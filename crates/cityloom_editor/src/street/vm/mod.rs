@@ -8,6 +8,7 @@ pub mod keys;
 pub mod level;
 pub mod row;
 pub mod text;
+pub mod transform;
 pub mod watch;
 
 use std::cell::{Cell, RefCell};
@@ -19,7 +20,7 @@ use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::catalogue::Side;
-use crate::shared::catalogue::{PEDESTRIAN_KINDS, StreetClass, kind_index};
+use crate::shared::catalogue::StreetClass;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -28,7 +29,7 @@ use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, StripCell, Subject, Template, TemplateView, TreeSize, Use, View,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, Street, StripCell, Subject, Template, TreeSize, Use, View,
     ZoneRefusal,
 };
 use crate::street::vm::add_menu::{Entry, Item, Topic};
@@ -117,25 +118,6 @@ fn areas_holding(ports: &Ports, binding: Option<&CityBinding>) -> Vec<Restrictio
     RestrictionStore::new(ports.storage.clone()).all().into_iter().filter(|r| r.holds(&shape, &projection)).collect()
 }
 
-/// The choices of the Transform menu (`StreetVm::transform_menu`).
-#[derive(Clone, Debug, PartialEq)]
-pub struct TransformMenu {
-    /// Catalogue indices of the kinds the motor pieces can become.
-    pub pedestrian: Vec<usize>,
-    /// Atlas codes of the measures the street can be arranged as.
-    pub transit: Vec<&'static str>,
-    /// Every street template, with the reason one cannot be applied to the selected zone. Never empty, so the
-    /// button is always shown.
-    pub templates: Vec<TemplateView>,
-}
-
-impl TransformMenu {
-    /// Nothing to offer: the button is not shown.
-    pub fn is_empty(&self) -> bool {
-        self.pedestrian.is_empty() && self.transit.is_empty() && self.templates.is_empty()
-    }
-}
-
 impl StreetVm {
     /// A street to edit, saying what it says in the language of `i18n` (the one
     /// instance the shell switches). Bound to a place in the city, what is made
@@ -222,8 +204,16 @@ impl StreetVm {
         if self.areas.is_empty() {
             return Vec::new();
         }
-        let street = self.core.read(|e| e.snapshot());
-        self.areas.iter().map(|r| Finding::of(r, &street)).collect()
+        self.findings_for(&self.core.read(|e| e.snapshot()))
+    }
+
+    /// How `street` (this one, or a copy of it with an edit tried on it) stands against each area the page's street
+    /// is inside.
+    fn findings_for(&self, street: &Street) -> Vec<Finding> {
+        if self.areas.is_empty() {
+            return Vec::new();
+        }
+        self.areas.iter().map(|r| Finding::of(r, street)).collect()
     }
 
     pub fn units(&self) -> Units {
@@ -405,18 +395,6 @@ impl StreetVm {
             self.record(Cause::StartOver, &before);
         }
         done
-    }
-
-    /// What the Transform menu offers, drawn again when the street is edited: the kinds the motor pieces can become
-    /// (while the street has a motor piece) and the transit measures the street is not already and can be arranged
-    /// as, in the Notes table's order: the table's Arrange rows. A measure that will not fit is not listed.
-    pub fn transform_menu(&self) -> TransformMenu {
-        let v = self.view();
-        TransformMenu {
-            pedestrian: if v.has_motor { PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect() } else { Vec::new() },
-            transit: v.measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect(),
-            templates: v.templates.clone(),
-        }
     }
 
     /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
@@ -1890,7 +1868,7 @@ mod tests {
         assert_eq!(says(&r, &impact)[0], "Made pedestrian");
         assert!(impact.class.is_some() && impact.uses.iter().any(|u| u.mode == crate::shared::catalogue::Mode::Vehicle && u.after_mm == 0));
         let r = rig(1);
-        let code = r.vm.transform_menu().transit[0];
+        let code = r.vm.transform_choices().transit[0].1[0];
         assert!(r.vm.apply_measure(code));
         r.time.advance(600);
         assert_eq!(r.vm.view_now().revisions.len(), 1);
@@ -2005,46 +1983,10 @@ mod tests {
     }
 
     #[test]
-    fn the_transform_menu_offers_the_pedestrian_kinds_and_only_the_measures_that_fit() {
-        use crate::shared::catalogue::{PEDESTRIAN_KINDS, kind_index};
-        let r = rig(1);
-        let menu = r.vm.transform_menu();
-        let kinds: Vec<usize> = PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect();
-        assert_eq!(menu.pedestrian, kinds);
-        let arrangeable: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
-        assert!(!arrangeable.is_empty());
-        assert_eq!(menu.transit, arrangeable);
-        let view = r.vm.view_now();
-        for m in view.measures.iter().filter(|m| !m.can_apply) {
-            assert!(!menu.transit.contains(&m.code), "{} will not fit", m.code);
-        }
-        // Choosing one arranges it as one undoable edit, and it is then this street's and no longer offered.
-        let code = menu.transit[0];
-        let steps = r.vm.view_now().revisions.len();
-        assert!(r.vm.apply_measure(code));
-        assert_eq!(r.vm.view_now().revisions.len(), steps + 1);
-        assert!(!r.vm.transform_menu().transit.contains(&code));
-        assert!(r.vm.undo());
-        assert!(r.vm.transform_menu().transit.contains(&code));
-    }
-
-    #[test]
-    fn a_street_with_no_motor_piece_has_no_pedestrian_choices_and_the_menu_is_empty_when_nothing_is_offered() {
-        use crate::shared::catalogue::kind_index;
-        let r = rig(0);
-        assert!(r.vm.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
-        let menu = r.vm.transform_menu();
-        assert!(menu.pedestrian.is_empty());
-        let fits: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
-        assert_eq!(menu.transit, fits, "the menu offers the measures that fit on a pedestrian street too");
-        assert!(!menu.is_empty(), "the templates are always listed");
-    }
-
-    #[test]
-    fn the_transform_menu_lists_all_five_templates_and_says_why_one_does_not_fit() {
+    fn the_transform_choices_list_all_five_templates_and_say_why_one_does_not_fit() {
         use crate::street::model::{Template, TemplateRefusal};
         let r = rig(2);
-        let menu = r.vm.transform_menu();
+        let menu = r.vm.transform_choices();
         assert_eq!(menu.templates.len(), 5);
         let bus = menu.templates.iter().find(|t| t.template == Template::BusCorridor).unwrap();
         assert!(matches!(bus.refusal, Some(TemplateRefusal::TooNarrow { .. })));
@@ -3977,6 +3919,7 @@ mod green_tests {
 mod level_tests {
     //! The details panel shows one level at a time, the one the person reached last, under a path to it.
     use super::*;
+    use crate::shared::catalogue::kind_index;
     use crate::shared::i18n::Locale;
     use crate::shared::ports::test_ports_with_time;
     use crate::street::model::StreetExt;
