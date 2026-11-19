@@ -1,0 +1,9 @@
+$ git rev-parse HEAD
+2636acca478990a3afb061a82e822902e2b2ded8
+$ just e2e-ui tests/read-only.spec.ts   (build, server and fixtures already made at this head; run as: E2E_PORT=8293 npx playwright test --project=ui tests/read-only.spec.ts)
+Running 4 tests using 4 workers
+  ✓  4 [ui] › tests/read-only.spec.ts:138:3 › a design opened read-only › a project opened without view=1 can be edited as ever (4.8s)
+  ✓  1 [ui] › tests/read-only.spec.ts:113:3 › a design opened read-only › the map can be searched and its places opened, read-only, and offers no area to declare (6.4s)
+  ✓  3 [ui] › tests/read-only.spec.ts:48:3 › a design opened read-only › a street can be looked at and chosen in, and not changed by a control, a key or undo (6.6s)
+  ✓  2 [ui] › tests/read-only.spec.ts:84:3 › a design opened read-only › a junction can be looked at, its streets gone to, and not changed (9.3s)
+  4 passed (10.1s)

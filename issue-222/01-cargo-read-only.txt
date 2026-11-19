@@ -1,0 +1,36 @@
+$ git rev-parse HEAD
+2636acca478990a3afb061a82e822902e2b2ded8
+$ cargo test -p cityloom_editor -- read_only the_history_is shown_read_only no_area_can_be_declared looking_still_works_and_writes_nothing a_page_opened_to_view_its_project a_page_is_read_only_when a_link_from_a_read_only_page a_storage_only_to_read a_page_shown_read_only a_street_shown_read_only a_junction_shown_read_only the_selected_streets_can_be_chosen_but_not
+running 31 tests
+test junction::model::tests::the_history_is_the_states_and_not_what_is_chosen ... ok
+test map::vm::areas::tests::shown_read_only_no_area_changes_and_one_can_still_be_chosen ... ok
+test map::view::tests::shown_read_only_no_area_can_be_declared_and_the_selected_one_s_form_is_disabled_and_its_streets_still_open ... ok
+test project::tests::context::a_page_opened_to_view_its_project_reads_it_and_writes_and_marks_nothing ... ok
+test shared::locked::tests::read_only_the_controls_are_in_a_disabled_fieldset_and_otherwise_as_they_are ... ok
+test shared::project_id::tests::a_link_from_a_read_only_page_keeps_it_read_only ... ok
+test shared::project_id::tests::a_page_is_read_only_when_its_address_says_view ... ok
+test junction::view::tests::a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_streets_to_go_to ... ok
+test shared::scoped::tests::a_storage_only_to_read_keeps_nothing_and_says_so_and_still_reads ... ok
+test street::model::tests::the_history_is_the_revisions_and_a_drag_and_not_what_is_chosen_or_shown ... ok
+test street::view::tests::a_street_shown_read_only_offers_its_piece_s_details_disabled_and_its_pieces_to_choose ... ok
+test street::view::tests::a_street_shown_read_only_offers_no_undo_no_add_menu_and_no_transform_menu ... ok
+test shell::tests::a_page_shown_read_only_says_so_and_its_links_keep_it_read_only ... ok
+test map::vm::read_only_tests::looking_still_works_and_writes_nothing ... ok
+test map::vm::read_only_tests::the_refusal_is_said_in_the_language_of_the_page ... ok
+test map::vm::read_only_tests::no_area_can_be_declared_and_every_place_opens_read_only ... ok
+test junction::vm::read_only_tests::every_edit_command_is_refused_and_said_and_leaves_the_junction_and_the_storage_as_they_were ... ok
+test junction::vm::read_only_tests::choosing_and_looking_still_work ... ok
+test street::vm::read_only_tests::a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept ... ok
+test junction::vm::read_only_tests::the_refusal_is_said_in_the_language_of_the_page ... ok
+test junction::vm::read_only_tests::a_link_from_the_junction_keeps_the_project_read_only ... ok
+test junction::vm::read_only_tests::the_junction_says_it_is_read_only_and_one_opened_to_edit_is_not ... ok
+test map::vm::read_only_tests::the_map_says_it_is_read_only_and_one_opened_to_edit_is_not ... ok
+test junction::vm::read_only_tests::a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept ... ok
+test map::vm::read_only_tests::the_selected_streets_can_be_chosen_but_not_reviewed_changed_or_changed_back ... ok
+test map::view::tests::selection::shown_read_only_the_selected_streets_can_be_listed_and_cleared_but_no_change_is_offered ... ok
+test street::vm::read_only_tests::a_link_from_the_street_keeps_the_project_read_only ... ok
+test street::vm::read_only_tests::choosing_and_looking_still_work ... ok
+test street::vm::read_only_tests::every_edit_command_is_refused_and_said_and_leaves_the_street_and_the_storage_as_they_were ... ok
+test street::vm::read_only_tests::the_refusal_is_said_in_the_language_of_the_page ... ok
+test street::vm::read_only_tests::the_street_says_it_is_read_only_and_one_opened_to_edit_is_not ... ok
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 3337 filtered out; finished in 0.88s

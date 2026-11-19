@@ -1,0 +1,23 @@
+seeded: one edit on street.html?street=1; localStorage holds 7 keys
+street read-only: #undo present: false
+street read-only: #redo present: false
+street read-only: #reset present: false
+street read-only: #add-btn present: false
+street read-only: #transform-btn present: false
+street read-only: inspector controls (inputs and buttons): 17, disabled: 17
+street read-only: #piece-remove disabled: true
+street read-only: tag (visible text): Read-only
+street read-only: tag (screen reader): This design is open read-only: you can look at it, but not change it.
+street read-only: pressed "+": live region says: This design is open read-only: nothing can be changed.
+street read-only: pressed Ctrl+Z: live region says: This design is open read-only: nothing can be changed.; changes badge: 1
+street read-only: links on the page: ["index.html","index.html","about.html","credits.html","intersection.html?junction=1&project=first&view=1","street.html?street=140&project=first&view=1","street.html?street=2&project=first&view=1"]
+street read-only fr-CA: tag (screen reader): Cet aménagement est ouvert en lecture seule : vous pouvez le consulter, mais pas le modifier.
+intersection read-only: #undo present: false
+intersection read-only: #redo present: false
+intersection read-only: #reset present: false
+intersection read-only: number fields: 2, first disabled: true
+intersection read-only: cross-section link: street.html?street=140&project=first&view=1
+intersection read-only: pressed Ctrl+Z: live region says: This design is open read-only: nothing can be changed.
+map read-only: #declare-area present: false
+map read-only: first search result link: intersection.html?junction=16&project=first&view=1
+localStorage (all keys but the language) identical before and after the read-only visits: true
