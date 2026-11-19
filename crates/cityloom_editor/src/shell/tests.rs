@@ -653,3 +653,113 @@ fn a_map_shown_read_only_still_takes_a_region_keeps_it_and_says_it() {
     assert!(words.len() == 1 && words[0].contains("Japan"), "{words:?}");
     crate::sync::hub::reset();
 }
+
+mod edits_cleared {
+    use std::rc::Rc;
+
+    use crate::shared::i18n::{Args, Locale};
+    use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_page};
+    use crate::shell::vm::ShellVm;
+    use crate::shell::{Bare, view::EditsClearedNotice};
+
+    const MESSAGE: &str = "The map was rebuilt with one street per block, so your earlier street and junction edits were cleared.";
+
+    fn edits_document(import: Option<u32>) -> String {
+        let record = match import {
+            Some(n) => serde_json::json!({"ways": [1], "import": n}),
+            None => serde_json::json!({"ways": [1]}),
+        };
+        serde_json::json!({"version": crate::city::edits::IMPORT_STAMP_VERSION, "streets": {"w1~n1~n2": record}, "junctions": {}}).to_string()
+    }
+
+    fn open(storage: &Rc<MemoryStorage>, project: Option<&str>) -> (Rc<ShellVm>, Rc<RecordingAnnouncer>) {
+        let (mut ports, _, _) = test_ports_with_page();
+        let said = Rc::new(RecordingAnnouncer::default());
+        ports.announcer = said.clone();
+        ports.storage = storage.clone();
+        crate::sync::hub::reset();
+        let target = Rc::new(Bare::in_project(project.map(String::from)));
+        (ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true), said)
+    }
+
+    fn storage_with(key: &str, doc: &str) -> Rc<MemoryStorage> {
+        let (_, _, storage) = test_ports_with_page();
+        storage.remember(key, doc);
+        storage
+    }
+
+    fn streets_in(storage: &MemoryStorage, key: &str) -> usize {
+        let v: serde_json::Value = serde_json::from_str(&storage.recall(key).unwrap()).unwrap();
+        v["streets"].as_object().unwrap().len()
+    }
+
+    #[test]
+    fn a_page_of_a_project_with_stale_edits_clears_them_and_says_so_once() {
+        let storage = storage_with("cityloom-edits@p1", &edits_document(None));
+        let (vm, said) = open(&storage, Some("p1"));
+        assert!(vm.edits_cleared());
+        assert_eq!(said.take(), vec![MESSAGE.to_string()]);
+        assert_eq!(streets_in(&storage, "cityloom-edits@p1"), 0);
+        let (again, said) = open(&storage, Some("p1"));
+        assert!(!again.edits_cleared());
+        assert!(said.take().is_empty());
+    }
+
+    #[test]
+    fn a_project_without_stale_edits_shows_nothing() {
+        let storage = storage_with("cityloom-edits@p1", &edits_document(Some(crate::city::edits::STALE_BEFORE_IMPORT)));
+        let (vm, said) = open(&storage, Some("p1"));
+        assert!(!vm.edits_cleared());
+        assert!(said.take().is_empty());
+        assert_eq!(streets_in(&storage, "cityloom-edits@p1"), 1);
+    }
+
+    #[test]
+    fn a_page_in_no_project_discards_nothing() {
+        let storage = storage_with("cityloom-edits", &edits_document(None));
+        let (vm, _) = open(&storage, None);
+        assert!(!vm.edits_cleared());
+        assert_eq!(streets_in(&storage, "cityloom-edits"), 1);
+    }
+
+    #[test]
+    fn dismissing_hides_the_notice() {
+        let storage = storage_with("cityloom-edits@p1", &edits_document(None));
+        let (vm, _) = open(&storage, Some("p1"));
+        vm.dismiss_edits_cleared();
+        assert!(!vm.edits_cleared());
+    }
+
+    #[test]
+    fn the_notice_is_a_status_with_the_message_and_a_dismiss_button_in_both_languages() {
+        use crate::shared::testing::html;
+        use leptos::prelude::*;
+        for (locale, button) in [(Locale::En, "Dismiss"), (Locale::FrCa, "Fermer")] {
+            let storage = storage_with("cityloom-edits@p1", &edits_document(None));
+            let (mut ports, _, _) = test_ports_with_page();
+            ports.storage = storage;
+            crate::sync::hub::reset();
+            let i18n = crate::i18n_for(locale);
+            let vm = ShellVm::new_with(ports, i18n.clone(), Rc::new(Bare::in_project(Some("p1".into()))), "details-details", vec![], false, true);
+            let out = html({
+                let vm = vm.clone();
+                move || view! { <EditsClearedNotice vm=vm/> }.into_any()
+            });
+            let message = i18n.tr_now("shell-edits-cleared", &Args::new());
+            assert!(out.contains(r#"role="status""#) && out.contains(r#"class="shell-notice""#), "{locale:?}: {out}");
+            assert!(out.contains(&message) && out.contains(&format!(">{button}<")), "{locale:?}: {out}");
+            assert!(out.contains(r#"type="button""#), "{out}");
+            if locale == Locale::En {
+                assert_eq!(message, MESSAGE);
+            }
+            vm.dismiss_edits_cleared();
+            assert!(
+                !html({
+                    let vm = vm.clone();
+                    move || view! { <EditsClearedNotice vm=vm/> }.into_any()
+                })
+                .contains("shell-notice")
+            );
+        }
+    }
+}

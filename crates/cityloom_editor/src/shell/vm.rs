@@ -152,6 +152,8 @@ pub struct ShellVm {
     inspector_open: ArcRwSignal<bool>,
     notes_open: ArcRwSignal<bool>,
     tab: ArcRwSignal<String>,
+    /// Whether the project's earlier edits were just cleared (the importer changed) and the notice says so.
+    edits_cleared: ArcRwSignal<bool>,
 }
 
 /// The message that names a side of the road.
@@ -220,10 +222,35 @@ impl ShellVm {
             inspector_open: ArcRwSignal::new(inspector_open),
             notes_open: ArcRwSignal::new(notes_open),
             tab: ArcRwSignal::new(tab),
+            edits_cleared: ArcRwSignal::new(false),
             ports,
         };
         vm.take_region(recall(REGION_KEY).as_deref());
+        vm.discard_stale_edits();
         Rc::new(vm)
+    }
+
+    // ---- edits cleared ----
+
+    /// Clears the edits of the page's project that were made against a network from before the importer changed
+    /// (`CityStore::discard_stale`) and, when there were any, shows the notice and says so. Nothing is kept: the next
+    /// open finds nothing stale. A page in no project discards nothing.
+    fn discard_stale_edits(&self) {
+        let Some(project) = self.target.project() else { return };
+        let storage: Rc<dyn crate::shared::ports::Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(self.ports.storage.clone(), &project));
+        if crate::city::store::CityStore::current(storage).discard_stale() > 0 {
+            self.edits_cleared.set(true);
+            self.ports.announcer.say(&self.say("shell-edits-cleared"));
+        }
+    }
+
+    /// Whether the notice that earlier edits were cleared is showing.
+    pub fn edits_cleared(&self) -> bool {
+        self.edits_cleared.get()
+    }
+
+    pub fn dismiss_edits_cleared(&self) {
+        self.edits_cleared.set(false);
     }
 
     // ---- language ----

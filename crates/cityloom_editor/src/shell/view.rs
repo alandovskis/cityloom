@@ -55,6 +55,30 @@ fn typing(target: Option<EventTarget>) -> bool {
     target.and_then(|t| t.dyn_into::<Element>().ok()).is_some_and(|e| e.closest("input, select, textarea").ok().flatten().is_some())
 }
 
+/// The notice that the project's earlier edits were cleared, with a button to close it (as the map's report notice).
+#[component]
+pub fn EditsClearedNotice(vm: Rc<ShellVm>) -> impl IntoView {
+    let vm = StoredValue::new_local(vm);
+    view! {
+        {move || {
+            vm.get_value()
+                .edits_cleared()
+                .then(|| {
+                    let i18n = vm.get_value().i18n();
+                    let dismiss = i18n.tr("shell-notice-dismiss", &Args::new());
+                    view! {
+                        <p class="shell-notice" role="status">
+                            {i18n.tr("shell-edits-cleared", &Args::new())}
+                            <button type="button" on:click=move |_| vm.get_value().dismiss_edits_cleared()>
+                                {dismiss}
+                            </button>
+                        </p>
+                    }
+                })
+        }}
+    }
+}
+
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
 /// is the message that names what the left sidebar holds on this page.
 pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes: NotesAtStart) {
@@ -104,6 +128,14 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
     bind_sync(&vm);
+    // The notice that earlier edits were cleared goes before the page's `main`, where a screen reader meets it first.
+    if let Some(main) = document().query_selector("main").ok().flatten()
+        && let Ok(slot) = document().create_element("div")
+    {
+        let _ = main.before_with_node_1(&slot);
+        let notice = vm.clone();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+    }
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {
