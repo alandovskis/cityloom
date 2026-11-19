@@ -3276,8 +3276,12 @@ fn in_a_scenario_the_section_says_where_edits_go_and_a_delete_asks_to_be_confirm
     for id in ["scenario-duplicate", "scenario-rename", "scenario-delete"] {
         assert!(!button_tag(&h, id).contains("disabled"), "{id}: {h}");
     }
+    // both labels are always there, one hidden, so that the button keeps the width of the longer and nothing moves
+    let labels = |h: &str| (h.contains(r#"<span class="swap-on">Delete</span>"#), h.contains(r#"<span class="swap-off">Confirm delete</span>"#));
+    assert_eq!(labels(&h), (true, true), "{h}");
     assert!(!s.delete_scenario());
-    assert!(scenarios_drawn(&s).contains(">Confirm delete</button>"));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(r#"<span class="swap-off">Delete</span>"#) && h.contains(r#"<span class="swap-on">Confirm delete</span>"#), "{h}");
 }
 
 #[test]

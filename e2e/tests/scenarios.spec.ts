@@ -115,13 +115,31 @@ test.describe("a street's scenarios", () => {
     await expect(live(page)).toHaveText(
       "Delete scenario “Wider lane, parking kept”? Press Confirm delete to delete it.",
     );
-    await expect(page.locator("#scenario-delete")).toHaveText("Confirm delete");
+    await expect(page.locator("#scenario-delete")).toHaveAccessibleName("Confirm delete");
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText("Scenario “Wider lane, parking kept” deleted. Now showing the baseline.");
     await expect(pick(page)).toHaveValue("");
     await expect(pick(page).locator("option")).toHaveText(["Baseline (what the map shows)", "Wider lane"]);
     // the pressed button is disabled on the baseline: the person goes on from the menu of designs, not the page's start
     await expect(pick(page)).toBeFocused();
+  });
+
+  test("asking to confirm a delete moves neither the scenarios nor the toolbar", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openStreet(page);
+    await act(page, "scenario-new", "Parking kept, wider sidewalk");
+    const boxes = () =>
+      Promise.all(["#scenario-slot", ".tools", "#drawing"].map(async (s) => page.locator(s).first().boundingBox()));
+    const before = await boxes();
+    await act(page, "scenario-delete");
+    await expect(page.locator("#scenario-delete")).toHaveAccessibleName("Confirm delete");
+    expect(await boxes()).toEqual(before);
+    // and it sits beside the title card, not on a row of its own
+    const [title, slot] = await Promise.all([
+      page.locator(".title-card").boundingBox(),
+      page.locator("#scenario-slot").boundingBox(),
+    ]);
+    expect(slot!.x).toBeGreaterThan(title!.x + title!.width - 1);
   });
 
   test("in French a name already taken is refused, under the field and in the live region", async ({ page }) => {

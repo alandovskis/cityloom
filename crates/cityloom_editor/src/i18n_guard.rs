@@ -521,6 +521,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("speed-target", "the id of a check, not a message"),
     ("read-only-slot", "the CSS class of the element the shell puts the read-only tag in, in the top bar (shell/view.rs)"),
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
+    ("swap-on", "a CSS class: the label of the scenarios' Delete button that is shown (web/editor.css)"),
+    ("swap-off", "a CSS class: the label of the scenarios' Delete button kept hidden for its width (web/editor.css)"),
     ("scenario-slot", "the id of the element a place's scenarios are drawn into (web/street.html, web/intersection.html)"),
     ("projects-heading", "the id of the list of projects' heading, where focus goes"),
     ("project-name", "the id of the create form's name field, where focus goes"),
