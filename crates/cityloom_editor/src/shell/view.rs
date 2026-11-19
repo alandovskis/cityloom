@@ -80,6 +80,16 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
             }
         }
     }
+    // A page that shows its project read-only says so first among the top bar's buttons, on every page of the project.
+    if vm.read_only()
+        && let Some(end) = document().query_selector(".top-end").ok().flatten()
+        && let Ok(slot) = document().create_element("div")
+    {
+        slot.set_class_name("read-only-slot");
+        let _ = end.insert_before(&slot, end.first_child().as_ref());
+        let i18n = vm.i18n();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ReadOnlyTag i18n=i18n/> }).forget();
+    }
     // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
     // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
     if let Some(slot) = by_id("share-slot") {
@@ -142,6 +152,24 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     }
     crate::shell::header::watch();
     std::mem::forget(owner);
+}
+
+/// What the top bar of a page that shows its project read-only says: "Read-only" to the eye, the whole sentence to a
+/// screen reader, in the page's language.
+#[component]
+pub fn ReadOnlyTag(i18n: Rc<I18n>) -> impl IntoView {
+    let i18n = StoredValue::new_local(i18n);
+    let say = move |key: &'static str| move || i18n.with_value(|i| i.tr(key, &Args::new()));
+    view! {
+        <p class="read-only-tag" id="read-only-tag">
+            <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/>
+                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>
+            </svg>
+            <span aria-hidden="true">{say("read-only-tag")}</span>
+            <span class="sr-only">{say("read-only-note")}</span>
+        </p>
+    }
 }
 
 /// The attributes a page's markup may have translated, as `data-i18n-<name>="key"`.

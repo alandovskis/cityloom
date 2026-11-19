@@ -516,6 +516,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("speed-choices", "the end of the id of a standards profile field's input, not a message"),
     ("target-speed", "the end of the id of a standards profile field's input, not a message"),
     ("speed-target", "the id of a check, not a message"),
+    ("read-only-slot", "the CSS class of the element the shell puts the read-only tag in, in the top bar (shell/view.rs)"),
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
     ("projects-heading", "the id of the list of projects' heading, where focus goes"),
     ("project-name", "the id of the create form's name field, where focus goes"),

@@ -105,7 +105,8 @@ pub fn Fit(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn History(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
-    view! {
+    // A junction shown read-only has no history to go back and forth in: undo, redo and Start over are not offered.
+    (!w.read_only()).then(move || view! {
         <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>
             {move || w.tr("jn-undo")}
@@ -118,7 +119,7 @@ pub fn History(vm: Rc<JunctionVm>) -> impl IntoView {
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
             {move || w.tr("jn-reset")}
         </button>
-    }
+    })
 }
 
 /// A key to the strips: the tint and hatch of each piece that appears in the plan.

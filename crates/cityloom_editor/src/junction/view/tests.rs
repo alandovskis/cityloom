@@ -1075,6 +1075,41 @@ fn undo_redo_and_start_over_are_off_until_there_is_something_to_undo() {
     assert_eq!(off(&h), [true, false, true]);
 }
 
+/// A junction of project `p1` on a page that shows the project read-only.
+fn read_only_junction(sample: usize) -> Rc<JunctionVm> {
+    use crate::shared::ports::Storage;
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let ports = crate::shared::ports::Ports { storage, ..ports };
+    JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None)
+}
+
+#[test]
+fn a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_streets_to_go_to() {
+    let s = read_only_junction(0);
+    let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
+    assert!(!h.contains("id=\"undo\"") && !h.contains("id=\"reset\""), "{h}");
+    // the junction's level: its control disabled, its streets still to go to
+    let h = panel(&s);
+    let fieldset = r#"<fieldset disabled class="read-only-controls"><section class="insp-sec"><h3 id=""#;
+    assert!(h.contains(&format!("{fieldset}i-h-control\"")), "the control is offered disabled: {h}");
+    assert!(!h.contains(&format!("{fieldset}i-h-streets\"")) && h.contains("jn-go-"), "the streets can still be gone to: {h}");
+    // a street's level: its number fields disabled, and the way back still there
+    let n = arm(&s, 0);
+    s.select(Target::Arm(n));
+    let h = panel(&s);
+    assert!(h.contains("jn-path-up-0") && !h[..h.find("jn-path-up-0").unwrap()].contains("read-only-controls"), "{h}");
+    assert!(count(&h, r#"<fieldset disabled class="read-only-controls""#) >= 2, "{h}");
+    // the turns cannot be switched
+    let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
+    let buttons: Vec<&str> = h.split("<button").skip(1).map(|b| &b[..b.find('>').unwrap()]).collect();
+    assert!(!buttons.is_empty() && buttons.iter().all(|b| b.contains("disabled")), "{h}");
+    // an editable junction has none of it
+    let s = shared(0);
+    assert!(!panel(&s).contains("read-only-controls"));
+    assert!(html(|| view! { <page::History vm=s.clone()/> }.into_any()).contains("id=\"undo\""));
+}
+
 #[test]
 fn the_key_lists_the_pieces_in_the_plan() {
     let s = shared(0);

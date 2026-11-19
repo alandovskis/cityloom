@@ -279,7 +279,8 @@ pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
 #[component]
 pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    view! {
+    // A street shown read-only has no history to go back and forth in: undo, redo and Start over are not offered.
+    (!w.read_only()).then(move || view! {
         <div class="btns" role="toolbar" aria-label=say(w, "history-tools")>
             <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -294,7 +295,7 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
             <span class="lbl">{say(w, "history-reset")}</span>
         </button>
-    }
+    })
 }
 
 /// The drawing's heading, for a screen reader.

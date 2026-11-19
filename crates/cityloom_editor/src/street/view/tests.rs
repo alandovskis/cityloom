@@ -420,6 +420,43 @@ fn the_street_s_history_buttons_are_off_until_there_is_something_to_undo() {
     assert_eq!(off(&h), [false, true, false]);
 }
 
+/// A street of project `p1` on a page that shows the project read-only.
+fn read_only_street() -> Rc<StreetVm> {
+    use crate::shared::ports::Storage;
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    StreetVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(Locale::En), Editor::new(0), None)
+}
+
+#[test]
+fn a_street_shown_read_only_offers_no_undo_no_add_menu_and_no_transform_menu() {
+    let s = read_only_street();
+    let h = street_html(|| view! { <page::History vm=s.clone()/> });
+    assert!(!h.contains("id=\"undo\"") && !h.contains("id=\"redo\"") && !h.contains("id=\"reset\""), "{h}");
+    let h = street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> });
+    assert!(!h.contains("add-btn") && !h.contains("add-menu"), "{h}");
+    let h = street_html(|| view! { <transform::TransformDialog vm=s.clone()/> });
+    assert!(!h.contains("transform-btn"), "{h}");
+    // a street that can be edited offers all three
+    let s = street_shared(0);
+    assert!(street_html(|| view! { <page::History vm=s.clone()/> }).contains("id=\"undo\""));
+    assert!(street_html(|| view! { <add_menu::AddMenu vm=s.clone()/> }).contains("id=\"add-btn\""));
+    assert!(street_html(|| view! { <transform::TransformDialog vm=s.clone()/> }).contains("id=\"transform-btn\""));
+}
+
+#[test]
+fn a_street_shown_read_only_offers_its_piece_s_details_disabled_and_its_pieces_to_choose() {
+    let s = read_only_street();
+    let u = segment(&s, 1);
+    s.select(Some(u));
+    let read_only = s.read_only();
+    let h = html(|| crate::shared::locked::locked(read_only, view! { <inspector::StreetInspector vm=s.clone()/> }));
+    assert!(h.starts_with(r#"<fieldset disabled class="read-only-controls""#), "{h}");
+    assert!(h.contains("piece-remove"), "the details are still shown: {h}");
+    let h = street_html(|| view! { <view::piece_list::PieceList vm=s.clone()/> });
+    assert!(!h.contains("disabled"), "the pieces can still be chosen: {h}");
+}
+
 /// The opening tag of the first element whose markup holds `needle`.
 fn tag_with(h: &str, needle: &str) -> String {
     let at = h.find(needle).unwrap_or_else(|| panic!("{needle}: {h}"));

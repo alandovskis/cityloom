@@ -112,42 +112,45 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     let body = move || {
         if searching.get() { Either::Left(move || results(w, parts, query.get())) } else { Either::Right(topics(w, parts, topic, narrow)) }
     };
-    view! {
-        <button
-            type="button"
-            id="add-btn"
-            class="btn"
-            aria-expanded=move || open.get().to_string()
-            aria-controls="add-menu"
-            node_ref=button
-            on:click=move |_| if open.get_untracked() { open.set(false) } else { open_menu() }
-            on:keydown=move |e: KeyboardEvent| {
-                if e.key() == "ArrowDown" && !open.get_untracked() {
-                    e.prevent_default();
-                    open_menu();
+    // A street shown read-only has nothing to add: the menu is not offered.
+    (!w.read_only()).then(move || {
+        view! {
+            <button
+                type="button"
+                id="add-btn"
+                class="btn"
+                aria-expanded=move || open.get().to_string()
+                aria-controls="add-menu"
+                node_ref=button
+                on:click=move |_| if open.get_untracked() { open.set(false) } else { open_menu() }
+                on:keydown=move |e: KeyboardEvent| {
+                    if e.key() == "ArrowDown" && !open.get_untracked() {
+                        e.prevent_default();
+                        open_menu();
+                    }
                 }
-            }
-        >
-            <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>
-            {say(w, "add-button")}
-        </button>
-        <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=keys on:focusout=focus_out>
-            <p class="menu-h">{say(w, "add-button")}</p>
-            <label class="sr-only" for="add-search">{say(w, "add-search-label")}</label>
-            <input
-                type="search"
-                id="add-search"
-                class="add-search"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder=say(w, "add-search-label")
-                node_ref=search
-                prop:value=move || query.get()
-                on:input=typed
-            />
-            <div class="add-body">{body}</div>
-        </div>
-    }
+            >
+                <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>
+                {say(w, "add-button")}
+            </button>
+            <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=keys on:focusout=focus_out>
+                <p class="menu-h">{say(w, "add-button")}</p>
+                <label class="sr-only" for="add-search">{say(w, "add-search-label")}</label>
+                <input
+                    type="search"
+                    id="add-search"
+                    class="add-search"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder=say(w, "add-search-label")
+                    node_ref=search
+                    prop:value=move || query.get()
+                    on:input=typed
+                />
+                <div class="add-body">{body}</div>
+            </div>
+        }
+    })
 }
 
 /// Whether the screen is as narrow as the one where `web/editor.css` lays the topics across the top.

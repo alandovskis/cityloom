@@ -21,6 +21,7 @@ use crate::junction::vm::JunctionVm;
 use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::locked::locked;
 use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
@@ -159,6 +160,11 @@ fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoVie
     view! { <section class="insp-sec"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
 }
 
+/// A section of editing controls: offered disabled on a junction shown read-only (`shared::locked`).
+fn edit_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> AnyView {
+    locked(w.read_only(), section(w, id, heading, body))
+}
+
 fn hint(text: Signal<String>) -> impl IntoView {
     move || {
         let t = text.get();
@@ -189,7 +195,7 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
     let Num { id, label, minus, plus, value, tag, hint: note } = n;
     let hint_id = format!("{id}-hint");
     let described_by = hint_id.clone();
-    view! {
+    let field = view! {
         <section class="insp-sec">
             <h3 class="note-h" id=id>{words(w, label)}</h3>
             <div class="stepper">
@@ -226,8 +232,9 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
             </div>
             {hint_with_id(note, hint_id)}
         </section>
-    }
-    .into_any()
+    };
+    // Every number field edits: offered disabled on a junction shown read-only.
+    locked(w.read_only(), field)
 }
 
 /// A hint that a field is described by.
@@ -366,7 +373,7 @@ fn turbo_layout(w: Watch) -> impl IntoView {
             </li>
         }
     };
-    section(
+    edit_section(
         w,
         "i-h-turbo",
         "jn-insp-turbo",
@@ -396,7 +403,7 @@ fn turbo_size(w: Watch) -> impl IntoView {
     let size = move || w.view().turbo.as_ref().map(|t| w.tr(t.size_key)).unwrap_or_default();
     let can_smaller = move || w.view().turbo.as_ref().is_some_and(|t| t.can_smaller);
     let can_larger = move || w.view().turbo.as_ref().is_some_and(|t| t.can_larger);
-    section(
+    edit_section(
         w,
         "i-h-turbo-size",
         "jn-insp-turbo-size",
@@ -446,7 +453,7 @@ fn turbo_main(w: Watch) -> impl IntoView {
     let label = move || w.tr(if moves_lanes() { "jn-insp-turbo-main-swap" } else { "jn-insp-turbo-main-switch" });
     move || {
         can_switch.get().then(|| {
-            section(
+            edit_section(
                 w,
                 "i-h-turbo-main",
                 "jn-insp-turbo-main",
@@ -499,7 +506,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
     };
     let none_selected = move || w.view().bus.is_none();
     let note = Signal::derive(move || bus_note(w).unwrap_or_else(|| w.tr("jn-insp-bus-offer")));
-    section(
+    edit_section(
         w,
         "i-h-bus",
         "jn-insp-bus-across",
@@ -521,7 +528,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
 }
 
 fn cycle_track(w: Watch, cycle: Memo<bool>) -> impl IntoView {
-    section(
+    edit_section(
         w,
         "i-h-cycle",
         "jn-insp-cycle",
@@ -543,7 +550,7 @@ fn cycle_track(w: Watch, cycle: Memo<bool>) -> impl IntoView {
 
 /// The switch that raises the whole junction to sidewalk height.
 fn raised_table(w: Watch, raised: Memo<bool>) -> impl IntoView {
-    section(
+    edit_section(
         w,
         "i-h-raised",
         "jn-insp-raised",
@@ -581,7 +588,7 @@ fn control_section(w: Watch) -> impl IntoView {
             )
             .into_any()
         } else {
-            section(
+            edit_section(
                 w,
                 "i-h-control",
                 "jn-insp-control",
@@ -630,7 +637,10 @@ fn head_view(name: Signal<String>, sub: Signal<String>) -> AnyView {
 }
 
 fn danger_button(w: Watch, label: &'static str, on_click: impl Fn() + 'static) -> impl IntoView {
-    view! { <section class="insp-sec"><button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{words(w, label)}</button></section> }
+    locked(
+        w.read_only(),
+        view! { <section class="insp-sec"><button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{words(w, label)}</button></section> },
+    )
 }
 
 fn bus_panel(w: Watch) -> AnyView {
@@ -853,7 +863,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
                 format!("turn dest{}{}", if on { " on" } else { "" }, if on && bad { " bad" } else { "" })
             }
             aria-pressed=move || state().0.to_string()
-            disabled=move || !state().1 || fixed()
+            disabled=move || !state().1 || fixed() || w.read_only()
             title=label
             aria-label=name
             on:click=move |_| {
@@ -937,12 +947,12 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     };
     view! {
         {head(title, sub)}
-        <section class="insp-sec">
+        {locked(w.read_only(), view! { <section class="insp-sec">
             <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
             {hint(Signal::derive(move || if fixed() { w.tr("jn-insp-lane-fixed") } else { String::new() }))}
-        </section>
+        </section> })}
         <section class="insp-sec">
             <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button>
         </section>
@@ -992,11 +1002,11 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
         )
     };
     view! {
-        <section class="insp-sec">
+        {locked(w.read_only(), view! { <section class="insp-sec">
             <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
             {hint(range)}
             <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, false)); }>{btn_icon(false)}{words(w, "jn-insp-crossing-remove")}</button>
-        </section>
+        </section> })}
         {num_field(
             w,
             setback,
@@ -1017,7 +1027,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
                 w.edit(|j| j.set_crossing_width(uid, w.units_now().mm(v)));
             },
         )}
-        {section(
+        {edit_section(
             w,
             "i-h-refuge",
             "jn-insp-halfway",
@@ -1041,7 +1051,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
                 </ul>
             },
         )}
-        {section(
+        {edit_section(
             w,
             "i-h-continuous",
             "jn-insp-continuous",
@@ -1057,7 +1067,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
                 </ul>
             },
         )}
-        {section(w, "i-h-bulb", "jn-insp-shorten", view! { <ul class="opts">{bulb(0)}{bulb(1)}</ul> })}
+        {edit_section(w, "i-h-bulb", "jn-insp-shorten", view! { <ul class="opts">{bulb(0)}{bulb(1)}</ul> })}
     }
 }
 
@@ -1101,10 +1111,10 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
             crossing_fields(w, uid).into_any()
         } else {
             view! {
-                <section class="insp-sec">
+                {locked(w.read_only(), view! { <section class="insp-sec">
                     <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
                     <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, true)); }>{btn_icon(true)}{words(w, "jn-insp-crossing-mark")}</button>
-                </section>
+                </section> })}
             }
             .into_any()
         }
@@ -1168,7 +1178,7 @@ fn choice(
 fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
     let why = move || w.arm(uid, |a| a.bike_box_why).flatten();
     let on = move || w.arm(uid, |a| a.bike_box.is_some()).unwrap_or(false);
-    section(
+    edit_section(
         w,
         "i-h-bike-box",
         "jn-insp-bike-box",
@@ -1190,7 +1200,7 @@ fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
 fn protected_section(w: Watch, uid: u32) -> impl IntoView {
     let why = move || w.view().corners.iter().find(|c| c.uid == uid).and_then(|c| c.protected_why);
     let on = move || w.view().corners.iter().find(|c| c.uid == uid).is_some_and(|c| c.protected.is_some());
-    section(
+    edit_section(
         w,
         "i-h-protected",
         "jn-insp-protected",
@@ -1241,7 +1251,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
         })
     };
     view! {
-        <section class="insp-sec">
+        {locked(w.read_only(), view! { <section class="insp-sec">
             <h3 class="note-h" id="i-h-transit">{words(w, "jn-insp-transit")}</h3>
             <ul class="opts">
                 {option_btn(
@@ -1265,7 +1275,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
                 )}
             </ul>
             {problems}
-        </section>
+        </section> })}
         {length_field}
     }
 }
@@ -1631,6 +1641,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
         view! {
             <li>
                 <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
+                {locked(w.read_only(), view! {
                 {patterns}
                 {walks}
                 {rides}
@@ -1648,6 +1659,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                         {words(w, "jn-sig-remove-short")}
                     </button>
                 </div>
+                })}
             </li>
         }
     };
@@ -1660,7 +1672,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     {signal_phases(w)}
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
-                    <div class="signal-tools">
+                    {locked(w.read_only(), view! { <div class="signal-tools">
                         <For
                             each=move || streets.get()
                             key=|uid| *uid
@@ -1673,7 +1685,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                             on:click=move |_| { if w.edit(|j| j.restore_suggestion()) { focus_id("signal-plan-state") } }>
                             {words(w, "jn-sig-restore")}
                         </button>
-                    </div>
+                    </div> })}
                 </section>
             }
         })
@@ -1778,12 +1790,12 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let remove = (!linked).then(|| {
         let can = move || w.view().can_remove;
         view! {
-            <section class="insp-sec">
+            {locked(w.read_only(), view! { <section class="insp-sec">
                 <button type="button" class="btn danger" disabled=move || !can() on:click=move |_| { w.edit(|j| j.remove_arm(uid)); }>
                     {btn_icon(false)}{words(w, "jn-insp-remove-street")}
                 </button>
                 {move || (!can()).then(|| view! { <p class="insp-range">{move || tr(w, "jn-insp-min-arms", Args::new().num("n", MIN_ARMS as i64))}</p> })}
-            </section>
+            </section> })}
         }
     });
     view! {

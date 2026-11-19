@@ -559,3 +559,39 @@ fn the_tray_is_worded_in_french() {
     assert!(h.contains(r#"aria-label="Notes""#) && h.contains("Sections des notes"), "{h}");
     assert!(h.contains("<span>Vérifications</span>") && h.contains("<span>Modifications</span>"), "{h}");
 }
+
+/// A page whose address opens its project read-only (`view=1`): the shell's links to the project's pages keep it, and
+/// its top bar says so in the page's language.
+#[test]
+fn a_page_shown_read_only_says_so_and_its_links_keep_it_read_only() {
+    let shell = |path: &str| {
+        crate::sync::hub::reset();
+        let (ports, page, _) = crate::shared::ports::test_ports_with_page();
+        *page.path.borrow_mut() = path.to_string();
+        let target = std::rc::Rc::new(crate::shell::Bare::in_project(Some("p1".into())));
+        crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true)
+    };
+    let vm = shell("/map.html?project=p1&view=1");
+    assert!(vm.read_only());
+    assert_eq!(vm.link("street.html?street=7"), "street.html?street=7&project=p1&view=1");
+    assert_eq!(vm.link("index.html"), "index.html", "the list of projects is no page of the project");
+    let vm = shell("/map.html?project=p1");
+    assert!(!vm.read_only());
+    assert_eq!(vm.link("street.html?street=7"), "street.html?street=7&project=p1");
+    crate::sync::hub::reset();
+
+    let tag = |locale: Locale| {
+        let i18n = crate::i18n_for(locale);
+        crate::shared::testing::html(move || {
+            use leptos::prelude::IntoAny;
+            leptos::view! { <crate::shell::view::ReadOnlyTag i18n=i18n/> }.into_any()
+        })
+    };
+    let en = tag(Locale::En);
+    assert!(en.contains(r#"id="read-only-tag""#), "{en}");
+    assert!(en.contains(">Read-only<"), "{en}");
+    assert!(en.contains("This design is open read-only: you can look at it, but not change it."), "{en}");
+    let fr = tag(Locale::FrCa);
+    assert!(fr.contains(">Lecture seule<"), "{fr}");
+    assert!(fr.contains("Cet aménagement est ouvert en lecture seule\u{a0}: vous pouvez le consulter, mais pas le modifier."), "{fr}");
+}

@@ -82,9 +82,11 @@ pub fn SelectedStreets(vm: Rc<MapVm>) -> impl IntoView {
                     }
                 })
         }}
-        {move || (!streets().is_empty()).then(|| change(vm))}
+        // A map shown read-only cannot change the selected streets: neither the change nor its undo is offered.
+        {move || (!streets().is_empty() && !vm.with(|v| v.read_only())).then(|| change(vm))}
         {move || {
             vm.with(|v| v.corridor_undo_label())
+                .filter(|_| !vm.with(|v| v.read_only()))
                 .map(|label| {
                     view! {
                         <button type="button" class="btn quiet" id="corridor-undo" on:click=move |_| {

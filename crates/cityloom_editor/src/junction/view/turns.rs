@@ -120,6 +120,7 @@ fn table(v: &JView, w: Watch, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                                 class=class
                                 aria-pressed=allowed.to_string()
                                 aria-label=label
+                                disabled=w.read_only()
                                 on:click=move |_| toggle(from, to, allowed)
                             >
                                 {turn_glyph(m.class, 16)}

@@ -66,6 +66,11 @@ impl SheetWatch {
         self.vm.with_value(|v| v.link(href))
     }
 
+    /// Whether the street is shown read-only: the page offers no edit.
+    pub fn read_only(&self) -> bool {
+        self.vm.with_value(|v| v.read_only())
+    }
+
     pub fn units(&self) -> Units {
         self.vm.with_value(|v| v.units())
     }

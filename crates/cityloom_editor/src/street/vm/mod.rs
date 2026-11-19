@@ -4448,6 +4448,7 @@ mod read_only_tests {
             ("reset", Box::new(|vm| vm.reset())),
             ("template", Box::new(|vm| vm.apply_template(Template::School))),
             ("measure", Box::new(|vm| vm.apply_measure("B1"))),
+            ("transform", Box::new(|vm| vm.apply_choice(crate::street::vm::transform::Choice::Template(Template::Greenway)))),
             ("add a piece", Box::new(move |vm| vm.add_item(Item::Piece(travel)))),
             ("add green", Box::new(|vm| vm.add_green_clear(GreenForm::new(GreenKind::Bed)))),
             ("split", Box::new(|vm| vm.split_zone(None))),

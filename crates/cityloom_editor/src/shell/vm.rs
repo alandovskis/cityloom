@@ -247,9 +247,16 @@ impl ShellVm {
     }
 
     /// `href` as a link of this page: one to the map or an editor names the page's project, so it opens there whichever
-    /// project another tab opened since (`shared::project_id::link`).
+    /// project another tab opened since, and read-only where this page is (`shared::project_id::link_in`).
     pub fn link(&self, href: &str) -> String {
-        crate::shared::project_id::link(href, self.target.project().as_deref())
+        crate::shared::project_id::link_in(href, self.target.project().as_deref(), self.read_only())
+    }
+
+    /// Whether the page shows its project read-only: its address says so (`shared::project_id::viewing`), as it does to
+    /// `project::context`, which gives the page's view-models a storage that keeps nothing. The top bar then says so.
+    pub fn read_only(&self) -> bool {
+        let path = self.ports.page.path();
+        crate::shared::project_id::viewing(path.split_once('?').map_or("", |(_, search)| search))
     }
 
     // ---- units ----
