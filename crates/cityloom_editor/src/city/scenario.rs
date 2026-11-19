@@ -115,6 +115,29 @@ impl<T: Clone> Scenarios<T> {
     }
 }
 
+/// One action of the management of a place's scenarios.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    /// A new scenario, named so, starting as the baseline.
+    Create(String),
+    /// A copy of scenario `id`, named so.
+    Duplicate(u32, String),
+    Rename(u32, String),
+    Delete(u32),
+}
+
+impl<T: Clone> Scenarios<T> {
+    /// Does `action`, a new scenario starting as `baseline`. The id of the scenario it made, if it made one.
+    pub fn act(&mut self, action: Action, baseline: &T) -> Result<Option<u32>, Refusal> {
+        match action {
+            Action::Create(name) => self.create(&name, baseline.clone()).map(Some),
+            Action::Duplicate(id, name) => self.duplicate(id, &name).map(Some),
+            Action::Rename(id, name) => self.rename(id, &name).map(|()| None),
+            Action::Delete(id) => self.delete(id).map(|()| None),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +200,19 @@ mod tests {
             s.create(&format!("S{i}"), 0).unwrap();
         }
         assert_eq!(s.create("One more", 0), Err(Refusal::Full));
+    }
+
+    #[test]
+    fn each_action_does_what_its_method_does() {
+        let mut s = two();
+        assert_eq!(s.act(Action::Create("New".into()), &7), Ok(Some(3)));
+        assert_eq!(s.get(3).unwrap().design, 7, "a new scenario starts as the baseline");
+        assert_eq!(s.act(Action::Duplicate(1, "Copy".into()), &7), Ok(Some(4)));
+        assert_eq!(s.get(4).unwrap().design, 1);
+        assert_eq!(s.act(Action::Rename(4, "new".into()), &7), Err(Refusal::NameTaken));
+        assert_eq!(s.act(Action::Rename(4, "Copied".into()), &7), Ok(None));
+        assert_eq!(s.act(Action::Delete(4), &7), Ok(None));
+        assert_eq!(s.act(Action::Delete(4), &7), Err(Refusal::Missing));
     }
 
     #[test]
