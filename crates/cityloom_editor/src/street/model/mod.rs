@@ -646,7 +646,6 @@ impl Editor {
     }
 
     /// Gives every zone in the pick `section`, as one edit (`over_pick`): the pick becomes one run.
-    #[cfg_attr(not(test), expect(dead_code, reason = "measures and templates give the pick one section from a later change"))]
     fn edit_uniform(&mut self, label: Said, section: Vec<Segment>) -> bool {
         self.over_pick(label, |c, range, shown, whole| c.change_sections(range, shown, whole, |_, _| (section.clone(), false)))
     }
@@ -1130,7 +1129,8 @@ impl Editor {
         })
     }
 
-    /// Arranges the roadway as one of the Atlas lane measures (`measures::DEFS`).
+    /// Arranges the roadway as one of the Atlas lane measures (`measures::DEFS`), from the shown section, and gives
+    /// that one arrangement, with one set of uids, to every zone in the pick (`edit_uniform`): the pick becomes one run.
     /// Refused when it does not suit this street or will not fit.
     pub fn apply_measure(&mut self, code: &str) -> bool {
         let Some(def) = measures::DEFS.iter().find(|d| d.code == code) else {
@@ -1142,10 +1142,7 @@ impl Editor {
         else {
             return false;
         };
-        let ok = self.edit(Said::new("rev-measure").with("code", Arg::Text(def.code.to_string())).with("name", Arg::Measure(def.code)), |segs| {
-            *segs = arranged;
-            true
-        });
+        let ok = self.edit_uniform(Said::new("rev-measure").with("code", Arg::Text(def.code.to_string())).with("name", Arg::Measure(def.code)), arranged);
         if ok {
             self.next_uid = next_uid;
             self.selected = None;
@@ -1153,12 +1150,13 @@ impl Editor {
         ok
     }
 
-    /// Arranges the selected zone as a street template (`Template`): its pieces are replaced by the template's,
-    /// fitted to the street's width, as one undoable edit. Refused, with the reason and nothing changed, when the
-    /// class or the width does not suit it.
+    /// Arranges the pick as a street template (`Template`): the pieces of every zone in it are replaced by the
+    /// template's, fitted to the street's width, with one set of uids (`edit_uniform`: the pick becomes one run), as one
+    /// undoable edit. Refused, with the reason and nothing changed, when the class or the width does not suit it.
     ///
-    /// The School street also makes a school zone, with a lower speed limit and a raised table, as far as each fits
-    /// (`apply_school`); the report says which parts were applied and which skipped. Still one revision.
+    /// The School street is laid out only in its school stretch, in the middle of the pick, with a lower speed limit
+    /// and a raised table, as far as each fits (`apply_school`); the report says which parts were applied and which
+    /// skipped. Still one revision.
     pub fn apply_template(&mut self, template: Template) -> Result<TemplateReport, TemplateRefusal> {
         let mut next_uid = self.next_uid;
         let arranged = template.arrange(self.class(), self.row_mm(), REGIONS[self.region].drive_side, &mut next_uid)?;
@@ -1166,11 +1164,7 @@ impl Editor {
         if template == Template::School {
             return Ok(self.apply_school(arranged, next_uid, label));
         }
-        let ok = self.edit(label, |segs| {
-            *segs = arranged;
-            true
-        });
-        if ok {
+        if self.edit_uniform(label, arranged) {
             self.next_uid = next_uid;
             self.selected = None;
         }
@@ -2271,6 +2265,33 @@ mod tests {
         let _ = e.set_width(bus, 3000);
         let m = e.view().measures.into_iter().find(|m| m.code == "B1").unwrap();
         assert!(m.present && !m.problems.is_empty());
+    }
+
+    #[test]
+    fn a_measure_on_a_stretch_makes_it_one_run_with_one_set_of_uids() {
+        // The avenue in three runs (0, 20 m, 40 m on a 60 m road), the middle one with a wider first piece.
+        let base = Street::sample(1, Side::Right);
+        let mut s = zoned(base.clone(), &[0, 20_000, 40_000], 60_000);
+        let mut own = base.segments.clone();
+        own[0].width_mm += 100;
+        s.zones[1].segments = Some(own);
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap_or(0);
+        let mut e = Editor::from_street(&s, &s, region).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        let before = e.snapshot();
+        e.pick_stretch(10_000, 30_000).unwrap();
+        assert!(e.apply_measure("B1"));
+        let after = e.snapshot();
+        // Split at the pick's ends; the two zones inside, given one section with one set of uids, join.
+        assert_eq!(after.zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 10_000, 30_000, 40_000]);
+        let runs = e.runs();
+        assert_eq!((runs[1].from_mm, runs[1].to_mm, runs[1].zones.clone()), (10_000, 30_000, 1..2), "the pick is one run");
+        let sections = after.sections();
+        assert!(sections[1].iter().any(|g| g.kind == kind("bus")), "the measure is laid out in the pick");
+        assert!(e.view().measures.iter().find(|m| m.code == "B1").unwrap().present);
+        let was = before.sections();
+        assert_eq!((sections[0], sections[2], sections[3]), (was[0], was[1], was[2]), "outside the pick, as it was");
+        assert!(e.undo());
+        assert_eq!(e.snapshot().zones, before.zones, "one step to undo");
     }
 
     #[test]
