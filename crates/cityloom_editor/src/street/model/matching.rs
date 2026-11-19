@@ -70,7 +70,6 @@ pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usi
 }
 
 /// For each piece of `a`, its index in `b`, paired by `match_pieces`; `None` where `b` has no such piece.
-#[cfg_attr(not(test), expect(dead_code, reason = "the replay of edits uses it from the next change"))]
 pub(crate) fn counterpart(a: &[Segment], b: &[Segment]) -> Vec<Option<usize>> {
     let mut out = vec![None; a.len()];
     for (i, j) in match_pieces(a, b) {
