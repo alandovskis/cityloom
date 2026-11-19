@@ -1,0 +1,12 @@
+F1 · Contraflow Transit Lanes No change in the checks.
+
+F1 · Contraflow Transit Lanes
+Now
+After
+What changes
+Street space
+Biking: 3.0 m → 0.0 m (3.0 m less)
+Transit: 0.0 m → 3.3 m (3.3 m more)
+Cars and trucks: 6.0 m → 5.7 m (0.3 m less)
+---
+street unchanged while previewing: 

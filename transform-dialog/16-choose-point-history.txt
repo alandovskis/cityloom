@@ -1,0 +1,9 @@
+Make pedestrian, pointed: Sidewalk
+chosen: A1 · Transit Streets
+pointing at another: A2 · Transit Ways
+mouse left the list: A1 · Transit Streets
+
+before opening:      {"pieces":["Sidewalk","Buffer","Bike lane","Driving lane","Driving lane","Bike lane","Buffer","Sidewalk"],"undoDisabled":true,"redoDisabled":true}
+while previewing:    {"pieces":["Sidewalk","Buffer","Bike lane","Driving lane","Driving lane","Bike lane","Buffer","Sidewalk"],"undoDisabled":true,"redoDisabled":true}
+after Cancel:        {"pieces":["Sidewalk","Buffer","Bike lane","Driving lane","Driving lane","Bike lane","Buffer","Sidewalk"],"undoDisabled":true,"redoDisabled":true}
+unchanged: true

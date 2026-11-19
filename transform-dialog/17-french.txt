@@ -1,0 +1,44 @@
+Transformer cette rue
+Rendre piétonne
+3
+Priorité au transport en commun
+6
+Modèles de rue
+4 sur 5
+
+Réorganisez la rue selon l’une de ces mesures pour le transport en commun. Chacune reconstruit la chaussée en une seule modification annulable.
+
+Rues de transport en commun
+
+A1
+Rues de transport en commun
+A2
+Voies de transport en commun
+
+Voies centrales
+
+B3
+Voies centrales réservées au transport en commun à sens alterné fixe
+B4
+Voies centrales réservées au transport en commun à sens alterné dynamique
+
+Voies à contresens
+
+F1
+Voies réservées au transport en commun à contresens
+F2
+Voies décalées réservées au transport en commun à contresens
+
+A1 · Rues de transport en commun Aucun changement dans les vérifications.
+
+A1 · Rues de transport en commun
+Maintenant
+Après
+Ce qui change
+Espace de la rue
+Vélo : 3,0 m → 2,4 m (0,6 m de moins)
+Transport en commun : 0,0 m → 6,0 m (6,0 m de plus)
+Autos et camions : 6,0 m → 0,0 m (6,0 m de moins)
+Verdure : 0,0 m → 0,6 m (0,6 m de plus)
+Annuler
+Appliquer

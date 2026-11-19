@@ -1,0 +1,17 @@
+School street Regressed: 1 check now fails.
+
+School street
+Now
+After
+What changes
+Street space
+Walking: 3.0 m → 6.0 m (3.0 m more)
+Biking: 3.0 m → 0.0 m (3.0 m less)
+Cars and trucks: 6.0 m → 2.7 m (3.3 m less)
+Greenery: 0.0 m → 3.6 m (3.6 m more)
+Buffer: 0.3 m → 0.0 m (0.3 m less)
+Newly failing
+Room for emergency vehicles
+A raised table is at 16.7 m.
+No separate school zone was made, so the selected zone as a whole is the school zone. The zone is shorter than a school zone of 60.0 m with 5.0 m to spare on each side.
+The speed limit stays at 30 km/h: it is not above 30 km/h.
