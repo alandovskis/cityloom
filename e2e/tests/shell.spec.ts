@@ -277,3 +277,47 @@ for (const p of PAGES) {
     expect(await xs()).toEqual(before);
   });
 }
+
+// A project's street or junction edit saved before the importer merged a block's pieces has no `import` stamp: it is
+// stale, discarded when one of the project's pages opens, and the page says so once. The notice floats below the
+// fixed bar where the bar floats, so it must be seen, in the viewport, and reachable at both widths.
+const CLEARED =
+  "The map was rebuilt with one street per block, so your earlier street and junction edits were cleared.";
+const NOTICE_PAGES = [
+  { name: "map", open: (page: Page) => page.goto("/map.html"), ready: "#region option" },
+  { name: "street", open: (page: Page) => openStreet(page), ready: "#region option" },
+  { name: "intersection", open: (page: Page) => openJunction(page), ready: "#region option" },
+  { name: "timeline", open: (page: Page) => page.goto("/timeline.html"), ready: "#region option" },
+];
+const WIDTHS = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "phone", width: 390, height: 844 },
+];
+
+for (const p of NOTICE_PAGES) {
+  for (const w of WIDTHS) {
+    test(`a project's cleared edits are announced once on the ${p.name} page at ${w.name} width`, async ({ page }) => {
+      await page.setViewportSize({ width: w.width, height: w.height });
+      await p.open(page);
+      await expect(page.locator(p.ready).first()).toBeAttached();
+      await page.evaluate(() => {
+        const record = { ways: [1], nodes: [], leaving: {}, street: {} };
+        localStorage.setItem(
+          "cityloom-edits@first",
+          JSON.stringify({ version: 17, streets: { w1: record }, junctions: {} }),
+        );
+      });
+      await page.reload();
+      const notice = page.locator("p.shell-notice");
+      await expect(notice).toHaveAttribute("role", "status");
+      await expect(notice).toContainText(CLEARED);
+      await expect(notice).toBeVisible();
+      await expect(notice).toBeInViewport({ ratio: 1 });
+      await notice.getByRole("button", { name: "Dismiss" }).click();
+      await expect(notice).toHaveCount(0);
+      await page.reload();
+      await expect(page.locator(p.ready).first()).toBeAttached();
+      await expect(notice).toHaveCount(0);
+    });
+  }
+}
