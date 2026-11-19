@@ -112,6 +112,7 @@ impl Editor {
             time_min: 12 * 60,
             states: Vec::new(),
             cursor: 0,
+            floor: 0,
             next_uid: 1,
             zone: 0,
             frame: None,
@@ -167,6 +168,7 @@ impl Editor {
             green_move: None,
         }];
         self.cursor = 0;
+        self.floor = 0;
         self.selected = None;
         self.gesture = None;
     }

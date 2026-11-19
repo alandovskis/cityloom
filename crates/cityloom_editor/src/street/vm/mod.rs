@@ -1670,7 +1670,10 @@ impl ScenarioPage for StreetVm {
     }
 
     fn show_design(&self, id: Option<u32>) -> bool {
-        let Some(fresh) = self.binding.as_ref().and_then(|b| b.street_editor(id)) else { return false };
+        let Some(mut fresh) = self.binding.as_ref().and_then(|b| b.street_editor(id)) else { return false };
+        // each design shown starts a history of its own: undo goes back to it and no further (not to the street as
+        // imported, which Start over still gives, as one step undo takes back)
+        fresh.begin_history();
         // another design: what was chosen in this one may not be there, and the drawing starts as a page opens
         self.replace_street(fresh, false);
         true
@@ -1848,6 +1851,49 @@ mod tests {
         r.time.advance(1_000);
         assert_eq!(kept_width(&binding, Some(id)), baseline + 300, "redone, and kept by the keeper as any edit is");
         assert_eq!(kept_width(&binding, None), baseline);
+    }
+
+    #[test]
+    fn right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, -100)), "an edit of the baseline");
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let wider = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 300)));
+        assert!(r.vm.create_scenario("Parking kept"));
+        let parking = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        // this page, and a page opened again on the same street (a reload), each switching to a scenario
+        let (ports, _, _, _) = test_ports_with_time();
+        let again = StreetVm::new(ports, crate::i18n_for(Locale::En), binding.street_editor(None).unwrap(), Some(binding.clone()));
+        for vm in [&r.vm, &again] {
+            assert!(vm.switch_scenario(Some(wider)));
+            assert!(!vm.view_now().can_undo, "nothing was done in it since it was shown");
+            assert!(!vm.undo());
+            assert_eq!(vm.view_now().segments[0].width_mm, baseline + 300);
+            vm.flush();
+        }
+        assert_eq!(
+            (kept_width(&binding, None), kept_width(&binding, Some(wider)), kept_width(&binding, Some(parking))),
+            (baseline, baseline + 300, baseline + 100)
+        );
+        // Start over gives the street as imported, in the scenario shown only, as a step undo takes back
+        assert!(r.vm.reset());
+        r.vm.flush();
+        let imported = binding.store.open().street_editor_today(binding_edge(&binding), 0).unwrap().snapshot().segments[0].width_mm;
+        assert_eq!((kept_width(&binding, None), kept_width(&binding, Some(wider)), kept_width(&binding, Some(parking))), (baseline, imported, baseline + 100));
+        assert!(r.vm.undo());
+        r.vm.flush();
+        assert_eq!(kept_width(&binding, Some(wider)), baseline + 300);
+        assert!(!r.vm.undo());
+    }
+
+    fn binding_edge(binding: &CityBinding) -> u32 {
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        edge
     }
 
     #[test]

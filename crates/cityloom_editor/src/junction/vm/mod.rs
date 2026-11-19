@@ -599,7 +599,9 @@ impl ScenarioPage for JunctionVm {
     }
 
     fn show_design(&self, id: Option<u32>) -> bool {
-        let Some(fresh) = self.binding.as_ref().and_then(|b| b.junction_editor(id)) else { return false };
+        let Some(mut fresh) = self.binding.as_ref().and_then(|b| b.junction_editor(id)) else { return false };
+        // each design shown starts a history of its own (`Junction::begin_history`)
+        fresh.begin_history();
         // another design starts as a page opens: nothing chosen, the junction's own level shown
         self.plan.set(false);
         self.core.edit(|j| *j = fresh);
@@ -760,6 +762,43 @@ mod tests {
             (baseline, baseline + 1_000, baseline)
         );
         assert_eq!(binding.store.open().view(0).edited, 0, "the map reads the baseline");
+    }
+
+    #[test]
+    fn right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        let imported = corner(&r);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 500)), "an edit of the baseline");
+        assert!(r.vm.create_scenario("Raised"));
+        let raised = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        assert!(r.vm.create_scenario("Protected"));
+        let protected = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_500)));
+        let (ports, _, _, _) = test_ports_with_time();
+        let again = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), binding.junction_editor(None).unwrap(), Some(binding.clone()));
+        for vm in [&r.vm, &again] {
+            assert!(vm.switch_scenario(Some(raised)));
+            assert!(!vm.view_now().can_undo, "nothing was done in it since it was shown");
+            assert!(!vm.undo());
+            assert_eq!(vm.read(|j| j.current().arms[0].corner_mm), imported + 1_000);
+            vm.flush();
+        }
+        let kept = |s| kept_corner(&binding, s);
+        assert_eq!((kept(None), kept(Some(raised)), kept(Some(protected))), (imported + 500, imported + 1_000, imported + 1_500));
+        assert!(r.vm.reset());
+        r.vm.flush();
+        assert_eq!(
+            (kept(None), kept(Some(raised)), kept(Some(protected))),
+            (imported + 500, imported, imported + 1_500),
+            "start over: the scenario shown only"
+        );
+        assert!(r.vm.undo(), "and it can be undone");
+        r.vm.flush();
+        assert_eq!(kept(Some(raised)), imported + 1_000);
+        assert!(!r.vm.undo());
     }
 
     #[test]
