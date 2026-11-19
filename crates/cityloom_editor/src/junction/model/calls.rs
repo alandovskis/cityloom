@@ -603,7 +603,7 @@ mod tests {
             }
         }
         assert_eq!(j.arm(e).unwrap().calls, Some(DEFAULT_CALLS_PER_HOUR), "kept, never silently dropped");
-        let sum = summary(j.current(), &signal::plan(j.current(), 0).unwrap(), &crate::junction::model::read_model::crossing_distances(j.current(), 0));
+        let sum = summary(j.current(), &signal::plan(j.current(), 0).unwrap(), &crate::junction::model::read_model::crossing_distances(&j.view().arms));
         assert_eq!(sum.findings, vec![Finding::NotWalked { arm: e }]);
         assert!(j.set_on_call(e, false), "recall is always allowed: the finding can be cleared");
         assert!(!j.set_on_call(n, false) && j.refusal() == Some(Refusal::CallAlready));

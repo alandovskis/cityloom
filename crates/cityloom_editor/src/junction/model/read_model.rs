@@ -238,12 +238,9 @@ fn crossing_distance_mm(a: &Arm, l: &ArmLayout) -> i32 {
 }
 
 /// The length of each crossing the junction has as it is drawn (`CrossingView.distance_mm`), by street uid, in the
-/// order of the arms. Empty when the junction cannot be drawn.
-pub fn crossing_distances(s: &State, region: usize) -> Vec<(u32, i32)> {
-    let in_force = in_force(s);
-    let s: &State = &in_force;
-    let Some(lay) = layout(s, region) else { return Vec::new() };
-    s.arms.iter().zip(&lay.arms).filter(|(a, _)| a.crossing.is_some()).map(|(a, l)| (a.uid, crossing_distance_mm(a, l))).collect()
+/// order of the arms: the one source of the lengths the pedestrian calls' clearance is worked out from.
+pub fn crossing_distances(arms: &[ArmView]) -> Vec<(u32, i32)> {
+    arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (a.uid, c.distance_mm))).collect()
 }
 
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
@@ -779,8 +776,7 @@ pub struct CallRowView {
 /// The calls of `plan` on `s` in words: `arms` names the streets and gives each crossing's length.
 fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
-    let distances: Vec<(u32, i32)> = arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (a.uid, c.distance_mm))).collect();
-    let summary = calls::summary(s, plan, &distances);
+    let summary = calls::summary(s, plan, &crossing_distances(arms));
     let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.crossing.is_some() || a.calls.is_some()).collect();
     listed.sort_by_key(|a| a.bearing);
     let crossings = listed
