@@ -860,7 +860,9 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
             type="button"
             class=move || {
                 let (on, _, bad) = state();
-                format!("turn dest{}{}", if on { " on" } else { "" }, if on && bad { " bad" } else { "" })
+                // ` read-only`: the look of a locked turn (editor.css), not that of a street the lane cannot reach.
+                let ro = if w.read_only() { " read-only" } else { "" };
+                format!("turn dest{}{}{ro}", if on { " on" } else { "" }, if on && bad { " bad" } else { "" })
             }
             aria-pressed=move || state().0.to_string()
             disabled=move || !state().1 || fixed() || w.read_only()

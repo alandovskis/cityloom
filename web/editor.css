@@ -2398,7 +2398,8 @@ svg pattern circle {
   color: var(--ink-3);
   cursor: default;
 }
-.turn[aria-pressed="false"]::after {
+.turn[aria-pressed="false"]:not(:disabled)::after,
+.turn.read-only[aria-pressed="false"]::after {
   content: "";
   position: absolute;
   inset: 5px;
@@ -2425,11 +2426,18 @@ svg pattern circle {
   color: var(--ink-3);
   opacity: 0.7;
 }
-/* A turn inside a page's locked controls: allowed ones on the fill in ink-2, banned ones keep their stroke, no wash. */
-.turn[aria-pressed="true"]:disabled {
+/* A turn on a page shown read-only (`read-only`, set by the junction's views; it sits outside the locked fieldsets):
+   allowed ones on the fill in ink-2, unserved ones keep their warning, banned ones their stroke (pinned in
+   shared/contrast.rs). A turn an editable page disables (a street the lane cannot reach) keeps its own look. */
+.turn.read-only[aria-pressed="true"] {
   border-color: var(--rule);
   background: var(--fill);
   color: var(--ink-2);
+}
+.turn.read-only.bad[aria-pressed="true"] {
+  border-color: var(--warn-line);
+  background: var(--warn-wash);
+  color: var(--warn);
 }
 .turn.dest {
   width: auto;
@@ -2444,7 +2452,8 @@ svg pattern circle {
   width: 14px;
   height: 14px;
 }
-.turn.dest[aria-pressed="false"]::after {
+.turn.dest[aria-pressed="false"]:not(:disabled)::after,
+.turn.dest.read-only[aria-pressed="false"]::after {
   inset: 5px 4px;
 }
 

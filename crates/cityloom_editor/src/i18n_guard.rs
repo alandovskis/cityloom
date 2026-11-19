@@ -281,6 +281,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("a junction state is always drawable", "a panic message about the code, never shown"),
     (" on", "a CSS class appended to a class list"),
     (" bad", "a CSS class appended to a class list"),
+    (" read-only", "a CSS class appended to a turn's class list on a page shown read-only"),
     (" t-warn", "a CSS class of the junction plan, appended to a class list"),
     (" no", "a CSS class of the junction plan, appended to a class list"),
     (" indirect", "a CSS class of the junction plan, appended to a class list"),

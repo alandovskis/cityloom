@@ -102,7 +102,9 @@ fn table(v: &JView, w: Watch, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                         }
                         .into_any();
                     }
-                    let class = format!("turn{}{}", if m.allowed { " on" } else { "" }, if bad { " bad" } else { "" });
+                    // ` read-only`: the look of a locked turn (editor.css), which a turn disabled for any other reason has not.
+                    let class =
+                        format!("turn{}{}{}", if m.allowed { " on" } else { "" }, if bad { " bad" } else { "" }, if w.read_only() { " read-only" } else { "" });
                     let state = if !m.allowed {
                         "jn-turn-banned"
                     } else if bad {

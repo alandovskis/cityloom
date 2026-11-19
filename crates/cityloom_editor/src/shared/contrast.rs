@@ -234,9 +234,16 @@ mod tests {
         assert!(chosen.contains("background: transparent;") && chosen.contains("color: var(--ink-2);"), "{chosen}");
         let field = rule(editor, ".wfield input:disabled,\n.var select:disabled,\n.var input[type=\"time\"]:disabled,\n.inspector select:disabled");
         assert!(field.contains("color: var(--ink-2);") && field.contains("cursor: default;") && field.contains("border-color: var(--rule);"), "{field}");
-        let turn = rule(editor, ".turn[aria-pressed=\"true\"]:disabled");
+        // A turn's locked look is only a read-only page's (`.turn.read-only`): an editable junction disables a turn it
+        // cannot take (an unreachable or fixed street) and keeps its own look for it.
+        assert!(!editor.contains(".turn[aria-pressed=\"true\"]:disabled"), "no locked look for every disabled turn");
+        assert!(editor.contains(".turn[aria-pressed=\"false\"]:not(:disabled)::after,\n.turn.read-only[aria-pressed=\"false\"]::after {"));
+        assert!(editor.contains(".turn.dest[aria-pressed=\"false\"]:not(:disabled)::after,\n.turn.dest.read-only[aria-pressed=\"false\"]::after {"));
+        let turn = rule(editor, ".turn.read-only[aria-pressed=\"true\"]");
         assert!(turn.contains("background: var(--fill);") && turn.contains("color: var(--ink-2);"), "{turn}");
-        assert!(editor.contains(".turn[aria-pressed=\"false\"]::after {"), "a banned turn keeps its stroke when disabled");
+        // an unserved turn keeps its warning read-only: the colours of `.turn.bad[aria-pressed="true"]`
+        let bad = rule(editor, ".turn.read-only.bad[aria-pressed=\"true\"]");
+        assert!(bad.contains("background: var(--warn-wash);") && bad.contains("color: var(--warn);"), "{bad}");
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let (panel, fill) = (pick(&token(app, "panel"), i), pick(&token(app, "fill"), i));

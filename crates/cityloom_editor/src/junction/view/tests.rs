@@ -1100,13 +1100,19 @@ fn a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_st
     let h = panel(&s);
     assert!(h.contains("jn-path-up-0") && !h[..h.find("jn-path-up-0").unwrap()].contains("read-only-controls"), "{h}");
     assert!(count(&h, r#"<fieldset disabled class="read-only-controls""#) >= 2, "{h}");
-    // the turns cannot be switched
+    // a lane's streets to go to are disabled and marked read-only, for the look of a locked turn (editor.css)
+    let dests: Vec<&str> = h.split("<button").skip(1).map(|b| &b[..b.find('>').unwrap()]).filter(|b| b.contains("turn dest")).collect();
+    assert!(!dests.is_empty() && dests.iter().all(|b| b.contains("disabled") && b.contains(" read-only\"")), "{dests:?}");
+    // the turns cannot be switched, and are marked so
     let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
     let buttons: Vec<&str> = h.split("<button").skip(1).map(|b| &b[..b.find('>').unwrap()]).collect();
-    assert!(!buttons.is_empty() && buttons.iter().all(|b| b.contains("disabled")), "{h}");
-    // an editable junction has none of it
+    assert!(!buttons.is_empty() && buttons.iter().all(|b| b.contains("disabled") && b.contains(" read-only\"")), "{h}");
+    // an editable junction has none of it: a turn it disables (an unreachable street) keeps the editable look
     let s = shared(0);
     assert!(!panel(&s).contains("read-only-controls"));
+    assert!(!html(|| view! { <turns::Turns vm=s.clone()/> }.into_any()).contains(" read-only\""));
+    s.select(Target::Arm(arm(&s, 0)));
+    assert!(!panel(&s).contains(" read-only\""));
     assert!(html(|| view! { <page::History vm=s.clone()/> }.into_any()).contains("id=\"undo\""));
 }
 
