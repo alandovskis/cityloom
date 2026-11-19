@@ -353,6 +353,7 @@ pick-refused-no-anchor = Both ends of this street are cut by the edge of the map
 pick-refused-too-short = A stretch must be at least { $min } long.
 pick-refused-outside = That position is outside the street.
 pick-refused-dragging = Finish the drag before picking another stretch.
+pick-refused-no-boundary = No stretch boundary at either end of the pick.
 # What is said of the stretch picked on the plan (src/street/vm/text.rs, picked_said); positions from the plan's left end.
 stretch-picked = From { $from } to { $to }, { $length } long.
 stretch-picked-differs = From { $from } to { $to }, { $length } long: { $what }.

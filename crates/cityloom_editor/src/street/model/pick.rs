@@ -214,8 +214,8 @@ impl Editor {
     }
 
     /// The spans (anchored) where an edit over the pick missed: where the edit found nothing to change that the shown
-    /// zone had. Cleared by the next edit and by a move through the history.
-    pub fn missed(&self) -> Vec<(i32, i32)> {
+    /// zone had, each with the kind of the piece it lacked. Cleared by the next edit and by a move through the history.
+    pub fn missed(&self) -> Vec<(i32, i32, usize)> {
         self.missed.clone()
     }
 
@@ -228,7 +228,7 @@ impl Editor {
     /// Inside a drag, the split is made on the drag's first changing step and every step is made again from what it
     /// left, so a step back undoes a step; the edit is shown at once, and the join and the revision wait for
     /// `end_gesture`. Cancelling the drag leaves no boundary.
-    pub(super) fn over_pick(&mut self, label: Said, change: impl FnOnce(&mut Content, Range<usize>, usize, bool) -> Vec<usize>) -> bool {
+    pub(super) fn over_pick(&mut self, label: Said, change: impl FnOnce(&mut Content, Range<usize>, usize, bool) -> Vec<(usize, usize)>) -> bool {
         self.missed.clear();
         let (base, range) = match (&self.gesture, &self.gesture_pick) {
             (Some(_), Some(picked)) => picked.clone(),
@@ -272,14 +272,14 @@ impl Editor {
         (base, range)
     }
 
-    /// The anchored spans of `zones` in `content`, neighbouring ones as one.
-    fn spans_of(content: &Content, zones: &[usize], length_mm: i32) -> Vec<(i32, i32)> {
-        let mut spans: Vec<(i32, i32)> = Vec::new();
-        for &z in zones {
+    /// The anchored spans of `zones` (each with a kind) in `content`, neighbouring ones of the same kind as one.
+    fn spans_of(content: &Content, zones: &[(usize, usize)], length_mm: i32) -> Vec<(i32, i32, usize)> {
+        let mut spans: Vec<(i32, i32, usize)> = Vec::new();
+        for &(z, kind) in zones {
             let (from, to) = content.span(z, length_mm);
             match spans.last_mut() {
-                Some(last) if last.1 == from => last.1 = to.min(length_mm),
-                _ => spans.push((from, to.min(length_mm))),
+                Some(last) if last.1 == from && last.2 == kind => last.1 = to.min(length_mm),
+                _ => spans.push((from, to.min(length_mm), kind)),
             }
         }
         spans
@@ -418,16 +418,16 @@ impl Content {
     }
 
     /// Gives each zone in `range` the section `change` makes of its own (`change` is told whether it is the zone
-    /// `shown`, and says whether it missed). For the whole street (`whole`) the base section is changed once, for
+    /// `shown`, and gives the kind of the piece it missed, if it did). For the whole street (`whole`) the base section is changed once, for
     /// the zones that follow it, and a zone past `range` that follows it (one cut off) is first given a copy of it,
-    /// so that it is not changed. Returns the zones where the change missed.
+    /// so that it is not changed. Returns the zones where the change missed, each with the kind it missed.
     pub(super) fn change_sections(
         &mut self,
         range: Range<usize>,
         shown: usize,
         whole: bool,
-        change: impl Fn(bool, &[Segment]) -> (Vec<Segment>, bool),
-    ) -> Vec<usize> {
+        change: impl Fn(bool, &[Segment]) -> (Vec<Segment>, Option<usize>),
+    ) -> Vec<(usize, usize)> {
         let mut missed = Vec::new();
         if whole && !self.zones.is_empty() {
             let base = self.segments.clone();
@@ -439,13 +439,16 @@ impl Content {
             self.segments = base;
             for z in range {
                 match self.zones[z].segments.take() {
-                    None if base_missed => missed.push(z),
-                    None => {}
+                    None => {
+                        if let Some(kind) = base_missed {
+                            missed.push((z, kind));
+                        }
+                    }
                     Some(own) => {
                         let (own, m) = change(z == shown, &own);
                         self.zones[z].segments = Some(own);
-                        if m {
-                            missed.push(z);
+                        if let Some(kind) = m {
+                            missed.push((z, kind));
                         }
                     }
                 }
@@ -454,8 +457,8 @@ impl Content {
             for z in range {
                 let (section, m) = change(z == shown, self.section(z));
                 *self.section_mut(z) = section;
-                if m {
-                    missed.push(z);
+                if let Some(kind) = m {
+                    missed.push((z, kind));
                 }
             }
         }
@@ -468,7 +471,7 @@ mod tests {
     use super::super::fixtures::zoned;
     use super::*;
     use crate::shared::catalogue::{Side, kind_index};
-    use crate::street::model::{Segment, Speed, Street, StreetExt, ZoneFrame};
+    use crate::street::model::{Segment, Speed, Street, StreetExt, ZoneFrame, ZoneRefusal};
 
     const LEN: i32 = 60_000;
 
@@ -725,6 +728,87 @@ mod tests {
         assert_eq!(e.move_boundary(30_000), Ok(()));
         assert!(e.end_gesture());
         assert_eq!((e.zone(), e.pick()), (1, stretch(30_000, 40_000)));
+    }
+
+    #[test]
+    fn moving_a_named_zone_s_start_leaves_the_pick_and_the_selected_piece_alone() {
+        let mut e = three_runs();
+        e.pick_stretch(10_000, 30_000).unwrap();
+        let uid = e.current()[0].uid;
+        e.select(Some(uid));
+        let revisions = e.states.len();
+        e.begin_gesture();
+        assert_eq!(e.move_boundary_of(2, 38_000), Ok(()));
+        assert_eq!(e.move_boundary_of(2, 37_000), Ok(()));
+        assert_eq!((e.pick(), e.zone(), e.view().selected), (stretch(10_000, 30_000), 0, Some(uid)), "nothing follows while it lasts");
+        assert!(e.end_gesture());
+        assert_eq!(e.states.len(), revisions + 1);
+        assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
+        assert_eq!((e.pick(), e.view().selected), (stretch(10_000, 30_000), Some(uid)));
+        e.begin_gesture();
+        assert_eq!(e.move_boundary_of(2, 45_000), Ok(()));
+        e.cancel_gesture();
+        assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
+        assert_eq!(e.move_boundary_of(0, 5_000), Err(ZoneRefusal::NoBoundary));
+        assert_eq!(e.move_boundary_of(2, 22_000), Err(ZoneRefusal::TooShort));
+    }
+
+    #[test]
+    fn what_sets_a_picked_run_apart_is_read_against_the_run_on_its_left_else_on_its_right() {
+        let words = |e: &Editor| e.pick_differs().iter().map(|s| s.key).collect::<Vec<_>>();
+        // The middle run lacks the left parking, its right sidewalk is wider, it has a bike lane and 30 km/h.
+        let base = sample();
+        let mut s = zoned(base.clone(), &[0, 20_000, 40_000], LEN);
+        let mut middle = base.segments.clone();
+        middle.remove(1);
+        middle.last_mut().unwrap().width_mm += 200;
+        let at = middle.len() - 1;
+        middle.insert(at, Segment::new(900, kind_index("bike").unwrap(), 1_800));
+        s.zones[1].segments = Some(middle);
+        s.zones[1].speed = Speed::Kmh(30);
+        let mut e = editor(&s, frame(LEN, ZoneEnd::First));
+        assert!(e.pick_differs().is_empty(), "the whole street");
+        e.pick_stretch(20_000, 40_000).unwrap();
+        let said = e.pick_differs();
+        assert_eq!(words(&e), ["stretch-what-dropped", "stretch-what-added", "stretch-what-width", "stretch-what-speed"]);
+        assert_eq!(said[0], Said::new("stretch-what-dropped").with("kind", Arg::KindLower("parking")).with("side", Arg::Msg("side-word-left")));
+        assert_eq!(said[1], Said::new("stretch-what-added").with("kind", Arg::KindLower("bike")).with("side", Arg::Msg("side-word-right")));
+        let sidewalk = base.segments.last().unwrap().width_mm + 200;
+        assert_eq!(
+            said[2],
+            Said::new("stretch-what-width")
+                .with("kind", Arg::KindLower("sidewalk"))
+                .with("side", Arg::Msg("side-word-right"))
+                .with("width", Arg::Length(sidewalk))
+        );
+        assert_eq!(said[3], Said::new("stretch-what-speed").with("kmh", Arg::Num(30)));
+        // Against the left neighbour: the first run, read against the middle one on its right (it has no left one).
+        e.pick_stretch(0, 20_000).unwrap();
+        assert_eq!(words(&e), ["stretch-what-added", "stretch-what-dropped", "stretch-what-width", "stretch-what-no-speed"]);
+        // A stretch that is not one whole run says nothing of it.
+        e.pick_stretch(25_000, 35_000).unwrap();
+        assert!(e.pick_differs().is_empty());
+        // Anchored at the last end, the run on the plan's left is the next zone.
+        let mut s = s.clone();
+        s.from_end = ZoneEnd::Last;
+        s.zones[2].segments = s.zones[1].segments.clone();
+        s.zones[2].speed = Speed::Kmh(30);
+        s.zones[1].segments = None;
+        s.zones[1].speed = Speed::Undecided;
+        s.zones[0].speed = Speed::Kmh(40);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(frame(LEN, ZoneEnd::Last));
+        e.pick_stretch(20_000, 40_000).unwrap();
+        assert_eq!(words(&e), ["stretch-what-added", "stretch-what-dropped", "stretch-what-width", "stretch-what-no-speed"], "read against zone 2, not zone 0");
+    }
+
+    #[test]
+    fn a_reload_keeps_the_pick_where_it_is_on_the_plan_even_from_the_other_end() {
+        let mut was = editor(&sample(), frame(LEN, ZoneEnd::First));
+        was.pick_stretch(10_000, 30_000).unwrap();
+        let mut now = editor(&street(&[0, 20_000], &[0, 100], ZoneEnd::Last), frame(LEN, ZoneEnd::Last));
+        now.keep_choices(&was);
+        assert_eq!(now.view().plan.pick, Some((10_000, 30_000)));
+        assert_eq!(now.pick(), stretch(30_000, 50_000));
     }
 
     // ---- edits over the pick ----
@@ -985,7 +1069,7 @@ mod tests {
         s.zones[1].segments = Some(middle);
         let mut e = editor(&s, frame(LEN, ZoneEnd::First));
         assert!(e.set_width(uid_of(&e, 1), 2_600));
-        assert_eq!(e.missed(), [(20_000, 40_000)]);
+        assert_eq!(e.missed(), [(20_000, 40_000, kind_index("parking").unwrap())], "the stretch lacks the parking changed");
         assert_eq!(widths_of(&e, 1), [2_600, 3_300, 2_600], "the middle run's travel lane is left alone");
         assert!(e.set_width(uid_of(&e, 0), 3_000));
         assert!(e.missed().is_empty(), "the next edit clears it");

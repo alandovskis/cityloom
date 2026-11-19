@@ -394,7 +394,7 @@ pub struct Editor {
     /// ends, and the zones the pick covers in it. Every step is made again from it (`over_pick`).
     gesture_pick: Option<(Content, std::ops::Range<usize>)>,
     /// Where the last edit over the pick missed (`Editor::missed`).
-    missed: Vec<(i32, i32)>,
+    missed: Vec<(i32, i32, usize)>,
     /// Where the street lies as loaded (its length and its real end), once the page knows it.
     frame: Option<ZoneFrame>,
     /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
@@ -565,11 +565,19 @@ impl Editor {
         self.zone
     }
 
-    /// Takes `from`'s pick, clamped to this street (which shows the zone at its left end), and the stretches chosen on
-    /// its strips (curbside, stops, raised elements, green), as a reload of the same street keeps them; a move under way belongs to `from`'s history and is not taken. A place no longer on a
-    /// strip simply finds no cell.
+    /// Takes `from`'s pick, at the same place on the plan and clamped to this street (which shows the zone at its left
+    /// end), and the stretches chosen on its strips (curbside, stops, raised elements, green), as a reload of the same
+    /// street keeps them; a move under way belongs to `from`'s history and is not taken. A place no longer on a strip
+    /// simply finds no cell.
     pub fn keep_choices(&mut self, from: &Editor) {
-        self.pick = from.pick;
+        // Where the pick lies on the plan stays, even when this street is measured from its other end.
+        self.pick = match from.pick {
+            Pick::Whole => Pick::Whole,
+            Pick::Stretch { from_mm, to_mm } => {
+                let (a, b) = (self.anchored_mm(from.left_mm(from_mm)), self.anchored_mm(from.left_mm(to_mm)));
+                Pick::Stretch { from_mm: a.min(b), to_mm: a.max(b) }
+            }
+        };
         self.clamp_pick();
         self.curb_choice.at = from.curb_choice.at;
         self.stop_choice.at = from.stop_choice.at;
@@ -629,7 +637,7 @@ impl Editor {
         self.over_pick(label, |c, range, shown, whole| {
             c.change_sections(range, shown, whole, |is_shown, section| {
                 if is_shown {
-                    (after.clone(), false)
+                    (after.clone(), None)
                 } else {
                     let replayed = replay::replay(&before, &after, section);
                     (replayed.section, replayed.missed)
@@ -644,14 +652,14 @@ impl Editor {
             c.change_sections(range, shown, whole, |_, section| {
                 let mut section = section.to_vec();
                 f(&mut section);
-                (section, false)
+                (section, None)
             })
         })
     }
 
     /// Gives every zone in the pick `section`, as one edit (`over_pick`): the pick becomes one run.
     fn edit_uniform(&mut self, label: Said, section: Vec<Segment>) -> bool {
-        self.over_pick(label, |c, range, shown, whole| c.change_sections(range, shown, whole, |_, _| (section.clone(), false)))
+        self.over_pick(label, |c, range, shown, whole| c.change_sections(range, shown, whole, |_, _| (section.clone(), None)))
     }
 
     /// The shown zone's section as the drag under way found it (as its first changing step split it, once it did).
