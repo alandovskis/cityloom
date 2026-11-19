@@ -2,6 +2,8 @@
 
 Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
 
+Scenarios (#190): `StreetVm` keeps a `ScenarioState` and is a `ScenarioHost` and `city::binding::ScenarioPage`; its keeper writes to the design shown (`keep_*_in`), its sync reload reads it, and `page::Scenarios` draws `shared::scenarios_view::ScenarioPanel` in `#scenario-slot` (see `city/CLAUDE.md`, Scenarios, and `shared/CLAUDE.md`).
+
 The street's data types are `cityloom_model::street` (re-exported by `street::model`): a `Street`'s fields, `Segment`/`Variant`, `Zone`/`ZoneEnd`/`ZoneFrame`, `Speed`, `Instance`/`Use`, `Stop`/`StopKind`, `Calming`/`CalmingKind`, `Green`/`GreenKind`/`TreeSize`, `Piece`/`Window`, with `reversed`, `for_side`, `sections`, `settle_zones`, `settle_class`, `is_sound`, `zone_speed`, `at_end` and the soundness and reversal of each programme. A file under `street/model/` with a name below (`zones.rs`, `curb.rs`, `stop.rs`, `calming.rs`, `green.rs`, `zone_speed.rs`) holds the editor's part: the edits, checks, views, thresholds and message keys, the latter two on `…Ext` traits; `StreetExt` (`street/model/mod.rs`) holds `imported` (widths clamped to the standards profile), `title`, `beyond`, `end_uses`, `end_stops`, `map_uses`, `taper_speed_kmh` and, in tests, `sample`; `SegmentBounds` the widths and other kinds a piece may take.
 
 Every strip/list on the page (zones, pieces, curb, stops, green, calming) is a WAI-ARIA listbox: one tab stop, `aria-activedescendant`, keys from `keys::` (`on_strip`: arrows/Home/End choose, Alt+arrow moves 1 m, Shift+Alt 10 m).
