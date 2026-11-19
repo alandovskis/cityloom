@@ -82,6 +82,9 @@ test.describe("a design opened read-only", () => {
   });
 
   test("a junction can be looked at, its streets gone to, and not changed", async ({ page }) => {
+    // It edits a street, opens the map and a junction twice each, and switches the language: about 28 s alone, past
+    // the default 30 s with other workers beside it.
+    test.setTimeout(120_000);
     await editStreet(page);
     const href = await openJunction(page);
     await page.goto("/map.html");
