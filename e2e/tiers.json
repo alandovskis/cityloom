@@ -20,6 +20,7 @@
     "map",
     "network",
     "projects",
+    "read-only",
     "report",
     "restrictions",
     "search",
