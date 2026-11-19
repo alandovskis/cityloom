@@ -66,14 +66,31 @@ pub const NEWEST: u32 = IMPORT_STAMP_VERSION;
 pub const STALE_BEFORE_IMPORT: u32 = 11;
 
 /// Whether a street or junction record, as JSON, is stale: its `import` is not a number of at least
-/// `STALE_BEFORE_IMPORT`. The one rule; typed records are checked through `serde_json::to_value`.
+/// `STALE_BEFORE_IMPORT`. A test keeps `is_stale_record` in agreement.
 pub fn is_stale(record: &Value) -> bool {
     !record.get("import").and_then(Value::as_u64).is_some_and(|v| v >= u64::from(STALE_BEFORE_IMPORT))
 }
 
-/// The same rule for a typed street or junction record, decided on its JSON form.
-pub fn is_stale_record<T: Serialize>(record: &T) -> bool {
-    serde_json::to_value(record).map_or(true, |v| is_stale(&v))
+/// A typed street or junction record's import stamp, so the staleness rule reads the field rather than the JSON.
+pub trait Stamped {
+    fn import(&self) -> Option<u32>;
+}
+
+impl Stamped for StreetRecord {
+    fn import(&self) -> Option<u32> {
+        self.import
+    }
+}
+
+impl Stamped for JunctionRecord {
+    fn import(&self) -> Option<u32> {
+        self.import
+    }
+}
+
+/// The same rule as `is_stale` for a typed street or junction record: unstamped, or stamped below the cutoff.
+pub fn is_stale_record(record: &impl Stamped) -> bool {
+    record.import().is_none_or(|v| v < STALE_BEFORE_IMPORT)
 }
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
@@ -769,6 +786,23 @@ mod tests {
         assert!(!is_stale(&json!({"import": 11})));
         assert!(!is_stale(&json!({"import": 12})));
         assert!(is_stale(&json!({"import": "11"})));
+    }
+
+    #[test]
+    fn a_typed_record_is_stale_exactly_when_its_json_is() {
+        let junction = || {
+            let city = crate::city::model::City::new();
+            let node = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+            city.junction_record(node).unwrap().1
+        };
+        for import in [None, Some(10), Some(11), Some(12)] {
+            let street = StreetRecord { import, ..street_record() };
+            assert_eq!(is_stale_record(&street), is_stale(&serde_json::to_value(&street).unwrap()), "street {import:?}");
+            assert_eq!(Stamped::import(&street), import);
+            let junction = JunctionRecord { import, ..junction() };
+            assert_eq!(is_stale_record(&junction), is_stale(&serde_json::to_value(&junction).unwrap()), "junction {import:?}");
+            assert_eq!(Stamped::import(&junction), import);
+        }
     }
 
     #[test]
