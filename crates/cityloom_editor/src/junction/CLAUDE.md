@@ -2,6 +2,8 @@
 
 Loaded when working in this folder; the root `CLAUDE.md` has the project-wide rules.
 
+**Read-only (#222).** `JunctionVm::read_only()` is the page's storage's (`Storage::read_only`, a page opened with `view=1`). `apply_with` (so `apply`, `Watch::edit`, `choose_turbo`, `choose_pattern`), `toggle_phase_*`, `undo`, `redo`, `reset` and `load_sample` refuse first and say `read-only-refused` (shell's message; `apply` returns `R::default()`). Behind them `edit` puts back any change to the junction's history (`Junction::same_history`: states and cursor; the selection, region and refusal stay) and never touches the keeper, so nothing is flushed or marked. `link` keeps `view=1`.
+
 ## The details panel (`junction/view/inspector.rs`, `#inspector`)
 
 - One level at a time under a path (`path`, a `nav.panel-path`, `jn-path-label`, the street page's styles): Junction; Junction › a street; Junction › a street › Crossing or Lane n; Junction › Corner, Bus lane or Cycle track. Steps before the last are `.path-step` buttons (`jn-path-up-<i>`) that choose the parent (`Target::None`, `Target::Arm`); the last is `#jn-path-current` (`aria-current="location"`, `tabindex=-1`), which takes the focus after a step or a "go to" button is pressed.
