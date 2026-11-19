@@ -545,6 +545,25 @@ mod tests {
     }
 
     #[test]
+    fn the_cleared_edits_notice_is_warn_on_its_wash_over_an_opaque_panel_in_both_themes() {
+        let app = include_str!("../../../../web/app.css");
+        // It floats over the map, so its translucent dark wash is laid on the panel's colour, not on whatever is under it.
+        let notice = rule(app, ".shell-notice");
+        assert!(notice.contains("background: linear-gradient(var(--warn-wash), var(--warn-wash)), var(--panel);"), "{notice}");
+        assert!(notice.contains("color: var(--warn);"), "{notice}");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let pick = |name: &str| {
+                let t = token(app, name);
+                if i == 0 { t.0 } else { t.1 }
+            };
+            let panel = pick("panel").unwrap();
+            let wash = pick("warn-wash").unwrap_or_else(|| blend("#f59e0b", &panel, 0.18));
+            let warn = pick("warn").unwrap();
+            assert!(contrast(&warn, &wash) >= 4.5, "warn on its wash over the panel {theme}: {:.2}", contrast(&warn, &wash));
+        }
+    }
+
+    #[test]
     fn the_list_of_projects_text_fields_and_buttons_clear_aa_in_both_themes() {
         let (app, home) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/home.css"));
         for (theme, i) in [("light", 0), ("dark", 1)] {

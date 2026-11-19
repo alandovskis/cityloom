@@ -1974,7 +1974,8 @@ body.map-page {
   margin: 8px 16px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: var(--warn-wash);
+  /* The dark wash is translucent: laid on the panel's colour, it reads the same over the map as over a panel. */
+  background: linear-gradient(var(--warn-wash), var(--warn-wash)), var(--panel);
   color: var(--warn);
   box-shadow: inset 0 0 0 1px var(--warn-line);
 }
