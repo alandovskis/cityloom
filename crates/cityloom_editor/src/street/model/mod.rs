@@ -382,6 +382,9 @@ pub struct Editor {
     time_min: i32,
     states: Vec<State>,
     cursor: usize,
+    /// The first state undo may go back to: 0, or the state the design was shown at when another design of the place
+    /// was shown in its place (`begin_history`).
+    floor: usize,
     next_uid: u32,
     /// The zone the edits act on: the one at the pick's left end on the plan. A setting, not part of the history; 0
     /// for a street with no zones.
@@ -528,6 +531,7 @@ impl Editor {
                 green_move: None,
             }],
             cursor: 0,
+            floor: 0,
             next_uid: now.next_uid.max(1),
             zone: 0,
             pick: Pick::Whole,
@@ -1268,9 +1272,15 @@ impl Editor {
 
     // ---- history -------------------------------------------------------
 
+    /// Starts the history at the street as it now is: undo goes back no further (the step from the street as imported
+    /// to it, if it differs, is not undone). Start over still gives the street as imported, as a step undo takes back.
+    pub fn begin_history(&mut self) {
+        self.floor = self.cursor;
+    }
+
     pub fn undo(&mut self) -> bool {
         self.cancel_gesture();
-        if self.cursor == 0 {
+        if self.cursor <= self.floor {
             return false;
         }
         self.curb_choice.undo(self.states[self.cursor].curb_move);
@@ -1471,7 +1481,7 @@ impl Editor {
                 .map(|template| TemplateView { template, refusal: template.applicable(self.class(), self.row_mm()).err() })
                 .collect(),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
-            can_undo: self.cursor > 0,
+            can_undo: self.cursor > self.floor,
             can_redo: self.cursor + 1 < self.states.len(),
             changed: self.states[self.cursor].content != self.states[0].content,
             source: self.source.clone(),
@@ -1902,6 +1912,29 @@ mod tests {
     /// What a message of the model says in English, as the page shows it.
     fn says(said: &Said) -> String {
         crate::street::vm::text::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, said)
+    }
+
+    #[test]
+    fn a_history_begun_on_an_edited_street_does_not_undo_into_the_import_and_start_over_is_one_undoable_step() {
+        let today = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&today, &today, 0);
+        let u = e.view().segments[0].uid;
+        assert!(e.nudge_width(u, -100));
+        let opened = e.snapshot();
+        let mut e = Editor::from_street(&today, &opened, 0);
+        assert!(e.view().can_undo, "opened as a page opens: its earlier changes are a step");
+        e.begin_history();
+        assert!(!e.view().can_undo && !e.undo(), "nothing before the design as it was shown");
+        assert_eq!(e.snapshot(), opened);
+        assert!(e.view().changed, "it still differs from the street as imported");
+        assert!(e.nudge_width(u, -100));
+        assert!(e.undo() && !e.undo(), "only what was done since");
+        assert_eq!(e.snapshot(), opened);
+        assert!(e.reset(), "start over gives the street as imported");
+        assert_eq!(e.snapshot(), today);
+        assert!(e.undo(), "as one step undone");
+        assert_eq!(e.snapshot(), opened);
+        assert!(!e.undo());
     }
 
     #[test]

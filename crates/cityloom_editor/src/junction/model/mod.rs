@@ -939,6 +939,9 @@ pub struct Junction {
     pub region: usize,
     states: Vec<State>,
     cursor: usize,
+    /// The first state undo may go back to: 0, or the state the design was shown at when another design of the place
+    /// was shown in its place (`begin_history`).
+    floor: usize,
     pub selected: Target,
     /// Why the last edit was refused; None once one is taken.
     refusal: Option<Refusal>,
@@ -948,6 +951,11 @@ pub struct Junction {
     calls_dropped: usize,
     /// How many phases of its stored plan were left out as it opened (past `signal::MAX_PHASES`); 0 once it is edited.
     phases_cut: usize,
+}
+
+/// Whether two states are the same design, whatever step each is labelled as.
+fn same_design(a: &State, b: &State) -> bool {
+    State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() }
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -976,6 +984,7 @@ impl Junction {
             region,
             states: vec![State { label: self::today(), ..today.clone() }],
             cursor: 0,
+            floor: 0,
             selected: Target::None,
             refusal: None,
             refusal_arm: None,
@@ -1067,7 +1076,13 @@ impl Junction {
     }
 
     pub fn can_undo(&self) -> bool {
-        self.cursor > 0
+        self.cursor > self.floor
+    }
+
+    /// Starts the history at the junction as it now is: undo goes back no further (the step from the junction as
+    /// imported to it, if it differs, is not undone), and Start over becomes a step undo takes back.
+    pub fn begin_history(&mut self) {
+        self.floor = self.cursor;
     }
 
     pub fn can_redo(&self) -> bool {
@@ -1203,6 +1218,18 @@ impl Junction {
     }
 
     pub fn reset(&mut self) -> bool {
+        if self.floor > 0 {
+            // what came before the floor is not to be dropped: the junction as imported is a step of its own
+            if self.cursor == 0 || same_design(&self.states[self.cursor], &self.states[0]) {
+                return false;
+            }
+            let today = self.states[0].clone();
+            self.states.truncate(self.cursor + 1);
+            self.states.push(today);
+            self.cursor += 1;
+            self.selected = Target::None;
+            return true;
+        }
         if self.cursor == 0 && self.states.len() == 1 {
             return false;
         }
@@ -1213,7 +1240,7 @@ impl Junction {
     }
 
     pub fn changed(&self) -> bool {
-        self.cursor > 0
+        self.cursor > 0 && !same_design(&self.states[self.cursor], &self.states[0])
     }
 
     fn fix_selection(&mut self) {
@@ -2912,6 +2939,28 @@ mod tests {
             a.edge = a.uid;
         }
         Junction::from_city(named("Test junction"), &state, &state, 0).expect("the sample draws")
+    }
+
+    #[test]
+    fn a_history_begun_on_an_edited_junction_does_not_undo_into_the_import_and_start_over_can_be_undone() {
+        let today = linked(0).current().clone();
+        let mut j = linked(0);
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_corner(uid, 7_000));
+        let opened = j.current().clone();
+        let mut j = Junction::from_city(named("Test junction"), &today, &opened, 0).unwrap();
+        assert!(j.can_undo(), "opened as a page opens: its earlier changes are a step");
+        j.begin_history();
+        assert!(!j.can_undo() && !j.undo(), "nothing before the design as it was shown");
+        assert!(j.changed(), "it still differs from the junction as imported");
+        assert!(j.set_corner(uid, 8_000));
+        assert!(j.undo() && !j.undo(), "only what was done since");
+        assert_eq!(j.current().arms[0].corner_mm, 7_000);
+        assert!(j.reset(), "start over gives the junction as imported");
+        assert_eq!(j.current().arms[0].corner_mm, today.arms[0].corner_mm);
+        assert!(j.undo(), "and can be undone, back to the design as it was shown");
+        assert_eq!(j.current().arms[0].corner_mm, 7_000);
+        assert!(!j.undo());
     }
 
     #[test]
