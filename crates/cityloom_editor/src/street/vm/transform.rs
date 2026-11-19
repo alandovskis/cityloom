@@ -453,6 +453,19 @@ mod tests {
     }
 
     #[test]
+    fn a_measure_the_edit_refuses_previews_no_after_and_cannot_be_applied() {
+        let r = rig(0);
+        let refused = r.vm.view_now().measures.iter().find(|m| !m.can_apply).map(|m| m.code).expect("a measure the sample cannot take");
+        let preview = r.vm.preview(Choice::Measure(refused));
+        assert!(!preview.can_apply(), "{refused}");
+        let Outcome::Refused(said) = preview.outcome else { panic!("{refused} is refused") };
+        assert_eq!(said, Said::new("measure-refused"));
+        let before = r.vm.read(|e| e.snapshot());
+        assert!(!r.vm.apply_choice(Choice::Measure(refused)));
+        assert_eq!(r.vm.read(|e| e.snapshot()), before);
+    }
+
+    #[test]
     fn the_preview_draws_no_selected_piece() {
         let r = rig(0);
         let uid = r.vm.view_now().segments[0].uid;
