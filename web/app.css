@@ -1437,6 +1437,9 @@ a.btn {
     min-width: 44px;
     min-height: 44px;
   }
+  .shell-notice button {
+    min-height: 44px;
+  }
   details.src summary {
     min-height: 44px;
   }
@@ -2012,9 +2015,4 @@ body.map-page {
 .shell-notice button:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
-}
-@media (any-pointer: coarse) {
-  .shell-notice button {
-    min-height: 44px;
-  }
 }
