@@ -11,6 +11,17 @@
     padding-top: 16px;
   }
 }
+/* The cleared-edits notice stands in the page's flow, under the floating bar and lined up with the card; the room the
+   page keeps for the bar moves above it, so it covers nothing. */
+@media (min-width: 900px) {
+  .shell-notice {
+    width: min(780px, calc(100% - 2 * clamp(16px, 5vw, 80px)));
+    margin: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 0;
+  }
+  div:has(> .shell-notice) + .timeline-page {
+    padding-top: 16px;
+  }
+}
 #timeline-slot {
   width: min(780px, 100%);
   padding: 36px 40px;

@@ -327,6 +327,15 @@ for (const p of NOTICE_PAGES) {
           `the notice ${JSON.stringify(box)} covers a panel ${JSON.stringify(covered)}`,
         ).toBe(false);
       }
+      // A page whose main is not the editors' full-screen stage (the timeline) keeps the notice in its flow, above
+      // the content, never over it.
+      for (const main of await page.locator("main:not(.stage)").all()) {
+        const content = (await main.boundingBox())!;
+        expect(
+          overlap(box, content),
+          `the notice ${JSON.stringify(box)} covers the page's content ${JSON.stringify(content)}`,
+        ).toBe(false);
+      }
       await notice.getByRole("button", { name: "Dismiss" }).press("Enter");
       await expect(notice).toHaveCount(0);
       // a keyboard user keeps their place: focus goes to the drawing or the page's main, not back to the top
