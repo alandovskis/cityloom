@@ -29,7 +29,7 @@ pub const MAX_COPIES: usize = 10;
 
 /// A copy as listed: the project it opens as, and the link it came from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Copy {
+pub struct SharedCopy {
     pub id: String,
     /// The share link's token, so the same link opens the same copy. Kept on this device only.
     pub token: String,
@@ -40,7 +40,7 @@ pub struct Copy {
     pub opened_at: String,
 }
 
-impl Copy {
+impl SharedCopy {
     /// The copy as the pages open a project.
     pub fn as_project(&self) -> Project {
         Project { id: self.id.clone(), name: self.name.clone(), area: self.area.clone(), created_at: self.opened_at.clone(), placeholder: false }
@@ -49,7 +49,7 @@ impl Copy {
 
 /// The copies listed; none where the document is missing, damaged or a newer build's (a copy can always be opened
 /// again from its link: nothing of the person's is lost by starting the list over).
-pub fn list(storage: &dyn Storage) -> Vec<Copy> {
+pub fn list(storage: &dyn Storage) -> Vec<SharedCopy> {
     let Some(raw) = storage.recall(COPIES_KEY).filter(|s| !s.trim().is_empty()) else { return Vec::new() };
     let Ok(value) = serde_json::from_str::<Value>(&raw) else { return Vec::new() };
     if value["version"].as_u64() != Some(u64::from(VERSION)) {
@@ -70,7 +70,7 @@ pub fn is_copy(storage: &dyn Storage, id: &str) -> bool {
 
 /// The id a new copy takes: random where the storage has randomness, else `s<n>` past the highest listed; never one a
 /// project or a copy has.
-fn fresh_id(storage: &Rc<dyn Storage>, copies: &[Copy]) -> String {
+fn fresh_id(storage: &Rc<dyn Storage>, copies: &[SharedCopy]) -> String {
     let taken = |id: &str| copies.iter().any(|c| c.id == id) || ProjectStore::new(storage.clone()).list().iter().any(|p| p.id == id);
     if let Some(hex) = storage.random_hex() {
         let id = format!("s-{}", &hex[..hex.len().min(12)]);
@@ -92,7 +92,7 @@ fn blank(storage: &Rc<dyn Storage>, id: &str) {
     }
 }
 
-fn write_list(storage: &Rc<dyn Storage>, copies: &[Copy]) -> bool {
+fn write_list(storage: &Rc<dyn Storage>, copies: &[SharedCopy]) -> bool {
     storage.remember(COPIES_KEY, &json!({ "version": VERSION, "copies": copies }).to_string())
 }
 
@@ -108,7 +108,7 @@ pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, docu
     let scoped = ScopedStorage::new(storage.clone(), &id);
     let written = documents.iter().all(|(key, text)| SCOPED_KEYS.contains(key) && scoped.remember(key, text));
     copies.retain(|c| c.token != token);
-    copies.push(Copy {
+    copies.push(SharedCopy {
         id: id.clone(),
         token: token.to_string(),
         name: name.to_string(),
@@ -118,7 +118,7 @@ pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, docu
     let dropped: Vec<String> = if copies.len() > MAX_COPIES { copies.drain(..copies.len() - MAX_COPIES).map(|c| c.id).collect() } else { Vec::new() };
     if !(written && write_list(storage, &copies)) {
         blank(storage, &id);
-        let before: Vec<Copy> = list(&**storage).into_iter().filter(|c| c.id != id).collect();
+        let before: Vec<SharedCopy> = list(&**storage).into_iter().filter(|c| c.id != id).collect();
         write_list(storage, &before);
         return Err(Refused::Unusable);
     }
