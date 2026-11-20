@@ -1319,8 +1319,12 @@ impl StreetVm {
     /// start on the plan, from its left end, as the person typed it; it is turned to the anchored start here.
     pub fn change_green(&self, form: &GreenForm) -> bool {
         self.on_chosen_green(|e, i| {
-            let length_mm = form.length_mm.or(e.green_at(i).map(|g| g.length_mm)).unwrap_or(0);
-            let at_mm = form.at_mm.map(|left| anchored_start(e, left, length_mm));
+            // The length the change will give it (a new kind's default when none is typed), found where it stands now,
+            // then again where the typed start puts it, since a default can depend on the section there.
+            let at_mm = form.at_mm.map(|left| {
+                let first = anchored_start(e, left, e.green_length_for(i, &GreenForm { at_mm: None, ..*form }));
+                anchored_start(e, left, e.green_length_for(i, &GreenForm { at_mm: Some(first), ..*form }))
+            });
             e.change_green(i, &GreenForm { at_mm, ..*form })
         })
     }
@@ -3507,6 +3511,22 @@ mod green_tests {
         assert_eq!((g.from_mm, g.to_mm), (36_000, 40_000));
         assert!(vm.view_now().revisions.last().unwrap().label.key == "rev-green-change");
         assert_eq!(vm.green_left_start(g), 20_000);
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_a_change_of_kind_with_no_length_starts_where_typed() {
+        let pieces: Vec<Piece> =
+            CURB.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces);
+        let (ports, _, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::Last }));
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None);
+        assert!(vm.add_green(GreenForm { length_mm: Some(4_000), ..form(GreenKind::Bed, 10_000, 0) }));
+        // A bed becomes a rain garden, the length left empty: it takes the rain garden's 6 m, and starts at the 20 m typed.
+        assert!(vm.change_green(&GreenForm { at_mm: Some(20_000), ..GreenForm::new(GreenKind::RainGarden) }));
+        let g = vm.view_now().green.cells[0].clone();
+        assert_eq!((g.kind, g.to_mm - g.from_mm), (GreenKind::RainGarden, 6_000));
+        assert_eq!(vm.green_left_start(&g), 20_000, "anchored {}..{}", g.from_mm, g.to_mm);
     }
 
     #[test]

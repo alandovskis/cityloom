@@ -935,7 +935,7 @@ test.describe("changing part of a street", () => {
     await pickRunAt(page, Math.floor((await streetLength(page)) / 2) + 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on ([\d.]+ m), .* The stretch from \1 to [\d.]+ m has /,
+      /centred on ([\d.]+ m), where the section changes abruptly: the stretch from 0\.0 m to \1 is in front and the one from \1 to [\d.]+ m beyond\. The stretch from \1 to [\d.]+ m has /,
     );
     expect(await drawing.innerHTML(), "the second run's own pieces again").not.toBe(first);
   });

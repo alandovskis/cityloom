@@ -774,6 +774,13 @@ impl Editor {
     /// Changes element `i` as `form` says, a field it leaves open staying as it is, except that a change of kind takes
     /// the new kind's defaults for the length, width and place across (a tree's size is medium unless one is asked). It
     /// is checked as an add is. One revision, whatever the number of fields; the element stays the chosen one.
+    /// The length `change_green(i, form)` would give element `i`: what is typed, else what it has, else the new kind's
+    /// default, snapped as the change snaps it. Its present length when the form asks for something it cannot be.
+    pub fn green_length_for(&self, i: usize, form: &GreenForm) -> i32 {
+        let Some(old) = self.green_at(i) else { return 0 };
+        self.green_from_form(form, Some(&old)).map_or(old.length_mm, |g| snap(g.length_mm).max(SNAP_MM))
+    }
+
     pub fn change_green(&mut self, i: usize, form: &GreenForm) -> Result<(), GreenRefusal> {
         let frame = self.green_gate(false)?;
         let Some(old) = self.green_at(i) else { return Ok(()) };
