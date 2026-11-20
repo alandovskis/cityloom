@@ -310,6 +310,10 @@ impl JunctionVm {
     /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, and only an
     /// edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
+        if self.refuse_read_only() {
+            return false;
+        }
         // Only the findings are compared: a crossing's calls move no phase, so nothing about meetings can change.
         let (findings, edits) = (self.findings(), self.read(|j| j.revisions().count()));
         let done = self.edit(f);
@@ -1286,6 +1290,22 @@ mod read_only_tests {
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(r.vm.read(|j| j.snapshot()), junction);
+        assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
+    }
+
+    #[test]
+    fn a_calls_edit_is_refused_and_said_once_and_changes_nothing() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let junction = r.vm.read(|j| j.snapshot());
+        let arm = r.vm.view_now().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(!r.vm.set_on_call(arm, true), "on call is refused");
+        assert_eq!(r.said.take(), [REFUSED], "said once, the read-only sentence and no other reason");
+        assert!(!r.vm.set_call_rate(arm, 20), "a rate is refused");
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert_eq!(r.vm.read(|j| j.snapshot()), junction, "nothing changed");
+        r.vm.flush();
+        r.time.advance(1_000);
         assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
     }
 

@@ -1899,7 +1899,8 @@ fn calls_section(w: Watch) -> impl IntoView {
                     <h3 class="note-h" id="i-h-calls">{words(w, "jn-calls-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-calls-intro")}</p>
                     <p class="insp-range" id="calls-bounds">{bounds}</p>
-                    <ul class="calls-crossings"><For each=move || uids.get() key=|u| *u children=item/></ul>
+                    // The on-call boxes and the rate fields edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="calls-crossings"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
                     {move || none_on_call.get().then(|| view! { <p class="insp-range" id="calls-none">{words(w, "jn-calls-none")}</p> })}
                     {totals_table}
                     {findings}
