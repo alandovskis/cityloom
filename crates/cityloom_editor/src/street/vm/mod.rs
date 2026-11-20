@@ -1503,9 +1503,9 @@ impl StreetVm {
         scenario_actions::refresh(self);
         // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
         let shown = self.scenarios.active_now();
-        let (fresh, shown) = match binding.street_editor(shown) {
+        let (fresh, shown) = match self.open_design(shown) {
             Some(fresh) => (fresh, shown),
-            None => match binding.street_editor(None) {
+            None => match self.open_design(None) {
                 Some(fresh) => (fresh, None),
                 None => return,
             },
@@ -1518,6 +1518,15 @@ impl StreetVm {
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.replace_street(fresh, true);
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
+    /// Design `id` (None: the baseline) as the city keeps it now, its history begun there: undo goes back to it and no
+    /// further (not to the street as imported, which Start over still gives, as one step undo takes back). What both a
+    /// switch and a sync reload show.
+    fn open_design(&self, id: Option<u32>) -> Option<Editor> {
+        let mut fresh = self.binding.as_ref()?.street_editor(id)?;
+        fresh.begin_history();
+        Some(fresh)
     }
 
     /// Shows `fresh` in place of the street being edited, with its own history; with `keep_choices`, what is chosen
@@ -1670,10 +1679,7 @@ impl ScenarioPage for StreetVm {
     }
 
     fn show_design(&self, id: Option<u32>) -> bool {
-        let Some(mut fresh) = self.binding.as_ref().and_then(|b| b.street_editor(id)) else { return false };
-        // each design shown starts a history of its own: undo goes back to it and no further (not to the street as
-        // imported, which Start over still gives, as one step undo takes back)
-        fresh.begin_history();
+        let Some(fresh) = self.open_design(id) else { return false };
         // another design: what was chosen in this one may not be there, and the drawing starts as a page opens
         self.replace_street(fresh, false);
         true
@@ -1975,12 +1981,15 @@ mod tests {
         assert!(binding.keep_street_in(s, Some(id)));
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(width(&r), baseline - 100, "the scenario shown, as the other tab left it");
+        assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
+        assert_eq!(width(&r), baseline - 100);
         // and then deletes it
         binding.act(Action::Delete(id)).unwrap();
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.scenario_state().active_now(), None);
         assert!(r.vm.scenario_state().items().is_empty());
         assert_eq!(width(&r), baseline);
+        assert!(!r.vm.view_now().can_undo, "the baseline shown starts a history of its own");
         hub::reset();
     }
 

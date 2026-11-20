@@ -396,14 +396,16 @@ impl JunctionVm {
         scenario_actions::refresh(self);
         // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
         let shown = self.scenarios.active_now();
-        let (mut fresh, shown) = match binding.junction_editor(shown) {
+        let (mut fresh, shown) = match self.open_design(shown) {
             Some(fresh) => (fresh, shown),
-            None => match binding.junction_editor(None) {
+            None => match self.open_design(None) {
                 Some(fresh) => (fresh, None),
                 None => return,
             },
         };
         if shown != self.scenarios.active_now() {
+            // another design starts as a page opens: the junction's own level, not the signal plan
+            self.plan.set(false);
             self.scenarios.show(shown);
         } else if self.core.read(|j| j.drawn_as(&fresh)) {
             // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
@@ -414,6 +416,14 @@ impl JunctionVm {
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
         self.core.edit(|j| *j = fresh);
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
+    /// Design `id` (None: the baseline) as the city keeps it now, its history begun there (`Junction::begin_history`).
+    /// What both a switch and a sync reload show.
+    fn open_design(&self, id: Option<u32>) -> Option<Junction> {
+        let mut fresh = self.binding.as_ref()?.junction_editor(id)?;
+        fresh.begin_history();
+        Some(fresh)
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -599,9 +609,7 @@ impl ScenarioPage for JunctionVm {
     }
 
     fn show_design(&self, id: Option<u32>) -> bool {
-        let Some(mut fresh) = self.binding.as_ref().and_then(|b| b.junction_editor(id)) else { return false };
-        // each design shown starts a history of its own (`Junction::begin_history`)
-        fresh.begin_history();
+        let Some(fresh) = self.open_design(id) else { return false };
         // another design starts as a page opens: nothing chosen, the junction's own level shown
         self.plan.set(false);
         self.core.edit(|j| *j = fresh);
@@ -650,6 +658,37 @@ mod tests {
         assert_eq!(r.said.take(), ["Updated from another device."]);
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert!(r.said.take().is_empty(), "nothing differs now");
+    }
+
+    #[test]
+    fn a_sync_reloads_the_scenario_shown_and_falls_back_to_the_baseline_when_it_is_gone() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        r.vm.plan.set(true);
+        // another tab edits the scenario
+        let mut j = binding.junction_editor(Some(id)).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, imported + 1_000));
+        assert!(binding.keep_junction_in(j.snapshot(), Some(id)));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(corner(&r), imported + 1_000, "the scenario shown, as the other tab left it");
+        assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
+        assert_eq!(corner(&r), imported + 1_000);
+        // and then deletes it
+        binding.act(Action::Delete(id)).unwrap();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(corner(&r), imported);
+        assert!(!r.vm.view_now().can_undo);
+        assert!(!r.vm.plan.get_untracked(), "another design starts at the junction's own level");
+        hub::reset();
     }
 
     #[test]
