@@ -228,13 +228,14 @@ struct Asked {
 ///
 /// A phase takes at least a second in the run, and the clock counts in u64 (a settled timing is within its range,
 /// but the run holds any), so time moves on: every call that can be served is, within a cycle of being made, and the
-/// run stops a whole cycle past the last call, whatever is still waiting then not served.
+/// run stops a cycle at its longest (each phase extended by at most `MAX_EXTENSION_S`, `stop_at`) past the last call,
+/// whatever is still waiting then not served.
 fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
     serve_turns(plan, asked, MAX_TURNS)
 }
 
-/// A bound on the phases `serve` runs, only a guard: the run stops a cycle past the last call of the hour, and a phase
-/// lasts a second or more, so it takes at most about an hour and a cycle of one-second phases.
+/// A bound on the phases `serve` runs, only a guard: the run stops a cycle at its longest past the last call of the hour
+/// (`stop_at`), and a phase lasts a second or more, so it takes at most about an hour and a cycle of one-second phases.
 const MAX_TURNS: usize = 100_000;
 
 /// When the run stops: a cycle at its longest past the `last` call. Each phase takes a second or more, and its green
