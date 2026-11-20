@@ -19,6 +19,20 @@ share-delete-confirm = { $state ->
 }
 share-delete-yes = Supprimer le lien
 share-cancel = Annuler
+# Les noms du champ et des boutons d’un lien, par son jour d’expiration (share-date), pour distinguer les rangées à
+# l’oreille; chacun contient les mots qu’affiche la commande.
+share-link-named = { $state ->
+    [expired] Lien de partage qui a expiré le { $date }
+   *[live] Lien de partage qui fonctionne jusqu’au { $date }
+}
+share-copy-named = { $state ->
+    [expired] Copier le lien qui a expiré le { $date }
+   *[live] Copier le lien qui fonctionne jusqu’au { $date }
+}
+share-delete-named = { $state ->
+    [expired] Supprimer le lien qui a expiré le { $date }
+   *[live] Supprimer le lien qui fonctionne jusqu’au { $date }
+}
 # Jusqu’à quand un lien fonctionne : un jour, comme l’écrit share-date.
 share-until = Fonctionne jusqu’au { $date }
 share-expired-on = A expiré le { $date }

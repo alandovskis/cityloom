@@ -19,6 +19,20 @@ share-delete-confirm = { $state ->
 }
 share-delete-yes = Delete the link
 share-cancel = Cancel
+# The names of a link's field and buttons, by its expiry day (share-date), so rows can be told apart by ear; each
+# holds the words the control shows.
+share-link-named = { $state ->
+    [expired] Share link that expired on { $date }
+   *[live] Share link that works until { $date }
+}
+share-copy-named = { $state ->
+    [expired] Copy link that expired on { $date }
+   *[live] Copy link that works until { $date }
+}
+share-delete-named = { $state ->
+    [expired] Delete link that expired on { $date }
+   *[live] Delete link that works until { $date }
+}
 # Until when a link works: a day, as share-date writes it.
 share-until = Works until { $date }
 share-expired-on = Expired on { $date }

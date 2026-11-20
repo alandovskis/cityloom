@@ -456,6 +456,37 @@ fn deleting_a_link_is_asked_first_and_starts_on_the_safe_answer() {
     );
 }
 
+/// Each row's field and buttons are named by when its link stops (or stopped) working, so a list of several can be
+/// told apart by ear; each name holds the words the control shows.
+#[test]
+fn each_link_s_field_and_buttons_are_named_by_its_expiry() {
+    let (vm, t) = sharing(Locale::En);
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    let row = &vm.links()[0];
+    assert_eq!(
+        (row.field_name.as_str(), row.copy_name.as_str(), row.delete_name.as_str()),
+        ("Share link that works until April 15, 2027", "Copy link that works until April 15, 2027", "Delete link that works until April 15, 2027")
+    );
+    t.storage.set_now(1_800_000_000_000 + 91 * 86_400_000);
+    let row = &vm.links()[0];
+    assert_eq!(row.delete_name, "Delete link that expired on April 15, 2027");
+    let (vm, t) = sharing(Locale::FrCa);
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    let row = &vm.links()[0];
+    assert_eq!(
+        (row.field_name.as_str(), row.copy_name.as_str(), row.delete_name.as_str()),
+        (
+            "Lien de partage qui fonctionne jusqu’au 15 avril 2027",
+            "Copier le lien qui fonctionne jusqu’au 15 avril 2027",
+            "Supprimer le lien qui fonctionne jusqu’au 15 avril 2027"
+        )
+    );
+}
+
 #[test]
 fn a_link_the_server_no_longer_has_is_forgotten_when_deleted() {
     for gone in [ShareFailure::NotFound, ShareFailure::Expired, ShareFailure::Deleted] {
@@ -536,6 +567,15 @@ mod page {
         assert!(out.contains(&format!(r#"id="sharing-link-{TOKEN}""#)) && out.contains(&format!("{FAKE_ORIGIN}/share.html#{TOKEN}")), "{out}");
         assert!(out.contains(&format!(r#"for="sharing-link-{TOKEN}""#)), "the field is labelled");
         assert!(out.contains("Works until April 15, 2027") && out.contains("Copy link") && out.contains("Delete link"));
+        for (id, name) in [
+            ("link", "Share link that works until April 15, 2027"),
+            ("copy", "Copy link that works until April 15, 2027"),
+            ("delete", "Delete link that works until April 15, 2027"),
+        ] {
+            let at = out.find(&format!(r#"id="sharing-{id}-{TOKEN}""#)).unwrap();
+            let tag = &out[out[..at].rfind('<').unwrap()..at + out[at..].find('>').unwrap()];
+            assert!(tag.contains(&format!(r#"aria-label="{name}""#)), "{tag}");
+        }
         assert!(out.contains("Share link created."), "{out}");
     }
 

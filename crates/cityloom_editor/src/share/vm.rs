@@ -55,6 +55,10 @@ pub struct LinkRow {
     /// "Works until April 15, 2027" or "Expired on …".
     pub expiry: String,
     pub expired: bool,
+    /// The names of the row's field and buttons, each by the link's expiry, so that rows can be told apart by ear.
+    pub field_name: String,
+    pub copy_name: String,
+    pub delete_name: String,
 }
 
 /// Where focus should go after a command. The view moves it when `focus_request` changes.
@@ -199,11 +203,21 @@ impl ShareVm {
             .list()
             .into_iter()
             .rev()
-            .map(|m| LinkRow {
-                link: model::link(&origin, &m.token),
-                expiry: expiry_text(&self.i18n, &m.expires_at, &now),
-                expired: m.expires_at <= now,
-                token: m.token,
+            .map(|m| {
+                let expired = m.expires_at <= now;
+                let named = |key: &str| {
+                    let args = Args::new().str("state", if expired { "expired" } else { "live" }).str("date", date_text(&self.i18n, &m.expires_at));
+                    self.i18n.tr(key, &args)
+                };
+                LinkRow {
+                    link: model::link(&origin, &m.token),
+                    expiry: expiry_text(&self.i18n, &m.expires_at, &now),
+                    expired,
+                    field_name: named("share-link-named"),
+                    copy_name: named("share-copy-named"),
+                    delete_name: named("share-delete-named"),
+                    token: m.token,
+                }
             })
             .collect()
     }
