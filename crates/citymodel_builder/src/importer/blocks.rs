@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn merging_twenty_thousand_blocks_takes_under_two_seconds() {
+    fn merging_twenty_thousand_roads_takes_under_two_seconds() {
         const N: u32 = 10_000;
         let mut net = Network::default();
         for i in 0..N {
