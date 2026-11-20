@@ -960,8 +960,7 @@ impl Junction {
             refusal: None,
             refusal_arm: None,
         };
-        let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
-        if let Some(now) = now.filter(|n| !same(n, &today)) {
+        if let Some(now) = now.filter(|n| !same_design(n, &today)) {
             j.states.push(State { label: earlier(), ..now });
             j.cursor = 1;
         }
