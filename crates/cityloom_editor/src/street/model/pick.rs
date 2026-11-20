@@ -70,10 +70,11 @@ impl Editor {
     /// street. On a street whose zones were drawn elsewhere, the stretch grows to the whole runs it touches.
     pub fn pick_stretch(&mut self, a_mm: i32, b_mm: i32) -> Result<Pick, PickRefusal> {
         let length = self.pickable()?;
-        let (lo, hi) = (snap(a_mm.min(b_mm)), snap(a_mm.max(b_mm)));
-        if lo < 0 || hi > length {
+        if a_mm.min(b_mm) < 0 || a_mm.max(b_mm) > length {
             return Err(PickRefusal::OutsideStreet);
         }
+        // Snapped, but never past the street: a street need not be a whole number of snaps long.
+        let (lo, hi) = (snap(a_mm.min(b_mm)).min(length), snap(a_mm.max(b_mm)).min(length));
         let runs = self.runs();
         let (lo, hi) = if self.elsewhere().is_some() {
             // Whole runs only: the run `lo` lies in, to the run the stretch ends in.
@@ -538,6 +539,16 @@ mod tests {
         assert_eq!(e.pick_stretch(-100, 10_000), Err(PickRefusal::OutsideStreet));
         assert_eq!(e.pick_stretch(10_000, LEN + 100), Err(PickRefusal::OutsideStreet));
         assert_eq!(e.pick(), stretch(50_000, LEN), "a refusal leaves the pick");
+    }
+
+    #[test]
+    fn a_street_whose_length_is_not_a_whole_100_mm_can_be_picked_to_its_end() {
+        // 90.77 m long: its end snaps past the street, and is still its end.
+        let mut e = editor(&sample(), frame(90_770, ZoneEnd::First));
+        assert_eq!(e.pick_stretch(45_000, 90_770), Ok(stretch(45_000, 90_770)));
+        assert_eq!(e.pick_stretch(90_770, 80_000), Ok(stretch(80_000, 90_770)));
+        assert_eq!(e.pick_stretch(45_000, 90_771), Err(PickRefusal::OutsideStreet), "past the end is still outside");
+        assert_eq!(e.pick_stretch(-1, 20_000), Err(PickRefusal::OutsideStreet));
     }
 
     #[test]
