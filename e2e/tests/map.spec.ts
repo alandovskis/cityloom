@@ -640,6 +640,8 @@ test.describe("the zone boundaries on the map", () => {
     await page.locator("#search").fill(name);
     const rows = page.locator("#search-results .place-row", { hasText: name });
     await expect(rows.first()).toBeVisible();
+    // A street's small print is its ends and width (a junction's row, also found by the name, is its control).
+    await expect(rows.locator("small", { hasText: / \u00b7 \d+\.\d m$/ }).first()).toBeVisible();
     await expect(rows.filter({ hasText: /zone/i })).toHaveCount(0);
   });
 

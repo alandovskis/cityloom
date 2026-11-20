@@ -208,7 +208,7 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
 }
-# `stretch` is the stretch across the end stretch's boundary, a stretch-mid ("from 49 m to 82 m") counted from the street's first end (src/street/model/beyond.rs).
+# `stretch` is the stretch across the end stretch's boundary, a stretch-mid ("from 20 m to 100 m") measured from the junction's centre, so it starts where the end stretch reaches (src/street/model/beyond.rs).
 jn-sel-arm-approach = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees

@@ -252,7 +252,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | approach measure | mesure d’approche |  |
 | Junction | end stretch (the street's stretch at the junction, drawn to its boundary) | tronçon d’extrémité | `Chaque tronçon d’extrémité dépasse sa ligne d’arrêt`; masculine: `Son tronçon d’extrémité va jusqu’à 20 m du centre`. |
 | Junction | Approaches (the check on the end stretches and their transitions) | Approches | `jn-check-approach`. Not the inspector’s `À l’approche` (the transit measures’ list, `mesure d’approche`): that one is about where on the street a measure stands, this check is about whether the end stretch holds the stop line, the arrows and the transition. |
-| Junction | next stretch (the stretch across the end stretch's boundary, in the arm's sentence, named by where it lies from the street's first end) | tronçon suivant | `Tronçon suivant : de 20 m à 100 m`. |
+| Junction | next stretch (the stretch across the end stretch's boundary, in the arm's sentence, named by where it lies measured from the junction's centre, so it starts where the end stretch reaches) | tronçon suivant | `Tronçon suivant : de 20 m à 100 m`. |
 | Junction | turn management | gestion des virages |  |
 | Junction | dead end | cul-de-sac |  |
 | Junction | Right-in/right-out | Entrée et sortie à droite seulement | As the Atlas name `L3`; shortened to `Entrée et sortie à droite` where it says why a turn is blocked. |
@@ -430,5 +430,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Modal filter (street element) | `Filtre modal` | The term used in Québec and France for a barrier that stops motor traffic and lets people on foot and bikes through; to confirm |
 | build-out (of a chicane) | `avancée` | `saillie`, `avancée de trottoir` (a curb extension; to confirm) |
 | ramp (of a raised table) | `rampe` | `pente` (the slope, not the thing) |
-| boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is the app's lengthways zone) |
+| boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is kept for the map's areas, `règles de zone`) |
 | Timeline page | Milestone | `jalon` | `point de repère`, `version enregistrée`, `instantané` (a snapshot, but it reads as a photo) |

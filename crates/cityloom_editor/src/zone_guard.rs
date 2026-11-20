@@ -104,6 +104,10 @@ fn messages(locale: Locale) -> BTreeMap<String, Message> {
 
 /// French says "zone" for an area of the map (a `règle de zone`, the glossary's term), so a French message may say it
 /// where its English one speaks of an area: says "area", takes an `area`, or is one of `AREA_MESSAGES`.
+///
+/// The exemption is of the whole message: a French message whose English speaks of an area is not read for "zone" at
+/// all, so one that also said "zone" of a street would pass. None does; a message that mixes the two needs its words
+/// checked by hand.
 #[test]
 fn no_message_anywhere_says_zone_except_school_and_loading_zones() {
     let en = messages(Locale::En);

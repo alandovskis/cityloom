@@ -527,7 +527,7 @@ pub struct ArmView {
     /// the taper is (0 for a jog); both 0 without a beyond.
     pub beyond_reach_mm: i32,
     pub beyond_taper_mm: i32,
-    /// The stretch across, named by where it lies from the plan's left end; `None` without a beyond.
+    /// The stretch across, named by where it lies measured from the junction's centre; `None` without a beyond.
     pub beyond_stretch: Option<Said>,
     /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
     pub core_bike: Vec<Vec<Value>>,

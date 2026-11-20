@@ -208,7 +208,7 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
 }
-# `stretch` est le tronçon de l’autre côté de la limite du tronçon d’extrémité, un stretch-mid (« de 49 m à 82 m ») compté depuis la première extrémité de la rue (src/street/model/beyond.rs).
+# `stretch` est le tronçon de l’autre côté de la limite du tronçon d’extrémité, un stretch-mid (« de 20 m à 100 m ») mesuré depuis le centre de la jonction : il commence là où finit le tronçon d’extrémité (src/street/model/beyond.rs).
 jn-sel-arm-approach = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés

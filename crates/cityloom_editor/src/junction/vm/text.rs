@@ -343,6 +343,34 @@ mod tests {
     }
 
     #[test]
+    fn an_arm_at_the_streets_last_end_names_the_next_stretch_from_where_its_end_stretch_reaches() {
+        use crate::shared::catalogue::{Side, kind_index};
+        use crate::street::model::{Street, StreetExt, ZoneEnd, ZoneFrame, zoned};
+        // A 100 m street that changes 75 m from its first end, off the roadway (a jog): the arm at its last end has an
+        // end stretch reaching 25 m, then the first stretch, to the street's far end 100 m away.
+        const LEN: i32 = 100_000;
+        let mut street = zoned(Street::sample(0, Side::Right), &[0, 75_000], LEN);
+        let mut own = street.segments.clone();
+        own[0].kind = kind_index("planting").unwrap();
+        street.zones[0].segments = Some(own);
+        let real = street.beyond(false, Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First })).expect("the sections differ");
+        assert_eq!((real.boundary_mm, real.taper.is_none()), (25_000, true));
+        let (mut j, uid) = crate::junction::view::tests::junction_with_a_beyond(
+            |_| {},
+            |b| {
+                b.boundary_mm = real.boundary_mm;
+                b.stretch = real.stretch.clone();
+                b.taper = None;
+            },
+        );
+        j.select(Target::Arm(uid));
+        let said = selection_text(&j.view(), &en(), Units::Metres).unwrap();
+        let reach = Units::Metres.length(real.boundary_mm);
+        let end = Units::Metres.length(LEN);
+        assert!(said.ends_with(&format!("Its end stretch reaches {reach} from the centre, then the stretch from {reach} to {end}.")), "{said}");
+    }
+
+    #[test]
     fn an_arm_without_one_says_what_it_said_before() {
         let mut j = Junction::new(0);
         let n = arm_at(&j, 0);
