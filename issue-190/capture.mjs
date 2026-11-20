@@ -62,7 +62,7 @@ async function newPage(browser, lang) {
   );
   const page = await context.newPage();
   await page.route("**/data/metro/index.json", (r) =>
-    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } } }),
   );
   await page.route("**/data/metro/0_0.json", (r) => r.fulfill({ contentType: "application/json", body: plateau }));
   return page;
@@ -377,7 +377,7 @@ try {
   await shot(tabA, "Missing, tab A: make and show “Doomed”");
   const tabB = await ctx.newPage();
   await tabB.route("**/data/metro/index.json", (r) =>
-    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } } }),
   );
   await tabB.route("**/data/metro/0_0.json", (r) => r.fulfill({ contentType: "application/json", body: plateau }));
   await tabB.goto("/" + places.street);
@@ -394,6 +394,61 @@ try {
   await shot(tabA, "Missing, tab A: try to rename the shown design to “Doomed again”");
   await ctx.close();
 
+
+  // An edit to a scenario that another tab deleted: the page shows the baseline, keeps the chosen piece, says why.
+  for (const lang of ["en", "fr-CA"]) {
+    const ctxE = (await newPage(browser, lang)).context();
+    const ea = ctxE.pages()[0];
+    await ea.goto("/" + places.street);
+    await ea.locator("#scenario-pick").waitFor();
+    await act(ea, "scenario-new", "Edited away");
+    const eb = await ctxE.newPage();
+    await eb.route("**/data/metro/index.json", (r) =>
+      r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } } }),
+    );
+    await eb.route("**/data/metro/0_0.json", (r) => r.fulfill({ contentType: "application/json", body: plateau }));
+    await eb.goto("/" + places.street);
+    await eb.locator("#scenario-pick").waitFor();
+    await show(eb, "Edited away");
+    await act(eb, "scenario-delete");
+    await eb.keyboard.press("Enter");
+    await eb.waitForTimeout(300);
+    await ea.bringToFront();
+    const before = await firstPieceWidth(ea);
+    await ea.keyboard.press("ArrowUp");
+    await ea.waitForTimeout(1200);
+    const after = await ea.locator("#inspector input").first().inputValue();
+    const sel = await ea.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
+    await shot(ea, `${lang}: tab B deleted “Edited away”; in tab A, with the first piece chosen (${before} m), press ArrowUp in its width field: the edit is refused, the page shows the baseline, says why, keeps the piece chosen (width field ${after} m, focus on ${sel})`);
+    await ctxE.close();
+  }
+
+  // A scenario deleted elsewhere while this tab only chose a piece in it: the page shows the baseline, says it is gone, and does not claim a change was lost.
+  for (const lang of ["en", "fr-CA"]) {
+    const ctxC = (await newPage(browser, lang)).context();
+    const ca = ctxC.pages()[0];
+    await ca.goto("/" + places.street);
+    await ca.locator("#scenario-pick").waitFor();
+    await act(ca, "scenario-new", "Only looked at");
+    const cb = await ctxC.newPage();
+    await cb.route("**/data/metro/index.json", (r) =>
+      r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } } }),
+    );
+    await cb.route("**/data/metro/0_0.json", (r) => r.fulfill({ contentType: "application/json", body: plateau }));
+    await cb.goto("/" + places.street);
+    await cb.locator("#scenario-pick").waitFor();
+    await show(cb, "Only looked at");
+    await act(cb, "scenario-delete");
+    await cb.keyboard.press("Enter");
+    await cb.waitForTimeout(300);
+    await ca.bringToFront();
+    await ca.locator("#wrap").focus();
+    await ca.keyboard.press("Escape");
+    await ca.keyboard.press("ArrowRight");
+    await ca.waitForTimeout(1200);
+    await shot(ca, `${lang}: tab B deleted “Only looked at”; in tab A only choose a piece (ArrowRight on the drawing, no change): the page shows the baseline and says the scenario is gone, without saying a change was lost`);
+    await ctxC.close();
+  }
   // The same in fr-CA: the Missing refusal in French.
   const ctxFr = (await newPage(browser, "fr-CA")).context();
   const frA = ctxFr.pages()[0];
@@ -403,7 +458,7 @@ try {
   await shot(frA, "Missing en fr-CA, onglet A : créer et afficher « Condamné »");
   const frB = await ctxFr.newPage();
   await frB.route("**/data/metro/index.json", (r) =>
-    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    r.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"], checksums: { "0_0": "e2e" } } }),
   );
   await frB.route("**/data/metro/0_0.json", (r) => r.fulfill({ contentType: "application/json", body: plateau }));
   await frB.goto("/" + places.street);

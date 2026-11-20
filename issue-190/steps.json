@@ -203,7 +203,7 @@
   },
   {
     "step": 14,
-    "caption": "14. Reload while “Wider bike lane” is shown: the page opens on the baseline (first piece 1.50 m); the kept street record's keys are [\"leaving\",\"nodes\",\"scenarios\",\"street\",\"ways\"], with no active-scenario field",
+    "caption": "14. Reload while “Wider bike lane” is shown: the page opens on the baseline (first piece 1.50 m); the kept street record's keys are [\"import\",\"leaving\",\"nodes\",\"scenarios\",\"street\",\"ways\"], with no active-scenario field",
     "file": "14.png",
     "state": {
       "live": "Sidewalk, 1.5 m, 1 of 8",
@@ -629,7 +629,7 @@
   },
   {
     "step": 40,
-    "caption": "40. Reload while “Wider bike lane” is shown: the junction opens on the baseline; the kept junction record's keys are [\"arm_streets\",\"nodes\",\"scenarios\",\"state\"], with no active-scenario field",
+    "caption": "40. Reload while “Wider bike lane” is shown: the junction opens on the baseline; the kept junction record's keys are [\"arm_streets\",\"import\",\"nodes\",\"scenarios\",\"state\"], with no active-scenario field",
     "file": "40.png",
     "state": {
       "live": "",
@@ -913,8 +913,64 @@
   },
   {
     "step": 58,
-    "caption": "58. Missing en fr-CA, onglet A : créer et afficher « Condamné »",
+    "caption": "58. en: tab B deleted “Edited away”; in tab A, with the first piece chosen (1.50 m), press ArrowUp in its width field: the edit is refused, the page shows the baseline, says why, keeps the piece chosen (width field 1.50 m, focus on width)",
     "file": "58.png",
+    "state": {
+      "live": "That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 59,
+    "caption": "59. fr-CA: tab B deleted “Edited away”; in tab A, with the first piece chosen (1,50 m), press ArrowUp in its width field: the edit is refused, the page shows the baseline, says why, keeps the piece chosen (width field 1,50 m, focus on width)",
+    "file": "59.png",
+    "state": {
+      "live": "Ce scénario n’existe plus : il a été supprimé ailleurs, et votre dernière modification n’a donc pas été conservée. La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 60,
+    "caption": "60. en: tab B deleted “Only looked at”; in tab A only choose a piece (ArrowRight on the drawing, no change): the page shows the baseline and says the scenario is gone, without saying a change was lost",
+    "file": "60.png",
+    "state": {
+      "live": "That scenario is no longer here: it was deleted elsewhere. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "wrap"
+    }
+  },
+  {
+    "step": 61,
+    "caption": "61. fr-CA: tab B deleted “Only looked at”; in tab A only choose a piece (ArrowRight on the drawing, no change): the page shows the baseline and says the scenario is gone, without saying a change was lost",
+    "file": "61.png",
+    "state": {
+      "live": "Ce scénario n’existe plus : il a été supprimé ailleurs. La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)"
+      ],
+      "refusal": "",
+      "focused": "wrap"
+    }
+  },
+  {
+    "step": 62,
+    "caption": "62. Missing en fr-CA, onglet A : créer et afficher « Condamné »",
+    "file": "62.png",
     "state": {
       "live": "Scénario « Condamné » créé à partir de la référence. Vous le modifiez maintenant.",
       "mode": "Scénario « Condamné » : les modifications ne changent que ce scénario.",
@@ -927,9 +983,9 @@
     }
   },
   {
-    "step": 59,
-    "caption": "59. Missing en fr-CA, onglet B : afficher « Condamné » et le supprimer, confirmé",
-    "file": "59.png",
+    "step": 63,
+    "caption": "63. Missing en fr-CA, onglet B : afficher « Condamné » et le supprimer, confirmé",
+    "file": "63.png",
     "state": {
       "live": "Scénario « Condamné » supprimé. La référence est maintenant affichée.",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -941,9 +997,9 @@
     }
   },
   {
-    "step": 60,
-    "caption": "60. Missing en fr-CA, onglet A : renommer la conception affichée est refusé, sous le champ et dans la zone d’annonces",
-    "file": "60.png",
+    "step": 64,
+    "caption": "64. Missing en fr-CA, onglet A : renommer la conception affichée est refusé, sous le champ et dans la zone d’annonces",
+    "file": "64.png",
     "state": {
       "live": "Ce scénario n’existe plus.",
       "mode": "Scénario « Condamné » : les modifications ne changent que ce scénario.",
@@ -956,9 +1012,9 @@
     }
   },
   {
-    "step": 61,
-    "caption": "61. fr-CA, rue : créer « Voie élargie », annoncé",
-    "file": "61.png",
+    "step": 65,
+    "caption": "65. fr-CA, rue : créer « Voie élargie », annoncé",
+    "file": "65.png",
     "state": {
       "live": "Scénario « Voie élargie » créé à partir de la référence. Vous le modifiez maintenant.",
       "mode": "Scénario « Voie élargie » : les modifications ne changent que ce scénario.",
@@ -971,9 +1027,9 @@
     }
   },
   {
-    "step": 62,
-    "caption": "62. fr-CA, rue : afficher la référence avec le menu, annoncé",
-    "file": "62.png",
+    "step": 66,
+    "caption": "66. fr-CA, rue : afficher la référence avec le menu, annoncé",
+    "file": "66.png",
     "state": {
       "live": "La référence est maintenant affichée.",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -986,9 +1042,9 @@
     }
   },
   {
-    "step": 63,
-    "caption": "63. fr-CA, rue : afficher « Voie élargie » avec le menu, annoncé",
-    "file": "63.png",
+    "step": 67,
+    "caption": "67. fr-CA, rue : afficher « Voie élargie » avec le menu, annoncé",
+    "file": "67.png",
     "state": {
       "live": "Le scénario « Voie élargie » est maintenant affiché.",
       "mode": "Scénario « Voie élargie » : les modifications ne changent que ce scénario.",
@@ -1001,9 +1057,9 @@
     }
   },
   {
-    "step": 64,
-    "caption": "64. fr-CA, rue : renommer en « Voie cyclable large », annoncé",
-    "file": "64.png",
+    "step": 68,
+    "caption": "68. fr-CA, rue : renommer en « Voie cyclable large », annoncé",
+    "file": "68.png",
     "state": {
       "live": "Scénario « Voie élargie » renommé « Voie cyclable large ».",
       "mode": "Scénario « Voie cyclable large » : les modifications ne changent que ce scénario.",
@@ -1016,9 +1072,9 @@
     }
   },
   {
-    "step": 65,
-    "caption": "65. fr-CA, rue : dupliquer en « Voie cyclable large, copie », annoncé",
-    "file": "65.png",
+    "step": 69,
+    "caption": "69. fr-CA, rue : dupliquer en « Voie cyclable large, copie », annoncé",
+    "file": "69.png",
     "state": {
       "live": "Scénario « Voie cyclable large » dupliqué sous le nom « Voie cyclable large, copie ». Vous modifiez maintenant la copie.",
       "mode": "Scénario « Voie cyclable large, copie » : les modifications ne changent que ce scénario.",
@@ -1032,9 +1088,9 @@
     }
   },
   {
-    "step": 66,
-    "caption": "66. fr-CA, rue : Supprimer demande une confirmation, annoncée",
-    "file": "66.png",
+    "step": 70,
+    "caption": "70. fr-CA, rue : Supprimer demande une confirmation, annoncée",
+    "file": "70.png",
     "state": {
       "live": "Supprimer le scénario « Voie cyclable large, copie »? Appuyez sur Confirmer la suppression pour le supprimer.",
       "mode": "Scénario « Voie cyclable large, copie » : les modifications ne changent que ce scénario.",
@@ -1048,9 +1104,9 @@
     }
   },
   {
-    "step": 67,
-    "caption": "67. fr-CA, rue : confirmer la suppression, annoncée, la référence est affichée",
-    "file": "67.png",
+    "step": 71,
+    "caption": "71. fr-CA, rue : confirmer la suppression, annoncée, la référence est affichée",
+    "file": "71.png",
     "state": {
       "live": "Scénario « Voie cyclable large, copie » supprimé. La référence est maintenant affichée.",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -1063,9 +1119,9 @@
     }
   },
   {
-    "step": 68,
-    "caption": "68. fr-CA, intersection : la page s’ouvre sur la référence",
-    "file": "68.png",
+    "step": 72,
+    "caption": "72. fr-CA, intersection : la page s’ouvre sur la référence",
+    "file": "72.png",
     "state": {
       "live": "",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -1077,9 +1133,9 @@
     }
   },
   {
-    "step": 69,
-    "caption": "69. fr-CA, intersection : créer « Virage protégé », annoncé",
-    "file": "69.png",
+    "step": 73,
+    "caption": "73. fr-CA, intersection : créer « Virage protégé », annoncé",
+    "file": "73.png",
     "state": {
       "live": "Scénario « Virage protégé » créé à partir de la référence. Vous le modifiez maintenant.",
       "mode": "Scénario « Virage protégé » : les modifications ne changent que ce scénario.",
@@ -1092,9 +1148,9 @@
     }
   },
   {
-    "step": 70,
-    "caption": "70. fr-CA, intersection : afficher la référence avec le menu, annoncé",
-    "file": "70.png",
+    "step": 74,
+    "caption": "74. fr-CA, intersection : afficher la référence avec le menu, annoncé",
+    "file": "74.png",
     "state": {
       "live": "La référence est maintenant affichée.",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -1107,9 +1163,9 @@
     }
   },
   {
-    "step": 71,
-    "caption": "71. fr-CA, intersection : afficher « Virage protégé » avec le menu, annoncé",
-    "file": "71.png",
+    "step": 75,
+    "caption": "75. fr-CA, intersection : afficher « Virage protégé » avec le menu, annoncé",
+    "file": "75.png",
     "state": {
       "live": "Le scénario « Virage protégé » est maintenant affiché.",
       "mode": "Scénario « Virage protégé » : les modifications ne changent que ce scénario.",
@@ -1122,9 +1178,9 @@
     }
   },
   {
-    "step": 72,
-    "caption": "72. fr-CA, intersection : renommer en « Virage sûr », annoncé",
-    "file": "72.png",
+    "step": 76,
+    "caption": "76. fr-CA, intersection : renommer en « Virage sûr », annoncé",
+    "file": "76.png",
     "state": {
       "live": "Scénario « Virage protégé » renommé « Virage sûr ».",
       "mode": "Scénario « Virage sûr » : les modifications ne changent que ce scénario.",
@@ -1137,9 +1193,9 @@
     }
   },
   {
-    "step": 73,
-    "caption": "73. fr-CA, intersection : dupliquer en « Virage sûr, copie », annoncé",
-    "file": "73.png",
+    "step": 77,
+    "caption": "77. fr-CA, intersection : dupliquer en « Virage sûr, copie », annoncé",
+    "file": "77.png",
     "state": {
       "live": "Scénario « Virage sûr » dupliqué sous le nom « Virage sûr, copie ». Vous modifiez maintenant la copie.",
       "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
@@ -1153,9 +1209,9 @@
     }
   },
   {
-    "step": 74,
-    "caption": "74. fr-CA, intersection : « virage SÛR » est refusé, nom déjà pris",
-    "file": "74.png",
+    "step": 78,
+    "caption": "78. fr-CA, intersection : « virage SÛR » est refusé, nom déjà pris",
+    "file": "78.png",
     "state": {
       "live": "Un autre scénario s’appelle déjà « virage SÛR ».",
       "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
@@ -1169,9 +1225,9 @@
     }
   },
   {
-    "step": 75,
-    "caption": "75. fr-CA, intersection : Supprimer demande une confirmation, annoncée",
-    "file": "75.png",
+    "step": 79,
+    "caption": "79. fr-CA, intersection : Supprimer demande une confirmation, annoncée",
+    "file": "79.png",
     "state": {
       "live": "Supprimer le scénario « Virage sûr, copie »? Appuyez sur Confirmer la suppression pour le supprimer.",
       "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
@@ -1185,9 +1241,9 @@
     }
   },
   {
-    "step": 76,
-    "caption": "76. fr-CA, intersection : confirmer la suppression, annoncée, la référence est affichée",
-    "file": "76.png",
+    "step": 80,
+    "caption": "80. fr-CA, intersection : confirmer la suppression, annoncée, la référence est affichée",
+    "file": "80.png",
     "state": {
       "live": "Scénario « Virage sûr, copie » supprimé. La référence est maintenant affichée.",
       "mode": "Référence : les modifications changent la conception que montre la carte.",
@@ -1200,9 +1256,9 @@
     }
   },
   {
-    "step": 77,
-    "caption": "77. Start over, junction: on the baseline, turn the first street: the kept baseline's bearing is 40°",
-    "file": "77.png",
+    "step": 81,
+    "caption": "81. Start over, junction: on the baseline, turn the first street: the kept baseline's bearing is 40°",
+    "file": "81.png",
     "state": {
       "live": "Avenue Laurier Est bearing: 40°. 4 streets, traffic signal. Every check passes.",
       "mode": "Baseline: edits change the design the map shows.",
@@ -1214,9 +1270,9 @@
     }
   },
   {
-    "step": 78,
-    "caption": "78. Make “Turned more” and turn the street again: the scenario's bearing is 45°, the baseline's 40°",
-    "file": "78.png",
+    "step": 82,
+    "caption": "82. Make “Turned more” and turn the street again: the scenario's bearing is 45°, the baseline's 40°",
+    "file": "82.png",
     "state": {
       "live": "Avenue Laurier Est bearing: 45°. 4 streets, traffic signal. Every check passes.",
       "mode": "Scenario “Turned more”: edits change this scenario only.",
@@ -1229,9 +1285,9 @@
     }
   },
   {
-    "step": 79,
-    "caption": "79. Press Start over in “Turned more”: “Started over from the junction as it is today.”; the scenario's bearing is 35° (as imported), the baseline's still 40°; Undo enabled: true",
-    "file": "79.png",
+    "step": 83,
+    "caption": "83. Press Start over in “Turned more”: “Started over from the junction as it is today.”; the scenario's bearing is 35° (as imported), the baseline's still 40°; Undo enabled: true",
+    "file": "83.png",
     "state": {
       "live": "Started over from the junction as it is today.",
       "mode": "Scenario “Turned more”: edits change this scenario only.",
@@ -1244,9 +1300,9 @@
     }
   },
   {
-    "step": 80,
-    "caption": "80. Undo the Start over: the scenario's bearing is 45° again, the baseline's 40°",
-    "file": "80.png",
+    "step": 84,
+    "caption": "84. Undo the Start over: the scenario's bearing is 45° again, the baseline's 40°",
+    "file": "84.png",
     "state": {
       "live": "Undone.",
       "mode": "Scenario “Turned more”: edits change this scenario only.",
@@ -1259,9 +1315,9 @@
     }
   },
   {
-    "step": 81,
-    "caption": "81. Start over in “Turned more” again: the first street's bearing field reads 35° (as imported)",
-    "file": "81.png",
+    "step": 85,
+    "caption": "85. Start over in “Turned more” again: the first street's bearing field reads 35° (as imported)",
+    "file": "85.png",
     "state": {
       "live": "Avenue Laurier Est (north-east), 35 degrees",
       "mode": "Scenario “Turned more”: edits change this scenario only.",
@@ -1274,9 +1330,9 @@
     }
   },
   {
-    "step": 82,
-    "caption": "82. Then show the baseline: the first street's bearing field reads 40°, the baseline's own turn, untouched by the scenario's Start over",
-    "file": "82.png",
+    "step": 86,
+    "caption": "86. Then show the baseline: the first street's bearing field reads 40°, the baseline's own turn, untouched by the scenario's Start over",
+    "file": "86.png",
     "state": {
       "live": "Avenue Laurier Est (north-east), 40 degrees",
       "mode": "Baseline: edits change the design the map shows.",
