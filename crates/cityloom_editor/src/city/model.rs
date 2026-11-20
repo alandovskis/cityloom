@@ -854,8 +854,8 @@ impl City {
     }
 
     /// The key and the record to keep for street `edge` as it now stands; None where the street has no key, or one
-    /// another place shares, so that what is written is always what comes back. Stamped as this build's importer
-    /// made it; `CityStore` stamps what it writes with the importer of the network it holds instead.
+    /// another place shares, so that what is written is always what comes back. Unstamped (`import` is None):
+    /// `CityStore` alone stamps what it writes, with the importer of the network it holds.
     pub fn street_record(&self, edge: u32) -> Option<(String, StreetRecord)> {
         let e = self.edge_index(edge)?;
         let key = self.street_keys[e].clone()?;
@@ -873,7 +873,7 @@ impl City {
                 leaving: ids.leaving,
                 street,
                 scenarios: Default::default(),
-                import: Some(cityloom_model::IMPORTER_VERSION),
+                import: None,
             },
         ))
     }
@@ -904,7 +904,7 @@ impl City {
 
     /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
     /// own, or an arm's street could not be found again from what the record says of it.
-    /// Stamped as `street_record` is.
+    /// Unstamped, as `street_record` is.
     pub fn junction_record(&self, node: u32) -> Option<(String, JunctionRecord)> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let key = self.junction_keys[n].clone()?;
@@ -928,7 +928,7 @@ impl City {
                 state,
                 arm_streets,
                 scenarios: Default::default(),
-                import: Some(cityloom_model::IMPORTER_VERSION),
+                import: None,
             },
         ))
     }
@@ -1732,14 +1732,14 @@ mod tests {
             if city.streets[&uid] != city.today_streets[&uid]
                 && let Some((key, record)) = city.street_record(uid)
             {
-                e.streets.insert(key, record);
+                e.streets.insert(key, StreetRecord { import: Some(cityloom_model::IMPORTER_VERSION), ..record });
             }
         }
         for (uid, state) in city.all_junctions() {
             if !same_junction(state, city.today_junction(uid).unwrap())
                 && let Some((key, record)) = city.junction_record(uid)
             {
-                e.junctions.insert(key, record);
+                e.junctions.insert(key, JunctionRecord { import: Some(cityloom_model::IMPORTER_VERSION), ..record });
             }
         }
         e
@@ -2192,10 +2192,10 @@ mod tests {
     }
 
     #[test]
-    fn a_record_the_city_writes_is_stamped_with_the_importer_version() {
+    fn a_record_the_city_makes_is_left_for_the_store_to_stamp() {
         let city = City::new();
-        assert_eq!(city.street_record(1).unwrap().1.import, Some(cityloom_model::IMPORTER_VERSION));
-        assert_eq!(city.junction_record(node_uid(1)).unwrap().1.import, Some(cityloom_model::IMPORTER_VERSION));
+        assert_eq!(city.street_record(1).unwrap().1.import, None);
+        assert_eq!(city.junction_record(node_uid(1)).unwrap().1.import, None);
     }
 
     #[test]
@@ -3030,6 +3030,7 @@ mod tests {
         assert_eq!(city.streets[&2], today, "but it is not kept");
         let mut edits = Edits::new();
         let (key, mut record) = city.street_record(2).unwrap();
+        record.import = Some(cityloom_model::IMPORTER_VERSION);
         record.street = bad;
         edits.streets.insert(key, record);
         let back = City::load(&edits);

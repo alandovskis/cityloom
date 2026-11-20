@@ -1540,6 +1540,7 @@ mod tests {
         e.streets.insert("w8~n1~n2".into(), pedestrian);
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
+        record.import = Some(cityloom_model::IMPORTER_VERSION);
         record.state.turbo = Some(crate::junction::model::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
         record.state.signal_plan = Some(crate::junction::model::signal::SignalPlan {
             phases: vec![crate::junction::model::signal::StoredPhase {
