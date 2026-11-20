@@ -1,0 +1,67 @@
+$ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
+6febe2c6de6fab61be8112f9ffcdddb769bd386d
+$ export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom   # as `just db` prints it
+$ cargo test -p cityloom_server --features test-provider --test share_api --test share_db --test no_plaintext --test unavailable
+   Compiling cityloom_server v0.1.0 (/Users/alex/src/cityloom/main-issue-221/crates/cityloom_server)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.91s
+     Running tests/no_plaintext.rs (target/debug/deps/no_plaintext-3482f9aa86b3f40e)
+
+running 1 test
+test no_row_holds_anything_the_person_signed_in_with ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/share_api.rs (target/debug/deps/share_api-b35627cf888f3c43)
+
+running 10 tests
+test an_unknown_or_malformed_link_is_not_found ... ok
+test reading_links_has_its_own_rate_limit ... ok
+test the_creator_deletes_a_share_and_its_link_then_says_so ... ok
+test a_change_needs_the_sites_own_origin ... ok
+test deleting_the_account_deletes_its_shares ... ok
+test after_ninety_days_the_link_says_expired ... ok
+test a_body_that_is_no_share_newer_or_too_large_is_refused ... ok
+test a_share_is_made_signed_in_and_read_by_anyone_with_the_link ... ok
+test signed_out_nobody_makes_or_deletes_a_share ... ok
+test an_account_holds_at_most_fifty_live_shares ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.42s
+
+     Running tests/share_db.rs (target/debug/deps/share_db-c1e3b2753761bd44)
+
+running 5 tests
+test a_share_opens_with_its_token_only_and_comes_back_exactly ... ok
+test only_the_creator_deletes_and_the_body_goes_with_it ... ok
+test a_body_moved_to_another_row_does_not_open ... ok
+test an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_it_a_year_on ... ok
+test the_cap_counts_live_shares_and_a_gone_account_makes_none ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests/unavailable.rs (target/debug/deps/unavailable-1ca4abc17f3837ee)
+
+running 3 tests
+test the_bare_auth_and_api_paths_answer_503_too_when_the_account_side_is_off ... ok
+test auth_and_api_answer_503_when_the_account_side_is_off_and_the_site_is_still_served ... ok
+test a_database_that_cannot_be_reached_answers_503_without_a_panic_and_the_site_is_still_served ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+
+$ cargo test -p cityloom_server --features test-provider --lib -- share:: a_share_token_never_reaches_the_log the_share_routes_have_their_own_rate_limit
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_server-4dcc1651467b3d01)
+
+running 9 tests
+test share::tests::debug_never_shows_the_token ... ok
+test share::tests::the_associated_data_names_the_row ... ok
+test app::tests::a_share_token_never_reaches_the_log ... ok
+test share::tests::a_share_is_kept_ninety_days ... ok
+test share::tests::a_token_is_43_characters_of_base64url_and_reads_back ... ok
+test share::tests::anything_else_is_no_token ... ok
+test share::tests::the_lookup_and_the_body_key_depend_on_the_token_and_differ_from_each_other ... ok
+test config::tests::the_share_routes_have_their_own_rate_limit ... ok
+test share::tests::the_body_must_be_a_share_of_a_known_format_and_not_too_large ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 86 filtered out; finished in 0.01s
+

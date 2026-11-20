@@ -1,0 +1,53 @@
+$ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
+6febe2c6de6fab61be8112f9ffcdddb769bd386d
+$ cd e2e && DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8317 npx playwright test --config /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221/playwright.config.ts
+# (web/pkg and target/e2e/cityloom_server as built by the 'just e2e tests/share.spec.ts' run of 03-spec-after.txt; capture spec: /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221/capture.spec.ts)
+
+## 1. Signed in: share a project with a street edit and an area rule
+edited street: street.html?street=1 (changes counter: 1)
+area rule kept in the first project: "Shared zone" (car_free)
+creator's project row: First project Metropolitan area Montréal Changed November 20, 2026 Timeline Share Rename Delete
+row's share link: href=share.html?project=first aria-label=Share First project
+share page URL: http://127.0.0.1:8317/share.html?project=first
+heading: Share First project
+intro: A share link lets anyone who has it see this project as it is now, read-only and with no account: its streets, junctions and area rules. Changes you make later are not in it.
+intro: The server keeps each shared copy for 90 days, then deletes it, and its link then says it has expired. You can delete a link sooner here, and deleting your account deletes them all.
+announced: Share link created. It works until February 18, 2027.
+link: http://127.0.0.1:8317/share.html#gVPBLnyI5rQZEcVR1pdXcczIpvM2ytM4Ar3_W7mf2bU  (format <origin>/share.html#<43 base64url chars>: true)
+expiry line: Works until February 18, 2027
+buttons: Copy link, Delete link
+
+## 2. Another browser, signed out, opens the link
+recipient's project list before: ["First project Metropolitan area Montréal Timeline Share Rename Delete"]
+recipient /api/me status: 401 (signed out)
+opened URL: http://127.0.0.1:8317/map.html?project=s-1cabb503422f&view=1
+read-only tag: Read-only This design is open read-only: you can look at it, but not change it.
+areas panel: Shared zone Car-free · 32 streets inside; 31 conflict with the rule.
+"Declare an area" control present: 0
+copy's street edits equal the creator's: true
+street URL: http://127.0.0.1:8317/street.html?street=1&project=s-1cabb503422f&view=1
+street changes counter (the shared edit): 1
+edit attempt (ArrowRight, +) announced: This design is open read-only: nothing can be changed.
+changes counter after the attempt: 1
+without view=1 (http://127.0.0.1:8317/street.html?street=1&project=s-1cabb503422f): read-only tag still visible
+recipient's project list after: ["First project Metropolitan area Montréal Timeline Share Rename Delete"] (unchanged: true)
+
+## 3. The creator deletes the link
+announced: Share link deleted. Anyone who opens it is told it was deleted.
+rows left on the share page: 0
+deleted link opened: alert = The person who shared this design deleted it. Nothing was kept on this device.; URL stays http://127.0.0.1:8317/share.html#gVPBLnyI5rQZEcVR1pdXcczIpvM2ytM4Ar3_W7mf2bU
+
+## 4. Signed out on the share page
+blocked: Sign in to share this project: the server keeps shared copies for your account.
+create button disabled: true
+
+## 5. Made-up token
+[en] http://127.0.0.1:8317/share.html#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA alert: No shared design has this link. It may have been copied wrong, or deleted with the account that shared it. Nothing was kept on this device.
+[en] storage keys unchanged: true
+[fr-CA] http://127.0.0.1:8317/share.html#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA alert: Aucun aménagement partagé n’a ce lien. Il a peut-être été mal copié, ou supprimé avec le compte qui l’a partagé. Rien n’a été conservé sur cet appareil.
+[fr-CA] storage keys unchanged: true
+
+## 6. Expired link (server's 410 stubbed with page.route, as share.spec.ts does)
+[en] alert: This shared design has expired: a share link works for 90 days. Ask the person who shared it for a new link. Nothing was kept on this device.
+[fr-CA] alert: Cet aménagement partagé a expiré : un lien de partage fonctionne pendant 90 jours. Demandez un nouveau lien à la personne qui l’a partagé. Rien n’a été conservé sur cet appareil.
+Server-side 90-day expiry: proven by cargo tests in 01-server-share-tests.txt: share_api::after_ninety_days_the_link_says_expired, share_db::an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_it_a_year_on, and the unit test share::tests::a_share_is_kept_ninety_days.

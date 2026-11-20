@@ -1,0 +1,8 @@
+$ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
+6febe2c6de6fab61be8112f9ffcdddb769bd386d
+$ (website/build from 'just docs-build', 11-docs-build.txt, served at http://127.0.0.1:8320/cityloom/ by python3 -m http.server)
+$ cd e2e && cp /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/ev221/../cap221/docs-shot.mjs ./.docs-shot-tmp.mjs && node ./.docs-shot-tmp.mjs <ev221> ; rm -f ./.docs-shot-tmp.mjs   # a temporary untracked copy so that 'playwright' resolves from e2e/node_modules; removed at once
+en http://127.0.0.1:8320/cityloom/sharing.html title: Sharing a design | CityLoom
+en headings: ["Sharing a design","Making a link​","Opening a link​","Privacy and retention​"]
+fr-CA http://127.0.0.1:8320/cityloom/fr-CA/sharing.html title: Partager un aménagement | CityLoom
+fr-CA headings: ["Partager un aménagement","Créer un lien​","Ouvrir un lien​","Confidentialité et conservation​"]

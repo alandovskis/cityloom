@@ -1,0 +1,332 @@
+$ git worktree add --detach /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221 29330ad1   # origin/main, without the change
+$ cp /Users/alex/src/cityloom/main-issue-221/e2e/tests/share.spec.ts /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/   # only the new spec
+$ (e2e/tiers.json: "share" added to the integration tier, which playwright.config.ts requires of every spec)
+$ (node_modules, e2e/node_modules and .tools (wasm-bindgen 0.2.130, the same pin) symlinked from the issue worktree; untracked, gitignored)
+$ docker exec cityloom-db psql -U postgres -c "CREATE DATABASE cityloom_before221"
+# (a database of its own: the head server already applied its share migration to `cityloom`, and the base server refuses a database with a migration it does not know: "the database is not ready kind=MigrationVersion", so the account side would be off for a reason unrelated to the change)
+$ cd /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221 && git rev-parse HEAD && git status --short && git diff
+29330ad197a55faac3041f3446c664714ef2aabd
+ M e2e/tiers.json
+?? e2e/tests/share.spec.ts
+diff --git a/e2e/tiers.json b/e2e/tiers.json
+index 1b472030..f0525b84 100644
+--- a/e2e/tiers.json
++++ b/e2e/tiers.json
+@@ -35,7 +35,7 @@
+     "webgl",
+     "world"
+   ],
+-  "integration": ["account-server", "sync"],
++  "integration": ["account-server", "share", "sync"],
+   "e2e": ["archive", "delivery", "serve"],
+   "archive_also": ["map", "street"]
+ }
+$ DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom_before221 E2E_PORT=8317 just e2e tests/share.spec.ts
+./scripts/build.sh
+    Finished `release` profile [optimized] target(s) in 0.29s
+web/pkg/cityloom_editor.js: 90602 B, br 12302 B, gzip 14709 B
+web/pkg/cityloom_editor_bg.wasm: 6906298 B, br 1226332 B, gzip 1852839 B
+web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2309 B
+web/pkg/cityloom_report_pdf_bg.wasm: 2372530 B, br 562187 B, gzip 770312 B
+web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
+web/vendor/maplibre-gl-worker.mjs: 519372 B, br 121563 B, gzip 147276 B
+web/vendor/maplibre-gl.css: 71596 B, br 8326 B, gzip 10191 B
+web/vendor/maplibre-gl.mjs: 1108049 B, br 241249 B, gzip 294314 B
+14 compressed copies
+cargo build -p cityloom_server --features test-provider
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.43s
+./scripts/pin-server.sh
+
+Running 6 tests using 6 workers
+
+  ✘  3 [integration] › tests/share.spec.ts:121:1 › a link that is not whole is refused without asking the server (5.3s)
+  ✘  2 [integration] › tests/share.spec.ts:158:1 › signed out, the share page says to sign in and makes no link (5.3s)
+  ✘  4 [integration] › tests/share.spec.ts:146:1 › an expired share says it has expired, in English and in French (5.3s)
+  ✘  5 [integration] › tests/share.spec.ts:102:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing (5.8s)
+  ✘  1 [integration] › tests/share.spec.ts:132:1 › a share its creator deleted says so (30.4s)
+  ✘  6 [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link (30.4s)
+
+
+  1) [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('#project-share-first')
+
+
+      35 | async function share(page: Page) {
+      36 |   await page.goto("/index.html");
+    > 37 |   await page.locator("#project-share-first").click();
+         |                                              ^
+      38 |   await expect(page).toHaveURL(/\/share\.html\?project=first$/);
+      39 |   await expect(page.locator("#sharing-heading")).toHaveText("Share First project");
+      40 |   await expect(page.locator("#sharing-create")).toBeEnabled();
+        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:37:46)
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:66:16
+
+    Error Context: test-results/share-a-project-shared-by--8fa64-ll-for-anyone-with-the-link-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-a-project-shared-by--8fa64-ll-for-anyone-with-the-link-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-a-project-shared-by--8fa64-ll-for-anyone-with-the-link-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [integration] › tests/share.spec.ts:102:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected substring: "No shared design has this link."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" getByRole('alert') with timeout 5000ms
+      - waiting for getByRole('alert')
+
+
+      112 |     const before = await page.evaluate(() => Object.keys(localStorage).sort());
+      113 |     await page.goto(`/share.html#${MADE_UP}`);
+    > 114 |     await expect(page.getByRole("alert")).toContainText(words);
+          |                                           ^
+      115 |     await expect(page).toHaveURL(new RegExp(`/share\\.html#${MADE_UP}$`));
+      116 |     expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(before);
+      117 |   }
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:114:43
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    + ]
+
+       at fixtures.ts:48
+
+      46 |       });
+      47 |       await use(errors);
+    > 48 |       expect(errors).toEqual([]);
+         |                      ^
+      49 |     },
+      50 |     { auto: true },
+      51 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/fixtures.ts:48:22)
+
+    Error Context: test-results/share-a-made-up-link-says--0c848-in-French-and-keeps-nothing-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-a-made-up-link-says--0c848-in-French-and-keeps-nothing-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-a-made-up-link-says--0c848-in-French-and-keeps-nothing-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [integration] › tests/share.spec.ts:121:1 › a link that is not whole is refused without asking the server 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected substring: "This is not a whole share link."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" getByRole('alert') with timeout 5000ms
+      - waiting for getByRole('alert')
+
+
+      126 |   });
+      127 |   await page.goto("/share.html#short");
+    > 128 |   await expect(page.getByRole("alert")).toContainText("This is not a whole share link.");
+          |                                         ^
+      129 |   expect(asked).toBe(false);
+      130 | });
+      131 |
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:128:41
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    + ]
+
+       at fixtures.ts:48
+
+      46 |       });
+      47 |       await use(errors);
+    > 48 |       expect(errors).toEqual([]);
+         |                      ^
+      49 |     },
+      50 |     { auto: true },
+      51 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/fixtures.ts:48:22)
+
+    Error Context: test-results/share-a-link-that-is-not-w-45293-d-without-asking-the-server-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-a-link-that-is-not-w-45293-d-without-asking-the-server-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-a-link-that-is-not-w-45293-d-without-asking-the-server-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [integration] › tests/share.spec.ts:132:1 › a share its creator deleted says so ───────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('#project-share-first')
+
+
+      35 | async function share(page: Page) {
+      36 |   await page.goto("/index.html");
+    > 37 |   await page.locator("#project-share-first").click();
+         |                                              ^
+      38 |   await expect(page).toHaveURL(/\/share\.html\?project=first$/);
+      39 |   await expect(page.locator("#sharing-heading")).toHaveText("Share First project");
+      40 |   await expect(page.locator("#sharing-create")).toBeEnabled();
+        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:37:46)
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:134:16
+
+    Error Context: test-results/share-a-share-its-creator-deleted-says-so-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-a-share-its-creator-deleted-says-so-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-a-share-its-creator-deleted-says-so-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [integration] › tests/share.spec.ts:146:1 › an expired share says it has expired, in English and in French 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('alert')
+    Expected substring: "This shared design has expired: a share link works for 90 days. Ask the person who shared it for a new link."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" getByRole('alert') with timeout 5000ms
+      - waiting for getByRole('alert')
+
+
+      147 |   await page.route("**/api/share/**", (route) => route.fulfill({ status: 410, json: { error: "expired" } }));
+      148 |   await page.goto(`/share.html#${MADE_UP}`);
+    > 149 |   await expect(page.getByRole("alert")).toContainText(
+          |                                         ^
+      150 |     "This shared design has expired: a share link works for 90 days. Ask the person who shared it for a new link.",
+      151 |   );
+      152 |   await page.locator("#account-btn").click();
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:149:41
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    + ]
+
+       at fixtures.ts:48
+
+      46 |       });
+      47 |       await use(errors);
+    > 48 |       expect(errors).toEqual([]);
+         |                      ^
+      49 |     },
+      50 |     { auto: true },
+      51 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/fixtures.ts:48:22)
+
+    Error Context: test-results/share-an-expired-share-say-9fad1-ed-in-English-and-in-French-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-an-expired-share-say-9fad1-ed-in-English-and-in-French-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-an-expired-share-say-9fad1-ed-in-English-and-in-French-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [integration] › tests/share.spec.ts:158:1 › signed out, the share page says to sign in and makes no link 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('#sharing-blocked')
+    Expected: "Sign in to share this project: the server keeps shared copies for your account."
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" locator('#sharing-blocked') with timeout 5000ms
+      - waiting for locator('#sharing-blocked')
+
+
+      158 | test("signed out, the share page says to sign in and makes no link", async ({ page }) => {
+      159 |   await page.goto("/share.html?project=first");
+    > 160 |   await expect(page.locator("#sharing-blocked")).toHaveText(
+          |                                                  ^
+      161 |     "Sign in to share this project: the server keeps shared copies for your account.",
+      162 |   );
+      163 |   await expect(page.locator("#sharing-create")).toBeDisabled();
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/share.spec.ts:160:50
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    + ]
+
+       at fixtures.ts:48
+
+      46 |       });
+      47 |       await use(errors);
+    > 48 |       expect(errors).toEqual([]);
+         |                      ^
+      49 |     },
+      50 |     { auto: true },
+      51 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/fixtures.ts:48:22)
+
+    Error Context: test-results/share-signed-out-the-share-1667b-o-sign-in-and-makes-no-link-integration/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/share-signed-out-the-share-1667b-o-sign-in-and-makes-no-link-integration/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/share-signed-out-the-share-1667b-o-sign-in-and-makes-no-link-integration/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link 
+    [integration] › tests/share.spec.ts:102:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing 
+    [integration] › tests/share.spec.ts:121:1 › a link that is not whole is refused without asking the server 
+    [integration] › tests/share.spec.ts:132:1 › a share its creator deleted says so ────────────────
+    [integration] › tests/share.spec.ts:146:1 › an expired share says it has expired, in English and in French 
+    [integration] › tests/share.spec.ts:158:1 › signed out, the share page says to sign in and makes no link 
+error: recipe `e2e` failed with exit code 1
+exit status: 1

@@ -1,0 +1,19 @@
+$ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
+6febe2c6de6fab61be8112f9ffcdddb769bd386d
+$ just docs-build
+cd website && npm run build
+
+> cityloom-website@0.0.0 build
+> docusaurus build
+
+[INFO] Website will be built for all these locales: 
+- en
+- fr-CA
+[INFO] [en] Creating an optimized production build...
+(node:91492) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[SUCCESS] Generated static files in "build".
+[INFO] [fr-CA] Creating an optimized production build...
+[SUCCESS] Generated static files in "build/fr-CA".
+[INFO] Use `npm run serve` command to test your build locally.
+exit status: 0

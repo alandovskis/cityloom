@@ -1,0 +1,51 @@
+$ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
+6febe2c6de6fab61be8112f9ffcdddb769bd386d
+# share:: = the share slice; project::copies = the kept copies of shared designs; a_copy_of_a_shared_design = sync::local (a copy is never listed, read or sent by the sync), project context and shell (read-only whatever the address); natively_the_browser_share = the share port; the last two: the home page row's Share link and the read-only key list
+$ cargo test -p cityloom_editor --lib -- share:: project::copies a_copy_of_a_shared_design natively_the_browser_share the_list_has_a_heading_and_one_item_per_project_named_with_its_area the_design_keys_a_page_only_to_read_refuses_name_the_projects_list
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `cityloom_editor` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.68s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-67eab69717832707)
+
+running 35 tests
+test project::tests::context::the_design_keys_a_page_only_to_read_refuses_name_the_projects_list ... ok
+test project::copies::tests::a_damaged_or_newer_list_holds_no_copy ... ok
+test project::copies::tests::the_same_link_replaces_its_copy_and_another_link_makes_another ... ok
+test project::copies::tests::a_refused_write_leaves_no_copy ... ok
+test project::copies::tests::past_ten_copies_the_oldest_goes_with_its_documents ... ok
+test share::store::tests::links_are_kept_oldest_first_and_forgotten ... ok
+test project::copies::tests::a_copy_keeps_its_documents_under_its_own_id_and_is_found_but_not_listed_as_a_project ... ok
+test project::tests::context::a_copy_of_a_shared_design_opens_only_to_read_whatever_the_address_says ... ok
+test share::tests::a_token_is_43_characters_of_base64url_and_its_link_carries_it_in_the_fragment ... ok
+test share::tests::a_project_with_no_work_shares_its_area_alone_and_unknown_fields_are_ignored ... ok
+test share::tests::a_share_holds_the_project_as_it_is_and_reads_back_whole ... ok
+test share::tests::a_link_is_copied_and_deleted_and_the_server_s_refusals_are_said ... ok
+test share::tests::a_project_whose_work_cannot_be_read_is_not_sent ... ok
+test share::tests::a_design_shown_read_only_is_not_shared_from_its_page ... ok
+test share::tests::a_copy_the_browser_cannot_keep_is_said_and_leaves_nothing ... ok
+test share::tests::the_messages_are_the_same_in_both_languages ... ok
+test project::tests::page::the_list_has_a_heading_and_one_item_per_project_named_with_its_area ... ok
+test share::tests::the_server_s_refusals_become_the_slice_s_errors ... ok
+test shared::platform::tests::natively_the_browser_share_says_no_network_and_a_token_reaches_only_its_own_path ... ok
+test share::tests::page::the_sharing_page_says_what_a_share_is_and_lists_the_links_made_here ... ok
+test share::tests::what_is_not_a_whole_share_is_refused_as_damaged_or_newer ... ok
+test share::tests::a_link_opens_its_design_as_a_copy_and_goes_to_its_map_read_only ... ok
+test share::tests::page::signed_out_the_button_waits_and_the_reason_is_shown ... ok
+test share::tests::page::the_opening_page_has_a_status_while_it_works_and_an_alert_when_it_cannot ... ok
+test share::tests::signed_in_a_link_is_made_of_the_project_kept_here_said_and_focused ... ok
+test sync::local::tests::a_copy_of_a_shared_design_is_never_listed_read_or_sent ... ok
+test share::tests::a_link_the_server_no_longer_has_is_forgotten_when_deleted ... ok
+test shell::tests::a_copy_of_a_shared_design_is_shown_read_only_whatever_its_address_says ... ok
+test share::tests::signed_out_a_link_is_not_made_and_the_page_says_why ... ok
+test share::tests::a_link_that_holds_no_whole_token_asks_the_server_nothing ... ok
+test shell::share::tests::it_is_closed_at_first_and_its_button_and_heading_follow_the_language ... ok
+test share::tests::the_server_s_refusals_of_a_new_link_are_said_and_nothing_is_kept ... ok
+test share::tests::a_project_whose_work_cannot_be_read_or_is_too_large_is_not_shared ... ok
+test share::tests::every_failure_to_open_a_link_is_said_and_keeps_nothing ... ok
+test share::tests::every_failure_is_said_in_english_and_in_french ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 3380 filtered out; finished in 0.72s
+
