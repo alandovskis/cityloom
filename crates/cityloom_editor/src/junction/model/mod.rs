@@ -944,6 +944,8 @@ pub struct Junction {
     refusal: Option<Refusal>,
     /// The arm a `TurboArmSkewed` or `TurboEntryTooNarrow` refusal names; None for any other.
     refusal_arm: Option<Said>,
+    /// How many crossings were taken off call as the junction opened (it is not a signal); 0 once it is edited.
+    calls_dropped: usize,
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -975,6 +977,7 @@ impl Junction {
             selected: Target::None,
             refusal: None,
             refusal_arm: None,
+            calls_dropped: 0,
         };
         let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
@@ -982,15 +985,12 @@ impl Junction {
             j.cursor = 1;
         }
         // Crossings kept on call off a signal (a record from before calls went with the timing, or a sync) are taken off
-        // as it opens: the history says so, as it would of an edit, until the next edit writes the record without them.
+        // as it opens. The junction's level says so until its first edit (which writes the record without them); opening
+        // is no edit, so no step is added to undo. A state of changes it opens on says it too, as an edit's would.
         let lost = kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count();
-        if lost > 0 {
-            if j.cursor == 0 {
-                j.states.push(State { label: earlier(), ..today });
-                j.cursor = 1;
-            }
-            let label = calls_lost_label(earlier(), lost);
-            j.states[1].label = label;
+        j.calls_dropped = lost;
+        if lost > 0 && j.cursor == 1 {
+            j.states[1].label = calls_lost_label(earlier(), lost);
         }
         Some(j)
     }
@@ -1023,6 +1023,11 @@ impl Junction {
 
     pub fn name(&self) -> &Said {
         &self.name
+    }
+
+    /// How many crossings were taken off call as the junction opened, until its first edit.
+    pub fn calls_dropped(&self) -> usize {
+        self.calls_dropped
     }
 
     pub fn is_linked(&self) -> bool {
@@ -1140,6 +1145,7 @@ impl Junction {
         }
         self.refusal = None;
         self.refusal_arm = None;
+        self.calls_dropped = 0;
         next.label = label;
         self.states.truncate(self.cursor + 1);
         self.states.push(next);

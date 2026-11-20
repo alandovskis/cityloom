@@ -1029,6 +1029,8 @@ pub struct JView {
     /// The crossings kept on call while the signal is suspended (`in_force`: one street of traffic), for when it runs
     /// again; 0 while it runs, or off a signal.
     pub calls_kept: usize,
+    /// The crossings taken off call as the junction opened, it not being a signal; 0 once it is edited.
+    pub calls_dropped: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
     /// The turbo the roundabout has, if any.
@@ -1660,6 +1662,7 @@ impl Junction {
             control: CONTROLS[s.control].id,
             control_index: s.control,
             traffic_arms: traffic_arms(s),
+            calls_dropped: self.calls_dropped(),
             calls_kept: if self.current().control == SIGNAL && s.control != SIGNAL {
                 self.current().arms.iter().filter(|a| a.calls.is_some()).count()
             } else {

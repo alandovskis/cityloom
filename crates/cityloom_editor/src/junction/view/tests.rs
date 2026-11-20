@@ -546,6 +546,27 @@ fn a_suspended_signal_says_which_crossings_stay_on_call_in_both_languages() {
 }
 
 #[test]
+fn a_junction_that_opened_without_its_calls_says_so_until_it_is_edited_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "1 crossing was taken off call as the junction opened: it is not run by a signal."),
+        (Locale::FrCa, "1 passage n’est plus sur appel depuis l’ouverture de l’intersection\u{a0}: elle n’est pas réglée par des feux."),
+    ] {
+        let mut kept = Junction::new(0).current().clone();
+        kept.control = PRIORITY;
+        kept.arms[0].calls = Some(12);
+        let j = Junction::from_city(crate::street::model::named_said("J"), &kept, &kept, 0).unwrap();
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        let h = panel(&s);
+        assert!(h.contains(r#"id="calls-dropped""#) && h.contains(words), "{h}");
+        let uid = arm(&s, 90);
+        assert!(s.edit(|j| j.step_corner(uid, 1)));
+        assert!(!panel(&s).contains(r#"id="calls-dropped""#), "said until the first edit");
+    }
+    assert!(!panel(&shared(0)).contains(r#"id="calls-dropped""#));
+}
+
+#[test]
 fn each_crossing_is_a_list_item_holding_a_group_named_for_it() {
     let s = shared(0);
     s.show_plan();

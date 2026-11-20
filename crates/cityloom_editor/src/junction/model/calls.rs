@@ -570,7 +570,18 @@ mod tests {
         kept.arms[0].calls = Some(12);
         let opened = Junction::from_city(crate::street::model::named_said("J"), &kept, &kept, 0).unwrap();
         assert!(opened.current().arms.iter().all(|a| a.calls.is_none()));
-        // ...and says so, in the history, as an edit that took them off would.
+        // ...and says so, without a step to undo: nobody has edited it.
+        assert!(!opened.changed() && !opened.can_undo(), "opening is no edit");
+        assert_eq!(opened.view().calls_dropped, 1, "the junction's level says how many were taken off");
+        // Its first edit is what writes the record without them: the note has been said by then.
+        let mut edited = opened;
+        let uid = edited.current().arms[0].uid;
+        assert!(edited.step_corner(uid, 1));
+        assert_eq!(edited.view().calls_dropped, 0);
+        // When the junction opens on changes of its own, its state says it as an edit that took them off would.
+        let mut changed = kept.clone();
+        changed.arms[1].corner_mm += 1_000;
+        let opened = Junction::from_city(crate::street::model::named_said("J"), &kept, &changed, 0).unwrap();
         let label = &opened.current().label;
         assert_eq!(label.key, "jn-rev-calls-lost", "{label:?}");
         assert_eq!(label.args[1], ("n", crate::shared::said::Arg::Num(1)));

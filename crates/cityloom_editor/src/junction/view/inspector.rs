@@ -707,9 +707,15 @@ fn junction_panel(w: Watch) -> AnyView {
             })
             .collect_view()
     };
+    // Crossings a record kept on call off a signal were taken off as the junction opened: said here until it is edited.
+    let dropped = move || {
+        let n = w.view().calls_dropped;
+        (n > 0).then(|| view! { <p class="insp-range" id="calls-dropped">{move || tr(w, "jn-calls-dropped", Args::new().num("n", n as i64))}</p> })
+    };
     view! {
         {head(name, sub)}
         {control_section(w)}
+        {dropped}
         {section(w, "i-h-streets", "jn-insp-streets", view! { <ul class="jn-goes">{streets}</ul> })}
         {signal_summary(w)}
         <p class="insp-empty jn-tip">{words(w, "jn-insp-empty")}</p>
