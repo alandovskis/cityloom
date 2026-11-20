@@ -707,6 +707,8 @@ pub struct MemoryStorage {
     randomness: std::cell::Cell<bool>,
     drawn: std::cell::Cell<u64>,
     identity: std::cell::OnceCell<usize>,
+    /// The most text it holds (`hold_at_most`), as a browser's quota: None holds anything.
+    capacity: std::cell::Cell<Option<usize>>,
 }
 
 impl MemoryStorage {
@@ -745,6 +747,19 @@ impl MemoryStorage {
         self.refused.borrow_mut().clear();
     }
 
+    /// Refuses, from now on, any write that would make what it holds (`held`) more than `chars`, as a browser's
+    /// storage refuses a write past its quota.
+    #[cfg(test)]
+    pub fn hold_at_most(&self, chars: usize) {
+        self.capacity.set(Some(chars));
+    }
+
+    /// How much text it holds: the length of every value kept.
+    #[cfg(test)]
+    pub fn held(&self) -> usize {
+        self.kept.borrow().values().map(String::len).sum()
+    }
+
     /// Removes what is kept under `key`, as clearing a browser's site data would.
     #[cfg(test)]
     pub fn forget(&self, key: &str) {
@@ -760,6 +775,13 @@ impl Storage for MemoryStorage {
     fn remember(&self, key: &str, value: &str) -> bool {
         if self.blocked.get() || self.refused.borrow().contains(key) {
             return false;
+        }
+        if let Some(cap) = self.capacity.get() {
+            let kept = self.kept.borrow();
+            let after = kept.values().map(String::len).sum::<usize>() - kept.get(key).map_or(0, String::len) + value.len();
+            if after > cap {
+                return false;
+            }
         }
         self.kept.borrow_mut().insert(key.to_string(), value.to_string());
         true
