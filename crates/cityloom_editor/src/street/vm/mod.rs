@@ -95,6 +95,8 @@ pub struct StreetVm {
     /// The boundary a click on the plan chose, by the zone it starts and where it is on the plan, to be moved by typing
     /// where it goes (a pointer's way to move it without dragging); outside the history.
     boundary: ArcRwSignal<Option<(usize, i32)>>,
+    /// What was typed in the pick's From and To fields and not yet picked (`plan::PickDrafts`).
+    pick_drafts: ArcRwSignal<plan::PickDrafts>,
     goal: crate::shared::goals::GoalChoice,
     /// Whether the Checks tab shows its passing checks.
     passes: crate::shared::check_fold::PassFold,
@@ -172,6 +174,7 @@ impl StreetVm {
                 extend_from: Cell::new(None),
                 point_alone: ArcRwSignal::new(false),
                 boundary: ArcRwSignal::new(None),
+                pick_drafts: ArcRwSignal::new(plan::PickDrafts::default()),
                 goal,
                 passes: Default::default(),
                 impact: ArcRwSignal::new(None),
@@ -2486,6 +2489,28 @@ mod tests {
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.read(|e| e.zone()), 1);
         assert_eq!(r.vm.view_now().selected, Some(uid));
+    }
+
+    #[test]
+    fn a_sync_reload_keeps_the_keyboard_point_on_the_city_s_street() {
+        use crate::street::model::ZoneFrame;
+        use crate::street::vm::keys::PlanKey;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        let frame = r.vm.read(|e| e.frame()).expect("the city's street has an end to measure from");
+        // The street as this page had it, on a road 20 m longer than the city's now: the point at its far end.
+        let longer = binding.store.open().street_editor(edge, 0).unwrap().with_frame(Some(ZoneFrame { length_mm: frame.length_mm + 20_000, ..frame }));
+        r.vm.core.edit(|e| *e = longer);
+        r.vm.plan_key(PlanKey::To(true));
+        assert_eq!(r.vm.plan_point(), frame.length_mm + 20_000);
+        remote_edit(&binding);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.read(|e| e.frame()), Some(frame), "reloaded from the city");
+        assert_eq!(r.vm.plan_point(), frame.length_mm, "kept on the street");
     }
 
     #[test]

@@ -783,18 +783,32 @@ test.describe("changing part of a street", () => {
     const to = page.locator("#pick-to");
     await expect(from).toHaveValue("0.0");
     await from.click();
-    await from.fill("10");
+    await from.fill("6");
+    await to.click();
+    await to.fill("12");
+    await page.keyboard.press("Enter");
+    await expect(picked(page)).toHaveText("From 6.0 m to 12.0 m · 6.0 m long");
+    await expect(live(page)).toHaveText("From 6.0 m to 12.0 m, 6.0 m long.");
+    await expect(from).toHaveValue("6.0");
+    // (The fixture street is about 40.4 m long, so every end here stays more than 5 m from its ends.)
+    // Moved past its own end, one field at a time: From 30 waits, as typed, for To; nothing is swapped.
+    await from.click();
+    await from.fill("18");
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText("From must come before To.");
+    await expect(from).toHaveValue("18");
+    await expect(picked(page)).toHaveText("From 6.0 m to 12.0 m · 6.0 m long");
     await to.click();
     await to.fill("25");
     await page.keyboard.press("Enter");
-    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
-    await expect(live(page)).toHaveText("From 10.0 m to 25.0 m, 15.0 m long.");
-    await expect(from).toHaveValue("10.0");
-    // A stretch too short is refused, said, and the fields show the pick again.
-    await to.fill("12");
+    await expect(picked(page)).toHaveText("From 18.0 m to 25.0 m · 7.0 m long");
+    await expect(from).toHaveValue("18.0");
+    // A stretch too short is refused, said, and what was typed stays to be put right.
+    await to.fill("20");
     await page.keyboard.press("Enter");
     await expect(live(page)).toHaveText("A stretch must be at least 5.0 m long.");
-    await expect(to).toHaveValue("25.0");
+    await expect(to).toHaveValue("20");
+    await expect(picked(page)).toHaveText("From 18.0 m to 25.0 m · 7.0 m long");
   });
 
   test("Shift and the arrows pick a stretch from the keyboard, and the point says where it is on the way", async ({

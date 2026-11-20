@@ -2,7 +2,7 @@
 //! panel's Street level: a way to pick part of a run and to move a boundary with a single pointer, without dragging
 //! along the plan (WCAG 2.5.7), and to type either exactly. Positions count from the plan's left end, in the page's
 //! units. The view forwards: a change in a pick field (Enter, or leaving it changed) goes to the view-model's
-//! `pick_typed`, Enter in the Move to field to `move_chosen_boundary` and Escape there to `clear_boundary`; each says
+//! `type_pick_from` or `type_pick_to`, which keep what was typed until it makes a stretch, Enter in the Move to field to `move_chosen_boundary` and Escape there to `clear_boundary`; each says
 //! what it did or why not.
 
 use std::rc::Rc;
@@ -24,10 +24,10 @@ pub fn PickFields(vm: Rc<StreetVm>) -> impl IntoView {
     let to_value = move || ends().map(|e| e.1).unwrap_or_default();
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
-    let commit = move || {
+    let commit = move |is_from: bool| {
         let (Some(a), Some(b)) = (from.get_untracked(), to.get_untracked()) else { return };
-        vm.with_value(|vm| vm.pick_typed(&a.value(), &b.value()));
-        // The fields show the pick as it now is, whether it was taken or refused.
+        vm.with_value(|vm| if is_from { vm.type_pick_from(&a.value()) } else { vm.type_pick_to(&b.value()) });
+        // The fields show what the view-model says they hold: the pick, or what was typed and is waiting.
         if let Some((x, y)) = untrack(ends) {
             a.set_value(&x);
             b.set_value(&y);
@@ -80,7 +80,7 @@ pub fn PickFields(vm: Rc<StreetVm>) -> impl IntoView {
                         node_ref=from
                         value=from_value
                         prop:value=from_value
-                        on:change=move |_| commit()
+                        on:change=move |_| commit(true)
                     />
                 </div>
                 <div class="zone-tool">
@@ -93,7 +93,7 @@ pub fn PickFields(vm: Rc<StreetVm>) -> impl IntoView {
                         node_ref=to
                         value=to_value
                         prop:value=to_value
-                        on:change=move |_| commit()
+                        on:change=move |_| commit(false)
                     />
                 </div>
             </div>

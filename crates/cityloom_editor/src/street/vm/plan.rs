@@ -96,6 +96,15 @@ pub fn boundary_kept(others: &[i32], own_mm: i32, length_mm: i32, to_mm: i32) ->
     snap(to_mm.clamp(low, high)).clamp(low, high)
 }
 
+/// What was typed in the pick's From and To fields and not picked yet: each field shows its draft while it has one,
+/// else the pick's end. A commit picks between the two (a draft, else the pick's end); refused, both drafts stay as
+/// typed so that the other field can put it right. They go once a pick is made, by these fields or any other way.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PickDrafts {
+    from: Option<String>,
+    to: Option<String>,
+}
+
 /// The picking commands: positions here count from the plan's left end (the street's first end) and are converted with
 /// `Editor::anchored_mm` at the editor's edge.
 impl StreetVm {
@@ -129,27 +138,56 @@ impl StreetVm {
         self.pick_between(a_mm, b_mm)
     }
 
-    /// What the pick's From and To fields show: its ends from the plan's left end, as numbers in the page's units (the
-    /// whole street: 0 and its length). `None` for a street with no end to measure from, which has no positions. Watched.
+    /// What the pick's From and To fields show: each its draft as typed while it has one, else the pick's end from the
+    /// plan's left end as a number in the page's units (the whole street: 0 and its length). `None` for a street with no
+    /// end to measure from, which has no positions. Watched.
     pub fn pick_ends_shown(&self) -> Option<(String, String)> {
         let plan = &self.view().plan;
         let length = plan.length_mm?;
         let (from, to) = plan.pick.unwrap_or((0, length));
         let (units, locale) = (self.units(), self.i18n.locale());
-        Some((units.number_in(from, locale), units.number_in(to, locale)))
+        let drafts = self.pick_drafts.get();
+        Some((drafts.from.unwrap_or_else(|| units.number_in(from, locale)), drafts.to.unwrap_or_else(|| units.number_in(to, locale))))
     }
 
-    /// Picks the stretch between the ends typed in the pick's From and To fields (from the plan's left end, in the
-    /// page's units, either order), saying what was picked or why not: a pointer's way to pick part of a run without
-    /// dragging. A field that does not hold a number is said, and nothing is picked.
-    pub fn pick_typed(&self, from: &str, to: &str) -> bool {
+    /// `typed` in the pick's From field (Enter, or leaving it changed): kept as its draft, then the stretch is picked
+    /// (`commit_pick_drafts`). A pointer's way to pick part of a run without dragging.
+    pub fn type_pick_from(&self, typed: &str) -> bool {
+        self.pick_drafts.update(|d| d.from = Some(typed.to_string()));
+        self.commit_pick_drafts()
+    }
+
+    /// The same for the pick's To field.
+    pub fn type_pick_to(&self, typed: &str) -> bool {
+        self.pick_drafts.update(|d| d.to = Some(typed.to_string()));
+        self.commit_pick_drafts()
+    }
+
+    /// Picks from the From draft (else the pick's left end) to the To draft (else its right end), never swapping them,
+    /// and says what was picked or why not. Refused (a draft that is not a number, From not before To, or the pick's own
+    /// refusals), the drafts stay as typed; picked, they go.
+    fn commit_pick_drafts(&self) -> bool {
+        let plan = self.view_now().plan.clone();
+        let Some(length) = plan.length_mm else { return false };
+        let (from, to) = plan.pick.unwrap_or((0, length));
+        let drafts = self.pick_drafts.get_untracked();
         let units = self.units_now();
-        match (parse_length_mm(from, units), parse_length_mm(to, units)) {
-            (Some(a), Some(b)) => self.pointer_picked(self.pick_stretch(a, b)),
-            _ => {
-                self.say_bad_number();
-                false
-            }
+        let end = |draft: &Option<String>, now: i32| draft.as_ref().map_or(Some(now), |typed| parse_length_mm(typed, units));
+        let (Some(a), Some(b)) = (end(&drafts.from, from), end(&drafts.to, to)) else {
+            self.say_bad_number();
+            return false;
+        };
+        if a >= b {
+            self.ports.announcer.say(&say_now(&self.i18n, units, &Said::new("pick-refused-order")));
+            return false;
+        }
+        self.pointer_picked(self.pick_stretch(a, b))
+    }
+
+    /// Lets go of what was typed in the pick's fields: the pick changed another way.
+    pub(super) fn clear_pick_drafts(&self) {
+        if self.pick_drafts.with_untracked(|d| *d != PickDrafts::default()) {
+            self.pick_drafts.set(PickDrafts::default());
         }
     }
 
@@ -331,6 +369,8 @@ impl StreetVm {
                     return PlanGesture::Refused;
                 }
                 let Some(at_mm) = self.boundary_at(zone) else { return PlanGesture::Refused };
+                // A boundary chosen to be typed is let go: a drag moves this one, and the boundaries may shift under it.
+                self.clear_boundary();
                 let pick = self.view_now().plan.pick;
                 if !self.begin_boundary_drag() {
                     return PlanGesture::Refused;
@@ -462,6 +502,7 @@ impl StreetVm {
         let Some(picked) = picked else { return false };
         match picked {
             Ok(_) => {
+                self.clear_pick_drafts();
                 self.point_alone.set(false);
                 if let Some(said) = self.pick_text() {
                     self.ports.announcer.say(&said);
@@ -484,6 +525,8 @@ impl StreetVm {
     /// `said`, and after it the pick in words when it is no longer `before` (a move through the history or a reload
     /// clamped it to the street).
     pub(super) fn with_pick_note(&self, said: String, before: Pick) -> String {
+        // The history or a sync moved the street from under what was typed in the pick's fields.
+        self.clear_pick_drafts();
         if self.read(|e| e.pick()) == before {
             return said;
         }
@@ -575,6 +618,7 @@ impl StreetVm {
 
     /// Picks `pick` (from the plan's left end; `None` the whole street) again, quietly, keeping the selected piece.
     fn repick(&self, pick: Option<(i32, i32)>) {
+        self.clear_pick_drafts();
         let selected = self.view_now().selected;
         self.edit(|e| {
             match pick {
@@ -1060,39 +1104,110 @@ mod pick_tests {
         }
     }
 
+    /// What the pick's From and To fields show.
+    fn fields(r: &Rig) -> Option<(String, String)> {
+        r.vm.pick_ends_shown()
+    }
+
+    fn shown(from: &str, to: &str) -> Option<(String, String)> {
+        Some((from.to_string(), to.to_string()))
+    }
+
     #[test]
     fn the_pick_s_ends_typed_in_its_fields_pick_a_stretch_from_the_plan_s_left_end() {
-        let shown = |r: &Rig| r.vm.pick_ends_shown().map(|(a, b)| (a, b));
         for from_end in [ZoneEnd::First, ZoneEnd::Last] {
             let r = rig_of(&sample(), from_end);
-            assert_eq!(shown(&r), Some(("0.0".to_string(), "60.0".to_string())), "{from_end:?}: the whole street, 0 to its length");
-            assert!(r.vm.pick_typed("10", "30,5"), "{from_end:?}");
+            assert_eq!(fields(&r), shown("0.0", "60.0"), "{from_end:?}: the whole street, 0 to its length");
+            // Each field picks with the other end as it is: From 10 picks 10 m to the street's end.
+            assert!(r.vm.type_pick_from("10"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, LEN)), "{from_end:?}");
+            assert!(r.vm.type_pick_to("30,5"), "{from_end:?}");
             assert_eq!(r.vm.picked(), Some((10_000, 30_500)), "{from_end:?}");
-            assert_eq!(r.said.take(), ["From 10.0 m to 30.5 m, 20.5 m long."], "{from_end:?}");
-            assert_eq!(shown(&r), Some(("10.0".to_string(), "30.5".to_string())), "{from_end:?}");
-            // Either order, and a unit word typed after the number.
-            assert!(r.vm.pick_typed("40 m", "20"), "{from_end:?}");
-            assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "{from_end:?}");
+            assert_eq!(r.said.take().last().map(String::as_str), Some("From 10.0 m to 30.5 m, 20.5 m long."), "{from_end:?}");
+            assert_eq!(fields(&r), shown("10.0", "30.5"), "{from_end:?}");
+            // A unit word typed after the number.
+            assert!(r.vm.type_pick_to("40 m"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, 40_000)), "{from_end:?}");
             r.said.take();
-            // Refusals are said, as for any pick, and the pick stays.
-            assert!(!r.vm.pick_typed("20", "22"));
-            assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."]);
-            assert!(!r.vm.pick_typed("20", "70"));
+            assert!(!r.vm.type_pick_to("70"));
             assert_eq!(r.said.take(), ["That position is outside the street."]);
-            assert!(!r.vm.pick_typed("twenty", "40"));
+            assert!(!r.vm.type_pick_to("forty"));
             assert_eq!(r.said.take(), ["That is not a number."]);
-            assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, 40_000)), "{from_end:?}: refused, the pick stays");
+            assert_eq!(fields(&r), shown("10.0", "forty"), "{from_end:?}: what was typed stays, to be put right");
             // The full length is the whole street.
-            assert!(r.vm.pick_typed("0", "60"));
-            assert_eq!((r.vm.picked(), shown(&r)), (None, Some(("0.0".to_string(), "60.0".to_string()))));
+            assert!(r.vm.type_pick_to("60"));
+            assert!(r.vm.type_pick_from("0"));
+            assert_eq!((r.vm.picked(), fields(&r)), (None, shown("0.0", "60.0")));
         }
         let r = rig_in(&sample(), ZoneEnd::First, Locale::FrCa);
-        assert!(r.vm.pick_typed("10,5", "20"));
-        assert_eq!(shown(&r), Some(("10,5".to_string(), "20,0".to_string())));
+        assert!(r.vm.type_pick_from("10,5"));
+        assert!(r.vm.type_pick_to("20"));
+        assert_eq!(fields(&r), shown("10,5", "20,0"));
         // A street with no anchor has no positions to type.
         let (ports, _, _, _) = test_ports_with_time();
         let free = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&sample(), &sample(), 0).with_frame(None), None);
         assert_eq!(free.pick_ends_shown(), None);
+    }
+
+    #[test]
+    fn a_from_typed_past_the_pick_s_end_waits_for_its_to_and_is_never_swapped() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        assert!(r.vm.pick_stretch(10_000, 20_000));
+        r.said.take();
+        // From 30 against To 20: not swapped into 20 to 30, but refused, said, and kept as typed.
+        assert!(!r.vm.type_pick_from("30"));
+        assert_eq!(r.said.take(), ["From must come before To."]);
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((10_000, 20_000)), shown("30", "20.0")));
+        // Then To 40: from the typed From, 30 m to 40 m.
+        assert!(r.vm.type_pick_to("40"));
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((30_000, 40_000)), shown("30.0", "40.0")));
+        let fr = rig_in(&sample(), ZoneEnd::First, Locale::FrCa);
+        assert!(fr.vm.pick_stretch(10_000, 20_000));
+        fr.said.take();
+        assert!(!fr.vm.type_pick_from("30"));
+        assert_eq!(fr.said.take(), ["\u{ab}\u{a0}De\u{a0}\u{bb} doit venir avant \u{ab}\u{a0}À\u{a0}\u{bb}."]);
+    }
+
+    #[test]
+    fn a_refused_from_keeps_what_was_typed_until_the_to_makes_a_stretch_of_it() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        assert!(r.vm.pick_stretch(10_000, 30_000));
+        r.said.take();
+        // 28 m to 30 m is under the shortest stretch: refused, said, and From keeps 28 rather than going back to 10.
+        assert!(!r.vm.type_pick_from("28"));
+        assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."]);
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((10_000, 30_000)), shown("28", "30.0")));
+        assert!(r.vm.type_pick_to("60"));
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((28_000, LEN)), shown("28.0", "60.0")));
+    }
+
+    #[test]
+    fn what_was_typed_in_the_pick_s_fields_goes_when_the_pick_changes_another_way() {
+        let typed = |r: &Rig| {
+            assert!(r.vm.pick_stretch(10_000, 30_000));
+            assert!(!r.vm.type_pick_from("28"));
+            assert_eq!(fields(r), shown("28", "30.0"));
+        };
+        let r = three_runs(ZoneEnd::First);
+        typed(&r);
+        drag(&r, PlanPress::Street { at_mm: 40_000 }, 40_000, 50_000);
+        assert_eq!(fields(&r), shown("40.0", "50.0"), "a drag");
+        typed(&r);
+        r.vm.plan_key(PlanKey::To(false));
+        assert_eq!(fields(&r), shown("28", "30.0"), "moving the point alone picks nothing");
+        r.vm.plan_key(PlanKey::Extend(10_000));
+        assert_eq!(fields(&r), shown("0.0", "10.0"), "the keys");
+        typed(&r);
+        r.vm.show_level(Level::Street);
+        assert_eq!(fields(&r), shown("0.0", "60.0"), "the Street step of the path");
+        typed(&r);
+        let uid = r.vm.view_now().segments[0].uid;
+        assert!(r.vm.apply(|e| e.set_width(uid, 4_000)));
+        assert!(r.vm.pick_stretch(12_000, 50_000));
+        assert!(!r.vm.type_pick_from("49"));
+        assert!(r.vm.undo());
+        assert_eq!(fields(&r), shown("10.0", "50.0"), "an undo");
     }
 
     #[test]
@@ -1243,6 +1358,17 @@ mod pick_tests {
     }
 
     #[test]
+    fn a_drag_of_another_boundary_lets_go_of_the_one_chosen() {
+        let r = three_runs(ZoneEnd::First);
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert_eq!(r.vm.chosen_boundary(), Some(20_000));
+        drag(&r, PlanPress::Boundary { zone: 2 }, 40_000, 45_000);
+        assert_eq!(boundaries(&r), [20_000, 45_000]);
+        assert_eq!(r.vm.chosen_boundary(), None, "the field is not left up for the other boundary");
+    }
+
+    #[test]
     fn a_boundary_drawn_on_another_road_is_not_chosen_and_the_reason_is_said() {
         // Drawn on 60 m, loaded on 70 m: elsewhere.
         let s = street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First);
@@ -1345,7 +1471,7 @@ mod pick_tests {
             assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((40_000, LEN)), 40_000), "{from_end:?}: a click");
             drag(&r, PlanPress::Handle { left: true }, 40_000, 45_000);
             assert_eq!(r.vm.plan_point(), 45_000, "{from_end:?}: a handle");
-            assert!(r.vm.pick_typed("30", "35"));
+            assert!(r.vm.type_pick_from("30"));
             assert_eq!(r.vm.plan_point(), 30_000, "{from_end:?}: typed ends");
             let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 10_000 }, 100.0);
             r.vm.plan_release(g, 10_000);
@@ -1358,17 +1484,6 @@ mod pick_tests {
             drag(&r, PlanPress::Street { at_mm: 30_000 }, 30_000, 32_000);
             assert_eq!(r.vm.plan_point(), 15_000, "{from_end:?}");
         }
-    }
-
-    #[test]
-    fn the_keyboard_point_is_kept_on_the_street_when_a_sync_shortens_it() {
-        let r = rig_of(&sample(), ZoneEnd::First);
-        r.vm.plan_key(PlanKey::To(true));
-        assert_eq!(r.vm.plan_point(), LEN);
-        // What a sync does: the editor is replaced by the city's, here on a shorter road.
-        r.vm.core.edit(|e| *e = Editor::from_street(&sample(), &sample(), 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First })));
-        r.vm.clamp_point();
-        assert_eq!(r.vm.plan_point(), 40_000);
     }
 
     #[test]

@@ -347,6 +347,7 @@ pick-refused-too-short = Un tronçon doit mesurer au moins { $min }.
 pick-refused-outside = Cette position est hors de la rue.
 pick-refused-dragging = Terminez le glissement avant de choisir un autre tronçon.
 pick-refused-no-boundary = Aucune limite entre tronçons aux extrémités du tronçon choisi.
+pick-refused-order = « De » doit venir avant « À ».
 # Ce qui est dit du tronçon choisi sur le plan (src/street/vm/text.rs, picked_said); positions depuis l’extrémité gauche du plan.
 stretch-picked = De { $from } à { $to }, { $length } de long.
 stretch-picked-differs = De { $from } à { $to }, { $length } de long : { $what }.
