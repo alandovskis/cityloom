@@ -287,8 +287,19 @@ impl StreetVm {
         }
     }
 
+    /// What a press on `p` acts on. Shown read-only, a boundary is no target, since nothing may move it: a press on one
+    /// is a press on the street there, which picks (a click the run, a drag a stretch). The view asks it for the
+    /// pointer's look over the plan too.
+    pub fn plan_target(&self, p: PlanPress) -> PlanPress {
+        match p {
+            PlanPress::Boundary { zone } if self.read_only() => self.boundary_at(zone).map_or(p, |at_mm| PlanPress::Street { at_mm }),
+            p => p,
+        }
+    }
+
     /// A press on the plan: a thing pressed is chosen at once, as on its row. The view keeps the gesture.
     pub fn plan_press(&self, p: PlanPress, x_px: f64) -> PlanGesture {
+        let p = self.plan_target(p);
         if !matches!(p, PlanPress::Boundary { .. }) {
             self.clear_boundary();
         }
@@ -598,9 +609,12 @@ impl StreetVm {
     }
 
     /// Moves the chosen boundary to where `typed` says (from the plan's left end, in the page's units): Enter in its
-    /// Move to field. It stays chosen. False, with the reason said, when none is chosen, `typed` is not a number or the
-    /// boundary cannot go there.
+    /// Move to field. It stays chosen. False, with the reason said, when the street is shown read-only, none is chosen,
+    /// `typed` is not a number or the boundary cannot go there.
     pub fn move_chosen_boundary(&self, typed: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let (Some((zone, _)), Some(was)) = (self.boundary.get_untracked(), untrack(|| self.chosen_boundary())) else { return false };
         let Some(to) = parse_length_mm(typed, self.units_now()) else {
             self.say_bad_number();
@@ -1510,5 +1524,67 @@ mod pick_tests {
             let stop = objects(&r).into_iter().find(|o| matches!(o.0, PlanThing::Stop { .. })).unwrap();
             assert_eq!((stop.1, stop.2), (0, stop_mm), "{from_end:?}: as a stretch picked from the left end would");
         }
+    }
+
+    /// Three runs as `three_runs` has them, anchored at the first end, on a page that shows its project read-only
+    /// (#222), and the storage it reads.
+    fn read_only_three_runs() -> (Rig, Rc<crate::shared::ports::MemoryStorage>) {
+        use crate::shared::ports::{Ports, Storage};
+        let street = street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First);
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        let (ports, said, storage, _) = test_ports_with_time();
+        let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let editor = Editor::from_street(&street, &street, region).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        let vm = StreetVm::new(Ports { storage: view, ..ports }, crate::i18n_for(Locale::En), editor, None);
+        assert!(vm.read_only());
+        (Rig { vm, said }, storage)
+    }
+
+    /// Shown read-only, a stretch is still picked, by the plan, its point and the pick's fields: picking chooses, it
+    /// does not edit. No boundary moves: a click on one picks the run there, as a click on the street does, and chooses
+    /// nothing to move; a drag from one picks a stretch; Alt+arrow and a typed Move to are refused and said. The street,
+    /// its history and the storage are as they were.
+    #[test]
+    fn a_street_shown_read_only_picks_stretches_and_moves_no_boundary() {
+        use crate::shared::ports::Storage;
+        const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+        let (r, storage) = read_only_three_runs();
+        let stored = || {
+            let mut keys = storage.keys();
+            keys.sort();
+            keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect::<Vec<_>>()
+        };
+        let (street, revisions, kept) = (r.vm.read(|e| e.snapshot()), r.vm.view_now().revisions.len(), stored());
+        let refused = |said: Vec<String>| said.iter().any(|s| s == REFUSED);
+
+        r.vm.plan_key(PlanKey::PickRun);
+        assert_eq!(r.vm.picked(), Some((0, 20_000)), "the point's run");
+        assert!(r.vm.pick_stretch(25_000, 35_000));
+        assert_eq!(r.vm.picked(), Some((25_000, 35_000)));
+        assert!(r.vm.type_pick_from("26"));
+        assert!(r.vm.type_pick_to("33"));
+        assert_eq!(r.vm.picked(), Some((26_000, 33_000)), "the fields pick");
+        assert!(!refused(r.said.take()), "picking is never refused");
+
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert_eq!(r.vm.chosen_boundary(), None, "nothing is chosen to be moved");
+        assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "the click picks the run there");
+        assert!(!refused(r.said.take()));
+
+        drag(&r, PlanPress::Boundary { zone: 1 }, 20_000, 30_000);
+        assert_eq!(r.vm.picked(), Some((20_000, 30_000)), "the drag picks a stretch");
+        assert_eq!(boundaries(&r), [20_000, 40_000], "and moves no boundary");
+        assert!(!refused(r.said.take()));
+
+        r.vm.plan_key(PlanKey::NudgeBoundary(-1_000));
+        assert_eq!(r.said.take(), [REFUSED], "Alt+arrow");
+        assert!(!r.vm.move_chosen_boundary("25"));
+        assert_eq!(r.said.take(), [REFUSED], "a typed Move to");
+
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+        assert_eq!(r.vm.read(|e| e.snapshot()), street, "the street is as it was");
+        assert_eq!(r.vm.view_now().revisions.len(), revisions, "and its history");
+        assert_eq!(stored(), kept, "nothing written, nothing marked for the sync");
     }
 }

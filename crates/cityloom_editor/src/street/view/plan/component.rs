@@ -120,7 +120,8 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
     let on_move = move |e: PointerEvent| {
         let Some((x, y)) = local(&e) else { return };
         let Some((g, grab)) = gesture.get_value() else {
-            let over = hover_of(hit(&w.view_now().plan, width.get_untracked(), x, y, target.get_value()).press);
+            let press = hit(&w.view_now().plan, width.get_untracked(), x, y, target.get_value()).press;
+            let over = hover_of(vm.with_value(|vm| vm.plan_target(press)));
             if hover.get_untracked() != over {
                 hover.set(over);
             }
