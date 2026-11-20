@@ -1563,7 +1563,9 @@ impl Editor {
             let before = out.len();
             for (b, host, why) in &failing {
                 let at = self.left_mm(content.zones[*b + 1].from_mm);
-                let boundary = || Said::new("check-boundary").with("at", Arg::Length(at));
+                // A street with no end to measure from has no positions.
+                let boundary =
+                    || if self.frame.is_none() { Said::new("check-boundary-somewhere") } else { Said::new("check-boundary").with("at", Arg::Length(at)) };
                 match (id, why) {
                     ("transition-room", Failing::Room { need_mm, room_mm }) => {
                         let detail = Said::new("check-detail-transition-room")
@@ -3113,11 +3115,11 @@ mod tests {
     }
 
     /// An editor on the sample street divided into three zones, all on the base section; the zoning is one
-    /// earlier revision.
+    /// earlier revision. Its ends are an end to measure from (a frame), so its stretches are named by position.
     fn zoned_editor() -> Editor {
         let today = sample_street();
         let now = zoned(today.clone(), &[0, 20_000, 40_000], 60_000);
-        Editor::from_street(&today, &now, 0)
+        Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
     }
 
     #[test]
@@ -3401,7 +3403,7 @@ mod tests {
         let today = sample_street();
         let mut now = zoned_apart(today.clone(), &[0, 20_000, 45_000], 60_000);
         now.zones[1].name = Some("Market".into());
-        let mut e = Editor::from_street(&today, &now, 0);
+        let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
         let z = e.view().zones;
         assert_eq!((z.length_mm, z.from_end, z.selected), (60_000, ZoneEnd::First, 0));
         assert_eq!(
@@ -3473,7 +3475,7 @@ mod tests {
         let frame = ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last };
         let e = zoned_editor().with_frame(Some(frame));
         assert_eq!(e.frame(), Some(frame));
-        assert_eq!(zoned_editor().frame(), None);
+        assert_eq!(zoned_editor().with_frame(None).frame(), None);
     }
 
     fn with_speed(speed: Speed) -> Editor {

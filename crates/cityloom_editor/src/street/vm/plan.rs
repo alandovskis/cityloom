@@ -1126,6 +1126,27 @@ mod pick_tests {
     }
 
     #[test]
+    fn an_edit_that_missed_part_of_a_street_with_no_end_to_measure_from_names_no_positions() {
+        // Both ends cut: no frame. The middle zone of the saved record has no parking on its first side.
+        let mut s = zoned(sample(), &[0, 20_000, 40_000], LEN);
+        let mut middle = s.segments.clone();
+        middle.remove(1);
+        s.zones[1].segments = Some(middle);
+        let (ports, said, _, _) = test_ports_with_time();
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&s, &s, 0).with_frame(None), None), said };
+        let parking = r.vm.view_now().segments[1].uid;
+        assert!(r.vm.apply(|e| e.set_width(parking, 2_600)));
+        let said = r.said.take();
+        assert!(said[0].ends_with(" Not changed along part of the street: that part has no parking."), "{said:?}");
+        assert!(!said[0].contains("from"), "no positions: {said:?}");
+        let (ports, said, _, _) = test_ports_with_time();
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::FrCa), Editor::from_street(&s, &s, 0).with_frame(None), None), said };
+        assert!(r.vm.apply(|e| e.set_width(parking, 2_600)));
+        let said = r.said.take();
+        assert!(said[0].ends_with(" Aucun changement sur une partie de la rue\u{a0}: cette partie est sans stationnement."), "{said:?}");
+    }
+
+    #[test]
     fn an_edit_with_nothing_selected_that_missed_a_stretch_still_says_where() {
         let mut s = zoned(sample(), &[0, 20_000, 40_000], LEN);
         let mut middle = s.segments.clone();

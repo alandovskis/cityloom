@@ -339,6 +339,9 @@ boundary-refused-elsewhere = The changes along this street were drawn on a road 
 zone-refused-dragging = Finish the drag before changing the street.
 # A stretch named in the middle of a sentence, its ends from the plan's left end ("Room for the transition from 49 m to 82 m").
 stretch-mid = from { $from } to { $to }
+# A stretch named on a street with no end to measure from, which has no positions.
+stretch-mid-whole = along the whole street
+stretch-mid-part = along part of the street
 pick-refused-no-anchor = Both ends of this street are cut by the edge of the map, so it can only be changed along its whole length.
 pick-refused-too-short = A stretch must be at least { $min } long.
 pick-refused-outside = That position is outside the street.
@@ -358,8 +361,14 @@ stretch-what-pair = { $a } and { $b }
 stretch-what-more = { $a }, { $b }
 # Said after an edit that changed the picked stretch except where it lacked the piece changed.
 edit-missed = Not changed from { $from } to { $to }: that stretch has no { $kind }.
+edit-missed-part = Not changed along part of the street: that part has no { $kind }.
 # The plan's name for a screen reader, and the line under it naming the picked stretch.
 st-plan-label = The street from its first end to its last, { $length } long
+# The same with the ends the edge of the map cuts (the plan draws them as a zigzag), and with no end to measure from.
+st-plan-label-cut-left = The street from its first end to its last, { $length } long; its left end is cut by the edge of the map
+st-plan-label-cut-right = The street from its first end to its last, { $length } long; its right end is cut by the edge of the map
+st-plan-label-cut-both = The street from its first end to its last, { $length } long; both its ends are cut by the edge of the map
+st-plan-label-no-anchor = The street, both its ends cut by the edge of the map
 st-stretch = From { $from } to { $to } · { $length } long
 # Where the plan's keyboard point is, said while it moves on its own (src/street/vm/text.rs, point_said).
 st-point = At { $at }
@@ -441,6 +450,7 @@ svg-iso-stops = { $count ->
        *[other] { $count } transit stops are shown ({ $kinds }).
     }
 check-boundary = where the street changes at { $at }
+check-boundary-somewhere = where the street changes
 check-label-transition-room = Room for the transition
 check-label-lane-drop = Lane drops
 check-detail-transition-room = The transition needs { $need } but the stretch { $stretch } is { $room } long.

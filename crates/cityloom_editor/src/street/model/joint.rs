@@ -160,7 +160,8 @@ mod tests {
 
     #[test]
     fn the_view_carries_the_neighbours_section_and_labels() {
-        let mut e = two_zones(true);
+        // An end to measure from, so the stretches are named by position.
+        let mut e = two_zones(true).with_frame(Some(crate::street::model::ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
         assert!(e.select_zone(1));
         let j = e.view().zones.joint.expect("zone 2's start is near");
         assert_eq!((j.zone, j.far, j.at_mm), (0, false, 50_000));

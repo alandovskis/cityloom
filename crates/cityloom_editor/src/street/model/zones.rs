@@ -208,8 +208,13 @@ impl Editor {
         self.stretch_of(from_mm.min(length), to_mm.min(length))
     }
 
-    /// The stretch between two anchored positions, named from the plan's left end (`stretch_between`).
+    /// The stretch between two anchored positions, named from the plan's left end (`stretch_between`). A street with
+    /// no end to measure from has no positions: it is named as the whole street, or as part of it.
     pub(super) fn stretch_of(&self, a_mm: i32, b_mm: i32) -> Said {
+        if self.frame.is_none() {
+            let whole = a_mm.min(b_mm) <= 0 && a_mm.max(b_mm) >= self.pick_length_mm();
+            return Said::new(if whole { "stretch-mid-whole" } else { "stretch-mid-part" });
+        }
         let (a, b) = self.left_span(a_mm, b_mm);
         stretch_between(a, b)
     }
@@ -761,6 +766,26 @@ mod tests {
         assert_eq!(e.move_boundary(30_000), Ok(()));
         e.cancel_gesture();
         assert_eq!(starts(&e), [0, 20_000]);
+    }
+
+    #[test]
+    fn a_street_with_no_end_to_measure_from_names_no_positions() {
+        // A saved record of three stretches on a street whose ends are both cut: no frame.
+        let today = sample();
+        let mut now = super::super::zoned_apart(today.clone(), &[0, 20_000, 40_000], LEN);
+        let mut narrow = today.segments.clone();
+        narrow[0].width_mm = 600;
+        now.zones[1].segments = Some(narrow);
+        let e = Editor::from_street(&today, &now, 0).with_frame(None);
+        assert_eq!(e.stretch_said(1), Said::new("stretch-mid-part"));
+        assert_eq!(e.stretch_of(0, LEN), Said::new("stretch-mid-whole"));
+        // A failing check names no position: the boundary between the stretches is "where the street changes".
+        let failing: Vec<Said> = e.view().checks.into_iter().filter(|c| !c.ok).filter_map(|c| c.zone).collect();
+        assert!(!failing.is_empty(), "the narrow sidewalk needs a transition it has no room for");
+        assert!(failing.iter().all(|z| ["stretch-mid-part", "stretch-mid-whole", "check-boundary-somewhere"].contains(&z.key)), "{failing:?}");
+        // With a frame, positions again.
+        let e = Editor::from_street(&today, &now, 0).with_frame(Some(frame()));
+        assert_eq!(e.stretch_said(1), stretch_between(20_000, 40_000));
     }
 
     #[test]

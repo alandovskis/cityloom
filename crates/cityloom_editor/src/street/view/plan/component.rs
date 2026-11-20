@@ -57,7 +57,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         plan_svg(&v.plan, width.get(), &w.i18n(), units)
     });
     let layout = move |at_mm: i32| plan_layout(&w.view().plan, width.get(), at_mm);
-    let label = move || plan_label(&w.view().plan).map(|said| say(&w.i18n(), w.units(), &said));
+    let label = move || say(&w.i18n(), w.units(), &plan_label(&w.view().plan));
     let length = move || w.view().plan.length_mm.unwrap_or(0);
     let length_text = move |mm: i32| {
         let i18n = w.i18n();

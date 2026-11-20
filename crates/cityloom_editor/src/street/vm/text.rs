@@ -180,9 +180,17 @@ pub fn point_said(at_mm: i32) -> Said {
     Said::new("st-point").with("at", Arg::Length(at_mm))
 }
 
-/// The plan's name for a screen reader: the street from end to end, and how long. Nothing for a street with no length.
-pub fn plan_label(plan: &PlanView) -> Option<Said> {
-    plan.length_mm.map(|length| Said::new("st-plan-label").with("length", Arg::Length(length)))
+/// The plan's name for a screen reader (its drawing is hidden from one): the street from end to end, how long, and which
+/// of its ends the edge of the map cuts; a street with no length, that both are.
+pub fn plan_label(plan: &PlanView) -> Said {
+    let Some(length) = plan.length_mm else { return Said::new("st-plan-label-no-anchor") };
+    let key = match plan.cut {
+        [false, false] => "st-plan-label",
+        [true, false] => "st-plan-label-cut-left",
+        [false, true] => "st-plan-label-cut-right",
+        [true, true] => "st-plan-label-cut-both",
+    };
+    Said::new(key).with("length", Arg::Length(length))
 }
 
 /// The line under the plan: the picked stretch and how long it is. Nothing for the whole street.
@@ -203,6 +211,12 @@ pub fn missed_said(spans: &[(i32, i32)], kind: &'static str) -> Vec<Said> {
         .iter()
         .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("kind", Arg::KindLower(kind)))
         .collect()
+}
+
+/// Where an edit did not reach on a street with no end to measure from, which has no positions: part of it, lacking
+/// `kind` (a catalogue id).
+pub fn missed_part_said(kind: &'static str) -> Said {
+    Said::new("edit-missed-part").with("kind", Arg::KindLower(kind))
 }
 
 /// `items` as one list: "a, b and c".
@@ -261,13 +275,37 @@ mod tests {
     }
 
     #[test]
+    fn the_plan_s_label_says_which_of_its_ends_the_edge_of_the_map_cuts() {
+        use crate::street::model::{EndInfo, ZoneEnd, ZoneFrame};
+        let words = |i18n: &I18n, e: &Editor| say_now(i18n, Units::Metres, &plan_label(&e.view().plan));
+        let frame = |from_end| Some(ZoneFrame { length_mm: 60_000, from_end });
+        let cut_last = Editor::new(0).with_frame(frame(ZoneEnd::First)).with_ends([false, true].map(|cut| EndInfo { cut, ..Default::default() }));
+        assert_eq!(words(&en(), &cut_last), "The street from its first end to its last, 60.0 m long; its right end is cut by the edge of the map");
+        assert_eq!(
+            words(&fr(), &cut_last).replace('\u{a0}', " "),
+            "La rue de sa première extrémité à sa dernière, 60,0 m de long; son extrémité droite est coupée par le bord de la carte"
+        );
+        let cut_first = Editor::new(0).with_frame(frame(ZoneEnd::Last));
+        assert!(words(&en(), &cut_first).ends_with("; its left end is cut by the edge of the map"));
+        let both = Editor::new(0).with_frame(frame(ZoneEnd::Last)).with_ends([false, true].map(|cut| EndInfo { cut, ..Default::default() }));
+        assert!(words(&en(), &both).ends_with("; both its ends are cut by the edge of the map"));
+        assert!(words(&fr(), &both).ends_with("; ses deux extrémités sont coupées par le bord de la carte"));
+        // No end to measure from: no length, both ends cut.
+        let free = Editor::new(0).with_frame(None);
+        assert_eq!(words(&en(), &free), "The street, both its ends cut by the edge of the map");
+        assert_eq!(words(&fr(), &free), "La rue, ses deux extrémités coupées par le bord de la carte");
+        // Neither cut: as before.
+        assert_eq!(words(&en(), &Editor::new(0).with_frame(frame(ZoneEnd::First))), "The street from its first end to its last, 60.0 m long");
+    }
+
+    #[test]
     fn the_pick_the_plan_and_what_sets_a_stretch_apart_are_worded_in_both_languages() {
         use crate::street::model::{ZoneEnd, ZoneFrame};
         let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
         let words = |i18n: &I18n, said: Option<Said>| say_now(i18n, Units::Metres, &said.expect("something to say"));
         let plan = e.view().plan;
         assert_eq!(words(&en(), picked_said(&plan, Vec::new())), "The whole street, 60.0 m long.");
-        assert_eq!(words(&en(), plan_label(&plan)), "The street from its first end to its last, 60.0 m long");
+        assert_eq!(words(&en(), Some(plan_label(&plan))), "The street from its first end to its last, 60.0 m long");
         assert_eq!(stretch_label(&plan), None, "no line for the whole street");
         e.pick_stretch(10_000, 30_000).unwrap();
         let plan = e.view().plan;

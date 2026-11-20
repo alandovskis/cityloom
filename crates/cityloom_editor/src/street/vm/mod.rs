@@ -1513,6 +1513,14 @@ impl StreetVm {
         if spans.is_empty() {
             return said;
         }
+        // A street with no end to measure from has no positions: each kind missed is said once, without them.
+        if self.read(|e| e.frame().is_none()) {
+            let mut kinds: Vec<usize> = spans.iter().map(|s| s.2).collect();
+            kinds.sort_unstable();
+            kinds.dedup();
+            let notes: Vec<String> = kinds.into_iter().map(|k| say_now(&self.i18n, self.units_now(), &text::missed_part_said(KINDS[k].id))).collect();
+            return format!("{said} {}", notes.join(" "));
+        }
         spans.sort_unstable();
         let notes: Vec<String> = spans
             .iter()

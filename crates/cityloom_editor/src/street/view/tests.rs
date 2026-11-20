@@ -1880,6 +1880,9 @@ fn the_plan_mounts_in_place_of_the_zone_strip() {
     assert!(group.contains("role=\"group\""), "{group}");
     assert!(group.contains("aria-label=\"The street from its first end to its last, 40.0 m long\""), "{group}");
     assert!(h.contains("<svg class=\"plan\"") && h.contains("data-length-mm=\"40000\""), "the plan's drawing: {h}");
+    // The drawing is said by the group's label (with its cut ends) and the point, so a screen reader skips it.
+    let svg = &h[h.find("<svg class=\"plan\"").unwrap()..];
+    assert!(svg[..svg.find('>').unwrap()].contains("aria-hidden=\"true\""), "{svg}");
     // The page mounts it where the zone strip was.
     let page = include_str!("../mod.rs");
     assert!(page.contains("mount(\"zones-slot\", view! { <view::plan::Plan vm=vm.clone()/> }"), "{page}");
