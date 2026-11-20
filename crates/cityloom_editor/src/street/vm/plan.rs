@@ -137,17 +137,22 @@ impl StreetVm {
         });
     }
 
-    /// Picks the run at `at_mm` (from the plan's left end), as a click on the street does, then chooses on `side`'s
-    /// row (its curbside, else its stops) the stretch at the pick's left end and shows its level: what is added next
-    /// goes there, on that side, whichever side traffic keeps.
+    /// A press on `side`'s empty lane at `at_mm` (from the plan's left end). Inside the pick (a stretch, or the whole
+    /// street) the pick stays; outside it the run there is picked, as a click on the street does. Then on `side`'s row
+    /// (its curbside, else its stops) the stretch at the pick's left end is chosen and its level shown: what is added
+    /// next goes there, on that side, whichever side traffic keeps.
     fn pick_lane(&self, side: Side, at_mm: i32) {
         self.extend_from.set(None);
-        let picked = self.pick_with(Some(side), |e| {
-            let at = e.anchored_mm(at_mm);
-            e.pick_run_at(at)
-        });
-        if !picked {
-            return;
+        let plan = &self.view_now().plan;
+        let inside = plan.length_mm.is_some() && plan.pick.is_none_or(|(from, to)| from <= at_mm && at_mm <= to);
+        if !inside {
+            let picked = self.pick_with(Some(side), |e| {
+                let at = e.anchored_mm(at_mm);
+                e.pick_run_at(at)
+            });
+            if !picked {
+                return;
+            }
         }
         let plan = &self.view_now().plan;
         let left = plan.pick.map_or(0, |(from, _)| from);
@@ -822,7 +827,7 @@ mod pick_tests {
     }
 
     #[test]
-    fn a_press_on_the_empty_lane_of_a_side_picks_the_run_and_chooses_that_side_s_free_stretch_at_its_start() {
+    fn a_press_on_the_empty_lane_of_a_side_outside_the_pick_picks_the_run_and_chooses_that_side_s_free_stretch_at_its_start() {
         for from_end in [ZoneEnd::First, ZoneEnd::Last] {
             let mut s = parking_both_sides();
             // A second run from 30 m on the plan (the right sidewalk 100 mm wider there).
@@ -833,6 +838,8 @@ mod pick_tests {
             s.from_end = from_end;
             let r = rig_of(&s.settled(), from_end);
             assert_eq!(boundaries(&r), [30_000], "{from_end:?}");
+            // A stretch picked elsewhere, so the press below falls outside the pick.
+            assert!(r.vm.pick_stretch(5_000, 15_000));
             r.said.take();
             // The side away from traffic (the left) is the lane above the bands.
             let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 40_000 }, 400.0);
@@ -852,6 +859,39 @@ mod pick_tests {
             // A drag from a lane picks a stretch, as from the street.
             drag(&r, PlanPress::Lane { side: Side::Right, at_mm: 5_000 }, 5_000, 15_000);
             assert_eq!(r.vm.picked(), Some((5_000, 15_000)), "{from_end:?}");
+        }
+    }
+
+    #[test]
+    fn a_lane_press_inside_the_pick_keeps_it_and_only_chooses_that_side() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let mut s = parking_both_sides();
+            s.from_end = from_end;
+            let r = rig_of(&s, from_end);
+            // A stretch picked in the middle of the street's one run.
+            assert!(r.vm.pick_stretch(40_000, 50_000));
+            let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 45_000 }, 450.0);
+            r.vm.plan_release(g, 45_000);
+            assert_eq!(r.vm.picked(), Some((40_000, 50_000)), "{from_end:?}: the pick stays");
+            assert_eq!(r.vm.level(), Level::Curb, "{from_end:?}");
+            assert!(r.vm.add_curb(Use::Parking, 6_000), "{from_end:?}");
+            let use_ = objects(&r).into_iter().find(|o| matches!(o.0, PlanThing::Curb { side: Side::Left, .. })).expect("the use");
+            assert_eq!((use_.1, use_.2), (40_000, 46_000), "{from_end:?}: at the stretch's start, on the side pressed");
+            // The whole street picked: a press anywhere is inside it, and the left end is its start.
+            r.vm.pick_whole();
+            let g = r.vm.plan_press(PlanPress::Lane { side: Side::Right, at_mm: 20_000 }, 200.0);
+            r.vm.plan_release(g, 20_000);
+            assert_eq!(r.vm.picked(), None, "{from_end:?}");
+            let v = r.vm.view_now();
+            let right = v.curb.sides.iter().find(|s| s.side == Side::Right).expect("a curbside on the right");
+            let cell = &right.cells[right.selected.expect("a cell chosen on the right")];
+            let at = if from_end == ZoneEnd::First { 0 } else { LEN - 1 };
+            assert!(cell.from_mm <= at && at < cell.to_mm, "{from_end:?}: the free stretch at the street's left end");
+            // Outside the pick, the run there is picked, as before.
+            assert!(r.vm.pick_stretch(40_000, 50_000));
+            let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 10_000 }, 100.0);
+            r.vm.plan_release(g, 10_000);
+            assert_eq!(r.vm.picked(), None, "{from_end:?}: the street's one run");
         }
     }
 

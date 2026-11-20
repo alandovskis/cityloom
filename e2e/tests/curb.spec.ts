@@ -143,21 +143,29 @@ test.describe("the curbside strip", () => {
     const length = await streetLength(page);
     const x = (m: number) => box.x + (m / length) * box.width;
     const bands = box.y + 24 + 48;
-    // A drag along the plan picks a stretch.
-    await page.mouse.move(x(5), bands);
+    // A drag along the plan picks a stretch that starts in the middle of the street's run.
+    await page.mouse.move(x(6), bands);
     await page.mouse.down();
-    await page.mouse.move(x(15), bands, { steps: 8 });
+    await page.mouse.move(x(16), bands, { steps: 8 });
     await page.mouse.up();
-    await expect(page.locator("#plan-picked")).toHaveText(/^From /);
-    // A press on the empty lane above the bands, where the left side's uses are drawn, picks the run there and
-    // chooses the left curbside's free stretch at its start.
-    await page.mouse.click(x(length / 2), box.y + 12);
+    const picked = page.locator("#plan-picked");
+    await expect(picked).toHaveText(/^From /);
+    const stretch = (await picked.innerText()).trim();
+    const from = Number(/^From ([\d.]+) m/.exec(stretch)![1]);
+    expect(from).toBeGreaterThan(0);
+    // A press on the empty lane above the bands, inside the stretch, keeps it and chooses the left curbside's free
+    // stretch at its start.
+    await page.mouse.click(x(from + 2), box.y + 12);
+    await expect(picked).toHaveText(stretch);
     await expect(page.locator("#p-curb")).toBeVisible();
     await page.locator("#curb-use").selectOption(USE.patio);
     await page.locator("#curb-length").fill("6");
     await page.locator("#curb-add").click();
-    await expect(page.locator('#plan [data-thing^="curb-left-"]')).toHaveCount(1);
+    const use = page.locator('#plan [data-thing^="curb-left-"]');
+    await expect(use).toHaveCount(1);
     await expect(page.locator('#curb-strip-left [role="option"][title="Patio"]')).toHaveCount(1);
+    // It lies at the stretch's start.
+    expect(Math.abs((await use.locator(".plan-thing-mark").boundingBox())!.x - x(from))).toBeLessThanOrEqual(2);
     await expect(page.locator('#curb-strip-right [role="option"][title="Patio"]')).toHaveCount(0);
   });
 
