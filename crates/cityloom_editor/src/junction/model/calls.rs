@@ -237,6 +237,13 @@ fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
 /// lasts a second or more, so it takes at most about an hour and a cycle of one-second phases.
 const MAX_TURNS: usize = 100_000;
 
+/// When the run stops: a cycle at its longest past the `last` call. Each phase takes a second or more, and its green
+/// may be extended by at most `MAX_EXTENSION_S`, so a call that can be served is, at the latest, a cycle that long after
+/// it was made (one that misses an extended walk waits for the next): the bound is a guard, and cuts off no call.
+fn stop_at(plan: &Plan, last: u64) -> u64 {
+    last + plan.phases.iter().map(|p| u64::from(p.length_s).max(1) + u64::from(MAX_EXTENSION_S)).sum::<u64>()
+}
+
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
 fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The phases (places in the plan) that can serve each crossing.
@@ -260,14 +267,11 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The calls still waiting for their walk (places in `calls`), and whether each has missed one.
     let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
     let mut missed = vec![false; calls.len()];
-    // The clock, in u64 so no timing can wrap it, and when to stop: a cycle at its longest past the last call.
+    // The clock, in u64 so no timing can wrap it, and when to stop.
     let length = |k: usize| u64::from(plan.phases[k].length_s);
-    // A cycle as long as it can run: each phase's green may be extended, by at most MAX_EXTENSION_S, and a call that
-    // misses an extended walk waits for the next, which can start that much later.
-    let cycle: u64 = (0..plan.phases.len()).map(|k| length(k).max(1) + u64::from(MAX_EXTENSION_S)).sum();
-    let last = calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0);
+    let stop = stop_at(plan, calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0));
     let (mut start, mut turn) = (0u64, 0usize);
-    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= last + cycle {
+    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= stop {
         let k = turn % plan.phases.len();
         let phase = &plan.phases[k];
         let serves = |x: usize| serving[x].contains(&k);
@@ -466,7 +470,7 @@ mod tests {
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
         // The first phase lasts as long as a u32 goes: its next walk is a cycle on, counted without wrapping.
         assert_eq!(calls[1], call(9, 50, Outcome::Delayed, u32::MAX - 20, 0));
-        // A call that would wait past a cycle after the last one is not served: the run stops there.
+        // Stopped by its turn limit before the walk comes round, the call is not served (never served with no wait).
         let plan = plan_of(vec![huge(1, 25, &[]), huge(2, 25, &[9])]);
         let calls = serve_turns(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0] }], 1);
         assert_eq!(calls, vec![call(9, 0, Outcome::NotServed, 0, 0)], "still waiting when the run stops");
@@ -494,6 +498,17 @@ mod tests {
         let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
         let asked = [Asked { arm: 9, need_s: 35, at_s: vec![0, 5] }];
         assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 10), call(9, 5, Outcome::Delayed, 65, 10)]);
+    }
+
+    #[test]
+    fn the_run_stops_a_longest_cycle_past_the_last_call_and_the_latest_walk_falls_within_it() {
+        // Two phases of 15 s, each walking a crossing that needs 25 s: each green, 10 s, is extended by the most, 15 s.
+        let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 10, &[8])]);
+        assert_eq!(stop_at(&plan, 1), 1 + 2 * (15 + MAX_EXTENSION_S as u64), "the last call, then a cycle at its longest");
+        // The worst a call can wait: made a second into an extended walk it missed, while the other phase is extended
+        // too. Its walk comes round at 60 s, a second inside the bound (61 s): delayed, not cut off.
+        let asked = [Asked { arm: 9, need_s: 25, at_s: vec![0, 1] }, Asked { arm: 8, need_s: 25, at_s: vec![0] }];
+        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 15), call(8, 0, Outcome::Served, 30, 15), call(9, 1, Outcome::Delayed, 59, 15)]);
     }
 
     #[test]
