@@ -544,6 +544,19 @@ mod tests {
         }
     }
 
+    /// The dark value of a `light-dark(…, rgb(r g b / a))` token, as a hex colour and its alpha; fails when the token
+    /// is not written so.
+    fn translucent_dark(css: &str, name: &str) -> (String, f64) {
+        let at = css.find(&format!("--{name}: ")).unwrap_or_else(|| panic!("--{name}"));
+        let line = &css[at..at + css[at..].find(';').unwrap()];
+        let rgb = line.split("rgb(").nth(1).unwrap_or_else(|| panic!("--{name} has no rgb() value: {line}"));
+        let rgb = rgb.split(')').next().unwrap();
+        let (channels, alpha) = rgb.split_once('/').unwrap_or_else(|| panic!("--{name} has no alpha: {line}"));
+        let c: Vec<u8> = channels.split_whitespace().map(|v| v.parse().unwrap()).collect();
+        assert_eq!(c.len(), 3, "{line}");
+        (format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]), alpha.trim().parse().unwrap())
+    }
+
     #[test]
     fn the_cleared_edits_notice_is_warn_on_its_wash_over_an_opaque_panel_in_both_themes() {
         let app = include_str!("../../../../web/app.css");
@@ -557,7 +570,13 @@ mod tests {
                 if i == 0 { t.0 } else { t.1 }
             };
             let panel = pick("panel").unwrap();
-            let wash = pick("warn-wash").unwrap_or_else(|| blend("#f59e0b", &panel, 0.18));
+            let wash = match pick("warn-wash") {
+                Some(opaque) => opaque,
+                None => {
+                    let (colour, alpha) = translucent_dark(app, "warn-wash");
+                    blend(&colour, &panel, alpha)
+                }
+            };
             let warn = pick("warn").unwrap();
             assert!(contrast(&warn, &wash) >= 4.5, "warn on its wash over the panel {theme}: {:.2}", contrast(&warn, &wash));
         }
