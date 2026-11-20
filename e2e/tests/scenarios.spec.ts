@@ -85,8 +85,12 @@ test.describe("a street's scenarios", () => {
     await expect(live(page)).toHaveText("Now showing the baseline.");
     expect(await firstPieceWidth(page)).toEqual(baseline);
 
+    // a reload while a scenario is shown opens on the baseline: which design is shown is not kept
+    await show(page, "Wider bike lane");
+    await expect(pick(page)).not.toHaveValue("");
     await page.reload();
     await expect(pick(page)).toHaveValue("", { timeout: 10_000 });
+    await expect(page.locator("#scenario-mode")).toHaveText("Baseline: edits change the design the map shows.");
     expect(await firstPieceWidth(page)).toEqual(baseline);
     await expect(pick(page).locator("option")).toHaveText([
       "Baseline (what the map shows)",
@@ -99,6 +103,9 @@ test.describe("a street's scenarios", () => {
     expect(await firstPieceWidth(page)).toEqual(baseline);
     const record = Object.values((await edits(page)).streets)[0] as { scenarios: { name: string }[] };
     expect(record.scenarios.map((s) => s.name)).toEqual(["Wider bike lane", "Parking kept"]);
+    // the record keeps the designs, and nothing of which one was shown
+    expect(Object.keys(record).sort()).toEqual(["leaving", "nodes", "scenarios", "street", "ways"]);
+    for (const scenario of record.scenarios) expect(Object.keys(scenario).sort()).toEqual(["design", "id", "name"]);
   });
 
   test("a scenario is renamed, duplicated and deleted once the delete is confirmed", async ({ page }) => {
@@ -181,8 +188,12 @@ test.describe("a junction's scenarios", () => {
     await showBaseline(page);
     await expect(live(page)).toHaveText("Now showing the baseline.");
 
+    // a reload while a scenario is shown opens on the baseline: which design is shown is not kept
+    await show(page, "Wider bike lane");
+    await expect(pick(page)).not.toHaveValue("");
     await page.reload();
     await expect(pick(page)).toHaveValue("", { timeout: 10_000 });
+    await expect(page.locator("#scenario-mode")).toHaveText("Baseline: edits change the design the map shows.");
     await expect(pick(page).locator("option")).toHaveText([
       "Baseline (what the map shows)",
       "Wider bike lane",
@@ -196,5 +207,8 @@ test.describe("a junction's scenarios", () => {
     expect([wider.name, parking.name]).toEqual(["Wider bike lane", "Parking kept"]);
     expect(parking.design).toEqual(record.state);
     expect(wider.design).not.toEqual(record.state);
+    // the record keeps the designs, and nothing of which one was shown
+    expect(Object.keys(record).sort()).toEqual(["arm_streets", "nodes", "scenarios", "state"]);
+    for (const scenario of record.scenarios) expect(Object.keys(scenario).sort()).toEqual(["design", "id", "name"]);
   });
 });
