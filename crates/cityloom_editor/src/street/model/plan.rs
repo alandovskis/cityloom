@@ -55,7 +55,7 @@ pub struct PlanBand {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PlanBoundary {
     pub at_mm: i32,
-    /// The zone the boundary starts, in anchored order (the one `move_boundary` moves the start of).
+    /// The zone the boundary starts, in anchored order (the one `move_boundary_of` moves the start of).
     pub zone: usize,
     /// The transition's taper, `(from, to)`, at its true length on the side of the run that holds it; it may reach
     /// past that run (a failing transition) or past the street's end.

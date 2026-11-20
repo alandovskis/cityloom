@@ -1934,7 +1934,7 @@ fn the_plan_shows_the_ends_and_a_notice_when_the_zones_were_drawn_elsewhere() {
     // Drawn on 40 m, loaded 20 m.
     let s = zoned_street(&[0, 10_000, 30_000], Some(20_000), Locale::En);
     let h = plan_html(&s);
-    assert!(h.contains("The zones were drawn on this street when it was 40.0 m long; here it is 20.0 m."), "{h}");
+    assert!(h.contains("The changes along this street were drawn when it was 40.0 m long; here it is 20.0 m."), "{h}");
 }
 
 #[test]
@@ -1997,33 +1997,64 @@ fn the_plan_scrolls_inside_itself_and_keeps_its_point_in_sight() {
 // ---- the street level of the details panel ------------------------------------------
 
 #[test]
-fn the_street_level_opens_on_the_street_s_name_class_width_length_and_zones() {
+fn the_street_level_opens_on_the_street_s_name_class_width_and_length_and_then_the_picked_stretch() {
     let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
-    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=s.clone()/> });
+    let summary = |vm: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::page::StreetSummary vm=vm.clone()/> });
+    let h = summary(&s);
     assert!(h.contains(r#"<h2 class="insp-name">Sample Street 1</h2>"#), "{h}");
     let v = s.view();
     let width = Units::Metres.length_fine_in(v.row_mm, Locale::En);
-    assert!(h.contains(&format!(">Local street · {width} wide · 40.0 m long · 2 zones<")), "{h}");
-    let mini = &h[h.find("zone-mini").expect("a strip of the zones")..];
-    assert_eq!(mini[..mini.find("</div>").unwrap()].matches("<span").count(), 2, "{h}");
+    assert!(h.contains(&format!(">Local street · {width} wide · 40.0 m long<")), "{h}");
+    assert!(!h.contains("zone") && !h.contains("street-stretch"), "no count of zones, no strip of them, no line for the whole street: {h}");
+    assert!(s.pick_stretch(10_000, 30_000));
+    let h = summary(&s);
+    assert!(h.contains(r#"<p class="insp-sub street-stretch">From 10.0 m to 30.0 m · 20.0 m long</p>"#), "{h}");
     let one = zoned_street(&[], Some(40_000), Locale::FrCa);
-    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=one.clone()/> }).replace(['\u{a0}', '\u{202f}'], " ");
-    assert!(h.contains("Rue locale ·") && h.contains("40,0 m de long · 1 zone<"), "{h}");
+    let h = summary(&one).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("Rue locale ·") && h.contains("40,0 m de long<"), "{h}");
     // A street with no end to measure from has no length to give.
     let free = street_shared(0);
-    let h = street_html(|| view! { <crate::street::view::page::StreetSummary vm=free.clone()/> });
-    assert!(h.contains(" wide · 1 zone<") && !h.contains(" long"), "{h}");
+    let h = summary(&free);
+    assert!(h.contains(" wide<") && !h.contains(" long"), "{h}");
 }
 
 #[test]
-fn with_several_zones_the_speed_limit_says_whose_it_is() {
+fn with_a_stretch_picked_the_speed_limit_says_whose_it_is_and_whether_it_varies() {
     let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
-    let speed = street_html(|| view! { <crate::street::view::speed_view::SpeedLimit vm=s.clone()/> });
-    assert!(speed.contains(">For Zone 1, the zone chosen.<"), "{speed}");
-    assert!(speed.contains(r#"<label for="speed-limit" class="zone-l">Speed limit</label>"#), "{speed}");
-    let one = zoned_street(&[], Some(40_000), Locale::En);
-    let speed = street_html(|| view! { <crate::street::view::speed_view::SpeedLimit vm=one.clone()/> });
-    assert!(!speed.contains("the zone chosen"), "{speed}");
+    let speed = |vm: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::speed_view::SpeedLimit vm=vm.clone()/> });
+    let h = speed(&s);
+    assert!(h.contains(r#"<label for="speed-limit" class="zone-l">Speed limit</label>"#), "{h}");
+    assert!(!h.contains("zone-hint"), "the whole street's limit needs no line: {h}");
+    assert!(s.pick_stretch(10_000, 30_000));
+    assert!(s.set_speed(Some(30)));
+    let h = speed(&s);
+    assert!(h.contains(">For the stretch from 10.0 m to 30.0 m.<"), "{h}");
+    assert!(!h.contains("Varies"), "{h}");
+    // Across the stretch at 30 km/h and the street's own beside it, the limits differ.
+    assert!(s.pick_stretch(0, 20_000));
+    let h = speed(&s);
+    assert!(h.contains(">For the stretch from 0.0 m to 20.0 m.<") && h.contains(">Varies along the stretch<"), "{h}");
+    let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 30_000));
+    let h = speed(&fr).replace('\u{a0}', " ");
+    assert!(h.contains(">Pour le tronçon de 10,0 m à 30,0 m.<"), "{h}");
+}
+
+#[test]
+fn a_piece_whose_width_varies_along_the_pick_says_so_under_its_width() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    let uid = segment(&s, 0);
+    let width = s.view().segments[0].width_mm;
+    assert!(s.pick_stretch(0, 20_000));
+    assert!(s.edit(|e| e.set_width(uid, width + 100)));
+    s.select(Some(uid));
+    let inspector = || street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(!inspector().contains(r#"id="i-width-varies""#), "one run picked: one width");
+    s.pick_whole();
+    s.select(Some(uid));
+    let h = inspector();
+    assert!(h.contains(r#"<p id="i-width-varies" class="insp-range">Varies along the stretch</p>"#), "{h}");
+    assert!(h.contains(r#"aria-describedby="i-width-range i-width-varies""#), "{h}");
 }
 
 #[test]

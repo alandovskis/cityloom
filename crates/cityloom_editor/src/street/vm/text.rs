@@ -146,7 +146,7 @@ pub fn green_cell_text(g: &GreenRowView, cell: usize, i18n: &I18n, units: Units)
     i18n.tr_now("green-cell", &args)
 }
 
-/// Why a zone operation was refused, in the page's language.
+/// Why a boundary could not be moved (or the street changed while a drag is under way), in the page's language.
 pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
     say_now(i18n, units, &refusal.said())
 }
@@ -210,8 +210,8 @@ fn listed(items: Vec<Said>) -> Option<Said> {
     Some(items.fold(pair("stretch-what-pair", before, last), |list, item| pair("stretch-what-more", item, list)))
 }
 
-/// What a check is called where it is listed: a failing check of a street with several zones says which zone
-/// it fails in.
+/// What a check is called where it is listed: a failing check of a street that changes along its length says where
+/// it fails (a stretch, "from 49 m to 82 m", or where the street changes).
 pub fn check_label(check: &Check) -> Said {
     match (&check.zone, check.ok) {
         // A curbside row names the use that fails, not a zone.
@@ -230,8 +230,8 @@ pub fn check_label(check: &Check) -> Said {
         (Some(instance), false) if check.id.starts_with("green-") => {
             Said::new("check-green-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
         }
-        (Some(zone), false) => {
-            Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
+        (Some(stretch), false) => {
+            Said::new("check-stretch-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("stretch", Arg::Said(Box::new(stretch.clone())))
         }
         _ => check.label.clone(),
     }
@@ -477,8 +477,8 @@ mod tests {
     #[test]
     fn the_words_are_in_both_languages_and_the_french_has_its_typography() {
         use crate::street::model::ZoneRefusal;
-        assert_eq!(zone_refused(&en(), Units::Metres, ZoneRefusal::TooShort), "A zone must be at least 5.0 m long.");
-        assert_eq!(zone_refused(&fr(), Units::Metres, ZoneRefusal::TooShort), "Une zone doit mesurer au moins 5,0\u{a0}m.");
+        assert_eq!(zone_refused(&en(), Units::Metres, ZoneRefusal::TooShort), "A stretch must be at least 5.0 m long.");
+        assert_eq!(zone_refused(&fr(), Units::Metres, ZoneRefusal::TooShort), "Un tronçon doit mesurer au moins 5,0\u{a0}m.");
     }
 
     #[test]
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn a_failing_check_names_its_zone_only_when_the_street_has_several() {
+    fn a_failing_check_names_its_stretch_only_when_the_street_changes_along_its_length() {
         let mut e = zoned_editor();
         assert!(e.select_zone(1));
         let uid = e.view().segments[0].uid;
@@ -510,8 +510,9 @@ mod tests {
         let fits = v.checks.iter().find(|c| c.id == "fits").unwrap();
         assert!(!fits.ok);
         let plain = say_now(&en(), Units::Metres, &fits.label);
-        assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} in Zone 2"));
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{}\u{a0}: Zone 2", say_now(&fr(), Units::Metres, &fits.label)));
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} from 10.0 m to 30.0 m"));
+        let plain = say_now(&fr(), Units::Metres, &fits.label);
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{plain} de 10,0\u{a0}m à 30,0\u{a0}m"));
         let passing = v.checks.iter().find(|c| c.ok).unwrap();
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
@@ -616,7 +617,8 @@ mod tests {
                 "class",
                 "kmh",
                 "need",
-                "zone",
+                "stretch",
+                "at",
                 "room",
             ]
             .into_iter()
@@ -626,5 +628,72 @@ mod tests {
             }
             assert_eq!(i18n.missing(), Vec::<String>::new(), "{locale:?}");
         }
+    }
+
+    /// Every street message, in both languages, says "stretch" where it said "zone": only the places that are zones
+    /// by name keep the word. Each message is read in every variant of its selectors, then formatted with sample
+    /// values; the ids that still say "zone" are listed.
+    #[test]
+    fn no_street_message_says_zone_except_school_and_loading_zones() {
+        use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
+        use std::collections::BTreeSet;
+        // "school zone" and "loading zone" are zones by name, as are their French forms. French also says
+        // "zone de chargement" for the loading zone (the glossary's term), "zone tampon" for a buffer (a piece across
+        // the street, not a part along it) and "zones à circulation restreinte" (the name of a kind of area).
+        const ALLOWED: [&str; 7] =
+            ["school zone", "loading zone", "zone scolaire", "zone de livraison", "zone de chargement", "zone tampon", "zones à circulation restreinte"];
+        fn says_zone(text: &str) -> bool {
+            let mut text = text.to_lowercase();
+            for phrase in ALLOWED {
+                text = text.replace(phrase, "");
+            }
+            text.contains("zone")
+        }
+        fn words(p: &Pattern<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
+            for el in &p.elements {
+                match el {
+                    PatternElement::TextElement { value } => text.push_str(value),
+                    PatternElement::Placeable { expression } => expression_words(expression, text, vars),
+                }
+            }
+        }
+        fn inline_words(e: &InlineExpression<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
+            match e {
+                InlineExpression::StringLiteral { value } => text.push_str(value),
+                InlineExpression::VariableReference { id } => {
+                    vars.insert(String::leak(id.name.to_string()));
+                }
+                InlineExpression::Placeable { expression } => expression_words(expression, text, vars),
+                _ => {}
+            }
+        }
+        fn expression_words(e: &Expression<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
+            match e {
+                Expression::Inline(i) => inline_words(i, text, vars),
+                Expression::Select { selector, variants } => {
+                    inline_words(selector, text, vars);
+                    for v in variants {
+                        text.push(' ');
+                        words(&v.value, text, vars);
+                    }
+                }
+            }
+        }
+        let mut offending = Vec::new();
+        for (locale, source) in [(Locale::En, crate::street::RESOURCES.en), (Locale::FrCa, crate::street::RESOURCES.fr)] {
+            let i18n = crate::i18n_for(locale);
+            let resource = fluent_syntax::parser::parse(source).expect("the street's messages parse");
+            for entry in &resource.body {
+                let Entry::Message(m) = entry else { continue };
+                let Some(pattern) = &m.value else { continue };
+                let (mut text, mut vars) = (String::new(), BTreeSet::new());
+                words(pattern, &mut text, &mut vars);
+                let formatted = [1, 2, 5].map(|n| i18n.tr_now(m.id.name, &vars.iter().fold(Args::new(), |args, v| args.num(v, n))));
+                if says_zone(&text) || formatted.iter().any(|f| says_zone(f)) {
+                    offending.push(format!("{}: {}", locale.tag(), m.id.name));
+                }
+            }
+        }
+        assert_eq!(offending, Vec::<String>::new());
     }
 }

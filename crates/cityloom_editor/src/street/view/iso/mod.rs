@@ -191,8 +191,8 @@ fn diagram_through(v: &View, i18n: &I18n, p: &Projection) -> Diagram {
     diagram
 }
 
-/// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
-/// shown, and its pieces; across a near boundary, the two zones that meet there.
+/// What a screen reader is told the 2.5D drawing is: the street, the stretch of it shown when it changes along its
+/// length, the length drawn, and its pieces; across a near boundary, where it is and the two stretches that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     iso_label_at(v, i18n, units, LABEL_WIDTH)
 }
@@ -245,24 +245,21 @@ fn iso_label_of(v: &View, i18n: &I18n, units: Units) -> String {
         return i18n.tr("svg-iso-label", &args);
     }
     let zone = &v.zones.zones[v.zones.selected.min(v.zones.zones.len() - 1)];
+    let args = args.str("stretch", say(i18n, units, &zone.label));
     if let Some(joint) = &v.zones.joint {
-        // The selected zone is the near run when the neighbour lies far; otherwise the neighbour is in front.
-        let (near, far) = if joint.far { (&zone.label_mid, &joint.label_mid) } else { (&joint.label_mid, &zone.label_mid) };
-        let args = args.str("zone", say(i18n, units, &zone.label)).str("near", say(i18n, units, near)).str("far", say(i18n, units, far));
+        // The shown stretch is the near one when the neighbour lies far; otherwise the neighbour is in front.
+        let (near, far) = if joint.far { (&zone.label, &joint.label) } else { (&joint.label, &zone.label) };
+        let args = args.str("at", units.length_in(joint.left_mm, i18n.locale())).str("near", say(i18n, units, near)).str("far", say(i18n, units, far));
         let mut label = i18n.tr("svg-iso-label-joint", &args);
         if let Some(t) = &joint.taper {
-            // The transition leads from the host into the other zone.
-            let other = if t.host_is_selected { &joint.label_mid } else { &zone.label_mid };
-            let args = Args::new().str("length", units.length_whole_in(t.length_mm, i18n.locale())).str("zone", say(i18n, units, other));
+            // The transition leads from the host into the other stretch.
+            let other = if t.host_is_selected { &joint.label } else { &zone.label };
+            let args = Args::new().str("length", units.length_whole_in(t.length_mm, i18n.locale())).str("stretch", say(i18n, units, other));
             label = format!("{label} {}", i18n.tr("svg-iso-transition", &args));
         }
         return label;
     }
-    let args = args
-        .str("zone", say(i18n, units, &zone.label))
-        .str("from", units.length_whole_in(zone.from_mm, i18n.locale()))
-        .str("to", units.length_whole_in(zone.to_mm, i18n.locale()));
-    i18n.tr("svg-iso-label-zone", &args)
+    i18n.tr("svg-iso-label-stretch", &args)
 }
 
 #[cfg(test)]
@@ -870,36 +867,37 @@ mod tests {
     }
 
     #[test]
-    fn the_2_5d_label_names_the_selected_zone_and_its_range_in_both_languages() {
+    fn the_2_5d_label_names_the_shown_stretch_in_both_languages() {
         let mut e = zones_far_apart();
         assert!(e.select_zone(0));
         let v = e.view();
         assert!(v.zones.joint.is_none());
-        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, from 0.0 m to 100.0 m, along a 40 m stretch. 6 segments.");
         let fr = crate::i18n_for(Locale::FrCa);
-        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 1, de 0\u{a0}m à 100\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, de 0,0\u{a0}m à 100,0\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
     }
 
     #[test]
-    fn the_label_names_the_two_zones_where_they_meet_in_both_languages() {
+    fn the_label_names_the_two_stretches_where_they_meet_in_both_languages() {
         let v = joined(true, 1);
         assert_eq!(
             iso_label(&v, &en(), Units::Metres),
-            "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments. A transition of 53 m leads into Zone 1."
+            "Sample Street 1 in 2.5D, along a 40 m stretch centred on 50.0 m, where the section changes abruptly: the stretch from 0.0 m to 50.0 m is in front and the one from 50.0 m to 100.0 m beyond. The stretch from 50.0 m to 100.0 m has 5 segments. A transition of 53 m leads into the stretch from 0.0 m to 50.0 m."
         );
         let fr = crate::i18n_for(Locale::FrCa);
         assert_eq!(
             iso_label(&v, &fr, Units::Metres),
-            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement à cet endroit. Zone 2 compte 5 éléments. Une transition de 53\u{a0}m mène à zone 1."
+            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur 50,0\u{a0}m, là où la coupe change brusquement\u{a0}: le tronçon de 0,0\u{a0}m à 50,0\u{a0}m est au premier plan et celui de 50,0\u{a0}m à 100,0\u{a0}m, au-delà. Le tronçon de 50,0\u{a0}m à 100,0\u{a0}m compte 5 éléments. Une transition de 53\u{a0}m mène au tronçon de 0,0\u{a0}m à 50,0\u{a0}m."
         );
     }
 
     #[test]
-    fn the_zone_in_front_is_the_one_nearer_the_eye() {
+    fn the_stretch_in_front_is_the_one_nearer_the_eye() {
+        // Anchored at its last end, the second zone is the plan's first 50 m, and the first lies beyond it.
         let v = joined_from_last(true, 1);
         assert!(v.zones.joint.as_ref().expect("a joint").far, "the neighbour of the last zone lies beyond");
         let label = iso_label(&v, &en(), Units::Metres);
-        assert!(label.contains("between Zone 2 in front and Zone 1 beyond"), "{label}");
+        assert!(label.contains("the stretch from 0.0 m to 50.0 m is in front and the one from 50.0 m to 100.0 m beyond"), "{label}");
     }
 
     #[test]
@@ -911,7 +909,7 @@ mod tests {
         assert!(e.select_zone(0));
         let v = e.view();
         assert!(v.zones.joint.is_none());
-        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, from 0.0 m to 100.0 m, along a 40 m stretch. 6 segments.");
     }
 
     #[test]
@@ -1478,12 +1476,13 @@ mod tests {
     fn the_label_says_the_transition() {
         let v = joined(true, 1);
         let en_label = iso_label(&v, &en(), Units::Metres);
-        assert!(en_label.contains("The section changes abruptly there. Zone 2 has 5 segments. A transition of 53 m leads into Zone 1."), "{en_label}");
+        assert!(en_label.ends_with("has 5 segments. A transition of 53 m leads into the stretch from 0.0 m to 50.0 m."), "{en_label}");
         let fr = crate::i18n_for(Locale::FrCa);
         let fr_label = iso_label(&v, &fr, Units::Metres);
-        assert!(fr_label.contains("Zone 2 compte 5 éléments. Une transition de 53\u{a0}m mène à zone 1."), "{fr_label}");
+        assert!(fr_label.ends_with("compte 5 éléments. Une transition de 53\u{a0}m mène au tronçon de 0,0\u{a0}m à 50,0\u{a0}m."), "{fr_label}");
         // Seen from zone 1, zone 2 (across the boundary) hosts it and it leads into zone 1.
         let v = joined(true, 0);
-        assert!(iso_label(&v, &en(), Units::Metres).ends_with("A transition of 53 m leads into Zone 1."), "{}", iso_label(&v, &en(), Units::Metres));
+        let label = iso_label(&v, &en(), Units::Metres);
+        assert!(label.ends_with("A transition of 53 m leads into the stretch from 0.0 m to 50.0 m."), "{label}");
     }
 }

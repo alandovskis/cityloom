@@ -532,10 +532,14 @@ mod pick_tests {
     }
 
     fn rig_of(street: &Street, from_end: ZoneEnd) -> Rig {
+        rig_in(street, from_end, Locale::En)
+    }
+
+    fn rig_in(street: &Street, from_end: ZoneEnd, locale: Locale) -> Rig {
         let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
         let (ports, said, _, _) = test_ports_with_time();
         let editor = Editor::from_street(street, street, region).with_frame(Some(ZoneFrame { length_mm: LEN, from_end }));
-        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said }
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(locale), editor, None), said }
     }
 
     fn sample() -> Street {
@@ -605,6 +609,30 @@ mod pick_tests {
         r.vm.plan_key(PlanKey::NudgeBoundary(1_000));
         assert_eq!(boundaries(&r), [30_000, 40_000]);
         assert_eq!(r.said.take(), ["No stretch boundary at either end of the pick."]);
+    }
+
+    #[test]
+    fn alt_arrow_says_the_boundary_s_move_from_the_plan_s_left_end_and_why_it_stops_in_the_words_of_stretches() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = three_runs(from_end);
+            r.vm.pick_run_at(30_000);
+            r.said.take();
+            r.vm.plan_key(PlanKey::NudgeBoundary(-1_000));
+            let said = r.said.take();
+            assert!(said[0].contains("Move a change along the street to 19.0 m"), "{from_end:?}: {said:?}");
+            // 10 m on twice: the second would leave the picked stretch 1 m long, short of 5 m.
+            r.vm.plan_key(PlanKey::NudgeBoundary(10_000));
+            r.said.take();
+            r.vm.plan_key(PlanKey::NudgeBoundary(10_000));
+            assert_eq!(boundaries(&r), [29_000, 40_000], "{from_end:?}");
+            assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."], "{from_end:?}");
+        }
+        let r = rig_in(&street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First), ZoneEnd::First, Locale::FrCa);
+        r.vm.pick_run_at(30_000);
+        r.vm.plan_key(PlanKey::NudgeBoundary(10_000));
+        r.said.take();
+        r.vm.plan_key(PlanKey::NudgeBoundary(10_000));
+        assert_eq!(r.said.take(), ["Un tronçon doit mesurer au moins 5,0\u{a0}m."]);
     }
 
     /// Right-hand traffic: sidewalk, a bus lane each way against the curbs, sidewalk; so each side has a stops row.

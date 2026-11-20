@@ -216,6 +216,8 @@ jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
 }. Sa zone d’extrémité va jusqu’à { $reach } du centre. Zone suivante : { $zone }.
+# La zone de l’autre côté de la limite d’une zone d’extrémité, par son numéro depuis l’extrémité d’ancrage de la rue (src/street/model/beyond.rs).
+zone-unnamed-mid = zone { $n }
 jn-side-left = à gauche vu du centre
 jn-side-right = à droite vu du centre
 jn-sel-arm-stop = { $kind } { $side }, à { $at } du centre, dans la voie { $n } sur { $of }, qui permet { $uses }.
