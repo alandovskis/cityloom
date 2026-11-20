@@ -27,6 +27,9 @@ project-date = { $month ->
 } { $day }, { $year }
 project-timeline = Timeline
 project-timeline-named = Timeline of { $name }
+# The project row's link to the page that shares the project by a link (#221).
+project-share = Share
+project-share-named = Share { $name }
 project-rename = Rename
 project-rename-named = Rename { $name }
 project-rename-save = Save the name

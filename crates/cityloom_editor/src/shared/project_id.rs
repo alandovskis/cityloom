@@ -30,8 +30,8 @@ pub fn round_trips(project: &str, key: &str) -> bool {
     split_key(&wire_key(project, key)) == (project, key)
 }
 
-/// The pages that open inside a project: the map, the two editors and the timeline.
-pub const PROJECT_PAGES: [&str; 4] = ["map.html", "street.html", "intersection.html", "timeline.html"];
+/// The pages that open inside a project: the map, the two editors, the timeline and the page that shares it.
+pub const PROJECT_PAGES: [&str; 5] = ["map.html", "street.html", "intersection.html", "timeline.html", "share.html"];
 
 /// What a page's address carries to open its project read-only: the design can be looked at, not changed. Nothing
 /// on a page adds it or takes it away (`link_in` keeps it on the links between a project's pages); the share link

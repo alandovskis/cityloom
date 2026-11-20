@@ -96,11 +96,13 @@ pub fn ids(storage: &Shared) -> Vec<Id> {
     out
 }
 
-/// The record as kept. A placeholder project is not one: it never leaves the device; nor is a stale street or junction
-/// record (`edits::is_stale`), which the project's discard removes when it is next opened.
+/// The record as kept. A placeholder project is not one, nor a copy of a shared design (`project::copies`, which
+/// `ProjectStore::list` does not hold): neither leaves the device; nor is a stale street or junction record
+/// (`edits::is_stale`), which the project's discard removes when it is next opened.
 pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     if id.kind == Kind::Project {
-        return ProjectStore::new(storage.clone()).get(&id.key).filter(|p| !p.placeholder).and_then(|p| serde_json::to_value(p).ok());
+        let listed = ProjectStore::new(storage.clone()).list().into_iter().find(|p| p.id == id.key);
+        return listed.filter(|p| !p.placeholder).and_then(|p| serde_json::to_value(p).ok());
     }
     let (project, key) = split_key(&id.key);
     let storage = &scoped(storage, project);
@@ -491,6 +493,19 @@ mod tests {
         assert_eq!(read(&s, &other), None);
         assert_eq!(read(&s, &first), Some(stamped(json!({"mine": "first"}))), "removing it from p1 leaves the first project's");
         assert_eq!(memory.recall("cityloom-sync"), None);
+    }
+
+    #[test]
+    fn a_copy_of_a_shared_design_is_never_listed_read_or_sent() {
+        let (s, _) = storage();
+        let mut draft = Draft::new();
+        assert!(draft.put_raw(STREETS, "w1", json!({"mine": "shared"})));
+        let copy = crate::project::copies::keep(&s, "tok", "Shared", &crate::place::area::default_area().to_query(), &[(EDITS_KEY, &draft.to_json())]).unwrap();
+        assert!(ProjectStore::new(s.clone()).get(&copy).is_some(), "the pages find it");
+        assert!(!projects(&s).contains(&copy));
+        assert!(ids(&s).iter().all(|id| !id.key.starts_with(&copy)), "{:?}", ids(&s));
+        assert_eq!(read(&s, &Id::new(Kind::Project, &copy)), None, "its record never leaves the device");
+        assert!(usable(&s, Kind::Street));
     }
 
     #[test]

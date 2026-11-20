@@ -1262,6 +1262,37 @@ mod context {
     fn the_design_keys_a_page_only_to_read_refuses_name_the_projects_list() {
         use crate::shared::scoped::DESIGN_KEYS;
         assert!(DESIGN_KEYS.contains(&crate::project::store::PROJECTS_KEY) && DESIGN_KEYS.contains(&crate::project::store::DAMAGED_KEY));
+        assert!(DESIGN_KEYS.contains(&crate::project::copies::COPIES_KEY));
+    }
+
+    /// A copy of a shared design opens on every page, and only to read, whether or not its address says `view=1`.
+    #[test]
+    fn a_copy_of_a_shared_design_opens_only_to_read_whatever_the_address_says() {
+        use crate::project::context::peek;
+        let t = two_projects();
+        let id = crate::project::copies::keep(
+            &t.ports.storage,
+            "tok",
+            "Shared",
+            &crate::place::area::default_area().to_query(),
+            &[(crate::city::edits::EDITS_KEY, "{\"version\":5}")],
+        )
+        .unwrap();
+        for path in [format!("/map.html?project={id}&view=1"), format!("/street.html?street=7&project={id}")] {
+            *t.page.path.borrow_mut() = path.clone();
+            let page = open_page(t.ports.clone()).expect("the copy opens");
+            let look = peek(t.ports.clone()).expect("the copy opens");
+            for ports in [&page, &look] {
+                assert!(ports.storage.read_only(), "{path}");
+                assert_eq!(ports.storage.recall(crate::city::edits::EDITS_KEY).as_deref(), Some("{\"version\":5}"));
+                assert!(!ports.storage.remember(crate::city::edits::EDITS_KEY, "{}"));
+                assert!(!crate::sync::model::mark(&*ports.storage, Kind::Street, "w1", false));
+            }
+        }
+        assert_eq!(crate::project::context::area_of(&*open_page(t.ports.clone()).unwrap().storage), Some(crate::place::area::default_area()));
+        assert_eq!(ProjectStore::new(t.ports.storage.clone()).last_opened(), None, "a copy is not remembered as the person's project opened last");
+        *t.page.path.borrow_mut() = "/map.html?project=p1".into();
+        assert!(!open_page(t.ports.clone()).unwrap().storage.read_only(), "the person's own projects are written as ever");
     }
 
     #[test]
@@ -1628,6 +1659,9 @@ mod page {
         // Its timeline is one link away, named for the project.
         assert!(out.contains(&format!(r#"id="project-timeline-{id}""#)) && out.contains(&format!(r#"href="timeline.html?project={id}""#)), "{out}");
         assert!(out.contains(r#"aria-label="Timeline of Plateau""#), "{out}");
+        // And its share link's page (#221).
+        assert!(out.contains(&format!(r#"id="project-share-{id}""#)) && out.contains(&format!(r#"href="share.html?project={id}""#)), "{out}");
+        assert!(out.contains(r#"aria-label="Share Plateau""#), "{out}");
         assert!(out.contains(r#"aria-label="Rename Plateau""#) && out.contains(r#"aria-label="Delete Plateau""#));
         assert!(out.contains("Verdun &lt;b&gt;"), "a name is text, not markup");
         assert!(!out.contains("project-empty"));

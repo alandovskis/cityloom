@@ -30,6 +30,9 @@ project-date = { $day ->
 } { $year }
 project-timeline = Chronologie
 project-timeline-named = Chronologie de { $name }
+# Le lien de la rangée du projet vers la page qui partage le projet par un lien (#221).
+project-share = Partager
+project-share-named = Partager { $name }
 project-rename = Renommer
 project-rename-named = Renommer { $name }
 project-rename-save = Enregistrer le nom
