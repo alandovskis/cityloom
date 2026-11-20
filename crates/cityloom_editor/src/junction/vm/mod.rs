@@ -718,6 +718,39 @@ mod tests {
     }
 
     #[test]
+    fn an_action_whose_flush_finds_the_scenario_gone_stops_there_with_the_baseline_shown() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let actions: [(&str, fn(&JunctionVm) -> bool); 5] = [
+            ("switch", |vm| vm.switch_scenario(None)),
+            ("create", |vm| vm.create_scenario("Protected")),
+            ("duplicate", |vm| vm.duplicate_scenario("Copy")),
+            ("rename", |vm| vm.rename_scenario("Renamed")),
+            ("delete", |vm| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            let (r, binding) = city_rig();
+            let imported = corner(&r);
+            assert!(r.vm.create_scenario("Raised"));
+            let id = r.vm.scenario_state().active_now().unwrap();
+            let uid = r.vm.read(|j| j.current().arms[0].uid);
+            assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+            binding.act(Action::Delete(id)).unwrap();
+            r.said.take();
+            assert!(!action(&r.vm), "{what}: it stops once the flush found the scenario gone");
+            assert_eq!(
+                r.said.take(),
+                ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."],
+                "{what}"
+            );
+            assert_eq!(r.vm.scenario_state().refusal(), None, "{what}");
+            assert_eq!(r.vm.scenario_state().active_now(), None, "{what}");
+            assert!(binding.scenarios().is_empty(), "{what}");
+            assert_eq!((corner(&r), kept_corner(&binding, None)), (imported, imported), "{what}");
+        }
+    }
+
+    #[test]
     fn a_junction_edit_made_a_moment_before_a_sync_is_not_lost() {
         use crate::sync::hub;
         use crate::sync::model::{Change, Origin};

@@ -2025,6 +2025,38 @@ mod tests {
         assert_eq!(r.said.take().last().map(String::as_str), Some("This browser is not keeping your changes, so other pages will not see them."));
     }
 
+    const GONE_EDIT: &str = "That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.";
+
+    #[test]
+    fn an_action_whose_flush_finds_the_scenario_gone_stops_there_with_the_baseline_shown() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let actions: [(&str, fn(&StreetVm) -> bool); 5] = [
+            ("switch", |vm| vm.switch_scenario(None)),
+            ("create", |vm| vm.create_scenario("Parking kept")),
+            ("duplicate", |vm| vm.duplicate_scenario("Copy")),
+            ("rename", |vm| vm.rename_scenario("Renamed")),
+            ("delete", |vm| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            let (r, binding) = city_rig();
+            let baseline = width(&r);
+            assert!(r.vm.create_scenario("Wider bike lane"));
+            let id = r.vm.scenario_state().active_now().unwrap();
+            let uid = first(&r.vm);
+            // an edit waits in the keeper while another tab deletes the scenario
+            assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+            binding.act(Action::Delete(id)).unwrap();
+            r.said.take();
+            assert!(!action(&r.vm), "{what}: it stops once the flush found the scenario gone");
+            assert_eq!(r.said.take(), [GONE_EDIT], "{what}: only the lost edit is said");
+            assert_eq!(r.vm.scenario_state().refusal(), None, "{what}: no refusal is left under the field");
+            assert_eq!(r.vm.scenario_state().active_now(), None, "{what}");
+            assert!(binding.scenarios().is_empty(), "{what}: nothing was made");
+            assert_eq!((width(&r), kept_width(&binding, None)), (baseline, baseline), "{what}: the baseline is unchanged");
+        }
+    }
+
     /// Another device's edit of the rig's street, applied to the city.
     fn remote_edit(binding: &CityBinding) {
         let Place::Street(edge) = binding.place else { unreachable!() };

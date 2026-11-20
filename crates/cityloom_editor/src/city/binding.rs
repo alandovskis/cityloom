@@ -104,7 +104,8 @@ impl CityBinding {
 pub trait ScenarioPage: ScenarioHost {
     /// The place in the city the page edits; none for a sandbox, which keeps no scenarios.
     fn binding(&self) -> Option<&CityBinding>;
-    /// Writes what waits to be kept, now (to the design shown).
+    /// Writes what waits to be kept, now (to the design shown). Where the scenario shown has been deleted elsewhere,
+    /// that write finds it gone and the page then shows the baseline and says why (`gone`): what is shown may change.
     fn flush(&self);
     /// Shows design `id` (None: the baseline) as the city keeps it, starting a history of its own: what could be
     /// undone in the design shown before is not carried over. Whether it could be shown.
@@ -113,8 +114,8 @@ pub trait ScenarioPage: ScenarioHost {
     fn tell(&self, said: &Said);
 }
 
-/// The scenario actions of a page, whichever kind of place it edits. Each keeps what the page shows before it acts,
-/// so no edit is lost, and tells the person what it did or why it did nothing.
+/// The scenario actions of a page, whichever kind of place it edits. Each keeps what the page shows before it reads
+/// it or acts (`kept_first`), so no edit is lost, and tells the person what it did or why it did nothing.
 pub mod scenario_actions {
     use super::{Action, ScenarioFailure, ScenarioPage};
     use crate::city::scenario::{News, Refusal};
@@ -151,11 +152,22 @@ pub mod scenario_actions {
     }
 
     /// Shows scenario `id`, or the baseline.
-    pub fn switch(page: &impl ScenarioPage, id: Option<u32>) -> bool {
+    /// Writes what waits to be kept before an action reads what is shown. False where the action is to stop: the page
+    /// edits no place, or the write found the scenario shown gone, so the page already shows the baseline and has
+    /// said why (anything said after it would only replace that in the live region).
+    fn kept_first(page: &impl ScenarioPage) -> bool {
         if page.binding().is_none() {
             return false;
         }
+        let shown = page.scenario_state().active_now();
         page.flush();
+        !(shown.is_some() && page.scenario_state().active_now().is_none())
+    }
+
+    pub fn switch(page: &impl ScenarioPage, id: Option<u32>) -> bool {
+        if !kept_first(page) {
+            return false;
+        }
         let state = page.scenario_state();
         if !page.show_design(id) {
             // gone since it was listed (deleted in another tab, say)
@@ -171,10 +183,9 @@ pub mod scenario_actions {
     }
 
     /// Does `action` on the place, `name` the name it was given (as typed): what it made, or None where it was
-    /// refused or not kept (and the person told why).
+    /// refused or not kept (and the person told why). What was waiting is kept first (`kept_first`).
     fn act(page: &impl ScenarioPage, action: Action, name: &str) -> Option<Option<u32>> {
         let binding = page.binding()?;
-        page.flush();
         let state = page.scenario_state();
         match binding.act(action) {
             Ok(made) => {
@@ -207,12 +218,18 @@ pub mod scenario_actions {
     }
 
     pub fn create(page: &impl ScenarioPage, name: &str) -> bool {
+        if !kept_first(page) {
+            return false;
+        }
         let Some(Some(made)) = act(page, Action::Create(name.to_string()), name) else { return false };
         show_made(page, made, News::Created)
     }
 
     /// Duplicates the scenario shown; nothing on the baseline (a new scenario is made from it).
     pub fn duplicate(page: &impl ScenarioPage, name: &str) -> bool {
+        if !kept_first(page) {
+            return false;
+        }
         let state = page.scenario_state();
         let Some(from) = state.active_now() else { return false };
         let from_name = state.name_now(from).unwrap_or_default();
@@ -222,6 +239,9 @@ pub mod scenario_actions {
 
     /// Renames the scenario shown; the baseline has no name of its own.
     pub fn rename(page: &impl ScenarioPage, name: &str) -> bool {
+        if !kept_first(page) {
+            return false;
+        }
         let state = page.scenario_state();
         let Some(id) = state.active_now() else { return false };
         let from = state.name_now(id).unwrap_or_default();
@@ -236,6 +256,9 @@ pub mod scenario_actions {
     /// Deletes the scenario shown, the second time it is asked with nothing done in between, and shows the
     /// baseline; the baseline cannot be deleted.
     pub fn delete(page: &impl ScenarioPage) -> bool {
+        if !kept_first(page) {
+            return false;
+        }
         let state = page.scenario_state();
         let Some(id) = state.active_now() else { return false };
         let name = state.name_now(id).unwrap_or_default();
