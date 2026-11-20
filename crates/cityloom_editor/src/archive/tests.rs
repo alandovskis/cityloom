@@ -431,7 +431,7 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (17, json!({"street": {}, "import": 11}), 17),
         (NEWEST.into(), plain.clone(), 5),
     ];
-    assert_eq!(NEWEST, 17, "a new edits version needs a row here");
+    assert_eq!(NEWEST, 18, "a new edits version needs a row here (18, a crossing on call, is a junction's: below)");
     for (version, mut record, written) in cases {
         record["import"] = json!(11); // an unstamped record is stale and never imported
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
@@ -440,7 +440,7 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1, "version {version}");
         // the import stamp every imported record needs makes the document version 17, whatever else the record holds
         let _ = written;
-        assert_eq!(stored(&b.storage, EDITS_KEY)["version"], NEWEST, "version {version}");
+        assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::IMPORT_STAMP_VERSION, "version {version}");
     }
     // a signal plan needs version 10
     let signal = json!({"state": {"signal_plan": {"phases": []}}});
@@ -450,7 +450,14 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
     let b = device();
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
-    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], NEWEST);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::IMPORT_STAMP_VERSION);
+    // a crossing on call needs version 18
+    let calls = json!({"state": {"arms": [{"calls": 12}]}, "import": 11});
+    let doc = json!({"version": 18, "streets": {}, "junctions": {"n8": calls}});
+    let b = device();
+    let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::CALLS_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }
