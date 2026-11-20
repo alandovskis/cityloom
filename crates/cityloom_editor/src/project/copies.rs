@@ -1,6 +1,6 @@
 //! The copies of shared designs this browser has opened (#221). A copy is a project of its own (its documents under
-//! `<key>@<id>`, as any project's), so the pages open it as they open any: `store::find` and `ProjectStore::get` know
-//! it, and `context` opens it only to read. It is not one of the person's projects: `ProjectStore::list` (the home
+//! `<key>@<id>`, as any project's), so the pages open it as they open any: `context::find` knows it (the person's
+//! list, `store::find` and `ProjectStore`, does not), and `context` opens it only to read. It is not one of the person's projects: `ProjectStore::list` (the home
 //! page, the sync, the move from before projects) does not hold it, nothing of it is ever marked or sent, and it is
 //! kept in a document of its own, `cityloom-shared-copies` (`{"version":1,"copies":[…]}`, oldest first), which a page
 //! showing a design read-only cannot write (`shared::scoped::DESIGN_KEYS`).
@@ -150,9 +150,9 @@ mod tests {
         assert_eq!(id, "s1");
         assert_eq!(memory.recall("cityloom-edits@s1").as_deref(), Some("{\"version\":5}"));
         assert_eq!(memory.recall("cityloom-restrictions@s1").as_deref(), Some("{\"version\":1}"));
-        let found = crate::project::store::find(&*storage, "s1").expect("the pages find it");
+        let found = crate::project::context::find(&*storage, "s1").expect("the pages find it");
         assert_eq!((found.name.as_str(), found.area.as_str(), found.placeholder), ("Plateau", "area=45.5,-73.5&name=Plateau", false));
-        assert!(store.get("s1").is_some());
+        assert!(store.get("s1").is_none(), "the list's own lookup knows only the person's projects");
         assert!(is_copy(&*storage, "s1") && !is_copy(&*storage, "p1"));
         assert_eq!(store.list().iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["p1"], "not one of the person's projects");
         assert!(crate::sync::model::open(&*storage).is_none_or(|doc| doc.records.keys().all(|k| !k.contains("s1"))), "nothing marked");

@@ -1295,6 +1295,24 @@ mod context {
         assert!(!open_page(t.ports.clone()).unwrap().storage.read_only(), "the person's own projects are written as ever");
     }
 
+    /// The person's list knows only their projects: a copy's id is no project to remember, open or remove; only the
+    /// pages' own lookup (`context::find`) knows it.
+    #[test]
+    fn only_the_pages_lookup_knows_a_copy_and_the_list_s_own_calls_do_not() {
+        let t = two_projects();
+        let id = crate::project::copies::keep(&t.ports.storage, "tok", "Shared", &crate::place::area::default_area().to_query(), &[]).unwrap();
+        let store = ProjectStore::new(t.ports.storage.clone());
+        assert!(crate::project::store::find(&*t.ports.storage, &id).is_none() && store.get(&id).is_none());
+        assert_eq!(crate::project::context::find(&*t.ports.storage, &id).map(|p| p.name).as_deref(), Some("Shared"));
+        assert_eq!(crate::project::context::find(&*t.ports.storage, "p1").map(|p| p.id).as_deref(), Some("p1"));
+        assert!(!store.open(&id), "a copy is not remembered as the project opened last");
+        t.storage.remember(LAST_KEY, &id);
+        assert_eq!(store.last_opened(), None);
+        assert!(store.remove_raw(&id), "nothing listed to remove");
+        assert_eq!(crate::project::copies::list(&*t.ports.storage).len(), 1, "the copy is not the list's to remove");
+        assert_eq!(store.list().iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["first", "p1"]);
+    }
+
     #[test]
     fn a_look_at_the_page_s_project_neither_sends_the_page_away_nor_remembers_it() {
         use crate::project::context::peek;

@@ -135,7 +135,7 @@ pub fn mount_timeline() -> Option<TimelinePage> {
     let ports = project::context::open_page(shared::platform::browser_ports())?;
     let i18n = i18n_browser(&ports);
     let project = ports.storage.project();
-    let name = project.as_deref().and_then(|id| project::store::find(&*ports.storage, id)).map(|p| p.name).unwrap_or_default();
+    let name = project.as_deref().and_then(|id| project::context::find(&*ports.storage, id)).map(|p| p.name).unwrap_or_default();
     let context = timeline::vm::Context { project_name: name, app_version: env!("CARGO_PKG_VERSION").to_string() };
     timeline::mount_timeline(ports, i18n.clone(), context);
     Some(TimelinePage { i18n, project })
@@ -176,7 +176,7 @@ pub fn mount_share() -> Option<SharePage> {
     let ports = project::context::open_page(root)?;
     let i18n = i18n_browser(&ports);
     let project = ports.storage.project();
-    let record = project.as_deref().and_then(|id| project::store::find(&*ports.storage, id));
+    let record = project.as_deref().and_then(|id| project::context::find(&*ports.storage, id));
     let context = share::vm::Context {
         project_name: record.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
         project_area: record.map(|p| p.area).unwrap_or_else(|| place::area::default_area().to_query()),

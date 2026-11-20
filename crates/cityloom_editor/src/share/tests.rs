@@ -196,7 +196,7 @@ fn a_link_opens_its_design_as_a_copy_and_goes_to_its_map_read_only() {
     assert_eq!(t.navigator.take_replaced(), ["map.html?project=s1&view=1"]);
     assert_eq!(t.storage.recall("cityloom-edits@s1").map(|t| serde_json::from_str::<Value>(&t).unwrap()), Some(edits()));
     assert_eq!(t.storage.recall("cityloom-restrictions@s1").map(|t| serde_json::from_str::<Value>(&t).unwrap()), Some(rules()));
-    let project = crate::project::store::find(&*t.storage, "s1").unwrap();
+    let project = crate::project::context::find(&*t.storage, "s1").unwrap();
     assert_eq!((project.name.as_str(), project.area), ("Plateau", default_area().to_query()));
     assert!(crate::project::ProjectStore::new(t.ports.storage.clone()).list().is_empty(), "not one of the person's projects");
     assert_eq!(t.storage.recall(crate::sync::model::SYNC_KEY), None, "nothing marked for the sync");
