@@ -1,0 +1,109 @@
+/* The share page: one card under the bar, as the timeline's. Its colours are the home page's tokens (the pairs
+   `shared/contrast.rs` measures are the ones used here). */
+
+.share-page {
+  position: relative;
+  z-index: 5;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 24px;
+}
+@media (max-width: 899px) {
+  .share-page {
+    padding-top: 16px;
+  }
+}
+#share-slot {
+  display: grid;
+  gap: 12px;
+  width: min(780px, 100%);
+  padding: 36px 40px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+@media (max-width: 520px) {
+  #share-slot {
+    padding: 24px 18px;
+  }
+}
+#share-slot h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+#share-slot h1:focus {
+  outline: none;
+}
+#share-slot h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+#share-slot h2 {
+  margin-top: 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.share-intro {
+  font-size: 16px;
+}
+.share-blocked,
+.share-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+.share-outcome:empty {
+  display: none;
+}
+.btn.share-create {
+  justify-self: start;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.share-create:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.share-empty {
+  color: var(--ink-2);
+}
+
+.share-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.share-row {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0;
+}
+.share-row + .share-row {
+  border-top: 1px solid var(--rule);
+}
+.share-row label {
+  font-weight: 600;
+}
+.share-link {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1.5px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font: 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.share-link:focus-visible {
+  border-color: var(--accent);
+}
+.share-expiry {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

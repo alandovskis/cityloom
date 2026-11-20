@@ -12,8 +12,9 @@ pub fn in_project(ports: Ports, project: &str) -> Ports {
     Ports { storage, ..ports }
 }
 
-/// The keys that hold one project's data. Each is stored as `<key>@<project>`.
-pub const SCOPED_KEYS: [&str; 7] = [
+/// The keys that hold one project's data. Each is stored as `<key>@<project>`. `cityloom-shares` is the share links
+/// made on this device for the project (`share::store::SHARES_KEY`).
+pub const SCOPED_KEYS: [&str; 8] = [
     "cityloom-edits",
     "cityloom-edits-damaged",
     "cityloom-restrictions",
@@ -21,6 +22,7 @@ pub const SCOPED_KEYS: [&str; 7] = [
     "cityloom-area",
     "cityloom-milestones",
     "cityloom-milestones-damaged",
+    "cityloom-shares",
 ];
 
 /// The person's keys, beyond a project's own (`SCOPED_KEYS`), that a page showing its project read-only does not keep:
