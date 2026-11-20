@@ -987,7 +987,9 @@ impl Junction {
         // Crossings kept on call off a signal (a record from before calls went with the timing, or a sync) are taken off
         // as it opens. The junction's level says so until its first edit (which writes the record without them); opening
         // is no edit, so no step is added to undo. A state of changes it opens on says it too, as an edit's would.
-        let lost = kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count();
+        // Only for that reason: a `now` that cannot be drawn opens on `today`, whose calls are its own.
+        let off_signal = j.current().control != SIGNAL;
+        let lost = if off_signal { kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count() } else { 0 };
         j.calls_dropped = lost;
         if lost > 0 && j.cursor == 1 {
             j.states[1].label = calls_lost_label(earlier(), lost);

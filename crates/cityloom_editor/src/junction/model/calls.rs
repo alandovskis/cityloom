@@ -556,6 +556,20 @@ mod tests {
     }
 
     #[test]
+    fn a_junction_that_falls_back_on_how_it_was_laid_out_is_not_said_to_have_lost_its_calls_to_a_control() {
+        // Today a signal with no call; now its crossing is on call, but two streets on one bearing cannot be drawn,
+        // even eased: it opens as it was laid out. The call went with the drawing, not because it is no signal.
+        let today = Junction::new(0).current().clone();
+        let mut now = today.clone();
+        now.arms[0].calls = Some(12);
+        now.arms[1].bearing = now.arms[0].bearing;
+        let opened = Junction::from_city(crate::street::model::named_said("J"), &today, &now, 0).unwrap();
+        assert_eq!(opened.current().control, crate::junction::model::SIGNAL);
+        assert!(opened.current().arms.iter().all(|a| a.calls.is_none()), "it opened on today");
+        assert_eq!(opened.calls_dropped(), 0, "not said to be off call for want of a signal");
+    }
+
+    #[test]
     fn a_junction_that_stops_being_a_signal_takes_its_crossings_off_call_and_says_so() {
         let mut j = Junction::new(0);
         let e = at(j.current(), 90);
