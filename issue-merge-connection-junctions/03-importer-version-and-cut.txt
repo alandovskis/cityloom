@@ -1,0 +1,25 @@
+$ cargo test -p cityloom_model cut
+test cut::tests::absorbing_a_network_that_shares_roads_adds_each_road_and_junction_once_with_its_id ... ok
+test cut::tests::clip_to_keeps_whole_a_road_inside_however_short ... ok
+test cut::tests::clip_to_cuts_a_crossing_road_at_the_border_and_ends_it_in_a_street_running_off_the_map ... ok
+test cut::tests::clip_to_cuts_at_the_edge_a_road_whose_trimmed_line_is_inside_and_whose_junction_is_not ... ok
+test cut::tests::clip_to_carries_each_zone_to_the_stretch_of_the_piece_it_covered ... ok
+test cut::tests::clip_to_keeps_the_line_of_a_crossing_road_whose_end_inside_is_where_its_junction_is ... ok
+test cut::tests::clip_to_keeps_a_road_inside_with_its_id_and_ends ... ok
+test cut::tests::clip_to_gives_a_priority_on_a_cut_road_to_its_piece ... ok
+test cut::tests::clip_to_keeps_the_stretch_from_a_junction_in_the_box_to_its_edge_where_the_trimmed_line_lies_outside ... ok
+test cut::tests::a_zoned_road_cut_by_a_frame_keeps_each_zone_where_it_lies ... ok
+test cut::tests::absorbing_gives_back_the_priority_roads_a_tile_left_out ... ok
+test cut::tests::clip_to_cuts_a_road_at_its_point_on_the_border_where_it_turns_out ... ok
+test cut::tests::clip_to_keeps_whole_a_road_inside_that_starts_or_ends_with_a_repeated_point ... ok
+test cut::tests::clip_to_leaves_out_a_road_that_touches_the_box_at_a_point ... ok
+test cut::tests::clip_to_leaves_out_a_cut_piece_shorter_than_a_metre_with_the_end_it_would_have_made ... ok
+test cut::tests::clip_to_makes_two_roads_of_one_that_leaves_and_comes_back ... ok
+test cut::tests::clip_to_puts_the_south_west_corner_of_the_box_at_the_origin ... ok
+test cut::tests::reaching_keeps_whole_the_roads_with_a_point_in_the_box_or_a_stretch_across_it ... ok
+test cut::tests::reaching_names_only_present_roads_in_a_priority_and_has_no_corridors ... ok
+test cut::tests::a_tile_is_kept_as_json ... ok
+test cut::tests::a_place_across_the_line_between_two_tiles_is_cut_from_them_as_from_the_whole ... ok
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+$ grep -rn "IMPORTER_VERSION: u32" crates/cityloom_model/src
+crates/cityloom_model/src/importer.rs:40:pub const IMPORTER_VERSION: u32 = 11;

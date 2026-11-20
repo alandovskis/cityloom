@@ -1,0 +1,11 @@
+$ cargo test -p cityloom_editor city::store::tests::a_record_written
+test city::store::tests::a_record_written_over_a_network_kept_by_importer_10_is_stale ... ok
+test city::store::tests::a_record_written_over_a_network_kept_by_importer_11_is_fresh ... ok
+test city::store::tests::a_record_written_over_a_network_whose_importer_is_unknown_is_unstamped ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3373 filtered out; finished in 0.00s
+
+Assertions in crates/cityloom_editor/src/city/store.rs (the tests above):
+  :486  assert_eq!(record["import"], serde_json::json!(10), "stamped with the importer of the network it was made on");
+  :493  assert_eq!(record["import"], serde_json::json!(11));
+  :501  assert!(record.get("import").is_none(), "{checksum:?}: no version to stamp");
+Related, city::edits: a_typed_record_is_stale_exactly_when_its_json_is, a_record_without_an_import_stamp_or_from_before_importer_11_is_stale (see 05-discard.txt).

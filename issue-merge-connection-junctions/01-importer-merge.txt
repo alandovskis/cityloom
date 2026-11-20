@@ -1,0 +1,16 @@
+$ cargo test -p citymodel_builder importer::blocks
+test importer::blocks::tests::a_node_where_three_road_ends_meet_is_kept ... ok
+test importer::blocks::tests::a_change_of_road_type_is_two_roads ... ok
+test importer::blocks::tests::a_change_of_name_is_two_roads ... ok
+test importer::blocks::tests::a_node_the_data_does_not_pass_through_is_kept ... ok
+test importer::blocks::tests::a_block_that_comes_back_to_its_own_end_is_left_alone ... ok
+test importer::blocks::tests::a_ring_of_connections_is_left_alone ... ok
+test importer::blocks::tests::a_chain_of_three_pieces_is_one_road_of_three_zones ... ok
+test importer::blocks::tests::a_priority_naming_two_pieces_names_the_merged_road_once ... ok
+test importer::blocks::tests::pieces_whose_ends_do_not_touch_keep_both_points ... ok
+test importer::blocks::tests::a_piece_drawn_the_other_way_is_turned_round ... ok
+test importer::blocks::tests::neighbouring_pieces_with_the_same_lanes_and_speed_are_one_zone ... ok
+test importer::blocks::tests::two_pieces_of_one_block_are_one_road_of_two_zones ... ok
+test importer::blocks::tests::a_priority_naming_a_piece_names_the_merged_road ... ok
+test importer::blocks::tests::merging_twenty_thousand_roads_takes_under_two_seconds ... ok
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 84 filtered out; finished in 0.08s

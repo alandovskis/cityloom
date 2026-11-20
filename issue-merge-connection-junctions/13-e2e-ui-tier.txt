@@ -1,0 +1,7 @@
+  ✓  278 [ui] › tests/network.spec.ts:91:3 › the network checks on the map page › each finding says why it failed, and a place it names is shown in the details and opened from there (2.8s)
+  ✘  307 [ui] › tests/restrictions.spec.ts:370:3 › area restrictions › closing on the first corner with the details collapsed opens them on the Area rules form (9.0s)
+    Error: expect(locator).toBeVisible() failed
+  1 failed
+  504 passed (3.2m)
+error: recipe `e2e` failed with exit code 1
+exit 1

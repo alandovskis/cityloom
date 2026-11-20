@@ -1,0 +1,54 @@
+$ cargo test -p cityloom_editor city::edits
+test city::edits::tests::a_document_holding_a_stamped_record_is_written_as_the_import_stamp_version ... ok
+test city::edits::tests::a_document_read_at_the_import_stamp_version_stays_there_when_its_last_record_goes ... ok
+test city::edits::tests::a_record_without_an_import_stamp_or_from_before_importer_11_is_stale ... ok
+test city::edits::tests::a_typed_record_is_stale_exactly_when_its_json_is ... ok
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 3314 filtered out; finished in 0.29s
+$ cargo test -p cityloom_editor city::store
+test city::store::tests::a_document_discarding_empties_is_kept_at_the_import_stamp_version ... ok
+test city::store::tests::a_record_written_over_a_network_kept_by_importer_10_is_stale ... ok
+test city::store::tests::a_record_written_over_a_network_whose_importer_is_unknown_is_unstamped ... ok
+test city::store::tests::discarding_leaves_a_newer_builds_document_alone ... ok
+test city::store::tests::discarding_removes_every_stale_record_marks_each_deleted_and_keeps_the_stamped_ones ... ok
+test city::store::tests::discarding_writes_nothing_for_an_empty_or_a_damaged_document ... ok
+test city::store::tests::a_write_that_is_refused_marks_nothing ... ok
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 3323 filtered out; finished in 0.22s
+$ cargo test -p cityloom_editor sync::tests
+test sync::tests::a_mark_whose_wire_key_the_server_would_refuse_is_not_kept ... ok
+test sync::tests::a_pulled_stale_record_does_not_remove_a_stamped_copy_which_is_sent_over_it_waiting_or_not ... ok
+test sync::tests::a_pulled_stale_record_is_not_kept_and_is_answered_with_its_removal ... ok
+test sync::tests::a_pulled_stamped_record_is_kept_as_before ... ok
+test sync::tests::a_413_is_retried_one_record_at_a_time_and_the_refused_record_is_blocked_and_said_once ... ok
+test sync::tests::a_stale_record_that_supersedes_a_stamped_copy_does_not_remove_it_and_the_copy_goes_again_over_it ... ok
+test sync::tests::a_batch_refused_over_a_record_limit_goes_one_at_a_time_and_the_refused_one_is_blocked_and_said_once ... ok
+test sync::tests::the_sync_refuses_a_project_s_storage - should panic ... ok
+test sync::tests::the_sync_refuses_a_projects_storage - should panic ... ok
+test sync::tests::what_was_applied_before_a_store_refused_a_record_is_still_published ... ok
+test sync::tests::a_pull_of_several_pages_is_not_started_over_by_a_tombstone_purged_meanwhile ... ok
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 3322 filtered out; finished in 4.20s
+$ cargo test -p cityloom_editor archive::tests
+test archive::tests::a_stale_record_in_an_archive_is_not_imported ... ok
+test archive::tests::export_refuses_work_it_cannot_read_rather_than_make_an_archive_that_lacks_it ... ok
+test archive::tests::an_archive_holding_only_stale_records_says_so_and_not_that_everything_is_already_here ... ok
+test archive::tests::an_archive_of_stale_and_current_records_that_are_already_here_keeps_the_usual_outcome ... ok
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 3347 filtered out; finished in 3.24s
+$ cargo test -p cityloom_editor timeline::tests
+test timeline::tests::a_bad_name_is_refused_beside_the_field_and_said_and_nothing_is_kept ... ok
+test timeline::tests::a_stale_milestone_has_its_own_refusal_in_both_languages ... ok
+test timeline::tests::comparing_the_same_work_says_so_and_an_unknown_milestone_is_refused ... ok
+test timeline::tests::work_that_cannot_be_read_is_refused ... ok
+test timeline::tests::milestones_stop_where_they_would_crowd_the_device_and_a_restore_that_cannot_keep_its_backup_is_refused ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 3357 filtered out; finished in 0.82s
+$ cargo test -p cityloom_editor shell::tests
+test shell::tests::edits_cleared::a_page_in_no_project_discards_nothing ... ok
+test shell::tests::edits_cleared::a_project_without_stale_edits_shows_nothing ... ok
+test shell::tests::edits_cleared::dismissing_hides_the_notice ... ok
+test shell::tests::edits_cleared::the_notice_is_a_status_with_the_message_and_a_dismiss_button_in_both_languages ... ok
+test shell::tests::edits_cleared::a_page_of_a_project_with_stale_edits_clears_them_and_says_so_once ... ok
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 3345 filtered out; finished in 0.10s
+$ cargo test -p cityloom_editor i18n
+test shared::i18n::tests::parity_reports_a_file_that_does_not_parse ... ok
+test shared::i18n::tests::parity_walks_the_variants_of_a_select ... ok
+test shared::i18n::tests::parity_reports_a_message_in_one_language_only_and_a_variable_that_differs ... ok
+test shared::i18n::tests::two_resource_sets_with_the_same_id_are_refused ... ok
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 3338 filtered out; finished in 1.65s

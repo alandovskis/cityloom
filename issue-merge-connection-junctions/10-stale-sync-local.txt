@@ -1,0 +1,25 @@
+$ cargo test -p cityloom_editor sync::local
+test sync::local::tests::an_area_that_is_not_an_area_is_refused ... ok
+test sync::local::tests::a_damaged_milestones_document_pauses_milestones_alone ... ok
+test sync::local::tests::a_record_for_a_project_is_refused_while_the_list_cannot_be_changed ... ok
+test sync::local::tests::a_document_from_a_newer_build_or_a_damaged_one_is_unusable_and_never_written_or_replaced ... ok
+test sync::local::tests::a_project_record_that_is_not_a_project_is_refused ... ok
+test sync::local::tests::an_old_document_that_cannot_be_read_holds_every_record_of_its_kinds ... ok
+test sync::local::tests::removing_a_record_of_a_project_not_in_the_list_adds_nothing ... ok
+test sync::local::tests::a_stale_body_is_not_written ... ok
+test sync::local::tests::a_stale_record_is_neither_listed_nor_read ... ok
+test sync::local::tests::a_key_the_server_would_refuse_is_not_listed ... ok
+test sync::local::tests::the_places_wait_while_work_from_before_projects_waits_to_be_moved ... ok
+test sync::local::tests::a_project_record_is_kept_in_the_list_without_a_mark_and_replaced_in_place ... ok
+test sync::local::tests::work_under_the_old_keys_is_held_only_while_the_move_is_unfinished ... ok
+test sync::local::tests::a_wire_key_over_two_hundred_characters_is_not_listed_but_stays_readable ... ok
+test sync::local::tests::a_damaged_document_in_any_project_pauses_its_kind ... ok
+test sync::local::tests::rules_and_the_area_go_by_project_too ... ok
+test sync::local::tests::removing_a_project_record_removes_its_places_and_its_entry_without_a_mark ... ok
+test sync::local::tests::two_projects_keep_the_same_place_apart_under_their_wire_keys ... ok
+test sync::local::tests::a_record_for_a_project_not_in_the_list_brings_a_placeholder_that_its_own_record_replaces ... ok
+test sync::local::tests::a_milestone_is_listed_read_written_and_removed_in_its_project_without_marking ... ok
+test sync::local::tests::each_kind_is_listed_read_written_and_removed_without_marking ... ok
+test sync::local::tests::writing_a_zoned_street_through_the_sync_makes_the_document_the_import_stamp_version_so_an_older_build_will_not_touch_it ... ok
+test sync::local::tests::a_many_zone_street_record_fits_a_keepalive_batch ... ok
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 3353 filtered out; finished in 0.00s

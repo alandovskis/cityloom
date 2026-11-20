@@ -1,0 +1,8 @@
+
+        npx playwright show-trace test-results/restrictions-area-restrict-8a1c6-them-on-the-Area-rules-form-ui-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [ui] › tests/restrictions.spec.ts:370:3 › area restrictions › closing on the first corner with the details collapsed opens them on the Area rules form 
+  2 passed (9.2s)

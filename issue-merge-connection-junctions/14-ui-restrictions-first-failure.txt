@@ -1,0 +1,22 @@
+  1) [ui] › tests/restrictions.spec.ts:370:3 › area restrictions › closing on the first corner with the details collapsed opens them on the Area rules form 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('#area-save')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('#area-save') with timeout 5000ms
+      - waiting for locator('#area-save')
+
+
+      197 | /** The closed outline's form is shown wherever the person had gone, and asks for its rule first. */
+      198 | async function formShown(page: Page) {
+    > 199 |   await expect(page.locator("#area-save")).toBeVisible();
+          |                                            ^
+      200 |   await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "true");
+      201 |   await expect(page.locator("#area-rule")).toBeFocused();
+      202 |   await expect(page.locator("#map-canvas")).not.toHaveAttribute("data-drawing", "");
+        at formShown (e2e/tests/restrictions.spec.ts:199:44)

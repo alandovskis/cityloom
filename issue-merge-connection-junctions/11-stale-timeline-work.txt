@@ -1,0 +1,14 @@
+$ cargo test -p cityloom_editor timeline::work
+test timeline::work::tests::a_document_that_cannot_be_read_is_not_captured ... ok
+test timeline::work::tests::a_changed_place_says_what_about_it_changed ... ok
+test timeline::work::tests::a_milestone_holding_stale_work_cannot_be_restored ... ok
+test timeline::work::tests::a_restore_over_a_document_that_cannot_be_read_is_refused ... ok
+test timeline::work::tests::nothing_kept_is_an_empty_snapshot_and_work_is_counted_by_kind ... ok
+test timeline::work::tests::restoring_work_that_is_already_as_the_milestone_had_it_changes_and_keeps_nothing ... ok
+test timeline::work::tests::the_same_work_has_no_difference_and_places_made_removed_or_changed_are_told_apart ... ok
+test timeline::work::tests::restoring_marks_places_put_back_as_written_and_places_taken_away_as_removed ... ok
+test timeline::work::tests::a_restore_that_fails_half_way_leaves_no_document_it_made_and_no_mark_for_the_backup_it_dropped ... ok
+test timeline::work::tests::the_mark_of_a_dropped_backup_is_found_under_the_project_s_wire_key_in_any_project ... ok
+test timeline::work::tests::restoring_puts_the_work_back_after_keeping_what_it_replaces_as_a_milestone_of_its_own ... ok
+test timeline::work::tests::a_restore_that_cannot_keep_the_work_it_replaces_changes_nothing ... ok
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 3364 filtered out; finished in 0.05s
