@@ -212,6 +212,16 @@ mod tests {
     }
 
     #[test]
+    fn the_scenarios_disclosure_shares_the_standards_one_rule_in_the_accent_measured_on_the_panel() {
+        let editor = include_str!("../../../../web/editor.css");
+        let shared = rule(editor, ".standards-manage > summary,\n.standards-import-open > summary,\n.scenario-manage > summary");
+        for declaration in ["color: var(--accent);", "font-size: 13px;", "font-weight: 600;", "cursor: pointer;"] {
+            assert!(shared.contains(declaration), "{shared}");
+        }
+        assert!(!editor.contains(".scenario-manage summary {"), "no rule of its own beside the shared one");
+    }
+
+    #[test]
     fn a_disabled_radio_option_does_not_look_pressable_and_keeps_its_checked_fill() {
         let editor = include_str!("../../../../web/editor.css");
         let rule_of = rule(editor, r#".opt[role="radio"][aria-disabled="true"]"#);

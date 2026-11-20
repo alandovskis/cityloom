@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::city::binding::{CityBinding, Place};
+use crate::city::binding::{CityBinding, Place, ScenarioPage, scenario_actions};
 use crate::junction::model::read_model::JView;
 use crate::junction::model::signal;
 use crate::junction::model::{Junction, Refusal, State, Target};
@@ -18,7 +18,9 @@ use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
+use crate::shared::said::Said;
 use crate::shared::said::say_now;
+use crate::shared::scenarios::{ScenarioHost, ScenarioState};
 use crate::shared::units::Units;
 use crate::sync::model::{Change, Kind, Origin};
 
@@ -40,6 +42,12 @@ pub struct JunctionVm {
     plan: ArcRwSignal<bool>,
     /// Whether the Checks tab shows its passing checks.
     passes: crate::shared::check_fold::PassFold,
+    /// The junction's scenarios and which design is shown (the baseline when the page opens).
+    scenarios: ScenarioState,
+    /// Whether the junction keeps scenarios: it is a junction of the city with a key of its own.
+    offers_scenarios: bool,
+    /// The design shown as last opened or kept (as `StreetVm`'s): a write of the same design changes nothing.
+    kept_design: std::cell::RefCell<State>,
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
@@ -70,7 +78,24 @@ impl JunctionVm {
                 )
             });
             let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
-            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, goal, plan: ArcRwSignal::new(false), passes: Default::default() }
+            let offers_scenarios = binding.as_ref().is_some_and(|b| b.record().is_some());
+            let scenarios = ScenarioState::default();
+            if let Some(b) = &binding {
+                scenarios.list(b.scenarios());
+            }
+            JunctionVm {
+                kept_design: std::cell::RefCell::new(junction.snapshot()),
+                core: Core::new(junction),
+                ports,
+                i18n,
+                keeper,
+                binding,
+                goal,
+                plan: ArcRwSignal::new(false),
+                passes: Default::default(),
+                scenarios,
+                offers_scenarios,
+            }
         })
     }
 
@@ -363,22 +388,42 @@ impl JunctionVm {
     /// differs (the selection stays if it is still there).
     fn on_synced(&self, changes: &[Change]) {
         let Some(binding) = &self.binding else { return };
-        let Place::Junction(node) = binding.place else { return };
+        if !matches!(binding.place, Place::Junction(_)) {
+            return;
+        }
         if !changes.iter().any(|c| matches!(c.id.kind, Kind::Junction | Kind::Street)) {
             return;
         }
         // As the street's: a later edit still waiting in the keeper is written first and wins.
         self.flush();
-        let Some(mut fresh) = binding.store.open().junction_editor(node, binding.store.region()) else { return };
-        // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
+        scenario_actions::refresh(self);
+        // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
+        let shown = self.scenarios.active_now();
+        let Some(mut fresh) = self.open_design(shown) else {
+            if shown.is_some() {
+                // the scenario shown was deleted elsewhere: the baseline, said as that rather than as an update
+                scenario_actions::gone(self, false);
+            }
+            return;
+        };
         if self.core.read(|j| j.drawn_as(&fresh)) {
+            // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
             return;
         }
         fresh.select(self.core.read(|j| j.selected));
         let own = binding.record();
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        *self.kept_design.borrow_mut() = fresh.snapshot();
         self.core.edit(|j| *j = fresh);
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
+    /// Design `id` (None: the baseline) as the city keeps it now, its history begun there (`Junction::begin_history`).
+    /// What both a switch and a sync reload show.
+    fn open_design(&self, id: Option<u32>) -> Option<Junction> {
+        let mut fresh = self.binding.as_ref()?.junction_editor(id)?;
+        fresh.begin_history();
+        Some(fresh)
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -391,7 +436,14 @@ impl JunctionVm {
     /// Writes the junction as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        binding.keep_junction(self.core.read(|j| j.snapshot()))
+        let state = self.core.read(|j| j.snapshot());
+        // the same design, whatever step it is labelled as
+        let changed = !crate::junction::model::same_design(&self.kept_design.borrow(), &state);
+        let kept = binding.keep_junction_in(state.clone(), self.scenarios.active_now());
+        if kept.is_ok() {
+            *self.kept_design.borrow_mut() = state;
+        }
+        scenario_actions::kept(self, kept, changed)
     }
 
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
@@ -520,6 +572,72 @@ impl crate::shell::Target for JunctionVm {
     }
 }
 
+impl ScenarioHost for JunctionVm {
+    fn i18n(&self) -> Rc<I18n> {
+        self.i18n.clone()
+    }
+
+    fn scenario_state(&self) -> &ScenarioState {
+        &self.scenarios
+    }
+
+    fn scenarios_offered(&self) -> bool {
+        self.offers_scenarios
+    }
+
+    fn read_only(&self) -> bool {
+        JunctionVm::read_only(self)
+    }
+
+    fn switch_scenario(&self, id: Option<u32>) -> bool {
+        scenario_actions::switch(self, id)
+    }
+
+    fn create_scenario(&self, name: &str) -> bool {
+        scenario_actions::create(self, name)
+    }
+
+    fn duplicate_scenario(&self, name: &str) -> bool {
+        scenario_actions::duplicate(self, name)
+    }
+
+    fn rename_scenario(&self, name: &str) -> bool {
+        scenario_actions::rename(self, name)
+    }
+
+    fn delete_scenario(&self) -> bool {
+        scenario_actions::delete(self)
+    }
+}
+
+impl ScenarioPage for JunctionVm {
+    fn binding(&self) -> Option<&CityBinding> {
+        self.binding.as_ref().filter(|_| self.offers_scenarios)
+    }
+
+    fn flush(&self) {
+        JunctionVm::flush(self);
+    }
+
+    fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool {
+        let Some(mut fresh) = self.open_design(id) else { return false };
+        if keep_choices {
+            // as a sync reload does: the part chosen stays chosen where the junction shown has it
+            fresh.select(self.core.read(|j| j.selected));
+        } else {
+            // another design the person asked for starts as a page opens: nothing chosen, the junction's own level
+            self.plan.set(false);
+        }
+        *self.kept_design.borrow_mut() = fresh.snapshot();
+        self.core.edit(|j| *j = fresh);
+        true
+    }
+
+    fn tell(&self, said: &Said) {
+        self.ports.announcer.say(&text::scenario_text(said, &self.i18n, self.units_now()));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -557,6 +675,161 @@ mod tests {
         assert_eq!(r.said.take(), ["Updated from another device."]);
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert!(r.said.take().is_empty(), "nothing differs now");
+    }
+
+    #[test]
+    fn a_sync_reloads_the_scenario_shown_and_falls_back_to_the_baseline_when_it_is_gone() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        r.vm.plan.set(true);
+        // another tab edits the scenario
+        let mut j = binding.junction_editor(Some(id)).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, imported + 1_000));
+        assert_eq!(binding.keep_junction_in(j.snapshot(), Some(id)), Ok(()));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(corner(&r), imported + 1_000, "the scenario shown, as the other tab left it");
+        assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
+        assert_eq!(corner(&r), imported + 1_000);
+        // (a refused undo still asks the keeper to write: that write is done before the other tab acts)
+        r.vm.flush();
+        // and then deletes it
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."));
+        assert_eq!(corner(&r), imported);
+        assert!(!r.vm.view_now().can_undo);
+        assert!(r.vm.plan.get_untracked(), "a fallback the person did not ask for keeps what they were looking at, as it keeps the part chosen");
+        hub::reset();
+    }
+
+    #[test]
+    fn an_edit_of_a_scenario_deleted_elsewhere_shows_the_baseline_says_so_and_leaves_the_storage_warning_for_real_failures() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        binding.act(Action::Delete(id)).unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(
+            r.said.take(),
+            ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."]
+        );
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!((corner(&r), kept_corner(&binding, None)), (imported, imported));
+        r.storage.refuse(crate::city::edits::EDITS_KEY);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 500)));
+        r.time.advance(1_000);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("This browser is not keeping your changes, so other pages will not see them."));
+    }
+
+    #[test]
+    fn an_action_whose_flush_finds_the_scenario_gone_stops_there_with_the_baseline_shown() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let actions: [(&str, fn(&JunctionVm) -> bool); 5] = [
+            ("switch", |vm| vm.switch_scenario(None)),
+            ("create", |vm| vm.create_scenario("Protected")),
+            ("duplicate", |vm| vm.duplicate_scenario("Copy")),
+            ("rename", |vm| vm.rename_scenario("Renamed")),
+            ("delete", |vm| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            let (r, binding) = city_rig();
+            let imported = corner(&r);
+            assert!(r.vm.create_scenario("Raised"));
+            let id = r.vm.scenario_state().active_now().unwrap();
+            let uid = r.vm.read(|j| j.current().arms[0].uid);
+            assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+            binding.act(Action::Delete(id)).unwrap();
+            r.said.take();
+            assert!(!action(&r.vm), "{what}: it stops once the flush found the scenario gone");
+            assert_eq!(
+                r.said.take(),
+                ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."],
+                "{what}"
+            );
+            assert_eq!(r.vm.scenario_state().refusal(), None, "{what}");
+            assert_eq!(r.vm.scenario_state().active_now(), None, "{what}");
+            assert!(binding.scenarios().is_empty(), "{what}");
+            assert_eq!((corner(&r), kept_corner(&binding, None)), (imported, imported), "{what}");
+        }
+    }
+
+    #[test]
+    fn a_scenario_deleted_elsewhere_while_only_a_part_was_chosen_in_it_says_no_change_was_lost() {
+        use crate::city::scenario::Action;
+        use crate::junction::model::Target;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        r.vm.select(Target::Arm(uid));
+        r.vm.select_relative(1);
+        assert!(!r.vm.redo());
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+    }
+
+    #[test]
+    fn the_baseline_shown_for_a_scenario_deleted_elsewhere_keeps_the_part_chosen() {
+        use crate::city::scenario::Action;
+        use crate::junction::model::Target;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[1].uid);
+        r.vm.select(Target::Corner(uid));
+        let corner_mm = r.vm.read(|j| j.current().arms[1].corner_mm);
+        assert!(r.vm.apply(|j| j.set_corner(uid, corner_mm + 1_000)));
+        binding.act(Action::Delete(id)).unwrap();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.vm.read(|j| j.selected), Target::Corner(uid), "the corner is still chosen in the baseline, which has it");
+    }
+
+    #[test]
+    fn shown_read_only_the_scenarios_can_be_looked_at_and_no_action_on_them_is_taken() {
+        use crate::shared::ports::{Ports, Storage, test_ports};
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::shared::scoped::ScopedStorage;
+        let (ports, said, root) = test_ports();
+        let writable: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1"));
+        let node = CityStore::sample(writable.clone()).open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let id = CityStore::sample(writable).change_junction_scenarios(node, |s, base| s.create("Raised", base.clone())).unwrap();
+        let storage: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1").only_to_read());
+        let store = CityStore::sample(storage.clone());
+        let junction = store.open().junction_editor(node, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Junction(node) };
+        let vm = JunctionVm::new(Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone()));
+        assert!(vm.switch_scenario(Some(id)), "looking at a scenario is choosing, which goes on");
+        said.take();
+        let actions: [(&str, &dyn Fn() -> bool); 3] =
+            [("create", &|| vm.create_scenario("Protected")), ("rename", &|| vm.rename_scenario("Renamed")), ("delete", &|| vm.delete_scenario())];
+        for (what, action) in actions {
+            assert!(!action(), "{what}");
+            assert_eq!(said.take(), ["This design is open read-only: nothing can be changed."], "{what}");
+        }
+        assert_eq!(binding.scenarios(), [(id, "Raised".to_string())]);
     }
 
     #[test]
@@ -627,6 +900,139 @@ mod tests {
         let junction = store.open().junction_editor(node, 0).unwrap();
         let binding = CityBinding { store, place: Place::Junction(node) };
         (Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    /// The first arm's corner radius as the editor holds it, and as the city keeps design `scenario`.
+    fn corner(r: &Rig) -> i32 {
+        r.vm.read(|j| j.current().arms[0].corner_mm)
+    }
+
+    fn kept_corner(binding: &CityBinding, scenario: Option<u32>) -> i32 {
+        binding.junction_editor(scenario).unwrap().current().arms[0].corner_mm
+    }
+
+    fn last_said(r: &Rig) -> String {
+        r.said.take().pop().unwrap_or_default()
+    }
+
+    #[test]
+    fn two_named_scenarios_are_made_and_switching_between_them_and_the_baseline_loses_nothing() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.scenarios_offered());
+        assert_eq!(r.vm.scenario_state().active_now(), None, "the page opens on the baseline");
+        let baseline = corner(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        assert_eq!(last_said(&r), "Scenario “Wider bike lane” made from the baseline. Now editing it.");
+        let wider = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, baseline + 1_000)));
+        assert!(r.vm.create_scenario("Parking kept"));
+        let parking = r.vm.scenario_state().active_now().unwrap();
+        assert_eq!(corner(&r), baseline, "a new scenario starts as the baseline");
+        assert!(r.vm.switch_scenario(Some(wider)));
+        assert_eq!(last_said(&r), "Now showing scenario “Wider bike lane”.");
+        assert_eq!(corner(&r), baseline + 1_000);
+        assert!(r.vm.switch_scenario(None));
+        assert_eq!(corner(&r), baseline);
+        assert!(r.vm.switch_scenario(Some(parking)));
+        r.vm.flush();
+        assert_eq!(
+            (kept_corner(&binding, None), kept_corner(&binding, Some(wider)), kept_corner(&binding, Some(parking))),
+            (baseline, baseline + 1_000, baseline)
+        );
+        assert_eq!(binding.store.open().view(0).edited, 0, "the map reads the baseline");
+    }
+
+    #[test]
+    fn right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        let imported = corner(&r);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 500)), "an edit of the baseline");
+        assert!(r.vm.create_scenario("Raised"));
+        let raised = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        assert!(r.vm.create_scenario("Protected"));
+        let protected = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_500)));
+        let (ports, _, _, _) = test_ports_with_time();
+        let again = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), binding.junction_editor(None).unwrap(), Some(binding.clone()));
+        for vm in [&r.vm, &again] {
+            assert!(vm.switch_scenario(Some(raised)));
+            assert!(!vm.view_now().can_undo, "nothing was done in it since it was shown");
+            assert!(!vm.undo());
+            assert_eq!(vm.read(|j| j.current().arms[0].corner_mm), imported + 1_000);
+            vm.flush();
+        }
+        let kept = |s| kept_corner(&binding, s);
+        assert_eq!((kept(None), kept(Some(raised)), kept(Some(protected))), (imported + 500, imported + 1_000, imported + 1_500));
+        assert!(r.vm.reset());
+        r.vm.flush();
+        assert_eq!(
+            (kept(None), kept(Some(raised)), kept(Some(protected))),
+            (imported + 500, imported, imported + 1_500),
+            "start over: the scenario shown only"
+        );
+        assert!(r.vm.undo(), "and it can be undone");
+        r.vm.flush();
+        assert_eq!(kept(Some(raised)), imported + 1_000);
+        assert!(!r.vm.undo());
+    }
+
+    #[test]
+    fn start_over_in_a_scenario_made_from_a_junction_never_edited_can_be_undone() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        assert!(r.vm.reset());
+        assert_eq!(corner(&r), imported);
+        assert!(r.vm.undo(), "the edit comes back");
+        r.vm.flush();
+        assert_eq!(kept_corner(&binding, Some(id)), imported + 1_000);
+    }
+
+    #[test]
+    fn an_edit_in_a_scenario_changes_only_it_and_can_be_undone() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let baseline = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, baseline + 1_000)));
+        r.time.advance(1_000);
+        assert_eq!((kept_corner(&binding, Some(id)), kept_corner(&binding, None)), (baseline + 1_000, baseline));
+        assert!(r.vm.undo());
+        r.vm.flush();
+        assert_eq!(kept_corner(&binding, Some(id)), baseline);
+        assert!(r.vm.redo());
+        r.vm.flush();
+        assert_eq!((kept_corner(&binding, Some(id)), kept_corner(&binding, None)), (baseline + 1_000, baseline));
+    }
+
+    #[test]
+    fn a_junction_scenario_is_duplicated_renamed_and_deleted_and_a_refusal_is_said_in_the_language_of_the_page() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Raised"));
+        assert!(r.vm.duplicate_scenario("Raised, protected"));
+        assert!(r.vm.rename_scenario("Protected"));
+        assert_eq!(last_said(&r), "Scenario “Raised, protected” renamed “Protected”.");
+        r.vm.i18n().set(crate::shared::i18n::Locale::FrCa);
+        assert!(!r.vm.rename_scenario("raised"));
+        assert_eq!(last_said(&r), "Un autre scénario s’appelle déjà «\u{a0}raised\u{a0}».");
+        assert!(!r.vm.delete_scenario());
+        assert_eq!(last_said(&r), "Supprimer le scénario «\u{a0}Protected\u{a0}»? Appuyez sur Confirmer la suppression pour le supprimer.");
+        assert!(r.vm.delete_scenario());
+        assert_eq!(last_said(&r), "Scénario «\u{a0}Protected\u{a0}» supprimé. La référence est maintenant affichée.");
+        assert_eq!(binding.scenarios().into_iter().map(|(_, n)| n).collect::<Vec<_>>(), ["Raised"]);
+        assert!(!rig(0).vm.scenarios_offered(), "a sample junction outside the city keeps none");
     }
 
     #[test]

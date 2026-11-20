@@ -325,6 +325,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Archive | Design archive / Export design / Import design | Archive de conception / Exporter la conception / Importer une conception | `conception` for design work; `lieu` for a place. |
 | Archive | Keep mine / Use the archive's | Garder les miens / Utiliser ceux de l’archive | Conflict choice. |
 | Every page of a project | Read-only (a design opened to look at, not change) | Lecture seule | The tag in the top bar; the sentences say `aménagement` for the design (`Cet aménagement est ouvert en lecture seule`), as the street notes do. |
+| Street and junction pages | Scenario / Baseline | Scénario / Référence | A named alternative design of a place, beside its baseline (the design the map shows). |
+| Street and junction pages | Design shown | Conception affichée | As the archive's `conception`. |
+| Street and junction pages | Duplicate / Rename | Dupliquer / Renommer |  |
 | Sync | merged (your work with your account) | fusionné avec votre compte | `0` and `1` are singular: `1 lieu envoyé`, `0 lieu reçu`. |
 | Home page | project | projet | A named container of the person's work, tied to one area. |
 | Home page | Your projects / New project / First project | Vos projets / Nouveau projet / Premier projet |  |

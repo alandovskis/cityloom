@@ -54,6 +54,7 @@ impl Junction {
             region: 0,
             states: Vec::new(),
             cursor: 0,
+            floor: None,
             selected: Target::None,
             refusal: None,
             refusal_arm: None,
@@ -94,6 +95,7 @@ impl Junction {
             source: Vec::new(),
         }];
         self.cursor = 0;
+        self.floor = None;
         self.selected = Target::None;
     }
 

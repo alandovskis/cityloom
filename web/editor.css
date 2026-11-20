@@ -184,6 +184,119 @@
 .btns {
   display: contents;
 }
+/* A place's scenarios (#190): which design is shown, said in words as well as by the accent edge a scenario gets,
+   and the actions on them under a disclosure. */
+.scenario-slot:empty {
+  display: none;
+}
+/* A width of its own in the head's row (shrinking to the window), so that a longer label, Delete becoming Confirm
+   delete, wraps inside it and never moves it or what is beside it. */
+.scenario-slot {
+  flex: 0 1 30rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.scenarios {
+  display: grid;
+  /* a track that may be narrower than its content: the menu holds the names, and a long one must not widen it */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.scenario-h {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.scenario-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.scenario-row label,
+.scenario-manage label {
+  font-weight: 600;
+}
+#scenario-pick,
+#scenario-name {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+#scenario-name {
+  width: 100%;
+}
+#scenario-pick:focus-visible,
+#scenario-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* A scenario's name is the person's: one with no spaces still wraps, so a narrow window never scrolls sideways
+   (WCAG 1.4.10), as `.path-here` does. */
+.scenario-mode,
+.scenario-refusal {
+  overflow-wrap: anywhere;
+}
+.scenario-mode {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 3px solid var(--field-line);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.scenario-mode.in-scenario {
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+.scenario-manage[open] {
+  display: grid;
+  gap: 6px;
+}
+#scenario-name[aria-invalid="true"] {
+  border-color: var(--warn);
+}
+.scenario-refusal {
+  margin: 0;
+  color: var(--warn);
+  font-size: 13px;
+}
+.scenario-refusal:empty {
+  display: none;
+}
+.scenario-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* Room of its own above the buttons (the open details' gap does not reach its content): more than a focus ring
+     reaches (2 px outline, 2 px offset), so it never draws over the refusal above. */
+  margin-top: 8px;
+}
+.scenario-actions .btn {
+  min-height: 36px;
+}
+/* Delete and Confirm delete share one cell: the button keeps the width of the longer label in any language. */
+.swap {
+  display: inline-grid;
+}
+.swap > span {
+  grid-area: 1 / 1;
+}
+.swap > .swap-off {
+  visibility: hidden;
+}
 .stuck {
   max-width: 56ch;
   padding: 24px 28px;
@@ -1635,7 +1748,8 @@ svg pattern circle {
   padding: 12px 0;
 }
 .standards-manage > summary,
-.standards-import-open > summary {
+.standards-import-open > summary,
+.scenario-manage > summary {
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
@@ -3445,6 +3559,7 @@ svg pattern circle {
   .bar,
   .panel,
   .tools,
+  .scenarios,
   .welcome,
   .clock,
   .statusbar {
