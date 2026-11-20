@@ -265,6 +265,14 @@ impl StreetVm {
         });
     }
 
+    /// The keys the plan's point answers to beyond a slider's own (`keys::on_plan`), as `aria-keyshortcuts` names them:
+    /// shown read-only, only those that pick, since the Alt+arrows that move a boundary are always refused there.
+    pub fn plan_shortcuts(&self) -> &'static str {
+        const PICK: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape";
+        const ALL: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight";
+        if self.read_only() { PICK } else { ALL }
+    }
+
     /// What a key on the plan's point does (`keys::on_plan`).
     pub fn plan_key(&self, k: PlanKey) {
         let length = self.view_now().plan.length_mm.unwrap_or(0);

@@ -241,7 +241,11 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(any-pointer: coarse)", "a CSS media query the street plan asks for its target size (street/view/plan/component.rs), not words"),
     (
         "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight",
-        "the keys of the street plan's point as aria-keyshortcuts names them (street/view/plan/component.rs), not words",
+        "the keys of the street plan's point as aria-keyshortcuts names them (street/vm/plan.rs, plan_shortcuts), not words",
+    ),
+    (
+        "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape",
+        "the same keys on a street shown read-only, without the boundary keys (street/vm/plan.rs, plan_shortcuts), not words",
     ),
     ("plan-thing plan-chosen", "two CSS classes of the chosen thing on the street's plan (street/view/plan/mod.rs)"),
     ("OpenStreetMap", "a provider's brand name, not translated"),

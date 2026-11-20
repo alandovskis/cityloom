@@ -1889,6 +1889,27 @@ fn the_plan_mounts_in_place_of_the_zone_strip() {
     assert!(!page.contains("ZoneStrip"));
 }
 
+/// The point's `aria-keyshortcuts` name only keys that do something: on a street shown read-only the Alt+arrows that
+/// move a boundary are always refused, so they are not named; picking keys are.
+#[test]
+fn the_plan_point_names_the_boundary_keys_only_where_a_boundary_may_move() {
+    let keys = |s: &Rc<StreetVm>| {
+        let h = plan_html(s);
+        let point = plan_tag(&h, "plan-point");
+        let at = point.find("aria-keyshortcuts=\"").expect("the point names its keys") + "aria-keyshortcuts=\"".len();
+        point[at..at + point[at..].find('"').unwrap()].split(' ').map(str::to_string).collect::<Vec<_>>()
+    };
+    let editable = keys(&zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En));
+    for k in ["Alt+ArrowLeft", "Alt+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Shift+ArrowRight", "Enter", "Escape"] {
+        assert!(editable.iter().any(|e| e == k), "{k} in {editable:?}");
+    }
+    let read_only = keys(&read_only_street());
+    assert!(read_only.iter().all(|k| !k.contains("Alt+")), "no boundary key read-only: {read_only:?}");
+    for k in ["Shift+ArrowLeft", "Shift+ArrowRight", "Shift+PageUp", "Shift+PageDown", "Shift+Home", "Shift+End", "Enter", "Escape"] {
+        assert!(read_only.iter().any(|e| e == k), "{k} still picks read-only: {read_only:?}");
+    }
+}
+
 #[test]
 fn the_plan_point_is_one_tab_stop_with_slider_semantics() {
     let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);

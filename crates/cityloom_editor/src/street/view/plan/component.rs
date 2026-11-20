@@ -17,9 +17,6 @@ use crate::street::vm::plan::{PlanGesture, PlanPress};
 use crate::street::vm::text::{picked_said, plan_label, stretch_label};
 use crate::street::vm::watch::SheetWatch;
 
-/// The keys the point answers to beyond a slider's own (`keys::on_plan`), as `aria-keyshortcuts` names them.
-const SHORTCUTS: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight";
-
 /// The room the plan's box keeps either side of the plan (its CSS padding): half the point's 24 px, so that the point's
 /// focus ring is seen whole at either end of the street.
 #[cfg(target_arch = "wasm32")]
@@ -212,7 +209,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
                         aria-valuemax=move || metres(length())
                         aria-valuenow=move || metres(vm.with_value(|vm| vm.plan_point()))
                         aria-valuetext=move || Some(vm.with_value(|vm| vm.plan_point_text())).filter(|t| !t.is_empty())
-                        aria-keyshortcuts=SHORTCUTS
+                        aria-keyshortcuts=vm.with_value(|vm| vm.plan_shortcuts())
                         style:left=move || format!("{}px", layout(vm.with_value(|vm| vm.plan_point())).1)
                         on:keydown=on_key
                     ></div>
