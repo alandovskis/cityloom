@@ -1,7 +1,9 @@
-//! The picked stretch's ends as fields, on the details panel's Street level: a way to pick part of a run with a single
-//! pointer, without dragging along the plan (WCAG 2.5.7), and to type a stretch exactly. Positions count from the
-//! plan's left end, in the page's units. The view forwards: a change in either field (Enter, or leaving it changed) goes
-//! to the view-model's `pick_typed`, which says what was picked or why not.
+//! The picked stretch's ends as fields, and the Move to field of a boundary a click on the plan chose, on the details
+//! panel's Street level: a way to pick part of a run and to move a boundary with a single pointer, without dragging
+//! along the plan (WCAG 2.5.7), and to type either exactly. Positions count from the plan's left end, in the page's
+//! units. The view forwards: a change in a pick field (Enter, or leaving it changed) goes to the view-model's
+//! `pick_typed`, Enter in the Move to field to `move_chosen_boundary` and Escape there to `clear_boundary`; each says
+//! what it did or why not.
 
 use std::rc::Rc;
 
@@ -31,7 +33,41 @@ pub fn PickFields(vm: Rc<StreetVm>) -> impl IntoView {
             b.set_value(&y);
         }
     };
+    let boundary_to = move || vm.with_value(|vm| vm.boundary_to_shown());
+    let boundary_value = move || boundary_to().unwrap_or_default();
+    let on_boundary_key = move |e: leptos::ev::KeyboardEvent| match e.key().as_str() {
+        "Enter" => {
+            e.prevent_default();
+            let input = event_target::<leptos::web_sys::HtmlInputElement>(&e);
+            vm.with_value(|vm| vm.move_chosen_boundary(&input.value()));
+            // The field shows where the boundary now is, whether it moved or not.
+            input.set_value(&untrack(boundary_value));
+        }
+        "Escape" => {
+            e.prevent_default();
+            vm.with_value(|vm| vm.clear_boundary());
+            // The field goes with the choice: the keys go back to the plan's point.
+            crate::street::view::focus_later("plan-point");
+        }
+        _ => {}
+    };
     view! {
+        <Show when=move || boundary_to().is_some()>
+            <div class="zone-tools boundary-fields">
+                <div class="zone-tool">
+                    <label for="boundary-to">{move || unit_text("st-boundary-to")}</label>
+                    <input
+                        id="boundary-to"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        value=boundary_value
+                        prop:value=boundary_value
+                        on:keydown=on_boundary_key
+                    />
+                </div>
+            </div>
+        </Show>
         <Show when=move || ends().is_some()>
             <div class="zone-tools pick-fields" role="group" aria-label=move || text("st-pick-fields")>
                 <div class="zone-tool">

@@ -370,6 +370,10 @@ st-plan-point-label = Point le long de la rue
 st-pick-fields = Tronçon choisi
 st-pick-from = De ({ $unit })
 st-pick-to = À ({ $unit })
+# Une limite choisie d’un clic sur le plan, à déplacer en saisissant où elle va (src/street/vm/plan.rs) ; `at` depuis
+# l’extrémité gauche du plan. L’étiquette du champ (src/street/view/plan/fields.rs).
+boundary-chosen = Le changement à { $at }; saisissez où le déplacer.
+st-boundary-to = Déplacer le changement à ({ $unit })
 stretches-elsewhere = Les changements le long de cette rue ont été tracés lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }

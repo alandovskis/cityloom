@@ -618,6 +618,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("zones-slot", "the id of the element the zone strip is mounted in"),
     ("speed-slot", "the id of the element the Speed limit control is mounted in"),
     ("pick-slot", "the id of the element the picked stretch's fields are mounted in"),
+    ("plan-point", "the id of the street plan's keyboard point, where the focus goes back to (street/view/plan/fields.rs)"),
     ("panel-path-slot", "the id of the element the details panel's path is mounted in"),
     ("panel-path-current", "the id of the step of the details panel's path that is the level shown"),
     ("t-space", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),

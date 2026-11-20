@@ -879,6 +879,28 @@ test.describe("changing part of a street", () => {
     await expect(planBoundaries(page)).toHaveCount(1);
   });
 
+  test("a boundary clicked on the plan is moved by typing where it goes, with no drag", async ({ page }) => {
+    await makeStretches(page, 2);
+    const line = page.locator("#plan .plan-boundary-line");
+    const before = await line.getAttribute("x1");
+    const box = (await line.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(live(page)).toHaveText(/^The change at [\d.]+ m; type where it goes\.$/);
+    await expect(picked(page)).toHaveText(/^The whole street/);
+    const field = page.locator("#boundary-to");
+    const at = Number(await field.inputValue());
+    await field.click();
+    await field.fill(String(at + 3));
+    await page.keyboard.press("Enter");
+    await expect(line).not.toHaveAttribute("x1", before!);
+    await expect(live(page)).toHaveText(new RegExp(`Move a change along the street to ${at + 3}\\.0 m`));
+    await expect(field).toHaveValue(`${at + 3}.0`);
+    await page.keyboard.press("Escape");
+    await expect(field).toHaveCount(0);
+    await page.locator("#undo").click();
+    await expect(line).toHaveAttribute("x1", before!);
+  });
+
   test("Escape cancels a drag", async ({ page }) => {
     await makeStretches(page, 2);
     const line = page.locator("#plan .plan-boundary-line");

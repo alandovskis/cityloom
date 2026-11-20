@@ -370,6 +370,10 @@ st-plan-point-label = Point along the street
 st-pick-fields = Picked stretch
 st-pick-from = From ({ $unit })
 st-pick-to = To ({ $unit })
+# A boundary chosen with a click on the plan, to be moved by typing where it goes (src/street/vm/plan.rs); `at` from the
+# plan's left end. The field's label (src/street/view/plan/fields.rs).
+boundary-chosen = The change at { $at }; type where it goes.
+st-boundary-to = Move the change to ({ $unit })
 stretches-elsewhere = The changes along this street were drawn when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }

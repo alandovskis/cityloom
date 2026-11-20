@@ -1974,6 +1974,32 @@ fn the_picked_stretch_s_ends_are_fields_on_the_street_level_in_the_page_s_langua
 }
 
 #[test]
+fn a_boundary_chosen_on_the_plan_has_a_move_to_field_on_the_street_level() {
+    use crate::street::vm::plan::PlanPress;
+    let html = |s: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::plan::PickFields vm=s.clone()/> });
+    // Two runs: an edit of a stretch from 10 m to the end makes a boundary at 10 m.
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    assert!(s.pick_stretch(10_000, 40_000));
+    let uid = s.view_now().segments[0].uid;
+    assert!(s.apply(|e| e.set_width(uid, 2_500)));
+    assert!(!html(&s).contains("boundary-to"), "nothing chosen, no field");
+    let zone = s.view_now().plan.boundaries[0].zone;
+    let g = s.plan_press(PlanPress::Boundary { zone }, 100.0);
+    s.plan_release(g, 10_000);
+    let h = html(&s);
+    assert!(plan_tag(&h, "boundary-to").contains("value=\"10.0\""), "{h}");
+    assert!(h.contains("for=\"boundary-to\">Move the change to (m)</label>"), "{h}");
+    let fr = zoned_street(&[0], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 40_000));
+    let uid = fr.view_now().segments[0].uid;
+    assert!(fr.apply(|e| e.set_width(uid, 2_500)));
+    let g = fr.plan_press(PlanPress::Boundary { zone }, 100.0);
+    fr.plan_release(g, 10_000);
+    let h = html(&fr);
+    assert!(h.contains(">Déplacer le changement à (m)</label>") && plan_tag(&h, "boundary-to").contains("value=\"10,0\""), "{h}");
+}
+
+#[test]
 fn the_plan_follows_the_language() {
     let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
     let h = plan_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
