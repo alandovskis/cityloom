@@ -385,12 +385,15 @@ impl StreetVm {
     }
 
     /// Moves the keyboard point to `to_mm`, picking from where the extension started once that is at least
-    /// `MIN_ZONE_MM` away (until then nothing is picked or said: the keys are on their way).
+    /// `MIN_ZONE_MM` away or reaches from end to end (until then nothing is picked or said: the keys are on their way).
     fn extend_pick(&self, to_mm: i32) {
         let from = self.extend_from.get().unwrap_or_else(|| self.point.get_untracked());
         self.extend_from.set(Some(from));
         self.point.set(to_mm);
-        if (to_mm - from).abs() < MIN_ZONE_MM || !self.pick_between(from, to_mm) {
+        let length = self.view_now().plan.length_mm.unwrap_or(0);
+        // End to end is the whole street, even on a street shorter than the shortest stretch.
+        let whole = from.min(to_mm) <= 0 && from.max(to_mm) >= length;
+        if ((to_mm - from).abs() < MIN_ZONE_MM && !whole) || !self.pick_between(from, to_mm) {
             self.point_alone.set(true);
         }
     }
@@ -829,6 +832,23 @@ mod pick_tests {
         r.vm.plan_release(g, 0);
         assert_eq!(r.vm.picked(), Some((0, 36_000)));
         assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn on_a_street_shorter_than_the_shortest_stretch_its_full_length_picks_the_whole_street() {
+        // 4 m long: no stretch of it can be picked, but its whole length is the whole street.
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&sample(), &sample(), 0).with_frame(Some(ZoneFrame { length_mm: 4_000, from_end: ZoneEnd::First }));
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said };
+        drag(&r, PlanPress::Street { at_mm: 0 }, 0, 4_000);
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."], "a drag over its full length");
+        r.vm.plan_key(PlanKey::To(false));
+        r.vm.plan_key(PlanKey::ExtendTo(true));
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."], "Shift+End from its left end");
+        assert_eq!(r.vm.picked(), None);
+        // Its ends are within the shortest stretch of anywhere on it: a drag over part of it snaps to them.
+        drag(&r, PlanPress::Street { at_mm: 1_000 }, 1_000, 3_000);
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."]);
     }
 
     #[test]

@@ -109,7 +109,8 @@ impl Editor {
             (first.map_or(0, |r| r.from_mm), last.map_or(length, |r| r.to_mm))
         } else {
             let (lo, hi) = self.snap_to_runs(lo, hi, length);
-            if hi - lo < MIN_ZONE_MM {
+            // End to end is the whole street, even on a street shorter than the shortest stretch.
+            if hi - lo < MIN_ZONE_MM && !(lo <= 0 && hi >= length) {
                 return Err(PickRefusal::TooShort);
             }
             (lo, hi)
