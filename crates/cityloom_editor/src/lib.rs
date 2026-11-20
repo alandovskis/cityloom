@@ -211,6 +211,9 @@ mod layout_guard;
 mod atlas_contract;
 
 #[cfg(test)]
+mod zone_guard;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use shared::i18n::Locale;

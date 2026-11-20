@@ -1468,7 +1468,7 @@ mod report {
     }
 
     #[test]
-    fn a_zoned_street_says_it_is_drawn_at_its_first_zone() {
+    fn a_street_that_changes_along_its_length_says_it_is_drawn_at_its_first_end() {
         let (vm, _, _, storage) = sample_in(Locale::En);
         let street = a_street(&vm);
         widen_street(&storage, street, 300);
@@ -1476,9 +1476,9 @@ mod report {
         let mut view = city.view(0);
         view.edges.iter_mut().find(|e| e.uid == street).unwrap().zones = 3;
         let (pages, _) = crate::map::vm::report::place_pages(&city, &view, 0, &vm.i18n(), vm.units());
-        assert!(texts(&pages[0]).join("\n").contains("drawn at its first zone"));
+        assert!(texts(&pages[0]).join("\n").contains("This street changes along its length. The figures show it at its first end."));
         let (pages, _) = crate::map::vm::report::place_pages(&city, &city.view(0), 0, &vm.i18n(), vm.units());
-        assert!(!texts(&pages[0]).join("\n").contains("first zone"));
+        assert!(!texts(&pages[0]).join("\n").contains("changes along its length"));
     }
 
     #[test]

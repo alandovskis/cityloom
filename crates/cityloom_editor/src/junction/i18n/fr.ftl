@@ -144,7 +144,7 @@ jn-check-corner-room-bad = Le coin après { $arms } gruge le trottoir
 jn-check-transit = Les mesures pour le transport en commun fonctionnent
 jn-check-transit-ok = Chaque mesure a ce qu’il lui faut
 jn-check-approach = Approches
-jn-check-approach-ok = Chaque zone d’extrémité dépasse sa ligne d’arrêt et sa transition tient
+jn-check-approach-ok = Chaque tronçon d’extrémité dépasse sa ligne d’arrêt et sa transition tient
 jn-check-approach-bad = { $problems }
 jn-check-stop-clear = Arrêts d’autobus dégagés de l’intersection
 jn-check-stop-clear-ok = Chaque arrêt d’autobus est dégagé de l’intersection.
@@ -166,7 +166,7 @@ jn-stop-inside = L’arrêt ({ $kind }) sur { $arm } empiète sur l’intersecti
 jn-stop-turn-only = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, qui ne permet que de tourner { $turn } : un autobus qui poursuit sa route doit changer de voie devant la circulation.
 jn-stop-shared-turn = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, partagée avec les virages { $turn } : les voitures qui tournent font la file derrière l’autobus à l’arrêt.
 jn-problem-stop-twice = { $arm } : la rue a déjà un arrêt ici; gardez soit la mesure ({ $measure }), soit l’arrêt de la rue, pas les deux.
-jn-approach-short = La zone d’extrémité de { $arm } finit à { $reach } du centre, avant les { $need } que demandent sa ligne d’arrêt et ses flèches.
+jn-approach-short = Le tronçon d’extrémité de { $arm } finit à { $reach } du centre, avant les { $need } que demandent sa ligne d’arrêt et ses flèches.
 jn-approach-room = La transition sur { $arm } demande { $need }, mais n’en a que { $room }.
 jn-approach-drop = Une voie sur { $arm } se termine sans voie voisine où s’insérer.
 jn-problem-offset-parking = { $arm } : une voie décalée de dépassement de file a besoin d’un stationnement le long de la bordure
@@ -208,16 +208,15 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
 }
+# `stretch` est le tronçon de l’autre côté de la limite du tronçon d’extrémité, un stretch-mid (« de 49 m à 82 m ») compté depuis la première extrémité de la rue (src/street/model/beyond.rs).
 jn-sel-arm-approach = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
-}. Sa zone d’extrémité va jusqu’à { $reach } du centre, puis une transition de { $length }. Zone suivante : { $zone }.
+}. Son tronçon d’extrémité va jusqu’à { $reach } du centre, puis une transition de { $length }. Tronçon suivant : { $stretch }.
 jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
-}. Sa zone d’extrémité va jusqu’à { $reach } du centre. Zone suivante : { $zone }.
-# La zone de l’autre côté de la limite d’une zone d’extrémité, par son numéro depuis l’extrémité d’ancrage de la rue (src/street/model/beyond.rs).
-zone-unnamed-mid = zone { $n }
+}. Son tronçon d’extrémité va jusqu’à { $reach } du centre. Tronçon suivant : { $stretch }.
 jn-side-left = à gauche vu du centre
 jn-side-right = à droite vu du centre
 jn-sel-arm-stop = { $kind } { $side }, à { $at } du centre, dans la voie { $n } sur { $of }, qui permet { $uses }.

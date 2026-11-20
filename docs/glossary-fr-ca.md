@@ -250,9 +250,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | allowed / not allowed (a turn) | permis / interdit |  |
 | Junction | add / remove (at the end of a history label) | ajout / retrait | Nouns, as on the street page. |
 | Junction | approach measure | mesure d’approche |  |
-| Junction | end zone (the street's zone at the junction, drawn to its boundary) | zone d’extrémité | `Chaque zone d’extrémité dépasse sa ligne d’arrêt`. |
-| Junction | Approaches (the check on the end zones and their transitions) | Approches | `jn-check-approach`. Not the inspector’s `À l’approche` (the transit measures’ list, `mesure d’approche`): that one is about where on the street a measure stands, this check is about whether the end zone holds the stop line, the arrows and the transition. |
-| Junction | next zone (the zone across the end zone's boundary, in the arm's sentence) | zone suivante | `Zone suivante : Zone 2`. |
+| Junction | end stretch (the street's stretch at the junction, drawn to its boundary) | tronçon d’extrémité | `Chaque tronçon d’extrémité dépasse sa ligne d’arrêt`; masculine: `Son tronçon d’extrémité va jusqu’à 20 m du centre`. |
+| Junction | Approaches (the check on the end stretches and their transitions) | Approches | `jn-check-approach`. Not the inspector’s `À l’approche` (the transit measures’ list, `mesure d’approche`): that one is about where on the street a measure stands, this check is about whether the end stretch holds the stop line, the arrows and the transition. |
+| Junction | next stretch (the stretch across the end stretch's boundary, in the arm's sentence, named by where it lies from the street's first end) | tronçon suivant | `Tronçon suivant : de 20 m à 100 m`. |
 | Junction | turn management | gestion des virages |  |
 | Junction | dead end | cul-de-sac |  |
 | Junction | Right-in/right-out | Entrée et sortie à droite seulement | As the Atlas name `L3`; shortened to `Entrée et sortie à droite` where it says why a turn is blocked. |

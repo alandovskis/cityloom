@@ -527,8 +527,8 @@ pub struct ArmView {
     /// the taper is (0 for a jog); both 0 without a beyond.
     pub beyond_reach_mm: i32,
     pub beyond_taper_mm: i32,
-    /// What the zone across is called; `None` without a beyond.
-    pub beyond_zone: Option<Said>,
+    /// The stretch across, named by where it lies from the plan's left end; `None` without a beyond.
+    pub beyond_stretch: Option<Said>,
     /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
     pub core_bike: Vec<Vec<Value>>,
     /// The flat top and the ramp of a raised table on this arm.
@@ -1323,7 +1323,7 @@ impl Junction {
                 beyond_problems: judged.map_or_else(Vec::new, |b| approach_problems(&arm_name(a), b, arrow_t + box_mm)),
                 beyond_reach_mm: judged.map_or(0, steady_mm),
                 beyond_taper_mm: judged.and_then(|b| b.taper.as_ref()).map_or(0, |t| t.to_mm - t.from_mm),
-                beyond_zone: judged.map(|b| b.zone.clone()),
+                beyond_stretch: judged.map(|b| b.stretch.clone()),
                 core_bike,
                 raised: table,
                 gaps,
@@ -4352,7 +4352,8 @@ mod tests {
     #[test]
     fn a_steady_part_exactly_as_long_as_the_arrows_need_passes() {
         let arrows = 23_000.0;
-        let beyond = |steady: i32| Beyond { boundary_mm: steady, next: Vec::new(), zone: Said::new("zone-unnamed-mid"), taper: None };
+        let beyond =
+            |steady: i32| Beyond { boundary_mm: steady, next: Vec::new(), stretch: crate::street::model::stretch_between(20_000, 100_000), taper: None };
         let arm = Said::new("city-name");
         let need = (arrows + ARROW_CLEAR_MM) as i32;
         assert!(approach_problems(&arm, &beyond(need), arrows).is_empty(), "equal passes");

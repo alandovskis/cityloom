@@ -44,10 +44,6 @@ map-stops = { $n ->
    *[other] { $n } arrêts d’autobus
 }
 map-programme = { $curb }, { $stops }
-map-zones = { $n ->
-    [one] { $n } zone
-   *[other] { $n } zones
-}
 map-junction-count = { $n ->
     [one] { $n } jonction
    *[other] { $n } jonctions
@@ -59,9 +55,7 @@ map-counts = { $junctions }, { $streets }
 # `control` est la signalisation de la jonction (un message jn-control-*), `streets` est map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
-map-street-sub-zones = { $ends } · { $width } · en { $zones }
 map-street-sub-programme = { $ends } · { $width } · { $programme }
-map-street-sub-zones-programme = { $ends } · { $width } · en { $zones } · { $programme }
 map-state-works = Fonctionne
 map-state-changed = Modifié
 map-state-bad = À corriger
@@ -69,9 +63,7 @@ map-state-bad = À corriger
 ## Comment un lieu est dit à un lecteur d’écran, phrase par phrase
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } de large.
-map-label-street-zones = { $street }, { $ends }, { $width } de large, en { $zones }.
 map-label-street-programme = { $street }, { $ends }, { $width } de large, { $programme }.
-map-label-street-zones-programme = { $street }, { $ends }, { $width } de large, en { $zones }, { $programme }.
 map-needs-attention = À corriger : { $failing }.
 map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.
@@ -296,7 +288,7 @@ map-report-place-before = Avant
 map-report-place-after = Après
 map-report-place-alt = { $which } : { $what }
 map-report-place-omitted = Quelques petites marques ne sont pas dessinées dans cette figure.
-map-report-place-zones = Cette rue compte { $zones } zones. Les figures la montrent dessinée à sa première zone.
+map-report-place-zones = Cette rue change le long de sa longueur. Les figures la montrent à sa première extrémité.
 map-report-place-street-missing = Cette rue n’a pas pu être lue; il n’y a donc rien de plus à montrer ici.
 map-report-place-width = Largeur : { $before } avant, { $after } après.
 map-report-place-class = Classe : { $before } avant, { $after } après.
@@ -308,7 +300,7 @@ map-report-place-pieces = Éléments : { $added ->
     [one] { $removed } retiré
    *[other] { $removed } retirés
 }.
-map-report-place-other = Le changement touche des détails que cette page ne résume pas, comme les zones, les usages en bordure de rue ou les arrêts. Les figures et les vérifications montrent le résultat.
+map-report-place-other = Le changement touche des détails que cette page ne résume pas, comme les changements le long de la rue, les usages en bordure de rue ou les arrêts. Les figures et les vérifications montrent le résultat.
 map-report-place-width-caption = Largeur par mode, avant et après
 map-report-place-col-mode = Mode
 map-report-place-share = { $length } ({ $pct } %)

@@ -107,11 +107,6 @@ fn streets(n: usize) -> Arg {
     Arg::Said(Box::new(Said::new("map-streets").with("n", Arg::Num(n as i64))))
 }
 
-/// A street's sentence with its zone count added when it has several (the `-zones` messages).
-fn with_zones(said: Said, n: usize) -> Said {
-    if n > 1 { said.with("zones", zones(n)) } else { said }
-}
-
 /// `2 curbside uses`, `1 stop`, as data to be worded.
 fn counted(key: &'static str, n: usize) -> Arg {
     Arg::Said(Box::new(Said::new(key).with("n", Arg::Num(n as i64))))
@@ -128,21 +123,13 @@ fn programme(e: &EdgeView) -> Option<Arg> {
     }
 }
 
-/// A street's sentence: the first of `keys` or the second (several zones), and the third or fourth (the
-/// `-programme` variants) when the street has curbside uses or stops.
-fn street_said(keys: [&'static str; 4], e: &EdgeView) -> Said {
-    let programme = programme(e);
-    let key = keys[usize::from(e.zones > 1) + 2 * usize::from(programme.is_some())];
-    let said = with_zones(Said::new(key), e.zones);
-    match programme {
-        Some(p) => said.with("programme", p),
-        None => said,
+/// A street's sentence: the first of `keys`, or the second (the `-programme` variant) when the street has curbside
+/// uses or stops. Where the street changes along its length is not counted: the map draws it.
+fn street_said(keys: [&'static str; 2], e: &EdgeView) -> Said {
+    match programme(e) {
+        Some(p) => Said::new(keys[1]).with("programme", p),
+        None => Said::new(keys[0]),
     }
-}
-
-/// `1 zone`, `3 zones`, as data to be worded.
-fn zones(n: usize) -> Arg {
-    Arg::Said(Box::new(Said::new("map-zones").with("n", Arg::Num(n as i64))))
 }
 
 /// What a city's place says, in the language of the page.
@@ -184,7 +171,7 @@ pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
 /// How a street on the map is told to a screen reader.
 pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
     let what = said::say(i18n, units, &{
-        street_said(["map-label-street", "map-label-street-zones", "map-label-street-programme", "map-label-street-zones-programme"], e)
+        street_said(["map-label-street", "map-label-street-programme"], e)
             .with("street", Arg::Said(Box::new(e.called.clone())))
             .with("ends", Arg::Said(Box::new(e.ends.clone())))
             .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale())))
@@ -582,7 +569,7 @@ impl MapVm {
             href: street_href(e.uid, project, read_only),
             hot: format!("s-{}", e.uid),
             name: e.called.clone(),
-            sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
+            sub: street_said(["map-street-sub", "map-street-sub-programme"], e)
                 .with("ends", Arg::Said(Box::new(e.ends.clone())))
                 .with("width", Arg::Text(self.units().length_in(e.row_mm, self.i18n.locale()))),
             tag: Self::tag(e.ok, e.edited),
@@ -3563,17 +3550,22 @@ mod tests {
     }
 
     #[test]
-    fn a_street_with_several_zones_says_how_many_in_its_label_and_row() {
+    fn a_street_that_changes_along_its_length_is_worded_as_one_that_does_not() {
         let vm = zoned_street_vm();
-        let uid = vm.view().edges[0].uid;
-        assert_eq!(vm.view().edges[0].zones, 2);
-        let label = vm.street_label(uid);
-        assert!(label.contains(", 2 zones.") && label.ends_with(" Opens the street cross-section."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones"));
+        let v = vm.view();
+        let e = &v.edges[0];
+        assert_eq!(e.zones, 2);
+        let width = Units::Metres.length(e.row_mm);
+        // Changed, as the street was divided by an edit; the rest is a plain street's.
+        assert_eq!(
+            vm.street_label(e.uid),
+            format!("{}, {}, {width} wide. Changed. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends))
+        );
+        assert_eq!(sub_of(&vm, &vm.street_rows()[0]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
         vm.i18n().set(Locale::FrCa);
-        let label = vm.street_label(uid);
-        assert!(label.contains(" de large, en 2 zones."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones"));
+        let label = vm.street_label(e.uid);
+        assert!(label.contains(" de large.") && !label.contains("zone"), "{label}");
+        assert!(!sub_of(&vm, &vm.street_rows()[0]).contains("zone"));
     }
 
     #[test]
@@ -3662,17 +3654,17 @@ mod tests {
     }
 
     #[test]
-    fn zones_and_programme_compose() {
+    fn a_street_that_changes_along_its_length_says_its_programme_and_no_count_of_stretches() {
         let vm = counted_vm(1, 0, 2);
         let e = &vm.view().edges[0];
         assert_eq!((e.zones, e.curb_count), (2, 1));
         let label = vm.street_label(e.uid);
-        assert!(label.contains(" wide, 2 zones, 1 curbside use."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones \u{b7} 1 curbside use"));
+        assert!(label.contains(" wide, 1 curbside use.") && !label.contains("zone"), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 1 curbside use"));
         vm.i18n().set(Locale::FrCa);
         let label = vm.street_label(e.uid);
-        assert!(label.contains(" de large, en 2 zones, 1 usage du bord de rue."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones \u{b7} 1 usage du bord de rue"));
+        assert!(label.contains(" de large, 1 usage du bord de rue.") && !label.contains("zone"), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 1 usage du bord de rue"));
     }
 }
 

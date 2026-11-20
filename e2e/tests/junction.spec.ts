@@ -1035,13 +1035,13 @@ test.describe("the approach of an arm whose street is divided", () => {
     await page.locator("#checks-passing").click(); // a passing check is folded until asked for
     await expect(checkRow(page)).toBeVisible();
     await expect(checkRow(page)).not.toHaveClass(/bad/);
-    await expect(checkRow(page)).toContainText("Every end zone reaches past its stop line");
+    await expect(checkRow(page)).toContainText("Every end stretch reaches past its stop line");
 
-    // The first press selects the street we divided: the arm says where its end zone reaches.
+    // The first press selects the street we divided: the arm says where its end stretch reaches.
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await expect(live(page)).toContainText(
-      /Its end zone reaches .* from the centre, then a transition of .* into Zone/,
+      /Its end stretch reaches .* from the centre, then a transition of .* into the stretch from .* to /,
     );
     const arm = (await live(page).innerText()).split(" (")[0];
 

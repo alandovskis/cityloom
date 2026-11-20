@@ -44,10 +44,6 @@ map-stops = { $n ->
    *[other] { $n } stops
 }
 map-programme = { $curb }, { $stops }
-map-zones = { $n ->
-    [one] { $n } zone
-   *[other] { $n } zones
-}
 map-junction-count = { $n ->
     [one] { $n } junction
    *[other] { $n } junctions
@@ -59,9 +55,7 @@ map-counts = { $junctions }, { $streets }
 # `control` is the junction's control (a jn-control-* message), `streets` is map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
-map-street-sub-zones = { $ends } · { $width } · { $zones }
 map-street-sub-programme = { $ends } · { $width } · { $programme }
-map-street-sub-zones-programme = { $ends } · { $width } · { $zones } · { $programme }
 map-state-works = Works
 map-state-changed = Changed
 map-state-bad = Needs attention
@@ -69,9 +63,7 @@ map-state-bad = Needs attention
 ## How a place is told to a screen reader, sentence by sentence
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } wide.
-map-label-street-zones = { $street }, { $ends }, { $width } wide, { $zones }.
 map-label-street-programme = { $street }, { $ends }, { $width } wide, { $programme }.
-map-label-street-zones-programme = { $street }, { $ends }, { $width } wide, { $zones }, { $programme }.
 map-needs-attention = Needs attention: { $failing }.
 map-changed = Changed.
 map-opens-junction = Opens the junction plan.
@@ -301,7 +293,7 @@ map-report-place-before = Before
 map-report-place-after = After
 map-report-place-alt = { $which }: { $what }
 map-report-place-omitted = Some small marks are not drawn in this figure.
-map-report-place-zones = This street has { $zones } zones. The figures show it drawn at its first zone.
+map-report-place-zones = This street changes along its length. The figures show it at its first end.
 map-report-place-street-missing = This street could not be read, so there is nothing more to show here.
 map-report-place-width = Width: { $before } before, { $after } after.
 map-report-place-class = Class: { $before } before, { $after } after.
@@ -313,7 +305,7 @@ map-report-place-pieces = Pieces: { $added ->
     [one] 1 removed
    *[other] { $removed } removed
 }.
-map-report-place-other = The change is to details this page does not summarise, such as zones, curbside uses or stops. The figures and the checks show the result.
+map-report-place-other = The change is to details this page does not summarise, such as where the street changes along its length, curbside uses or stops. The figures and the checks show the result.
 map-report-place-width-caption = Width by mode, before and after
 map-report-place-col-mode = Mode
 map-report-place-share = { $length } ({ $pct } %)

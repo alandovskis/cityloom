@@ -635,12 +635,12 @@ test.describe("the zone boundaries on the map", () => {
     expect(await ticks(page), "the band replaces the tick").toHaveLength(MERGED_BOUNDARIES + 1);
   });
 
-  test("the street's label gives its zone count", async ({ page }) => {
+  test("the street's label does not count where it changes", async ({ page }) => {
     const name = await splitOneStreet(page);
     await page.locator("#search").fill(name);
-    const row = page.locator("#search-results .place-row", { hasText: "2 zones" });
-    await expect(row.first()).toBeVisible();
-    await expect(row.first().locator("small")).toHaveText(/ \u00b7 2 zones$/);
+    const rows = page.locator("#search-results .place-row", { hasText: name });
+    await expect(rows.first()).toBeVisible();
+    await expect(rows.filter({ hasText: /zone/i })).toHaveCount(0);
   });
 
   test("a theme change keeps the ticks", async ({ page }) => {
