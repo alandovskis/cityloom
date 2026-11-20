@@ -333,6 +333,24 @@ fn signed_out_a_link_is_not_made_and_the_page_says_why() {
     assert!(vm.blocked().unwrap().starts_with("Connectez-vous pour partager ce projet"));
 }
 
+/// Only a server that says nobody is signed in makes the page say to sign in; one that could not answer (down, no
+/// network) lets a link be asked for, and the server's answer to that is said.
+#[test]
+fn a_server_that_cannot_say_who_is_signed_in_does_not_make_the_page_say_signed_out() {
+    for failure in [crate::shared::ports::AccountError::Unavailable, crate::shared::ports::AccountError::Refused] {
+        let (vm, t) = sharing(Locale::En);
+        vm.load_account();
+        assert!(t.account.answer(crate::shared::ports::AccountReply::Me(Err(failure))));
+        assert_eq!(vm.account(), Account::Unchecked, "{failure:?}");
+        assert_eq!(vm.blocked(), None, "{failure:?}");
+        vm.create();
+        assert!(matches!(t.share.calls().as_slice(), [ShareCall::Create(_)]), "{failure:?}: the server decides");
+        t.share.answer(ShareReply::Made(Err(ShareFailure::SignedOut)));
+        assert_eq!(vm.account(), Account::SignedOut);
+        assert!(vm.blocked().is_some());
+    }
+}
+
 #[test]
 fn signed_in_a_link_is_made_of_the_project_kept_here_said_and_focused() {
     let (vm, t) = sharing(Locale::En);
