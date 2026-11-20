@@ -49,20 +49,21 @@ impl CityBinding {
     }
 
     /// Writes a street as it now is back to the city, as scenario `scenario`'s design (`None`: the baseline, as
-    /// `keep_street`). Says whether it was kept.
-    pub fn keep_street_in(&self, street: Street, scenario: Option<u32>) -> bool {
-        let Place::Street(edge) = self.place else { return false };
+    /// `keep_street`). Why it was not kept: `Refused(Missing)` where the scenario is gone (deleted elsewhere), which is
+    /// no fault of the storage; `NotKept` otherwise.
+    pub fn keep_street_in(&self, street: Street, scenario: Option<u32>) -> Result<(), ScenarioFailure> {
+        let Place::Street(edge) = self.place else { return Err(ScenarioFailure::NotKept) };
         match scenario {
-            None => self.store.write_street(edge, street),
+            None => self.store.write_street(edge, street).then_some(()).ok_or(ScenarioFailure::NotKept),
             Some(id) => self.store.write_street_scenario(edge, id, street),
         }
     }
 
     /// The same for a junction.
-    pub fn keep_junction_in(&self, state: State, scenario: Option<u32>) -> bool {
-        let Place::Junction(node) = self.place else { return false };
+    pub fn keep_junction_in(&self, state: State, scenario: Option<u32>) -> Result<(), ScenarioFailure> {
+        let Place::Junction(node) = self.place else { return Err(ScenarioFailure::NotKept) };
         match scenario {
-            None => self.store.write_junction(node, state),
+            None => self.store.write_junction(node, state).then_some(()).ok_or(ScenarioFailure::NotKept),
             Some(id) => self.store.write_junction_scenario(node, id, state),
         }
     }
@@ -118,6 +119,29 @@ pub mod scenario_actions {
     use super::{Action, ScenarioFailure, ScenarioPage};
     use crate::city::scenario::{News, Refusal};
     use crate::shared::said::Said;
+
+    /// The scenario shown is gone (deleted elsewhere, found by a write or a sync): the baseline is shown, with a
+    /// history of its own, and the person is told, `edit_lost` where a change made to it could not be kept.
+    pub fn gone(page: &impl ScenarioPage, edit_lost: bool) {
+        refresh(page);
+        page.show_design(None);
+        page.scenario_state().show(None);
+        page.tell(&News::Gone { edit_lost }.said());
+    }
+
+    /// What a write of the design shown came to, for the page's keeper: false only where the storage failed (which
+    /// the keeper says once). A scenario gone since it was shown is no storage failure: the page shows the baseline and
+    /// says why (`gone`), and the keeper's one warning is kept for a real failure.
+    pub fn kept(page: &impl ScenarioPage, outcome: Result<(), ScenarioFailure>) -> bool {
+        match outcome {
+            Ok(()) => true,
+            Err(ScenarioFailure::NotKept) => false,
+            Err(ScenarioFailure::Refused(_)) => {
+                gone(page, true);
+                true
+            }
+        }
+    }
 
     /// Lists the place's scenarios as kept now.
     pub fn refresh(page: &impl ScenarioPage) {
@@ -312,14 +336,14 @@ mod tests {
                 let mut e = b.street_editor(Some(a)).unwrap();
                 let u = e.view().segments[0].uid;
                 e.nudge_width(u, -100);
-                assert!(b.keep_street_in(e.snapshot(), Some(a)));
+                assert_eq!(b.keep_street_in(e.snapshot(), Some(a)), Ok(()));
                 assert_eq!(b.street_editor(Some(a)).unwrap().snapshot(), e.snapshot());
                 assert_ne!(b.street_editor(None).unwrap().snapshot(), e.snapshot(), "the baseline is as it was");
-                assert!(b.junction_editor(None).is_none() && !b.keep_junction_in(crate::junction::model::Junction::new(0).snapshot(), Some(a)));
+                assert!(b.junction_editor(None).is_none() && b.keep_junction_in(crate::junction::model::Junction::new(0).snapshot(), Some(a)).is_err());
             } else {
                 let mut j = b.junction_editor(Some(a)).unwrap();
                 assert!(j.set_corner(j.current().arms[0].uid, 7_000));
-                assert!(b.keep_junction_in(j.snapshot(), Some(a)));
+                assert_eq!(b.keep_junction_in(j.snapshot(), Some(a)), Ok(()));
                 assert!(b.junction_editor(Some(a)).unwrap().drawn_as(&j));
                 assert!(!b.junction_editor(None).unwrap().drawn_as(&j), "the baseline is as it was");
                 assert!(b.street_editor(None).is_none());

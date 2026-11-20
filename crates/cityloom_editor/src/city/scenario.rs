@@ -70,6 +70,11 @@ pub enum News {
     AskDelete(String),
     /// The design now shown: a scenario by name, or the baseline.
     Showing(Option<String>),
+    /// The scenario shown was deleted elsewhere; the baseline is shown. `edit_lost`: a change made to it since could
+    /// not be kept.
+    Gone {
+        edit_lost: bool,
+    },
 }
 
 impl News {
@@ -83,6 +88,8 @@ impl News {
             News::AskDelete(name) => Said::new("scenario-delete-ask").with("name", text(name)),
             News::Showing(None) => Said::new("scenario-switched-baseline"),
             News::Showing(Some(name)) => Said::new("scenario-switched").with("name", text(name)),
+            News::Gone { edit_lost: false } => Said::new("scenario-gone"),
+            News::Gone { edit_lost: true } => Said::new("scenario-gone-edit"),
         }
     }
 }
