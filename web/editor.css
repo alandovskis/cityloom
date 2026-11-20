@@ -276,6 +276,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  /* Room of its own above the buttons (the open details' gap does not reach its content): more than a focus ring
+     reaches (2 px outline, 2 px offset), so it never draws over the refusal above. */
+  margin-top: 8px;
 }
 .scenario-actions .btn {
   min-height: 36px;
