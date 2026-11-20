@@ -1485,4 +1485,35 @@ mod tests {
         let label = iso_label(&v, &en(), Units::Metres);
         assert!(label.ends_with("A transition of 53 m leads into the stretch from 0.0 m to 50.0 m."), "{label}");
     }
+
+    /// The transition of a width change (no piece added or dropped) sits in the run farther from the street's anchored
+    /// end (`transition`'s `Host::Far`), and the 2.5D says it leads into the other run. So with the edited stretch in front
+    /// both times, it leads into the edited stretch on a street measured from its first end, where the edited stretch is
+    /// the nearer, and into the run beyond on one measured from its last end, where the edited stretch is the farther. The
+    /// two captures of Avenue Laurier Ouest (40.4 m, first end) and Avenue Henri-Julien (90.744 m, last end).
+    #[test]
+    fn a_width_transition_leads_into_the_run_nearer_the_anchored_end_whichever_end_that_is() {
+        use crate::street::model::{ZoneEnd, ZoneFrame};
+        let narrowed = |length_mm: i32, from_end: ZoneEnd, (a, b): (i32, i32)| {
+            let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm, from_end }));
+            let (a, b) = (e.anchored_mm(a), e.anchored_mm(b));
+            e.pick_stretch(a, b).expect("a stretch");
+            let uid = e.view().segments[0].uid;
+            assert!(e.nudge_width(uid, -100), "the first piece narrows in the picked stretch");
+            let v = e.view();
+            let joint = v.zones.joint.as_ref().expect("a boundary near the shown run");
+            let host_is_selected = joint.taper.as_ref().expect("a width change needs a transition").host_is_selected;
+            (iso_label(&v, &en(), Units::Metres), host_is_selected)
+        };
+
+        let (laurier, host_is_edited) = narrowed(40_400, ZoneEnd::First, (10_000, 25_000));
+        assert!(laurier.contains("the stretch from 10.0 m to 25.0 m is in front and the one from 25.0 m to 40.4 m beyond"), "{laurier}");
+        assert!(!host_is_edited, "the run beyond, farther from the first end, holds it");
+        assert!(laurier.ends_with(" leads into the stretch from 10.0 m to 25.0 m."), "{laurier}");
+
+        let (henri_julien, host_is_edited) = narrowed(90_744, ZoneEnd::Last, (0, 10_000));
+        assert!(henri_julien.contains("the stretch from 0.0 m to 10.0 m is in front and the one from 10.0 m to 90.7 m beyond"), "{henri_julien}");
+        assert!(host_is_edited, "the edited stretch, farther from the last end, holds it");
+        assert!(henri_julien.ends_with(" leads into the stretch from 10.0 m to 90.7 m."), "{henri_julien}");
+    }
 }
