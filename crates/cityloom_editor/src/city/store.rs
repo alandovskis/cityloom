@@ -1426,6 +1426,19 @@ mod tests {
     }
 
     #[test]
+    fn a_record_written_for_a_scenario_is_stamped_with_the_importer_as_a_baseline_write_is() {
+        let (store, storage) = store();
+        let id = store.change_street_scenarios(1, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        let stamp = || document(&storage).streets.values().next().unwrap().import;
+        assert_eq!(stamp(), store.importer(), "made by a scenario action, not stale");
+        assert_eq!(store.write_street_scenario(1, id, narrowed(&store, 1)), Ok(()));
+        assert_eq!(stamp(), store.importer());
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        store.change_junction_scenarios(node, |s, base| s.create("Raised", base.clone())).unwrap();
+        assert_eq!(document(&storage).junctions.values().next().unwrap().import, store.importer());
+    }
+
+    #[test]
     fn a_junction_scenario_starts_as_the_baseline_and_an_edit_in_it_leaves_the_baseline_alone() {
         let (store, _) = store();
         let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
