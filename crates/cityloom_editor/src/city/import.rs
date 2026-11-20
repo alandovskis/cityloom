@@ -776,6 +776,46 @@ mod tests {
         assert!(editor.structure_blocked().is_none(), "and may rearrange them");
     }
 
+    /// A merged block (a zone per OSM piece) as the street page shows it: neighbouring pieces that look the same are one
+    /// run of the plan, an edit over a pick is made again on each run it covers, and the edited street is kept stamped
+    /// with the importer, so clearing the edits made on the pieces before the merge leaves it.
+    #[test]
+    fn a_merged_block_shows_its_pieces_as_runs_takes_an_edit_on_each_and_is_kept_stamped() {
+        use crate::city::store::CityStore;
+        use crate::place::area::Area;
+        use crate::shared::catalogue::kind_index;
+        use crate::shared::ports::test_ports;
+        // Three pieces: two lanes at 30 km/h, the same again from 60 m (a way of its own in OSM), four lanes at 40 from 120 m.
+        let mut net = zoned_road(120.0);
+        net.roads[0].zones.insert(1, Zone { from: cityloom_model::Coordinate::new(60.0), speed_kmh: Some(30), lanes: two_lanes() });
+        let (ports, ..) = test_ports();
+        let store = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(store.keep_network_from(&net, Some(&cityloom_model::with_importer("ab12"))));
+        let edge = store.open().view(0).edges[0].uid;
+        let mut e = store.open().street_editor(edge, 0).unwrap();
+        assert_eq!(e.snapshot().zones.len(), 3, "a zone per piece, as imported");
+        let plan = e.view().plan;
+        assert_eq!(plan.runs.len(), 2, "the two pieces alike are one run: {:?}", plan.runs);
+        assert_eq!(plan.boundaries.len(), 1, "where the street changes, not where OSM split it");
+
+        // Made pedestrian over the whole street: each run's motor pieces, at their own widths.
+        e.pick_whole();
+        let sidewalk = kind_index("sidewalk").unwrap();
+        assert!(e.make_pedestrian(sidewalk));
+        assert!(e.missed().is_empty(), "every run took it");
+        let plan = e.view().plan;
+        assert_eq!(plan.runs.len(), 2, "the runs keep their widths apart");
+        assert!(plan.runs.iter().all(|r| r.bands.iter().all(|b| b.kind == sidewalk)), "{:?}", plan.runs);
+        let pieces: Vec<usize> = plan.runs.iter().map(|r| r.bands.len()).collect();
+        assert_eq!(pieces, [2, 4], "two lanes, then four, each now a sidewalk");
+
+        // Kept with the importer's stamp: clearing the stale edits removes nothing, and the edit is there on reopening.
+        assert!(store.write_street(edge, e.snapshot()));
+        assert_eq!(store.discard_stale(), 0, "an edit made on the merged block is not stale");
+        let reopened = store.open().street_editor(edge, 0).unwrap();
+        assert_eq!(reopened.snapshot(), e.snapshot());
+    }
+
     #[test]
     fn the_layout_remembers_where_its_origin_lies_in_the_network() {
         assert_eq!(City::from_network(&curving_t(), "Curves").view(0).origin_m, Some([-100.0, 100.0]));
