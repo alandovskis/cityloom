@@ -13,6 +13,7 @@ import {
   pickStretch,
   pickToEnd,
   pickWhole,
+  showZoneLevel,
   planBoundaries,
   streetLength,
   test,
@@ -810,10 +811,13 @@ test.describe("changing part of a street", () => {
   });
 
   test("a reload keeps the stretches", async ({ page }) => {
+    const tops = () =>
+      page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
     await pickStretch(page, 10, 25);
     await selectFirstPiece(page);
     await page.keyboard.press("-");
     await expect(planBoundaries(page)).toHaveCount(2);
+    const edited = await tops();
     const plan = await page.locator("#plan svg").innerHTML();
     await page.waitForTimeout(500); // the debounced write
     await page.reload();
@@ -824,6 +828,10 @@ test.describe("changing part of a street", () => {
     expect(await page.locator("#plan .plan-boundary").evaluateAll((b) => b.map((e) => e.outerHTML))).toEqual(
       [...plan.matchAll(/<g class="plan-boundary"[^]*?<\/g>/g)].map((m) => m[0]),
     );
+    // The edited run, picked again, is drawn as it was.
+    await pickRunAt(page, 15);
+    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
+    await expect.poll(tops).toBe(edited);
   });
 
   test("drags a boundary with the pointer as one undoable step, keeping the pointer captured", async ({ page }) => {
@@ -970,6 +978,46 @@ test.describe("changing part of a street", () => {
       "aria-label",
       /centré sur la limite entre zone 1 au premier plan et zone 2 au-delà/,
     );
+  });
+
+  test("the zone commands sit in the details panel, and Split is made by keyboard", async ({ page }) => {
+    await showZoneLevel(page);
+    await expect(page.locator("#zone-split")).toBeVisible();
+    expect(await page.locator("#zone-split").evaluate((e) => !!e.closest("#details-panel"))).toBe(true);
+    expect(await page.locator("#zones-slot #zone-split").count()).toBe(0);
+    await page.locator("#zone-split-at").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.locator("#zone-split")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText(/Split/);
+  });
+
+  test("a merge of zones with the same section, made by keyboard, leaves the focus on the plan", async ({ page }) => {
+    const length = await streetLength(page);
+    test.skip(length < 15, "the street is too short for three zones");
+    const step = Math.floor(length / 3);
+    // Split into three zones of the same section: they look the same, so the plan draws them as one run, and the
+    // zone commands count them.
+    await showZoneLevel(page);
+    const sub = page.locator("#p-zone .insp-sub");
+    for (const at of [step, 2 * step]) {
+      await page.locator("#zone-split-at").fill(String(at));
+      await page.locator("#zone-split").click();
+    }
+    await expect(sub).toHaveText(/ of 3$/);
+    await expect(planBoundaries(page)).toHaveCount(0);
+    // The middle zone, picked on the plan.
+    await pickStretch(page, step, 2 * step);
+    await expect(sub).toHaveText(/ 2 of 3$/);
+    await page.locator("#zone-merge-prev").focus();
+    await page.keyboard.press("Enter");
+    await expect(sub).toHaveText(/ of 2$/);
+    await expect(page.locator("#plan-point")).toBeFocused();
+    // the last merge takes the commands that need two zones away: the focus is still on the plan
+    await page.locator("#zone-merge-next").focus();
+    await page.keyboard.press("Enter");
+    await expect(sub).toHaveText(/^The whole street/);
+    await expect(page.locator("#plan-point")).toBeFocused();
   });
 
   test("the merge choice takes the focus and gives it back to the plan", async ({ page }) => {

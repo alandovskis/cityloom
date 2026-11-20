@@ -209,6 +209,9 @@ test.describe("a stretch's speed limit", () => {
     await expect(speed(page)).toHaveValue(street);
     await page.locator("#undo").click();
     await expect(planBoundaries(page)).toHaveCount(1);
+    await pickRunAt(page, half + 1);
+    await showStreetLevel(page);
+    await expect(speed(page)).toHaveValue(chosen);
     await page.locator("#undo").click();
     await expect(planBoundaries(page)).toHaveCount(0);
   });
