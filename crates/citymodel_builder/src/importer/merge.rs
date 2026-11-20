@@ -100,50 +100,8 @@ pub fn merge_dual_carriageways(net: &mut Network) -> HashSet<NodeId> {
         index.entry(n.id).or_insert(k);
     }
     let positions: HashMap<NodeId, Point<Local>> = index.iter().map(|(id, &k)| (*id, net.junctions[k].position)).collect();
-    let at = |id: NodeId| positions.get(&id).copied();
     let oriented: Vec<Option<Road>> = net.roads.iter().map(along).collect();
-    let mut taken = vec![false; net.roads.len()];
-    let mut pairs: Vec<(usize, usize)> = Vec::new();
-    // the roads that can be merged, by name, each group in ascending index order
-    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (k, o) in oriented.iter().enumerate() {
-        if let Some(r) = o {
-            by_name.entry(r.name.as_str()).or_default().push(k);
-        }
-    }
-    for i in 0..net.roads.len() {
-        let Some(a) = &oriented[i] else { continue };
-        let mut best: Option<(f64, usize)> = None;
-        for &j in &by_name[a.name.as_str()] {
-            let Some(b) = &oriented[j] else { continue };
-            if i == j || taken[j] || a.road_type != b.road_type {
-                continue;
-            }
-            let (Some(a0), Some(a1), Some(b0), Some(b1)) = (at(a.edge.from), at(a.edge.to), at(b.edge.from), at(b.edge.to)) else {
-                continue;
-            };
-            // b runs the other way: it starts where a ends and ends where a starts
-            if dist(a1, b0) > MAX_APART_M || dist(a0, b1) > MAX_APART_M {
-                continue;
-            }
-            if length(&a.points) < 1.0 || b.points.len() < 2 || a.points.len() < 2 {
-                continue;
-            }
-            if let Some(d) = apart(&a.points, &b.points)
-                && best.is_none_or(|(bd, _)| d < bd)
-            {
-                best = Some((d, j));
-            }
-        }
-        if let Some((_, j)) = best
-            && !taken[i]
-            && oriented[j].as_ref().is_some()
-        {
-            taken[i] = true;
-            taken[j] = true;
-            pairs.push((i, j));
-        }
-    }
+    let pairs = pairs_of(&oriented, &positions);
     if pairs.is_empty() {
         return HashSet::new();
     }
@@ -153,46 +111,119 @@ pub fn merge_dual_carriageways(net: &mut Network) -> HashSet<NodeId> {
     let mut merged: Vec<Road> = Vec::new();
     let mut gone = vec![false; net.roads.len()];
     for (i, j) in pairs {
-        let (a, b) = (oriented[i].clone().unwrap(), oriented[j].clone().unwrap());
-        // `b` seen along `a`: driving lanes run against it
+        let (Some(a), Some(b)) = (&oriented[i], &oriented[j]) else { continue };
         kept_as.push((b.edge.id, a.edge.id));
-        let b_here = reversed(&b);
-        // where the halves are furthest apart, which is their spacing; at the ends they meet
-        let d = a.points.iter().map(|&p| dist(p, nearest(&b.points, p))).fold(0.0, f64::max);
-        let median = (d - width(&a) / 2.0 - width(&b) / 2.0).max(MIN_MEDIAN_M);
-        let gap = Lane { kind: LaneKind::Other, direction: Direction::Forward, width_m: median, buffer_type: None, windows: vec![], shape: vec![] };
-        let b_on_left = side_of(&a.points, &b.points) > 0.0;
-        let lanes: Vec<Lane> = if b_on_left {
-            b_here.base_lanes().iter().cloned().chain([gap]).chain(a.base_lanes().iter().cloned()).collect()
-        } else {
-            a.base_lanes().iter().cloned().chain([gap]).chain(b_here.base_lanes().iter().cloned()).collect()
-        };
-        let points: Vec<Point> = a
-            .points
-            .iter()
-            .map(|&p| {
-                let q = nearest(&b.points, p);
-                Point::new((p.x_m() + q.x_m()) / 2.0, (p.y_m() + q.y_m()) / 2.0)
-            })
-            .collect();
         moved.push((b.edge.to, a.edge.from));
         moved.push((b.edge.from, a.edge.to));
-        let mut provenance = a.provenance.clone();
-        provenance.extend(b.provenance.clone());
-        merged.push(Road {
-            edge: a.edge,
-            provenance,
-            name: a.name.clone(),
-            road_type: a.road_type,
-            zones: vec![Zone { speed_kmh: lower(a.base_speed_kmh(), b.base_speed_kmh()), ..Zone::whole(lanes) }],
-            points,
-        });
+        merged.push(joined(a, b));
         gone[i] = true;
         gone[j] = true;
     }
 
-    // each merged pair's ends become one node, in the middle; a node merged away is dropped and
-    // the roads' ends that named it are rewritten once, after all the moves
+    let into_of = fold_nodes(net, &index, moved);
+    if !into_of.is_empty() {
+        rewrite_ends(net.roads.iter_mut().chain(merged.iter_mut()), &into_of);
+    }
+    let mut roads: Vec<Road> = net.roads.iter().enumerate().filter(|(i, _)| !gone[*i]).map(|(_, r)| r.clone()).collect();
+    roads.extend(merged);
+    // a stub of the crossing street that ran between the two carriageways now joins a node to itself
+    roads.retain(|r| r.edge.from != r.edge.to);
+    roads.sort_by_key(|r| r.edge.id);
+    net.roads = roads;
+    rename_priority(net, &kept_as);
+    drop_unknown_priority(net);
+    into_of.into_values().collect()
+}
+
+/// Pairs each one-way road with the other carriageway of its street that runs back closest beside it; a road is in
+/// one pair at most, and an earlier road chooses first.
+fn pairs_of(oriented: &[Option<Road>], positions: &HashMap<NodeId, Point<Local>>) -> Vec<(usize, usize)> {
+    // the roads that can be merged, by name, each group in ascending index order
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (k, o) in oriented.iter().enumerate() {
+        if let Some(r) = o {
+            by_name.entry(r.name.as_str()).or_default().push(k);
+        }
+    }
+    let mut taken = vec![false; oriented.len()];
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    for (i, a) in oriented.iter().enumerate() {
+        let Some(a) = a else { continue };
+        if taken[i] {
+            continue;
+        }
+        // the closest wins; of two as close, the first
+        let best = by_name[a.name.as_str()]
+            .iter()
+            .filter(|&&j| j != i && !taken[j])
+            .filter_map(|&j| oriented[j].as_ref().and_then(|b| runs_back_beside(a, b, positions)).map(|d| (d, j)))
+            .fold(None, |best: Option<(f64, usize)>, (d, j)| if best.is_none_or(|(bd, _)| d < bd) { Some((d, j)) } else { best });
+        if let Some((_, j)) = best {
+            taken[i] = true;
+            taken[j] = true;
+            pairs.push((i, j));
+        }
+    }
+    pairs
+}
+
+/// How far apart `a` and `b` run, on average, when `b` can be `a`'s other carriageway: the same kind of street,
+/// starting where `a` ends and ending where it starts, beside it all along; None otherwise.
+fn runs_back_beside(a: &Road, b: &Road, positions: &HashMap<NodeId, Point<Local>>) -> Option<f64> {
+    if a.road_type != b.road_type {
+        return None;
+    }
+    let at = |id: NodeId| positions.get(&id).copied();
+    let (a0, a1, b0, b1) = (at(a.edge.from)?, at(a.edge.to)?, at(b.edge.from)?, at(b.edge.to)?);
+    // b runs the other way: it starts where a ends and ends where a starts
+    if dist(a1, b0) > MAX_APART_M || dist(a0, b1) > MAX_APART_M {
+        return None;
+    }
+    if length(&a.points) < 1.0 || b.points.len() < 2 || a.points.len() < 2 {
+        return None;
+    }
+    apart(&a.points, &b.points)
+}
+
+/// The one road two carriageways `a` and `b` of a street become: `a`'s ends and id, both halves' lanes with a median
+/// between them, a line down the middle and the lower of their speeds.
+fn joined(a: &Road, b: &Road) -> Road {
+    // `b` seen along `a`: driving lanes run against it
+    let b_here = reversed(b);
+    // where the halves are furthest apart, which is their spacing; at the ends they meet
+    let d = a.points.iter().map(|&p| dist(p, nearest(&b.points, p))).fold(0.0, f64::max);
+    let median = (d - width(a) / 2.0 - width(b) / 2.0).max(MIN_MEDIAN_M);
+    let gap = Lane { kind: LaneKind::Other, direction: Direction::Forward, width_m: median, buffer_type: None, windows: vec![], shape: vec![] };
+    let b_on_left = side_of(&a.points, &b.points) > 0.0;
+    let lanes: Vec<Lane> = if b_on_left {
+        b_here.base_lanes().iter().cloned().chain([gap]).chain(a.base_lanes().iter().cloned()).collect()
+    } else {
+        a.base_lanes().iter().cloned().chain([gap]).chain(b_here.base_lanes().iter().cloned()).collect()
+    };
+    let points: Vec<Point> = a
+        .points
+        .iter()
+        .map(|&p| {
+            let q = nearest(&b.points, p);
+            Point::new((p.x_m() + q.x_m()) / 2.0, (p.y_m() + q.y_m()) / 2.0)
+        })
+        .collect();
+    let mut provenance = a.provenance.clone();
+    provenance.extend(b.provenance.clone());
+    Road {
+        edge: a.edge,
+        provenance,
+        name: a.name.clone(),
+        road_type: a.road_type,
+        zones: vec![Zone { speed_kmh: lower(a.base_speed_kmh(), b.base_speed_kmh()), ..Zone::whole(lanes) }],
+        points,
+    }
+}
+
+/// Merges each node of `moved` into the node beside it: the one kept moves to the middle and takes the other's
+/// provenance, kind and control (when it has none); the other is dropped. Gives back each node merged away and the
+/// node it went into.
+fn fold_nodes(net: &mut Network, index: &HashMap<NodeId, usize>, moved: Vec<(NodeId, NodeId)>) -> HashMap<NodeId, NodeId> {
     let mut removed = vec![false; net.junctions.len()];
     let mut into_of: HashMap<NodeId, NodeId> = HashMap::new(); // (a node merged away, the node it went into)
     for (from, into) in moved {
@@ -219,30 +250,31 @@ pub fn merge_dual_carriageways(net: &mut Network) -> HashSet<NodeId> {
         k += 1;
         !removed[k - 1]
     });
-    if !into_of.is_empty() {
-        // a node can be merged into one that is itself merged away later: follow the chain (it has no cycle)
-        let resolve = |mut id: NodeId| {
-            while let Some(&next) = into_of.get(&id) {
-                id = next;
-            }
-            id
-        };
-        for r in net.roads.iter_mut().chain(merged.iter_mut()) {
-            r.edge.from = resolve(r.edge.from);
-            r.edge.to = resolve(r.edge.to);
+    into_of
+}
+
+/// Points each road's ends at the node they were merged into.
+fn rewrite_ends<'a>(roads: impl Iterator<Item = &'a mut Road>, into_of: &HashMap<NodeId, NodeId>) {
+    // a node can be merged into one that is itself merged away later: follow the chain (it has no cycle)
+    let resolve = |mut id: NodeId| {
+        while let Some(&next) = into_of.get(&id) {
+            id = next;
         }
+        id
+    };
+    for r in roads {
+        r.edge.from = resolve(r.edge.from);
+        r.edge.to = resolve(r.edge.to);
     }
-    let mut roads: Vec<Road> = net.roads.iter().enumerate().filter(|(i, _)| !gone[*i]).map(|(_, r)| r.clone()).collect();
-    roads.extend(merged);
-    // a stub of the crossing street that ran between the two carriageways now joins a node to itself
-    roads.retain(|r| r.edge.from != r.edge.to);
-    roads.sort_by_key(|r| r.edge.id);
-    net.roads = roads;
-    // a priority road that was merged is the road it became; one that is gone is dropped
+}
+
+/// A priority road that was merged is the road it became, named once.
+fn rename_priority(net: &mut Network, kept_as: &[(RoadId, RoadId)]) {
+    let now = |id: &RoadId| kept_as.iter().find(|(gone, _)| gone == id).map_or(*id, |(_, now)| *now);
     for j in &mut net.junctions {
         if let crate::importer::Control::Priority(ids) = &mut j.control {
             let mut kept: Vec<RoadId> = Vec::new();
-            for id in ids.iter().map(|id| kept_as.iter().find(|(gone, _)| gone == id).map_or(*id, |(_, now)| *now)) {
+            for id in ids.iter().map(now) {
                 if !kept.contains(&id) {
                     kept.push(id);
                 }
@@ -250,8 +282,6 @@ pub fn merge_dual_carriageways(net: &mut Network) -> HashSet<NodeId> {
             *ids = kept;
         }
     }
-    drop_unknown_priority(net);
-    into_of.into_values().collect()
 }
 
 /// Takes from every priority control the roads the network does not have, so it never names one that is gone.
