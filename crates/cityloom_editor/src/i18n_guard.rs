@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync`, `project`, `timeline` and `standards` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction`, `sync`, `project`, `timeline`, `standards` and `share` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -20,6 +20,8 @@ const LEFT_OUT: &[(&str, &str)] = &[
         "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
     ),
     ("src/project/tests.rs", "test-only"),
+    ("src/share/store.rs", "storage keys and persistence of the links made on a device; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/share/tests.rs", "test-only"),
     ("src/project/copies.rs", "storage keys and persistence of the copies of shared designs; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/timeline/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/timeline/tests.rs", "test-only"),
@@ -201,6 +203,11 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/project/text.rs", include_str!("project/text.rs")),
     ("src/project/view.rs", include_str!("project/view.rs")),
     ("src/project/vm.rs", include_str!("project/vm.rs")),
+    ("src/share/mod.rs", include_str!("share/mod.rs")),
+    ("src/share/model.rs", include_str!("share/model.rs")),
+    ("src/share/text.rs", include_str!("share/text.rs")),
+    ("src/share/view.rs", include_str!("share/view.rs")),
+    ("src/share/vm.rs", include_str!("share/vm.rs")),
     ("src/timeline/mod.rs", include_str!("timeline/mod.rs")),
     ("src/timeline/model.rs", include_str!("timeline/model.rs")),
     ("src/timeline/text.rs", include_str!("timeline/text.rs")),
@@ -563,6 +570,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("measure-loop", "the CSS class of a virtual queue jump's loop, in the junction's 2.5D"),
     ("lane-hit", "the CSS class of a lane's place to press, in the plan and in the junction's 2.5D"),
     ("cityloom-design", "the `kind` of a design archive file, not a message"),
+    ("cityloom-share", "the `kind` of every share document (share/model.rs `MAGIC`), a format tag, not a message"),
     ("archive-result", "the id of the design archive's result line, not a message"),
     ("archive-keep", "the id of the design archive's Keep mine button, not a message"),
     ("archive-slot", "the id of the page slot the design archive is mounted in, not a message"),
@@ -907,7 +915,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project", "timeline", "standards"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync", "project", "timeline", "standards", "share"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
