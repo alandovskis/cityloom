@@ -186,6 +186,8 @@ impl AreasVm {
             return self.word("restriction-future");
         }
         match self.list.with(Vec::len) {
+            // Shown read-only, none can be declared: the lead does not ask for one.
+            0 if self.read_only() => self.word("restriction-lead-none-read-only"),
             0 => self.word("restriction-lead-none"),
             n => self.i18n.tr("restriction-lead-some", &Args::new().num("n", n as i64)),
         }
@@ -210,6 +212,21 @@ impl AreasVm {
     /// A speed among the choices: `30 km/h`.
     pub fn kmh_text(&self, kmh: u8) -> String {
         self.i18n.tr("restriction-kmh", &Args::new().num("kmh", kmh.into()))
+    }
+
+    /// Whether the areas are shown read-only (`Storage::read_only`): none can be drawn, redrawn, renamed, given another
+    /// rule, moved, deleted or brought back; each command refuses and says so. Choosing one still works.
+    pub fn read_only(&self) -> bool {
+        self.ports.storage.read_only()
+    }
+
+    /// Says so, and is true, when the areas are shown read-only: the command that asks changes nothing.
+    fn refuse_read_only(&self) -> bool {
+        let read_only = self.read_only();
+        if read_only {
+            self.tell("read-only-refused", Args::new());
+        }
+        read_only
     }
 
     // ---- commands ----
@@ -286,6 +303,9 @@ impl AreasVm {
     /// Starts drawing a new area. False, and nothing changes, where the document is a newer build's or an outline
     /// is already being drawn or named (the Declare button is not shown then, so nothing is said).
     pub fn start(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if self.future.get_untracked() || self.draw.get_untracked() != Draw::Idle {
             return false;
         }
@@ -299,6 +319,9 @@ impl AreasVm {
     /// Starts drawing a new outline for the area `id`, which keeps its name and rule. False, and nothing changes,
     /// where there is no such area, the document is a newer build's or an outline is already being drawn.
     pub fn start_redraw(&self, id: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let Some(r) = self.find_now(id) else { return false };
         if self.future.get_untracked() || self.draw.get_untracked() != Draw::Idle || self.step(Step::Start) != Outcome::Started {
             return false;
@@ -364,6 +387,9 @@ impl AreasVm {
 
     /// Keeps the closed outline with the rule and name chosen. If storage refuses, the outline stays to try again.
     pub fn save(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let Draw::Naming(ring) = self.draw.get_untracked() else { return false };
         let Some(r) = self.store.add(&self.name.get_untracked(), self.rule.get_untracked(), ring) else {
             // Another tab may have written a document this build cannot: the lead then says so.
@@ -397,6 +423,9 @@ impl AreasVm {
     /// Changes an area as it is kept now, then says so with `said` (given the area as it is now); says it was not
     /// kept when it could not be (gone, or storage refused).
     fn change(&self, id: &str, change: impl FnOnce(&mut Restriction), said: impl FnOnce(&Restriction)) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let kept = self.store.update(id, change);
         self.reload();
         match self.find_now(id).filter(|_| kept) {
@@ -423,6 +452,9 @@ impl AreasVm {
 
     /// Deletes an area; it can be brought back for the session (`undo_delete`).
     pub fn delete(&self, id: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let Some(r) = self.find_now(id) else { return false };
         if !self.store.remove(id) {
             self.reload();
@@ -438,6 +470,9 @@ impl AreasVm {
     /// Brings back the area deleted last, selected. If storage refuses, it stays there to bring back. Not while an
     /// outline is drawn or named: the list, where it would come back, is not shown then.
     pub fn undo_delete(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         if self.draw.get_untracked() != Draw::Idle {
             return false;
         }
@@ -462,6 +497,12 @@ impl AreasVm {
     /// is kept now, so another tab's change to another corner stays; if that tab changed how many corners there
     /// are, the drop is refused. Only the selected area's corners move, and none while an outline is drawn.
     pub fn drag_vertex(&self, area: &str, index: usize, at: LonLat, done: bool) {
+        if self.read_only() {
+            if done {
+                self.refuse_read_only();
+            }
+            return;
+        }
         if self.draw.get_untracked() != Draw::Idle || self.selected.get_untracked().as_deref() != Some(area) {
             return;
         }
@@ -533,7 +574,8 @@ impl AreasVm {
         let selected = self.selected.get_untracked().filter(|_| draw == Draw::Idle);
         let moving = self.moving.get_untracked().filter(|(id, _)| Some(id) == selected.as_ref());
         let list = self.list.get_untracked();
-        let areas = overlay::areas(&list, selected.as_deref(), moving.as_ref().map(|(_, ring)| ring.as_slice()));
+        // Shown read-only, the selected area has no corners to take hold of: a press there pans the map.
+        let areas = overlay::areas(&list, selected.as_deref(), moving.as_ref().map(|(_, ring)| ring.as_slice()), !self.read_only());
         self.ports.mapper.set_restrictions(&style::area_layers(), &areas);
         self.ports.mapper.set_draft(&style::draft_layers(), &overlay::draft(draw.corners()));
     }
@@ -1295,5 +1337,59 @@ mod tests {
         assert_eq!(said.take(), ["“B” restored."]);
         assert_eq!(vm.list_now().iter().map(|r| (r.id.as_str(), r.name.as_str())).collect::<Vec<_>>(), [("r1", "A"), ("r2", "B"), ("r3", "C")]);
         assert_eq!(vm.selected_id_now().as_deref(), Some("r2"));
+    }
+
+    /// The areas of a project shown read-only: none is drawn, redrawn, renamed, given another rule, moved, deleted or
+    /// brought back, each refusal is said, nothing is written; one can still be chosen.
+    #[test]
+    fn shown_read_only_no_area_changes_and_one_can_still_be_chosen() {
+        use crate::shared::scoped::ScopedStorage;
+        let (ports, said, storage) = test_ports();
+        let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+        let kept = RestrictionStore::new(own).add("A", Rule::CarFree, SQUARE.to_vec()).unwrap();
+        let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let mapper = Rc::new(FakeMapper::default());
+        let vm = AreasVm::new(Ports { storage: view, mapper: mapper.clone(), ..ports.clone() }, crate::i18n_for(Locale::En));
+        assert!(vm.read_only());
+        let snapshot = || {
+            let mut keys = storage.keys();
+            keys.sort();
+            keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect::<Vec<_>>()
+        };
+        let empty: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p2").only_to_read());
+        let none = AreasVm::new(Ports { storage: empty, ..ports.clone() }, crate::i18n_for(Locale::En));
+        assert_eq!(none.lead(), "This design has no area rules.", "none can be declared: the lead does not ask for one");
+        let empty: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p2").only_to_read());
+        let none = AreasVm::new(Ports { storage: empty, ..ports.clone() }, crate::i18n_for(Locale::FrCa));
+        assert_eq!(none.lead(), "Cet aménagement n’a aucune règle de zone.");
+        let before = snapshot();
+        vm.select(Some(&kept.id));
+        assert_eq!(vm.selected_id_now(), Some(kept.id.clone()), "choosing works");
+        mapper.take();
+        vm.sync();
+        let calls = mapper.take();
+        assert!(
+            matches!(&calls[0], MapCall::Restrictions { data, .. } if data.contains("\"selected\":true") && !data.contains("\"i\":")),
+            "marked as chosen, with no corner to take hold of: {calls:?}"
+        );
+        said.take();
+        let refused = "This design is open read-only: nothing can be changed.";
+        assert!(!vm.start());
+        assert_eq!(said.take(), [refused]);
+        assert_eq!(vm.draw_now(), Draw::Idle);
+        assert!(!vm.add_at(SQUARE[0]), "no outline is being drawn");
+        assert!(!vm.start_redraw(&kept.id));
+        assert!(!vm.save());
+        assert!(!vm.rename(&kept.id, "B"));
+        assert!(!vm.set_rule(&kept.id, Rule::NoParkingOrLoading));
+        assert!(!vm.delete(&kept.id));
+        assert!(!vm.undo_delete());
+        assert_eq!(said.take(), [refused; 6]);
+        vm.drag_vertex(&kept.id, 0, [-73.61, 45.52], false);
+        assert_eq!(vm.moving(), None, "a corner is not moved");
+        vm.drag_vertex(&kept.id, 0, [-73.61, 45.52], true);
+        assert_eq!(said.take(), [refused]);
+        assert_eq!(vm.list_now(), vec![kept]);
+        assert_eq!(snapshot(), before, "nothing written, nothing marked for the sync");
     }
 }

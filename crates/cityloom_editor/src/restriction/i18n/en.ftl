@@ -77,6 +77,8 @@ restriction-restored = “{ $area }” restored.
 ## The tab's lead
 restriction-future = These area rules were saved by a newer version of CityLoom, so they cannot be shown or changed here.
 restriction-lead-none = No area rules yet. Declare one to check the streets inside it.
+# Said in the tab of a map shown read-only (`view=1`) where the design has no area: none can be declared.
+restriction-lead-none-read-only = This design has no area rules.
 restriction-lead-some = { $n ->
     [one] One area rule.
    *[other] { $n } area rules.

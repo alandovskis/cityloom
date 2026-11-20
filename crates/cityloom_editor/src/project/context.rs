@@ -44,18 +44,22 @@ fn search_of(ports: &Ports) -> String {
 }
 
 /// A page's storage for project `id` over the root `storage`: it keeps nothing once the project is no longer listed (a
-/// tab deleted it; no sync need say so), so an editor still open cannot bring the project back.
-fn page_storage(storage: &Rc<dyn Storage>, id: &str) -> Rc<ScopedStorage> {
+/// tab deleted it; no sync need say so), so an editor still open cannot bring the project back. On a page whose address
+/// opens the project read-only (`search` holds `project_id::VIEW`) it keeps none of the design and marks nothing
+/// (`ScopedStorage::only_to_read`); the person's caches and preferences are still kept.
+fn page_storage(storage: &Rc<dyn Storage>, id: &str, search: &str) -> Rc<ScopedStorage> {
     let (root, project) = (storage.clone(), id.to_string());
-    Rc::new(ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some()))
+    let scoped = ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some());
+    Rc::new(if crate::shared::project_id::viewing(search) { scoped.only_to_read() } else { scoped })
 }
 
 /// `enter`, keeping the project's storage so that it can be shut.
 fn enter_scoped(ports: Ports) -> Option<(Ports, Rc<ScopedStorage>)> {
-    match resolve(&ports.storage, &search_of(&ports)) {
+    let search = search_of(&ports);
+    match resolve(&ports.storage, &search) {
         Resolved::Project(id) => {
             ProjectStore::new(ports.storage.clone()).open(&id);
-            let scoped = page_storage(&ports.storage, &id);
+            let scoped = page_storage(&ports.storage, &id, &search);
             let storage: Rc<dyn Storage> = scoped.clone();
             Some((Ports { storage, ..ports }, scoped))
         }
@@ -85,9 +89,10 @@ pub fn area_of(storage: &dyn Storage) -> Option<Area> {
 /// roads to get ahead of the mount, the archive, the home page). None where no project resolves: there is then no
 /// project to write into, and what would write stays inert rather than write the root storage.
 pub fn peek(ports: Ports) -> Option<Ports> {
-    match resolve(&ports.storage, &search_of(&ports)) {
+    let search = search_of(&ports);
+    match resolve(&ports.storage, &search) {
         Resolved::Project(id) => {
-            let storage: Rc<dyn Storage> = page_storage(&ports.storage, &id);
+            let storage: Rc<dyn Storage> = page_storage(&ports.storage, &id, &search);
             Some(Ports { storage, ..ports })
         }
         Resolved::Missing => None,

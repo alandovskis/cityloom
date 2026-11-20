@@ -1196,6 +1196,74 @@ mod context {
         assert!(doc.entry(&Id::new(Kind::Street, "p1:w1")).is_none());
     }
 
+    /// A page whose address says `view=1` shows its project read-only: the page, a look at it and its editors can read the
+    /// project and keep nothing in it, neither its documents nor a mark; without it the same project is written as ever.
+    #[test]
+    fn a_page_opened_to_view_its_project_reads_it_and_writes_and_marks_nothing() {
+        use crate::project::context::peek;
+        let t = two_projects();
+        let edits = crate::city::edits::EDITS_KEY;
+        *t.page.path.borrow_mut() = "/street.html?street=7&project=p1".into();
+        assert!(open_page(t.ports.clone()).expect("p1 is here").storage.remember(edits, "{\"version\":5}"));
+        assert!(!open_page(t.ports.clone()).unwrap().storage.read_only());
+        *t.page.path.borrow_mut() = "/street.html?street=7&project=p1&view=1".into();
+        let page = open_page(t.ports.clone()).expect("p1 is here");
+        let entered = enter(t.ports.clone()).expect("p1 is here");
+        let look = peek(t.ports.clone()).expect("p1 is here");
+        let before: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        for ports in [&page, &entered, &look] {
+            assert!(ports.storage.read_only());
+            assert_eq!(ports.storage.project().as_deref(), Some("p1"));
+            assert_eq!(ports.storage.recall(edits).as_deref(), Some("{\"version\":5}"), "it reads the project");
+            assert!(!ports.storage.remember(edits, "{\"version\":5,\"streets\":{}}"));
+            assert!(!crate::sync::model::mark(&*ports.storage, Kind::Street, "w1", false));
+        }
+        let after: Vec<(String, Option<String>)> = t.storage.keys().into_iter().map(|k| (k.clone(), t.storage.recall(&k))).collect();
+        assert_eq!(after, before, "nothing written, nothing marked");
+        assert!(t.navigator.take().is_empty() && t.navigator.take_replaced().is_empty());
+        assert_eq!(crate::shared::project_id::link_for("map.html", &*page.storage), "map.html?project=p1&view=1");
+    }
+
+    #[test]
+    fn a_page_opened_to_view_its_project_still_keeps_a_place_s_roads_and_the_goal_but_no_design() {
+        use crate::city::store::CityStore;
+        use crate::place::area::default_area;
+        use crate::project::context::peek;
+        use crate::shared::goals::{Goal, GoalChoice};
+        let t = two_projects();
+        *t.page.path.borrow_mut() = "/map.html?project=p1&view=1".into();
+        let look = peek(t.ports.clone()).expect("p1 is here");
+        assert!(look.storage.read_only());
+        let city = CityStore::for_area(look.storage.clone(), default_area());
+        assert!(!city.has_network());
+        assert!(city.keep_network_from(&cityloom_model::Network::default(), Some("sum")), "the roads are the person's cache");
+        assert!(CityStore::for_area(t.ports.storage.clone(), default_area()).has_network(), "kept for every project");
+        assert_eq!(city.checksum().as_deref(), Some("sum"));
+        GoalChoice::new(look.storage.clone()).set(Some(Goal::Buses));
+        assert_eq!(GoalChoice::new(t.ports.storage.clone()).get_untracked(), Some(Goal::Buses), "the goal is the person's");
+        let design = |storage: &crate::shared::ports::MemoryStorage| -> Vec<(String, Option<String>)> {
+            let mut keys: Vec<String> = storage
+                .keys()
+                .into_iter()
+                .filter(|k| !k.starts_with("cityloom-network") && !k.starts_with("cityloom-checksum") && k != crate::shared::goals::GOAL_KEY)
+                .collect();
+            keys.sort();
+            keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect()
+        };
+        let before = design(&t.storage);
+        assert!(!look.storage.remember(crate::city::edits::EDITS_KEY, "{\"version\":5}"));
+        assert!(!look.storage.remember(crate::city::store::AREA_KEY, &default_area().to_query()));
+        assert!(!look.storage.remember(crate::project::store::PROJECTS_KEY, "{}"), "the list of projects is the design the sync carries");
+        assert!(!crate::sync::model::mark(&*look.storage, Kind::Street, "w1", false));
+        assert_eq!(design(&t.storage), before, "neither the design nor a mark written");
+    }
+
+    #[test]
+    fn the_design_keys_a_page_only_to_read_refuses_name_the_projects_list() {
+        use crate::shared::scoped::DESIGN_KEYS;
+        assert!(DESIGN_KEYS.contains(&crate::project::store::PROJECTS_KEY) && DESIGN_KEYS.contains(&crate::project::store::DAMAGED_KEY));
+    }
+
     #[test]
     fn a_look_at_the_page_s_project_neither_sends_the_page_away_nor_remembers_it() {
         use crate::project::context::peek;

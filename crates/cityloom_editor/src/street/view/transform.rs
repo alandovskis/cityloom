@@ -369,7 +369,8 @@ pub fn TransformDialog(vm: Rc<StreetVm>) -> impl IntoView {
 
     let w = SheetWatch::new(vm);
     let choices = Memo::new(move |_| w.transform_choices());
-    let offered = Memo::new(move |_| !choices.with(|c| c.is_empty()));
+    // A street shown read-only cannot be transformed: the button is not offered (and the dialog never opens).
+    let offered = Memo::new(move |_| !choices.with(|c| c.is_empty()) && !w.read_only());
     let state = RwSignal::new(opening(&choices.get_untracked()));
     let group = Memo::new(move |_| state.with(|s| s.group));
     let shown = Memo::new(move |_| state.with(|s| s.shown()));

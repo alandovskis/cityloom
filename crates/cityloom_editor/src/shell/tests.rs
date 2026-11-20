@@ -559,3 +559,97 @@ fn the_tray_is_worded_in_french() {
     assert!(h.contains(r#"aria-label="Notes""#) && h.contains("Sections des notes"), "{h}");
     assert!(h.contains("<span>Vérifications</span>") && h.contains("<span>Modifications</span>"), "{h}");
 }
+
+/// A page whose address opens its project read-only (`view=1`): the shell's links to the project's pages keep it, and
+/// its top bar says so in the page's language.
+#[test]
+fn a_page_shown_read_only_says_so_and_its_links_keep_it_read_only() {
+    let shell = |path: &str| {
+        crate::sync::hub::reset();
+        let (ports, page, _) = crate::shared::ports::test_ports_with_page();
+        *page.path.borrow_mut() = path.to_string();
+        let target = std::rc::Rc::new(crate::shell::Bare::in_project(Some("p1".into())));
+        crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true)
+    };
+    let vm = shell("/map.html?project=p1&view=1");
+    assert!(vm.read_only());
+    assert_eq!(vm.link("street.html?street=7"), "street.html?street=7&project=p1&view=1");
+    assert_eq!(vm.link("index.html"), "index.html", "the list of projects is no page of the project");
+    let vm = shell("/map.html?project=p1");
+    assert!(!vm.read_only());
+    assert_eq!(vm.link("street.html?street=7"), "street.html?street=7&project=p1");
+    crate::sync::hub::reset();
+
+    let tag = |locale: Locale| {
+        let i18n = crate::i18n_for(locale);
+        crate::shared::testing::html(move || {
+            use leptos::prelude::IntoAny;
+            leptos::view! { <crate::shell::view::ReadOnlyTag i18n=i18n/> }.into_any()
+        })
+    };
+    let en = tag(Locale::En);
+    assert!(en.contains(r#"id="read-only-tag""#), "{en}");
+    assert!(en.contains(">Read-only<"), "{en}");
+    assert!(en.contains("This design is open read-only: you can look at it, but not change it."), "{en}");
+    let fr = tag(Locale::FrCa);
+    assert!(fr.contains(">Lecture seule<"), "{fr}");
+    assert!(fr.contains("Cet aménagement est ouvert en lecture seule\u{a0}: vous pouvez le consulter, mais pas le modifier."), "{fr}");
+}
+
+/// A street shown read-only, opened where the other drive side's region is kept: the shell gives the street that region
+/// on load, which is not taken and says nothing. Choosing a region there is refused like any edit: it is said, the
+/// street keeps its own, the menu shows that one, and neither the region kept nor "region chosen" is said or written.
+#[test]
+fn a_page_shown_read_only_takes_no_region_says_nothing_on_load_and_refuses_a_choice() {
+    use crate::shared::ports::{RecordingAnnouncer, Storage};
+    use crate::shell::vm::REGION_KEY;
+    use std::rc::Rc;
+    crate::sync::hub::reset();
+    let (mut ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let said = Rc::new(RecordingAnnouncer::default());
+    ports.announcer = said.clone();
+    *page.path.borrow_mut() = "/street.html?street=7&project=p1&view=1".into();
+    storage.remember(REGION_KEY, "united-kingdom");
+    let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), "p1").only_to_read());
+    let street = crate::street::vm::StreetVm::new(
+        crate::shared::ports::Ports { storage: view, ..ports.clone() },
+        crate::i18n_for(Locale::En),
+        crate::street::model::Editor::new(0),
+        None,
+    );
+    let before = street.read(|e| e.snapshot());
+    let shell = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), street.clone(), "details-details", vec![], false, true);
+    assert!(shell.read_only() && shell.region_locked());
+    assert!(said.take().is_empty(), "nothing said on load");
+    assert_eq!(street.read(|e| e.snapshot()), before, "the design keeps its drive side");
+    let own = shell.region();
+    assert_ne!(own, "united-kingdom", "the menu shows the street's region");
+    shell.choose_region("japan");
+    assert_eq!(said.take(), ["This design is open read-only: nothing can be changed."]);
+    assert_eq!((shell.region(), street.read(|e| e.snapshot())), (own, before));
+    assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("united-kingdom"), "the region kept is not changed");
+    crate::sync::hub::reset();
+}
+
+/// A map shown read-only: its region is only how the city is shown (the person's preference, not the design), so it
+/// is chosen, kept and said as on any page.
+#[test]
+fn a_map_shown_read_only_still_takes_a_region_keeps_it_and_says_it() {
+    use crate::shared::ports::{RecordingAnnouncer, Storage};
+    use crate::shell::vm::REGION_KEY;
+    use std::rc::Rc;
+    crate::sync::hub::reset();
+    let (mut ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let said = Rc::new(RecordingAnnouncer::default());
+    ports.announcer = said.clone();
+    *page.path.borrow_mut() = "/map.html?project=p1&view=1".into();
+    let target = Rc::new(crate::shell::Bare::in_project(Some("p1".into())));
+    let shell = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true);
+    assert!(shell.read_only() && !shell.region_locked());
+    shell.choose_region("japan");
+    assert_eq!(shell.region(), "japan");
+    assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("japan"));
+    let words = said.take();
+    assert!(words.len() == 1 && words[0].contains("Japan"), "{words:?}");
+    crate::sync::hub::reset();
+}

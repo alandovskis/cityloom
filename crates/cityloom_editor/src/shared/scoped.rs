@@ -1,5 +1,6 @@
 //! A `Storage` for one project: the keys that hold a project's own data get the project as a suffix, so two
-//! projects never share them; every other key (the language, the sync document, ...) is the person's and is shared.
+//! projects never share them; every other key (the language, the sync document, ...) is the person's and is shared. A
+//! page showing its project read-only keeps none of the design (`SCOPED_KEYS`, `DESIGN_KEYS`) but still the rest.
 
 use std::rc::Rc;
 
@@ -22,6 +23,20 @@ pub const SCOPED_KEYS: [&str; 7] = [
     "cityloom-milestones-damaged",
 ];
 
+/// The person's keys, beyond a project's own (`SCOPED_KEYS`), that a page showing its project read-only does not keep:
+/// the sync document and its damaged copy (`sync::model::SYNC_KEY`, `DAMAGED_KEY`: a mark there would send the
+/// design), and the list of projects and its damaged copy (`project::store::PROJECTS_KEY`, `DAMAGED_KEY`: the
+/// project's own record, which the sync carries). `shared` depends on no slice, so the names are spelled here and
+/// those slices' tests check they agree. Every other key (the roads kept for an area, the language, the theme, the
+/// goal, the standards profile, the project opened last, ...) is the person's cache or preference and is kept.
+pub const DESIGN_KEYS: [&str; 4] = ["cityloom-sync", "cityloom-sync-damaged", "cityloom-projects", "cityloom-projects-damaged"];
+
+/// Whether `key` (as asked, or already suffixed `<key>@<project>`) holds a design or reaches the sync.
+fn is_design(key: &str) -> bool {
+    let base = key.split_once('@').map_or(key, |(base, _)| base);
+    SCOPED_KEYS.contains(&base) || DESIGN_KEYS.contains(&base)
+}
+
 pub struct ScopedStorage {
     inner: Rc<dyn Storage>,
     project: String,
@@ -30,11 +45,13 @@ pub struct ScopedStorage {
     /// Asked before each write: whether the project is still here. None for a storage the caller vouches for (the sync,
     /// which writes a project's places before listing it; the migration, before it lists `first`).
     still_here: Option<Box<dyn Fn() -> bool>>,
+    /// The page shows the project read-only: no design key is ever written through this storage (`only_to_read`).
+    read_only: bool,
 }
 
 impl ScopedStorage {
     pub fn new(inner: Rc<dyn Storage>, project: &str) -> ScopedStorage {
-        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false), still_here: None }
+        ScopedStorage { inner, project: project.to_string(), closed: std::cell::Cell::new(false), still_here: None, read_only: false }
     }
 
     /// A page's storage: every write (the project's documents, and a mark, which would name the project) is refused
@@ -42,6 +59,16 @@ impl ScopedStorage {
     /// this one. `shared` knows no project list: the caller (`project::context`) says how to ask.
     pub fn guarded(inner: Rc<dyn Storage>, project: &str, still_here: impl Fn() -> bool + 'static) -> ScopedStorage {
         ScopedStorage { still_here: Some(Box::new(still_here)), ..ScopedStorage::new(inner, project) }
+    }
+
+    /// The same storage for a page that shows the project read-only (`project_id::VIEW`): every write of the design is
+    /// refused, the project's documents (`SCOPED_KEYS`, under any project), a mark and the list of projects alike
+    /// (`DESIGN_KEYS`), so nothing the page does reaches the design or the sync. The person's caches and preferences
+    /// (an area's roads, the goal, the language, ...) are still kept, so a design can be seen on a device that has not
+    /// kept its roads yet. Reads go on, and `Storage::read_only` says so, for the view-models to refuse their edits
+    /// before they are made.
+    pub fn only_to_read(self) -> ScopedStorage {
+        ScopedStorage { read_only: true, ..self }
     }
 
     /// From now on every write is refused, so a page whose project is gone cannot bring its work back (an editor's
@@ -61,7 +88,10 @@ impl Storage for ScopedStorage {
     }
 
     fn remember(&self, key: &str, value: &str) -> bool {
-        !self.closed.get() && self.still_here.as_ref().is_none_or(|here| here()) && self.inner.remember(&self.name(key), value)
+        !(self.read_only && is_design(key))
+            && !self.closed.get()
+            && self.still_here.as_ref().is_none_or(|here| here())
+            && self.inner.remember(&self.name(key), value)
     }
 
     /// Every key of the inner storage, scoped ones under their suffixed names: nothing is hidden.
@@ -83,6 +113,10 @@ impl Storage for ScopedStorage {
 
     fn project(&self) -> Option<String> {
         Some(self.project.clone())
+    }
+
+    fn read_only(&self) -> bool {
+        self.read_only
     }
 }
 
@@ -122,6 +156,34 @@ mod tests {
         assert!(!a.remember("cityloom-sync", "{}"), "a mark would name the project");
         assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
         assert_eq!(inner.recall("cityloom-sync"), None);
+    }
+
+    #[test]
+    fn a_storage_only_to_read_keeps_no_design_and_says_so_and_still_reads() {
+        let inner = Rc::new(MemoryStorage::default());
+        inner.remember("cityloom-edits@a", "A");
+        let a = ScopedStorage::new(inner.clone(), "a").only_to_read();
+        assert!(a.read_only());
+        assert!(!ScopedStorage::new(inner.clone(), "a").read_only());
+        let before = inner.keys();
+        for key in SCOPED_KEYS.into_iter().chain(DESIGN_KEYS) {
+            assert!(!a.remember(key, "B"), "{key} holds the design or reaches the sync");
+            assert!(!a.remember(&format!("{key}@b"), "B"), "{key} of another project neither");
+        }
+        assert_eq!(inner.keys(), before, "nothing of the design written");
+        assert_eq!(a.recall("cityloom-edits"), Some("A".into()));
+        assert_eq!(inner.recall("cityloom-edits@a"), Some("A".into()));
+        assert_eq!(a.project(), Some("a".into()));
+    }
+
+    #[test]
+    fn a_storage_only_to_read_still_keeps_the_persons_caches_and_preferences() {
+        let inner = Rc::new(MemoryStorage::default());
+        let a = ScopedStorage::new(inner.clone(), "a").only_to_read();
+        for key in ["cityloom-network:45.5000,-73.6000", "cityloom-checksum:45.5000,-73.6000", "cityloom-goal", "cityloom-lang", "cityloom-theme"] {
+            assert!(a.remember(key, "x"), "{key} is the person's");
+            assert_eq!(inner.recall(key), Some("x".into()));
+        }
     }
 
     #[test]

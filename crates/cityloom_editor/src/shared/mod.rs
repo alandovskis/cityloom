@@ -17,6 +17,7 @@ pub mod i18n;
 pub mod iso;
 pub mod keeper;
 pub mod live;
+pub mod locked;
 pub mod platform;
 pub mod ports;
 pub mod project_id;

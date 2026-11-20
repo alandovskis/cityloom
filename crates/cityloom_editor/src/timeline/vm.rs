@@ -138,9 +138,9 @@ impl TimelineVm {
         self.i18n.tr("timeline-heading", &Args::new().str("project", self.context.project_name.clone()))
     }
 
-    /// The address of the project's map, which the page leads back to.
+    /// The address of the project's map, which the page leads back to: read-only where this page is.
     pub fn back_href(&self) -> String {
-        crate::shared::project_id::link("map.html", self.ports.storage.project().as_deref())
+        crate::shared::project_id::link_for("map.html", &*self.ports.storage)
     }
 
     /// What marks a milestone the app saved before a restore (tracked).

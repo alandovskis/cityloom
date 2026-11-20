@@ -14,6 +14,7 @@ use crate::map::vm::{AreaStreet, MapVm};
 use crate::restriction::draw::Draw;
 use crate::restriction::model::{DEFAULT_SPEED, Rule, SPEEDS};
 use crate::shared::bind::Bound;
+use crate::shared::locked::locked;
 
 type Vm = Bound<MapVm>;
 
@@ -117,10 +118,13 @@ fn idle(vm: Vm, back: bool) -> impl IntoView {
     }
     view! {
         <p class="hint" id="areas-lead">{move || vm.with(|v| v.areas_lead())}</p>
-        <button type="button" id="declare-area" class="btn" disabled=move || !vm.with(|v| v.can_declare()) on:click=move |_| {
-            vm.with(|v| v.areas().start());
-        }>{word(vm, "restriction-declare")}</button>
-        {move || vm.with(|v| v.areas().deleted_note()).map(|note| view! {
+        // A map shown read-only declares no area and brings none back: neither is offered.
+        {(!vm.with(|v| v.read_only())).then(|| view! {
+            <button type="button" id="declare-area" class="btn" disabled=move || !vm.with(|v| v.can_declare()) on:click=move |_| {
+                vm.with(|v| v.areas().start());
+            }>{word(vm, "restriction-declare")}</button>
+        })}
+        {move || vm.with(|v| v.areas().deleted_note()).filter(|_| !vm.with(|v| v.read_only())).map(|note| view! {
             <p class="hint area-undone">
                 {note}
                 " "
@@ -177,8 +181,8 @@ fn row(vm: Vm, id: String) -> impl IntoView {
 fn details(vm: Vm, id: String) -> impl IntoView {
     let (name_id, edit_id, rename_id, redraw_id, delete_id, streets_id) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
     let details_id = format!("area-details-{id}");
-    view! {
-        <div class="area-form" id=details_id>
+    // A map shown read-only shows the area's rule and name, and offers them, Redraw and Delete disabled.
+    let form = view! {
             {rule_picker(vm, Some(id))}
             <label for="area-name">{word(vm, "restriction-name-label")}</label>
             <input
@@ -201,6 +205,10 @@ fn details(vm: Vm, id: String) -> impl IntoView {
                     }
                 }>{word(vm, "restriction-delete")}</button>
             </div>
+    };
+    view! {
+        <div class="area-form" id=details_id>
+            {locked(vm.with(|v| v.read_only()), form)}
             {move || {
                 let streets = vm.with(|v| v.area_streets(&streets_id));
                 (!streets.is_empty()).then(|| view! {

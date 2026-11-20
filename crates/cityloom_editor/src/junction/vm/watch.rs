@@ -45,6 +45,11 @@ impl Watch {
         self.vm.with_value(|v| v.link(href))
     }
 
+    /// Whether the junction is shown read-only: the page offers its edits disabled, or not at all.
+    pub fn read_only(&self) -> bool {
+        self.vm.with_value(|v| v.read_only())
+    }
+
     /// The planning goal chosen.
     pub fn goal(&self) -> crate::shared::goals::GoalChoice {
         self.vm.with_value(|v| v.goal().clone())

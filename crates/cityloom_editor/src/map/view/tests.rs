@@ -581,6 +581,39 @@ fn areas_html(vm: &Rc<MapVm>) -> String {
     map_html(|| view! { <Areas vm=vm.clone()/> })
 }
 
+/// Bendville's map of project `p1`, its tiles answered, with one area kept first round its street's midpoint, on a page
+/// that shows the project read-only.
+fn read_only_areas_vm() -> Rc<MapVm> {
+    use crate::shared::ports::Storage;
+    let (ports, _, storage) = test_ports();
+    let own: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), "p1"));
+    let store = bent_store(own.clone());
+    let (_, mid) = bent_midpoint(&store);
+    RestrictionStore::new(own).add("Car zone", Rule::CarFree, square([mid[0], mid[1]], 0.0005)).unwrap();
+    let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage, "p1").only_to_read());
+    let mapper = Rc::new(FakeMapper::default());
+    let vm = MapVm::new(Ports { storage: view, mapper: mapper.clone(), ..ports }, crate::i18n_for(Locale::En));
+    vm.attach();
+    mapper.say(MapEvent::Ready);
+    vm
+}
+
+#[test]
+fn shown_read_only_no_area_can_be_declared_and_the_selected_one_s_form_is_disabled_and_its_streets_still_open() {
+    let vm = read_only_areas_vm();
+    let h = areas_html(&vm);
+    assert!(!h.contains("declare-area"), "{h}");
+    assert!(h.contains("Car zone"), "the areas are listed: {h}");
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(h.contains("<fieldset disabled class=\"read-only-controls\""), "{h}");
+    let form = &h[h.find("read-only-controls").unwrap()..h.find("</fieldset>").unwrap()];
+    for id in ["area-name", "area-rule", "area-redraw", "area-delete"] {
+        assert!(form.contains(&format!("id=\"{id}\"")), "{id} is in the disabled form: {form}");
+    }
+    assert!(h.contains("href=\"street.html?street=1&amp;project=p1&amp;view=1\"") || h.contains("href=\"street.html?street=1&project=p1&view=1\""), "{h}");
+}
+
 /// Draws a triangle and closes it: the outline then waits for its rule and name.
 fn close_a_triangle(vm: &MapVm) {
     assert!(vm.areas().start());
@@ -1636,6 +1669,22 @@ mod selection {
         vm.deselect(1);
         let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
         assert!(h.contains("1 street selected.") && count(&h, "<li") == 1, "{h}");
+    }
+
+    #[test]
+    fn shown_read_only_the_selected_streets_can_be_listed_and_cleared_but_no_change_is_offered() {
+        use crate::shared::ports::Storage;
+        let (ports, _, storage) = test_ports();
+        let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage, "p1").only_to_read());
+        let vm = MapVm::on_sample(crate::shared::ports::Ports { storage: view, ..ports }, crate::i18n_for(Locale::En));
+        vm.toggle_selected(Some("s-1"));
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("1 street selected.") && h.contains("Clear the selection"), "{h}");
+        assert!(!h.contains("corridor-op") && !h.contains("corridor-review"), "{h}");
+        let (vm, _) = map_vm();
+        vm.toggle_selected(Some("s-1"));
+        let h = map_html(|| view! { <crate::map::view::selection_view::SelectedStreets vm=vm.clone()/> });
+        assert!(h.contains("corridor-review"), "a map that can be changed offers the change: {h}");
     }
 
     #[test]

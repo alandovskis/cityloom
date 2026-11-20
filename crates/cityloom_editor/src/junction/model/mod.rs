@@ -905,6 +905,7 @@ impl Refusal {
     }
 }
 
+#[derive(Clone)]
 pub struct Junction {
     /// Set when the junction is a place in a city: its streets are the city's
     /// and its name is the city's, so its streets cannot be removed.
@@ -963,6 +964,13 @@ impl Junction {
     pub fn drawn_as(&self, other: &Junction) -> bool {
         let bare = |j: &Junction| State { label: unlabelled(), ..j.current().clone() };
         bare(self) == bare(other)
+    }
+
+    /// Whether `other` has the same history as this one: the same states and the same one shown. What is chosen, the
+    /// region and the last refusal are not history: a page that shows the junction read-only puts back a junction whose
+    /// history a command changed, and keeps the rest.
+    pub fn same_history(&self, other: &Junction) -> bool {
+        self.cursor == other.cursor && self.states == other.states
     }
 
     /// The junction as it is now, without its streets, for the city to keep.
@@ -2225,6 +2233,21 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::testing::{en, fr};
     use crate::street::model::SAMPLES;
+
+    #[test]
+    fn the_history_is_the_states_and_not_what_is_chosen() {
+        let j = Junction::new(0);
+        let arm = j.current().arms[0].uid;
+        let mut chosen = j.clone();
+        chosen.select(Target::Arm(arm));
+        assert!(chosen.same_history(&j));
+        let mut edited = j.clone();
+        assert!(edited.set_corner(arm, 7_000));
+        assert!(!edited.same_history(&j));
+        let mut undone = edited.clone();
+        assert!(undone.undo());
+        assert!(!undone.same_history(&edited), "the state shown is history");
+    }
 
     #[test]
     fn a_buffer_is_not_part_of_the_carriageway_the_profile_reads() {

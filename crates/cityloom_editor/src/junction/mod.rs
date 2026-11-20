@@ -16,7 +16,7 @@ use crate::city::store::CityStore;
 use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
 use crate::shared::ports::Ports;
-use crate::shared::project_id::link;
+use crate::shared::project_id::link_for;
 
 /// What the junction says, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
@@ -95,7 +95,7 @@ pub fn enter_junction_in(ports: Ports, node: u32) -> bool {
     // No junction is numbered 0: the page's script gives 0 for an address with no junction.
     let here = node != 0 && CityStore::current(ports.storage.clone()).open().junction_name(node).is_some();
     if !here {
-        ports.navigator.replace(&link("map.html", ports.storage.project().as_deref()));
+        ports.navigator.replace(&link_for("map.html", &*ports.storage));
     }
     here
 }
@@ -109,7 +109,7 @@ pub fn mount_bare_shell(node: u32) {
     // `open_junction` already watches for the project's removal.
     let Some(ports) = crate::project::context::enter(browser_ports()) else { return };
     let project = ports.storage.project();
-    let map = link("map.html", project.as_deref());
+    let map = link_for("map.html", &*ports.storage);
     let i18n = page_i18n(&ports);
     let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
     let doc = leptos::prelude::document();

@@ -14,9 +14,10 @@ use wasm_bindgen::prelude::*;
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
 use crate::shared::i18n::Resources;
+use crate::shared::locked::locked;
 use crate::shared::platform::browser_ports;
 use crate::shared::ports::Ports;
-use crate::shared::project_id::link;
+use crate::shared::project_id::link_for;
 
 /// What the street page says, in both languages.
 pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
@@ -75,6 +76,10 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let city = edge.map(|edge| (edge, sheet.1.open()));
     let ends = city.as_ref().map(|(edge, city)| city.street_ends(*edge));
     let neighbours = city.as_ref().map(|(edge, city)| city.street_neighbours(*edge));
+    // A street shown read-only offers its editing panels disabled; the strips, the drawing and the path still choose.
+    let read_only = vm.read_only();
+    // The hint under the drawing names only the keys that work; the shell words it (`data-i18n`) in either language.
+    let _ = at("focus-hint").set_attribute("data-i18n", vm.focus_hint_key());
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
@@ -91,12 +96,12 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("street-head-slot", view! { <view::page::StreetSummary vm=vm.clone()/> }.into_any());
-    mount("speed-slot", view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
-    mount("zone-tools-slot", view! { <view::zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
-    mount("curb-tools-slot", view! { <view::curb_tools::CurbTools vm=vm.clone()/> }.into_any());
-    mount("stop-tools-slot", view! { <view::stop_tools::StopTools vm=vm.clone()/> }.into_any());
-    mount("calming-tools-slot", view! { <view::calming_tools::CalmingTools vm=vm.clone()/> }.into_any());
-    mount("green-tools-slot", view! { <view::green_tools::GreenTools vm=vm.clone()/> }.into_any());
+    mount("speed-slot", locked(read_only, view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }));
+    mount("zone-tools-slot", locked(read_only, view! { <view::zone_tools::ZoneTools vm=vm.clone()/> }));
+    mount("curb-tools-slot", locked(read_only, view! { <view::curb_tools::CurbTools vm=vm.clone()/> }));
+    mount("stop-tools-slot", locked(read_only, view! { <view::stop_tools::StopTools vm=vm.clone()/> }));
+    mount("calming-tools-slot", locked(read_only, view! { <view::calming_tools::CalmingTools vm=vm.clone()/> }));
+    mount("green-tools-slot", locked(read_only, view! { <view::green_tools::GreenTools vm=vm.clone()/> }));
     mount("title-block", view! { <view::page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <view::page::Fit vm=vm.clone()/> }.into_any());
     mount("fit-checks-slot", view! { <view::notes::FitChecks vm=vm.clone()/> }.into_any());
@@ -107,7 +112,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("clock-slot", view! { <view::page::Clock vm=vm.clone()/> }.into_any());
     mount("time-note", view! { <view::page::TimeNote vm=vm.clone()/> }.into_any());
     mount("welcome-slot", view! { <view::page::Welcome vm=vm.clone()/> }.into_any());
-    mount("inspector", view! { <view::inspector::StreetInspector vm=vm.clone()/> }.into_any());
+    mount("inspector", locked(read_only, view! { <view::inspector::StreetInspector vm=vm.clone()/> }));
     mount("impact", view! { <view::notes::LastChange vm=vm.clone()/> }.into_any());
     mount("space", view! { <view::notes::Space vm=vm.clone()/> }.into_any());
     mount("cap", view! { <view::notes::Capacity vm=vm.clone()/> }.into_any());
@@ -137,7 +142,7 @@ pub fn open_street_in(ports: Ports, edge: u32) -> Option<Sheet> {
     let store = CityStore::current(ports.storage.clone());
     // No street is numbered 0: the page's script gives 0 for an address with no street.
     let Some(street) = (edge != 0).then(|| store.open().street_editor(edge, store.region())).flatten() else {
-        ports.navigator.replace(&link("map.html", ports.storage.project().as_deref()));
+        ports.navigator.replace(&link_for("map.html", &*ports.storage));
         return None;
     };
     let place = Place::Street(edge);

@@ -13,6 +13,7 @@ st-key-undo = undo
 st-key-view = section, 2.5D
 st-street-2-5d = Street in 2.5D
 st-focus-hint = Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.
+st-focus-hint-read-only = Arrows select.
 st-space-heading = Where the width goes
 st-people-moved = People moved
 st-sample-numbers = sample numbers

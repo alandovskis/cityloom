@@ -34,6 +34,11 @@ pub trait Target {
     fn project(&self) -> Option<String> {
         None
     }
+    /// Whether the region the page holds is part of its design (a street's or junction's drive side), so a page shown
+    /// read-only cannot choose it. False where it is only how the page shows things (the map, a bare page).
+    fn region_is_design(&self) -> bool {
+        false
+    }
 }
 
 /// The target of a page that has nothing of its own to bind (a junction that cannot be drawn): the menu
@@ -247,9 +252,16 @@ impl ShellVm {
     }
 
     /// `href` as a link of this page: one to the map or an editor names the page's project, so it opens there whichever
-    /// project another tab opened since (`shared::project_id::link`).
+    /// project another tab opened since, and read-only where this page is (`shared::project_id::link_in`).
     pub fn link(&self, href: &str) -> String {
-        crate::shared::project_id::link(href, self.target.project().as_deref())
+        crate::shared::project_id::link_in(href, self.target.project().as_deref(), self.read_only())
+    }
+
+    /// Whether the page shows its project read-only: its address says so (`shared::project_id::viewing`), as it does to
+    /// `project::context`, which gives the page's view-models a storage that keeps nothing. The top bar then says so.
+    pub fn read_only(&self) -> bool {
+        let path = self.ports.page.path();
+        crate::shared::project_id::viewing(path.split_once('?').map_or("", |(_, search)| search))
     }
 
     // ---- units ----
@@ -282,8 +294,23 @@ impl ShellVm {
         self.region.get()
     }
 
-    /// The person chose a region: the page takes it, it is remembered, and said.
+    /// Whether the region cannot be chosen: the page is shown read-only and its region is part of the design
+    /// (`Target::region_is_design`: a street's or junction's drive side). A read-only map's region is only how the city
+    /// is shown, the person's preference, and stays free.
+    pub fn region_locked(&self) -> bool {
+        self.read_only() && self.target.region_is_design()
+    }
+
+    /// The person chose a region: the page takes it, it is remembered, and said. Where the region is locked
+    /// (`region_locked`) the choice is refused like any edit: the refusal is said, the page keeps its own (the menu
+    /// shows it again), and the region kept for the other pages is neither written nor announced, so what is kept and
+    /// what the page shows never disagree. The menu is disabled there too (`view::bind_region`).
     pub fn choose_region(&self, id: &str) {
+        if self.region_locked() {
+            self.ports.announcer.say(&self.i18n.tr_now("read-only-refused", &Args::new()));
+            self.region.set(self.target.region_id());
+            return;
+        }
         self.take_region(Some(id));
         self.ports.storage.remember(REGION_KEY, id);
         if let Some(r) = REGIONS.iter().find(|r| r.id == self.target.region_id()) {

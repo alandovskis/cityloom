@@ -33,23 +33,51 @@ pub fn round_trips(project: &str, key: &str) -> bool {
 /// The pages that open inside a project: the map, the two editors and the timeline.
 pub const PROJECT_PAGES: [&str; 4] = ["map.html", "street.html", "intersection.html", "timeline.html"];
 
+/// What a page's address carries to open its project read-only: the design can be looked at, not changed. Nothing
+/// on a page adds it or takes it away (`link_in` keeps it on the links between a project's pages); the share link
+/// (#221) is to open a design with it.
+pub const VIEW: &str = "view=1";
+
+/// Whether the page whose query string is `search` (with or without its `?`) opens its project read-only.
+pub fn viewing(search: &str) -> bool {
+    search.trim_start_matches('?').split('&').any(|pair| pair == VIEW)
+}
+
 /// `href` naming `project` (`project=<id>` added to its query) where it leads to one of `PROJECT_PAGES` and names no
 /// project yet; any other address, or no project, leaves it as it is.
 pub fn link(href: &str, project: Option<&str>) -> String {
+    link_in(href, project, false)
+}
+
+/// `link`, from a page that shows `project` read-only when `read_only`: a link to another of its pages opens that
+/// read-only too (`VIEW` added), so the mode cannot be left by going from page to page.
+pub fn link_in(href: &str, project: Option<&str>, read_only: bool) -> String {
     let Some(project) = project else { return href.to_string() };
     let (rest, fragment) = href.split_once('#').map_or((href, None), |(r, f)| (r, Some(f)));
     let (path, query) = rest.split_once('?').map_or((rest, None), |(p, q)| (p, Some(q)));
     let page = path.rsplit('/').next().unwrap_or(path);
-    let named = query.is_some_and(|q| q.split('&').any(|pair| pair == "project" || pair.starts_with("project=")));
-    if !PROJECT_PAGES.contains(&page) || named {
+    if !PROJECT_PAGES.contains(&page) {
         return href.to_string();
     }
-    let query = match query {
-        Some(q) if !q.is_empty() => format!("{q}&project={project}"),
-        _ => format!("project={project}"),
-    };
+    let mut pairs: Vec<String> = query.unwrap_or_default().split('&').filter(|p| !p.is_empty()).map(str::to_string).collect();
+    let named = pairs.iter().any(|pair| pair == "project" || pair.starts_with("project="));
+    let viewed = pairs.iter().any(|pair| pair == VIEW);
+    if named && (viewed || !read_only) {
+        return href.to_string();
+    }
+    if !named {
+        pairs.push(format!("project={project}"));
+    }
+    if read_only && !viewed {
+        pairs.push(VIEW.to_string());
+    }
     let fragment = fragment.map(|f| format!("#{f}")).unwrap_or_default();
-    format!("{path}?{query}{fragment}")
+    format!("{path}?{}{fragment}", pairs.join("&"))
+}
+
+/// `link_in` from a page whose project's storage is `storage`: its project, and read-only where it is.
+pub fn link_for(href: &str, storage: &dyn crate::shared::ports::Storage) -> String {
+    link_in(href, storage.project().as_deref(), storage.read_only())
 }
 
 #[cfg(test)]
@@ -97,6 +125,31 @@ mod tests {
         assert!(!valid("Has Upper"));
         assert!(!valid("under_score"));
         assert!(!valid(&"a".repeat(17)));
+    }
+
+    #[test]
+    fn a_page_is_read_only_when_its_address_says_view() {
+        assert!(viewing("project=p1&view=1"));
+        assert!(viewing("?view=1&project=p1"));
+        assert!(viewing("street=7&project=p1&view=1"));
+        for no in ["", "project=p1", "view=0", "view", "review=1", "view=yes"] {
+            assert!(!viewing(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn a_link_from_a_read_only_page_keeps_it_read_only() {
+        assert_eq!(link_in("map.html", Some("p1"), true), "map.html?project=p1&view=1");
+        assert_eq!(link_in("street.html?street=7#x", Some("p1"), true), "street.html?street=7&project=p1&view=1#x");
+        assert_eq!(link_in("map.html?project=p1&view=1", Some("p1"), true), "map.html?project=p1&view=1");
+        // a link naming its project already is still kept read-only
+        assert_eq!(link_in("map.html?project=p2", Some("p1"), true), "map.html?project=p2&view=1");
+        assert_eq!(link_in("map.html", Some("p1"), false), "map.html?project=p1");
+        // a page outside a project is not one of its pages
+        for other in ["index.html", "about.html", "account.html", "https://www.openstreetmap.org/", "#wrap"] {
+            assert_eq!(link_in(other, Some("p1"), true), other);
+        }
+        assert_eq!(link_in("map.html", None, true), "map.html");
     }
 
     #[test]

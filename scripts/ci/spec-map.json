@@ -10,7 +10,7 @@
     "account": ["account", "account-server"],
     "sync": ["sync"],
     "archive": ["archive", "design-archive"],
-    "cross": ["a11y", "editors", "focus-touch", "footer", "language", "shell"],
+    "cross": ["a11y", "editors", "focus-touch", "footer", "language", "read-only", "shell"],
     "static": ["delivery", "serve"]
   },
   "rules": [

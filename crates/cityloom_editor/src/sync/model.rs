@@ -441,6 +441,12 @@ mod tests {
     use crate::shared::ports::{MemoryStorage, test_ports};
     use serde_json::json;
 
+    #[test]
+    fn the_design_keys_a_page_only_to_read_refuses_name_the_sync_document() {
+        use crate::shared::scoped::DESIGN_KEYS;
+        assert!(DESIGN_KEYS.contains(&SYNC_KEY) && DESIGN_KEYS.contains(&DAMAGED_KEY));
+    }
+
     fn storage() -> Rc<MemoryStorage> {
         let (_, _, s) = test_ports();
         s.set_now(1_800_000_000_000);

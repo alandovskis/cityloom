@@ -96,9 +96,24 @@ impl JunctionVm {
         self.ports.storage.project()
     }
 
-    /// `href` to another page of the junction's project (`shared::project_id::link`).
+    /// `href` to another page of the junction's project (`shared::project_id::link_for`): read-only where this one is.
     pub fn link(&self, href: &str) -> String {
-        crate::shared::project_id::link(href, self.project().as_deref())
+        crate::shared::project_id::link_for(href, &*self.ports.storage)
+    }
+
+    /// Whether the junction is shown read-only (`Storage::read_only`): every edit is refused and said, and nothing is
+    /// kept; choosing and looking go on. The page offers no edit then.
+    pub fn read_only(&self) -> bool {
+        self.ports.storage.read_only()
+    }
+
+    /// Says so, and is true, when the junction is shown read-only: the command that asks makes no edit.
+    fn refuse_read_only(&self) -> bool {
+        let read_only = self.read_only();
+        if read_only {
+            self.ports.announcer.say(&self.i18n.tr_now("read-only-refused", &Args::new()));
+        }
+        read_only
     }
 
     /// The view, which a view that reads it draws again when the junction changes.
@@ -133,8 +148,27 @@ impl JunctionVm {
         self.core.set_units(units);
     }
 
-    /// Changes the junction, tells whatever watches it, and sees that it is kept.
-    pub fn edit<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+    /// Changes the junction, tells whatever watches it, and sees that it is kept. Shown read-only, whatever `f` did to
+    /// the junction's history is put back (what is chosen stays), the refusal is said, `R::default()` (false, none) is
+    /// returned and nothing is kept: the commands refuse first, and this holds for any change that reaches the junction
+    /// some other way.
+    pub fn edit<R: Default>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        if self.read_only() {
+            let (r, put_back) = self.core.edit(|j| {
+                let kept = j.clone();
+                let r = f(j);
+                let put_back = !j.same_history(&kept);
+                if put_back {
+                    *j = kept;
+                }
+                (r, put_back)
+            });
+            if put_back {
+                self.refuse_read_only();
+                return R::default();
+            }
+            return r;
+        }
         let r = self.core.edit(f);
         if let Some(k) = &self.keeper {
             k.touch();
@@ -143,17 +177,20 @@ impl JunctionVm {
     }
 
     /// An edit the person made: it is announced by what it was, and a refusal by
-    /// its reason. A phase it takes off its ready-made pattern is said too.
-    pub fn apply<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+    /// its reason. A phase it takes off its ready-made pattern is said too. Shown read-only, it is refused and said.
+    pub fn apply<R: Into<bool> + Copy + Default>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         self.apply_with(f, PatternNote::Report)
     }
 
     /// `apply` for a choice of pattern, which says nothing of the phases' patterns: changing one is what it is for.
-    fn apply_choosing_pattern<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+    fn apply_choosing_pattern<R: Into<bool> + Copy + Default>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         self.apply_with(f, PatternNote::Skip)
     }
 
-    fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
+    fn apply_with<R: Into<bool> + Copy + Default>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
+        if self.refuse_read_only() {
+            return R::default();
+        }
         let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
         let meeting = self.meetings();
         let r = self.edit(f);
@@ -216,6 +253,9 @@ impl JunctionVm {
     }
 
     fn toggle_phase_movement(&self, index: usize, uid: u32, ride: bool) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         // The pattern of the phase, as the suggestion or the person's plan has it.
         let pattern = || {
             self.read(|j| {
@@ -270,6 +310,9 @@ impl JunctionVm {
     }
 
     pub fn undo(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let meeting = self.meetings();
         let done = self.edit(|j| j.undo());
         if done {
@@ -279,6 +322,9 @@ impl JunctionVm {
     }
 
     pub fn redo(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let meeting = self.meetings();
         let done = self.edit(|j| j.redo());
         if done {
@@ -288,6 +334,9 @@ impl JunctionVm {
     }
 
     pub fn reset(&self) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
         let meeting = self.meetings();
         let done = self.edit(|j| j.reset());
         if done {
@@ -298,6 +347,9 @@ impl JunctionVm {
 
     #[cfg(test)]
     pub fn load_sample(&self, sample: usize) {
+        if self.refuse_read_only() {
+            return;
+        }
         self.edit(|j| j.load_sample(sample));
         self.ports.announcer.say(&text::sample_text(&self.view_now(), &self.i18n));
     }
@@ -433,6 +485,11 @@ impl JunctionVm {
 }
 
 impl crate::shell::Target for JunctionVm {
+    /// The drive side is the design's: a page shown read-only cannot choose it.
+    fn region_is_design(&self) -> bool {
+        true
+    }
+
     fn set_units(&self, units: Units) {
         JunctionVm::set_units(self, units);
     }
@@ -440,7 +497,12 @@ impl crate::shell::Target for JunctionVm {
         JunctionVm::project(self)
     }
 
+    /// Shown read-only the junction keeps its own region (its drive side is the design): not taken and nothing said,
+    /// so the region the shell gives on load, which may be the other side's, makes no edit and no refusal.
     fn apply_region(&self, region: usize) -> bool {
+        if self.read_only() {
+            return false;
+        }
         let before = self.pattern_state();
         let meeting = self.meetings();
         let changed = self.edit(|j| j.set_region(region));
@@ -761,5 +823,156 @@ mod tests {
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(r.storage.recall(crate::sync::model::SYNC_KEY), None, "looking is not editing");
+    }
+}
+
+/// A junction shown read-only (`Storage::read_only`, a page opened with `project_id::VIEW`): every edit is refused, by
+/// the page or by a command called as it is, and nothing reaches the city or the sync; choosing and looking still work.
+#[cfg(test)]
+mod read_only_tests {
+    use super::*;
+    use crate::city::store::CityStore;
+    use crate::junction::model::signal::Pattern;
+    use crate::junction::model::{SIGNAL, Target};
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
+    use crate::shared::scoped::ScopedStorage;
+
+    struct Rig {
+        vm: Rc<JunctionVm>,
+        said: Rc<RecordingAnnouncer>,
+        time: Rc<ManualScheduler>,
+        storage: Rc<MemoryStorage>,
+    }
+
+    fn stored(storage: &MemoryStorage) -> Vec<(String, Option<String>)> {
+        let mut keys = storage.keys();
+        keys.sort();
+        keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect()
+    }
+
+    /// A junction of project `p1` signalled and with a corner changed before (so there is something to undo and start
+    /// over from), opened on a page that views the project read-only, in `locale`.
+    fn rig_in(locale: Locale) -> Rig {
+        let (ports, said, storage, time) = test_ports_with_time();
+        let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+        let store = CityStore::sample(own);
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        j.set_control(SIGNAL);
+        assert!(j.set_corner(arm, 7_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let store = CityStore::sample(view.clone());
+        let junction = store.open().junction_editor(node, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Junction(node) };
+        let vm = JunctionVm::new(Ports { storage: view, ..ports }, crate::i18n_for(locale), junction, Some(binding));
+        Rig { vm, said, time, storage }
+    }
+
+    fn rig() -> Rig {
+        rig_in(Locale::En)
+    }
+
+    const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+
+    /// The region (the shell gives the one kept, on load and when chosen) changes the junction's drive side: shown
+    /// read-only it is not taken, and nothing is said, so a page opened with the other side kept says nothing on load.
+    #[test]
+    fn a_region_is_not_taken_and_nothing_is_said() {
+        use crate::shell::Target;
+        let r = rig();
+        assert!(r.vm.region_is_design(), "the drive side is the design's");
+        let (junction, region) = (r.vm.read(|j| j.snapshot()), r.vm.region_id());
+        let left = crate::shared::catalogue::REGIONS.iter().position(|g| g.id == "united-kingdom").unwrap();
+        assert_ne!(region, "united-kingdom");
+        assert!(!r.vm.apply_region(left));
+        assert_eq!((r.vm.read(|j| j.snapshot()), r.vm.region_id()), (junction, region));
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn the_junction_says_it_is_read_only_and_one_opened_to_edit_is_not() {
+        assert!(rig().vm.read_only());
+        let (ports, ..) = test_ports_with_time();
+        assert!(!JunctionVm::new(ports, crate::i18n_for(Locale::En), Junction::new(0), None).read_only());
+    }
+
+    #[test]
+    fn every_edit_command_is_refused_and_said_and_leaves_the_junction_and_the_storage_as_they_were() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let junction = r.vm.read(|j| j.snapshot());
+        let arm = r.vm.view_now().arms[0].uid;
+        assert!(r.vm.view_now().can_undo && r.vm.view_now().changed, "the earlier edit can be undone and started over from");
+        assert!(r.vm.view_now().signal.is_some(), "a signal to plan");
+        let refused: Vec<(&str, Box<dyn Fn(&JunctionVm) -> bool>)> = vec![
+            ("apply", Box::new(move |vm| vm.apply(|j| j.set_corner(arm, 9_000)))),
+            ("undo", Box::new(|vm| vm.undo())),
+            ("redo", Box::new(|vm| vm.redo())),
+            ("reset", Box::new(|vm| vm.reset())),
+            ("turbo", Box::new(|vm| vm.choose_turbo(Some(0)))),
+            ("pattern", Box::new(|vm| vm.choose_pattern(0, Pattern::Scramble))),
+            ("walk", Box::new(move |vm| vm.toggle_phase_walk(0, arm))),
+            ("ride", Box::new(move |vm| vm.toggle_phase_ride(0, arm))),
+        ];
+        for (what, command) in &refused {
+            assert!(!command(&r.vm), "{what} is refused");
+            assert_eq!(r.said.take(), [REFUSED], "{what} says why");
+            assert_eq!(r.vm.read(|j| j.snapshot()), junction, "{what} changes nothing");
+        }
+        r.vm.load_sample(1);
+        assert_eq!(r.said.take(), [REFUSED]);
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.read(|j| j.snapshot()), junction);
+        assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
+    }
+
+    #[test]
+    fn a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let junction = r.vm.read(|j| j.snapshot());
+        let arm = r.vm.view_now().arms[0].uid;
+        assert!(!r.vm.edit(|j| j.set_corner(arm, 9_000)), "the model took it, and the page refuses it: no edit to announce");
+        assert_eq!(r.vm.read(|j| j.snapshot()), junction, "and it was put back");
+        assert_eq!(r.said.take(), ["This design is open read-only: nothing can be changed."]);
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(stored(&r.storage), before);
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn choosing_and_looking_still_work() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let arm = r.vm.view_now().arms[0].uid;
+        r.vm.select(Target::Arm(arm));
+        assert_eq!(r.vm.view_now().selected.uid, arm);
+        assert!(!r.said.take().is_empty(), "the choice is said");
+        let chosen = |vm: &JunctionVm| (vm.view_now().selected.kind, vm.view_now().selected.uid);
+        let first = chosen(&r.vm);
+        r.vm.select_relative(1);
+        assert_ne!(chosen(&r.vm), first, "the next thing round the junction");
+        r.vm.show_plan();
+        assert!(r.vm.plan_shown(), "the signal plan can be looked at");
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(stored(&r.storage), before);
+    }
+
+    #[test]
+    fn the_refusal_is_said_in_the_language_of_the_page() {
+        let r = rig_in(Locale::FrCa);
+        assert!(!r.vm.undo());
+        assert_eq!(r.said.take(), ["Cet aménagement est ouvert en lecture seule\u{a0}: rien ne peut y être modifié."]);
+    }
+
+    #[test]
+    fn a_link_from_the_junction_keeps_the_project_read_only() {
+        assert_eq!(rig().vm.link("street.html?street=7"), "street.html?street=7&project=p1&view=1");
     }
 }

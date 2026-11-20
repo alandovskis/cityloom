@@ -325,3 +325,17 @@ mod view {
         assert!(page.contains("width"), "{page}");
     }
 }
+
+#[test]
+fn the_link_back_to_the_map_keeps_the_project_and_a_read_only_view() {
+    use crate::shared::ports::Ports;
+    use crate::shared::scoped::ScopedStorage;
+    let (ports, _, storage) = test_ports();
+    let context = || Context { project_name: "Plateau".into(), app_version: "0.70.0".into() };
+    let own: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1"));
+    let vm = TimelineVm::new(Ports { storage: own, ..ports.clone() }, crate::i18n_for(Locale::En), context());
+    assert_eq!(vm.back_href(), "map.html?project=p1");
+    let look: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage, "p1").only_to_read());
+    let vm = TimelineVm::new(Ports { storage: look, ..ports }, crate::i18n_for(Locale::En), context());
+    assert_eq!(vm.back_href(), "map.html?project=p1&view=1", "a timeline shown read-only leads back to its map read-only");
+}

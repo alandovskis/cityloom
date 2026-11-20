@@ -358,6 +358,31 @@ a.btn {
   position: relative;
   margin-left: 6px;
 }
+/* A page that shows its project read-only offers its editing controls disabled (`shared::locked::locked`). */
+.read-only-controls {
+  display: contents;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+/* A page that shows its project read-only says so in its top bar (`shell::view::ReadOnlyTag`). */
+.read-only-slot {
+  display: contents;
+}
+.read-only-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .session-box[hidden] {
   display: none;
 }
