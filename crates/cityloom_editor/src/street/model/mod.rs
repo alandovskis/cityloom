@@ -69,7 +69,9 @@ pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
 pub use unavailable::Unavailable;
 mod zones;
 use zones::Failing;
-pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
+#[cfg(test)]
+pub use zones::Keep;
+pub use zones::{Elsewhere, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -3493,14 +3495,6 @@ mod tests {
         let mut e = Editor::from_street(&today, &now, 0);
         assert!(e.select_zone(1));
         assert_eq!(e.with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First })).zone(), 1, "a zone still loaded stays selected");
-    }
-
-    #[test]
-    fn a_street_cut_at_both_ends_says_split_is_unavailable() {
-        let e = zoned_editor();
-        assert_eq!(e.view().zones.split, Some(Said::new("zone-refused-no-anchor")));
-        let framed = zoned_editor().with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
-        assert_eq!(framed.view().zones.split, None);
     }
 
     #[test]

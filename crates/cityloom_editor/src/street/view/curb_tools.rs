@@ -12,7 +12,7 @@ use crate::shared::i18n::Args;
 use crate::shared::units::parse_length_mm;
 use crate::street::model::Use;
 use crate::street::model::UseExt;
-use crate::street::view::zone_tools::focus_later;
+use crate::street::view::focus_later;
 use crate::street::vm::StreetVm;
 use crate::street::vm::watch::SheetWatch;
 

@@ -179,7 +179,7 @@ pub fn opening_topic(level: Level, v: &View) -> Topic {
         Level::Calming => Topic::Calming,
         Level::Green => Topic::Greenery,
         Level::Curb => v.curb.sides.iter().find_map(|s| s.cells.get(s.selected?)?.use_).and_then(|u| kind_index(u.kind_id())).map_or(Topic::Walking, piece),
-        Level::Street | Level::Zone => Topic::Walking,
+        Level::Street => Topic::Walking,
     }
 }
 

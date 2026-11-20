@@ -1,5 +1,5 @@
 //! The street page's details panel: which of its levels shows (the page's own markup, `#p-<level>`), and the path to
-//! that level above it (`Street › Zone 1 › Driving lane`). A step before the last is a button that shows its level;
+//! that level above it (`Street › Driving lane`). A step before the last is a button that shows its level;
 //! the last is the level shown. The views show what the view-model says; nothing here decides which level that is.
 
 use std::rc::Rc;
@@ -60,24 +60,6 @@ pub fn PanelPath(vm: Rc<StreetVm>) -> impl IntoView {
         <nav class="panel-path" aria-label=move || w.i18n().tr("st-path-label", &Args::new())>
             <ol>{move || w.path().into_iter().map(step).collect_view()}</ol>
         </nav>
-    }
-}
-
-/// The Street level's way to the selected zone's commands: with nothing chosen the path is the street alone, and
-/// the zone commands (Split among them) are one press away from it.
-#[component]
-pub fn ZoneEntry(vm: Rc<StreetVm>) -> impl IntoView {
-    let w = SheetWatch::new(vm);
-    let on_press = move |_| {
-        w.show_level(Level::Zone);
-        focus_current();
-    };
-    view! {
-        <button type="button" id="zone-entry" class="btn" on:click=on_press>{move || w.zone_entry()}</button>
-        {move || {
-            (!w.view().zones.several)
-                .then(|| view! { <p class="zone-hint">{w.i18n().tr("st-zones-entry-hint", &crate::shared::i18n::Args::new())}</p> })
-        }}
     }
 }
 

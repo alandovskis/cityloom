@@ -4,9 +4,12 @@
 use super::{Zone, ZoneEnd, ZoneFrame};
 use serde::Serialize;
 
+#[cfg(test)]
+use super::Speed;
 use super::transition::{Host, Transition, transition};
 use super::zone_speed::taper_kmh;
-use super::{Arg, Editor, Said, Speed, named_said, snap};
+use super::{Arg, Editor, Said, named_said, snap};
+#[cfg(test)]
 use cityloom_model::street::{same_pieces, speed_in};
 
 /// Why a transition fails its check.
@@ -63,13 +66,8 @@ pub struct ZonesView {
     /// The street's length the zones lie along: the length they were drawn on, else the loaded one, else 0.
     pub length_mm: i32,
     pub from_end: ZoneEnd,
-    /// Why Split is not available, when it is not.
-    pub split: Option<Said>,
-    /// The street has more than one zone: only then are there zones to merge, name or give a section of their own.
+    /// The street has more than one zone.
     pub several: bool,
-    /// The selected zone has a zone before it / after it to merge with.
-    pub can_merge_prev: bool,
-    pub can_merge_next: bool,
     /// Set when the zones were drawn on a road of another length or anchored at its other end.
     pub elsewhere: Option<Elsewhere>,
     /// The zone across the nearest boundary, for the 2.5D; `None` when no boundary is near.
@@ -101,6 +99,7 @@ pub struct Elsewhere {
 }
 
 /// Which zone a merge keeps the section and name of.
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keep {
     Selected,
@@ -201,10 +200,7 @@ impl Editor {
             selected: self.zone,
             length_mm,
             from_end,
-            split: self.structure_frame(true).err().map(ZoneRefusal::said),
             several: content.zones.len() > 1,
-            can_merge_prev: self.merge_neighbour(false).is_some(),
-            can_merge_next: self.merge_neighbour(true).is_some(),
             elsewhere: self.elsewhere(),
             joint: self.joint(),
         }
@@ -253,7 +249,9 @@ impl Editor {
     }
 
     /// Splits the selected zone at `at_mm` (default its middle, snapped to `SNAP_MM`). Both halves keep the section;
-    /// the first keeps the name; the new zone is selected.
+    /// the first keeps the name; the new zone is selected. Tests build zoned streets with it; the page splits only
+    /// through an edit of the pick.
+    #[cfg(test)]
     pub fn split_zone(&mut self, at_mm: Option<i32>) -> Result<(), ZoneRefusal> {
         let frame = self.structure_frame(false)?;
         let z = self.zone;
@@ -281,6 +279,7 @@ impl Editor {
     }
 
     /// The neighbour a merge would join the selected zone to, if there is one.
+    #[cfg(test)]
     fn merge_neighbour(&self, next: bool) -> Option<usize> {
         let count = self.states[self.cursor].content.zones.len();
         let z = self.zone;
@@ -288,6 +287,7 @@ impl Editor {
     }
 
     /// Whether merging with the next (or previous) zone must ask which section to keep: the two differ.
+    #[cfg(test)]
     pub fn merge_needs_choice(&self, next: bool) -> bool {
         let content = &self.states[self.cursor].content;
         self.merge_neighbour(next).is_some_and(|n| {
@@ -302,7 +302,9 @@ impl Editor {
     }
 
     /// Merges the selected zone with the next (or previous) one. The merged zone starts where the earlier did, takes
-    /// the section and name of the zone `keep` names, and is selected.
+    /// the section and name of the zone `keep` names, and is selected. Tests only: the page joins runs when an edit
+    /// makes them alike.
+    #[cfg(test)]
     pub fn merge_zone(&mut self, next: bool, keep: Keep) -> Result<(), ZoneRefusal> {
         let frame = self.structure_frame(false)?;
         let n = self.merge_neighbour(next).ok_or(ZoneRefusal::NoNeighbour)?;
@@ -377,7 +379,9 @@ impl Editor {
         let _ = self.move_boundary(from + delta_mm);
     }
 
-    /// Names the selected zone; blank clears the name. False when the street has no zones or nothing changed.
+    /// Names the selected zone; blank clears the name. False when the street has no zones or nothing changed. Tests
+    /// only: a name comes with a saved street and is never typed on the page.
+    #[cfg(test)]
     pub fn name_zone(&mut self, name: Option<&str>) -> bool {
         if self.gesture.is_some() {
             return false;
@@ -391,41 +395,6 @@ impl Editor {
             .with("zone", Arg::Said(Box::new(zone_label_mid(&Zone { from_mm: 0, segments: None, name: name.clone(), speed: Speed::Undecided }, z + 1))));
         self.edit_content(label, |c| {
             c.zones[z].name = name;
-            true
-        })
-    }
-
-    /// Puts the selected zone back on the street's base section.
-    pub fn reset_zone(&mut self) -> bool {
-        if self.gesture.is_some() {
-            return false;
-        }
-        let z = self.zone;
-        if self.states[self.cursor].content.zones.get(z).is_none_or(|g| g.segments.is_none()) {
-            return false;
-        }
-        let label = Said::new("rev-zone-reset").with("zone", Arg::Said(Box::new(self.label_of(z))));
-        self.edit_content(label, |c| {
-            c.zones[z].segments = None;
-            true
-        })
-    }
-
-    /// Makes the selected zone's section the street's base. Zones with none of their own follow it; zones with one
-    /// keep it.
-    pub fn use_for_street(&mut self) -> bool {
-        if self.gesture.is_some() {
-            return false;
-        }
-        let z = self.zone;
-        if z >= self.states[self.cursor].content.zones.len() {
-            return false;
-        }
-        let label = Said::new("rev-zone-use").with("zone", Arg::Said(Box::new(self.label_of(z))));
-        self.edit_content(label, |c| {
-            if let Some(own) = c.zones[z].segments.take() {
-                c.segments = own;
-            }
             true
         })
     }
@@ -895,8 +864,6 @@ mod tests {
         assert_eq!(e.split_zone(Some(30_000)), Err(ZoneRefusal::Dragging));
         assert_eq!(e.merge_zone(true, Keep::Selected), Err(ZoneRefusal::Dragging));
         assert!(!e.name_zone(Some("x")));
-        assert!(!e.reset_zone());
-        assert!(!e.use_for_street());
         assert!(e.end_gesture());
         assert_eq!(revisions(&e), before.0 + 1);
         let s = e.snapshot();
@@ -929,7 +896,7 @@ mod tests {
     }
 
     #[test]
-    fn naming_resetting_and_using_a_zone_for_the_street_are_each_one_undoable_step() {
+    fn naming_a_zone_is_one_undoable_step() {
         let mut e = editor(&[0, 20_000, 40_000]);
         assert!(e.select_zone(1));
         let n = revisions(&e);
@@ -943,43 +910,9 @@ mod tests {
         assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-unname");
         assert!(e.undo());
         assert_eq!(e.snapshot().zones[1].name.as_deref(), Some("Market"));
-
-        make_own(&mut e);
-        let own = e.snapshot().zones[1].segments.clone().unwrap();
-        let base = e.snapshot().segments;
-        let n = revisions(&e);
-        assert!(e.reset_zone());
-        assert_eq!(e.snapshot().zones[1].segments, None);
-        assert_eq!(revisions(&e), n + 1);
-        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-reset");
-        assert!(!e.reset_zone(), "already on the base");
-        assert!(e.undo());
-        assert_eq!(e.snapshot().zones[1].segments.as_ref(), Some(&own));
-
-        // zone 2 has its own section too; zone 0 follows the base
-        assert!(e.select_zone(2));
-        let mut other_own = base.clone();
-        other_own[1].width_mm += 100;
-        let uid = other_own[1].uid;
-        assert!(e.set_width(uid, other_own[1].width_mm));
-        let kept = e.snapshot().zones[2].segments.clone().unwrap();
-        assert!(e.select_zone(1));
-        let n = revisions(&e);
-        assert!(e.use_for_street());
-        let s = e.snapshot();
-        assert_eq!(s.segments, own, "the zone's section is the base");
-        assert_eq!(s.zones[1].segments, None);
-        assert_eq!(s.zones[0].segments, None, "a zone with no section follows the new base");
-        assert_eq!(s.zones[2].segments.as_ref(), Some(&kept), "a zone with one keeps it");
-        assert_eq!(revisions(&e), n + 1);
-        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-use");
-        assert!(!e.use_for_street(), "it is the base already");
-        assert!(e.undo());
-        assert_eq!(e.snapshot().segments, base);
-
-        // a street of one zone has none of these
+        // a street of one zone has no zone to name
         let mut one = editor(&[]);
-        assert!(!one.name_zone(Some("x")) && !one.reset_zone() && !one.use_for_street());
+        assert!(!one.name_zone(Some("x")));
     }
 
     #[test]
@@ -1015,10 +948,6 @@ mod tests {
         check(&e, "move");
         e.merge_zone(false, Keep::Neighbour).unwrap();
         check(&e, "merge");
-        assert!(e.use_for_street());
-        check(&e, "use");
-        let _ = e.reset_zone();
-        check(&e, "reset");
         while e.undo() {
             check(&e, "undo");
         }
@@ -1044,23 +973,17 @@ mod tests {
     }
 
     #[test]
-    fn the_view_says_which_neighbours_the_selected_zone_has_and_which_zones_are_named() {
+    fn the_view_says_whether_there_are_several_zones_and_which_are_named() {
         let mut e = editor(&[]);
         let z = e.view().zones;
-        assert!(!z.several && !z.can_merge_prev && !z.can_merge_next && !z.zones[0].named);
+        assert!(!z.several && !z.zones[0].named);
         e.split_zone(None).unwrap();
         e.split_zone(None).unwrap();
-        assert!(e.select_zone(0));
-        let z = e.view().zones;
-        assert!(z.several && !z.can_merge_prev && z.can_merge_next);
+        assert!(e.view().zones.several);
         assert!(e.select_zone(1));
         assert!(e.name_zone(Some("Market")));
         let z = e.view().zones;
-        assert!(z.can_merge_prev && z.can_merge_next);
         assert_eq!(z.zones.iter().map(|g| g.named).collect::<Vec<_>>(), [false, true, false]);
-        assert!(e.select_zone(2));
-        let z = e.view().zones;
-        assert!(z.can_merge_prev && !z.can_merge_next);
     }
 
     #[test]

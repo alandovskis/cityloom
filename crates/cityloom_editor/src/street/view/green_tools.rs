@@ -14,7 +14,7 @@ use crate::shared::units::parse_number;
 use crate::street::model::GreenKindExt;
 use crate::street::model::{GreenCell, GreenForm, GreenKind, TreeSize};
 use crate::street::view::curb_tools::typed_length;
-use crate::street::view::zone_tools::focus_later;
+use crate::street::view::focus_later;
 use crate::street::vm::StreetVm;
 use crate::street::vm::watch::SheetWatch;
 
