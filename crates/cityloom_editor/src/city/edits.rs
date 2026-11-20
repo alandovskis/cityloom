@@ -65,10 +65,16 @@ pub const NEWEST: u32 = IMPORT_STAMP_VERSION;
 /// importer bump.
 pub const STALE_BEFORE_IMPORT: u32 = 11;
 
+/// The staleness rule, kept once: a record is stale when its import stamp is none (as before the stamp) or below
+/// `STALE_BEFORE_IMPORT`.
+fn stale_import(import: Option<u64>) -> bool {
+    import.is_none_or(|v| v < u64::from(STALE_BEFORE_IMPORT))
+}
+
 /// Whether a street or junction record, as JSON, is stale: its `import` is not a number of at least
 /// `STALE_BEFORE_IMPORT`. A test keeps `is_stale_record` in agreement.
 pub fn is_stale(record: &Value) -> bool {
-    !record.get("import").and_then(Value::as_u64).is_some_and(|v| v >= u64::from(STALE_BEFORE_IMPORT))
+    stale_import(record.get("import").and_then(Value::as_u64))
 }
 
 /// A typed street or junction record's import stamp, so the staleness rule reads the field rather than the JSON.
@@ -88,9 +94,9 @@ impl Stamped for JunctionRecord {
     }
 }
 
-/// The same rule as `is_stale` for a typed street or junction record: unstamped, or stamped below the cutoff.
+/// The same rule as `is_stale` for a typed street or junction record.
 pub fn is_stale_record(record: &impl Stamped) -> bool {
-    record.import().is_none_or(|v| v < STALE_BEFORE_IMPORT)
+    stale_import(record.import().map(u64::from))
 }
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
