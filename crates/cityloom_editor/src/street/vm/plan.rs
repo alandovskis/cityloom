@@ -145,7 +145,7 @@ impl StreetVm {
     pub fn pick_typed(&self, from: &str, to: &str) -> bool {
         let units = self.units_now();
         match (parse_length_mm(from, units), parse_length_mm(to, units)) {
-            (Some(a), Some(b)) => self.pick_stretch(a, b),
+            (Some(a), Some(b)) => self.pointer_picked(self.pick_stretch(a, b)),
             _ => {
                 self.say_bad_number();
                 false
@@ -154,12 +154,29 @@ impl StreetVm {
     }
 
     /// Picks the run at `at_mm` (from the plan's left end), saying what was picked or why not.
-    pub fn pick_run_at(&self, at_mm: i32) {
+    pub fn pick_run_at(&self, at_mm: i32) -> bool {
         self.extend_from.set(None);
         self.pick_with(None, |e| {
             let at = e.anchored_mm(at_mm);
             e.pick_run_at(at)
-        });
+        })
+    }
+
+    /// After a pick made with the pointer (or typed): when it was taken, the keyboard's point goes to its left end, so
+    /// that the keys go on from the stretch picked. Gives back `picked`.
+    fn pointer_picked(&self, picked: bool) -> bool {
+        if picked {
+            self.point.set(self.view_now().plan.pick.map_or(0, |(from, _)| from));
+        }
+        picked
+    }
+
+    /// Keeps the keyboard's point on the street, which a sync may have made shorter.
+    pub(super) fn clamp_point(&self) {
+        let length = self.view_now().plan.length_mm.unwrap_or(0);
+        if self.point.get_untracked() > length {
+            self.point.set(length);
+        }
     }
 
     /// A press on `side`'s empty lane at `at_mm` (from the plan's left end). Inside the pick (a stretch, or the whole
@@ -175,7 +192,7 @@ impl StreetVm {
                 let at = e.anchored_mm(at_mm);
                 e.pick_run_at(at)
             });
-            if !picked {
+            if !self.pointer_picked(picked) {
                 return;
             }
         }
@@ -221,7 +238,9 @@ impl StreetVm {
             PlanKey::To(last) => self.move_point(end(last)),
             PlanKey::Extend(d) => self.extend_pick(along(d)),
             PlanKey::ExtendTo(last) => self.extend_pick(end(last)),
-            PlanKey::PickRun => self.pick_run_at(point),
+            PlanKey::PickRun => {
+                self.pick_run_at(point);
+            }
             PlanKey::PickWhole => {
                 self.clear_boundary();
                 self.pick_whole();
@@ -262,15 +281,17 @@ impl StreetVm {
     /// it moved as one edit).
     pub fn plan_release(&self, g: PlanGesture, at_mm: i32) {
         match g {
-            PlanGesture::Pending(PlanPress::Street { at_mm: pressed }, _) => self.pick_run_at(pressed),
+            PlanGesture::Pending(PlanPress::Street { at_mm: pressed }, _) => {
+                self.pointer_picked(self.pick_run_at(pressed));
+            }
             PlanGesture::Pending(PlanPress::Boundary { zone }, _) => self.choose_boundary(zone),
             PlanGesture::Pending(PlanPress::Lane { side, at_mm: pressed }, _) => self.pick_lane(side, pressed),
             PlanGesture::Pending(..) | PlanGesture::Refused => {}
             PlanGesture::Picking { anchor_mm } => {
-                self.pick_stretch(anchor_mm, at_mm);
+                self.pointer_picked(self.pick_stretch(anchor_mm, at_mm));
             }
             PlanGesture::Handle { fixed_mm } => {
-                self.pick_stretch(fixed_mm, at_mm);
+                self.pointer_picked(self.pick_stretch(fixed_mm, at_mm));
             }
             PlanGesture::Boundary { zone, at_mm: was, pick } => {
                 self.plan_step(&g, at_mm);
@@ -1248,6 +1269,45 @@ mod pick_tests {
         // A pick by the pointer says the pick again.
         r.vm.pick_run_at(30_000);
         assert_eq!(text(), "The whole street, 60.0 m long.");
+    }
+
+    #[test]
+    fn the_keyboard_point_follows_a_pick_made_with_the_pointer() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = three_runs(from_end);
+            r.vm.plan_key(PlanKey::To(true));
+            assert_eq!(r.vm.plan_point(), LEN);
+            drag(&r, PlanPress::Street { at_mm: 25_000 }, 25_000, 12_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((12_000, 25_000)), 12_000), "{from_end:?}: a drag");
+            let g = r.vm.plan_press(PlanPress::Street { at_mm: 50_000 }, 500.0);
+            r.vm.plan_release(g, 50_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((40_000, LEN)), 40_000), "{from_end:?}: a click");
+            drag(&r, PlanPress::Handle { left: true }, 40_000, 45_000);
+            assert_eq!(r.vm.plan_point(), 45_000, "{from_end:?}: a handle");
+            assert!(r.vm.pick_typed("30", "35"));
+            assert_eq!(r.vm.plan_point(), 30_000, "{from_end:?}: typed ends");
+            let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 10_000 }, 100.0);
+            r.vm.plan_release(g, 10_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((0, 20_000)), 0), "{from_end:?}: a press on a lane");
+            // The keys go on from there.
+            r.vm.plan_key(PlanKey::Extend(10_000));
+            assert_eq!(r.vm.picked(), Some((0, 10_000)), "{from_end:?}");
+            // A refused pick leaves the point where it is.
+            r.vm.plan_key(PlanKey::Move(5_000));
+            drag(&r, PlanPress::Street { at_mm: 30_000 }, 30_000, 32_000);
+            assert_eq!(r.vm.plan_point(), 15_000, "{from_end:?}");
+        }
+    }
+
+    #[test]
+    fn the_keyboard_point_is_kept_on_the_street_when_a_sync_shortens_it() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        r.vm.plan_key(PlanKey::To(true));
+        assert_eq!(r.vm.plan_point(), LEN);
+        // What a sync does: the editor is replaced by the city's, here on a shorter road.
+        r.vm.core.edit(|e| *e = Editor::from_street(&sample(), &sample(), 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First })));
+        r.vm.clamp_point();
+        assert_eq!(r.vm.plan_point(), 40_000);
     }
 
     #[test]

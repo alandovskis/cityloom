@@ -1468,6 +1468,7 @@ impl StreetVm {
         fresh.select(self.view_now().selected);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
+        self.clamp_point();
         self.forget_impact();
         let said = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
         self.ports.announcer.say(&self.with_pick_note(said, pick));
