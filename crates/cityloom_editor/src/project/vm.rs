@@ -366,6 +366,11 @@ impl ProjectsVm {
         link("timeline.html", Some(id))
     }
 
+    /// The address of the page that shares project `id` by a link (#221).
+    pub fn share_href(&self, id: &str) -> String {
+        link("share.html", Some(id))
+    }
+
     /// Remembers project `id` as the one opened last and goes to its map. Nothing where it is not listed.
     pub fn open(&self, id: &str) {
         self.acted();

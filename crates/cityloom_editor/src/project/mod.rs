@@ -1,6 +1,7 @@
 //! The person's projects: named containers, each tied to an area. The home page is their list.
 
 pub mod context;
+pub mod copies;
 pub mod migrate;
 pub mod model;
 pub mod store;

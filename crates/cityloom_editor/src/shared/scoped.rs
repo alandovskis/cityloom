@@ -29,7 +29,9 @@ pub const SCOPED_KEYS: [&str; 7] = [
 /// project's own record, which the sync carries). `shared` depends on no slice, so the names are spelled here and
 /// those slices' tests check they agree. Every other key (the roads kept for an area, the language, the theme, the
 /// goal, the standards profile, the project opened last, ...) is the person's cache or preference and is kept.
-pub const DESIGN_KEYS: [&str; 4] = ["cityloom-sync", "cityloom-sync-damaged", "cityloom-projects", "cityloom-projects-damaged"];
+/// The list of the copies of shared designs this browser opened (`project::copies::COPIES_KEY`) is one too: a page
+/// showing a design does not change which designs are kept.
+pub const DESIGN_KEYS: [&str; 5] = ["cityloom-sync", "cityloom-sync-damaged", "cityloom-projects", "cityloom-projects-damaged", "cityloom-shared-copies"];
 
 /// Whether `key` (as asked, or already suffixed `<key>@<project>`) holds a design or reaches the sync.
 fn is_design(key: &str) -> bool {

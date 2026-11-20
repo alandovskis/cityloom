@@ -50,7 +50,9 @@ fn search_of(ports: &Ports) -> String {
 fn page_storage(storage: &Rc<dyn Storage>, id: &str, search: &str) -> Rc<ScopedStorage> {
     let (root, project) = (storage.clone(), id.to_string());
     let scoped = ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some());
-    Rc::new(if crate::shared::project_id::viewing(search) { scoped.only_to_read() } else { scoped })
+    // A copy of a shared design is only ever looked at, whatever the address says: it is no one's work on this device.
+    let read_only = crate::shared::project_id::viewing(search) || crate::project::copies::is_copy(&**storage, id);
+    Rc::new(if read_only { scoped.only_to_read() } else { scoped })
 }
 
 /// `enter`, keeping the project's storage so that it can be shut.
@@ -58,7 +60,10 @@ fn enter_scoped(ports: Ports) -> Option<(Ports, Rc<ScopedStorage>)> {
     let search = search_of(&ports);
     match resolve(&ports.storage, &search) {
         Resolved::Project(id) => {
-            ProjectStore::new(ports.storage.clone()).open(&id);
+            // A copy of a shared design is not one of the person's projects: the one opened last stays theirs.
+            if !crate::project::copies::is_copy(&*ports.storage, &id) {
+                ProjectStore::new(ports.storage.clone()).open(&id);
+            }
             let scoped = page_storage(&ports.storage, &id, &search);
             let storage: Rc<dyn Storage> = scoped.clone();
             Some((Ports { storage, ..ports }, scoped))

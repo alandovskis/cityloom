@@ -52,13 +52,15 @@ fn parse(stored: Option<&str>) -> Document {
     }
 }
 
-/// The listed project `id`; none where it is not listed or the list is damaged or a newer build's. Only reads, so it
-/// takes any storage: a `ScopedStorage` passes the list's key through to the root.
+/// The listed project `id`, or the copy of a shared design this browser keeps under that id (`copies`); none where it
+/// is neither (or the list is damaged or a newer build's). Only reads, so it takes any storage: a `ScopedStorage`
+/// passes the lists' keys through to the root.
 pub fn find(storage: &dyn Storage, id: &str) -> Option<Project> {
-    match parse(storage.recall(PROJECTS_KEY).as_deref()) {
+    let listed = match parse(storage.recall(PROJECTS_KEY).as_deref()) {
         Document::Current(projects) => projects.into_iter().find(|p| p.id == id),
         _ => None,
-    }
+    };
+    listed.or_else(|| crate::project::copies::find(storage, id))
 }
 
 /// The person's projects. Takes the root storage, never a `ScopedStorage`: the list belongs to no project.

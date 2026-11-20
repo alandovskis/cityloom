@@ -20,6 +20,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
         "storage keys and persistence; its one word, the placeholder name the sync gives a project, is data replaced by the project's own record",
     ),
     ("src/project/tests.rs", "test-only"),
+    ("src/project/copies.rs", "storage keys and persistence of the copies of shared designs; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/timeline/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/timeline/tests.rs", "test-only"),
     ("src/standards/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
