@@ -259,7 +259,7 @@ impl ShareRepo for NoShares {
     async fn delete(&self, _: uuid::Uuid, _: &Token, _: time::OffsetDateTime) -> Result<(), ShareError> {
         Err(ShareError::Unavailable)
     }
-    async fn purge(&self, _: time::OffsetDateTime) -> Result<u64, ShareError> {
+    async fn purge(&self, _: time::OffsetDateTime) -> Result<cityloom_server::share::Purged, ShareError> {
         Err(ShareError::Unavailable)
     }
 }

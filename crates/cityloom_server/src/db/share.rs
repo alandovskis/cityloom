@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::{PgRepo, unavailable};
 use crate::crypto;
-use crate::share::{self, Created, ShareError, ShareRepo, Standing, Token};
+use crate::share::{self, Created, Purged, ShareError, ShareRepo, Standing, Token};
 
 fn db(e: sqlx::Error) -> ShareError {
     unavailable(e).into()
@@ -81,7 +81,11 @@ impl ShareRepo for PgRepo {
             Standing::Live => {}
         }
         let sealed: Option<Vec<u8>> = row.try_get("body").map_err(db)?;
-        let sealed = sealed.ok_or(ShareError::Corrupt)?;
+        let Some(sealed) = sealed else {
+            // Only a purge or a deletion drops a body, and neither leaves the share live.
+            tracing::error!(share = %id, "a live share has no body");
+            return Err(ShareError::Corrupt);
+        };
         match crypto::open(&token.body_key(), &share::aad(id), &sealed) {
             Ok(plain) => Ok(plain.to_vec()),
             Err(_) => {
@@ -112,7 +116,7 @@ impl ShareRepo for PgRepo {
         }
     }
 
-    async fn purge(&self, now: OffsetDateTime) -> Result<u64, ShareError> {
+    async fn purge(&self, now: OffsetDateTime) -> Result<Purged, ShareError> {
         let dropped =
             sqlx::query("update shares set body = null where body is not null and expires_at <= $1").bind(now).execute(&self.pool).await.map_err(db)?;
         let forgotten = sqlx::query("delete from shares where expires_at < $1")
@@ -120,6 +124,6 @@ impl ShareRepo for PgRepo {
             .execute(&self.pool)
             .await
             .map_err(db)?;
-        Ok(dropped.rows_affected() + forgotten.rows_affected())
+        Ok(Purged { bodies: dropped.rows_affected(), markers: forgotten.rows_affected() })
     }
 }

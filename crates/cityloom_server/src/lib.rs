@@ -30,8 +30,8 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     let repo: std::sync::Arc<dyn accounts::Repo> = pg.clone();
     let work: std::sync::Arc<dyn work::WorkRepo> = pg.clone();
     let shares: std::sync::Arc<dyn share::ShareRepo> = pg;
-    // As the sessions' cleanup: its first pass may come before the database is ready and then only warns.
-    share::spawn_purge(shares.clone(), clock.clone());
+    // Its first pass waits for the migrations, which make the table it purges.
+    share::spawn_purge(shares.clone(), clock.clone(), ready.clone());
     // Its first pass runs before the database may be ready and then only logs a warning; the next is a day later,
     // which is acceptable because an expired row is refused on read anyway.
     session::spawn_cleanup(repo.clone(), clock.clone());
