@@ -189,8 +189,9 @@ pub trait ShareRepo: Send + Sync {
     async fn create(&self, user: Uuid, token: &Token, body: &[u8], now: OffsetDateTime) -> Result<Created, ShareError>;
     /// The body behind `token`: `NotFound`, `Expired` (its body dropped then if it was not yet) or `Deleted`.
     async fn open(&self, token: &Token, now: OffsetDateTime) -> Result<Vec<u8>, ShareError>;
-    /// Drops the body of `user`'s share behind `token` and keeps its marker. `NotFound` for no such share, `NotYours`
-    /// for another account's; a share already expired or deleted is deleted already.
+    /// Drops the body of `user`'s share behind `token` and keeps its marker, marked deleted where it is live at `now`.
+    /// `NotFound` for no such share, `NotYours` for another account's; a share that has expired stays expired (its link
+    /// says so), one deleted already stays deleted, and either is `Ok`: there is nothing left to delete.
     async fn delete(&self, user: Uuid, token: &Token, now: OffsetDateTime) -> Result<(), ShareError>;
     /// Drops the bodies of expired shares and the markers `MARKER_DAYS` past their expiry; how many rows changed.
     async fn purge(&self, now: OffsetDateTime) -> Result<u64, ShareError>;
