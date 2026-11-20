@@ -230,8 +230,11 @@ impl ShareVm {
         if self.ports.storage.read_only() {
             return self.done(Outcome::Failed(ShareError::ReadOnly));
         }
-        if self.account.get_untracked() == Account::SignedOut {
-            return self.done(Outcome::Failed(ShareError::SignedOut));
+        match self.account.get_untracked() {
+            // Not known yet: the button says it waits.
+            Account::Unknown => return,
+            Account::SignedOut => return self.done(Outcome::Failed(ShareError::SignedOut)),
+            Account::SignedIn | Account::Unchecked => {}
         }
         let now = stamp(self.ports.storage.now_ms());
         let body = match model::compose(&self.ports.storage, &self.context.project_name, &self.context.project_area, &self.context.app_version, &now) {
@@ -257,6 +260,8 @@ impl ShareVm {
                             vm.account.set(Account::SignedOut);
                         }
                         vm.done(Outcome::Failed(failure.into()));
+                        // The button waited without leaving the page: focus is on it again.
+                        vm.ask_focus(Focus::Create);
                     }
                 }
             }),
@@ -279,7 +284,7 @@ impl ShareVm {
 
     /// Asks before deleting the link `token` made here; its question starts on the safe answer.
     pub fn ask_delete(&self, token: &str) {
-        if !self.store.list().iter().any(|m| m.token == token) {
+        if self.busy.get_untracked() || !self.store.list().iter().any(|m| m.token == token) {
             return;
         }
         self.deleting.set(Some(token.to_string()));
@@ -311,6 +316,8 @@ impl ShareVm {
     pub fn confirm_delete(self: &Rc<Self>) -> bool {
         let Some(token) = self.deleting.get_untracked() else { return false };
         self.deleting.set(None);
+        // The question goes with its buttons: focus waits on the row's Delete button.
+        self.ask_focus(Focus::DeleteButton(token.clone()));
         self.delete(&token);
         true
     }
@@ -336,7 +343,10 @@ impl ShareVm {
                         vm.done(Outcome::Deleted);
                         vm.ask_focus(Focus::Create);
                     }
-                    Err(failure) => vm.done(Outcome::Failed(failure.into())),
+                    Err(failure) => {
+                        vm.done(Outcome::Failed(failure.into()));
+                        vm.ask_focus(Focus::DeleteButton(token_kept.clone()));
+                    }
                 }
             }),
         );

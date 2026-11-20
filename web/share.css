@@ -61,7 +61,7 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
-.btn.sharing-create:hover:not(:disabled) {
+.btn.sharing-create:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--accent);
   filter: brightness(1.08);
 }
@@ -123,4 +123,16 @@
 /* A Delete answer, as the home page's (`shared/contrast.rs` measures its edge on the panel). */
 .btn.danger {
   border-color: var(--map-bad);
+}
+/* A button whose request is on its way, or that cannot be used yet, waits without leaving the tab order
+   (`aria-disabled`), so focus stays on it; it looks as a disabled one does (`app.css`). */
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+.btn[aria-disabled="true"]:hover {
+  background: var(--panel);
+}
+.btn.sharing-create[aria-disabled="true"]:hover {
+  background: var(--accent);
 }

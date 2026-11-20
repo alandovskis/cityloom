@@ -487,6 +487,35 @@ fn each_link_s_field_and_buttons_are_named_by_its_expiry() {
     );
 }
 
+/// A button stays where it is while its request is on its way (it says it waits, it is not taken out of the page), and
+/// when the request fails focus is on it again, so the keyboard is not sent back to the top of the page.
+#[test]
+fn focus_stays_on_the_button_used_when_making_or_deleting_a_link_fails() {
+    let (vm, t) = sharing(Locale::En);
+    vm.create();
+    assert!(t.share.calls().is_empty(), "who is signed in is not known yet: nothing is asked");
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Err(ShareFailure::Network)));
+    let (count, to) = vm.focus_request();
+    assert_eq!(to, Focus::Create);
+    vm.create();
+    t.share.answer(ShareReply::Made(Err(ShareFailure::SignedOut)));
+    assert_eq!(vm.focus_request(), (count + 1, Focus::Create), "signed out since: the button waits, focus on it");
+    let (vm, t) = sharing(Locale::En);
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    vm.ask_delete(TOKEN);
+    vm.confirm_delete();
+    assert_eq!(vm.focus_request().1, Focus::DeleteButton(TOKEN.into()), "the question has gone: focus on the row's button, which waits");
+    vm.ask_delete(TOKEN);
+    assert_eq!(vm.deleting(), None, "no second question while the first answer is on its way");
+    let (count, _) = vm.focus_request();
+    t.share.answer(ShareReply::Deleted(Err(ShareFailure::Unavailable)));
+    assert_eq!(vm.focus_request(), (count + 1, Focus::DeleteButton(TOKEN.into())));
+}
+
 #[test]
 fn a_link_the_server_no_longer_has_is_forgotten_when_deleted() {
     for gone in [ShareFailure::NotFound, ShareFailure::Expired, ShareFailure::Deleted] {
@@ -599,13 +628,32 @@ mod page {
     }
 
     #[test]
+    fn while_a_request_is_on_its_way_the_buttons_say_they_wait_and_stay_focusable() {
+        let (vm, t) = sharing(Locale::En);
+        signed_in(&vm, &t, true);
+        vm.create();
+        t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+        let shown = vm.clone();
+        let out = html(move || view! { <ShareView vm=shown/> }.into_any());
+        assert!(crate::shared::testing::button_tag(&out, "sharing-create").contains(r#"aria-disabled="false""#));
+        vm.ask_delete(TOKEN);
+        vm.confirm_delete();
+        let shown = vm.clone();
+        let out = html(move || view! { <ShareView vm=shown/> }.into_any());
+        for id in ["sharing-create".to_string(), format!("sharing-delete-{TOKEN}")] {
+            let button = crate::shared::testing::button_tag(&out, &id);
+            assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "{button}");
+        }
+    }
+
+    #[test]
     fn signed_out_the_button_waits_and_the_reason_is_shown() {
         let (vm, t) = sharing(Locale::FrCa);
         signed_in(&vm, &t, false);
         let shown = vm.clone();
         let out = html(move || view! { <ShareView vm=shown/> }.into_any());
         let button = crate::shared::testing::button_tag(&out, "sharing-create");
-        assert!(button.contains("disabled"), "{button}");
+        assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "it waits and keeps focus: {button}");
         assert!(out.contains("Connectez-vous pour partager ce projet"), "{out}");
     }
 
