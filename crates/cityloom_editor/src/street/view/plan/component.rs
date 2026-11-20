@@ -100,7 +100,11 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
             let _ = c.set_pointer_capture(e.pointer_id());
         }
         e.prevent_default();
-        if let Some(p) = point.get_untracked() {
+        // The keys go to the point from now on, unless they are in one of the rows folded under the plan: taking the
+        // focus from there would fold them and move the plan from under the pointer (a drag is still given up with
+        // Escape wherever the keys are).
+        let in_rows = document().active_element().and_then(|a| a.closest(".plan-rows").ok().flatten()).is_some();
+        if let Some(p) = point.get_untracked().filter(|_| !in_rows) {
             let options = leptos::web_sys::FocusOptions::new();
             options.set_prevent_scroll(true);
             let _ = p.focus_with_options(&options);
@@ -145,6 +149,13 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         Effect::new(move |_| {
             if let Some(el) = boxed.get() {
                 watch_width(el.into(), width);
+            }
+        });
+        // Escape gives up a drag wherever the keys are.
+        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+            if e.key() == "Escape" && gesture.with_value(Option::is_some) {
+                e.prevent_default();
+                cancel();
             }
         });
         // The point is kept in sight inside the plan's own scroll (never the page's).
