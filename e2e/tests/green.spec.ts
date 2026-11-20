@@ -1,15 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import {
-  addFromMenu as addItem,
-  expect,
-  live,
-  menuItem,
-  placesOnMap,
-  streetLengthM,
-  test,
-  EDITS_VERSION,
-} from "./fixtures";
+import { addFromMenu as addItem, expect, live, menuItem, placesOnMap, streetLength, test, EDITS_VERSION } from "./fixtures";
 
 // Street trees and green infrastructure: the tools, the Green row, the checks, the 2.5D and the saved document.
 
@@ -48,8 +39,8 @@ async function openGreenStreet(page: Page, minM: number) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < minM) continue;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await streetLength(page)) < minM) continue;
     if (await treeGreyed(page)) continue;
     // The hosts are listed with the settings of a chosen element: add a tree to see them, and take it back.
     await addFromMenu(page, "Tree");
@@ -87,8 +78,8 @@ async function openStreetWithAJunctionAtItsStart(page: Page) {
   await page.goto("/map.html");
   for (const href of (await placesOnMap(page)).streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < 30 || (await treeGreyed(page))) continue;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await streetLength(page)) < 30 || (await treeGreyed(page))) continue;
     await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
     if (!hosts.some((h) => /^Sidewalk/.test(h))) {

@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
-import { expect, placesOnMap, streetLengthM, test, EDITS_VERSION } from "./fixtures";
+import { chooseCell, expect, placesOnMap, planThing, streetLength, test, EDITS_VERSION } from "./fixtures";
 
-// The curbside uses: the strip under the zones, the checks, the 2.5D and the saved document.
+// The curbside uses: the strip under the plan, the checks, the 2.5D and the saved document.
 
 const USE = { tree: "2", planting: "3", patio: "5", bikeParking: "6" };
 
@@ -12,8 +12,8 @@ async function openCurbsideStreet(page: Page, minM: number) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await page.locator(".curb-strip").count()) > 0 && (await streetLengthM(page)) >= minM) return;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await page.locator(".curb-strip").count()) > 0 && (await streetLength(page)) >= minM) return;
   }
   throw new Error(`no street of ${minM} m or more with a curbside lane`);
 }
@@ -21,7 +21,7 @@ async function openCurbsideStreet(page: Page, minM: number) {
 /** Adds a use of `metres` into the first free stretch of the first strip. */
 async function addUse(page: Page, cell: number, use: string, metres: number) {
   const strip = page.locator(".curb-strip").first();
-  await strip.locator('[role="option"]').nth(cell).click();
+  await chooseCell(page, strip.locator('[role="option"]').nth(cell));
   await page.locator("#curb-use").selectOption(use);
   await page.locator("#curb-length").fill(String(metres));
   await page.locator("#curb-add").click();
@@ -39,25 +39,25 @@ test.describe("the curbside strip", () => {
     await expect(cells).toHaveCount(1);
 
     // Two uses side by side: a tree (value 2), then bike parking (value 6) in the gap that is left.
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await use.selectOption("2");
     await page.locator("#curb-length").fill("2");
     await page.locator("#curb-add").click();
     await expect(cells).toHaveCount(2);
-    await cells.nth(1).click();
+    await chooseCell(page, cells.nth(1));
     await use.selectOption("6");
     await page.locator("#curb-length").fill("2");
     await page.locator("#curb-add").click();
     await expect(cells).toHaveCount(3);
 
     // Change the first use's kind by hand, then look at the other and come back.
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await expect(use).toHaveValue("2");
     await use.selectOption("3");
     await expect(cells.nth(0)).toHaveAttribute("title", "Planting");
-    await cells.nth(1).click();
+    await chooseCell(page, cells.nth(1));
     await expect(use).toHaveValue("6");
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await expect(use).toHaveValue("3");
   });
 
@@ -92,7 +92,7 @@ test.describe("the curbside strip", () => {
     // Kept: the document is EDITS_VERSION (the import stamp) and the use is still there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await expect(page.locator(".curb-strip").first().locator('[role="option"]').nth(0)).toHaveAttribute(
       "title",
       "Patio",
@@ -111,7 +111,7 @@ test.describe("the curbside strip", () => {
     await expect(cells).toHaveCount(2);
 
     await strip.focus();
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await strip.focus();
     await expect(strip).toHaveAttribute("aria-activedescendant", /-0$/);
     await page.keyboard.press("ArrowRight");
@@ -138,7 +138,10 @@ test.describe("the curbside strip", () => {
     const where = async () => await used().getAttribute("aria-label");
     const before = await where();
 
-    const box = (await used().boundingBox())!;
+    // The plan draws the use; a drag on it moves it.
+    const thing = planThing(page, (await used().getAttribute("id"))!);
+    await page.locator("#plan").scrollIntoViewIfNeeded();
+    const box = (await thing.boundingBox())!;
     const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
 
     // Escape during a drag puts the use back.
@@ -149,6 +152,8 @@ test.describe("the curbside strip", () => {
     await page.keyboard.press("Escape");
     await page.mouse.up();
     await expect.poll(where).toBe(before);
+    // The keys stayed in the row the use was added from, so the plan did not move from under the pointer.
+    expect((await thing.boundingBox())!.y).toBe(box.y);
 
     // A drag to the right moves it and is one step.
     await page.mouse.move(x, y);

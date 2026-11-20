@@ -8,8 +8,8 @@ import {
   openStreet,
   openPedestrianStreet,
   openStreetWithUnfitTemplate,
-  showZoneLevel,
-  splitInto,
+  makeStretches,
+  streetLength,
   test,
 } from "./fixtures";
 
@@ -43,7 +43,7 @@ test("at 400% zoom the sticky bar does not cover the control the keyboard has re
   const covered = await page.evaluate(() => parseFloat(document.documentElement.style.getPropertyValue("--bar-stuck")));
   const bar = (await page.locator(".bar").boundingBox())!;
   expect(covered).toBeGreaterThanOrEqual(bar.y + bar.height);
-  for (const id of ["#add-btn", "#zone-strip", "#wrap"]) {
+  for (const id of ["#add-btn", "#plan-point", "#wrap"]) {
     await page.locator(id).focus();
     const box = (await page.locator(id).boundingBox())!;
     const barNow = (await page.locator(".bar").boundingBox())!;
@@ -63,114 +63,87 @@ test("under 380 px the end buttons do not run over the logo", async ({ page }) =
   }
 });
 
-test("at 320 px a strip of many zones scrolls inside itself and the page does not scroll sideways", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 320, height: 700 });
-  await openStreet(page);
-  await expect(page.locator("#zone-strip")).toBeVisible();
-  // Thirty zones' cells (the same markup the strip draws), each with its 24 px minimum.
-  await page.evaluate(() => {
-    const strip = document.getElementById("zone-strip")!;
-    const cell = strip.querySelector(".zone-cell")!;
-    for (let i = 0; i < 30; i++) strip.append(cell.cloneNode(true));
-  });
-  const m = await page.evaluate(() => ({
-    page: document.documentElement.scrollWidth,
-    inner: innerWidth,
-    strip: document.getElementById("zone-strip")!.scrollWidth,
-    shown: document.getElementById("zone-strip")!.clientWidth,
-  }));
-  expect(m.page).toBeLessThanOrEqual(m.inner);
-  expect(m.strip).toBeGreaterThan(m.shown);
-});
-
-test("at 320 px twelve real zones keep 24 px cells and handles, and the page does not scroll sideways", async ({
+test("at 320 px a street too long for the column at the plan's smallest scale scrolls inside the plan, not the page", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await openLongStreet(page, 12 * 5);
-  await splitInto(page, 12);
+  // Twelve stretches of 5 m at least: at the smallest scale each is 24 px wide, more than the column holds.
+  await makeStretches(page, 12);
+  const length = await streetLength(page);
   const m = await page.evaluate(() => {
-    const strip = document.getElementById("zone-strip")!;
-    const w = (sel: string) => [...strip.querySelectorAll(sel)].map((e) => e.getBoundingClientRect().width);
+    const plan = document.getElementById("plan")!;
     return {
       page: document.documentElement.scrollWidth,
       inner: innerWidth,
-      strip: strip.scrollWidth,
-      shown: strip.clientWidth,
-      cells: w(".zone-cell"),
-      handles: w(".zone-handle"),
+      scroll: plan.scrollWidth,
+      shown: plan.clientWidth,
+      drawn: plan.querySelector("svg")!.getBoundingClientRect().width,
     };
   });
   expect(m.page).toBeLessThanOrEqual(m.inner);
-  expect(m.strip).toBeGreaterThan(m.shown);
-  expect(m.cells).toHaveLength(12);
-  expect(m.handles).toHaveLength(11);
-  for (const w of [...m.cells, ...m.handles]) expect(w).toBeGreaterThanOrEqual(24);
+  expect(m.drawn, "no smaller than 24 px for 5 m").toBeGreaterThanOrEqual(length * 4.8 - 1);
+  expect(m.scroll).toBeGreaterThan(m.shown);
 });
 
-test("at 320 px the zone chosen by the keys is scrolled into view inside the strip", async ({ page }) => {
+test("at 320 px the plan's point is kept in sight inside the plan as the keys move it", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await openLongStreet(page, 12 * 5);
-  await splitInto(page, 12);
-  const inside = (id: string) =>
-    page.evaluate((id) => {
-      const strip = document.getElementById("zone-strip")!.getBoundingClientRect();
-      const cell = document.getElementById(id)!.getBoundingClientRect();
-      return cell.left >= strip.left - 1 && cell.right <= strip.right + 1;
-    }, id);
-  await page.locator("#zone-strip").focus();
+  const inside = () =>
+    page.evaluate(() => {
+      const plan = document.getElementById("plan")!.getBoundingClientRect();
+      const point = document.getElementById("plan-point")!.getBoundingClientRect();
+      const middle = point.left + point.width / 2;
+      return middle >= plan.left - 1 && middle <= plan.right + 1;
+    });
+  const scrolled = () => page.evaluate(() => document.getElementById("plan")!.scrollLeft);
+  await page.locator("#plan-point").focus();
   await page.keyboard.press("Home");
-  await expect.poll(() => inside("zone-0")).toBe(true);
+  await expect.poll(inside).toBe(true);
   await page.keyboard.press("End");
-  await expect.poll(() => inside("zone-11")).toBe(true);
-  expect(await inside("zone-0"), "the strip scrolled; the first cell left its box").toBe(false);
-  await page.keyboard.press("ArrowLeft");
-  await expect.poll(() => inside("zone-10")).toBe(true);
+  await expect.poll(inside).toBe(true);
+  expect(await scrolled(), "the plan scrolled to show its right end").toBeGreaterThan(0);
+  await page.keyboard.press("Home");
+  await expect.poll(scrolled).toBe(0);
 });
 
-test("at 320 px a boundary dragged between a floored cell and the rest is dropped where the pointer was released", async ({
-  page,
-}) => {
+test("at 320 px a boundary dragged on the plan is dropped where the pointer was released", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await openLongStreet(page, 60);
-  await showZoneLevel(page);
-  // a 5 m first zone: its share of the strip is under the cell's 24 px minimum, so the cell is floored
-  await page.locator("#zone-split-at").fill("5");
-  await page.locator("#zone-split").click();
-  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-  const handle = page.locator(".zone-handle");
-  // the commands are in the details panel, below the strip on a phone: bring the strip back into the window
-  await page.locator("#zone-strip").scrollIntoViewIfNeeded();
-  const before = (await handle.boundingBox())!;
+  await makeStretches(page, 2);
+  const line = page.locator("#plan .plan-boundary-line");
+  await page.locator("#plan").scrollIntoViewIfNeeded();
+  const before = (await line.boundingBox())!;
   const x = before.x + before.width / 2;
   const y = before.y + before.height / 2;
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.mouse.move(x + 60, y, { steps: 6 });
+  await page.mouse.move(x + 30, y, { steps: 6 });
   await page.mouse.up();
-  const after = (await handle.boundingBox())!;
+  const after = (await line.boundingBox())!;
   const centre = after.x + after.width / 2;
-  expect(Math.abs(centre - (x + 60)), `the handle ends at ${centre}, the pointer at ${x + 60}`).toBeLessThanOrEqual(3);
+  expect(Math.abs(centre - (x + 30)), `the boundary ends at ${centre}, the pointer at ${x + 30}`).toBeLessThanOrEqual(
+    3,
+  );
 });
 
-test("the zone strip is one tab stop under the drawing and is named", async ({ page }) => {
+test("the plan's point is one tab stop under the drawing and is named", async ({ page }) => {
   await openStreet(page);
-  await expect(page.locator("#zone-strip")).toBeVisible();
-  await expect(page.locator("#zone-strip")).not.toHaveAttribute("aria-label", "");
-  expect(((await page.locator("#zone-strip").getAttribute("aria-label")) ?? "").trim().length).toBeGreaterThan(0);
-  // In the page's order: the title card, then the drawing, then the strip under it.
+  const point = page.locator("#plan-point");
+  await expect(page.locator("#plan")).toBeVisible();
+  expect(((await page.locator("#plan").getAttribute("aria-label")) ?? "").trim().length).toBeGreaterThan(0);
+  await expect(point).toHaveAttribute("aria-labelledby", "plan");
+  // In the page's order: the title card, then the drawing, then the plan under it.
   const order = await page.evaluate(() => {
     const before = (a: Element | null, b: Element | null) =>
       !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     const card = document.querySelector(".title-card");
-    const strip = document.getElementById("zone-strip");
+    const plan = document.getElementById("plan");
     const wrap = document.getElementById("wrap");
-    return { cardFirst: before(card, strip), stripFirst: before(wrap, strip) };
+    return { cardFirst: before(card, plan), drawingFirst: before(wrap, plan) };
   });
-  expect(order).toEqual({ cardFirst: true, stripFirst: true });
-  // Tabbing from the skip link reaches the drawing, then the strip once, and no cell of it.
+  expect(order).toEqual({ cardFirst: true, drawingFirst: true });
+  // Tabbing from the skip link reaches the drawing, then the plan's point once, and nothing else of the plan.
   const seen: string[] = [];
   await page.keyboard.press("Tab");
   await expect(page.locator(".skip-link")).toBeFocused();
@@ -178,39 +151,34 @@ test("the zone strip is one tab stop under the drawing and is named", async ({ p
     await page.keyboard.press("Tab");
     const at = await page.evaluate(() => {
       const a = document.activeElement!;
-      return a.id || a.className || a.tagName;
+      return a.closest("#plan") && a.id !== "plan-point" ? "inside-plan" : a.id || a.className || a.tagName;
     });
     seen.push(String(at));
-    if (at === "zone-strip") break;
+    if (at === "plan-point") break;
   }
-  expect(seen.at(-1), "the strip is reached").toBe("zone-strip");
+  expect(seen.at(-1), "the point is reached").toBe("plan-point");
   expect(seen.indexOf("wrap"), "the drawing comes first").toBeGreaterThanOrEqual(0);
-  expect(seen.filter((id) => id === "zone-strip")).toHaveLength(1);
-  expect(seen.filter((id) => /^zone-\d+$/.test(id))).toHaveLength(0);
-  expect(seen.indexOf("zone-strip")).toBeGreaterThanOrEqual(0);
+  expect(seen.filter((id) => id === "plan-point")).toHaveLength(1);
+  expect(seen.filter((id) => id === "inside-plan")).toHaveLength(0);
 });
 
-test("Alt and the arrows on the strip do not leave the page", async ({ page }) => {
+test("Alt and the arrows on the plan's point do not leave the page", async ({ page }) => {
   await openStreet(page);
-  await showZoneLevel(page);
-  await page.locator("#zone-split").click();
-  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-  await page.locator("#zone-strip").focus();
+  await makeStretches(page, 2);
+  await page.locator("#plan-point").focus();
   const url = page.url();
   await page.keyboard.press("Alt+ArrowLeft");
   await page.keyboard.press("Alt+ArrowRight");
   await page.keyboard.press("Alt+ArrowLeft");
   await page.waitForTimeout(300);
   expect(page.url(), "Alt+Arrow is not the browser's Back or Forward").toBe(url);
-  await expect(page.locator("#zone-strip")).toBeVisible();
+  await expect(page.locator("#plan")).toBeVisible();
 });
 
-test("the arrow keys still work after the strip had focus, and V changes nothing", async ({ page }) => {
+test("the arrow keys still work after the plan's point had focus, and V changes nothing", async ({ page }) => {
   await openStreet(page);
-  await showZoneLevel(page);
-  await page.locator("#zone-split").click();
-  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-  await page.locator("#zone-strip").focus();
+  await makeStretches(page, 2);
+  await page.locator("#plan-point").focus();
   await page.keyboard.press("ArrowRight");
   // back to the drawing: the 2.5D is the only view, so V does nothing, and the arrows choose a piece
   await page.locator("#wrap").focus();

@@ -80,9 +80,9 @@ test.describe("the street editor's panel and tray", () => {
     await expect(page.locator("#notes #notes-toggle")).toBeInViewport();
   });
 
-  test("the title and the tools stay in view while the strips below the drawing are scrolled", async ({ page }) => {
+  test("the title and the tools stay in view while the plan below the drawing is scrolled", async ({ page }) => {
     await page.locator(".stage-scroll").evaluate((el) => el.scrollTo(0, el.scrollHeight));
-    await expect(page.locator("#zone-strip")).toBeInViewport();
+    await expect(page.locator("#plan")).toBeInViewport();
     for (const s of ["#street-name", "#add-btn", "#undo"]) await expect(page.locator(s)).toBeInViewport();
     await expect(page.locator("#notes #fit")).toBeInViewport();
   });
