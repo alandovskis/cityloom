@@ -794,7 +794,7 @@ mod tests {
     }
 
     #[test]
-    fn a_build_before_scenarios_leaves_a_document_with_them_alone() {
+    fn a_document_with_the_import_stamp_is_still_read_at_version_17() {
         assert_eq!(IMPORT_STAMP_VERSION + 1, CALLS_VERSION, "the version after the import stamp is the calls'");
         let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, IMPORT_STAMP_VERSION);
         assert!(matches!(parse(Some(&newer)), Document::Current(_)));
