@@ -546,7 +546,6 @@ impl Editor {
 
 #[cfg(test)]
 mod tests {
-    use super::super::zones::Keep;
     use super::*;
     use crate::street::model::Street;
     use crate::street::model::StreetExt;
@@ -747,13 +746,14 @@ mod tests {
         e.select_zone(1);
         e.move_boundary(30_000).unwrap();
         assert_eq!(e.snapshot().stops, stops);
-        e.merge_zone(true, Keep::Selected).unwrap();
-        assert_eq!(e.snapshot().stops, stops);
-        // Merging back to no zones keeps the anchor the stop needs.
+        // Joining back to no zones keeps the anchor the stop needs: an edit of a stretch, then the edit back.
         let mut e = editor();
         e.add_stop(Side::Right, 20_000, 12_000, StopKind::Curb).unwrap();
-        e.split_zone(Some(25_000)).unwrap();
-        e.merge_zone(false, Keep::Selected).unwrap();
+        e.pick_stretch(25_000, LEN).unwrap();
+        let uid = e.view().segments[0].uid;
+        assert!(e.nudge_width(uid, 100));
+        assert_eq!(e.snapshot().zones.len(), 2);
+        assert!(e.nudge_width(uid, -100));
         let s = e.snapshot();
         assert!(s.zones.is_empty());
         assert_eq!((s.stops, s.length_mm, s.from_end), (stops, Some(LEN), ZoneEnd::First));
