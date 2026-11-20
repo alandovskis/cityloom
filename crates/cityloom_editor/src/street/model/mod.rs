@@ -590,7 +590,9 @@ impl Editor {
     }
 
     /// Chooses the zone the edits act on, picking its span. Refused when there is no such zone, or it lies beyond the
-    /// loaded end, or while a drag is under way. The selected piece is cleared when the zone changes.
+    /// loaded end, or while a drag is under way. The selected piece is cleared when the zone changes. Tests choose a
+    /// zone with it; the page picks a stretch on the plan.
+    #[cfg(test)]
     pub fn select_zone(&mut self, zone: usize) -> bool {
         // A drag's edits belong to the stretch it started on: nothing is chosen while one is under way.
         if self.gesture.is_some() || zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
@@ -3406,17 +3408,14 @@ mod tests {
         let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
         let z = e.view().zones;
         assert_eq!((z.length_mm, z.from_end, z.selected), (60_000, ZoneEnd::First, 0));
-        assert_eq!(
-            z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm, g.own, g.cut_off)).collect::<Vec<_>>(),
-            vec![(0, 0, 20_000, false, false), (1, 20_000, 45_000, false, false), (2, 45_000, 60_000, false, false)]
-        );
+        assert_eq!(z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm)).collect::<Vec<_>>(), vec![(0, 0, 20_000), (1, 20_000, 45_000), (2, 45_000, 60_000)]);
         assert_eq!(z.zones[2].label, stretch_between(45_000, 60_000));
         assert!(e.select_zone(1));
         let g = e.snapshot().segments[0].clone();
         assert!(e.set_width(g.uid, g.width_mm + 100));
         let z = e.view().zones;
         assert_eq!(z.selected, 1);
-        assert_eq!(z.zones.iter().map(|g| g.own).collect::<Vec<_>>(), vec![false, true, false]);
+        assert_eq!(e.snapshot().zones.iter().map(|g| g.segments.is_some()).collect::<Vec<_>>(), vec![false, true, false]);
         assert_eq!(z.zones[1].label, stretch_between(20_000, 45_000), "a saved name is never said");
     }
 
@@ -3444,7 +3443,7 @@ mod tests {
         let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First }));
         let z = e.view().zones;
         assert_eq!(z.elsewhere, Some(Elsewhere { drawn_mm: 60_000, loaded_mm: 40_000 }));
-        assert_eq!(z.zones.iter().map(|g| g.cut_off).collect::<Vec<_>>(), vec![false, false, true]);
+        assert_eq!((0..3).map(|g| e.is_cut_off(g)).collect::<Vec<_>>(), vec![false, false, true]);
         assert!(!e.select_zone(2));
         assert_eq!(e.zone(), 0);
         let s = e.snapshot();

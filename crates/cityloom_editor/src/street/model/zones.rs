@@ -77,14 +77,8 @@ pub struct ZoneView {
     pub index: usize,
     pub from_mm: i32,
     pub to_mm: i32,
-    /// The stretch it is, from the plan's left end: "from 49 m to 82 m".
+    /// The stretch of the run it is part of, from the plan's left end: "from 49 m to 82 m".
     pub label: Said,
-    /// The zone has a section of its own.
-    pub own: bool,
-    /// The zone starts beyond the loaded end of the street.
-    pub cut_off: bool,
-    /// Every check passes in this zone.
-    pub ok: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -143,17 +137,12 @@ impl Editor {
         let content = &self.states[self.cursor].content;
         let length_mm = self.street_length_mm().unwrap_or(0);
         let from_end = if content.zones.is_empty() { self.frame.map_or(ZoneEnd::First, |f| f.from_end) } else { content.from_end };
-        let failing = self.failing_transitions();
         let runs = self.runs();
         let one = |z: usize| {
             let (from_mm, to_mm) = content.span(z, length_mm);
-            let ok = self.section_passes(content.section(z)) && !failing.iter().any(|(_, host, _)| *host == z);
             // Named by the run it is part of, which the plan shows: a boundary inside a run is not seen.
             let label = runs.iter().find(|r| r.zones.contains(&z)).map_or_else(|| self.stretch_said(z), |r| self.stretch_of(r.from_mm, r.to_mm));
-            match content.zones.get(z) {
-                Some(g) => ZoneView { index: z, from_mm, to_mm, label, own: g.segments.is_some(), cut_off: self.is_cut_off(z), ok },
-                None => ZoneView { index: z, from_mm, to_mm, label, own: false, cut_off: false, ok },
-            }
+            ZoneView { index: z, from_mm, to_mm, label }
         };
         ZonesView {
             zones: (0..content.zone_count()).map(one).collect(),
@@ -901,7 +890,7 @@ mod tests {
         assert_eq!(room[0].zone, Some(Said::new("check-boundary").with("at", Arg::Length(20_000))));
         let detail = say_in(crate::shared::i18n::Locale::En, &room[0].detail);
         assert_eq!(detail, "The transition needs 49.5 m but the stretch from 0.0 m to 20.0 m is 20.0 m long.");
-        assert!(!e.view().zones.zones[0].ok, "the host zone");
+        assert!(!e.view().plan.runs[0].ok, "the host stretch");
     }
 
     #[test]
@@ -956,7 +945,7 @@ mod tests {
         let e = lane_added_after(50_000);
         let room = check(&e, "transition-room");
         assert_eq!((room.len(), room[0].ok, room[0].zone.clone()), (1, true, None));
-        assert!(e.view().zones.zones[0].ok);
+        assert!(e.view().plan.runs[0].ok);
         assert!(check(&e, "lane-drop")[0].ok);
     }
 

@@ -264,10 +264,8 @@ mod tests {
         let bands: Vec<PlanBand> = base.iter().map(|s| PlanBand { uid: s.uid, kind: s.kind, material: s.material, width_mm: s.width_mm }).collect();
         assert_eq!(p.runs[0].bands, bands, "the section's pieces, in order, top to bottom");
         assert_eq!(last_width(&p.runs[1]), base.last().unwrap().width_mm + 100);
-        // A run passes as its zone does on the zone strip: the widened one is wider than the street's room.
-        let zones = e.view().zones.zones;
+        // A run passes when its section does: the widened one is wider than the street's room.
         assert_eq!(p.runs.iter().map(|r| r.ok).collect::<Vec<_>>(), [true, false, true]);
-        assert_eq!(p.runs.iter().map(|r| zones[r.zone].ok).collect::<Vec<_>>(), [true, false, true]);
         assert_eq!(marks(&p), [(20_000, 1), (40_000, 2)]);
         assert!(p.boundaries.iter().all(|b| b.movable && b.taper.is_none()), "a wider sidewalk needs no taper");
         assert!(!p.elsewhere);

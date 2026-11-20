@@ -258,7 +258,9 @@ impl Editor {
         what
     }
 
-    /// Picks the span of zone `z` and shows it, keeping the chosen piece: what the zone strip's commands do.
+    /// Picks the span of zone `z` and shows it, keeping the chosen piece: what the zone strip's commands did, which tests
+    /// still use (`select_zone`, `split_zone`, `move_boundary`).
+    #[cfg(test)]
     pub(super) fn follow_zone(&mut self, z: usize) {
         let length = self.pick_length_mm();
         let (from_mm, to_mm) = self.states[self.cursor].content.span(z, length);
