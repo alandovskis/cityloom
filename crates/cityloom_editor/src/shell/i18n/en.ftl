@@ -86,3 +86,5 @@ session-outcome-conflict = This { $provider } account is already linked to anoth
 session-outcome-conflict-any = This account is already linked to another CityLoom account.
 session-outcome-cancelled = Sign-in cancelled.
 session-outcome-failed = Sign-in failed. Try again.
+shell-edits-cleared = The map was rebuilt with one street per block, so your earlier street and junction edits were cleared.
+shell-notice-dismiss = Dismiss

@@ -29,16 +29,25 @@
 /// 10: the importer runs once over the whole area at pack time (`citymodel_builder`), and the editor cuts a place out
 /// of the tile.
 ///
+/// 11: the roads of one block, split where nothing but their lanes or speed changes (a plain connection between two
+/// ways of the same name and type), are one road with a zone for each piece.
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
 ///
 /// CI keeps the tiles until the sources that make them change, and does not count this crate's `street` and
 /// `catalogue` modules among them (`.github/workflows/ci.yml`, the `tiles` cache key): the importer and the tile code
 /// must not use them, or the key must count them again.
-pub const IMPORTER_VERSION: u32 = 10;
+pub const IMPORTER_VERSION: u32 = 11;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {
     format!("{checksum}+i{IMPORTER_VERSION}")
+}
+
+/// The version of the importer that made an area kept with `checksum` (`with_importer`'s `+i<N>`); none where the
+/// checksum does not say.
+pub fn importer_of(checksum: &str) -> Option<u32> {
+    checksum.rsplit_once("+i")?.1.parse().ok()
 }
 
 #[cfg(test)]
@@ -47,7 +56,17 @@ mod tests {
 
     #[test]
     fn a_checksum_is_kept_with_the_importer_version() {
-        assert_eq!(with_importer("ab12"), "ab12+i10");
-        assert_eq!(IMPORTER_VERSION, 10);
+        assert_eq!(with_importer("ab12"), "ab12+i11");
+        assert_eq!(IMPORTER_VERSION, 11);
+    }
+
+    #[test]
+    fn the_importer_version_is_read_back_from_a_kept_checksum() {
+        assert_eq!(importer_of(&with_importer("ab12")), Some(IMPORTER_VERSION));
+        assert_eq!(importer_of("ab12+i10"), Some(10));
+        assert_eq!(importer_of("ab12"), None, "a checksum kept without the importer's version");
+        assert_eq!(importer_of("ab12+i"), None);
+        assert_eq!(importer_of("ab12+ix"), None);
+        assert_eq!(importer_of(""), None);
     }
 }

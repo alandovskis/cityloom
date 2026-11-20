@@ -54,7 +54,51 @@ pub const FILTER_VERSION: u32 = CHICANE_VERSION + 1;
 /// designs beside the record's own, the baseline): a build that does not know them would drop them on its next write,
 /// so it must treat the document as a newer one. A record without them is as before.
 pub const SCENARIO_VERSION: u32 = FILTER_VERSION + 1;
-pub const NEWEST: u32 = SCENARIO_VERSION;
+/// What a document is written as while a street or junction record carries the importer it was made against (`import`):
+/// a build that does not know the stamp would write records back without it, which this build then discards, so it
+/// must treat the document as a newer one.
+pub const IMPORT_STAMP_VERSION: u32 = SCENARIO_VERSION + 1;
+pub const NEWEST: u32 = IMPORT_STAMP_VERSION;
+/// A record made against an importer older than this (or against none, as before the stamp) is stale: it is never
+/// applied, listed or sent, put back from an archive, or restored from a milestone. A fixed cutoff, not the current
+/// importer version: raising it discards everyone's edits again, so it is a decision, not a side effect of an
+/// importer bump. Raising it also needs a new `shell-edits-cleared` wording: the current text names the rebuild that
+/// set this cutoff.
+pub const STALE_BEFORE_IMPORT: u32 = 11;
+
+/// The staleness rule, kept once: a record is stale when its import stamp is none (as before the stamp) or below
+/// `STALE_BEFORE_IMPORT`.
+fn stale_import(import: Option<u64>) -> bool {
+    import.is_none_or(|v| v < u64::from(STALE_BEFORE_IMPORT))
+}
+
+/// Whether a street or junction record, as JSON, is stale: its `import` is not a number of at least
+/// `STALE_BEFORE_IMPORT`. A test keeps `is_stale_record` in agreement.
+pub fn is_stale(record: &Value) -> bool {
+    stale_import(record.get("import").and_then(Value::as_u64))
+}
+
+/// A typed street or junction record's import stamp, so the staleness rule reads the field rather than the JSON.
+pub trait Stamped {
+    fn import(&self) -> Option<u32>;
+}
+
+impl Stamped for StreetRecord {
+    fn import(&self) -> Option<u32> {
+        self.import
+    }
+}
+
+impl Stamped for JunctionRecord {
+    fn import(&self) -> Option<u32> {
+        self.import
+    }
+}
+
+/// The same rule as `is_stale` for a typed street or junction record.
+pub fn is_stale_record(record: &impl Stamped) -> bool {
+    stale_import(record.import().map(u64::from))
+}
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -74,6 +118,10 @@ pub struct StreetRecord {
     /// Alternative designs of the street; `street` is the baseline.
     #[serde(default, skip_serializing_if = "Scenarios::is_empty")]
     pub scenarios: Scenarios<Street>,
+    /// The `IMPORTER_VERSION` of the network the place came from; none in a record from before importer 11, which is
+    /// stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import: Option<u32>,
 }
 
 /// The street at an arm of a junction, as the record names it: its key where it has one, the ways it was made
@@ -97,6 +145,10 @@ pub struct JunctionRecord {
     /// Alternative states of the junction; `state` is the baseline.
     #[serde(default, skip_serializing_if = "Scenarios::is_empty")]
     pub scenarios: Scenarios<State>,
+    /// The `IMPORTER_VERSION` of the network the place came from; none in a record from before importer 11, which is
+    /// stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -112,15 +164,13 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as, the first that applies: `FILTER_VERSION` while a street record holds a
-    /// modal filter, `CHICANE_VERSION` while one holds a
-    /// chicane, `ZONE_SPEED_VERSION` while a zone of a street
-    /// record has a speed of its own, `CALMING_VERSION` while a street record holds
-    /// raised tables or crossings, `GREEN_VERSION` while one holds green infrastructure, `SIGNAL_VERSION` while a
-    /// junction record holds
-    /// an edited signal plan, `STOP_VERSION` while a street record holds transit stops, `CURB_VERSION` while one holds
-    /// curbside uses, `SPEED_VERSION` while one holds a speed (set, or decided to have none), `ZONES_VERSION` while one
-    /// holds zones, else `VERSION`.
+    /// The version the document is written as: the first that applies of `IMPORT_STAMP_VERSION` (a street or junction
+    /// record carries an import stamp), `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record
+    /// holds a modal filter), `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own),
+    /// `CALMING_VERSION` (raised tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a
+    /// junction's edited signal plan), `STOP_VERSION` (transit stops), `CURB_VERSION` (curbside uses),
+    /// `SPEED_VERSION` (a speed, set or decided to have none), `ZONES_VERSION` (zones), else `VERSION`. Never below
+    /// `IMPORT_STAMP_VERSION` once the document was at it (`written_as`).
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
@@ -133,7 +183,8 @@ impl Edits {
         let chicane = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::Chicane));
         let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
         let scenarios = self.streets.values().any(|r| !r.scenarios.is_empty()) || self.junctions.values().any(|r| !r.scenarios.is_empty());
-        version_for(zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
+        let import = self.streets.values().any(|r| r.import.is_some()) || self.junctions.values().any(|r| r.import.is_some());
+        written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
     }
 
     pub fn to_json(&self) -> String {
@@ -142,9 +193,19 @@ impl Edits {
     }
 }
 
-/// The version a document is written as, from what its street records hold.
+/// The least version a document read or written as `version` is written as again: once it has been at
+/// `IMPORT_STAMP_VERSION`, never below it, even with no stamped record left (all discarded, say), or an older build's
+/// tab would write unstamped records into it, which this build then discards again.
+fn stamp_floor(version: u64) -> u32 {
+    if version >= u64::from(IMPORT_STAMP_VERSION) { IMPORT_STAMP_VERSION } else { 0 }
+}
+
+/// The version a document last read or held as `held` is written as, from what its records hold (`version_for`), never
+/// below `stamp_floor(held)`. The one place the floor is applied, so a writer cannot forget it.
 #[allow(clippy::too_many_arguments)]
-fn version_for(
+fn written_as(
+    held: u64,
+    import: bool,
     zones: bool,
     speed: bool,
     curb: bool,
@@ -157,7 +218,28 @@ fn version_for(
     filter: bool,
     scenarios: bool,
 ) -> u32 {
-    if scenarios {
+    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios).max(stamp_floor(held))
+}
+
+/// The version a document is written as, from what its street records hold.
+#[allow(clippy::too_many_arguments)]
+fn version_for(
+    import: bool,
+    zones: bool,
+    speed: bool,
+    curb: bool,
+    stops: bool,
+    signal: bool,
+    green: bool,
+    calming: bool,
+    zone_speed: bool,
+    chicane: bool,
+    filter: bool,
+    scenarios: bool,
+) -> u32 {
+    if import {
+        IMPORT_STAMP_VERSION
+    } else if scenarios {
         SCENARIO_VERSION
     } else if filter {
         FILTER_VERSION
@@ -182,6 +264,14 @@ fn version_for(
     } else {
         VERSION
     }
+}
+
+/// Whether any street or junction record carries an `import` stamp (decided on the raw JSON).
+fn holds_import(doc: &Map<String, Value>) -> bool {
+    [STREETS, JUNCTIONS].iter().any(|section| {
+        let mut records = doc.get(*section).and_then(Value::as_object).into_iter().flatten();
+        records.any(|(_, r)| r.get("import").is_some())
+    })
 }
 
 /// Whether any record of the streets section holds a speed limit: a `street.speed_kmh` key, a number or `null`
@@ -275,16 +365,20 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Err(Document::Empty) };
     let damaged = || Document::Damaged(raw.to_string());
     let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
-    match doc.get("version").and_then(Value::as_u64) {
+    let read = doc.get("version").and_then(Value::as_u64);
+    match read {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
-        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters and 16 with scenarios.
+        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios
+        // and 17 with the import stamp.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
     // The version the document would be written as, whichever it was read as.
-    let written = version_for(
+    let written = written_as(
+        read.unwrap_or_default(),
+        holds_import(&doc),
         holds_zones(&doc),
         holds_speed(&doc),
         holds_curb(&doc),
@@ -380,6 +474,13 @@ impl Draft {
         self.remove(section, key);
     }
 
+    /// Keeps the document at `IMPORT_STAMP_VERSION` at least from now on, whatever its records hold: what discarding
+    /// the stale records writes, so an older build's tab leaves it alone rather than writing unstamped records back.
+    pub fn hold_import_stamp_version(&mut self) {
+        let version = self.doc.get("version").and_then(Value::as_u64).unwrap_or_default().max(IMPORT_STAMP_VERSION.into());
+        self.doc.insert("version".into(), version.into());
+    }
+
     /// Keeps `record` under `key`. Says whether it could be.
     pub fn put_street(&mut self, key: &str, record: &StreetRecord) -> bool {
         self.put(STREETS, key, serde_json::to_value(record))
@@ -397,7 +498,8 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `FILTER_VERSION` while any street record holds a modal filter, else
+    /// The document as text, its version `IMPORT_STAMP_VERSION` while any street or junction record carries an import
+    /// stamp, else `SCENARIO_VERSION` while any keeps scenarios, else `FILTER_VERSION` while any street record holds a modal filter, else
     /// `CHICANE_VERSION` while any holds a chicane, else
     /// `ZONE_SPEED_VERSION` while any zone has a speed of its own, else
     /// `CALMING_VERSION` while any street record holds raised elements, else
@@ -405,10 +507,13 @@ impl Draft {
     /// `STOP_VERSION` while any holds transit stops, else
     /// `CURB_VERSION` while one holds curbside uses, else
     /// `SPEED_VERSION` while any holds a speed, else
-    /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`.
+    /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`; never below
+    /// `IMPORT_STAMP_VERSION` once read at it (`written_as`).
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
-        let written = version_for(
+        let written = written_as(
+            doc.get("version").and_then(Value::as_u64).unwrap_or_default(),
+            holds_import(&doc),
             holds_zones(&doc),
             holds_speed(&doc),
             holds_curb(&doc),
@@ -560,6 +665,7 @@ mod tests {
                 nodes: [2, 3].into(),
                 leaving: [(2, 90)].into(),
                 scenarios: Default::default(),
+                import: None,
                 street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
             },
         );
@@ -589,7 +695,8 @@ mod tests {
         assert_eq!(VERSION, 5, "this test pins the move from 4 to 5");
         let city = crate::city::model::City::new();
         let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
-        let (key, record) = city.junction_record(junction).unwrap();
+        // an unstamped record, as an older build wrote it
+        let (key, record) = city.junction_record(junction).map(|(k, r)| (k, JunctionRecord { import: None, ..r })).unwrap();
         let mut e = Edits::new();
         e.streets.insert("w7~n1~n2".into(), street_record());
         e.junctions.insert(key.clone(), record);
@@ -663,8 +770,8 @@ mod tests {
 
     #[test]
     fn a_build_before_scenarios_leaves_a_document_with_them_alone() {
-        assert_eq!(NEWEST, SCENARIO_VERSION);
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, SCENARIO_VERSION + 1);
+        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, IMPORT_STAMP_VERSION + 1);
         assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
@@ -677,6 +784,7 @@ mod tests {
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
             scenarios: Default::default(),
+            import: None,
             street: Street::imported(StreetClass::Local, Side::Right, &[walk]).named("Rue Piétonne"),
         }
     }
@@ -694,12 +802,71 @@ mod tests {
         assert_eq!(back, e);
     }
 
+    #[test]
+    fn a_record_without_an_import_stamp_or_from_before_importer_11_is_stale() {
+        use serde_json::json;
+        assert!(is_stale(&json!({})));
+        assert!(is_stale(&json!({"import": 10})));
+        assert!(!is_stale(&json!({"import": 11})));
+        assert!(!is_stale(&json!({"import": 12})));
+        assert!(is_stale(&json!({"import": "11"})));
+    }
+
+    #[test]
+    fn a_typed_record_is_stale_exactly_when_its_json_is() {
+        let junction = || {
+            let city = crate::city::model::City::new();
+            let node = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+            city.junction_record(node).unwrap().1
+        };
+        for import in [None, Some(10), Some(11), Some(12)] {
+            let street = StreetRecord { import, ..street_record() };
+            assert_eq!(is_stale_record(&street), is_stale(&serde_json::to_value(&street).unwrap()), "street {import:?}");
+            assert_eq!(Stamped::import(&street), import);
+            let junction = JunctionRecord { import, ..junction() };
+            assert_eq!(is_stale_record(&junction), is_stale(&serde_json::to_value(&junction).unwrap()), "junction {import:?}");
+            assert_eq!(Stamped::import(&junction), import);
+        }
+    }
+
+    #[test]
+    fn a_document_holding_a_stamped_record_is_written_as_the_import_stamp_version() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), StreetRecord { import: None, ..street_record() });
+        assert_eq!(e.written_version(), VERSION);
+        e.streets.insert("w7~n1~n2".into(), StreetRecord { import: Some(11), ..street_record() });
+        assert_eq!(e.written_version(), IMPORT_STAMP_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back, Edits { version: IMPORT_STAMP_VERSION, ..e.clone() });
+        assert!(e.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+    }
+
+    #[test]
+    fn a_document_read_at_the_import_stamp_version_stays_there_when_its_last_record_goes() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), StreetRecord { import: Some(11), ..street_record() });
+        let kept = e.to_json();
+        assert!(kept.contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+        let Ok(mut draft) = draft(Some(&kept)) else { panic!("a draft") };
+        draft.remove_street("w7~n1~n2");
+        let back: serde_json::Value = serde_json::from_str(&draft.to_json()).unwrap();
+        assert_eq!(back["version"], IMPORT_STAMP_VERSION, "an older build must not write unstamped records into it again");
+        // nor when no stamped record is left in a document read at it
+        let unstamped = format!(r#"{{"version":{IMPORT_STAMP_VERSION},"streets":{{"w1~n1~n2":{{"ways":[1]}}}},"junctions":{{}}}}"#);
+        let Document::Current(read) = parse(Some(&unstamped)) else { panic!("read") };
+        assert_eq!(read.version, IMPORT_STAMP_VERSION);
+        assert!(read.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+        let Ok(draft) = super::draft(Some(&unstamped)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")));
+    }
+
     fn street_record() -> StreetRecord {
         StreetRecord {
             ways: [7].into(),
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
             scenarios: Default::default(),
+            import: None,
             street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
         }
     }
@@ -728,7 +895,7 @@ mod tests {
         assert_eq!(ZONE_SPEED_VERSION, 13);
         assert_eq!(CHICANE_VERSION, 14);
         assert_eq!(FILTER_VERSION, 15);
-        assert_eq!(NEWEST, SCENARIO_VERSION);
+        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -958,7 +1125,7 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, SCENARIO_VERSION);
+        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
@@ -1288,6 +1455,7 @@ mod tests {
         let city = crate::city::model::City::new();
         let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
         let (key, mut record) = city.junction_record(junction).unwrap();
+        record.import = None; // as an older build wrote it
         assert!(record.state.arms.iter().all(|a| a.timing.is_none()), "an arm never timed has none to write");
         record.state.control = SIGNAL;
         let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
@@ -1315,6 +1483,7 @@ mod tests {
         let city = crate::city::model::City::new();
         let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
         let (key, mut record) = city.junction_record(junction).unwrap();
+        record.import = None; // as an older build wrote it
         record.state.control = SIGNAL;
         let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
         record.state.arms[0].timing = Some(timing);
@@ -1370,6 +1539,7 @@ mod tests {
         let mut e = Edits::new();
         e.streets.insert("w7~n1~n2".into(), street_record());
         let mut pedestrian = pedestrian_record();
+        pedestrian.import = Some(STALE_BEFORE_IMPORT);
         pedestrian.street.speed = crate::street::model::Speed::Kmh(30);
         pedestrian.street.curb.push(crate::street::model::Instance {
             side: crate::shared::catalogue::Side::Right,
@@ -1394,6 +1564,7 @@ mod tests {
         e.streets.insert("w8~n1~n2".into(), pedestrian);
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
+        record.import = Some(cityloom_model::IMPORTER_VERSION);
         record.state.turbo = Some(crate::junction::model::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
         record.state.signal_plan = Some(crate::junction::model::signal::SignalPlan {
             phases: vec![crate::junction::model::signal::StoredPhase {
@@ -1418,6 +1589,7 @@ mod tests {
     ".junctions.<key>.arm_streets.<key>.ways[]: number",
     ".junctions.<key>.arm_streets.<key>: object",
     ".junctions.<key>.arm_streets: object",
+    ".junctions.<key>.import: number",
     ".junctions.<key>.nodes: array",
     ".junctions.<key>.nodes[]: number",
     ".junctions.<key>.state.arms: array",
@@ -1475,6 +1647,7 @@ mod tests {
     ".junctions.<key>.state: object",
     ".junctions.<key>: object",
     ".junctions: object",
+    ".streets.<key>.import: number",
     ".streets.<key>.leaving.<key>: number",
     ".streets.<key>.leaving: object",
     ".streets.<key>.nodes: array",
@@ -1632,12 +1805,14 @@ mod tests {
             nodes: [1, 2].into(),
             leaving: [(1, 90)].into(),
             scenarios: Default::default(),
+            import: None,
             street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
         };
         assert_eq!(Ids::from_street_record("w7~n1~n2", &street), leaving(ids(Some("w7~n1~n2"), &[7], &[1, 2]), 1, 90));
         let junction = JunctionRecord {
             nodes: [4, 5].into(),
             scenarios: Default::default(),
+            import: None,
             state: State {
                 label: crate::junction::model::unlabelled(),
                 arms: vec![],

@@ -170,7 +170,10 @@ impl ArchiveVm {
 
     fn run(&self, archive: &Archive, choice: Choice) {
         match model::apply(archive, &self.ports.storage, choice) {
-            Ok(done) if done.added + done.replaced == 0 && done.kept == 0 => self.finish(Outcome::NothingNew, Focus::Result),
+            Ok(done) if done.added + done.replaced == 0 && done.kept == 0 => {
+                let outcome = if archive.stale() > 0 && archive.is_empty() { Outcome::StaleOnly } else { Outcome::NothingNew };
+                self.finish(outcome, Focus::Result)
+            }
             Ok(done) => self.finish(Outcome::Imported(done), Focus::Result),
             Err(e) => self.finish(Outcome::Failed(e), Focus::Result),
         }

@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 
 use cityloom_model::street::{class_of, legacy_pieces, one_way_bike_lanes, pieces, refs};
-use cityloom_model::{Control, Network, NodeId, Point};
+use cityloom_model::{Control, Network, NodeId, Point, Road};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::Side;
 use crate::street::model::StreetExt;
-use crate::street::model::{Piece, Speed, Street};
+use crate::street::model::{Piece, Speed, Street, Zone, ZoneEnd, ZoneFrame};
 
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
@@ -59,6 +59,50 @@ fn shape_mm(points: &[Point], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(
     Some(line)
 }
 
+/// Gives `street`, made from the first zone of `road`, a zone for each of the road's, measured along it as `frame`
+/// says: each with its own pieces (uids the street issues) and speed limit, then settled, so a zone like the first
+/// is the street's base. From the last end the zones are listed from that end, the road's last piece first.
+/// Zones that would make the street unsound (a piece with no lanes, starts the same once rounded) are not opened:
+/// the street keeps its first zone only, since an unsound street is never kept, so an edit to it would be lost.
+fn open_zones(street: &mut Street, road: &Road, frame: ZoneFrame) {
+    let mut zoned = street.clone();
+    fill_zones(&mut zoned, road, frame);
+    if zoned.is_sound() {
+        *street = zoned;
+    }
+}
+
+/// `open_zones` without the check that the zoned street is sound.
+fn fill_zones(street: &mut Street, road: &Road, frame: ZoneFrame) {
+    let length_m = road.length_m();
+    if road.zones.len() < 2 || length_m <= 0.0 {
+        return;
+    }
+    let at_mm = |m: f64| (m / length_m * frame.length_mm as f64).round() as i32;
+    let ends = road.zones.iter().skip(1).map(|z| z.from.metres()).chain([length_m]);
+    let mut zones = Vec::with_capacity(road.zones.len());
+    for (zone, end) in road.zones.iter().zip(ends) {
+        let mut segments = Street::imported(street.class, street.side, &pieces(&zone.lanes)).segments;
+        for s in &mut segments {
+            s.uid = street.next_uid;
+            street.next_uid += 1;
+        }
+        let from_mm = match frame.from_end {
+            ZoneEnd::First => at_mm(zone.from.metres()),
+            ZoneEnd::Last => at_mm(length_m - end),
+        };
+        zones.push(Zone { from_mm, segments: Some(segments), name: None, speed: Speed::from_kmh(zone.speed_kmh) });
+    }
+    if frame.from_end == ZoneEnd::Last {
+        zones.reverse();
+    }
+    street.zones = zones;
+    street.from_end = frame.from_end;
+    street.length_mm = Some(frame.length_mm);
+    street.settle_zones();
+    street.settle_class();
+}
+
 impl City {
     /// The city for `network`, every street and junction as OpenStreetMap has it.
     pub fn from_network(network: &Network, name: &str) -> City {
@@ -67,7 +111,8 @@ impl City {
 }
 
 impl Layout {
-    /// The layout of a network: a node for each end or meeting of streets, a street for each road.
+    /// The layout of a network: a node for each end or meeting of streets, a street for each road, with a zone for each
+    /// of its zones.
     /// Roads that start and end at one node, that have no lanes, that have no name, or that start or end at a node the
     /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
@@ -133,7 +178,15 @@ impl Layout {
                 }
             })
             .collect();
-        Layout { name: name.to_string(), side: if network.left_hand { Side::Left } else { Side::Right }, nodes, edges, origin_m }
+        let mut layout = Layout { name: name.to_string(), side: if network.left_hand { Side::Left } else { Side::Right }, nodes, edges, origin_m };
+        // zones are measured along the street as laid out, from the end the layout anchors them on; a road cut at
+        // both ends has none, and opens with its first zone only
+        for (edge, road) in roads.iter().enumerate().filter(|(_, r)| r.zones.len() > 1) {
+            if let Some(frame) = layout.zone_frame(edge) {
+                open_zones(&mut layout.edges[edge].section, road, frame);
+            }
+        }
+        layout
     }
 }
 
@@ -593,6 +646,134 @@ mod tests {
             assert_eq!(e.shape_mm[0], [node(e.a).x_mm, node(e.a).y_mm]);
             assert_eq!(e.shape_mm[1], [node(e.b).x_mm, node(e.b).y_mm]);
         }
+    }
+
+    fn two_lanes() -> Vec<Lane> {
+        vec![lane(LaneKind::Driving, Direction::Backward, 3.0), lane(LaneKind::Driving, Direction::Forward, 3.0)]
+    }
+
+    fn four_lanes() -> Vec<Lane> {
+        let mut lanes = two_lanes();
+        lanes.insert(0, lane(LaneKind::Driving, Direction::Backward, 3.0));
+        lanes.push(lane(LaneKind::Driving, Direction::Forward, 3.0));
+        lanes
+    }
+
+    /// A 200 m road east from one OSM node to another: two lanes at 30 km/h, then four at 40 from `second_m`.
+    fn zoned_road(second_m: f64) -> Network {
+        let mut net = star(&[(200.0, 0.0)]);
+        net.roads[0].zones = vec![
+            Zone { speed_kmh: Some(30), ..Zone::whole(two_lanes()) },
+            Zone { from: cityloom_model::Coordinate::new(second_m), speed_kmh: Some(40), lanes: four_lanes() },
+        ];
+        net
+    }
+
+    /// The pieces of a section, without their uids.
+    fn kinds_and_widths(section: &[crate::street::model::Segment]) -> Vec<(usize, i32, Option<usize>)> {
+        section.iter().map(|s| (s.kind, s.width_mm, s.direction)).collect()
+    }
+
+    /// The pieces the editor makes of `lanes`, without their uids.
+    fn imported(lanes: &[Lane]) -> Vec<(usize, i32, Option<usize>)> {
+        kinds_and_widths(&Street::imported(StreetClass::Local, Side::Right, &pieces(lanes)).segments)
+    }
+
+    #[test]
+    fn a_road_of_two_zones_opens_as_one_street_of_two_zones() {
+        use crate::street::model::ZoneEnd;
+        let layout = Layout::from_network(&zoned_road(80.0), "x");
+        let street = &layout.edges[0].section;
+        let length_mm = street.length_mm.expect("measured");
+        assert_eq!(street.from_end, ZoneEnd::First);
+        assert_eq!(street.zones.len(), 2);
+        let expected = (80_000.0 * length_mm as f64 / 200_000.0).round() as i32;
+        assert!((street.zones[1].from_mm - expected).abs() <= 1, "{} against {expected}", street.zones[1].from_mm);
+        assert_eq!(kinds_and_widths(&street.segments), imported(&two_lanes()), "the base is the first piece's");
+        assert_eq!(street.zones[0].segments, None, "the first zone is the base");
+        assert_eq!(kinds_and_widths(street.zones[1].segments.as_deref().expect("its own section")), imported(&four_lanes()));
+        assert_eq!((street.speed, street.zones[0].speed, street.zones[1].speed), (Speed::Kmh(30), Speed::Undecided, Speed::Kmh(40)));
+        assert!(street.zones.iter().all(|z| z.name.is_none()));
+        assert!(street.is_sound(), "every uid is one the street has issued: {street:?}");
+        let own = street.zones[1].segments.as_deref().unwrap();
+        assert!(own.iter().all(|s| street.segments.iter().all(|b| b.uid != s.uid)), "fresh uids");
+    }
+
+    #[test]
+    fn a_road_of_one_zone_opens_as_before() {
+        let mut net = zoned_road(80.0);
+        net.roads[0].zones.truncate(1);
+        let street = &Layout::from_network(&net, "x").edges[0].section;
+        assert!(street.zones.is_empty());
+        assert_eq!(street.length_mm, None);
+        assert_eq!(street.next_uid, 3, "no uid spent on zones");
+    }
+
+    #[test]
+    fn a_zoned_road_whose_first_end_is_cut_is_measured_from_its_last_end() {
+        use crate::street::model::ZoneEnd;
+        let mut net = zoned_road(80.0);
+        net.junctions[0].provenance = Provenance::default();
+        let street = &Layout::from_network(&net, "x").edges[0].section;
+        let length_mm = street.length_mm.expect("measured");
+        assert_eq!(street.from_end, ZoneEnd::Last);
+        assert_eq!(street.zones.len(), 2);
+        assert_eq!(kinds_and_widths(street.zones[0].segments.as_deref().expect("the road's last piece")), imported(&four_lanes()));
+        assert_eq!(street.zones[0].speed, Speed::Kmh(40));
+        assert_eq!((street.zones[1].segments.as_ref(), street.zones[1].speed), (None, Speed::Undecided), "the base: the road's first piece");
+        let expected = (120_000.0 * length_mm as f64 / 200_000.0).round() as i32;
+        assert!((street.zones[1].from_mm - expected).abs() <= 1, "{} against {expected}", street.zones[1].from_mm);
+        assert!(street.is_sound());
+    }
+
+    #[test]
+    fn a_road_cut_at_both_ends_opens_with_its_first_zone() {
+        let mut net = zoned_road(80.0);
+        net.junctions[0].provenance = Provenance::default();
+        net.junctions[1].provenance = Provenance::default();
+        let street = &Layout::from_network(&net, "x").edges[0].section;
+        assert!(street.zones.is_empty());
+        assert_eq!(kinds_and_widths(&street.segments), imported(&two_lanes()));
+    }
+
+    #[test]
+    fn a_zone_shorter_than_the_editor_minimum_is_kept() {
+        let street = &Layout::from_network(&zoned_road(197.0), "x").edges[0].section;
+        assert_eq!(street.zones.len(), 2);
+        assert!(street.is_sound());
+    }
+
+    #[test]
+    fn zones_that_would_make_an_unsound_street_leave_it_with_its_first_zone() {
+        // a later piece with no lanes: an empty section
+        let mut lane_less = zoned_road(80.0);
+        lane_less.roads[0].zones[1].lanes.clear();
+        // two starts under a millimetre apart: the same start once rounded
+        let mut crowded = zoned_road(80.0);
+        crowded.roads[0].zones.push(Zone { from: cityloom_model::Coordinate::new(80.0002), speed_kmh: Some(50), lanes: two_lanes() });
+        for net in [lane_less, crowded] {
+            let street = &Layout::from_network(&net, "x").edges[0].section;
+            assert!(street.zones.is_empty(), "{:?}", street.zones);
+            assert_eq!((street.length_mm, street.next_uid), (None, 3), "as a road of one zone opens");
+            assert_eq!(kinds_and_widths(&street.segments), imported(&two_lanes()));
+            assert!(street.is_sound());
+        }
+    }
+
+    #[test]
+    fn an_unchanged_zoned_street_is_not_saved() {
+        use crate::city::store::CityStore;
+        use crate::place::area::Area;
+        use crate::shared::ports::test_ports;
+        let (ports, ..) = test_ports();
+        let store = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(store.keep_network(&zoned_road(80.0)));
+        let city = store.open();
+        let v = city.view(0);
+        assert_eq!((v.edges[0].zones, v.edited), (2, 0));
+        let editor = city.street_editor(v.edges[0].uid, 0).unwrap();
+        assert_eq!(editor.snapshot().zones.len(), 2, "the editor opens the zones as imported");
+        assert!(editor.structure_blocked().is_none(), "and may rearrange them");
     }
 
     #[test]

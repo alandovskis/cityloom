@@ -30,7 +30,7 @@ pub use cut::NetworkTile;
 pub use frame::Frame;
 pub use graph::{Edge, Node, NodeId, connected};
 pub use hours::{Hours, Window};
-pub use importer::{IMPORTER_VERSION, with_importer};
+pub use importer::{IMPORTER_VERSION, importer_of, with_importer};
 pub use junction::{Control, Junction};
 pub use lane::{BufferType, Direction, Lane, LaneKind};
 pub use network::Network;

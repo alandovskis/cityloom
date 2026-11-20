@@ -86,3 +86,5 @@ session-outcome-conflict = Ce compte { $provider } est déjà associé à un aut
 session-outcome-conflict-any = Ce compte est déjà associé à un autre compte CityLoom.
 session-outcome-cancelled = Connexion annulée.
 session-outcome-failed = La connexion a échoué. Réessayez.
+shell-edits-cleared = La carte a été reconstruite avec une rue par îlot; vos modifications antérieures des rues et des jonctions ont donc été effacées.
+shell-notice-dismiss = Fermer

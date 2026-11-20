@@ -55,6 +55,49 @@ fn typing(target: Option<EventTarget>) -> bool {
     target.and_then(|t| t.dyn_into::<Element>().ok()).is_some_and(|e| e.closest("input, select, textarea").ok().flatten().is_some())
 }
 
+/// The notice that the project's earlier edits were cleared, with a button to close it (as the map's report notice).
+#[component]
+pub fn EditsClearedNotice(vm: Rc<ShellVm>) -> impl IntoView {
+    let vm = StoredValue::new_local(vm);
+    view! {
+        {move || {
+            vm.get_value()
+                .edits_cleared()
+                .then(|| {
+                    let i18n = vm.get_value().i18n();
+                    let dismiss = i18n.tr("shell-notice-dismiss", &Args::new());
+                    view! {
+                        <p class="shell-notice" role="status">
+                            {i18n.tr("shell-edits-cleared", &Args::new())}
+                            <button
+                                type="button"
+                                on:click=move |_| {
+                                    vm.get_value().dismiss_edits_cleared();
+                                    focus_after_notice();
+                                }
+                            >
+                                {dismiss}
+                            </button>
+                        </p>
+                    }
+                })
+        }}
+    }
+}
+
+/// Where focus goes once the notice is closed, so a keyboard user keeps their place rather than starting again from
+/// the top of the page: the drawing (`#wrap`) where the page has one, else the page's `main`, which is made focusable
+/// from script only (`tabindex="-1"`) when it is not already.
+fn focus_after_notice() {
+    let target = by_id("wrap").or_else(|| document().query_selector("main").ok().flatten());
+    if let Some(el) = target.and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        if !el.has_attribute("tabindex") {
+            el.set_tab_index(-1);
+        }
+        let _ = el.focus();
+    }
+}
+
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
 /// is the message that names what the left sidebar holds on this page.
 pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes: NotesAtStart) {
@@ -104,6 +147,22 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
     bind_sync(&vm);
+    // The notice that earlier edits were cleared goes where a screen reader meets it first: at the top of an editor's
+    // column (street, intersection), above its title, so it pushes the title down instead of covering it; elsewhere
+    // before the page's `main`.
+    if let Ok(slot) = document().create_element("div") {
+        let placed = if let Some(column) = document().query_selector(".stage-main").ok().flatten() {
+            column.prepend_with_node_1(&slot).is_ok()
+        } else if let Some(main) = document().query_selector("main").ok().flatten() {
+            main.before_with_node_1(&slot).is_ok()
+        } else {
+            false
+        };
+        if placed {
+            let notice = vm.clone();
+            leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+        }
+    }
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {

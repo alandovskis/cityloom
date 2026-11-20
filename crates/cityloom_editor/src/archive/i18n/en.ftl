@@ -15,6 +15,7 @@ archive-export-empty = You have no design work to export yet, so no file was mad
 archive-export-failed = The file could not be offered for download. Your work on this device was not changed.
 archive-imported = Import finished. Added: { $added }. Replaced: { $replaced }. Kept as they were here: { $kept }. Already identical: { $same }.
 archive-nothing-new = Nothing to import: everything in this archive is already on this device.
+archive-stale-only = Nothing to import: this archive was saved before the map was rebuilt with one street per block, so its street and junction edits no longer apply.
 archive-cancelled = Import cancelled. Nothing on this device was changed.
 archive-confirm-heading = Some places differ from this device
 archive-confirm-summary = In this archive, { $differ } differ from the same places on this device, and { $new } are new here and will be added either way. Nothing has been changed yet.

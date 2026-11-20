@@ -3,7 +3,7 @@ use std::rc::Rc;
 use serde_json::json;
 
 use super::vm::{Context, Focus, TimelineVm};
-use crate::city::edits::EDITS_KEY;
+use crate::city::edits::{EDITS_KEY, IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
 use crate::shared::i18n::Locale;
 use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
 
@@ -19,9 +19,11 @@ fn en() -> (Rc<TimelineVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
 
 /// Keeps streets `(key, name, width)` as the project's edits.
 fn keep(storage: &MemoryStorage, streets: &[(&str, &str, i64)]) {
-    let streets: serde_json::Map<String, serde_json::Value> =
-        streets.iter().map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "street": { "name": name, "row_mm": w } }))).collect();
-    assert!(storage.remember(EDITS_KEY, &json!({ "version": 5, "streets": streets }).to_string()));
+    let streets: serde_json::Map<String, serde_json::Value> = streets
+        .iter()
+        .map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "import": STALE_BEFORE_IMPORT, "street": { "name": name, "row_mm": w } })))
+        .collect();
+    assert!(storage.remember(EDITS_KEY, &json!({ "version": IMPORT_STAMP_VERSION, "streets": streets }).to_string()));
 }
 
 #[test]
@@ -338,4 +340,12 @@ fn the_link_back_to_the_map_keeps_the_project_and_a_read_only_view() {
     let look: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage, "p1").only_to_read());
     let vm = TimelineVm::new(Ports { storage: look, ..ports }, crate::i18n_for(Locale::En), context());
     assert_eq!(vm.back_href(), "map.html?project=p1&view=1", "a timeline shown read-only leads back to its map read-only");
+}
+
+#[test]
+fn a_stale_milestone_has_its_own_refusal_in_both_languages() {
+    assert_eq!(super::text::refused_key(super::model::Refused::Stale), "timeline-refused-stale");
+    for locale in [Locale::En, Locale::FrCa] {
+        assert!(!crate::i18n_for(locale).tr_now("timeline-refused-stale", &Default::default()).is_empty());
+    }
 }

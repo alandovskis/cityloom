@@ -1,6 +1,15 @@
 import type { Page } from "@playwright/test";
 
-import { addFromMenu as addItem, expect, live, menuItem, placesOnMap, streetLengthM, test } from "./fixtures";
+import {
+  addFromMenu as addItem,
+  expect,
+  live,
+  menuItem,
+  placesOnMap,
+  streetLengthM,
+  test,
+  EDITS_VERSION,
+} from "./fixtures";
 
 // Street trees and green infrastructure: the tools, the Green row, the checks, the 2.5D and the saved document.
 
@@ -116,8 +125,8 @@ test.describe("street trees and green infrastructure", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Trees and plantings shown: /);
     await expect(crowns(page).first()).toBeAttached();
 
-    // Version 11 is the edits document that can hold green elements.
-    await expect.poll(() => editsVersion(page)).toBe(11);
+    // EDITS_VERSION is the document that holds the import stamp every street record carries.
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#green-strip").locator('[role="option"]')).toHaveCount(1);
 

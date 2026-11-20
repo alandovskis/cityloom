@@ -3,7 +3,7 @@
 
 import type { Page } from "@playwright/test";
 
-import { expect, live, openJunction, openStreet, test } from "./fixtures";
+import { expect, live, openJunction, openStreet, test, EDITS_VERSION } from "./fixtures";
 
 // The editors are reached from the map, as a person does.
 const PAGES = [
@@ -276,4 +276,78 @@ for (const p of PAGES) {
     await expect(page.locator(".session-box")).not.toHaveClass(/pending/);
     expect(await xs()).toEqual(before);
   });
+}
+
+// A project's street or junction edit saved before the importer merged a block's pieces has no `import` stamp: it is
+// stale, discarded when one of the project's pages opens, and the page says so once. The notice floats below the
+// fixed bar where the bar floats, so it must be seen, in the viewport, and reachable at every width; at a laptop's
+// width the side panels leave it less room, and it must not cover their heads.
+const CLEARED =
+  "The map was rebuilt with one street per block, so your earlier street and junction edits were cleared.";
+const NOTICE_PAGES = [
+  { name: "map", open: (page: Page) => page.goto("/map.html"), ready: "#region option" },
+  { name: "street", open: (page: Page) => openStreet(page), ready: "#region option" },
+  { name: "intersection", open: (page: Page) => openJunction(page), ready: "#region option" },
+  { name: "timeline", open: (page: Page) => page.goto("/timeline.html"), ready: "#region option" },
+];
+const WIDTHS = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "laptop", width: 1280, height: 800 },
+  { name: "phone", width: 390, height: 844 },
+];
+
+/** Whether two boxes share any area. */
+const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+for (const p of NOTICE_PAGES) {
+  for (const w of WIDTHS) {
+    test(`a project's cleared edits are announced once on the ${p.name} page at ${w.name} width`, async ({ page }) => {
+      await page.setViewportSize({ width: w.width, height: w.height });
+      await p.open(page);
+      await expect(page.locator(p.ready).first()).toBeAttached();
+      await page.evaluate((version) => {
+        const record = { ways: [1], nodes: [], leaving: {}, street: {} };
+        localStorage.setItem(
+          "cityloom-edits@first",
+          JSON.stringify({ version, streets: { w1: record }, junctions: {} }),
+        );
+      }, EDITS_VERSION);
+      await page.reload();
+      const notice = page.locator("p.shell-notice");
+      await expect(notice).toHaveAttribute("role", "status");
+      await expect(notice).toContainText(CLEARED);
+      await expect(notice).toBeVisible();
+      await expect(notice).toBeInViewport({ ratio: 1 });
+      const box = (await notice.boundingBox())!;
+      // nor the street or intersection editor's title and tools above its drawing
+      for (const panel of await page.locator(".panel:visible, .stage-head:visible").all()) {
+        const covered = (await panel.boundingBox())!;
+        expect(
+          overlap(box, covered),
+          `the notice ${JSON.stringify(box)} covers a panel ${JSON.stringify(covered)}`,
+        ).toBe(false);
+      }
+      // A page whose main is not the editors' full-screen stage (the timeline) keeps the notice in its flow, above
+      // the content, never over it.
+      for (const main of await page.locator("main:not(.stage)").all()) {
+        const content = (await main.boundingBox())!;
+        expect(
+          overlap(box, content),
+          `the notice ${JSON.stringify(box)} covers the page's content ${JSON.stringify(content)}`,
+        ).toBe(false);
+      }
+      await notice.getByRole("button", { name: "Dismiss" }).press("Enter");
+      await expect(notice).toHaveCount(0);
+      // a keyboard user keeps their place: focus goes to the drawing or the page's main, not back to the top
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.matches("#wrap, main") ?? false), {
+          message: "focus after Dismiss",
+        })
+        .toBe(true);
+      await page.reload();
+      await expect(page.locator(p.ready).first()).toBeAttached();
+      await expect(notice).toHaveCount(0);
+    });
+  }
 }

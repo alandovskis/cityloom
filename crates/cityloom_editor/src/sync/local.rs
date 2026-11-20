@@ -78,18 +78,26 @@ pub fn usable(storage: &Shared, kind: Kind) -> bool {
 }
 
 /// Every record the stores hold, in every project, whose kind is usable there and whose wire key the server would
-/// take, and every listed project's own record. A key the server would refuse stays on this device, readable.
+/// take, and every listed project's own record. A key the server would refuse stays on this device, readable. A stale
+/// street or junction record is left out: it is never sent.
 pub fn ids(storage: &Shared) -> Vec<Id> {
     let mut out = Vec::new();
     for project in projects(storage) {
-        out.extend(projects::records(storage, &project).into_iter().map(|(kind, key)| Id { kind, key: wire_key(&project, &key) }));
+        let draft = edits_draft(&scoped(storage, &project));
+        let stale = |kind: Kind, key: &str| {
+            let record = section(kind).zip(draft.as_ref()).and_then(|(section, draft)| draft.get_raw(section, key));
+            record.is_some_and(edits::is_stale)
+        };
+        let records = projects::records(storage, &project).into_iter().filter(|(kind, key)| !stale(*kind, key));
+        out.extend(records.map(|(kind, key)| Id { kind, key: wire_key(&project, &key) }));
     }
     out.extend(ProjectStore::new(storage.clone()).list().into_iter().filter(|p| !p.placeholder).map(|p| Id::new(Kind::Project, &p.id)));
     out.retain(|id| valid_key(&id.key));
     out
 }
 
-/// The record as kept. A placeholder project is not one: it never leaves the device.
+/// The record as kept. A placeholder project is not one: it never leaves the device; nor is a stale street or junction
+/// record (`edits::is_stale`), which the project's discard removes when it is next opened.
 pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     if id.kind == Kind::Project {
         return ProjectStore::new(storage.clone()).get(&id.key).filter(|p| !p.placeholder).and_then(|p| serde_json::to_value(p).ok());
@@ -97,7 +105,7 @@ pub fn read(storage: &Shared, id: &Id) -> Option<Value> {
     let (project, key) = split_key(&id.key);
     let storage = &scoped(storage, project);
     match id.kind {
-        Kind::Street | Kind::Junction => edits_draft(storage)?.get_raw(section(id.kind)?, key).cloned(),
+        Kind::Street | Kind::Junction => edits_draft(storage)?.get_raw(section(id.kind)?, key).filter(|r| !edits::is_stale(r)).cloned(),
         Kind::Rule => RestrictionStore::new(storage.clone()).raw(key),
         Kind::Milestone => MilestoneStore::new(storage.clone()).raw(key),
         Kind::Area => storage.recall(AREA_KEY).filter(|q| Area::from_query(q).is_some()).map(|query| json!({ "query": query })),
@@ -186,7 +194,7 @@ impl LegacyHold {
 /// Keeps `body` as the record. False where the kind's document is unusable (damaged or a newer build's: it is not
 /// written or replaced), the body is not what the kind holds (an area that is not an area) or storage refused. A record
 /// of a project the list does not hold adds a placeholder project, so it can be reached; the project's own record
-/// replaces the placeholder.
+/// replaces the placeholder. A stale street or junction body (`edits::is_stale`) is not kept, and the write says yes.
 pub fn write(storage: &Shared, id: &Id, body: &Value) -> bool {
     let list = ProjectStore::new(storage.clone());
     if id.kind == Kind::Project {
@@ -211,6 +219,11 @@ fn write_in(storage: &Shared, kind: Kind, key: &str, body: &Value) -> bool {
     match kind {
         Kind::Street | Kind::Junction => {
             let (Some(mut draft), Some(section)) = (edits_draft(storage), section(kind)) else { return false };
+            // A stale record is not kept; it is done with all the same, so that it is not pulled again and again (the
+            // view-model answers it with a removal before it gets here).
+            if edits::is_stale(body) {
+                return true;
+            }
             draft.put_raw(section, key, body.clone()) && storage.remember(EDITS_KEY, &draft.to_json())
         }
         Kind::Rule => {
@@ -273,6 +286,12 @@ mod tests {
     /// Where the first project keeps its edits.
     const FIRST_EDITS: &str = "cityloom-edits@first";
 
+    /// `body` stamped as made against the importer of the cutoff, so that it is not stale (`edits::is_stale`).
+    fn stamped(mut body: Value) -> Value {
+        body["import"] = json!(edits::STALE_BEFORE_IMPORT);
+        body
+    }
+
     fn storage() -> (Rc<dyn Storage>, Rc<MemoryStorage>) {
         let (ports, _, memory) = test_ports();
         (ports.storage, memory)
@@ -288,8 +307,8 @@ mod tests {
         assert_eq!(ids(&s), Vec::<Id>::new());
         let ring = json!([[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]]);
         let bodies = [
-            (street.clone(), json!({"ways": [1], "street": {"x": 1}, "newer": {"z": [1]}})),
-            (junction.clone(), json!({"nodes": [7]})),
+            (street.clone(), stamped(json!({"ways": [1], "street": {"x": 1}, "newer": {"z": [1]}}))),
+            (junction.clone(), stamped(json!({"nodes": [7]}))),
             (rule.clone(), json!({"name": "R", "rule": {"kind": "car_free"}, "ring": ring})),
             (area.clone(), json!({"query": "area=45.5000,-73.6000&name=Home"})),
         ];
@@ -354,24 +373,26 @@ mod tests {
             zone.segments = Some(own);
             zone.name = Some(format!("Zone {i}"));
         }
-        let record = StreetRecord { ways: [7].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street, scenarios: Default::default() };
+        let record = StreetRecord {
+            ways: [7].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            street,
+            scenarios: Default::default(),
+            import: Some(edits::STALE_BEFORE_IMPORT),
+        };
         serde_json::to_value(record).unwrap()
     }
 
     #[test]
-    fn writing_a_zoned_street_through_the_sync_makes_the_document_version_6_so_an_older_build_will_not_touch_it() {
+    fn writing_a_zoned_street_through_the_sync_makes_the_document_the_import_stamp_version_so_an_older_build_will_not_touch_it() {
         let (s, memory) = storage();
         let version = || serde_json::from_str::<Value>(&memory.recall(FIRST_EDITS).unwrap()).unwrap()["version"].clone();
-        let plain = Id::new(Kind::Street, "w1~n2~n3");
-        assert!(write(&s, &plain, &json!({"ways": [1], "street": {"x": 1}})));
-        assert_eq!(version(), 5);
         let zoned = Id::new(Kind::Street, "w7~n1~n2");
         let body = many_zone_record(2);
         assert!(write(&s, &zoned, &body));
-        assert_eq!(version(), 6);
+        assert_eq!(version(), edits::IMPORT_STAMP_VERSION, "the newest version: a stamped record is kept, with its zones");
         assert_eq!(read(&s, &zoned), Some(body), "and the record is read back whole");
-        assert!(remove(&s, &zoned));
-        assert_eq!(version(), 5, "the last zoned record is gone");
     }
 
     #[test]
@@ -404,7 +425,7 @@ mod tests {
         memory.remember("cityloom-restrictions@first", "{broken");
         assert!(!usable(&s, Kind::Street) && !usable(&s, Kind::Junction) && !usable(&s, Kind::Rule));
         assert!(usable(&s, Kind::Area));
-        assert!(!write(&s, &Id::new(Kind::Street, "k"), &json!({})));
+        assert!(!write(&s, &Id::new(Kind::Street, "k"), &stamped(json!({}))));
         assert!(!write(&s, &Id::new(Kind::Rule, "r-1"), &json!({"name": "x", "rule": {"kind": "car_free"}, "ring": []})));
         assert!(!remove(&s, &Id::new(Kind::Street, "k")));
         assert!(!remove(&s, &Id::new(Kind::Rule, "r-1")));
@@ -423,13 +444,40 @@ mod tests {
     }
 
     #[test]
+    fn a_stale_record_is_neither_listed_nor_read() {
+        // project `first` was never opened since the discard came, so its stale records are still kept
+        let (s, memory) = storage();
+        let doc = json!({
+            "version": edits::IMPORT_STAMP_VERSION,
+            "streets": {"w1~n1~n2": {"ways": [1]}, "w2~n2~n3": {"ways": [2], "import": edits::STALE_BEFORE_IMPORT}},
+            "junctions": {"n7": {"nodes": [7], "import": 10}},
+        });
+        memory.remember(FIRST_EDITS, &doc.to_string());
+        let (stale_street, stale_junction) = (Id::new(Kind::Street, "w1~n1~n2"), Id::new(Kind::Junction, "n7"));
+        let stamped = Id::new(Kind::Street, "w2~n2~n3");
+        assert_eq!(ids(&s), [stamped.clone()]);
+        assert_eq!((read(&s, &stale_street), read(&s, &stale_junction)), (None, None));
+        assert_eq!(read(&s, &stamped), Some(json!({"ways": [2], "import": edits::STALE_BEFORE_IMPORT})));
+    }
+
+    #[test]
+    fn a_stale_body_is_not_written() {
+        let (s, memory) = storage();
+        let street = Id::new(Kind::Street, "w1~n1~n2");
+        assert!(write(&s, &street, &json!({"ways": [1], "import": 10})), "done with, so that it is not tried again");
+        assert!(memory.recall(FIRST_EDITS).is_none_or(|doc| !doc.contains("w1~n1~n2")), "but not kept");
+        assert!(write(&s, &street, &json!({"ways": [1], "import": edits::STALE_BEFORE_IMPORT})));
+        assert!(memory.recall(FIRST_EDITS).unwrap().contains("w1~n1~n2"), "a stamped one is");
+    }
+
+    #[test]
     fn two_projects_keep_the_same_place_apart_under_their_wire_keys() {
         let (s, memory) = storage();
         assert!(write(&s, &Id::new(Kind::Project, "p1"), &project_body("Plateau")));
         let first = Id::new(Kind::Street, "w1");
         let other = Id::new(Kind::Street, "p1:w1");
-        assert!(write(&s, &first, &json!({"mine": "first"})));
-        assert!(write(&s, &other, &json!({"mine": "p1"})));
+        assert!(write(&s, &first, &stamped(json!({"mine": "first"}))));
+        assert!(write(&s, &other, &stamped(json!({"mine": "p1"}))));
         let mut listed = ids(&s);
         listed.sort();
         assert_eq!(listed, [other.clone(), first.clone(), Id::new(Kind::Project, "p1")]);
@@ -437,11 +485,11 @@ mod tests {
         assert!(!memory.recall("cityloom-edits@p1").unwrap().contains("\"first\""));
         assert!(memory.recall("cityloom-edits@first").unwrap().contains("\"first\""));
         assert_eq!(memory.recall(EDITS_KEY), None, "the first project's records are its own too");
-        assert_eq!(read(&s, &first), Some(json!({"mine": "first"})));
-        assert_eq!(read(&s, &other), Some(json!({"mine": "p1"})));
+        assert_eq!(read(&s, &first), Some(stamped(json!({"mine": "first"}))));
+        assert_eq!(read(&s, &other), Some(stamped(json!({"mine": "p1"}))));
         assert!(remove(&s, &other));
         assert_eq!(read(&s, &other), None);
-        assert_eq!(read(&s, &first), Some(json!({"mine": "first"})), "removing it from p1 leaves the first project's");
+        assert_eq!(read(&s, &first), Some(stamped(json!({"mine": "first"}))), "removing it from p1 leaves the first project's");
         assert_eq!(memory.recall("cityloom-sync"), None);
     }
 
@@ -492,14 +540,14 @@ mod tests {
         let (s, memory) = storage();
         assert!(write(&s, &Id::new(Kind::Project, "p1"), &project_body("Plateau")));
         assert!(write(&s, &Id::new(Kind::Project, "p2"), &project_body("Rosemont")));
-        assert!(write(&s, &Id::new(Kind::Street, "p1:w1"), &json!({"x": 1})));
-        assert!(write(&s, &Id::new(Kind::Street, "p2:w1"), &json!({"x": 2})));
+        assert!(write(&s, &Id::new(Kind::Street, "p1:w1"), &stamped(json!({"x": 1}))));
+        assert!(write(&s, &Id::new(Kind::Street, "p2:w1"), &stamped(json!({"x": 2}))));
         assert!(ProjectStore::new(s.clone()).open("p1"));
         assert!(remove(&s, &Id::new(Kind::Project, "p1")));
         assert_eq!(list_ids(&s), ["p2"]);
         assert!(memory.recall("cityloom-edits@p1").is_none_or(|v| v.is_empty()));
         assert_eq!(read(&s, &Id::new(Kind::Street, "p1:w1")), None);
-        assert_eq!(read(&s, &Id::new(Kind::Street, "p2:w1")), Some(json!({"x": 2})));
+        assert_eq!(read(&s, &Id::new(Kind::Street, "p2:w1")), Some(stamped(json!({"x": 2}))));
         assert_eq!(ProjectStore::new(s.clone()).last_opened(), None);
         assert_eq!(memory.recall("cityloom-sync"), None);
         assert!(remove(&s, &Id::new(Kind::Project, "p1")), "removing what is gone is done");
@@ -509,13 +557,13 @@ mod tests {
     fn a_record_for_a_project_not_in_the_list_brings_a_placeholder_that_its_own_record_replaces() {
         let (s, memory) = storage();
         memory.set_now(1_800_000_000_000);
-        assert!(write(&s, &Id::new(Kind::Street, "p9:w1"), &json!({"x": 1})));
+        assert!(write(&s, &Id::new(Kind::Street, "p9:w1"), &stamped(json!({"x": 1}))));
         let placeholder = ProjectStore::new(s.clone()).get("p9").expect("its places are reachable");
         assert_eq!(placeholder.name, PLACEHOLDER_NAME);
         assert_eq!(placeholder.area, crate::place::area::default_area().to_query());
         assert_eq!(placeholder.created_at, crate::sync::model::stamp(1_800_000_000_000));
         assert!(placeholder.placeholder);
-        assert!(write(&s, &Id::new(Kind::Street, "p9:w2"), &json!({"x": 2})));
+        assert!(write(&s, &Id::new(Kind::Street, "p9:w2"), &stamped(json!({"x": 2}))));
         assert_eq!(ProjectStore::new(s.clone()).list().len(), 1, "one placeholder");
         // the placeholder never leaves the device: it would replace the project's name elsewhere
         assert_eq!(read(&s, &Id::new(Kind::Project, "p9")), None);
@@ -529,7 +577,7 @@ mod tests {
         let list = ProjectStore::new(s.clone()).list();
         assert_eq!(list.iter().map(|p| (p.id.as_str(), p.name.as_str(), p.placeholder)).collect::<Vec<_>>(), [("p9", "Verdun", false)]);
         assert!(ids(&s).contains(&Id::new(Kind::Project, "p9")));
-        assert_eq!(read(&s, &Id::new(Kind::Street, "p9:w1")), Some(json!({"x": 1})));
+        assert_eq!(read(&s, &Id::new(Kind::Street, "p9:w1")), Some(stamped(json!({"x": 1}))));
         assert_eq!(memory.recall("cityloom-sync"), None);
     }
 
@@ -548,7 +596,7 @@ mod tests {
         let (s, memory) = storage();
         memory.remember(crate::project::PROJECTS_KEY, r#"{"version":99,"projects":[]}"#);
         assert!(!usable(&s, Kind::Project));
-        assert!(!write(&s, &Id::new(Kind::Street, "p9:w1"), &json!({"x": 1})));
+        assert!(!write(&s, &Id::new(Kind::Street, "p9:w1"), &stamped(json!({"x": 1}))));
         assert!(!write(&s, &Id::new(Kind::Project, "p9"), &project_body("Verdun")));
         assert!(!remove(&s, &Id::new(Kind::Project, "p9")));
         assert_eq!(memory.recall("cityloom-edits@p9"), None);
@@ -581,7 +629,7 @@ mod tests {
         memory.remember("cityloom-area", &crate::place::area::default_area().to_query());
         assert!(legacy_hold(&s).is_none());
         let mut draft = Draft::new();
-        assert!(draft.put_raw(STREETS, "w1", json!({"x": 1})));
+        assert!(draft.put_raw(STREETS, "w1", stamped(json!({"x": 1}))));
         memory.remember(EDITS_KEY, &draft.to_json());
         let hold = legacy_hold(&s).expect("a move is waiting");
         assert!(hold.holds(&street));
@@ -592,7 +640,7 @@ mod tests {
         memory.remember("cityloom-area", &crate::place::area::Area::new("Berlin", 52.5, 13.4).to_query());
         assert!(!legacy_hold(&s).unwrap().holds(&area));
         // once `first` holds it, it is sent from there
-        assert!(write(&s, &street, &json!({"x": 2})));
+        assert!(write(&s, &street, &stamped(json!({"x": 2}))));
         assert!(!legacy_hold(&s).unwrap().holds(&street));
     }
 
@@ -618,7 +666,7 @@ mod tests {
         memory.remember("cityloom-edits@p1", "{broken");
         assert!(!usable(&s, Kind::Street) && !usable(&s, Kind::Junction));
         assert!(usable(&s, Kind::Rule));
-        assert!(!write(&s, &Id::new(Kind::Street, "p1:w1"), &json!({})));
+        assert!(!write(&s, &Id::new(Kind::Street, "p1:w1"), &stamped(json!({}))));
         assert_eq!(memory.recall("cityloom-edits@p1").as_deref(), Some("{broken"));
     }
 
@@ -632,19 +680,19 @@ mod tests {
         assert_eq!(long.len(), 190);
         let id = Id::new(Kind::Street, &format!("{project}:{long}"));
         assert_eq!(id.key.len(), 205);
-        assert!(write(&s, &id, &json!({"x": 1})));
-        assert!(write(&s, &Id::new(Kind::Street, &long), &json!({"x": 2})));
+        assert!(write(&s, &id, &stamped(json!({"x": 1}))));
+        assert!(write(&s, &Id::new(Kind::Street, &long), &stamped(json!({"x": 2}))));
         let listed = ids(&s);
         assert!(!listed.contains(&id), "{} characters", id.key.len());
         assert!(listed.contains(&Id::new(Kind::Street, &long)), "the first project's bare key fits");
-        assert_eq!(read(&s, &id), Some(json!({"x": 1})));
+        assert_eq!(read(&s, &id), Some(stamped(json!({"x": 1}))));
     }
 
     #[test]
     fn a_key_the_server_would_refuse_is_not_listed() {
         let (s, _) = storage();
-        assert!(write(&s, &Id::new(Kind::Street, "has space"), &json!({})));
-        assert!(write(&s, &Id::new(Kind::Street, "fine"), &json!({})));
+        assert!(write(&s, &Id::new(Kind::Street, "has space"), &stamped(json!({}))));
+        assert!(write(&s, &Id::new(Kind::Street, "fine"), &stamped(json!({}))));
         assert_eq!(ids(&s), [Id::new(Kind::Street, "fine")]);
     }
 }

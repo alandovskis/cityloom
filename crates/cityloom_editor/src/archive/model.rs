@@ -139,6 +139,7 @@ pub struct Archive {
     streets: BTreeMap<String, Value>,
     junctions: BTreeMap<String, Value>,
     rules: BTreeMap<String, Value>,
+    stale: usize,
 }
 
 impl Archive {
@@ -148,6 +149,11 @@ impl Archive {
 
     pub fn junctions(&self) -> usize {
         self.junctions.len()
+    }
+
+    /// How many street and junction records were left out as stale (`city::edits::is_stale`).
+    pub fn stale(&self) -> usize {
+        self.stale
     }
 
     pub fn rules(&self) -> usize {
@@ -260,9 +266,9 @@ pub fn parse_and_validate(text: &str) -> Result<Archive, ArchiveError> {
         },
         Some(_) => return Err(ArchiveError::Damaged(PART_HEADER)),
     };
-    let (streets, junctions) = read_edits(doc.get("edits"))?;
+    let (streets, junctions, stale) = read_edits(doc.get("edits"))?;
     let rules = read_rules(doc.get("restrictions"))?;
-    Ok(Archive { format_version: version, app_version, created_at, source, area, streets, junctions, rules })
+    Ok(Archive { format_version: version, app_version, created_at, source, area, streets, junctions, rules, stale })
 }
 
 type Records = BTreeMap<String, Value>;
@@ -287,8 +293,17 @@ fn section(draft: &Draft, name: &str, part: &'static str) -> Result<Records, Arc
     Ok(out)
 }
 
-fn read_edits(value: Option<&Value>) -> Result<(Records, Records), ArchiveError> {
-    let Some(value) = value.filter(|v| !v.is_null()) else { return Ok((Records::new(), Records::new())) };
+/// Without the records made before importer 11 (or unstamped), which are never applied, listed or sent; and how many
+/// there were.
+fn fresh(mut records: Records) -> (Records, usize) {
+    let before = records.len();
+    records.retain(|_, record| !edits::is_stale(record));
+    let dropped = before - records.len();
+    (records, dropped)
+}
+
+fn read_edits(value: Option<&Value>) -> Result<(Records, Records, usize), ArchiveError> {
+    let Some(value) = value.filter(|v| !v.is_null()) else { return Ok((Records::new(), Records::new(), 0)) };
     let damaged = ArchiveError::Damaged(PART_EDITS);
     let Some(doc) = value.as_object() else { return Err(damaged) };
     match doc.get("version").and_then(Value::as_u64) {
@@ -298,7 +313,10 @@ fn read_edits(value: Option<&Value>) -> Result<(Records, Records), ArchiveError>
         Some(_) => {}
     }
     match edits::draft(Some(&value.to_string())) {
-        Ok(draft) => Ok((section(&draft, STREETS, PART_EDITS)?, section(&draft, JUNCTIONS, PART_EDITS)?)),
+        Ok(draft) => {
+            let ((streets, s), (junctions, j)) = (fresh(section(&draft, STREETS, PART_EDITS)?), fresh(section(&draft, JUNCTIONS, PART_EDITS)?));
+            Ok((streets, junctions, s + j))
+        }
         Err(Document::Future) => Err(ArchiveError::EditsNewer(NEWEST as u64 + 1)),
         Err(_) => Err(damaged),
     }

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, placesOnMap, streetLengthM, test } from "./fixtures";
+import { expect, placesOnMap, streetLengthM, test, EDITS_VERSION } from "./fixtures";
 
 // The curbside uses: the strip under the zones, the checks, the 2.5D and the saved document.
 
@@ -89,8 +89,8 @@ test.describe("the curbside strip", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /One curbside use is shown\./);
     await expect(page.locator('#drawing .iso-piece:has(> title:text-is("Patio"))').first()).toBeAttached();
 
-    // Kept: the document is version 8 and the use is still there after a reload.
-    await expect.poll(() => editsVersion(page)).toBe(8);
+    // Kept: the document is EDITS_VERSION (the import stamp) and the use is still there after a reload.
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(page.locator(".curb-strip").first().locator('[role="option"]').nth(0)).toHaveAttribute(

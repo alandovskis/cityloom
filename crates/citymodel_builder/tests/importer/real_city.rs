@@ -29,7 +29,8 @@ fn a_real_neighbourhood_becomes_a_city_whose_places_can_all_be_opened() {
 fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_junctions() {
     let net = import(PLATEAU).expect("the extract reads");
     assert!(!net.left_hand);
-    assert!(net.roads.len() > 150, "{} roads", net.roads.len());
+    // 150 since the pieces of a block are one road (153 before)
+    assert!(net.roads.len() > 140, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
     for r in net.roads.iter() {
         *degree.entry(r.edge.from).or_insert(0) += 1;
@@ -243,7 +244,8 @@ mod two_way_track {
         let now = importer::import(FIXTURE.as_bytes()).unwrap();
         let storage = Rc::new(MemoryStorage::default());
         let store = CityStore::for_area(storage.clone() as Rc<dyn Storage>, Area::new("Saint-Marc", 45.4935, -73.58));
-        assert!(store.keep_network(&before));
+        // kept as this build's tiles are, so the record written over it is stamped and applies
+        assert!(store.keep_network_from(&before, Some(&cityloom_model::with_importer("test"))));
         // way 330153470's street
         let index = before
             .roads
@@ -257,7 +259,7 @@ mod two_way_track {
         edited.next_uid += 1;
         assert!(store.write_street(uid, edited.clone()));
 
-        assert!(store.keep_network(&now));
+        assert!(store.keep_network_from(&now, Some(&cityloom_model::with_importer("test"))));
         let city = store.open();
         let view = city.view(0);
         let index = now.roads.iter().position(|r| r.has_way(330153470)).unwrap();
@@ -271,14 +273,15 @@ mod two_way_track {
 
 /// Which meetings of streets are kept as junctions is what it was when every junction's corners were tuned while the
 /// city was built; they are now tuned when a junction is first asked for. The places are the nodes the city made
-/// before that, by uid.
+/// before that, by uid. (Renumbered when the pieces of a block became one road, importer 11: the nodes between them
+/// went, and the junctions are the same ones, at the same places with the same arms.)
 #[test]
 fn the_meetings_kept_as_junctions_are_the_same_as_when_corners_were_tuned_while_the_city_was_built() {
     let junctions = |osm: &[u8], name: &str| -> Vec<u32> {
         City::from_network(&import(osm).expect("the extract reads"), name).view(0).nodes.iter().filter(|n| n.junction).map(|n| n.uid).collect()
     };
-    assert_eq!(junctions(KREUZBERG, "Kreuzberg"), [12, 14, 28, 37, 54, 97]);
-    assert_eq!(junctions(PLATEAU, "Plateau"), [1, 2, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 21, 28, 37, 44, 47, 50, 55, 61, 63, 74, 76, 96, 97, 99, 100]);
+    assert_eq!(junctions(KREUZBERG, "Kreuzberg"), [11, 12, 23, 31, 47, 75]);
+    assert_eq!(junctions(PLATEAU, "Plateau"), [1, 2, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 21, 28, 37, 44, 47, 50, 55, 61, 63, 74, 76, 95, 96, 98, 99]);
 }
 
 /// A meeting of three streets that cannot be drawn with its corners as the node prefers them, and can once they are

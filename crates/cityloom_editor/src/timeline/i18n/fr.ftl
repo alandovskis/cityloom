@@ -95,3 +95,4 @@ timeline-refused-long = Le nom d’un jalon compte au plus 80 caractères.
 timeline-refused-large = Le travail est trop volumineux pour être conservé dans un seul jalon.
 timeline-refused-full = Les jalons de ce projet occupent toute la place permise sur cet appareil. Supprimez-en un pour faire de la place.
 timeline-refused-unusable = Les jalons ou le travail sur cet appareil n’ont pas pu être lus ou modifiés.
+timeline-refused-stale = Ce jalon a été enregistré avant que la carte soit reconstruite avec une rue par îlot; il ne peut donc pas être restauré. Vous pouvez toujours le comparer avec l’état actuel.
