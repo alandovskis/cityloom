@@ -38,6 +38,19 @@ const showBaseline = async (page: Page) => {
   await pick(page).selectOption("");
 };
 
+/** How far the focus ring of the scenario actions' first button reaches beyond its box (outline and offset), and the
+ *  room between the refusal's text and that button: the ring must never draw over the text. */
+const refusalRoom = async (page: Page) => {
+  const button = page.locator("#scenario-new");
+  await button.focus();
+  const reach = await button.evaluate((b) => {
+    const style = getComputedStyle(b);
+    return parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
+  });
+  const [refusal, first] = await Promise.all([page.locator("#scenario-refusal").boundingBox(), button.boundingBox()]);
+  return { reach, room: first!.y - (refusal!.y + refusal!.height) };
+};
+
 /** The edits document of the first project, as kept. */
 const edits = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits@first") ?? "null"));
 
@@ -163,7 +176,21 @@ test.describe("a street's scenarios", () => {
     await expect(page.locator("#scenario-name")).toHaveAttribute("aria-describedby", "scenario-refusal");
     await act(page, "scenario-new", " ");
     await expect(page.locator("#scenario-refusal")).toHaveText("Donnez un nom au scénario.");
+    const { reach, room } = await refusalRoom(page);
+    expect(reach).toBeGreaterThan(0);
+    expect(room).toBeGreaterThanOrEqual(reach);
   });
+});
+
+test("on both pages the focus ring of the first action never reaches the refusal above it", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const open of [openStreet, openJunction]) {
+    await open(page);
+    await act(page, "scenario-new", " ");
+    await expect(page.locator("#scenario-refusal")).toHaveText("Give the scenario a name.");
+    const { reach, room } = await refusalRoom(page);
+    expect(room, page.url()).toBeGreaterThanOrEqual(reach);
+  }
 });
 
 test.describe("a junction's scenarios", () => {
