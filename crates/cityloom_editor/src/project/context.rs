@@ -58,9 +58,15 @@ fn search_of(ports: &Ports) -> String {
 fn page_storage(storage: &Rc<dyn Storage>, id: &str, search: &str) -> Rc<ScopedStorage> {
     let (root, project) = (storage.clone(), id.to_string());
     let scoped = ScopedStorage::guarded(storage.clone(), id, move || find(&*root, &project).is_some());
-    // A copy of a shared design is only ever looked at, whatever the address says: it is no one's work on this device.
-    let read_only = crate::shared::project_id::viewing(search) || crate::project::copies::is_copy(&**storage, id);
-    Rc::new(if read_only { scoped.only_to_read() } else { scoped })
+    Rc::new(if read_only(&**storage, Some(id), search) { scoped.only_to_read() } else { scoped })
+}
+
+/// Whether a page whose query string is `search` shows its project `id` only to read: its address says so
+/// (`project_id::viewing`), or the project is a copy of a shared design (#221), which is only ever looked at whatever
+/// the address says: it is no one's work on this device. The one question the page's storage (`page_storage`) and the
+/// shell's top bar ask. Takes any storage.
+pub fn read_only(storage: &dyn Storage, id: Option<&str>, search: &str) -> bool {
+    crate::shared::project_id::viewing(search) || id.is_some_and(|id| crate::project::copies::is_copy(storage, id))
 }
 
 /// `enter`, keeping the project's storage so that it can be shut.

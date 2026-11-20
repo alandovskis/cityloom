@@ -1295,6 +1295,19 @@ mod context {
         assert!(!open_page(t.ports.clone()).unwrap().storage.read_only(), "the person's own projects are written as ever");
     }
 
+    /// One question says whether a page shows its project only to read, for the storage the page gets and for the shell's
+    /// top bar alike: its address says so, or the project is a copy of a shared design.
+    #[test]
+    fn a_page_is_read_only_where_its_address_says_so_or_its_project_is_a_copy() {
+        use crate::project::context::read_only;
+        let t = two_projects();
+        let id = crate::project::copies::keep(&t.ports.storage, "tok", "Shared", &crate::place::area::default_area().to_query(), &[]).unwrap();
+        let root = &*t.ports.storage;
+        assert!(read_only(root, Some(&id), "project=s1") && read_only(root, Some(&id), ""));
+        assert!(read_only(root, Some("p1"), "project=p1&view=1") && read_only(root, None, "view=1"));
+        assert!(!read_only(root, Some("p1"), "project=p1") && !read_only(root, None, ""));
+    }
+
     /// The person's list knows only their projects: a copy's id is no project to remember, open or remove; only the
     /// pages' own lookup (`context::find`) knows it.
     #[test]
