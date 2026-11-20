@@ -246,20 +246,16 @@ fn stop_at(plan: &Plan, last: u64) -> u64 {
 
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
 fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
-    // The phases (places in the plan) that can serve each crossing.
-    let serving: Vec<Vec<usize>> = asked
+    // Whether each phase (by its place in the plan) can serve each crossing: looked up once a turn, never searched.
+    let serving: Vec<Vec<bool>> = asked
         .iter()
-        .map(|a| {
-            (0..plan.phases.len())
-                .filter(|&k| plan.phases[k].walks.contains(&a.arm) && plan.phases[k].timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s)
-                .collect()
-        })
+        .map(|a| plan.phases.iter().map(|p| p.walks.contains(&a.arm) && p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s).collect())
         .collect();
     let mut calls: Vec<(usize, Call)> = asked
         .iter()
         .enumerate()
         .flat_map(|(x, a)| {
-            let outcome = if serving[x].is_empty() { Outcome::NotServed } else { Outcome::Served };
+            let outcome = if serving[x].contains(&true) { Outcome::Served } else { Outcome::NotServed };
             a.at_s.iter().map(move |&at_s| (x, Call { arm: a.arm, at_s, outcome, wait_s: 0, extended_s: 0 }))
         })
         .collect();
@@ -274,7 +270,7 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= stop {
         let k = turn % plan.phases.len();
         let phase = &plan.phases[k];
-        let serves = |x: usize| serving[x].contains(&k);
+        let serves = |x: usize| serving[x][k];
         let (now, later): (Vec<usize>, Vec<usize>) = waiting.iter().partition(|&&i| u64::from(calls[i].1.at_s) <= start && serves(calls[i].0));
         let mut extension = 0;
         for &i in &now {
@@ -509,6 +505,22 @@ mod tests {
         // too. Its walk comes round at 60 s, a second inside the bound (61 s): delayed, not cut off.
         let asked = [Asked { arm: 9, need_s: 25, at_s: vec![0, 1] }, Asked { arm: 8, need_s: 25, at_s: vec![0] }];
         assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 15), call(8, 0, Outcome::Served, 30, 15), call(9, 1, Outcome::Delayed, 59, 15)]);
+    }
+
+    #[test]
+    fn a_stored_plan_of_endless_phases_is_read_as_many_as_an_edit_allows_and_served_at_once() {
+        use crate::junction::model::MAX_ARMS;
+        let mut s = cross();
+        let (n, east, so) = (at(&s, 0), at(&s, 90), at(&s, 180));
+        let phase = StoredPhase { moves: vec![signal::Move { from: n, to: so }], walks: vec![east], rides: vec![], arm: None };
+        s.signal_plan = Some(SignalPlan { phases: vec![phase; 100_000] });
+        arm_mut(&mut s, east).calls = Some(MAX_CALLS_PER_HOUR);
+        let started = std::time::Instant::now();
+        let plan = signal::plan(&s, 0).unwrap();
+        assert_eq!(plan.phases.len(), MAX_ARMS * 2, "no more phases than an edit can make");
+        let sum = summary(&s, &plan, &[(east, 9_000)]);
+        assert_eq!(sum.calls.len(), MAX_CALLS_PER_HOUR as usize);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
     }
 
     #[test]

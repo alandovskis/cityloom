@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::model::{Arm, LEFT, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::junction::model::{Arm, LEFT, MAX_ARMS, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
 use crate::shared::catalogue::{REGIONS, Side};
 
 /// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
@@ -147,8 +147,8 @@ fn once<T: Copy + Eq + std::hash::Hash>(items: impl Iterator<Item = T>) -> Vec<T
     items.filter(|i| seen.insert(*i)).collect()
 }
 
-/// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), and a phase that serves
-/// nothing any more dropped. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
+/// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), a phase that serves
+/// nothing any more dropped, and no more phases than an edit can make. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
 /// list them), so what is stored, said and shown always match. None when nothing is left.
 fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
     let has = |uid: u32| s.arms.iter().any(|a| a.uid == uid);
@@ -165,6 +165,8 @@ fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
             arm: p.arm,
         })
         .filter(|p| !p.moves.is_empty() || p.arm.is_some_and(has))
+        // No more phases than an edit can make (`Junction::add_phase`): a stored plan may come from anywhere.
+        .take(MAX_ARMS * 2)
         .collect();
     (!phases.is_empty()).then_some(SignalPlan { phases })
 }
