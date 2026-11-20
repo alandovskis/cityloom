@@ -405,8 +405,9 @@ impl Editor {
         Ok(())
     }
 
-    fn curb_label(key: &'static str, i: &Instance) -> Said {
-        Said::new(key).with("use", Arg::MsgLower(i.use_.name_key())).with("at", Arg::Length(i.from_mm))
+    /// A revision's words: the use and where it starts on the plan, from its left end.
+    fn curb_label(&self, key: &'static str, i: &Instance) -> Said {
+        Said::new(key).with("use", Arg::MsgLower(i.use_.name_key())).with("at", Arg::Length(self.left_start(i.from_mm, i.length_mm)))
     }
 
     /// Records a change of the instances as one revision, writing the length and end they are measured against.
@@ -425,7 +426,7 @@ impl Editor {
         let frame = self.curb_frame(false)?;
         let i = Instance { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), use_ };
         self.curb_fits(&i, None, frame)?;
-        self.curb_change(Self::curb_label("rev-curb-add", &i), frame, |curb| curb.push(i));
+        self.curb_change(self.curb_label("rev-curb-add", &i), frame, |curb| curb.push(i));
         self.curb_choice.pick(side, i.from_mm);
         Ok(())
     }
@@ -436,7 +437,7 @@ impl Editor {
         let Some(&old) = self.states[self.cursor].content.curb.get(i) else { return Ok(()) };
         let new = Instance { use_, ..old };
         self.curb_fits(&new, Some(i), frame)?;
-        self.curb_change(Self::curb_label("rev-curb-use", &new), frame, |curb| curb[i] = new);
+        self.curb_change(self.curb_label("rev-curb-use", &new), frame, |curb| curb[i] = new);
         Ok(())
     }
 
@@ -446,7 +447,7 @@ impl Editor {
         let Some(&old) = self.states[self.cursor].content.curb.get(i) else { return Ok(()) };
         let new = Instance { length_mm: snap(length_mm).max(SNAP_MM), ..old };
         self.curb_fits(&new, Some(i), frame)?;
-        self.curb_change(Self::curb_label("rev-curb-resize", &new), frame, |curb| curb[i] = new);
+        self.curb_change(self.curb_label("rev-curb-resize", &new), frame, |curb| curb[i] = new);
         Ok(())
     }
 
@@ -460,7 +461,7 @@ impl Editor {
         if new == old {
             return Ok(());
         }
-        let label = Self::curb_label("rev-curb-move", &new);
+        let label = self.curb_label("rev-curb-move", &new);
         // The choice follows the use, and a drag records one move, from where it began to where it is.
         self.curb_choice.follow(old.side, old.from_mm, new.from_mm);
         if self.gesture.is_some() {
@@ -480,7 +481,7 @@ impl Editor {
     pub fn remove_curb(&mut self, i: usize) -> Result<(), CurbRefusal> {
         let frame = self.curb_frame(false)?;
         let Some(&old) = self.states[self.cursor].content.curb.get(i) else { return Ok(()) };
-        self.curb_change(Self::curb_label("rev-curb-remove", &old), frame, |curb| {
+        self.curb_change(self.curb_label("rev-curb-remove", &old), frame, |curb| {
             curb.remove(i);
         });
         Ok(())
@@ -512,16 +513,13 @@ pub(super) fn side_word(side: Side) -> &'static str {
 
 /// How the checks name a curbside use.
 pub(super) trait InstanceExt {
-    fn named(&self) -> Said;
+    fn named(&self, at_mm: i32) -> Said;
 }
 
 impl InstanceExt for Instance {
-    /// How the checks name it: "Patio at 42 m, right".
-    fn named(&self) -> Said {
-        Said::new("curb-instance")
-            .with("use", Arg::Msg(self.use_.name_key()))
-            .with("at", Arg::Length(self.from_mm))
-            .with("side", Arg::Msg(side_word(self.side)))
+    /// How the checks name it: "Patio at 42 m, right", `at_mm` being where it starts on the plan (`Editor::left_start`).
+    fn named(&self, at_mm: i32) -> Said {
+        Said::new("curb-instance").with("use", Arg::Msg(self.use_.name_key())).with("at", Arg::Length(at_mm)).with("side", Arg::Msg(side_word(self.side)))
     }
 }
 
@@ -572,7 +570,7 @@ impl Editor {
             ("curb-bike", "check-label-curb-bike", "check-detail-curb-bike-ok"),
             ("curb-sidewalk", "check-label-curb-sidewalk", "check-detail-curb-sidewalk-ok"),
         ];
-        check_rows(&rows, &failures, |k| content.curb[k].named())
+        check_rows(&rows, &failures, |k| content.curb[k].named(self.left_start(content.curb[k].from_mm, content.curb[k].length_mm)))
     }
 
     /// Every rule each instance breaks, instance by instance in order: `rule` indexes the five rows of `curb_checks`.

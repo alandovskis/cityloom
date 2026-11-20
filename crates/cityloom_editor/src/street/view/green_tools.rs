@@ -59,7 +59,8 @@ impl Fields {
         let (units, locale) = (w.units_now(), w.i18n().locale_now());
         self.kind.set(kind_index(c.kind));
         self.size.set(size_index(c.size));
-        self.at.set(units.number_in(c.from_mm, locale));
+        // Where it starts on the plan, from its left end, as every position the page shows.
+        self.at.set(units.number_in(w.green_left_start(c), locale));
         self.host.set(c.host.map(|h| h.to_string()).unwrap_or_default());
         self.fine.set(fine_shown(c.fine_mm));
         self.length.set(units.number_in(c.to_mm - c.from_mm, locale));
@@ -71,7 +72,8 @@ impl Fields {
         let field = |text: String| -> Option<Option<i32>> { if text.trim().is_empty() { Some(None) } else { typed_length(w, &text, None).map(Some) } };
         let kind = GreenKind::ALL.get(self.kind.get_untracked()).copied().unwrap_or(GreenKind::Tree);
         let at_mm = field(self.at.get_untracked())?;
-        let hosts: Vec<usize> = w.hosts_at(at_mm.unwrap_or(0)).into_iter().map(|(i, _)| i).collect();
+        let length_mm = field(self.length.get_untracked())?;
+        let hosts: Vec<usize> = w.hosts_at(at_mm.unwrap_or(0), length_mm.unwrap_or(0)).into_iter().map(|(i, _)| i).collect();
         let (host, fell_back) = effective_host(&hosts, &self.host.get_untracked());
         let fine_mm = if fell_back {
             self.fine.set(String::new());
@@ -93,7 +95,7 @@ impl Fields {
         Some(GreenForm {
             kind,
             size: (kind == GreenKind::Tree).then(|| SIZES[self.size.get_untracked().min(SIZES.len() - 1)].0),
-            length_mm: field(self.length.get_untracked())?,
+            length_mm,
             width_mm: field(self.width.get_untracked())?,
             at_mm,
             host,
@@ -158,7 +160,11 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         let typed = f.at.get();
         if typed.trim().is_empty() { 0 } else { crate::shared::units::parse_length_mm(&typed, w.units()).unwrap_or(0) }
     };
-    let host_ids = move || w.hosts_at(at_mm()).into_iter().map(|(i, _)| i).collect::<Vec<_>>();
+    let length_mm = move || {
+        let typed = f.length.get();
+        if typed.trim().is_empty() { 0 } else { crate::shared::units::parse_length_mm(&typed, w.units()).unwrap_or(0) }
+    };
+    let host_ids = move || w.hosts_at(at_mm(), length_mm()).into_iter().map(|(i, _)| i).collect::<Vec<_>>();
     let host_value = move || effective_host(&host_ids(), &f.host.get()).0.map(|h| h.to_string()).unwrap_or_default();
     // A piece held for another place is let go of, with the offset from its middle.
     #[cfg(target_arch = "wasm32")]
@@ -190,7 +196,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
             .collect_view()
     };
     let host_options = move || {
-        w.hosts_at(at_mm())
+        w.hosts_at(at_mm(), length_mm())
             .into_iter()
             .map(|(i, said)| {
                 let name = move || say(&w.i18n(), w.units(), &said);

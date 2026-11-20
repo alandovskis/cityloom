@@ -138,7 +138,7 @@ fn strip_cell<R: Row>(w: SheetWatch, side: Side, i: usize, on_down: impl Fn(lept
             aria-label=move || {
                 let _ = w.i18n().locale();
                 let v = w.view();
-                R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| cell_text(R::CELL_KEY, s, i, &w.i18n(), w.units())).unwrap_or_default()
+                R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| cell_text(R::CELL_KEY, s, i, v.axis, &w.i18n(), w.units())).unwrap_or_default()
             }
             aria-description=move || cell().is_some_and(|c| !c.1).then(|| w.i18n().tr("curb-cell-failing", &Args::new()))
             title=name

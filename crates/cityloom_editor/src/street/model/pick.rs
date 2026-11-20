@@ -6,6 +6,8 @@
 
 use std::ops::Range;
 
+use serde::Serialize;
+
 use super::matching::{counterpart, match_pieces};
 use super::zones::MIN_ZONE_MM;
 use super::{Arg, Content, Editor, Said, Segment, Speed, Zone, ZoneEnd, ZoneFrame, snap};
@@ -38,6 +40,30 @@ pub enum PickRefusal {
     OutsideStreet,
     /// A drag is under way: its edits belong to the stretch it started on.
     Dragging,
+}
+
+/// How a street's anchored positions turn into positions from the plan's left end (the street's first end): the end
+/// they are measured from and the length they lie along. Every position the person sees or types counts from the left.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct PlanAxis {
+    pub from_end: ZoneEnd,
+    pub length_mm: i32,
+}
+
+impl PlanAxis {
+    /// Where anchored position `anchored_mm` lies from the left end; the same turns a left position back.
+    pub fn left_mm(self, anchored_mm: i32) -> i32 {
+        match self.from_end {
+            ZoneEnd::First => anchored_mm,
+            ZoneEnd::Last => self.length_mm - anchored_mm,
+        }
+    }
+
+    /// The span between two anchored positions, from the left end, smaller end first.
+    pub fn left_span(self, a_mm: i32, b_mm: i32) -> (i32, i32) {
+        let (a, b) = (self.left_mm(a_mm), self.left_mm(b_mm));
+        (a.min(b), a.max(b))
+    }
 }
 
 impl PickRefusal {
@@ -132,12 +158,25 @@ impl Editor {
         }
     }
 
+    /// How this street's anchored positions turn into positions from the plan's left end.
+    pub fn axis(&self) -> PlanAxis {
+        PlanAxis { from_end: self.anchor_end(), length_mm: self.pick_length_mm() }
+    }
+
     /// Where an anchored position lies from the plan's left end, the street's first end.
     pub fn left_mm(&self, anchored_mm: i32) -> i32 {
-        match self.anchor_end() {
-            ZoneEnd::First => anchored_mm,
-            ZoneEnd::Last => self.pick_length_mm() - anchored_mm,
-        }
+        self.axis().left_mm(anchored_mm)
+    }
+
+    /// The anchored span between `a_mm` and `b_mm`, from the plan's left end, smaller end first.
+    pub(super) fn left_span(&self, a_mm: i32, b_mm: i32) -> (i32, i32) {
+        self.axis().left_span(a_mm, b_mm)
+    }
+
+    /// Where a thing `length_mm` long starting at anchored `from_mm` starts on the plan, from its left end: what
+    /// every label and announcement gives as its place.
+    pub(super) fn left_start(&self, from_mm: i32, length_mm: i32) -> i32 {
+        self.left_span(from_mm, from_mm + length_mm).0
     }
 
     /// The picked stretch as the page names it ("from 49 m to 82 m"); `None` for the whole street.

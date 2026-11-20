@@ -2034,6 +2034,14 @@ fn with_a_stretch_picked_the_speed_limit_says_whose_it_is_and_whether_it_varies(
     assert!(s.pick_stretch(0, 20_000));
     let h = speed(&s);
     assert!(h.contains(">For the stretch from 0.0 m to 20.0 m.<") && h.contains(">Varies along the stretch<"), "{h}");
+    // The whole street picked: it is the street whose limit varies.
+    s.pick_whole();
+    let h = speed(&s);
+    assert!(h.contains(">Varies along the street<") && !h.contains("For the stretch"), "{h}");
+    let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 30_000) && fr.set_speed(Some(30)));
+    fr.pick_whole();
+    assert!(speed(&fr).contains(">Varie le long de la rue<"), "{}", speed(&fr));
     let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
     assert!(fr.pick_stretch(10_000, 30_000));
     let h = speed(&fr).replace('\u{a0}', " ");
@@ -2049,11 +2057,13 @@ fn a_piece_whose_width_varies_along_the_pick_says_so_under_its_width() {
     assert!(s.edit(|e| e.set_width(uid, width + 100)));
     s.select(Some(uid));
     let inspector = || street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(!inspector().contains(r#"id="i-width-varies""#), "one run picked: one width");
+    let one = inspector();
+    assert!(!one.contains(r#"id="i-width-varies""#), "one run picked: one width: {one}");
+    assert!(one.contains(r#"aria-describedby="i-width-range""#), "described by what is there: {one}");
     s.pick_whole();
     s.select(Some(uid));
     let h = inspector();
-    assert!(h.contains(r#"<p id="i-width-varies" class="insp-range">Varies along the stretch</p>"#), "{h}");
+    assert!(h.contains(r#"<p id="i-width-varies" class="insp-range">Varies along the street</p>"#), "the whole street is picked: {h}");
     assert!(h.contains(r#"aria-describedby="i-width-range i-width-varies""#), "{h}");
 }
 

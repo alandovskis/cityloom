@@ -325,7 +325,7 @@ rev-speed = Limite de vitesse : { $kmh }{" "}km/h
 rev-speed-not-set = Limite de vitesse non indiquée
 rev-stretch-speed = Limite de vitesse de { $kmh }{" "}km/h { $stretch }
 rev-stretch-speed-not-set = Limite de vitesse non indiquée { $stretch }
-rev-stretch-speed-street = Retour à la limite de vitesse de la rue { $stretch }
+rev-stretch-speed-street = Retour à la limite de vitesse de la rue, { $stretch }
 street-now-pedestrian = { $street } est maintenant une rue piétonne.
 street-traffic-again = { $street } accueille de nouveau la circulation.
 check-access-ped-ok = Les trottoirs offrent un passage continu de { $amount } ou plus
@@ -368,7 +368,7 @@ st-plan-point-label = Point le long de la rue
 stretches-elsewhere = Les changements le long de cette rue ont été tracés lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
-check-stretch-in = { $check } { $stretch }
+check-stretch-in = { $check }, { $stretch }
 # Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
 plan-cut = Coupée par le bord de la carte
 
@@ -397,6 +397,7 @@ st-street-sub-free =
 st-speed-stretch-hint = Pour le tronçon de { $from } à { $to }.
 # Sous une valeur qui diffère d’une partie du tronçon choisi à l’autre : celle montrée est celle de la partie montrée.
 st-varies = Varie le long du tronçon
+st-varies-street = Varie le long de la rue
 st-path-label = Ce que montrent les détails
 st-path-street = Rue
 st-path-gap = Tronçon libre

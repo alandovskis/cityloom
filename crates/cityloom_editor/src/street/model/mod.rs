@@ -34,7 +34,7 @@ mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod matching;
 mod pick;
-pub use pick::{Pick, PickRefusal, Run};
+pub use pick::{Pick, PickRefusal, PlanAxis, Run};
 mod plan;
 pub use plan::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing, PlanView};
 mod replay;
@@ -1437,6 +1437,7 @@ impl Editor {
             },
             street_speed_kmh: self.states[self.cursor].content.speed.kmh(),
             speed_varies: self.speeds_vary(),
+            axis: self.axis(),
             speed_follows: {
                 let content = &self.states[self.cursor].content;
                 content.zones.len() > 1 && content.zones.get(self.zone).is_some_and(|z| z.speed.is_undecided())
@@ -1847,6 +1848,8 @@ pub struct View {
     pub speed_follows: bool,
     /// The picked runs have different speed limits: the one shown is the shown run's.
     pub speed_varies: bool,
+    /// How the strips' anchored positions turn into positions from the plan's left end, which is how they are said.
+    pub axis: PlanAxis,
     /// The street's own speed limit, which a zone with none of its own follows.
     pub street_speed_kmh: Option<u16>,
     /// The side of the road traffic keeps, for the 2.5D sign.

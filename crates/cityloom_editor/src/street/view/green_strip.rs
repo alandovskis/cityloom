@@ -71,7 +71,8 @@ fn green_cell(w: SheetWatch, i: usize, on_down: impl Fn(leptos::ev::PointerEvent
             aria-selected=move || (w.view().green.selected == Some(i)).to_string()
             aria-label=move || {
                 let _ = w.i18n().locale();
-                green_cell_text(&w.view().green, i, &w.i18n(), w.units())
+                let v = w.view();
+                green_cell_text(&v.green, i, v.axis, &w.i18n(), w.units())
             }
             aria-description=move || failing().then(|| w.i18n().tr("curb-cell-failing", &Args::new()))
             title=name

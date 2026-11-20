@@ -247,8 +247,8 @@ impl Editor {
         Ok(())
     }
 
-    fn calming_label(key: &'static str, c: &Calming) -> Said {
-        Said::new(key).with("kind", Arg::MsgLower(c.kind.name_key())).with("at", Arg::Length(c.from_mm))
+    fn calming_label(&self, key: &'static str, c: &Calming) -> Said {
+        Said::new(key).with("kind", Arg::MsgLower(c.kind.name_key())).with("at", Arg::Length(self.left_start(c.from_mm, c.length_mm)))
     }
 
     /// Records a change of the elements as one revision, writing the length and end they are measured against.
@@ -269,7 +269,7 @@ impl Editor {
         let Some(&old) = self.states[self.cursor].content.calming.get(i) else { return Ok(()) };
         let new = change(&old);
         self.calming_fits(&new, Some(i), frame)?;
-        self.calming_change(Self::calming_label(label_key, &new), frame, |list| list[i] = new);
+        self.calming_change(self.calming_label(label_key, &new), frame, |list| list[i] = new);
         Ok(())
     }
 
@@ -286,7 +286,7 @@ impl Editor {
         let c = Calming { from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, first };
         self.calming_fits(&c, None, frame)?;
         self.calming_choice.pick(Side::Left, c.from_mm);
-        self.calming_change(Self::calming_label("rev-calming-add", &c), frame, |list| list.push(c));
+        self.calming_change(self.calming_label("rev-calming-add", &c), frame, |list| list.push(c));
         Ok(self.states[self.cursor].content.calming.iter().position(|o| *o == c).unwrap_or(0))
     }
 
@@ -318,7 +318,7 @@ impl Editor {
         if new == old {
             return Ok(());
         }
-        let label = Self::calming_label("rev-calming-move", &new);
+        let label = self.calming_label("rev-calming-move", &new);
         // The choice follows the element, and a drag records one move, from where it began to where it is.
         self.calming_choice.follow(Side::Left, old.from_mm, new.from_mm);
         if self.gesture.is_some() {
@@ -338,7 +338,7 @@ impl Editor {
     pub fn remove_calming(&mut self, i: usize) -> Result<(), CalmingRefusal> {
         let frame = self.curb_frame(false).map_err(refusal)?;
         let Some(&old) = self.states[self.cursor].content.calming.get(i) else { return Ok(()) };
-        self.calming_change(Self::calming_label("rev-calming-remove", &old), frame, |list| {
+        self.calming_change(self.calming_label("rev-calming-remove", &old), frame, |list| {
             list.remove(i);
         });
         Ok(())
@@ -429,22 +429,22 @@ impl Editor {
 
 /// How the checks name a raised element, and where a chicane's build-outs stand.
 pub trait CalmingExt {
-    fn named(&self) -> Said;
-    fn named_in(&self, stretch: Said) -> Said;
+    fn named(&self, at_mm: i32) -> Said;
+    fn named_in(&self, at_mm: i32, stretch: Said) -> Said;
     fn buildouts(&self) -> Vec<(i32, i32, Side)>;
 }
 
 impl CalmingExt for Calming {
-    /// How the checks name it: "raised table at 20 m".
-    fn named(&self) -> Said {
-        Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(self.from_mm))
+    /// How the checks name it: "raised table at 20 m", `at_mm` being where it starts on the plan (`Editor::left_start`).
+    fn named(&self, at_mm: i32) -> Said {
+        Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(at_mm))
     }
 
     /// The same, in the stretch where it fails (`stretch`: "from 49 m to 82 m").
-    fn named_in(&self, stretch: Said) -> Said {
+    fn named_in(&self, at_mm: i32, stretch: Said) -> Said {
         Said::new("calming-instance-stretch")
             .with("kind", Arg::MsgLower(self.kind.name_key()))
-            .with("at", Arg::Length(self.from_mm))
+            .with("at", Arg::Length(at_mm))
             .with("stretch", Arg::Said(Box::new(stretch)))
     }
 
@@ -521,7 +521,7 @@ impl Editor {
                         ok: false,
                         label: Said::new(label),
                         detail: f.detail.clone(),
-                        zone: Some(f.named.clone().unwrap_or_else(|| element.named())),
+                        zone: Some(f.named.clone().unwrap_or_else(|| element.named(self.left_start(element.from_mm, element.length_mm)))),
                         standard: None,
                     }
                 }
@@ -580,7 +580,7 @@ impl Editor {
                 for z in 0..content.zone_count() {
                     let (from, to) = content.span(z, length_mm);
                     if from < c.to_mm() && c.from_mm < to && !content.section(z).iter().any(|g| is_roadway(g.kind)) {
-                        fail(0, Said::new("check-detail-calming-roadway"), Some(c.named_in(self.stretch_said(z))));
+                        fail(0, Said::new("check-detail-calming-roadway"), Some(c.named_in(self.left_start(c.from_mm, c.length_mm), self.stretch_said(z))));
                     }
                 }
             }
@@ -598,7 +598,7 @@ impl Editor {
                     let (from, to) = content.span(z, length_mm);
                     let kmh = speed_in(content.speed, &content.zones, z).kmh().filter(|&n| n > u16::from(max));
                     if let Some(kmh) = kmh.filter(|_| from < c.to_mm() && c.from_mm < to) {
-                        fail(1, too_fast(kmh), Some(c.named_in(self.stretch_said(z))));
+                        fail(1, too_fast(kmh), Some(c.named_in(self.left_start(c.from_mm, c.length_mm), self.stretch_said(z))));
                     }
                 }
             }
@@ -614,7 +614,7 @@ impl Editor {
                     for z in 0..content.zone_count() {
                         let (from, to) = content.span(z, length_mm);
                         if from < c.to_mm() && c.from_mm < to && lane(content.section(z)) {
-                            fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(self.stretch_said(z))));
+                            fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(self.left_start(c.from_mm, c.length_mm), self.stretch_said(z))));
                         }
                     }
                 }
@@ -636,7 +636,7 @@ impl Editor {
                     for z in 0..content.zone_count() {
                         let (from, to) = content.span(z, length_mm);
                         if from < c.to_mm() && c.from_mm < to {
-                            let named = || Some(c.named_in(self.stretch_said(z)));
+                            let named = || Some(c.named_in(self.left_start(c.from_mm, c.length_mm), self.stretch_said(z)));
                             if bus(content.section(z)) {
                                 fail(5, Said::new("check-detail-filter-bus"), named());
                             }
@@ -657,12 +657,16 @@ impl Editor {
                 .min_by_key(|(gap, _)| *gap);
             if let Some((gap, s)) = nearest {
                 if gap < 0 {
-                    fail(2, Said::new("check-detail-calming-stop-overlap").with("stop", Arg::Said(Box::new(s.named()))), None);
+                    fail(
+                        2,
+                        Said::new("check-detail-calming-stop-overlap").with("stop", Arg::Said(Box::new(s.named(self.left_start(s.from_mm, s.length_mm))))),
+                        None,
+                    );
                 } else {
                     fail(
                         2,
                         Said::new("check-detail-calming-stop-near")
-                            .with("stop", Arg::Said(Box::new(s.named())))
+                            .with("stop", Arg::Said(Box::new(s.named(self.left_start(s.from_mm, s.length_mm)))))
                             .with("gap", Arg::Length(gap))
                             .with("need", Arg::Length(CALMING_STOP_CLEAR_MM)),
                         None,
@@ -1248,6 +1252,27 @@ mod tests {
         let far = |from_mm: i32| with_table(from_mm, 7_000).with_ends([EndInfo::default(), reach(true, 9_000)]);
         assert!(check(&far(60_000 - 14_000 - 7_000), "calming-junction").ok);
         assert!(!check(&far(60_000 - 13_900 - 7_000), "calming-junction").ok);
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_a_failing_element_is_named_from_the_plan_s_left_end() {
+        // 60 m anchored at its last end: a table at 20 m to 32 m from the anchor is at 28 m to 40 m on the plan, and
+        // the zone from 30 m from the anchor is the plan's first 30 m.
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last }));
+        e.add_calming(Kind::Table, 20_000, 12_000).unwrap();
+        e.split_zone(Some(30_000)).unwrap();
+        e.select_zone(1);
+        let roadway: Vec<u32> = e.view().segments.iter().filter(|s| crate::shared::catalogue::is_roadway(s.kind)).map(|s| s.uid).collect();
+        for uid in roadway {
+            assert!(e.remove(uid));
+        }
+        let c = check(&e, "calming-length");
+        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let named = crate::street::vm::text::say_now(&en, crate::shared::units::Units::Metres, c.zone.as_ref().unwrap());
+        assert_eq!(named, "raised table at 28.0 m, in the stretch from 0.0 m to 30.0 m");
+        let added = e.view().revisions.iter().find(|r| r.label.key == "rev-calming-add").unwrap().label.clone();
+        assert_eq!(crate::street::vm::text::say_now(&en, crate::shared::units::Units::Metres, &added), "Add a raised table at 28.0 m");
     }
 
     #[test]

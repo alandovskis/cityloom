@@ -207,8 +207,8 @@ impl Editor {
 
     /// The stretch between two anchored positions, named from the plan's left end (`stretch_between`).
     pub(super) fn stretch_of(&self, a_mm: i32, b_mm: i32) -> Said {
-        let (a, b) = (self.left_mm(a_mm), self.left_mm(b_mm));
-        stretch_between(a.min(b), a.max(b))
+        let (a, b) = self.left_span(a_mm, b_mm);
+        stretch_between(a, b)
     }
 
     /// Splits the selected zone at `at_mm` (default its middle, snapped to `SNAP_MM`). Both halves keep the section;

@@ -26,8 +26,8 @@ Every strip/list on the page (zones, pieces, curb, stops, green, calming) is a W
 
 ## Zones on the street page
 
-- `#zones-slot` (after `#fit`) holds `#zone-strip` (`strip.rs`), at most 48 px high (e2e holds it), caption `st-zones-from`; cells proportional to length, 24 px floor (`cell_basis`; scrolls inside itself). Boundary drag (`strip::pair_boundary_mm`: snapped, kept 5 m from neighbours; cells keyed so the drag keeps pointer capture): one undoable edit.
-- `StreetVm` zone API: the boundary drag the plan starts and ends (`begin_boundary_drag`, `end_boundary_drag`); `PlanKey::NudgeBoundary` moves a boundary (`nudge_pick_boundary`). Each announces result or refusal. Checks, width table, shares are the selected zone's. Labels `svg-iso-label-zone`, `svg-iso-label-joint`.
+- `#zones-slot` (after `#fit`) holds the plan (`view/plan/`, `#plan`): the whole street from above, first end on the left, its runs, boundaries and things along it; a press picks a run, a drag picks a stretch, the pick's handles move its ends. A boundary drag (snapped, kept 5 m from its neighbours) is one undoable edit. Every position it shows or reads counts from its left end (`PlanAxis`).
+- `StreetVm` zone API: the boundary drag the plan starts and ends (`begin_boundary_drag`, `end_boundary_drag`); `PlanKey::NudgeBoundary` moves a boundary (`nudge_pick_boundary`). Each announces result or refusal. Checks, width table, shares are the selected zone's. Labels `svg-iso-label-stretch`, `svg-iso-label-joint`.
 - e2e opens the street from `e2e/fixtures/open-ends.osm(.pbf)` (both ends real nodes): the Plateau tile's streets cut at the box have no anchor.
 
 ## Picking a stretch from the view-model (`street/vm/plan.rs`, `keys::on_plan`; the plan component is to come)

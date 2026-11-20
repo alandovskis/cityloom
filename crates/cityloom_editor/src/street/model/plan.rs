@@ -197,12 +197,6 @@ impl Editor {
             from_end: Some(frame.from_end),
         }
     }
-
-    /// The anchored span between `a_mm` and `b_mm`, from the plan's left end, smaller end first.
-    fn left_span(&self, a_mm: i32, b_mm: i32) -> (i32, i32) {
-        let (a, b) = (self.left_mm(a_mm), self.left_mm(b_mm));
-        (a.min(b), a.max(b))
-    }
 }
 
 #[cfg(test)]

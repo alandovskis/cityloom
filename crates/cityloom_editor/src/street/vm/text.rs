@@ -9,7 +9,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
 use crate::street::model::{
-    CalmingStripView, Check, GreenRowView, PlanView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal,
+    CalmingStripView, Check, GreenRowView, PlanAxis, PlanView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal,
 };
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
@@ -98,14 +98,15 @@ pub fn piece_text(v: &View, i: usize, i18n: &I18n, units: Units) -> String {
 
 /// How a cell of a strip is named (by the message `key`): what it is, where it lies and how long, and its place on
 /// the strip.
-pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = side.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm(), c.to_mm());
     let args = Args::new()
         .str("name", say_now(i18n, units, c.label()))
-        .str("from", units.length_in(c.from_mm(), locale))
-        .str("to", units.length_in(c.to_mm(), locale))
-        .str("length", units.length_in(c.to_mm() - c.from_mm(), locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", side.cells.len() as i64);
     i18n.tr_now(key, &args)
@@ -113,14 +114,15 @@ pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n:
 
 /// What a screen reader is told on choosing cell `cell` of the raised elements' strip: its kind (or "Free"), where it
 /// lies, how long it is and its place on the strip.
-pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn calming_text(strip: &CalmingStripView, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = strip.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm, c.to_mm);
     let args = Args::new()
         .str("name", say_now(i18n, units, &c.label))
-        .str("from", units.length_in(c.from_mm, locale))
-        .str("to", units.length_in(c.to_mm, locale))
-        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", strip.cells.len() as i64);
     i18n.tr_now("calming-cell", &args)
@@ -128,14 +130,15 @@ pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: U
 
 /// What a screen reader is told of element `cell` of the Green row: its name, where it lies along the street and
 /// its place in the row.
-pub fn green_cell_text(g: &GreenRowView, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn green_cell_text(g: &GreenRowView, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = g.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm, c.to_mm);
     let args = Args::new()
         .str("name", say_now(i18n, units, &c.label))
-        .str("from", units.length_in(c.from_mm, locale))
-        .str("to", units.length_in(c.to_mm, locale))
-        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", g.cells.len() as i64);
     i18n.tr_now("green-cell", &args)
@@ -185,6 +188,12 @@ pub fn plan_label(plan: &PlanView) -> Option<Said> {
 /// The line under the plan: the picked stretch and how long it is. Nothing for the whole street.
 pub fn stretch_label(plan: &PlanView) -> Option<Said> {
     plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from)))
+}
+
+/// What is said under a figure that differs along the pick: along the stretch, or along the street when the whole
+/// street is picked.
+pub fn varies_said(plan: &PlanView) -> Said {
+    Said::new(if plan.pick.is_some() { "st-varies" } else { "st-varies-street" })
 }
 
 /// Where an edit did not reach (`spans`, from the plan's left end), each a sentence naming what that stretch lacks
@@ -507,7 +516,7 @@ mod tests {
         let plain = say_now(&en(), Units::Metres, &fits.label);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} from 10.0 m to 30.0 m"));
         let plain = say_now(&fr(), Units::Metres, &fits.label);
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{plain} de 10,0\u{a0}m à 30,0\u{a0}m"));
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{plain}, de 10,0\u{a0}m à 30,0\u{a0}m"));
         let passing = v.checks.iter().find(|c| c.ok).unwrap();
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
@@ -625,6 +634,28 @@ mod tests {
         }
     }
 
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_a_curbside_use_is_said_from_the_plan_s_left_end() {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
+        // 100 m anchored at its last end: a use from 10 m to 16 m from the anchor is from 84 m to 90 m on the plan.
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::Last }));
+        e.add_curb(Side::Right, 10_000, 6_000, Use::Loading).unwrap();
+        let v = e.view();
+        let row = v.checks.iter().find(|c| c.id == "curb-length").unwrap();
+        assert!(
+            say_now(&en(), Units::Metres, &check_label(row)).ends_with(": Loading at 84.0 m, right"),
+            "{:?}",
+            say_now(&en(), Units::Metres, &check_label(row))
+        );
+        assert_eq!(say_now(&en(), Units::Metres, &v.revisions.last().unwrap().label), "Add loading at 84.0 m");
+        let side = v.curb.sides.iter().find(|s| s.cells.iter().any(|c| c.instance.is_some())).unwrap();
+        let cell = side.cells.iter().position(|c| c.instance.is_some()).unwrap();
+        let said = cell_text("curb-cell", side, cell, v.axis, &en(), Units::Metres);
+        assert!(said.contains(", 84.0 m to 90.0 m, 6.0 m long,"), "{said}");
+    }
+
     /// Every street message, in both languages, says "stretch" where it said "zone": only the places that are zones
     /// by name keep the word. Each message is read in every variant of its selectors, then formatted with sample
     /// values; the ids that still say "zone" are listed.
@@ -632,11 +663,10 @@ mod tests {
     fn no_street_message_says_zone_except_school_and_loading_zones() {
         use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
         use std::collections::BTreeSet;
-        // "school zone" and "loading zone" are zones by name, as are their French forms. French also says
-        // "zone de chargement" for the loading zone (the glossary's term), "zone tampon" for a buffer (a piece across
-        // the street, not a part along it) and "zones à circulation restreinte" (the name of a kind of area).
-        const ALLOWED: [&str; 7] =
-            ["school zone", "loading zone", "zone scolaire", "zone de livraison", "zone de chargement", "zone tampon", "zones à circulation restreinte"];
+        // "school zone" and "loading zone" are zones by name, as is "zone scolaire". French says "zone de chargement"
+        // for the loading zone (the glossary's term), "zone tampon" for a buffer (a piece across the street, not a part
+        // along it) and "zones à circulation restreinte" (the name of a kind of area).
+        const ALLOWED: [&str; 6] = ["school zone", "loading zone", "zone scolaire", "zone de chargement", "zone tampon", "zones à circulation restreinte"];
         fn says_zone(text: &str) -> bool {
             let mut text = text.to_lowercase();
             for phrase in ALLOWED {

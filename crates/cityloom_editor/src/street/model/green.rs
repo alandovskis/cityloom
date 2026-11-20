@@ -289,7 +289,7 @@ fn centre_gap_mm(a: &Green, b: &Green) -> i32 {
 /// Where the checks place a green element, and how they name it.
 pub trait GreenExt {
     fn place(&self) -> Place;
-    fn named(&self, segs: &[Segment]) -> Said;
+    fn named(&self, segs: &[Segment], at_mm: i32) -> Said;
 }
 
 impl GreenExt for Green {
@@ -297,14 +297,13 @@ impl GreenExt for Green {
         (self.from_mm, self.offset_mm)
     }
 
-    /// How the checks name it: "Tree at 42 m, on sidewalk", the piece being the one under its centre in `segs`.
-    fn named(&self, segs: &[Segment]) -> Said {
+    /// How the checks name it: "Tree at 42 m, on sidewalk", the piece being the one under its centre in `segs` and
+    /// `at_mm` where it starts on the plan (`Editor::left_start`).
+    fn named(&self, segs: &[Segment], at_mm: i32) -> Said {
         let kind = Arg::Msg(self.kind.name_key());
         match host_at(segs, self.offset_mm) {
-            Some(h) => {
-                Said::new("green-instance").with("kind", kind).with("at", Arg::Length(self.from_mm)).with("across", Arg::KindLower(KINDS[segs[h].kind].id))
-            }
-            None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Length(self.from_mm)),
+            Some(h) => Said::new("green-instance").with("kind", kind).with("at", Arg::Length(at_mm)).with("across", Arg::KindLower(KINDS[segs[h].kind].id)),
+            None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Length(at_mm)),
         }
     }
 }
@@ -346,8 +345,8 @@ impl Editor {
     }
 
     /// A revision's words: what the element is and where along the street it starts.
-    fn green_label(key: &'static str, g: &Green) -> Said {
-        Said::new(key).with("kind", Arg::MsgLower(g.kind.name_key())).with("at", Arg::Length(g.from_mm))
+    fn green_label(&self, key: &'static str, g: &Green) -> Said {
+        Said::new(key).with("kind", Arg::MsgLower(g.kind.name_key())).with("at", Arg::Length(self.left_start(g.from_mm, g.length_mm)))
     }
 
     /// Records a change of the elements as one revision, writing the length and end they are measured against.
@@ -368,7 +367,7 @@ impl Editor {
         let Some(old) = self.states[self.cursor].content.green.get(i).copied() else { return Ok(()) };
         let new = change(&old);
         self.green_fits(&new, Some(i), frame)?;
-        self.green_change(Self::green_label(label_key, &new), frame, |green| green[i] = new);
+        self.green_change(self.green_label(label_key, &new), frame, |green| green[i] = new);
         Ok(())
     }
 
@@ -391,7 +390,7 @@ impl Editor {
         };
         self.green_fits(&g, None, frame)?;
         self.green_choice.pick(g.place());
-        self.green_change(Self::green_label("rev-green-add", &g), frame, |green| green.push(g));
+        self.green_change(self.green_label("rev-green-add", &g), frame, |green| green.push(g));
         Ok(())
     }
 
@@ -416,7 +415,7 @@ impl Editor {
             return Ok(());
         }
         self.green_choice.follow(old.place(), new.place());
-        let label = Self::green_label("rev-green-move", &new);
+        let label = self.green_label("rev-green-move", &new);
         if self.gesture.is_some() {
             let c = &mut self.states[self.cursor].content;
             c.green[i] = new;
@@ -446,7 +445,7 @@ impl Editor {
             return Ok(());
         }
         let new = Green { size: Some(size), ..old };
-        self.green_change(Self::green_label("rev-green-size", &new), frame, |green| green[i] = new);
+        self.green_change(self.green_label("rev-green-size", &new), frame, |green| green[i] = new);
         Ok(())
     }
 
@@ -455,7 +454,7 @@ impl Editor {
         let frame = self.green_gate(false)?;
         let Some(old) = self.states[self.cursor].content.green.get(i).copied() else { return Ok(()) };
         self.green_choice.clear_if(old.place());
-        self.green_change(Self::green_label("rev-green-remove", &old), frame, |green| {
+        self.green_change(self.green_label("rev-green-remove", &old), frame, |green| {
             green.remove(i);
         });
         Ok(())
@@ -668,7 +667,7 @@ impl Editor {
                     width_mm: g.width_mm,
                     host,
                     fine_mm,
-                    label: g.named(segs),
+                    label: g.named(segs, self.left_start(g.from_mm, g.length_mm)),
                     failing: failing.contains(&k),
                 }
             })
@@ -788,7 +787,7 @@ impl Editor {
             return Ok(());
         }
         self.green_choice.follow(old.place(), new.place());
-        self.green_change(Self::green_label("rev-green-change", &new), frame, |green| green[i] = new);
+        self.green_change(self.green_label("rev-green-change", &new), frame, |green| green[i] = new);
         Ok(())
     }
 }
@@ -839,7 +838,7 @@ impl Editor {
         check_rows(&rows, &self.green_failures(), |k| {
             let g = &content.green[k];
             let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
-            g.named(sections.first().copied().unwrap_or(&content.segments))
+            g.named(sections.first().copied().unwrap_or(&content.segments), self.left_start(g.from_mm, g.length_mm))
         })
     }
 
@@ -909,9 +908,9 @@ impl Editor {
                     let need = size.canopy_mm().max(o_size.canopy_mm());
                     if gap < need {
                         let osegs = content.sections_over(o.from_mm, o.to_mm(), length_mm);
-                        let named = o.named(osegs.first().copied().unwrap_or(&content.segments));
+                        let named = o.named(osegs.first().copied().unwrap_or(&content.segments), self.left_start(o.from_mm, o.length_mm));
                         let gsegs = content.sections_over(g.from_mm, g.to_mm(), length_mm);
-                        let this = g.named(gsegs.first().copied().unwrap_or(&content.segments));
+                        let this = g.named(gsegs.first().copied().unwrap_or(&content.segments), self.left_start(g.from_mm, g.length_mm));
                         fail(
                             2,
                             Said::new("check-detail-green-spacing")
@@ -955,7 +954,10 @@ impl Editor {
                         })
                     });
                     if on_platform {
-                        fail(6, Said::new("check-detail-green-stop").with("stop", Arg::Said(Box::new(stop.named()))));
+                        fail(
+                            6,
+                            Said::new("check-detail-green-stop").with("stop", Arg::Said(Box::new(stop.named(self.left_start(stop.from_mm, stop.length_mm))))),
+                        );
                     }
                 }
             }
@@ -1841,7 +1843,7 @@ mod tests {
     fn a_green_element_is_named_by_its_kind_place_and_host() {
         let e = two_zone_editor("sidewalk", vec![small(12_000, 1_650)]);
         let g = e.snapshot().green[0];
-        let said = g.named(&e.snapshot().segments);
+        let said = g.named(&e.snapshot().segments, g.from_mm);
         assert_eq!(said.key, "green-instance");
         let names: Vec<_> = said.args.iter().map(|(n, _)| *n).collect();
         assert_eq!(names, ["kind", "at", "across"]);
@@ -1875,7 +1877,7 @@ mod tests {
         let e = editor();
         let segs = e.snapshot().segments;
         let g = small(12_000, total(&segs) + 1_000);
-        let said = g.named(&segs);
+        let said = g.named(&segs, g.from_mm);
         assert_eq!(said.key, "green-instance-off");
         assert_eq!(said.args.iter().map(|(n, _)| *n).collect::<Vec<_>>(), ["kind", "at"]);
     }

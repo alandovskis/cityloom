@@ -49,8 +49,8 @@ impl Editor {
                 if to - from >= SCHOOL_ZONE_MM + 2 * MIN_ZONE_MM
                     && let Ok(Pick::Stretch { from_mm, to_mm }) = self.pick_stretch(a, a + SCHOOL_ZONE_MM)
                 {
-                    let (a, b) = (self.left_mm(from_mm), self.left_mm(to_mm));
-                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a.min(b))).with("to", Arg::Length(a.max(b))));
+                    let (a, b) = self.left_span(from_mm, to_mm);
+                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a)).with("to", Arg::Length(b)));
                 } else {
                     let room = Said::new("template-school-room").with("length", Arg::Length(SCHOOL_ZONE_MM)).with("min", Arg::Length(MIN_ZONE_MM));
                     report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(room))));
@@ -83,7 +83,7 @@ impl Editor {
         match self.school_table() {
             Ok(at) => {
                 // Where the table starts on the plan, from its left end, as every position the page shows.
-                let at = self.left_mm(at).min(self.left_mm(at + DEFAULT_TABLE_MM));
+                let at = self.left_start(at, DEFAULT_TABLE_MM);
                 report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Length(at)))
             }
             Err(reason) => report.skipped.push(Said::new("template-school-skipped-table").with("reason", Arg::Said(Box::new(reason)))),

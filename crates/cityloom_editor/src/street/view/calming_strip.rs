@@ -42,7 +42,8 @@ fn cell(w: SheetWatch, i: usize, on_down: impl Fn(leptos::ev::PointerEvent, usiz
             aria-selected=move || (w.view().calming_strip.selected == Some(i)).to_string()
             aria-label=move || {
                 let _ = w.i18n().locale();
-                calming_text(&w.view().calming_strip, i, &w.i18n(), w.units())
+                let v = w.view();
+                calming_text(&v.calming_strip, i, v.axis, &w.i18n(), w.units())
             }
             aria-description=move || state().is_some_and(|c| !c.1).then(|| w.i18n().tr("calming-cell-failing", &Args::new()))
             title=name

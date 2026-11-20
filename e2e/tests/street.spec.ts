@@ -921,13 +921,13 @@ test.describe("changing part of a street", () => {
     // The shown stretch is the street's second half, from the boundary the label is centred on.
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on ([\d.]+ m), where the section changes abruptly: .* The stretch from \1 to [\d.]+ m has /,
+      /centred on ([\d.]+ m), where the section changes abruptly: the stretch from 0\.0 m to \1 is in front and the one from \1 to [\d.]+ m beyond\. The stretch from \1 to [\d.]+ m has /,
     );
     const second = await drawing.innerHTML();
     await pickRunAt(page, 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /where the section changes abruptly: .* The stretch from 0\.0 m to [\d.]+ m has /,
+      /where the section changes abruptly: the stretch from 0\.0 m to ([\d.]+ m) is in front .* The stretch from 0\.0 m to \1 has /,
     );
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
     const first = await drawing.innerHTML();
@@ -963,7 +963,7 @@ test.describe("changing part of a street", () => {
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li", { hasText: "Room for the transition" });
     await expect(row).toBeVisible();
-    await expect(row).toContainText(/needs .* but the stretch from [\d.]+ m to [\d.]+ m is/);
+    await expect(row).toContainText(/needs .* but the stretch from 0\.0 m to [\d.]+ m is/);
   });
 
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {

@@ -15,6 +15,7 @@ use crate::shared::units::{Units, parse_number};
 use crate::street::model::{SegView, View};
 use crate::street::view::page::to_min;
 use crate::street::vm::StreetVm;
+use crate::street::vm::text::varies_said;
 use crate::street::vm::watch::SheetWatch;
 
 /// The kinds a piece may take at other times, with the one it is: the choices
@@ -241,7 +242,9 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                         value=value
                         prop:value=value
                         aria-labelledby="i-h-width"
-                        aria-describedby="i-width-range i-width-varies"
+                        aria-describedby=move || {
+                            if w.segment(uid, |s| s.varies).unwrap_or(false) { "i-width-range i-width-varies" } else { "i-width-range" }
+                        }
                         on:keydown=move |e| {
                             if let Some(dir) = width_key(&e.key()) {
                                 e.prevent_default();
@@ -278,7 +281,12 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 <span class="insp-meter" style=move || format!("width: {:.0}%", w.segment(uid, meter_pct).unwrap_or(0.0))></span>
             </span>
             <p class="insp-range" id="i-width-range">{range}{move || standard().map(|s| view! { " " <span class="check-standard">{s}</span> })}</p>
-            {move || w.segment(uid, |s| s.varies).unwrap_or(false).then(|| view! { <p class="insp-range" id="i-width-varies">{say(w, "st-varies")}</p> })}
+            {move || {
+                w.segment(uid, |s| s.varies).unwrap_or(false).then(|| {
+                    let words = move || crate::shared::said::say(&w.i18n(), w.units(), &varies_said(&w.view().plan));
+                    view! { <p class="insp-range" id="i-width-varies">{words}</p> }
+                })
+            }}
         </section>
     }
 }

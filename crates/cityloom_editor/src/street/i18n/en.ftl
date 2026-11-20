@@ -325,7 +325,7 @@ rev-speed = Speed limit { $kmh } km/h
 rev-speed-not-set = Speed limit not set
 rev-stretch-speed = Speed limit { $kmh } km/h { $stretch }
 rev-stretch-speed-not-set = Speed limit not set { $stretch }
-rev-stretch-speed-street = Speed limit back to the street's { $stretch }
+rev-stretch-speed-street = Speed limit { $stretch } back to the street's
 street-now-pedestrian = { $street } is now a pedestrian street.
 street-traffic-again = { $street } carries traffic again.
 check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
@@ -397,6 +397,7 @@ st-street-sub-free =
 st-speed-stretch-hint = For the stretch from { $from } to { $to }.
 # Under a figure that differs between the runs of the pick: the one shown is the shown run's.
 st-varies = Varies along the stretch
+st-varies-street = Varies along the street
 st-path-label = What the details are of
 st-path-street = Street
 st-path-gap = Free stretch
