@@ -329,6 +329,144 @@ pub trait WorkSync {
     fn clear(&self, done: WorkAnswer<()>);
 }
 
+/// Why a request about a shared design failed (#221). The share slice says each in words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShareFailure {
+    /// 401: nobody is signed in (making or deleting a share needs an account).
+    SignedOut,
+    /// 404: no share has this link.
+    NotFound,
+    /// 410 `expired`: the share was kept its 90 days and is gone.
+    Expired,
+    /// 410 `deleted`: the person who made it deleted it.
+    Deleted,
+    /// 403 `not-yours`: another account's share.
+    NotYours,
+    /// 409 `full`: the account holds as many shares as it may.
+    Full,
+    /// 413: the share is more than the server keeps.
+    TooLarge,
+    /// 422 `newer`: a share format the server does not know.
+    Newer,
+    /// No answer at all: the network is down, or the request never left.
+    Network,
+    /// 429, 5xx, or an answer that cannot be read: the server cannot help now.
+    Unavailable,
+    /// Any other refusal.
+    Refused,
+}
+
+/// What an HTTP status (with the body's `error`, for a 410) means for a share request. Status 0 is no answer.
+pub fn share_failure(status: u16, body: &str) -> ShareFailure {
+    let error = || serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_default();
+    match status {
+        0 => ShareFailure::Network,
+        401 => ShareFailure::SignedOut,
+        403 => ShareFailure::NotYours,
+        404 => ShareFailure::NotFound,
+        409 => ShareFailure::Full,
+        410 if error() == "deleted" => ShareFailure::Deleted,
+        410 => ShareFailure::Expired,
+        413 => ShareFailure::TooLarge,
+        422 => ShareFailure::Newer,
+        429 | 500..=599 => ShareFailure::Unavailable,
+        _ => ShareFailure::Refused,
+    }
+}
+
+/// A share the server just made: the link's token and when it expires (`2027-04-15T08:00:00.000Z`, UTC).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct ShareMade {
+    pub token: String,
+    pub expires_at: String,
+}
+
+impl ShareMade {
+    pub fn parse(body: &str) -> Result<ShareMade, ShareFailure> {
+        serde_json::from_str(body).map_err(|_| ShareFailure::Unavailable)
+    }
+}
+
+/// What a share request answers with, once.
+pub type ShareAnswer<T> = Box<dyn FnOnce(Result<T, ShareFailure>)>;
+
+/// The server's shared designs (`/api/share`). Each answer arrives later, once, to `done`.
+pub trait ShareApi {
+    /// Keeps `body` (a share document) behind a new link; needs a signed-in account.
+    fn create(&self, body: String, done: ShareAnswer<ShareMade>);
+    /// The share document behind `token`, as text; needs no account.
+    fn open(&self, token: &str, done: ShareAnswer<String>);
+    /// Deletes the share behind `token`; its creator's only.
+    fn delete(&self, token: &str, done: ShareAnswer<()>);
+}
+
+/// What a `FakeShare` was asked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ShareCall {
+    Create(String),
+    Open(String),
+    Delete(String),
+}
+
+/// An answer for `FakeShare::answer`.
+pub enum ShareReply {
+    Made(Result<ShareMade, ShareFailure>),
+    Opened(Result<String, ShareFailure>),
+    Deleted(Result<(), ShareFailure>),
+}
+
+enum SharePending {
+    Made(ShareAnswer<ShareMade>),
+    Opened(ShareAnswer<String>),
+    Deleted(ShareAnswer<()>),
+}
+
+/// A share server that keeps what it was asked until a test answers.
+#[derive(Default)]
+pub struct FakeShare {
+    asked: RefCell<Vec<(ShareCall, SharePending)>>,
+}
+
+impl FakeShare {
+    /// The calls not yet answered, oldest first.
+    pub fn calls(&self) -> Vec<ShareCall> {
+        self.asked.borrow().iter().map(|(c, _)| c.clone()).collect()
+    }
+
+    /// Answers the oldest pending call of that kind; false if there is none.
+    pub fn answer(&self, reply: ShareReply) -> bool {
+        let at = self.asked.borrow().iter().position(|(_, p)| {
+            matches!(
+                (p, &reply),
+                (SharePending::Made(_), ShareReply::Made(_))
+                    | (SharePending::Opened(_), ShareReply::Opened(_))
+                    | (SharePending::Deleted(_), ShareReply::Deleted(_))
+            )
+        });
+        let Some(at) = at else { return false };
+        let (_, pending) = self.asked.borrow_mut().remove(at);
+        match (pending, reply) {
+            (SharePending::Made(done), ShareReply::Made(r)) => done(r),
+            (SharePending::Opened(done), ShareReply::Opened(r)) => done(r),
+            (SharePending::Deleted(done), ShareReply::Deleted(r)) => done(r),
+            _ => unreachable!("matched above"),
+        }
+        true
+    }
+}
+
+impl ShareApi for FakeShare {
+    fn create(&self, body: String, done: ShareAnswer<ShareMade>) {
+        self.asked.borrow_mut().push((ShareCall::Create(body), SharePending::Made(done)));
+    }
+    fn open(&self, token: &str, done: ShareAnswer<String>) {
+        self.asked.borrow_mut().push((ShareCall::Open(token.to_string()), SharePending::Opened(done)));
+    }
+    fn delete(&self, token: &str, done: ShareAnswer<()>) {
+        self.asked.borrow_mut().push((ShareCall::Delete(token.to_string()), SharePending::Deleted(done)));
+    }
+}
+
 /// Whether the text after `#` is one the account's sign-in puts there; any other fragment is the page's own (an
 /// anchor) and is neither read nor removed.
 pub fn is_account_fragment(fragment: &str) -> bool {
@@ -346,6 +484,19 @@ pub trait Page {
     fn languages(&self) -> Vec<String>;
     /// Sets the `lang` of the document.
     fn set_lang(&self, tag: &str);
+    /// The text after `#` in the address, without it; empty where there is none. Only read: the address is left as it is.
+    fn hash(&self) -> String {
+        String::new()
+    }
+    /// The site's own origin, such as `https://cityloom.example`, for a link meant to be given to someone else.
+    fn origin(&self) -> String {
+        String::new()
+    }
+    /// Puts `text` on the clipboard; `done` hears whether the browser took it.
+    fn copy_text(&self, text: &str, done: Box<dyn FnOnce(bool)>) {
+        let _ = text;
+        done(false);
+    }
 }
 
 /// What the map tells the page.
@@ -523,6 +674,7 @@ pub struct Ports {
     pub account: Rc<dyn Account>,
     pub work: Rc<dyn WorkSync>,
     pub files: Rc<dyn ArchiveFiles>,
+    pub share: Rc<dyn ShareApi>,
 }
 
 /// An announcer that keeps what it was told.
@@ -817,13 +969,26 @@ pub struct FakePage {
     pub lang: RefCell<String>,
     pub path: RefCell<String>,
     pub fragment: RefCell<Option<String>>,
+    /// What the clipboard was given, and whether it takes it (it does unless a test says not).
+    pub copied: RefCell<Vec<String>>,
+    pub clipboard_refuses: std::cell::Cell<bool>,
 }
 
 impl Default for FakePage {
     fn default() -> Self {
-        FakePage { languages: RefCell::new(Vec::new()), lang: RefCell::new(String::new()), path: RefCell::new("/".into()), fragment: RefCell::new(None) }
+        FakePage {
+            languages: RefCell::new(Vec::new()),
+            lang: RefCell::new(String::new()),
+            path: RefCell::new("/".into()),
+            fragment: RefCell::new(None),
+            copied: RefCell::new(Vec::new()),
+            clipboard_refuses: std::cell::Cell::new(false),
+        }
     }
 }
+
+/// The origin a `FakePage` says the site is at.
+pub const FAKE_ORIGIN: &str = "https://cityloom.test";
 
 impl Page for FakePage {
     fn path(&self) -> String {
@@ -838,6 +1003,19 @@ impl Page for FakePage {
     }
     fn set_lang(&self, tag: &str) {
         *self.lang.borrow_mut() = tag.to_string();
+    }
+    fn hash(&self) -> String {
+        self.fragment.borrow().clone().unwrap_or_default()
+    }
+    fn origin(&self) -> String {
+        FAKE_ORIGIN.to_string()
+    }
+    fn copy_text(&self, text: &str, done: Box<dyn FnOnce(bool)>) {
+        let taken = !self.clipboard_refuses.get();
+        if taken {
+            self.copied.borrow_mut().push(text.to_string());
+        }
+        done(taken);
     }
 }
 
@@ -1137,6 +1315,7 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             account: Rc::new(FakeAccount::default()),
             work: Rc::new(FakeWorkSync::default()),
             files: Rc::new(FakeArchiveFiles::default()),
+            share: Rc::new(FakeShare::default()),
         },
         announcer,
         storage,
@@ -1162,6 +1341,7 @@ pub struct TestPorts {
     pub storage: Rc<MemoryStorage>,
     pub work: Rc<FakeWorkSync>,
     pub files: Rc<FakeArchiveFiles>,
+    pub share: Rc<FakeShare>,
 }
 
 /// The same, with the account, the navigator and the page too.
@@ -1175,7 +1355,9 @@ pub fn test_ports_full() -> TestPorts {
     ports.work = work.clone();
     let files = Rc::new(FakeArchiveFiles::default());
     ports.files = files.clone();
-    TestPorts { ports, account, navigator, page, announcer, storage, work, files }
+    let share = Rc::new(FakeShare::default());
+    ports.share = share.clone();
+    TestPorts { ports, account, navigator, page, announcer, storage, work, files, share }
 }
 
 /// The same, with the PDF writer and the downloads too.
@@ -1490,6 +1672,58 @@ mod map_tests {
             assert_eq!(work_error(unavailable, ""), WorkError::Unavailable, "{unavailable}");
         }
         assert_eq!(work_error(400, ""), WorkError::Refused);
+    }
+
+    #[test]
+    fn the_status_of_a_share_answer_says_what_went_wrong() {
+        assert_eq!(share_failure(0, ""), ShareFailure::Network);
+        assert_eq!(share_failure(401, r#"{"error":"signed-out"}"#), ShareFailure::SignedOut);
+        assert_eq!(share_failure(403, r#"{"error":"not-yours"}"#), ShareFailure::NotYours);
+        assert_eq!(share_failure(404, r#"{"error":"not-found"}"#), ShareFailure::NotFound);
+        assert_eq!(share_failure(409, r#"{"error":"full","limit":50}"#), ShareFailure::Full);
+        assert_eq!(share_failure(410, r#"{"error":"expired"}"#), ShareFailure::Expired);
+        assert_eq!(share_failure(410, r#"{"error":"deleted"}"#), ShareFailure::Deleted);
+        assert_eq!(share_failure(410, "not json"), ShareFailure::Expired);
+        assert_eq!(share_failure(413, r#"{"error":"too-large","limit":"share"}"#), ShareFailure::TooLarge);
+        assert_eq!(share_failure(422, r#"{"error":"newer"}"#), ShareFailure::Newer);
+        for unavailable in [429, 500, 502, 503] {
+            assert_eq!(share_failure(unavailable, ""), ShareFailure::Unavailable, "{unavailable}");
+        }
+        assert_eq!(share_failure(400, ""), ShareFailure::Refused);
+        assert_eq!(ShareMade::parse(r#"{"token":"abc","expires_at":"2027-04-15T08:00:00.000Z"}"#).map(|m| m.token), Ok("abc".into()));
+        assert_eq!(ShareMade::parse("{}"), Err(ShareFailure::Unavailable));
+    }
+
+    #[test]
+    fn a_fake_share_server_answers_each_call_when_the_test_says() {
+        let fake = FakeShare::default();
+        let got = Rc::new(RefCell::new(Vec::new()));
+        let (a, b) = (got.clone(), got.clone());
+        fake.open("tok", Box::new(move |r| a.borrow_mut().push(format!("{r:?}"))));
+        fake.delete("tok", Box::new(move |r| b.borrow_mut().push(format!("{r:?}"))));
+        assert_eq!(fake.calls(), [ShareCall::Open("tok".into()), ShareCall::Delete("tok".into())]);
+        assert!(!fake.answer(ShareReply::Made(Err(ShareFailure::Network))), "nothing made was asked");
+        assert!(fake.answer(ShareReply::Deleted(Ok(()))));
+        assert!(fake.answer(ShareReply::Opened(Err(ShareFailure::Expired))));
+        assert_eq!(*got.borrow(), ["Ok(())", "Err(Expired)"]);
+        assert!(fake.calls().is_empty());
+    }
+
+    #[test]
+    fn a_fake_page_tells_its_fragment_and_origin_and_keeps_what_was_copied() {
+        let page = FakePage::default();
+        assert_eq!((page.hash(), page.origin()), (String::new(), FAKE_ORIGIN.to_string()));
+        *page.fragment.borrow_mut() = Some("tok".into());
+        assert_eq!(page.hash(), "tok");
+        assert_eq!(page.take_fragment(), None, "not the account's: left where it is");
+        let took = Rc::new(std::cell::Cell::new(None));
+        let t = took.clone();
+        page.copy_text("link", Box::new(move |ok| t.set(Some(ok))));
+        assert_eq!((took.get(), page.copied.borrow().clone()), (Some(true), vec!["link".to_string()]));
+        page.clipboard_refuses.set(true);
+        let t = took.clone();
+        page.copy_text("again", Box::new(move |ok| t.set(Some(ok))));
+        assert_eq!((took.get(), page.copied.borrow().len()), (Some(false), 1));
     }
 
     #[test]
