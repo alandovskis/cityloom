@@ -127,3 +127,22 @@ async fn deleting_a_share_that_has_expired_leaves_it_expired(pool: PgPool) {
     r.delete(ada, &other, later).await.unwrap();
     assert_eq!(r.open(&other, later).await.unwrap_err(), ShareError::Deleted);
 }
+
+#[sqlx::test]
+async fn opening_an_expired_share_writes_only_when_a_body_is_left_to_drop(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let token = Token::random();
+    r.create(ada, &token, BODY, t0()).await.unwrap();
+    let later = t0() + Duration::days(90);
+    // Each write of a row makes a new version of it, with a new `xmin`.
+    let version = || async { sqlx::query_scalar::<_, String>("select xmin::text from shares").fetch_one(&pool).await.unwrap() };
+    let before = version().await;
+    assert_eq!(r.open(&token, later).await.unwrap_err(), ShareError::Expired);
+    let dropped = version().await;
+    assert_ne!(dropped, before, "the first read of it expired drops its body");
+    assert_eq!(r.open(&token, later).await.unwrap_err(), ShareError::Expired);
+    assert_eq!(version().await, dropped, "the next writes nothing: there is no body left");
+    r.delete(ada, &token, later).await.unwrap();
+    assert_eq!(r.open(&token, later).await.unwrap_err(), ShareError::Expired);
+}
