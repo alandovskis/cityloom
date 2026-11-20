@@ -344,6 +344,8 @@ pub enum ShareFailure {
     NotYours,
     /// 409 `full`: the account holds as many shares as it may.
     Full,
+    /// 409 `too-many-today`: the account made as many shares as it may in 24 hours, deleted ones too.
+    TooManyToday,
     /// 413: the share is more than the server keeps.
     TooLarge,
     /// 422 `newer`: a share format the server does not know.
@@ -356,7 +358,7 @@ pub enum ShareFailure {
     Refused,
 }
 
-/// What an HTTP status (with the body's `error`, for a 410) means for a share request. Status 0 is no answer.
+/// What an HTTP status (with the body's `error`, for a 409 or a 410) means for a share request. Status 0 is no answer.
 pub fn share_failure(status: u16, body: &str) -> ShareFailure {
     let error = || serde_json::from_str::<serde_json::Value>(body).ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_default();
     match status {
@@ -364,6 +366,7 @@ pub fn share_failure(status: u16, body: &str) -> ShareFailure {
         401 => ShareFailure::SignedOut,
         403 => ShareFailure::NotYours,
         404 => ShareFailure::NotFound,
+        409 if error() == "too-many-today" => ShareFailure::TooManyToday,
         409 => ShareFailure::Full,
         410 if error() == "deleted" => ShareFailure::Deleted,
         410 => ShareFailure::Expired,
@@ -1703,6 +1706,7 @@ mod map_tests {
         assert_eq!(share_failure(403, r#"{"error":"not-yours"}"#), ShareFailure::NotYours);
         assert_eq!(share_failure(404, r#"{"error":"not-found"}"#), ShareFailure::NotFound);
         assert_eq!(share_failure(409, r#"{"error":"full","limit":50}"#), ShareFailure::Full);
+        assert_eq!(share_failure(409, r#"{"error":"too-many-today","limit":100}"#), ShareFailure::TooManyToday);
         assert_eq!(share_failure(410, r#"{"error":"expired"}"#), ShareFailure::Expired);
         assert_eq!(share_failure(410, r#"{"error":"deleted"}"#), ShareFailure::Deleted);
         assert_eq!(share_failure(410, "not json"), ShareFailure::Expired);

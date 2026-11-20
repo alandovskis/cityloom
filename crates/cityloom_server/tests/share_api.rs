@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::{StatusCode, header};
 use cityloom_server::config::RateLimit;
 use cityloom_server::fake_provider::FakeLogin;
-use cityloom_server::share::{MAX_BODY_BYTES, MAX_LIVE_SHARES};
+use cityloom_server::share::{MAX_BODY_BYTES, MAX_LIVE_SHARES, MAX_SHARES_PER_DAY};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use support::*;
@@ -195,4 +195,16 @@ async fn reading_links_has_its_own_rate_limit(pool: PgPool) {
     anyone.forwarded_for = "198.51.100.9".into();
     assert_eq!(anyone.get(path).await.status, StatusCode::NOT_FOUND, "counted per address");
     assert_eq!(anyone.get("/api/providers").await.status, StatusCode::OK, "the other routes are not counted with it");
+}
+
+#[sqlx::test]
+async fn an_account_makes_a_bounded_number_of_shares_a_day(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut ada = signed_in(&app, "ada").await;
+    for _ in 0..MAX_SHARES_PER_DAY {
+        let token = made(&mut ada).await;
+        assert_eq!(ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT);
+    }
+    let r = share(&mut ada, &design()).await;
+    assert_eq!((r.status, r.json()["error"].as_str(), r.json()["limit"].as_u64()), (StatusCode::CONFLICT, Some("too-many-today"), Some(MAX_SHARES_PER_DAY as u64)));
 }

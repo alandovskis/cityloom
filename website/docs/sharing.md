@@ -20,7 +20,8 @@ shows; choose **Create a share link**.
   listed there again on the same device, newest first.
 - **Delete link** deletes the shared copy from the server before it expires. Anyone who opens the link afterwards is told
   the person who shared it deleted it.
-- An account holds at most 50 links that still work, and a shared copy is at most 1 MB.
+- An account holds at most 50 links that still work, makes at most 100 links in any 24 hours (deleted ones count
+  too), and a shared copy is at most 1 MB.
 
 ## Opening a link
 

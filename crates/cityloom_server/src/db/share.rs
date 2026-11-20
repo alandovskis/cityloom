@@ -21,12 +21,17 @@ fn is_gone(e: &sqlx::Error) -> bool {
 #[async_trait]
 impl ShareRepo for PgRepo {
     async fn create(&self, user: Uuid, token: &Token, body: &[u8], now: OffsetDateTime) -> Result<Created, ShareError> {
+        // Sealed before the account's row is locked: the lock is held for the checks and the insert alone.
+        let id = Uuid::new_v4();
+        let expires_at = share::expires_at(now);
+        let sealed = crypto::seal(&token.body_key(), &share::aad(id), body);
         let mut tx = self.pool.begin().await.map_err(db)?;
-        // Locks the account's row, so two shares made at once cannot both pass the cap.
+        // Locks the account's row, so two shares made at once cannot both pass the bounds.
         let exists: Option<Uuid> = sqlx::query_scalar("select id from users where id = $1 for update").bind(user).fetch_optional(&mut *tx).await.map_err(db)?;
         if exists.is_none() {
             return Err(ShareError::Gone);
         }
+        // Over `shares_live`, which holds only the rows that still have a body: the markers do not slow it.
         let live: i64 = sqlx::query_scalar("select count(*) from shares where user_id = $1 and body is not null and expires_at > $2")
             .bind(user)
             .bind(now)
@@ -36,9 +41,16 @@ impl ShareRepo for PgRepo {
         if live as usize >= share::MAX_LIVE_SHARES {
             return Err(ShareError::Full);
         }
-        let id = Uuid::new_v4();
-        let expires_at = share::expires_at(now);
-        let sealed = crypto::seal(&token.body_key(), &share::aad(id), body);
+        // Over `shares_user_created`: the day's rows alone, deleted ones too.
+        let today: i64 = sqlx::query_scalar("select count(*) from shares where user_id = $1 and created_at > $2")
+            .bind(user)
+            .bind(now - time::Duration::days(1))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db)?;
+        if today as usize >= share::MAX_SHARES_PER_DAY {
+            return Err(ShareError::TooMany);
+        }
         sqlx::query("insert into shares (id, lookup, user_id, created_at, expires_at, body) values ($1, $2, $3, $4, $5, $6)")
             .bind(id)
             .bind(&token.lookup()[..])

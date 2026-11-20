@@ -45,6 +45,9 @@ pub const MAX_BYTES: usize = 1024 * 1024;
 pub const RETENTION_DAYS: i64 = 90;
 /// How many live shares an account may hold (`cityloom_server::share::MAX_LIVE_SHARES`), for the words that say so.
 pub const MAX_LIVE: i64 = 50;
+/// How many shares an account may make in 24 hours, deleted ones too (`cityloom_server::share::MAX_SHARES_PER_DAY`),
+/// for the words that say so.
+pub const MAX_PER_DAY: i64 = 100;
 /// The page a share link opens.
 pub const PAGE: &str = "share.html";
 
@@ -75,6 +78,8 @@ pub enum ShareError {
     TooLarge,
     /// The account holds as many shares as it may.
     Full,
+    /// The account made as many shares as it may in 24 hours.
+    TooManyToday,
     /// Another account's share.
     NotYours,
     /// Anything else the server refused.
@@ -99,6 +104,7 @@ impl ShareError {
             ShareError::Unusable => Said::new("share-error-unusable"),
             ShareError::TooLarge => Said::new("share-error-too-large").with("megabytes", Arg::Num((MAX_BYTES / (1024 * 1024)) as i64)),
             ShareError::Full => Said::new("share-error-full").with("count", Arg::Num(MAX_LIVE)),
+            ShareError::TooManyToday => Said::new("share-error-too-many-today").with("count", Arg::Num(MAX_PER_DAY)),
             ShareError::NotYours => Said::new("share-error-not-yours"),
             ShareError::Refused => Said::new("share-error-refused"),
         }
@@ -128,6 +134,7 @@ impl From<ShareFailure> for ShareError {
             ShareFailure::Deleted => ShareError::Deleted,
             ShareFailure::NotYours => ShareError::NotYours,
             ShareFailure::Full => ShareError::Full,
+            ShareFailure::TooManyToday => ShareError::TooManyToday,
             ShareFailure::TooLarge => ShareError::TooLarge,
             ShareFailure::Newer => ShareError::Newer,
             ShareFailure::Network => ShareError::Network,

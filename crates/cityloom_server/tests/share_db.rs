@@ -156,3 +156,28 @@ async fn a_live_share_whose_body_is_gone_is_corrupt(pool: PgPool) {
     sqlx::query("update shares set body = null").execute(&pool).await.unwrap();
     assert_eq!(r.open(&token, t0()).await.unwrap_err(), ShareError::Corrupt);
 }
+
+#[sqlx::test]
+async fn an_account_makes_a_bounded_number_of_shares_a_day_deleted_ones_too(pool: PgPool) {
+    let r = repo(pool.clone());
+    let (ada, bea) = (user(&r, "a").await, user(&r, "b").await);
+    for n in 0..share::MAX_SHARES_PER_DAY {
+        let token = Token::random();
+        r.create(ada, &token, BODY, t0() + Duration::minutes(n as i64)).await.unwrap();
+        r.delete(ada, &token, t0() + Duration::minutes(n as i64)).await.unwrap();
+    }
+    let last = t0() + Duration::minutes(share::MAX_SHARES_PER_DAY as i64 - 1);
+    assert_eq!(r.create(ada, &Token::random(), BODY, last).await.unwrap_err(), ShareError::TooMany, "deleting does not make room today");
+    assert!(r.create(bea, &Token::random(), BODY, last).await.is_ok(), "the bound is per account");
+    assert!(r.create(ada, &Token::random(), BODY, t0() + Duration::days(1)).await.is_ok(), "a day after the first, room for one");
+}
+
+#[sqlx::test]
+async fn the_checks_before_a_share_is_kept_have_indexes_that_skip_the_markers(pool: PgPool) {
+    let defs: Vec<(String, String)> =
+        sqlx::query_as("select indexname::text, indexdef from pg_indexes where tablename = 'shares' order by indexname").fetch_all(&pool).await.unwrap();
+    let def = |name: &str| defs.iter().find(|(n, _)| n == name).map(|(_, d)| d.clone()).unwrap_or_else(|| panic!("no {name}: {defs:?}"));
+    assert!(def("shares_live").contains("(user_id, expires_at) WHERE (body IS NOT NULL)"), "{}", def("shares_live"));
+    assert!(def("shares_user_created").contains("(user_id, created_at)"), "{}", def("shares_user_created"));
+    assert!(defs.iter().all(|(n, _)| n != "shares_user"), "the account's rows are found by shares_user_created: {defs:?}");
+}

@@ -24,6 +24,7 @@ fn share_error(e: ShareError) -> Response {
         ShareError::Deleted => json_error(StatusCode::GONE, "deleted"),
         ShareError::NotYours => json_error(StatusCode::FORBIDDEN, "not-yours"),
         ShareError::Full => json_response(StatusCode::CONFLICT, serde_json::json!({ "error": "full", "limit": share::MAX_LIVE_SHARES })),
+        ShareError::TooMany => json_response(StatusCode::CONFLICT, serde_json::json!({ "error": "too-many-today", "limit": share::MAX_SHARES_PER_DAY })),
         ShareError::Gone => json_error(StatusCode::UNAUTHORIZED, "signed-out"),
         ShareError::Unavailable => json_error(StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
         ShareError::Corrupt => json_error(StatusCode::INTERNAL_SERVER_ERROR, "corrupt"),
