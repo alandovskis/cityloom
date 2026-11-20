@@ -288,11 +288,13 @@ impl ShellVm {
         crate::shared::project_id::link_in(href, self.target.project().as_deref(), self.read_only())
     }
 
-    /// Whether the page shows its project read-only: its address says so (`shared::project_id::viewing`), as it does to
-    /// `project::context`, which gives the page's view-models a storage that keeps nothing. The top bar then says so.
+    /// Whether the page shows its project read-only: its address says so (`shared::project_id::viewing`), or its project
+    /// is a copy of a shared design (`project::copies`, #221), as they do to `project::context`, which gives the page's
+    /// view-models a storage that keeps nothing. The top bar then says so.
     pub fn read_only(&self) -> bool {
         let path = self.ports.page.path();
         crate::shared::project_id::viewing(path.split_once('?').map_or("", |(_, search)| search))
+            || self.target.project().is_some_and(|id| crate::project::copies::is_copy(&*self.ports.storage, &id))
     }
 
     // ---- units ----

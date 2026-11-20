@@ -14,7 +14,7 @@ fn word(vm: Vm, key: &'static str) -> String {
 
 /// The id of an element of the row of the link `token` (base64url, safe in an id).
 fn part(what: &str, token: &str) -> String {
-    format!("share-{what}-{token}")
+    format!("sharing-{what}-{token}")
 }
 
 /// Moves focus where the view-model asks, once the page shows it. Effects do not run on the host.
@@ -27,7 +27,7 @@ fn follow_focus(vm: Vm) {
         let id = match to {
             Focus::None => return,
             Focus::Link(token) => part("link", &token),
-            Focus::Create => "share-create".to_string(),
+            Focus::Create => "sharing-create".to_string(),
         };
         if let Some(el) = document().get_element_by_id(&id).and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
             let _ = el.focus();
@@ -95,15 +95,15 @@ pub fn ShareView(vm: Rc<ShareVm>) -> impl IntoView {
         <p class="share-back-row">
             <a class="share-back" href=vm.with_value(|v| v.back_href())>{move || word(vm, "share-back")}</a>
         </p>
-        <h1 id="share-heading" tabindex="-1">{move || vm.with_value(|v| v.heading())}</h1>
+        <h1 id="sharing-heading" tabindex="-1">{move || vm.with_value(|v| v.heading())}</h1>
         <p class="share-intro">{move || word(vm, "share-intro")}</p>
         <p class="share-intro">{move || vm.with_value(|v| v.retention())}</p>
-        <p id="share-blocked" class="share-blocked" hidden=move || blocked().is_none()>{blocked}</p>
+        <p id="sharing-blocked" class="sharing-blocked" hidden=move || blocked().is_none()>{blocked}</p>
         <button
             type="button"
-            id="share-create"
-            class="btn share-create"
-            aria-describedby="share-blocked"
+            id="sharing-create"
+            class="btn sharing-create"
+            aria-describedby="sharing-blocked"
             disabled=move || vm.with_value(|v| v.busy() || v.blocked().is_some() || v.account() == Account::Unknown)
             on:click=move |_| vm.with_value(|v| v.create())
         >
@@ -113,19 +113,19 @@ pub fn ShareView(vm: Rc<ShareVm>) -> impl IntoView {
             let outcome = vm.with_value(|v| v.outcome());
             let (error, none) = (outcome.as_ref().is_some_and(|(_, e)| *e), outcome.is_none());
             view! {
-                <p id="share-outcome" class="share-outcome" class:share-error=error hidden=none>
+                <p id="sharing-outcome" class="sharing-outcome" class:share-error=error hidden=none>
                     {outcome.map(|(text, _)| text)}
                 </p>
             }
         }}
-        <h2 id="share-links-heading">{move || word(vm, "share-links-heading")}</h2>
+        <h2 id="sharing-links-heading">{move || word(vm, "share-links-heading")}</h2>
         {move || {
             let rows = vm.with_value(|v| v.links());
             if rows.is_empty() {
                 view! { <p class="share-empty">{move || word(vm, "share-links-empty")}</p> }.into_any()
             } else {
                 view! {
-                    <ul class="share-list" aria-labelledby="share-links-heading">
+                    <ul class="share-list" aria-labelledby="sharing-links-heading">
                         {rows.into_iter().map(|row| link_view(vm, row)).collect_view()}
                     </ul>
                 }
@@ -143,12 +143,12 @@ pub fn OpenView(vm: Rc<OpenVm>) -> impl IntoView {
     Effect::new(move |_| document().set_title(&vm.with_value(|v| v.word("share-page-title"))));
     let failed = move || matches!(vm.with_value(|v| v.state()), Opening::Failed(_));
     view! {
-        <h1 id="share-heading" tabindex="-1">{move || vm.with_value(|v| v.word("share-open-heading"))}</h1>
+        <h1 id="sharing-heading" tabindex="-1">{move || vm.with_value(|v| v.word("share-open-heading"))}</h1>
         // One node each for the page's life: a status while it works, an alert when it cannot.
-        <p id="share-open-status" role="status" class="share-intro">
+        <p id="sharing-open-status" role="status" class="share-intro">
             {move || (!failed()).then(|| vm.with_value(|v| v.message()))}
         </p>
-        <p id="share-open-error" role="alert" class="share-outcome share-error">
+        <p id="sharing-open-error" role="alert" class="sharing-outcome share-error">
             {move || failed().then(|| vm.with_value(|v| v.message()))}
         </p>
         <p class="share-back-row" hidden=move || !failed()>
