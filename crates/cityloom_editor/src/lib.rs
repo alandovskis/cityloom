@@ -156,8 +156,8 @@ impl SharePage {
     }
 }
 
-/// Draws the share page. Its address carries either a share link's token (`share.html#<token>`): the page is in no
-/// project, moves the work from before projects first as such a page does, and opens the link (`share::mount_open`);
+/// Draws the share page. Its address carries either a share link's token (`share.html#<token>`, or a fragment where
+/// no project is named: `share::model::opens_a_link`): the page is in no project, moves the work from before projects first as such a page does, and opens the link (`share::mount_open`);
 /// or a project (`share.html?project=<id>`, `project::context::open_page`): the page makes and lists that project's
 /// links (`share::mount_share`), and where the project is not here it has gone to the list and draws nothing. Put
 /// together here, where slices may meet: the project slice says which project, what it is called and where it is.
@@ -166,8 +166,8 @@ pub fn mount_share() -> Option<SharePage> {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let root = shared::platform::browser_ports();
-    let hash = root.page.hash();
-    if !hash.is_empty() && !shared::ports::is_account_fragment(&hash) {
+    let search = root.page.path().split_once('?').map(|(_, search)| search.to_string()).unwrap_or_default();
+    if share::model::opens_a_link(&root.page.hash(), &search) {
         let i18n = i18n_browser(&root);
         project::migrate::move_legacy_work(&root.storage, &i18n);
         share::mount_open(root, i18n.clone());

@@ -122,6 +122,18 @@ fn a_token_is_43_characters_of_base64url_and_its_link_carries_it_in_the_fragment
     assert_eq!(model::link("https://cityloom.example", TOKEN), format!("https://cityloom.example/share.html#{TOKEN}"));
 }
 
+/// The share page opens a link only for a whole token, or for a fragment where no project is named; a project's page
+/// keeps its own anchors (the skip link's `#sharing-heading`, after a reload) and the account's sign-in fragment.
+#[test]
+fn the_page_opens_a_link_only_for_a_whole_token_or_where_it_names_no_project() {
+    let opens = |hash: &str, search: &str| model::opens_a_link(hash, search);
+    assert!(opens(TOKEN, "") && opens(TOKEN, "?project=p1"), "a whole token is a link, whatever else the address says");
+    assert!(opens("short", "") && opens("sharing-heading", ""), "no project named: a fragment is a link, said not whole");
+    assert!(!opens("sharing-heading", "?project=p1") && !opens("short", "project=p1&view=1"), "a project's page keeps its anchors");
+    assert!(!opens("account=signed-in", "") && !opens("account=signed-in", "?project=p1"), "the sign-in's fragment");
+    assert!(!opens("", "") && !opens("", "?project=p1"), "no fragment: the project's page (the one opened last where none is named)");
+}
+
 #[test]
 fn every_failure_is_said_in_english_and_in_french() {
     use ShareError::*;
