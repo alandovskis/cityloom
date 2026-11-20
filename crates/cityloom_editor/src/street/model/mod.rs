@@ -1831,6 +1831,20 @@ mod tests {
     }
 
     #[test]
+    fn a_history_begun_on_the_street_as_imported_keeps_its_edits_through_a_start_over() {
+        let today = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&today, &today, 0);
+        e.begin_history();
+        let u = e.view().segments[0].uid;
+        assert!(e.nudge_width(u, -100));
+        let edited = e.snapshot();
+        assert!(e.reset());
+        assert_eq!(e.snapshot(), today);
+        assert!(e.undo(), "start over is a step undo takes back");
+        assert_eq!(e.snapshot(), edited);
+    }
+
+    #[test]
     fn a_street_made_of_given_pieces_is_sound_and_as_wide_as_they_are() {
         let kind = |id| kind_index(id).unwrap();
         let pieces = [

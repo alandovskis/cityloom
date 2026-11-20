@@ -802,6 +802,22 @@ mod tests {
     }
 
     #[test]
+    fn start_over_in_a_scenario_made_from_a_junction_never_edited_can_be_undone() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        assert!(r.vm.reset());
+        assert_eq!(corner(&r), imported);
+        assert!(r.vm.undo(), "the edit comes back");
+        r.vm.flush();
+        assert_eq!(kept_corner(&binding, Some(id)), imported + 1_000);
+    }
+
+    #[test]
     fn an_edit_in_a_scenario_changes_only_it_and_can_be_undone() {
         use crate::shared::scenarios::ScenarioHost;
         let (r, binding) = city_rig();
