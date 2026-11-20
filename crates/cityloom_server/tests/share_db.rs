@@ -108,3 +108,22 @@ async fn the_cap_counts_live_shares_and_a_gone_account_makes_none(pool: PgPool) 
     assert_eq!(rows, 0, "the account's shares went with it");
     assert_eq!(r.create(ada, &Token::random(), BODY, t0()).await.unwrap_err(), ShareError::Gone);
 }
+
+#[sqlx::test]
+async fn deleting_a_share_that_has_expired_leaves_it_expired(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let token = Token::random();
+    r.create(ada, &token, BODY, t0()).await.unwrap();
+    let later = t0() + Duration::days(91);
+    r.delete(ada, &token, later).await.unwrap();
+    assert_eq!(r.open(&token, later).await.unwrap_err(), ShareError::Expired, "it expired before it was deleted: so says its link");
+    let (deleted, body): (bool, Option<Vec<u8>>) = sqlx::query_as("select deleted, body from shares").fetch_one(&pool).await.unwrap();
+    assert_eq!((deleted, body), (false, None), "its body goes all the same");
+    // One deleted before it expired stays deleted when deleted again.
+    let other = Token::random();
+    r.create(ada, &other, BODY, t0()).await.unwrap();
+    r.delete(ada, &other, t0()).await.unwrap();
+    r.delete(ada, &other, later).await.unwrap();
+    assert_eq!(r.open(&other, later).await.unwrap_err(), ShareError::Deleted);
+}

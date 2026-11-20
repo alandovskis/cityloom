@@ -83,16 +83,19 @@ impl ShareRepo for PgRepo {
         }
     }
 
-    async fn delete(&self, user: Uuid, token: &Token, _now: OffsetDateTime) -> Result<(), ShareError> {
+    async fn delete(&self, user: Uuid, token: &Token, now: OffsetDateTime) -> Result<(), ShareError> {
         let owner: Option<Uuid> =
             sqlx::query_scalar("select user_id from shares where lookup = $1").bind(&token.lookup()[..]).fetch_optional(&self.pool).await.map_err(db)?;
         match owner {
             None => Err(ShareError::NotFound),
             Some(owner) if owner != user => Err(ShareError::NotYours),
             Some(_) => {
-                sqlx::query("update shares set deleted = true, body = null where lookup = $1 and user_id = $2")
+                // Only a live share becomes deleted: one that expired first stays expired (its body goes either way),
+                // and one deleted already is left as it is.
+                sqlx::query("update shares set deleted = expires_at > $3, body = null where lookup = $1 and user_id = $2 and not deleted")
                     .bind(&token.lookup()[..])
                     .bind(user)
+                    .bind(now)
                     .execute(&self.pool)
                     .await
                     .map_err(db)?;
