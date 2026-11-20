@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
-use cityloom_editor::city::edits::{self, Document, EDITS_KEY, Edits};
+use cityloom_editor::city::edits::{self, Document, EDITS_KEY, Edits, JunctionRecord, StreetRecord};
 use cityloom_editor::city::model::CityView;
 use cityloom_editor::city::projection::Projection;
 use cityloom_editor::city::store::CityStore;
@@ -74,7 +74,7 @@ pub fn edit_everything(store: &CityStore, storage: &MemoryStorage) -> (Tally, Ta
         match city.street_record(e.uid) {
             Some((key, record)) => {
                 placed.streets.insert(key.clone(), e.shape_mm.iter().map(|p| at.lon_lat(p[0], p[1])).collect());
-                edits.streets.insert(key, record);
+                edits.streets.insert(key, StreetRecord { import: Some(cityloom_model::IMPORTER_VERSION), ..record });
                 written.0.push(e.uid);
             }
             None => streets.refused += 1,
@@ -87,7 +87,7 @@ pub fn edit_everything(store: &CityStore, storage: &MemoryStorage) -> (Tally, Ta
         match city.junction_record(n.uid) {
             Some((key, record)) => {
                 placed.junctions.insert(key.clone(), at.lon_lat(n.x_mm, n.y_mm));
-                edits.junctions.insert(key, record);
+                edits.junctions.insert(key, JunctionRecord { import: Some(cityloom_model::IMPORTER_VERSION), ..record });
                 written.1.push(n.uid);
             }
             None => junctions.refused += 1,
