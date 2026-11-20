@@ -1,186 +1,519 @@
-head 1833e2f0afaa461ff836ac7edd65088d8e902097
+head 582550e787daa2c0e962d3a31f8680a34b4cec49
 $ cargo test -p cityloom_editor --lib -- junction::model::calls
-test junction::model::calls::tests::a_phase_that_cannot_fit_the_walk_and_clearance_even_lengthened_does_not_serve_the_call ... ok
-test junction::model::calls::tests::a_call_that_misses_an_extended_walk_is_delayed_to_the_next_however_long_the_extension ... ok
 test junction::model::calls::tests::a_call_is_served_when_the_next_phase_that_walks_its_crossing_starts_and_delayed_if_it_missed_one ... ok
+test junction::model::calls::tests::a_plan_whose_phases_take_no_time_still_ends_at_once_and_serves_its_calls ... ok
 test junction::model::calls::tests::a_short_green_is_lengthened_by_the_shortfall_and_every_phase_after_it_starts_later ... ok
 test junction::model::calls::tests::a_call_still_waiting_when_the_run_stops_is_not_served_never_served_with_no_wait ... ok
-test junction::model::calls::tests::a_plan_whose_phases_take_no_time_still_ends_at_once_and_serves_its_calls ... ok
+test junction::model::calls::tests::a_call_that_misses_an_extended_walk_is_delayed_to_the_next_however_long_the_extension ... ok
+test junction::model::calls::tests::a_phase_that_cannot_fit_the_walk_and_clearance_even_lengthened_does_not_serve_the_call ... ok
 test junction::model::calls::tests::no_crossing_on_call_means_no_calls_and_no_findings ... ok
-test junction::model::calls::tests::a_junction_that_falls_back_on_how_it_was_laid_out_is_not_said_to_have_lost_its_calls_to_a_control ... ok
 test junction::model::calls::tests::a_crossing_that_no_phase_can_serve_is_a_finding_and_its_calls_are_counted_as_not_served ... ok
+test junction::model::calls::tests::fixed_inputs_give_a_fixed_summary ... ok
+test junction::model::calls::tests::the_calls_of_an_hour_are_the_same_every_time_spread_over_the_hour_in_order ... ok
+test junction::model::calls::tests::a_junction_that_falls_back_on_how_it_was_laid_out_is_not_said_to_have_lost_its_calls_to_a_control ... ok
+test junction::model::calls::tests::the_run_stops_a_longest_cycle_past_the_last_call_and_the_latest_walk_falls_within_it ... ok
+test junction::model::calls::tests::timings_too_long_for_the_clock_end_the_run_at_once_without_wrapping ... ok
+test junction::model::calls::tests::the_clearance_is_the_length_at_one_metre_a_second_rounded_up_and_the_walk_comes_first ... ok
 test junction::model::calls::tests::a_document_with_timings_past_their_range_reads_them_within_it ... ok
 test junction::model::calls::tests::a_crossing_left_on_call_that_no_phase_walks_is_a_finding_and_is_kept ... ok
 test junction::model::calls::tests::a_crossing_can_go_on_call_only_where_the_plan_walks_it ... ok
+test junction::model::calls::tests::on_call_is_refused_with_its_reason_where_no_phase_walks_the_crossing ... ok
+test junction::model::calls::tests::on_call_is_set_and_taken_off_and_the_rate_is_kept_within_its_bound ... ok
 test junction::model::calls::tests::a_junction_saved_before_calls_loads_unchanged_and_one_with_none_on_call_is_written_as_before ... ok
 test junction::model::calls::tests::a_rate_past_the_bound_in_a_document_is_read_as_the_bound ... ok
-test junction::model::calls::tests::fixed_inputs_give_a_fixed_summary ... ok
-test junction::model::calls::tests::on_call_is_refused_with_its_reason_where_no_phase_walks_the_crossing ... ok
-test junction::model::calls::tests::the_calls_of_an_hour_are_the_same_every_time_spread_over_the_hour_in_order ... ok
-test junction::model::calls::tests::the_clearance_is_the_length_at_one_metre_a_second_rounded_up_and_the_walk_comes_first ... ok
-test junction::model::calls::tests::the_run_stops_a_longest_cycle_past_the_last_call_and_the_latest_walk_falls_within_it ... ok
-test junction::model::calls::tests::timings_too_long_for_the_clock_end_the_run_at_once_without_wrapping ... ok
-test junction::model::calls::tests::an_edit_that_takes_the_walk_away_keeps_the_crossing_on_call_as_a_finding ... ok
-test junction::model::calls::tests::on_call_is_set_and_taken_off_and_the_rate_is_kept_within_its_bound ... ok
 test junction::model::calls::tests::a_junction_that_stops_being_a_signal_takes_its_crossings_off_call_and_says_so ... ok
+test junction::model::calls::tests::an_edit_that_takes_the_walk_away_keeps_the_crossing_on_call_as_a_finding ... ok
 test junction::model::calls::tests::a_stored_plan_longer_than_an_edit_can_make_says_how_many_phases_it_left_out_until_edited ... ok
 test junction::model::calls::tests::a_stored_plan_of_endless_phases_is_read_as_many_as_an_edit_allows_and_served_at_once ... ok
-test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 3402 filtered out; finished in 0.13s
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 3442 filtered out; finished in 0.22s
 $ cargo test -p cityloom_editor --lib -- junction::model::signal
 test junction::model::signal::tests::a_plan_kept_before_patterns_still_loads_and_a_scramble_is_the_only_phase_that_writes_the_marker ... ok
-test junction::model::signal::tests::a_bike_movement_runs_unless_it_crosses_the_phases_traffic ... ok
-test junction::model::signal::tests::a_phase_is_the_pattern_it_matches_and_custom_when_it_matches_none ... ok
-test junction::model::signal::tests::a_phase_that_moves_to_another_ready_made_pattern_is_not_lost_but_one_that_becomes_custom_is ... ok
+test junction::model::signal::tests::a_turn_into_a_street_gives_way_to_its_crossing ... ok
+test junction::model::signal::tests::a_crossing_is_walked_while_the_traffic_beside_it_goes_straight_on_but_not_while_traffic_goes_straight_into_it ... ok
+test junction::model::signal::tests::a_protected_left_goes_first_and_no_one_crosses_where_it_turns ... ok
+test junction::model::signal::tests::a_scramble_takes_the_timing_of_its_street ... ok
+test junction::model::signal::tests::a_turn_that_gives_way_to_people_crossing_is_not_a_conflict ... ok
 test junction::model::signal::tests::a_street_nothing_enters_from_has_no_phase_but_its_crossing_is_still_walked ... ok
-test junction::model::signal::tests::the_phases_take_turns_in_the_order_of_the_bearings_and_the_cycle_is_their_sum ... ok
-test junction::model::signal::tests::five_streets_make_five_phases ... ok
+test junction::model::signal::tests::a_pedestrian_scramble_serves_no_vehicle_and_every_crossing_walks ... ok
+test junction::model::signal::tests::a_scramble_has_no_conflict ... ok
+test junction::model::signal::tests::a_window_is_the_longest_unbroken_run_not_the_total ... ok
+test junction::model::signal::tests::a_movement_that_crosses_a_bike_movement_that_runs_is_a_ride_conflict ... ok
 test junction::model::signal::tests::at_a_t_junction_a_crossing_is_walked_in_the_phases_that_send_nothing_straight_into_it ... ok
+test junction::model::signal::tests::a_phase_that_moves_to_another_ready_made_pattern_is_not_lost_but_one_that_becomes_custom_is ... ok
+test junction::model::signal::tests::a_bike_movement_runs_unless_it_crosses_the_phases_traffic ... ok
+test junction::model::signal::tests::the_phases_take_turns_in_the_order_of_the_bearings_and_the_cycle_is_their_sum ... ok
+test junction::model::signal::tests::a_phase_is_the_pattern_it_matches_and_custom_when_it_matches_none ... ok
+test junction::model::signal::tests::only_the_patterns_the_lanes_support_are_offered ... ok
+test junction::model::signal::tests::the_walk_window_runs_on_across_the_end_of_the_cycle ... ok
 test junction::model::signal::tests::the_streets_a_phase_sends_traffic_from_are_listed_once_in_the_order_first_seen ... ok
+test junction::model::signal::tests::removing_the_cause_removes_the_conflict ... ok
+test junction::model::signal::tests::a_stored_plan_with_repeats_is_read_without_them_so_its_conflicts_stay_few ... ok
+test junction::model::signal::tests::through_only_serves_the_streets_straight_on_movements_and_nothing_else ... ok
+test junction::model::signal::tests::there_is_no_plan_unless_the_control_is_a_signal ... ok
+test junction::model::signal::tests::traffic_that_starts_at_or_goes_straight_into_a_walked_crossing_is_a_walk_conflict ... ok
+test junction::model::signal::tests::driving_on_the_left_the_protected_turn_is_the_one_across_oncoming_traffic_which_is_the_right_turn ... ok
+test junction::model::signal::tests::five_streets_make_five_phases ... ok
 test junction::model::signal::tests::two_movements_that_cross_in_one_phase_are_a_vehicle_conflict ... ok
-test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 3399 filtered out; finished in 0.01s
+test junction::model::signal::tests::the_suggested_plan_has_no_conflict_on_the_four_way_a_five_way_a_t_and_streets_with_bike_lanes ... ok
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 3439 filtered out; finished in 0.01s
 $ cargo test -p cityloom_editor --lib -- city::edits
 test city::edits::tests::a_build_before_calls_leaves_a_document_with_them_alone ... ok
 test city::edits::tests::a_document_above_newest_is_not_read ... ok
+test city::edits::tests::a_document_with_the_import_stamp_is_still_read_at_version_17 ... ok
 test city::edits::tests::a_document_without_calming_keeps_its_version ... ok
-test city::edits::tests::a_document_of_the_version_before_filters_is_read_and_rewritten_as_it_is ... ok
-test city::edits::tests::a_document_of_the_version_before_chicanes_is_read_and_rewritten_as_it_is ... ok
-test city::edits::tests::a_document_comes_back_as_it_was_kept ... ok
-test city::edits::tests::a_change_keeps_every_record_it_does_not_touch_as_it_was_kept_readable_or_not ... ok
-test city::edits::tests::a_document_with_scenarios_is_still_read_at_version_16 ... ok
-test city::edits::tests::a_calming_record_cannot_be_read_under_an_older_version_number ... ok
 test city::edits::tests::a_green_version_document_is_read ... ok
-test city::edits::tests::a_chicane_is_written_as_chicane_version_and_tables_alone_keep_calming_version ... ok
-test city::edits::tests::a_document_from_before_scenarios_reads_every_place_as_its_baseline ... ok
-test city::edits::tests::a_document_holding_a_zoned_street_is_written_as_version_6_and_back_to_5_when_the_last_zoned_record_goes ... ok
+test city::edits::tests::a_draft_holding_scenarios_is_written_as_16_and_a_junction_counts_too ... ok
 test city::edits::tests::a_document_with_no_zone_is_still_written_as_version_5_and_a_one_zone_street_record_is_byte_identical ... ok
+test city::edits::tests::a_change_keeps_every_record_it_does_not_touch_as_it_was_kept_readable_or_not ... ok
+test city::edits::tests::a_document_read_at_the_import_stamp_version_stays_there_when_its_last_record_goes ... ok
 test city::edits::tests::a_newer_document_is_left_alone ... ok
 test city::edits::tests::a_newer_version_is_told_apart_and_not_read ... ok
+test city::edits::tests::a_document_from_before_scenarios_reads_every_place_as_its_baseline ... ok
+test city::edits::tests::a_document_comes_back_as_it_was_kept ... ok
+test city::edits::tests::a_document_of_the_version_before_chicanes_is_read_and_rewritten_as_it_is ... ok
+test city::edits::tests::a_document_holding_a_stamped_record_is_written_as_the_import_stamp_version ... ok
+test city::edits::tests::a_junction_whose_key_changed_is_found_by_a_shared_osm_node ... ok
+test city::edits::tests::a_document_of_the_version_before_filters_is_read_and_rewritten_as_it_is ... ok
 test city::edits::tests::a_not_set_speed_also_writes_version_7 ... ok
-test city::edits::tests::a_record_can_be_read_written_and_removed_as_the_document_holds_it ... ok
+test city::edits::tests::a_place_without_a_key_matches_only_by_overlap_and_may_match_nothing ... ok
+test city::edits::tests::a_place_overlapping_two_records_equally_takes_neither ... ok
+test city::edits::tests::a_calming_record_cannot_be_read_under_an_older_version_number ... ok
+test city::edits::tests::a_record_goes_to_the_place_with_its_key ... ok
+test city::edits::tests::a_piece_of_the_way_that_leaves_the_shared_end_another_way_does_not_take_the_record_even_alone ... ok
+test city::edits::tests::a_record_read_from_the_store_carries_its_key_and_ids ... ok
+test city::edits::tests::a_pedestrian_street_comes_back_with_the_class_it_had ... ok
 test city::edits::tests::a_modal_filter_is_written_as_filter_version_and_chicanes_alone_keep_theirs ... ok
-test city::edits::tests::a_record_with_a_speed_is_written_as_version_7 ... ok
-test city::edits::tests::a_record_with_calming_is_written_as_calming_version ... ok
-test city::edits::tests::a_record_with_curb_uses_is_written_as_version_8 ... ok
+test city::edits::tests::a_record_without_an_import_stamp_or_from_before_importer_11_is_stale ... ok
+test city::edits::tests::a_chicane_is_written_as_chicane_version_and_tables_alone_keep_calming_version ... ok
+test city::edits::tests::a_record_without_scenarios_is_written_as_before ... ok
 test city::edits::tests::a_stop_version_document_is_read ... ok
-test city::edits::tests::a_record_with_green_is_written_as_the_green_version ... ok
-test city::edits::tests::a_record_with_stops_is_written_as_the_stop_version ... ok
-test city::edits::tests::a_version_7_document_with_speeds_and_no_zones_is_read ... ok
+test city::edits::tests::a_record_can_be_read_written_and_removed_as_the_document_holds_it ... ok
+test city::edits::tests::a_record_with_a_speed_is_written_as_version_7 ... ok
+test city::edits::tests::a_street_needs_a_shared_way_and_a_shared_end ... ok
 test city::edits::tests::a_version_8_document_is_read ... ok
-test city::edits::tests::a_zone_with_a_speed_is_written_as_zone_speed_version ... ok
+test city::edits::tests::a_version_7_document_with_speeds_and_no_zones_is_read ... ok
+test city::edits::tests::a_document_holding_a_zoned_street_is_written_as_version_6_and_back_to_5_when_the_last_zoned_record_goes ... ok
+test city::edits::tests::a_record_that_cannot_be_read_is_left_out_and_the_others_are_read ... ok
+test city::edits::tests::bearings_are_apart_by_the_shorter_way_round ... ok
+test city::edits::tests::a_record_with_curb_uses_is_written_as_version_8 ... ok
 test city::edits::tests::a_zoned_street_whose_zones_follow_the_street_keeps_the_zones_version ... ok
 test city::edits::tests::nothing_stored_is_an_empty_document ... ok
-test city::edits::tests::a_zoned_record_round_trips_through_the_document ... ok
-test city::edits::tests::scenarios_are_kept_with_their_record_and_make_it_version_16 ... ok
+test city::edits::tests::of_two_pieces_of_a_way_that_overlap_a_record_as_much_the_one_leaving_the_shared_end_the_same_way_takes_it ... ok
+test city::edits::tests::places_with_the_same_key_are_told_apart_by_overlap_and_a_tie_is_nobodys ... ok
+test city::edits::tests::the_halves_of_a_way_split_in_the_middle_both_leave_their_ends_the_same_way_and_are_nobodys ... ok
+test city::edits::tests::the_junction_with_the_exact_key_beats_a_larger_overlap_even_when_it_overlaps_little ... ok
+test city::edits::tests::a_record_with_calming_is_written_as_calming_version ... ok
+test city::edits::tests::the_place_with_the_exact_key_beats_an_overlapping_one ... ok
+test city::edits::tests::the_street_with_the_exact_key_beats_a_larger_overlap ... ok
+test city::edits::tests::two_places_claiming_one_record_give_it_to_the_larger_overlap_or_to_nobody ... ok
+test city::edits::tests::two_street_places_claiming_one_record_give_it_to_the_larger_overlap ... ok
 test city::edits::tests::versions_4_5_and_6_are_read_and_one_past_the_newest_is_a_newer_document_left_alone ... ok
+test city::edits::tests::scenarios_are_kept_with_their_record_and_make_it_version_16 ... ok
 test city::edits::tests::what_is_not_a_document_is_damaged_and_keeps_its_text ... ok
+test city::edits::tests::a_record_with_green_is_written_as_the_green_version ... ok
+test city::edits::tests::a_zone_with_a_speed_is_written_as_zone_speed_version ... ok
+test city::edits::tests::a_record_with_stops_is_written_as_the_stop_version ... ok
+test city::edits::tests::a_zoned_record_round_trips_through_the_document ... ok
+test city::edits::tests::the_pinned_shape_of_a_zoned_record_adds_exactly_these_paths ... ok
+test city::edits::tests::a_junction_record_with_signal_timing_round_trips_and_one_written_before_it_reads_as_untimed ... ok
 test city::edits::tests::a_junction_record_with_an_edited_signal_plan_is_written_as_the_signal_version_and_older_records_read_as_suggested ... ok
 test city::edits::tests::a_version_4_document_is_read_and_the_next_write_says_5 ... ok
 test city::edits::tests::what_a_record_is_written_as_is_pinned_so_that_a_change_of_shape_is_a_decision_about_the_version ... ok
-test city::edits::tests::a_crossing_on_call_makes_its_document_version_17_and_one_with_none_is_written_as_before ... ok
-test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 3367 filtered out; finished in 0.15s
+test city::edits::tests::a_crossing_on_call_makes_its_document_version_18_and_one_with_none_is_written_as_before ... ok
+test city::edits::tests::a_typed_record_is_stale_exactly_when_its_json_is ... ok
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 3403 filtered out; finished in 0.41s
+$ cargo test -p cityloom_editor --lib -- archive
+test archive::tests::a_document_that_the_archive_has_nothing_for_does_not_stop_the_import ... ok
+test archive::tests::a_stale_record_in_an_archive_is_not_imported ... ok
+test archive::tests::fields_this_build_does_not_know_are_ignored_and_reserved_ones_are_neither_read_nor_written ... ok
+test archive::tests::edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_version_their_content_needs ... ok
+test archive::tests::a_minimal_version_1_archive_is_read ... ok
+test archive::tests::export_refuses_work_it_cannot_read_rather_than_make_an_archive_that_lacks_it ... ok
+test archive::tests::new_records_join_a_document_that_holds_others_and_the_others_are_not_touched ... ok
+test archive::tests::an_archive_holding_only_stale_records_says_so_and_not_that_everything_is_already_here ... ok
+test archive::tests::the_errors_say_what_is_wrong_in_both_languages ... ok
+test archive::tests::the_file_is_named_by_the_day_and_is_never_a_bare_dot_cityloom ... ok
+test archive::tests::the_french_section_is_in_french ... ok
+test archive::tests::the_ftl_files_have_the_same_messages_and_variables ... ok
+test archive::tests::the_result_follows_a_language_switch ... ok
+test archive::tests::an_export_holds_the_design_and_what_made_it_and_nothing_of_the_account_or_the_network ... ok
+test archive::tests::export_offers_a_file_and_says_so_and_with_no_work_makes_none ... ok
+test archive::tests::a_write_that_fails_puts_back_what_was_written ... ok
+test archive::tests::importing_an_unchanged_archive_again_finds_everything_the_same_and_changes_nothing ... ok
+test archive::tests::import_reads_the_file_the_person_picked_and_a_cancelled_chooser_does_nothing ... ok
+test archive::tests::the_design_survives_export_then_import_into_an_empty_device ... ok
+test archive::tests::local_work_that_cannot_take_records_stops_the_import_and_is_left_byte_identical ... ok
+test archive::tests::an_export_from_a_project_holds_that_project_s_work_and_none_of_another_s ... ok
+test archive::tests::an_archive_of_stale_and_current_records_that_are_already_here_keeps_the_usual_outcome ... ok
+test archive::tests::with_no_project_open_the_archive_of_the_page_does_nothing_and_with_one_it_works_in_it ... ok
+test archive::tests::a_place_that_differs_is_a_conflict_and_nothing_is_written_until_the_person_chooses ... ok
+test archive::tests::keeping_mine_adds_only_what_is_new_and_leaves_the_place_that_differs ... ok
+test archive::tests::the_section_has_labelled_buttons_and_shows_the_question_and_the_result ... ok
+test archive::tests::an_import_into_a_project_writes_only_that_project_s_documents_and_marks_only_its_records ... ok
+test archive::tests::using_the_archive_replaces_the_place_that_differs_and_marks_it ... ok
+test archive::tests::every_kind_of_bad_archive_gets_its_own_error_and_leaves_storage_byte_identical ... ok
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 3438 filtered out; finished in 4.64s
 $ cargo test -p cityloom_editor --lib -- junction::vm
-test junction::vm::keys::tests::delete_and_backspace_remove_and_the_browser_is_kept_from_going_back ... ok
+test junction::vm::keys::tests::other_keys_and_pressed_modifiers_are_not_a_choice_of_a_radio ... ok
+test junction::vm::keys::tests::shift_and_an_arrow_turn_the_selected_street ... ok
 test junction::vm::keys::tests::a_radio_group_has_one_tab_stop_the_chosen_radio_or_else_the_first ... ok
+test junction::vm::keys::tests::delete_and_backspace_remove_and_the_browser_is_kept_from_going_back ... ok
+test junction::vm::keys::tests::escape_clears_a_selection_and_leaves_the_key_alone ... ok
+test junction::vm::keys::tests::other_keys_are_not_ours ... ok
+test junction::vm::keys::tests::plus_and_minus_do_nothing_for_a_lane_a_bus_lane_or_when_nothing_is_selected ... ok
+test junction::vm::keys::tests::plus_and_minus_step_what_is_selected_in_the_way_that_suits_it ... ok
+test junction::vm::keys::tests::the_arrows_choose_the_next_and_previous_radio_and_wrap ... ok
+test junction::vm::keys::tests::the_arrows_move_the_selection_round_the_junction ... ok
+test junction::vm::keys::tests::with_no_radio_to_start_from_the_arrows_go_to_the_ends ... ok
 test junction::vm::tests::a_change_that_suspends_the_signal_says_its_crossings_stay_on_call ... ok
-test junction::vm::tests::a_crossing_put_on_call_is_announced_with_how_its_calls_are_served_and_a_refusal_says_why_in_both_languages ... ok
+test junction::vm::tests::a_finding_already_there_is_not_said_again_when_an_edit_renames_its_street ... ok
 test junction::vm::tests::a_crossing_whose_calls_are_not_served_is_said_to_have_none_served_not_a_wait_of_0_s ... ok
 test junction::vm::tests::a_control_change_that_takes_crossings_off_call_counts_them_in_both_languages ... ok
-test junction::vm::read_only_tests::every_edit_command_is_refused_and_said_and_leaves_the_junction_and_the_storage_as_they_were ... ok
-test junction::vm::read_only_tests::a_link_from_the_junction_keeps_the_project_read_only ... ok
-test junction::vm::read_only_tests::a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept ... ok
-test junction::vm::read_only_tests::a_region_is_not_taken_and_nothing_is_said ... ok
-test junction::vm::read_only_tests::the_junction_says_it_is_read_only_and_one_opened_to_edit_is_not ... ok
-test junction::vm::tests::an_edit_changes_the_view_and_the_version_and_a_view_is_built_once_per_edit ... ok
+test junction::vm::tests::a_crossing_put_on_call_is_announced_with_how_its_calls_are_served_and_a_refusal_says_why_in_both_languages ... ok
+test junction::vm::tests::a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit ... ok
+test junction::vm::tests::a_refusal_for_an_arm_off_square_names_the_arm_in_a_second_sentence ... ok
+test junction::vm::tests::a_refusal_for_an_entry_too_narrow_to_widen_names_the_street_in_a_second_sentence ... ok
+test junction::vm::tests::a_sandbox_keeps_nothing_in_storage ... ok
+test junction::vm::tests::a_selection_is_announced_and_clearing_it_says_nothing ... ok
+test junction::vm::tests::a_signal_edit_that_leaves_a_crossing_on_call_unwalked_says_so_in_both_languages ... ok
 test junction::vm::read_only_tests::a_calls_edit_is_refused_and_said_once_and_changes_nothing ... ok
 test junction::vm::read_only_tests::the_refusal_is_said_in_the_language_of_the_page ... ok
+test junction::vm::read_only_tests::the_junction_says_it_is_read_only_and_one_opened_to_edit_is_not ... ok
+test junction::vm::tests::an_edit_changes_the_view_and_the_version_and_a_view_is_built_once_per_edit ... ok
+test junction::vm::read_only_tests::a_region_is_not_taken_and_nothing_is_said ... ok
+test junction::vm::tests::choosing_the_turbo_layout_already_chosen_changes_nothing_and_says_nothing ... ok
+test junction::vm::tests::an_edit_is_announced_by_its_label_and_a_refusal_by_its_reason ... ok
+test junction::vm::read_only_tests::a_link_from_the_junction_keeps_the_project_read_only ... ok
 test junction::vm::tests::no_calls_an_hour_are_said_as_none_in_french_never_as_one ... ok
-test junction::vm::tests::a_signal_edit_that_leaves_a_crossing_on_call_unwalked_says_so_in_both_languages ... ok
 test junction::vm::tests::the_phase_commands_are_announced_and_refused_in_english_and_in_french ... ok
+test junction::vm::tests::the_units_start_in_metres_and_changing_them_is_not_an_edit ... ok
+test junction::vm::tests::undo_redo_start_over_and_a_sample_are_announced ... ok
 test junction::vm::read_only_tests::choosing_and_looking_still_work ... ok
-test junction::vm::text::tests::an_arm_with_a_stop_says_its_lane_in_both_languages ... ok
-test junction::vm::text::tests::an_arm_without_a_stop_says_nothing_of_one ... ok
-test junction::vm::text::tests::the_counts_said_are_singular_at_zero_and_one_in_french_and_at_one_in_english ... ok
-test junction::vm::tests::only_selecting_on_a_place_never_edited_marks_nothing_for_the_sync ... ok
 test junction::vm::tests::a_junction_changed_by_a_sync_is_reloaded_and_announced ... ok
+test junction::vm::tests::a_city_that_cannot_be_written_is_said_once_and_the_page_goes_on ... ok
+test junction::vm::text::tests::a_continuous_crossing_is_selected_as_a_continuous_sidewalk_in_both_languages ... ok
+test junction::vm::text::tests::a_junction_that_fails_one_check_names_it ... ok
+test junction::vm::text::tests::a_junction_that_fails_several_counts_and_names_them ... ok
+test junction::vm::read_only_tests::a_change_made_by_any_other_way_is_put_back_and_nothing_is_kept ... ok
+test junction::vm::text::tests::a_sample_is_announced_by_its_name ... ok
+test junction::vm::read_only_tests::every_edit_command_is_refused_and_said_and_leaves_the_junction_and_the_storage_as_they_were ... ok
+test junction::vm::text::tests::a_protected_corner_is_selected_as_a_protected_corner_in_both_languages ... ok
+test junction::vm::text::tests::an_arm_without_a_stop_says_nothing_of_one ... ok
+test junction::vm::text::tests::an_arm_with_a_stop_says_its_lane_in_both_languages ... ok
+test junction::vm::text::tests::an_arm_without_one_says_what_it_said_before ... ok
+test junction::vm::text::tests::nothing_selected_says_nothing ... ok
+test junction::vm::text::tests::a_junction_that_works_says_how_many_streets_and_how_it_is_run ... ok
+test junction::vm::text::tests::an_edit_is_announced_by_its_label_and_where_the_junction_stands ... ok
+test junction::vm::text::tests::an_arm_with_a_beyond_says_where_its_end_zone_ends_in_both_languages ... ok
+test junction::vm::text::tests::the_counts_said_are_singular_at_zero_and_one_in_french_and_at_one_in_english ... ok
+test junction::vm::tests::a_junction_whose_own_change_lost_says_so_and_keeps_its_selection ... ok
+test junction::vm::text::tests::the_bus_lane_and_cycle_track_say_what_they_are ... ok
 test junction::vm::tests::a_sync_that_leaves_a_crossing_on_call_unwalked_says_so_after_the_update ... ok
+test junction::vm::text::tests::each_kind_of_selection_says_what_it_is ... ok
+test junction::vm::tests::only_selecting_on_a_place_never_edited_marks_nothing_for_the_sync ... ok
+test junction::vm::tests::a_change_to_an_arms_street_reloads_the_junction ... ok
 test junction::vm::tests::a_sync_that_opens_the_junction_off_a_signal_says_the_calls_it_took_off_once ... ok
-test junction::vm::tests::a_sync_that_suspends_the_signal_says_its_crossings_stay_on_call ... ok
+test junction::vm::tests::leaving_the_page_keeps_what_is_waiting_at_once ... ok
 test junction::vm::tests::a_junction_edit_made_a_moment_before_a_sync_is_not_lost ... ok
+test junction::vm::tests::a_sync_that_suspends_the_signal_says_its_crossings_stay_on_call ... ok
 test junction::vm::tests::what_is_made_of_a_city_junction_is_kept_in_the_city_a_moment_after_the_last_change ... ok
-test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 3364 filtered out; finished in 0.73s
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 3404 filtered out; finished in 2.31s
 $ cargo test -p cityloom_editor --lib -- junction::view::tests
-test junction::view::tests::a_dropped_lane_with_nowhere_to_merge_fails_it ... ok
+test junction::view::tests::a_beyond_ignored_for_a_turbo_or_a_pedestrian_arm_cannot_fail ... ok
+test junction::view::tests::a_beyond_past_the_drawn_arm_is_neither_judged_nor_described ... ok
 test junction::view::tests::a_far_side_stop_is_checked_for_clearance_too ... ok
+test junction::view::tests::a_city_junction_s_heading_links_back_to_the_map ... ok
+test junction::view::tests::a_dropped_lane_with_nowhere_to_merge_fails_it ... ok
 test junction::view::tests::a_far_side_stop_is_not_judged_for_lanes ... ok
+test junction::view::tests::a_junction_page_for_a_project_not_here_goes_to_the_list_and_for_no_junction_to_its_project_s_map ... ok
+test junction::view::tests::a_corner_panel_names_its_two_streets_and_gives_the_radius ... ok
 test junction::view::tests::a_crossing_too_far_for_one_go_says_so_in_french ... ok
+test junction::view::tests::a_bearing_typed_with_a_comma_is_rounded_and_snapped_like_any_other ... ok
+test junction::view::tests::a_continuous_sidewalk_says_why_its_street_has_no_island_switch ... ok
+test junction::view::tests::a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed ... ok
+test junction::view::tests::a_banned_turn_reads_as_not_allowed ... ok
+test junction::view::tests::a_field_with_no_hint_is_not_described_by_one ... ok
+test junction::view::tests::a_junction_that_cannot_be_drawn_follows_a_switch_of_language ... ok
+test junction::view::tests::a_failing_check_is_marked_and_says_so_to_a_screen_reader ... ok
 test junction::view::tests::a_junction_that_cannot_be_drawn_says_so_in_french ... ok
+test junction::view::tests::a_junction_offers_a_raised_table_until_it_is_a_roundabout ... ok
+test junction::view::tests::a_lane_hit_area_ends_where_its_lane_ends ... ok
+test junction::view::tests::a_junction_that_cannot_be_drawn_says_so_in_english ... ok
+test junction::view::tests::a_junction_with_no_source_has_no_source_in_its_title_block ... ok
+test junction::view::tests::a_one_lane_approach_cannot_fail_the_lane_check ... ok
 test junction::view::tests::a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_is_a_finding ... ok
-test junction::view::tests::a_change_of_region_that_changes_what_a_phase_is_says_so ... ok
-test junction::view::tests::a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_streets_to_go_to ... ok
-test junction::view::tests::a_junction_that_opened_without_its_calls_says_so_until_it_is_edited_in_both_languages ... ok
-test junction::view::tests::a_near_side_stop_in_a_right_turn_only_lane_fails_stop_lane ... ok
-test junction::view::tests::a_one_way_street_s_words_speak_french ... ok
 test junction::view::tests::a_near_side_stop_in_a_through_and_right_lane_fails_stop_lane ... ok
+test junction::view::tests::a_near_side_stop_in_a_right_turn_only_lane_fails_stop_lane ... ok
+test junction::view::tests::a_length_typed_in_feet_is_converted ... ok
+test junction::view::tests::a_pedestrian_arm_draws_and_judges_no_uses ... ok
+test junction::view::tests::a_pedestrian_arm_and_a_turbo_arm_draw_as_before ... ok
+test junction::view::tests::a_lane_panel_lists_where_the_lane_goes ... ok
+test junction::view::tests::a_length_typed_with_a_comma_or_a_point_is_read_as_a_decimal ... ok
+test junction::view::tests::a_pocket_past_the_arrows_passes ... ok
 test junction::view::tests::a_phase_that_matches_no_pattern_shows_custom_checked_and_not_selectable ... ok
-test junction::view::tests::a_stop_five_metres_clear_passes ... ok
-test junction::view::tests::a_stop_in_a_through_lane_too_near_the_junction_is_bad ... ok
+test junction::view::tests::a_lane_of_a_turbo_says_the_layout_sets_where_it_goes ... ok
+test junction::view::tests::a_pedestrian_arm_junction_draws ... ok
+test junction::view::tests::a_length_is_held_with_the_decimal_mark_of_the_language ... ok
+test junction::view::tests::a_one_way_street_s_words_speak_french ... ok
+test junction::view::tests::a_queue_jump_has_a_length_field_and_a_virtual_one_does_not ... ok
+test junction::view::tests::a_roundabout_adds_its_size_cycle_track_and_bus_lane ... ok
+test junction::view::tests::a_corner_between_streets_with_bike_lanes_offers_a_protected_corner_and_others_say_why_not ... ok
 test junction::view::tests::a_stop_in_a_through_lane_passes ... ok
-test junction::view::tests::a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane ... ok
-test junction::view::tests::a_stop_too_near_the_crossing_is_bad_and_one_inside_the_mouth_is_cut ... ok
-test junction::view::tests::a_stop_past_the_drawn_arm_is_left_off ... ok
-test junction::view::tests::a_stop_on_a_bus_piece_is_only_checked_for_clearance ... ok
+test junction::view::tests::a_stop_in_a_through_lane_too_near_the_junction_is_bad ... ok
+test junction::view::tests::a_stop_five_metres_clear_passes ... ok
+test junction::view::tests::a_roundabout_offers_its_turbo_layouts_and_a_chosen_one_its_size_and_main_road ... ok
 test junction::view::tests::a_pocket_that_ends_before_the_stop_line_fails_the_approach_check ... ok
-test junction::view::tests::a_stop_three_metres_from_the_crossing_fails_stop_clear_and_names_the_arm ... ok
+test junction::view::tests::a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane ... ok
+test junction::view::tests::a_selected_street_offers_a_control_for_each_junction_measure_of_the_atlas ... ok
+test junction::view::tests::a_stop_past_the_drawn_arm_is_left_off ... ok
+test junction::view::tests::a_stop_too_near_the_crossing_is_bad_and_one_inside_the_mouth_is_cut ... ok
+test junction::view::tests::a_stop_on_a_bus_piece_is_only_checked_for_clearance ... ok
 test junction::view::tests::a_stop_inside_the_mouth_fails_and_says_it_reaches_into_the_junction ... ok
-test junction::view::tests::a_plan_cut_to_the_phases_an_edit_can_make_says_so_on_the_plan_in_both_languages ... ok
-test junction::view::tests::a_stop_measure_and_a_street_stop_on_one_side_are_said_in_transit ... ok
+test junction::view::tests::a_stop_three_metres_from_the_crossing_fails_stop_clear_and_names_the_arm ... ok
+test junction::view::tests::a_roundabout_says_it_has_no_bike_box ... ok
+test junction::view::tests::a_size_stepper_at_its_end_is_aria_disabled_so_that_focus_stays_on_it ... ok
+test junction::view::tests::a_street_s_panel_has_its_lanes_crossing_transit_direction_and_street ... ok
+test junction::view::tests::a_street_with_a_crossing_offers_a_continuous_sidewalk_and_one_without_does_not ... ok
+test junction::view::tests::a_street_folds_its_transit_priority_and_position_and_says_on_each_what_is_set ... ok
+test junction::view::tests::a_street_without_a_crossing_says_none_and_a_too_long_one_is_flagged ... ok
+test junction::view::tests::a_street_without_a_crossing_offers_to_mark_one ... ok
+test junction::view::tests::a_tree_beside_the_crossing_is_not_held_to_the_clearance ... ok
+test junction::view::tests::a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_streets_to_go_to ... ok
+test junction::view::tests::a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic ... ok
 test junction::view::tests::a_turbo_and_a_pedestrian_arm_draw_no_stops ... ok
-test junction::view::tests::a_suspended_signal_says_which_crossings_stay_on_call_in_both_languages ... ok
-test junction::view::tests::a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_reads_in_french ... ok
-test junction::view::tests::an_arm_draws_the_stops_its_street_has ... ok
+test junction::view::tests::a_taper_without_room_fails_the_approach_check ... ok
+test junction::view::tests::a_turn_only_lane_on_an_arm_with_no_through_movement_does_not_fail ... ok
+test junction::view::tests::a_turbo_or_pedestrian_arm_cannot_fail ... ok
+test junction::view::tests::a_turbo_offers_no_queue_jump_in_the_approach_list_and_a_plain_roundabout_does ... ok
+test junction::view::tests::a_switch_of_language_draws_the_picture_its_label_and_the_status_again ... ok
+test junction::view::tests::a_turn_a_measure_blocks_is_locked_with_its_reason ... ok
+test junction::view::tests::an_arm_draws_the_curbside_uses_its_street_has ... ok
+test junction::view::tests::a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing ... ok
 test junction::view::tests::an_arm_with_a_beyond_draws_its_end_zone_to_the_boundary_and_what_follows ... ok
+test junction::view::tests::an_arm_without_a_beyond_draws_as_before ... ok
+test junction::view::tests::an_arm_without_uses_sends_none ... ok
+test junction::view::tests::an_arm_draws_the_stops_its_street_has ... ok
+test junction::view::tests::a_junction_that_opened_without_its_calls_says_so_until_it_is_edited_in_both_languages ... ok
+test junction::view::tests::a_typed_length_outside_what_fits_is_refused_by_the_model ... ok
 test junction::view::tests::an_arm_without_stops_draws_as_before ... ok
+test junction::view::tests::choosing_a_goal_marks_the_checks_that_bear_on_it_and_leaves_the_junction_as_it_was ... ok
+test junction::view::tests::a_stop_measure_and_a_street_stop_on_one_side_are_said_in_transit ... ok
+test junction::view::tests::a_suspended_signal_says_which_crossings_stay_on_call_in_both_languages ... ok
+test junction::view::tests::conflicts_are_counted_and_the_note_follows_the_control ... ok
+test junction::view::tests::each_crossing_is_a_list_item_holding_a_group_named_for_it ... ok
 test junction::view::tests::each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit ... ok
-test junction::view::tests::a_turn_of_a_street_that_changes_what_a_phase_is_says_so ... ok
+test junction::view::tests::each_thing_the_old_grips_edited_has_a_field_with_steppers_in_the_inspector ... ok
+test junction::view::tests::every_number_field_is_text_that_asks_for_a_decimal_keyboard ... ok
+test junction::view::tests::a_street_with_a_bike_lane_offers_a_bike_box_and_one_without_says_why_it_cannot ... ok
+test junction::view::tests::intersection_html_has_a_language_row_and_sets_the_language_in_the_head ... ok
+test junction::view::tests::every_data_i18n_key_in_intersection_html_exists_in_both_languages ... ok
+test junction::view::tests::intersection_html_leaves_no_text_without_its_message ... ok
 test junction::view::tests::each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_street_and_phase ... ok
-test junction::view::tests::choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_same_one_is_silent ... ok
+test junction::view::tests::a_curbside_rain_garden_on_an_arm_brings_its_pattern_and_no_other_drawing_does ... ok
+test junction::view::tests::getting_across_follows_the_units ... ok
+test junction::view::tests::getting_across_lists_each_street_with_its_crossing_and_lanes ... ok
+test junction::view::tests::no_beyond_no_failure_and_one_passing_check ... ok
+test junction::view::tests::a_change_of_region_that_changes_what_a_phase_is_says_so ... ok
+test junction::view::tests::parking_five_metres_clear_passes_and_a_millimetre_short_fails ... ok
+test junction::view::tests::parking_three_metres_past_the_crossing_fails_curb_near_and_names_the_arm ... ok
+test junction::view::tests::parking_that_reaches_the_crossing_says_so ... ok
+test junction::view::tests::only_the_layouts_that_suit_the_streets_are_offered ... ok
+test junction::view::tests::removing_the_last_removable_street_is_refused_with_its_reason ... ok
+test junction::view::tests::removing_takes_away_what_is_selected_in_the_way_that_suits_it ... ok
+test junction::view::tests::in_a_project_the_junction_s_links_open_the_map_and_streets_of_that_project ... ok
+test junction::view::tests::stepping_with_nothing_selected_changes_nothing ... ok
+test junction::view::tests::stepping_the_selected_street_turns_it_by_a_step_and_says_so ... ok
+test junction::view::tests::switching_a_bike_movement_or_a_crossing_that_cannot_be_is_refused_aloud_and_changes_nothing ... ok
+test junction::view::tests::the_arrow_keys_step_a_number_field ... ok
+test junction::view::tests::a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_reads_in_french ... ok
+test junction::view::tests::stepping_suits_what_is_selected ... ok
+test junction::view::tests::a_plan_cut_to_the_phases_an_edit_can_make_says_so_on_the_plan_in_both_languages ... ok
+test junction::view::tests::the_bus_lane_and_cycle_track_are_removed_by_the_same_key ... ok
+test junction::view::tests::the_bus_lane_and_cycle_track_have_their_own_panels ... ok
+test junction::view::tests::the_arm_panel_has_three_steppers_and_a_fourth_for_a_street_with_a_transit_lane ... ok
+test junction::view::tests::the_bikes_checklist_is_there_where_a_street_has_a_bike_lane_and_the_drawing_follows_a_switch ... ok
 test junction::view::tests::the_arm_panel_says_what_else_runs_in_the_phase ... ok
-test junction::view::tests::phases_that_stop_following_their_pattern_are_said_once_in_both_languages ... ok
-test junction::view::tests::switching_a_crossing_in_a_phase_is_announced_in_both_languages_and_says_when_the_phase_is_now_custom ... ok
-test junction::view::tests::the_card_of_a_phase_follows_the_pattern_chosen ... ok
+test junction::view::tests::a_turn_of_a_street_that_changes_what_a_phase_is_says_so ... ok
 test junction::view::tests::the_checks_and_the_history_of_a_junction_speak_french_with_no_english_left ... ok
-test junction::view::tests::the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list ... ok
+test junction::view::tests::the_checks_tab_puts_the_checks_first_and_the_goal_and_its_measures_in_a_column_beside_them ... ok
+test junction::view::tests::the_changes_are_a_card_each_newest_first_over_the_junction_today ... ok
+test junction::view::tests::the_card_of_a_phase_follows_the_pattern_chosen ... ok
+test junction::view::tests::the_checks_each_say_whether_they_pass ... ok
+test junction::view::tests::the_control_note_counts_the_streets_that_carry_traffic ... ok
+test junction::view::tests::the_checks_list_fails_while_movements_meet_and_passes_again ... ok
+test junction::view::tests::the_current_step_of_the_junction_s_path_is_drawn_as_the_street_s_is ... ok
+test junction::view::tests::the_checks_list_what_fails_first_and_fold_what_passes_until_asked ... ok
+test junction::view::tests::an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages ... ok
+test junction::view::tests::switching_a_crossing_in_a_phase_is_announced_in_both_languages_and_says_when_the_phase_is_now_custom ... ok
+test junction::view::tests::the_english_text_in_intersection_html_is_the_english_message ... ok
+test junction::view::tests::the_drawing_follows_the_units_and_the_selection ... ok
 test junction::view::tests::the_drawing_speaks_french ... ok
-test junction::view::tests::the_junction_page_asks_for_no_message_that_is_missing_in_french ... ok
+test junction::view::tests::the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list ... ok
+test junction::view::tests::the_heading_names_the_junction_and_counts_its_streets ... ok
 test junction::view::tests::the_drawings_speak_french_with_no_english_left ... ok
-test junction::view::tests::the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle ... ok
-test junction::view::tests::the_layout_radios_are_one_tab_stop_on_the_chosen_one ... ok
+test junction::view::tests::the_drawing_of_the_selected_street_is_pressed_and_the_row_follows_an_edit ... ok
+test junction::view::tests::the_junction_ftl_files_have_the_same_messages_and_variables ... ok
+test junction::view::tests::the_junction_level_opens_on_a_summary_and_lists_its_streets_to_go_to ... ok
+test junction::view::tests::the_junction_page_and_the_page_of_one_that_cannot_be_drawn_start_in_the_stored_language ... ok
+test junction::view::tests::no_uses_one_passing_check ... ok
+test junction::view::tests::the_junction_page_asks_for_no_message_that_is_missing_in_french ... ok
+test junction::view::tests::the_drawing_is_a_labelled_group_holding_the_2_5d_picture_of_the_junction ... ok
+test junction::view::tests::the_junction_figure_keeps_street_names_only_each_on_a_white_label ... ok
+test junction::view::tests::the_junction_alt_text_names_what_is_drawn ... ok
 test junction::view::tests::the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run ... ok
-test junction::view::tests::the_names_of_the_boxes_and_the_scramble_note_are_in_french_too ... ok
+test junction::view::tests::the_junction_s_control_is_the_junction_level_s_and_a_street_leads_to_its_crossing ... ok
+test junction::view::tests::the_key_lists_the_pieces_in_the_plan ... ok
 test junction::view::tests::an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages ... ok
+test junction::view::tests::the_page_has_no_provenance_tab ... ok
+test junction::view::tests::the_page_has_no_toggle_between_views_and_no_key_for_one ... ok
 test junction::view::tests::the_notes_speak_french ... ok
 test junction::view::tests::the_page_around_the_plan_speaks_french ... ok
+test junction::view::tests::the_layout_radios_are_one_tab_stop_on_the_chosen_one ... ok
+test junction::view::tests::phases_that_stop_following_their_pattern_are_said_once_in_both_languages ... ok
+test junction::view::tests::the_names_of_the_boxes_and_the_scramble_note_are_in_french_too ... ok
+test junction::view::tests::the_panel_is_under_a_path_from_the_junction_to_what_is_chosen ... ok
 test junction::view::tests::the_panel_of_a_city_street_speaks_french ... ok
-test junction::view::tests::the_panel_of_a_lane_speaks_french ... ok
+test junction::view::tests::the_label_of_the_drawing_describes_the_junction_as_the_plan_s_did ... ok
 test junction::view::tests::the_panel_of_a_corner_speaks_french ... ok
 test junction::view::tests::the_panel_of_a_crossing_speaks_french ... ok
-test junction::view::tests::the_panel_of_a_street_that_cannot_be_removed_says_why_in_french ... ok
+test junction::view::tests::the_panel_of_a_lane_speaks_french ... ok
+test junction::view::tests::the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle ... ok
 test junction::view::tests::the_panel_of_a_roundabout_speaks_french ... ok
+test junction::view::tests::the_panel_of_a_street_that_cannot_be_removed_says_why_in_french ... ok
+test junction::view::tests::the_keys_step_what_the_old_grips_dragged_and_the_inspector_follows ... ok
+test junction::view::tests::the_panel_s_lengths_follow_the_units ... ok
 test junction::view::tests::the_panel_of_a_narrow_road_speaks_french ... ok
+test junction::view::tests::the_panel_of_a_walkway_arm_says_there_is_no_roadway_to_cross_and_offers_no_crossing ... ok
+test junction::view::tests::the_panel_s_steppers_follow_the_units ... ok
+test junction::view::tests::the_panel_of_a_walkway_arm_has_no_transit_signal_or_lane_sections_and_says_it_has_no_lanes ... ok
 test junction::view::tests::the_panel_of_a_turbo_roundabout_speaks_french ... ok
 test junction::view::tests::the_panel_with_nothing_selected_speaks_french ... ok
-test junction::view::tests::the_panel_s_plurals_are_singular_at_zero_and_one_in_french ... ok
-test junction::view::tests::the_panel_of_a_street_speaks_french ... ok
-test junction::view::tests::the_pedestrian_calls_speak_french ... ok
-test junction::view::tests::the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_placeholders ... ok
 test junction::view::tests::the_raised_table_switch_is_worded_in_french_too ... ok
-test junction::view::tests::no_stops_two_passing_checks ... ok
+test junction::view::tests::the_pedestrian_arm_messages_exist_in_both_languages ... ok
+test junction::view::tests::the_panel_s_plurals_are_singular_at_zero_and_one_in_french ... ok
+test junction::view::tests::the_junction_figure_has_polygons_inside_its_box ... ok
+test junction::view::tests::the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_placeholders ... ok
+test junction::view::tests::the_street_page_is_told_no_reach_for_an_arm_the_junction_does_not_judge ... ok
+test junction::view::tests::the_pedestrian_calls_speak_french ... ok
+test junction::view::tests::the_selected_arm_names_its_curbside_uses ... ok
+test junction::view::tests::the_status_line_says_whether_the_junction_works ... ok
+test junction::view::tests::the_title_block_gives_the_name_the_streets_and_the_changes_made ... ok
+test junction::view::tests::the_title_block_ends_with_whether_the_junction_was_changed_and_the_osm_nodes_it_came_from ... ok
 test junction::view::tests::the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggested ... ok
-test junction::view::tests::the_turn_table_speaks_french ... ok
-test junction::view::tests::the_stop_findings_are_said_in_french_with_the_oqlf_spacing ... ok
-test junction::view::tests::the_transit_measures_of_a_junction_cite_the_atlas_toolbox_for_their_names_and_say_the_rest_is_a_placeholder ... ok
+test junction::view::tests::the_title_block_s_source_follows_the_language_switch ... ok
 test junction::view::tests::the_timing_panels_are_not_there_off_a_signal_and_speak_french ... ok
+test junction::view::tests::the_selection_moves_round_the_junction_and_says_where_it_is ... ok
+test junction::view::tests::the_turbo_size_stepper_is_a_group_that_holds_its_buttons_and_the_heading_labels_it ... ok
+test junction::view::tests::the_transit_measures_of_a_junction_cite_the_atlas_toolbox_for_their_names_and_say_the_rest_is_a_placeholder ... ok
+test junction::view::tests::the_turn_table_has_a_button_for_every_turn_and_none_for_a_street_to_itself ... ok
+test junction::view::tests::the_turn_table_speaks_french ... ok
+test junction::view::tests::the_junction_figure_is_fitted_to_what_is_drawn_and_its_words_are_whole_and_apart ... ok
 test junction::view::tests::with_no_crossing_the_stop_is_measured_from_the_mouth ... ok
-test junction::view::tests::the_totals_count_every_call_and_mark_the_ones_not_served ... ok
+test junction::view::tests::the_panel_of_a_street_speaks_french ... ok
+test junction::view::tests::undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does ... ok
+test junction::view::tests::what_is_not_a_number_is_not_committed ... ok
+test junction::view::tests::with_nothing_selected_the_panel_offers_the_junction_s_control ... ok
+test junction::view::tests::the_stop_findings_are_said_in_french_with_the_oqlf_spacing ... ok
+test junction::view::tests::undo_redo_and_start_over_are_off_until_there_is_something_to_undo ... ok
+test junction::view::tests::no_stops_two_passing_checks ... ok
+test junction::view::tests::the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar ... ok
+test junction::view::tests::with_traffic_on_the_left_the_curb_side_turn_is_left ... ok
+test junction::view::tests::with_one_street_carrying_traffic_the_control_choice_is_replaced_by_a_note ... ok
 test junction::view::tests::with_two_phases_for_one_street_only_the_first_is_current ... ok
-test result: ok. 204 passed; 0 failed; 0 ignored; 0 measured; 3223 filtered out; finished in 0.37s
+test junction::view::tests::choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_same_one_is_silent ... ok
+test junction::view::tests::the_old_choice_of_the_plan_is_ignored_and_the_junction_is_always_drawn_in_2_5d ... ok
+test junction::view::tests::the_totals_count_every_call_and_mark_the_ones_not_served ... ok
+test result: ok. 204 passed; 0 failed; 0 ignored; 0 measured; 3263 filtered out; finished in 0.98s
+
+=== Source of the tests that pin the summary and the loading of existing documents (head 582550e7) ===
+--- junction/model/calls.rs
+    #[test]
+    fn fixed_inputs_give_a_fixed_summary() {
+        let mut s = cross();
+        let (e, w) = (at(&s, 90), at(&s, 270));
+        arm_mut(&mut s, e).calls = Some(3);
+        arm_mut(&mut s, w).calls = Some(2);
+        let sum = summary_of(&s, &[(e, 9_000), (w, 21_000)]);
+        assert_eq!(sum, summary_of(&s, &[(e, 9_000), (w, 21_000)]), "deterministic");
+        // Phases north, east, south, west, 30 s each; east's crossing (9 m: 7 + 9 = 16 s) is walked in north's and
+        // south's, west's (21 m: 7 + 21 = 28 s, 3 s more than the 25 s green) in the same two.
+        let pinned = Summary {
+            calls: vec![
+                call(e, 455, Outcome::Served, 25, 0),
+                call(w, 479, Outcome::Served, 1, 3),
+                call(e, 1612, Outcome::Served, 11, 0),
+                call(w, 1881, Outcome::Delayed, 42, 3),
+                call(e, 3067, Outcome::Delayed, 59, 0),
+            ],
+            totals: vec![
+                Totals { arm: e, rate: 3, clearance_s: 9, need_s: 16, calls: 3, served: 2, delayed: 1, not_served: 0, extended: 0, longest_wait_s: Some(59) },
+                Totals { arm: w, rate: 2, clearance_s: 21, need_s: 28, calls: 2, served: 1, delayed: 1, not_served: 0, extended: 2, longest_wait_s: Some(42) },
+            ],
+            findings: vec![],
+        };
+        assert_eq!(sum, pinned, "{sum:#?}");
+    }
+    #[test]
+    fn a_junction_saved_before_calls_loads_unchanged_and_one_with_none_on_call_is_written_as_before() {
+        let s = Junction::new(0).current().clone();
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(!text.contains("calls"), "nothing new is written while no crossing is on call");
+        let back: State = serde_json::from_str(&text).unwrap();
+        assert!(back.arms.iter().all(|a| a.calls.is_none()));
+        assert_eq!(serde_json::to_string(&back).unwrap(), text);
+        let mut on = s.clone();
+        on.arms[0].calls = Some(20);
+        let text = serde_json::to_string(&on).unwrap();
+        assert!(text.contains(r#""calls":20"#), "{text}");
+        let back: State = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.arms[0].calls, Some(20));
+    }
+}
+--- city/edits.rs
+    #[test]
+    fn a_crossing_on_call_makes_its_document_version_18_and_one_with_none_is_written_as_before() {
+        assert_eq!(CALLS_VERSION, 18);
+        let (key, record) = signal_record(None);
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record);
+        assert!(!e.to_json().contains("calls"));
+        assert_eq!(e.written_version(), VERSION);
+        let (_, on_call) = signal_record(Some(12));
+        e.junctions.insert(key.clone(), on_call);
+        assert_eq!(e.written_version(), CALLS_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.version, CALLS_VERSION);
+        assert_eq!(back.junctions[&key].state.arms[0].calls, Some(12));
+        // The draft decides on the raw JSON, a junction's scenario included.
+        let Ok(mut draft) = draft(Some(&e.to_json())) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+        // The import stamp's floor still holds once the calls go: never below it again.
+        draft.remove_junction(&key);
+        assert!(draft.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")), "{}", draft.to_json());
+        let in_a_scenario = r#"{"version":5,"streets":{},"junctions":{"n1":{"scenarios":[{"id":1,"name":"A","design":{"arms":[{"calls":3}]}}]}}}"#;
+        let Ok(draft) = super::draft(Some(in_a_scenario)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+    }
+
+    #[test]
+    fn a_build_before_calls_leaves_a_document_with_them_alone() {
+        assert_eq!(NEWEST, CALLS_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, CALLS_VERSION + 1);
+        assert!(matches!(parse(Some(&newer)), Document::Future));
+    }
+
+    fn pedestrian_record() -> StreetRecord {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let walk = Piece { kind: kind_index("sidewalk").unwrap(), width_mm: 3000, direction: None, variants: Vec::new() };
+        StreetRecord {
+            ways: [8].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            scenarios: Default::default(),
+            import: None,
+            street: Street::imported(StreetClass::Local, Side::Right, &[walk]).named("Rue Piétonne"),
+        }
+    }
+
+    #[test]

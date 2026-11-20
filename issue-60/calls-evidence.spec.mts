@@ -21,6 +21,14 @@ async function signalPlan(page: Page, n: number) {
   await expect(page.locator("#signal-plan-state")).toBeVisible();
 }
 
+
+async function french(page: Page) {
+  await page.locator("#account-btn").click();
+  await page.getByRole("button", { name: "Français" }).click();
+  await expect(page.locator("#signal-calls")).toContainText("Appels piétons");
+  await page.keyboard.press("Escape");
+}
+
 test.use({ viewport: { width: 1440, height: 6000 } });
 
 test("pedestrian calls, step by step (junction 0, English then French)", async ({ page }) => {
@@ -77,6 +85,11 @@ test("pedestrian calls, step by step (junction 0, English then French)", async (
   await expect(section).toContainText("Appels piétons");
   await page.keyboard.press("Escape");
   await shot(page, "07-french.png", "Switched to fr-CA: the same section in French, with OQLF spacing");
+  const rateFr = page.locator(`#call-rate-${second}`);
+  await rateFr.fill("61");
+  await rateFr.press("Enter");
+  await expect(rateFr).toHaveValue("30");
+  await shot(page, "07b-french-rate-refused.png", "In fr-CA, 61 calls an hour typed: refused in French, the rate stays 30");
 });
 
 test("a crossing already on call keeps its call when an edit takes its walk away, as a finding (junction 0)", async ({ page }) => {
@@ -95,6 +108,9 @@ test("a crossing already on call keeps its call when an edit takes its walk away
   appendFileSync(LOG, `09b findings text: ${(await page.locator("#calls-findings").innerText()).replace(/\s+/g, " ")}\n09b crossing status: ${(await page.locator(`#call-status-${uid}`).innerText()).trim()}\n`);
   await shot(page, "09b-walk-taken-away.png", "Then its walk unticked in every phase: it stays on call (box still ticked), and the findings say no phase walks it; the edit's announcement says so too");
   await page.locator("#calls-findings").screenshot({ path: `${OUT}/09c-finding-closeup.png` });
+  await french(page);
+  appendFileSync(LOG, `09d findings text (fr-CA): ${(await page.locator("#calls-findings").innerText()).replace(/\s+/g, " ")}\n09d crossing status (fr-CA): ${(await page.locator(`#call-status-${uid}`).innerText()).trim()}\n`);
+  await shot(page, "09d-walk-taken-away-french.png", "The same plan in fr-CA: the finding that no phase walks the crossing on call, and its status, in French");
 });
 
 test("a crossing too long for any phase's green is a finding (junction 3)", async ({ page }) => {
@@ -123,6 +139,15 @@ test("a crossing too long for any phase's green is a finding (junction 3)", asyn
   await page.locator("#calls-totals").locator("xpath=ancestor::*[@role='region'][1]").screenshot({ path: `${OUT}/08a-totals-closeup.png` });
   await page.locator("#calls-findings").screenshot({ path: `${OUT}/08b-finding-closeup.png` });
   await shot(page, "08-finding.png", "Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)");
+  const notServed = page.locator("#calls-rows tbody tr").filter({ hasText: /not served/i });
+  appendFileSync(LOG, `08 a not-served row: ${(await notServed.first().innerText()).replace(/\s+/g, " ")}\n`);
+  await french(page);
+  await expect(page.locator("#calls-findings")).toContainText("en sécurité");
+  const frRows = page.locator("#calls-rows tbody tr");
+  if (!(await frRows.first().isVisible())) await page.locator("#calls-rows summary").click();
+  appendFileSync(LOG, `08c findings text (fr-CA): ${(await page.locator("#calls-findings").innerText()).replace(/\s+/g, " ")}\n08c totals table text (fr-CA): ${(await page.locator("#calls-totals").innerText()).replace(/\s+/g, " ")}\n08c first extended row (fr-CA): ${(await frRows.nth(await (async () => { const all = await frRows.allInnerTexts(); return Math.max(0, all.findIndex((s) => /prolong/i.test(s))); })()).innerText()).replace(/\s+/g, " ")}\n08c a not-served row (fr-CA): ${((await frRows.allInnerTexts()).find((s) => /non servi/i.test(s)) ?? "(none found)").replace(/\s+/g, " ")}\n`);
+  await page.locator("#calls-findings").screenshot({ path: `${OUT}/08d-finding-french-closeup.png` });
+  await shot(page, "08c-finding-french.png", "Junction 3 in fr-CA: the finding that a crossing cannot be served safely, the totals (green extended, not served) and the rows, in French");
 });
 
 test("a design opened read-only shows the calls but locks them (junction 0)", async ({ page }) => {

@@ -1,14 +1,9 @@
-On head 1833e2f0afaa461ff836ac7edd65088d8e902097, E2E_PORT=8461: junction.spec.ts + junction-a11y.spec.ts + read-only.spec.ts — 93 passed (1.3m), 1 failed. The #60 cases:
-✓  10 [ui] › tests/junction-a11y.spec.ts:224:3 › pedestrian calls in the signal plan (#60) › each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways (3.3s)
-✓  11 [ui] › tests/junction-a11y.spec.ts:294:5 › pedestrian calls in the signal plan (#60) › at 1440 px every column of the calls' tables can be read in the panel, in English and French (4.3s)
-✓  12 [ui] › tests/junction-a11y.spec.ts:294:5 › pedestrian calls in the signal plan (#60) › at 280 px every column of the calls' tables can be read in the panel, in English and French (3.1s)
-✓  68 [ui] › tests/junction.spec.ts:880:3 › signal timing on a junction of the city › a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French (2.8s)
-✓  70 [ui] › tests/junction.spec.ts:1015:3 › signal timing on a junction of the city › a crossing too long for any phase's green, even extended by 15 s, is a finding (4.4s)
-✓  92 [ui] › tests/read-only.spec.ts:116:3 › a design opened read-only › a junction's signal plan and its pedestrian calls can be read, and the calls not changed (4.7s)
+On head 582550e787daa2c0e962d3a31f8680a34b4cec49 (rebased onto main 7ada7212), E2E_PORT=8461: junction.spec.ts + junction-a11y.spec.ts + read-only.spec.ts — 94 passed, 0 failed. The #60 cases:
+  ✓  10 [ui] › tests/junction-a11y.spec.ts:224:3 › pedestrian calls in the signal plan (#60) › each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways (4.4s)
+  ✓  11 [ui] › tests/junction-a11y.spec.ts:294:5 › pedestrian calls in the signal plan (#60) › at 1440 px every column of the calls' tables can be read in the panel, in English and French (4.9s)
+  ✓  12 [ui] › tests/junction-a11y.spec.ts:294:5 › pedestrian calls in the signal plan (#60) › at 280 px every column of the calls' tables can be read in the panel, in English and French (5.2s)
+  ✓  68 [ui] › tests/junction.spec.ts:880:3 › signal timing on a junction of the city › a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French (7.0s)
+  ✓  70 [ui] › tests/junction.spec.ts:1015:3 › signal timing on a junction of the city › a crossing too long for any phase's green, even extended by 15 s, is a finding (11.9s)
+  ✓  92 [ui] › tests/read-only.spec.ts:116:3 › a design opened read-only › a junction's signal plan and its pedestrian calls can be read, and the calls not changed (10.9s)
 
-The one failure, not a #60 test (read-only map search from #230; its search result never became visible within 30 s under parallel load):
-✘  93 [ui] › tests/read-only.spec.ts:145:3 › a design opened read-only › the map can be searched and its places opened, read-only, and offers no area to declare (30.3s)
-Rerun alone:
-run 1:   1 passed (6.4s) 
-run 2:   1 passed (6.7s) 
-run 3:   1 passed (7.7s) 
+  94 passed (1.6m)
