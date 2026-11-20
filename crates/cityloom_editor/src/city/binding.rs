@@ -222,8 +222,18 @@ pub mod scenario_actions {
         true
     }
 
+    /// Says so, and is true, where the page shows its project read-only: an action on its scenarios is an edit,
+    /// refused as every edit is there (switching to look at another design is not one).
+    fn refused_read_only(page: &impl ScenarioPage) -> bool {
+        let read_only = page.read_only();
+        if read_only {
+            page.tell(&Said::new("read-only-refused"));
+        }
+        read_only
+    }
+
     pub fn create(page: &impl ScenarioPage, name: &str) -> bool {
-        if !kept_first(page) {
+        if refused_read_only(page) || !kept_first(page) {
             return false;
         }
         let Some(Some(made)) = act(page, Action::Create(name.to_string()), name) else { return false };
@@ -232,7 +242,7 @@ pub mod scenario_actions {
 
     /// Duplicates the scenario shown; nothing on the baseline (a new scenario is made from it).
     pub fn duplicate(page: &impl ScenarioPage, name: &str) -> bool {
-        if !kept_first(page) {
+        if refused_read_only(page) || !kept_first(page) {
             return false;
         }
         let state = page.scenario_state();
@@ -244,7 +254,7 @@ pub mod scenario_actions {
 
     /// Renames the scenario shown; the baseline has no name of its own.
     pub fn rename(page: &impl ScenarioPage, name: &str) -> bool {
-        if !kept_first(page) {
+        if refused_read_only(page) || !kept_first(page) {
             return false;
         }
         let state = page.scenario_state();
@@ -261,7 +271,7 @@ pub mod scenario_actions {
     /// Deletes the scenario shown, the second time it is asked with nothing done in between, and shows the
     /// baseline; the baseline cannot be deleted.
     pub fn delete(page: &impl ScenarioPage) -> bool {
-        if !kept_first(page) {
+        if refused_read_only(page) || !kept_first(page) {
             return false;
         }
         let state = page.scenario_state();

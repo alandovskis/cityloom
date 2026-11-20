@@ -3306,3 +3306,25 @@ fn a_street_outside_the_city_draws_no_scenarios() {
     let (s, _) = street_watch();
     assert!(!scenarios_drawn(&s).contains("scenario"));
 }
+
+#[test]
+fn shown_read_only_the_scenarios_menu_is_offered_and_the_name_and_actions_are_locked() {
+    use crate::shared::ports::Storage;
+    let owner = Owner::new();
+    owner.set();
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let store = crate::city::store::CityStore::sample(storage.clone());
+    let edge = store.open().view(0).edges[0].uid;
+    let street = store.open().street_editor(edge, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(edge) };
+    let s = StreetVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(Locale::En), street, Some(binding));
+    let h = scenarios_drawn(&s);
+    let picker = h.find(r#"<select id="scenario-pick""#).expect("the menu of designs is offered");
+    let locked = h.find(r#"<fieldset disabled class="read-only-controls""#).expect("the editing controls are locked");
+    assert!(picker < locked, "the menu stays outside: {h}");
+    for id in ["scenario-name", "scenario-new", "scenario-duplicate", "scenario-rename", "scenario-delete"] {
+        assert!(h.find(&format!(r#"id="{id}""#)).unwrap() > locked, "{id} is inside the locked fieldset: {h}");
+    }
+    assert!(!scenarios_drawn(&city_street()).contains("read-only-controls"), "a page that can edit locks nothing");
+}

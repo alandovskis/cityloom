@@ -113,6 +113,11 @@ pub trait ScenarioHost {
     fn scenario_state(&self) -> &ScenarioState;
     /// Whether the place can keep scenarios (it is a place of the city with a key of its own).
     fn scenarios_offered(&self) -> bool;
+    /// Whether the page shows its project read-only (#222): the designs can be looked at, and every action on them
+    /// is refused as any edit is.
+    fn read_only(&self) -> bool {
+        false
+    }
     /// Shows scenario `id`, or the baseline, what is shown now being kept first. Whether it is shown.
     fn switch_scenario(&self, id: Option<u32>) -> bool;
     /// A new scenario named `name`, made from the baseline and shown. Whether it was made.

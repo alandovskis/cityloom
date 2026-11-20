@@ -1657,6 +1657,10 @@ impl ScenarioHost for StreetVm {
         self.offers_scenarios
     }
 
+    fn read_only(&self) -> bool {
+        StreetVm::read_only(self)
+    }
+
     fn switch_scenario(&self, id: Option<u32>) -> bool {
         scenario_actions::switch(self, id)
     }
@@ -2098,6 +2102,40 @@ mod tests {
         assert_eq!(r.vm.scenario_state().active_now(), None);
         assert_eq!(r.vm.view_now().selected, Some(uid), "the piece is still chosen in the baseline, which has it");
         assert_eq!(r.vm.level(), Level::Piece, "and the details panel still shows it");
+    }
+
+    #[test]
+    fn shown_read_only_the_scenarios_can_be_looked_at_and_no_action_on_them_is_taken() {
+        use crate::shared::ports::{Storage, test_ports};
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::shared::scoped::ScopedStorage;
+        let (ports, said, root) = test_ports();
+        // a scenario made on a page that could edit, then the project opened read-only
+        let writable: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1"));
+        let edge = CityStore::sample(writable.clone()).open().view(0).edges[0].uid;
+        let id = CityStore::sample(writable).change_street_scenarios(edge, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        let storage: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1").only_to_read());
+        let store = CityStore::sample(storage.clone());
+        let street = store.open().street_editor(edge, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        let vm = StreetVm::new(Ports { storage, ..ports }, crate::i18n_for(Locale::En), street, Some(binding.clone()));
+        assert!(vm.scenarios_offered());
+        assert!(vm.switch_scenario(Some(id)), "looking at a scenario is choosing, which goes on");
+        said.take();
+        let refused = "This design is open read-only: nothing can be changed.";
+        let actions: [(&str, &dyn Fn() -> bool); 5] = [
+            ("create", &|| vm.create_scenario("Parking kept")),
+            ("duplicate", &|| vm.duplicate_scenario("Copy")),
+            ("rename", &|| vm.rename_scenario("Renamed")),
+            ("delete", &|| vm.delete_scenario()),
+            ("delete again", &|| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            assert!(!action(), "{what}");
+            assert_eq!(said.take(), [refused], "{what}: refused as every edit is, not as a storage failure");
+        }
+        assert_eq!(vm.scenario_state().refusal(), None);
+        assert_eq!(binding.scenarios(), [(id, "Wider bike lane".to_string())], "nothing changed");
     }
 
     /// Another device's edit of the rig's street, applied to the city.

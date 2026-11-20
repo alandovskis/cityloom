@@ -585,6 +585,10 @@ impl ScenarioHost for JunctionVm {
         self.offers_scenarios
     }
 
+    fn read_only(&self) -> bool {
+        JunctionVm::read_only(self)
+    }
+
     fn switch_scenario(&self, id: Option<u32>) -> bool {
         scenario_actions::switch(self, id)
     }
@@ -801,6 +805,31 @@ mod tests {
         r.time.advance(1_000);
         assert_eq!(r.vm.scenario_state().active_now(), None);
         assert_eq!(r.vm.read(|j| j.selected), Target::Corner(uid), "the corner is still chosen in the baseline, which has it");
+    }
+
+    #[test]
+    fn shown_read_only_the_scenarios_can_be_looked_at_and_no_action_on_them_is_taken() {
+        use crate::shared::ports::{Ports, Storage, test_ports};
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::shared::scoped::ScopedStorage;
+        let (ports, said, root) = test_ports();
+        let writable: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1"));
+        let node = CityStore::sample(writable.clone()).open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let id = CityStore::sample(writable).change_junction_scenarios(node, |s, base| s.create("Raised", base.clone())).unwrap();
+        let storage: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1").only_to_read());
+        let store = CityStore::sample(storage.clone());
+        let junction = store.open().junction_editor(node, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Junction(node) };
+        let vm = JunctionVm::new(Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone()));
+        assert!(vm.switch_scenario(Some(id)), "looking at a scenario is choosing, which goes on");
+        said.take();
+        let actions: [(&str, &dyn Fn() -> bool); 3] =
+            [("create", &|| vm.create_scenario("Protected")), ("rename", &|| vm.rename_scenario("Renamed")), ("delete", &|| vm.delete_scenario())];
+        for (what, action) in actions {
+            assert!(!action(), "{what}");
+            assert_eq!(said.take(), ["This design is open read-only: nothing can be changed."], "{what}");
+        }
+        assert_eq!(binding.scenarios(), [(id, "Raised".to_string())]);
     }
 
     #[test]
