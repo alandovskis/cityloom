@@ -1,7 +1,7 @@
 use cityloom_server::accounts::{self, Claims, Repo};
 use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
-use cityloom_server::share::{self, ShareError, ShareRepo, Token};
+use cityloom_server::share::{self, Purged, ShareError, ShareRepo, Token};
 use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
@@ -70,12 +70,12 @@ async fn an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_
     assert_eq!(r.open(&read, at_90).await.unwrap_err(), ShareError::Expired);
     let bodies: i64 = sqlx::query_scalar("select count(*) from shares where body is not null").fetch_one(&pool).await.unwrap();
     assert_eq!(bodies, 1, "the read dropped the expired body at once");
-    assert_eq!(r.purge(at_90).await.unwrap(), 0, "the other is not expired yet");
-    assert_eq!(r.purge(at_90 + Duration::days(1)).await.unwrap(), 1);
+    assert_eq!(r.purge(at_90).await.unwrap(), Purged { bodies: 0, markers: 0 }, "the other is not expired yet");
+    assert_eq!(r.purge(at_90 + Duration::days(1)).await.unwrap(), Purged { bodies: 1, markers: 0 });
     let bodies: i64 = sqlx::query_scalar("select count(*) from shares where body is not null").fetch_one(&pool).await.unwrap();
     assert_eq!(bodies, 0);
     assert_eq!(r.open(&purged, at_90 + Duration::days(2)).await.unwrap_err(), ShareError::Expired, "the marker still says expired");
-    assert_eq!(r.purge(at_90 + Duration::days(share::MARKER_DAYS + 2)).await.unwrap(), 2, "a year past expiry the markers go");
+    assert_eq!(r.purge(at_90 + Duration::days(share::MARKER_DAYS + 2)).await.unwrap(), Purged { bodies: 0, markers: 2 }, "a year past expiry the markers go");
     assert_eq!(r.open(&purged, at_90 + Duration::days(share::MARKER_DAYS + 2)).await.unwrap_err(), ShareError::NotFound);
 }
 
@@ -145,4 +145,14 @@ async fn opening_an_expired_share_writes_only_when_a_body_is_left_to_drop(pool: 
     assert_eq!(version().await, dropped, "the next writes nothing: there is no body left");
     r.delete(ada, &token, later).await.unwrap();
     assert_eq!(r.open(&token, later).await.unwrap_err(), ShareError::Expired);
+}
+
+#[sqlx::test]
+async fn a_live_share_whose_body_is_gone_is_corrupt(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let token = Token::random();
+    r.create(ada, &token, BODY, t0()).await.unwrap();
+    sqlx::query("update shares set body = null").execute(&pool).await.unwrap();
+    assert_eq!(r.open(&token, t0()).await.unwrap_err(), ShareError::Corrupt);
 }

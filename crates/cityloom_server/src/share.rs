@@ -193,19 +193,34 @@ pub trait ShareRepo: Send + Sync {
     /// `NotFound` for no such share, `NotYours` for another account's; a share that has expired stays expired (its link
     /// says so), one deleted already stays deleted, and either is `Ok`: there is nothing left to delete.
     async fn delete(&self, user: Uuid, token: &Token, now: OffsetDateTime) -> Result<(), ShareError>;
-    /// Drops the bodies of expired shares and the markers `MARKER_DAYS` past their expiry; how many rows changed.
-    async fn purge(&self, now: OffsetDateTime) -> Result<u64, ShareError>;
+    /// Drops the bodies of expired shares and the markers `MARKER_DAYS` past their expiry, and says how many of each.
+    async fn purge(&self, now: OffsetDateTime) -> Result<Purged, ShareError>;
 }
 
-/// Purges at start-up and then once a day. A link to an expired share is refused on read anyway, so a missed day
-/// keeps a sealed body a little longer, never serves it.
-pub fn spawn_purge(repo: std::sync::Arc<dyn ShareRepo>, clock: std::sync::Arc<dyn crate::clock::Clock>) -> tokio::task::JoinHandle<()> {
+/// What a purge did: the bodies of expired shares it dropped, and the markers it removed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Purged {
+    pub bodies: u64,
+    pub markers: u64,
+}
+
+/// Purges once the database is ready (`ready`, set when the migrations have run: before, the table may not exist yet),
+/// and then once a day. A link to an expired share is refused on read anyway, so a missed day keeps a sealed body a
+/// little longer, never serves it.
+pub fn spawn_purge(
+    repo: std::sync::Arc<dyn ShareRepo>,
+    clock: std::sync::Arc<dyn crate::clock::Clock>,
+    ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        while !ready.load(std::sync::atomic::Ordering::Acquire) {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
         let mut every_day = tokio::time::interval(std::time::Duration::from_secs(24 * 3600));
         loop {
             every_day.tick().await; // the first tick is at once: that is the start-up pass
             match repo.purge(clock.now()).await {
-                Ok(n) => tracing::info!(changed = n, "expired shares purged"),
+                Ok(Purged { bodies, markers }) => tracing::info!(bodies, markers, "expired shares purged"),
                 Err(e) => tracing::warn!(%e, "expired shares could not be purged"),
             }
         }
@@ -280,6 +295,50 @@ mod tests {
         let base = pad(0).len();
         assert_eq!(check_body(pad(MAX_BODY_BYTES - base).as_bytes()), Ok(()), "exactly the limit");
         assert_eq!(check_body(pad(MAX_BODY_BYTES - base + 1).as_bytes()), Err(Invalid::TooLarge));
+    }
+
+    /// A `ShareRepo` that counts its purges.
+    #[derive(Default)]
+    struct Counting(std::sync::atomic::AtomicUsize);
+
+    #[async_trait]
+    impl ShareRepo for Counting {
+        async fn create(&self, _: Uuid, _: &Token, _: &[u8], _: OffsetDateTime) -> Result<Created, ShareError> {
+            Err(ShareError::Unavailable)
+        }
+        async fn open(&self, _: &Token, _: OffsetDateTime) -> Result<Vec<u8>, ShareError> {
+            Err(ShareError::Unavailable)
+        }
+        async fn delete(&self, _: Uuid, _: &Token, _: OffsetDateTime) -> Result<(), ShareError> {
+            Err(ShareError::Unavailable)
+        }
+        async fn purge(&self, _: OffsetDateTime) -> Result<Purged, ShareError> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(Purged { bodies: 1, markers: 2 })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_first_purge_waits_for_the_database_to_be_ready_then_one_runs_each_day() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let repo = Arc::new(Counting::default());
+        let ready = Arc::new(AtomicBool::new(false));
+        let clock = Arc::new(crate::clock::FixedClock::new(at(0)));
+        let handle = spawn_purge(repo.clone(), clock, ready.clone());
+        tokio::time::advance(std::time::Duration::from_secs(30)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(repo.0.load(Ordering::SeqCst), 0, "not before the migrations have run");
+        ready.store(true, Ordering::Release);
+        tokio::time::advance(std::time::Duration::from_secs(2)).await;
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+        assert_eq!(repo.0.load(Ordering::SeqCst), 1, "once ready, at once");
+        tokio::time::advance(std::time::Duration::from_secs(24 * 3600 + 1)).await;
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+        assert_eq!(repo.0.load(Ordering::SeqCst), 2, "then a day later");
+        handle.abort();
     }
 
     #[test]
