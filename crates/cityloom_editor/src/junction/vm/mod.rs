@@ -52,6 +52,8 @@ struct Before {
     findings: Vec<(u8, u32)>,
     /// The crossings kept on call while the signal was suspended.
     kept: usize,
+    /// The crossings taken off call as the junction opened (until its first edit): a sync says only more of them.
+    dropped: usize,
 }
 
 /// Whether an edit says which phases it took off their ready-made pattern.
@@ -422,8 +424,10 @@ impl JunctionVm {
         // The sync's sentence, then what it did to the calls, as an edit's announcement says it: crossings it took off
         // call (the junction is not a signal), a finding that arose, crossings kept on call as the signal is suspended.
         let synced = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
+        // Until its first edit the record still holds the calls, so each sync opens the junction without them again:
+        // said only when this one took more off than were off before it.
         let dropped = self.view_now().calls_dropped;
-        let dropped = (dropped > 0).then(|| self.i18n.tr_now("jn-calls-dropped", &Args::new().num("n", dropped as i64)));
+        let dropped = (dropped > before.dropped).then(|| self.i18n.tr_now("jn-calls-dropped", &Args::new().num("n", dropped as i64)));
         self.say_parts(std::iter::once(synced).chain(dropped).chain(self.findings_note(&before.findings)).chain(self.kept_note(&before)));
     }
 
@@ -461,7 +465,7 @@ impl JunctionVm {
 
     /// What an edit is compared against afterwards: the movements that met and the calls' findings before it.
     fn before(&self) -> Before {
-        Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept }
+        Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
     }
 
     /// What the findings of the pedestrian calls are about now, each its kind and street.
@@ -735,6 +739,39 @@ mod tests {
         assert_eq!(t.len(), 1);
         assert!(t[0].starts_with("Updated from another device. The crossing of "), "{t:?}");
         assert!(t[0].ends_with("is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall."), "{t:?}");
+    }
+
+    /// The junction of `city_rig`'s record as another device writes it: a signal, its first crossing put on call.
+    fn on_call_record(binding: &CityBinding) -> (u32, State) {
+        use crate::junction::model::SIGNAL;
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let _ = j.set_control(SIGNAL);
+        let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(j.set_on_call(arm, true));
+        (node, j.snapshot())
+    }
+
+    #[test]
+    fn a_sync_that_opens_the_junction_off_a_signal_says_the_calls_it_took_off_once() {
+        use crate::junction::model::PRIORITY;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        // The record holds a crossing on call on a junction that is no signal (an older build's, say).
+        let (node, mut state) = on_call_record(&binding);
+        state.control = PRIORITY;
+        assert!(binding.store.write_junction(node, state.clone()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.said.take(), ["Updated from another device. 1 crossing was taken off call as the junction opened: it is not run by a signal."]);
+        // Another change comes, the record still holding the call: the sync took nothing off this time.
+        state.arms[1].corner_mm += 1_000;
+        assert!(binding.store.write_junction(node, state));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
     }
 
     #[test]
