@@ -31,8 +31,8 @@ then go.
   scolaire" and "loading zone" / "zone de livraison" stay. Every new string in both `.ftl` files, same ids and variables.
 - Test-driven, a commit per change once tests pass, `just format` before each commit, `RUSTFLAGS=-D warnings`.
 - Four pull requests (phases below), each bumping the minor version in `crates/cityloom_editor/Cargo.toml` (planned
-  0.94.0 → 0.95.0 → 0.96.0 → 0.97.0; rebased on the Transform dialog (0.94.0) and the read-only mode (0.95.0), 0.96.0 →
-  0.97.0 → 0.98.0 → 0.99.0) with `cargo update -p cityloom_editor`.
+  0.94.0 → 0.95.0 → 0.96.0 → 0.97.0; rebased on the Transform dialog (0.94.0), the read-only mode (0.95.0) and the merged
+  blocks (0.96.0), 0.97.0 → 0.98.0 → 0.99.0 → 0.100.0) with `cargo update -p cityloom_editor`.
 - One worktree per checkout, no shared `CARGO_TARGET_DIR` (memory: stale binaries keep another checkout's paths).
 - Accessibility WCAG 2.2 AA: every new text/control colour pair measured in `shared/contrast.rs`; focus always
   visible; 24 px targets (44 px on a coarse pointer).
