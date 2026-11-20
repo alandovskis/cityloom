@@ -102,7 +102,7 @@ pub fn zone_selection_text(v: &View, i18n: &I18n, units: Units) -> String {
     zone_text(v, v.zones.selected, i18n, units)
 }
 
-/// The same for zone `index` (the last when past the end), which is how a cell of the strip is named.
+/// The same for zone `index` (the last when past the end).
 pub fn zone_text(v: &View, index: usize, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let zone = &v.zones.zones[index.min(v.zones.zones.len().saturating_sub(1))];

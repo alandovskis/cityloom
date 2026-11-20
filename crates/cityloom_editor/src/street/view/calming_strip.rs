@@ -11,8 +11,7 @@ use leptos::web_sys::HtmlElement;
 
 use crate::shared::i18n::Args;
 use crate::street::model::StripCell;
-use crate::street::view::curb_strip::{DragSpan, drag_span, dragged_from_mm};
-use crate::street::view::strip::basis_by_length;
+use crate::street::view::curb_strip::{DragSpan, basis_by_length, drag_span, dragged_from_mm};
 use crate::street::vm::keys::{ZoneAction, on_strip};
 use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::row::CalmingRow;
@@ -115,7 +114,7 @@ pub fn CalmingStrip(vm: Rc<crate::street::vm::StreetVm>) -> impl IntoView {
         let doc = document();
         if let (Some(cell), Some(strip)) = (doc.get_element_by_id(&cell_id), doc.get_element_by_id(CalmingRow::STRIP_ID)) {
             let (c, s) = (cell.get_bounding_client_rect(), strip.get_bounding_client_rect());
-            let by = crate::street::view::strip::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
+            let by = crate::street::view::scroll::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
             if by != 0.0 {
                 strip.set_scroll_left(strip.scroll_left() + by.round() as i32);
             }

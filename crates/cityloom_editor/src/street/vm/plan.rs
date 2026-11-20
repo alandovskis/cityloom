@@ -7,7 +7,7 @@ use leptos::prelude::*;
 
 use crate::shared::catalogue::Side;
 use crate::shared::said::{Said, say, say_now};
-use crate::street::model::{Editor, MIN_ZONE_MM, Pick, PickRefusal, PlanThing, ZoneEnd};
+use crate::street::model::{Editor, MIN_ZONE_MM, Pick, PickRefusal, PlanThing, ZoneEnd, snap};
 use crate::street::vm::keys::PlanKey;
 use crate::street::vm::row::{CurbRow, StopRow};
 use crate::street::vm::{StreetVm, text};
@@ -77,6 +77,18 @@ pub fn fixed_end(left: bool, pick: Option<(i32, i32)>, length_mm: i32) -> i32 {
 /// it; the whole street stays the whole street.
 pub fn pick_after_move(pick: Option<(i32, i32)>, from_mm: i32, to_mm: i32) -> Option<(i32, i32)> {
     pick.map(|(a, b)| (if a == from_mm { to_mm } else { a }, if b == from_mm { to_mm } else { b }))
+}
+
+/// Where a boundary now at `own_mm` goes when dragged to `to_mm` (all from the plan's left end): kept `MIN_ZONE_MM` from
+/// the boundaries either side of it (`others`) and from the street's ends, and snapped; where it is when there is no
+/// room.
+pub fn boundary_kept(others: &[i32], own_mm: i32, length_mm: i32, to_mm: i32) -> i32 {
+    let low = others.iter().copied().filter(|&b| b < own_mm).max().unwrap_or(0) + MIN_ZONE_MM;
+    let high = others.iter().copied().filter(|&b| b > own_mm).min().unwrap_or(length_mm) - MIN_ZONE_MM;
+    if low > high {
+        return own_mm;
+    }
+    snap(to_mm.clamp(low, high)).clamp(low, high)
 }
 
 /// The picking commands: positions here count from the plan's left end (the street's first end) and are converted with
@@ -259,7 +271,11 @@ impl StreetVm {
         let at = self.read(|e| e.anchored_mm(at_mm));
         match *g {
             PlanGesture::Boundary { zone, .. } => {
-                self.quiet(|e| e.move_boundary_of(zone, at).is_ok());
+                let plan = &self.view_now().plan;
+                let Some(own) = self.boundary_at(zone) else { return };
+                let others: Vec<i32> = plan.boundaries.iter().filter(|b| b.zone != zone).map(|b| b.at_mm).collect();
+                let to = boundary_kept(&others, own, plan.length_mm.unwrap_or(0), at_mm);
+                self.quiet(|e| e.move_boundary_of(zone, e.anchored_mm(to)).is_ok());
             }
             PlanGesture::Thing { thing, from_mm, grab_mm } => {
                 let to = from_mm + at - grab_mm;
@@ -425,6 +441,17 @@ mod tests {
         assert!(moved(&PlanGesture::Picking { anchor_mm: 0 }, 100.0), "a drag begun stays one");
         let thing = press(PlanPress::Thing { thing: PlanThing::Curb { side: Side::Left, cell: 1 }, at_mm: 5_000 }, 10.0);
         assert!(!moved(&thing, 12.0));
+    }
+
+    #[test]
+    fn a_boundary_is_kept_the_shortest_stretch_from_its_neighbours_and_snapped() {
+        // A boundary at 20 m between one at 40 m and the street's start, on 60 m.
+        assert_eq!(boundary_kept(&[40_000], 20_000, 60_000, 30_000), 30_000);
+        assert_eq!(boundary_kept(&[40_000], 20_000, 60_000, 39_000), 35_000);
+        assert_eq!(boundary_kept(&[40_000], 20_000, 60_000, -3_000), MIN_ZONE_MM);
+        assert_eq!(boundary_kept(&[40_000], 20_000, 60_000, 12_340), 12_300);
+        assert_eq!(boundary_kept(&[10_000, 19_000], 14_500, 60_000, 12_000), 14_500, "no room: it stays");
+        assert_eq!(boundary_kept(&[], 20_000, 60_000, 58_000), 55_000);
     }
 
     #[test]
@@ -811,6 +838,29 @@ mod pick_tests {
         assert_eq!((r.vm.picked(), r.vm.view_now().selected), (Some((25_000, 40_000)), Some(uid)));
         assert_eq!(r.vm.view_now().revisions.len(), revisions + 1);
         assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn a_boundary_dragged_past_its_neighbour_stops_the_shortest_stretch_from_it() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            // Boundaries at 20 m and 40 m on the plan, whichever end is anchored.
+            let r = three_runs(from_end);
+            // The boundary at 20 m starts the second zone from the first end, the third from the last.
+            let zone = if from_end == ZoneEnd::First { 1 } else { 2 };
+            let at = |r: &Rig| boundaries(r)[0];
+            assert_eq!(at(&r), 20_000);
+            let g = r.vm.plan_press(PlanPress::Boundary { zone }, 200.0);
+            let g = r.vm.plan_move(&g, 210.0, 21_000);
+            let g = r.vm.plan_move(&g, 380.0, 38_000);
+            assert_eq!(at(&r), 35_000, "{from_end:?}: kept 5 m from the next boundary");
+            let g = r.vm.plan_move(&g, 10.0, 1_000);
+            assert_eq!(at(&r), MIN_ZONE_MM, "{from_end:?}: kept 5 m from the street's end");
+            let g = r.vm.plan_move(&g, 123.4, 12_340);
+            assert_eq!(at(&r), 12_300, "{from_end:?}: snapped");
+            r.vm.plan_release(g, 50_000);
+            assert_eq!(boundaries(&r).len(), 2);
+            assert_eq!(at(&r), 35_000, "{from_end:?}: let go past the next boundary");
+        }
     }
 
     #[test]

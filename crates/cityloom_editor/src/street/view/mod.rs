@@ -18,9 +18,9 @@ pub mod page;
 pub mod panel_path;
 pub mod piece_list;
 pub mod plan;
+pub mod scroll;
 pub mod speed_view;
 pub mod stop_tools;
-pub mod strip;
 #[cfg(test)]
 mod tests;
 pub mod transform;

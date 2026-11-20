@@ -152,7 +152,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
             let x = layout(vm.with_value(|vm| vm.plan_point())).1;
             if let Some(b) = boxed.get() {
                 let (left, shown) = (f64::from(b.scroll_left()), f64::from(b.client_width()));
-                let by = crate::street::view::strip::scroll_into_view_px(x - 12.0, x + 12.0, left, left + shown);
+                let by = crate::street::view::scroll::scroll_into_view_px(x - 12.0, x + 12.0, left, left + shown);
                 if by != 0.0 {
                     b.set_scroll_left(b.scroll_left() + by.round() as i32);
                 }

@@ -103,7 +103,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             let Some(m) = menu.get_untracked() else { return };
             let (Ok(Some(row)), Ok(Some(tab))) = (m.query_selector(".add-topics"), m.query_selector(&format!("#add-topic-{}", t.id()))) else { return };
             let (c, s) = (tab.get_bounding_client_rect(), row.get_bounding_client_rect());
-            let by = crate::street::view::strip::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
+            let by = crate::street::view::scroll::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
             if by != 0.0 {
                 row.set_scroll_left(row.scroll_left() + by.round() as i32);
             }
