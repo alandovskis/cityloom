@@ -23,6 +23,7 @@ Chaque ligne indique le nom du projet, sa région métropolitaine et le jour de 
   que vous ouvrez à partir de celle-ci sont modifiées dans ce projet.
 - **Renommer** : choisissez **Renommer**, tapez le nouveau nom et choisissez **Enregistrer le nom**. Échap ou
   **Annuler** le laisse tel quel.
+- **Partager** : choisissez **Partager** pour créer un lien qui montre le projet, en lecture seule, à quiconque l’a ([Partager un aménagement](sharing.md)).
 - **Supprimer** : choisissez **Supprimer**. La ligne demande d’abord une confirmation; **Supprimer le projet** retire
   le projet et tout ce qu’il contient. Cette action est irréversible.
 

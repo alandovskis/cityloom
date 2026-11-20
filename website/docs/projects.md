@@ -23,6 +23,7 @@ row shows the project's name, its metropolitan area and the day it was last chan
   from there are edited in that project.
 - **Rename**: choose **Rename**, type the new name and choose **Save the name**. Escape or **Cancel** leaves it as it
   was.
+- **Share**: choose **Share** to make a link that shows the project, read-only, to anyone who has it ([Sharing a design](sharing.md)).
 - **Delete**: choose **Delete**. The row asks first; **Delete the project** removes the project and everything in it.
   This cannot be undone.
 
