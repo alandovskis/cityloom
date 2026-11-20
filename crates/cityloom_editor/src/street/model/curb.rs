@@ -417,7 +417,7 @@ impl Editor {
 
     /// A revision's words: the use and where it starts on the plan, from its left end.
     fn curb_label(&self, key: &'static str, i: &Instance) -> Said {
-        Said::new(key).with("use", Arg::MsgLower(i.use_.name_key())).with("at", Arg::Length(self.left_start(i.from_mm, i.length_mm)))
+        Said::new(key).with("use", Arg::MsgLower(i.use_.name_key())).with("at", Arg::Along(self.left_start(i.from_mm, i.length_mm)))
     }
 
     /// Records a change of the instances as one revision, writing the length and end they are measured against.
@@ -529,7 +529,7 @@ pub(super) trait InstanceExt {
 impl InstanceExt for Instance {
     /// How the checks name it: "Patio at 42 m, right", `at_mm` being where it starts on the plan (`Editor::left_start`).
     fn named(&self, at_mm: i32) -> Said {
-        Said::new("curb-instance").with("use", Arg::Msg(self.use_.name_key())).with("at", Arg::Length(at_mm)).with("side", Arg::Msg(side_word(self.side)))
+        Said::new("curb-instance").with("use", Arg::Msg(self.use_.name_key())).with("at", Arg::Along(at_mm)).with("side", Arg::Msg(side_word(self.side)))
     }
 }
 

@@ -90,7 +90,7 @@ pub struct Elsewhere {
 /// A stretch of the street as the page names it, by where it lies from the plan's left end (the street's first end):
 /// "from 49 m to 82 m", in the middle of a sentence. A zone's saved name is never said.
 pub fn stretch_between(from_mm: i32, to_mm: i32) -> Said {
-    Said::new("stretch-mid").with("from", Arg::Length(from_mm)).with("to", Arg::Length(to_mm))
+    Said::new("stretch-mid").with("from", Arg::Along(from_mm)).with("to", Arg::Along(to_mm))
 }
 
 /// How far the length a zoning was drawn against may differ from the loaded one before it is another road.
@@ -290,7 +290,7 @@ impl Editor {
         if content.zones[z].from_mm == to_mm && (first, end) == (z - 1, z + 1) {
             return Ok(z);
         }
-        let label = Said::new("rev-boundary-move").with("to", Arg::Length(self.left_mm(to_mm)));
+        let label = Said::new("rev-boundary-move").with("to", Arg::Along(self.left_mm(to_mm)));
         let set = |c: &mut super::Content| {
             // The hidden boundaries go: the earlier zone of each run reaches over the rest of it (as a join keeps it).
             c.zones.drain(z + 1..end);
@@ -697,7 +697,7 @@ mod tests {
         e.nudge_boundary(-10_000);
         assert_eq!(starts(&e), [0, 11_000, 40_000]);
         assert_eq!(revisions(&e), before + 2);
-        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-boundary-move").with("to", Arg::Length(11_000)));
+        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-boundary-move").with("to", Arg::Along(11_000)));
         assert_eq!(e.move_boundary(4_940), Err(ZoneRefusal::TooShort));
         assert_eq!(e.move_boundary(35_100), Err(ZoneRefusal::TooShort));
         assert_eq!(e.move_boundary(35_050), Err(ZoneRefusal::TooShort), "snaps to 35 100, 4 900 mm from the next boundary");
@@ -793,7 +793,7 @@ mod tests {
         now.from_end = ZoneEnd::Last;
         let e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last }));
         assert_eq!(labels(&e), [stretch_between(40_000, LEN), stretch_between(0, 40_000)]);
-        assert_eq!(stretch_between(20_000, 40_000), Said::new("stretch-mid").with("from", Arg::Length(20_000)).with("to", Arg::Length(40_000)));
+        assert_eq!(stretch_between(20_000, 40_000), Said::new("stretch-mid").with("from", Arg::Along(20_000)).with("to", Arg::Along(40_000)));
     }
 
     #[test]
@@ -887,7 +887,7 @@ mod tests {
         let room = check(&e, "transition-room");
         assert_eq!(room.len(), 1);
         assert!(!room[0].ok);
-        assert_eq!(room[0].zone, Some(Said::new("check-boundary").with("at", Arg::Length(20_000))));
+        assert_eq!(room[0].zone, Some(Said::new("check-boundary").with("at", Arg::Along(20_000))));
         let detail = say_in(crate::shared::i18n::Locale::En, &room[0].detail);
         assert_eq!(detail, "The transition needs 49.5 m but the stretch from 0.0 m to 20.0 m is 20.0 m long.");
         assert!(!e.view().plan.runs[0].ok, "the host stretch");

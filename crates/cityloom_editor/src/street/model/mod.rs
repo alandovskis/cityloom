@@ -1578,7 +1578,7 @@ impl Editor {
                 let at = self.left_mm(content.zones[*b + 1].from_mm);
                 // A street with no end to measure from has no positions.
                 let boundary =
-                    || if self.frame.is_none() { Said::new("check-boundary-somewhere") } else { Said::new("check-boundary").with("at", Arg::Length(at)) };
+                    || if self.frame.is_none() { Said::new("check-boundary-somewhere") } else { Said::new("check-boundary").with("at", Arg::Along(at)) };
                 match (id, why) {
                     ("transition-room", Failing::Room { need_mm, room_mm }) => {
                         let detail = Said::new("check-detail-transition-room")

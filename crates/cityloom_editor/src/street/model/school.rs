@@ -51,7 +51,7 @@ impl Editor {
                     && let Ok(Pick::Stretch { from_mm, to_mm }) = self.pick_stretch(a, a + SCHOOL_ZONE_MM)
                 {
                     let (a, b) = self.left_span(from_mm, to_mm);
-                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a)).with("to", Arg::Length(b)));
+                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Along(a)).with("to", Arg::Along(b)));
                 } else {
                     let room = Said::new("template-school-room").with("length", Arg::Length(SCHOOL_ZONE_MM)).with("min", Arg::Length(MIN_ZONE_MM));
                     report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(room))));
@@ -85,7 +85,7 @@ impl Editor {
             Ok(at) => {
                 // Where the table starts on the plan, from its left end, as every position the page shows.
                 let at = self.left_start(at, DEFAULT_TABLE_MM);
-                report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Length(at)))
+                report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Along(at)))
             }
             Err(reason) => report.skipped.push(Said::new("template-school-skipped-table").with("reason", Arg::Said(Box::new(reason)))),
         }
@@ -176,7 +176,7 @@ mod tests {
         e.pick_stretch(20_000, 120_000).unwrap();
         let report = e.apply_template(Template::School).unwrap();
         assert_eq!(keys(&report.applied), ["template-school-applied-zone", "template-school-applied-speed", "template-school-applied-table"]);
-        assert_eq!((report.applied[0].args[0].1.clone(), report.applied[0].args[1].1.clone()), (Arg::Length(40_000), Arg::Length(100_000)));
+        assert_eq!((report.applied[0].args[0].1.clone(), report.applied[0].args[1].1.clone()), (Arg::Along(40_000), Arg::Along(100_000)));
         assert_eq!(starts(&e), [0, 40_000, 100_000]);
         let s = e.snapshot();
         let sections = s.sections();
@@ -306,9 +306,9 @@ mod tests {
         // The school stretch is 25 m to 85 m from the anchor, so 35 m to 95 m on the plan; its table, 7 m long, starts
         // 51.5 m from the anchor and 61.5 m from the left (120 - 51.5 - 7).
         assert_eq!(e.pick(), stretch(25_000, 85_000));
-        assert_eq!(report.applied[0].args, vec![("from", Arg::Length(35_000)), ("to", Arg::Length(95_000))]);
+        assert_eq!(report.applied[0].args, vec![("from", Arg::Along(35_000)), ("to", Arg::Along(95_000))]);
         assert_eq!(e.snapshot().calming[0].from_mm, 51_500);
-        assert_eq!(report.applied[2].args, vec![("at", Arg::Length(61_500))]);
+        assert_eq!(report.applied[2].args, vec![("at", Arg::Along(61_500))]);
     }
 
     #[test]

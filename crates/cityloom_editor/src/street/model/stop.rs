@@ -64,7 +64,7 @@ impl Editor {
 
     /// A revision's words: the stop and where it starts on the plan, from its left end.
     fn stop_label(&self, key: &'static str, s: &Stop) -> Said {
-        Said::new(key).with("kind", Arg::MsgLower(s.kind.name_key())).with("at", Arg::Length(self.left_start(s.from_mm, s.length_mm)))
+        Said::new(key).with("kind", Arg::MsgLower(s.kind.name_key())).with("at", Arg::Along(self.left_start(s.from_mm, s.length_mm)))
     }
 
     /// Records a change of the stops as one revision, writing the length and end they are measured against.
@@ -312,8 +312,8 @@ impl StopExt for Stop {
     fn named(&self, at_mm: i32) -> Said {
         let kind = Arg::MsgLower(self.kind.name_key());
         match &self.name {
-            Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Length(at_mm)),
-            None => Said::new("stop-instance").with("kind", kind).with("at", Arg::Length(at_mm)).with("side", Arg::Msg(side_word(self.side))),
+            Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Along(at_mm)),
+            None => Said::new("stop-instance").with("kind", kind).with("at", Arg::Along(at_mm)).with("side", Arg::Msg(side_word(self.side))),
         }
     }
 
@@ -568,7 +568,7 @@ mod tests {
     /// The length argument `name` of a message.
     fn mm(said: &Said, name: &str) -> Option<i32> {
         said.args.iter().find_map(|(n, a)| match a {
-            Arg::Length(v) if *n == name => Some(*v),
+            Arg::Length(v) | Arg::Along(v) if *n == name => Some(*v),
             _ => None,
         })
     }

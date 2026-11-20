@@ -608,7 +608,7 @@ impl StreetVm {
         let Some(at_mm) = self.boundary_at(zone) else { return };
         self.boundary.set(Some((zone, at_mm)));
         self.ask(crate::street::vm::level::Level::Street);
-        let said = Said::new("boundary-chosen").with("at", crate::shared::said::Arg::Length(at_mm));
+        let said = Said::new("boundary-chosen").with("at", crate::shared::said::Arg::Along(at_mm));
         self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &said));
     }
 

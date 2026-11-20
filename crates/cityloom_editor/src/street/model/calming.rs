@@ -248,7 +248,7 @@ impl Editor {
     }
 
     fn calming_label(&self, key: &'static str, c: &Calming) -> Said {
-        Said::new(key).with("kind", Arg::MsgLower(c.kind.name_key())).with("at", Arg::Length(self.left_start(c.from_mm, c.length_mm)))
+        Said::new(key).with("kind", Arg::MsgLower(c.kind.name_key())).with("at", Arg::Along(self.left_start(c.from_mm, c.length_mm)))
     }
 
     /// Records a change of the elements as one revision, writing the length and end they are measured against.
@@ -437,7 +437,7 @@ pub trait CalmingExt {
 impl CalmingExt for Calming {
     /// How the checks name it: "raised table at 20 m", `at_mm` being where it starts on the plan (`Editor::left_start`).
     fn named(&self, at_mm: i32) -> Said {
-        Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(at_mm))
+        Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Along(at_mm))
     }
 
     /// The same, in the stretch where it fails (`stretch`: "from 49 m to 82 m").
@@ -1110,7 +1110,7 @@ mod tests {
 
     fn arg_mm(said: &Said, name: &str) -> Option<i32> {
         said.args.iter().find_map(|(n, a)| match a {
-            Arg::Length(v) if *n == name => Some(*v),
+            Arg::Length(v) | Arg::Along(v) if *n == name => Some(*v),
             _ => None,
         })
     }

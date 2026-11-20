@@ -68,7 +68,7 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                 let (v, units) = w.now();
                 let i18n = w.i18n();
                 let stretch = v.plan.pick.map(|(from, to)| {
-                    let hint = Said::new("st-speed-stretch-hint").with("from", Arg::Length(from)).with("to", Arg::Length(to));
+                    let hint = Said::new("st-speed-stretch-hint").with("from", Arg::Along(from)).with("to", Arg::Along(to));
                     view! { <p class="zone-hint">{say(&i18n, units, &hint)}</p> }
                 });
                 let varies = v.speed_varies.then(|| view! { <p class="zone-hint">{say(&i18n, units, &varies_said(&v.plan))}</p> });

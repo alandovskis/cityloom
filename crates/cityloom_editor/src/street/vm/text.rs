@@ -166,9 +166,9 @@ pub fn template_report(i18n: &I18n, units: Units, report: &TemplateReport) -> Op
 /// measure along.
 pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
     let Some((from, to)) = plan.pick else {
-        return plan.length_mm.map(|length| Said::new("stretch-whole").with("length", Arg::Length(length)));
+        return plan.length_mm.map(|length| Said::new("stretch-whole").with("length", Arg::Along(length)));
     };
-    let span = |key| Said::new(key).with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from));
+    let span = |key| Said::new(key).with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("length", Arg::Along(to - from));
     Some(match listed(what) {
         Some(what) => span("stretch-picked-differs").with("what", Arg::Said(Box::new(what))),
         None => span("stretch-picked"),
@@ -177,7 +177,7 @@ pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
 
 /// Where the plan's keyboard point is, `at_mm` from the plan's left end.
 pub fn point_said(at_mm: i32) -> Said {
-    Said::new("st-point").with("at", Arg::Length(at_mm))
+    Said::new("st-point").with("at", Arg::Along(at_mm))
 }
 
 /// The plan's name for a screen reader (its drawing is hidden from one): the street from end to end, how long, and which
@@ -190,12 +190,12 @@ pub fn plan_label(plan: &PlanView) -> Said {
         [false, true] => "st-plan-label-cut-right",
         [true, true] => "st-plan-label-cut-both",
     };
-    Said::new(key).with("length", Arg::Length(length))
+    Said::new(key).with("length", Arg::Along(length))
 }
 
 /// The line under the plan: the picked stretch and how long it is. Nothing for the whole street.
 pub fn stretch_label(plan: &PlanView) -> Option<Said> {
-    plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from)))
+    plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("length", Arg::Along(to - from)))
 }
 
 /// What is said under a figure that differs along the pick: along the stretch, or along the street when the whole
@@ -209,7 +209,7 @@ pub fn varies_said(plan: &PlanView) -> Said {
 pub fn missed_said(spans: &[(i32, i32)], kind: &'static str) -> Vec<Said> {
     spans
         .iter()
-        .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("kind", Arg::KindLower(kind)))
+        .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("kind", Arg::KindLower(kind)))
         .collect()
 }
 
@@ -296,6 +296,35 @@ mod tests {
         assert_eq!(words(&fr(), &free), "La rue, ses deux extrémités coupées par le bord de la carte");
         // Neither cut: as before.
         assert_eq!(words(&en(), &Editor::new(0).with_frame(frame(ZoneEnd::First))), "The street from its first end to its last, 60.0 m long");
+    }
+
+    /// A place along the street is said to a tenth of a unit, as the pick's fields and the 2.5D's label give it, also
+    /// where it is not a whole tenth from the plan's left end: on a street measured from its last end, 90.744 m long,
+    /// whose positions snap to 100 mm from that end.
+    #[test]
+    fn places_along_a_street_measured_from_its_last_end_are_said_to_a_tenth() {
+        use crate::street::model::{ZoneEnd, ZoneFrame, stretch_between};
+        let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 90_744, from_end: ZoneEnd::Last }));
+        let (a, b) = (e.anchored_mm(0), e.anchored_mm(10_000));
+        e.pick_stretch(a, b).unwrap();
+        let plan = e.view().plan;
+        let (from, to) = plan.pick.expect("a stretch");
+        assert_eq!((from, to % 100 != 0), (0, true), "its end is not a whole tenth from the left: {to}");
+        let words = |i18n: &I18n, said: Said| say_now(i18n, Units::Metres, &said);
+        assert_eq!(words(&en(), picked_said(&plan, Vec::new()).unwrap()), "From 0.0 m to 10.0 m, 10.0 m long.");
+        assert_eq!(words(&fr(), stretch_label(&plan).unwrap()), "De 0,0\u{a0}m à 10,0\u{a0}m · 10,0\u{a0}m de long");
+        assert_eq!(words(&en(), point_said(to)), "At 10.0 m");
+        assert_eq!(words(&en(), stretch_between(from, to)), "from 0.0 m to 10.0 m");
+        assert_eq!(words(&en(), Said::new("boundary-chosen").with("at", Arg::Along(to))), "The change at 10.0 m; type where it goes.");
+        // A width is still said to the hundredth it has.
+        assert_eq!(
+            words(
+                &en(),
+                Said::new("stretch-what-width").with("kind", Arg::KindLower("buffer")).with("side", Arg::Msg("side-word-left")).with("width", Arg::Length(150))
+            )
+            .contains("0.15 m"),
+            true
+        );
     }
 
     #[test]
@@ -570,7 +599,7 @@ mod tests {
             label: Said::new("check-label-curb-length"),
             detail: Said::new("check-detail-curb-length-ok"),
             zone: Some(
-                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right")),
+                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Along(42_000)).with("side", Arg::Msg("side-word-right")),
             ),
             standard: None,
         };

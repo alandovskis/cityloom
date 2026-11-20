@@ -302,8 +302,8 @@ impl GreenExt for Green {
     fn named(&self, segs: &[Segment], at_mm: i32) -> Said {
         let kind = Arg::Msg(self.kind.name_key());
         match host_at(segs, self.offset_mm) {
-            Some(h) => Said::new("green-instance").with("kind", kind).with("at", Arg::Length(at_mm)).with("across", Arg::KindLower(KINDS[segs[h].kind].id)),
-            None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Length(at_mm)),
+            Some(h) => Said::new("green-instance").with("kind", kind).with("at", Arg::Along(at_mm)).with("across", Arg::KindLower(KINDS[segs[h].kind].id)),
+            None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Along(at_mm)),
         }
     }
 }
@@ -346,7 +346,7 @@ impl Editor {
 
     /// A revision's words: what the element is and where along the street it starts.
     fn green_label(&self, key: &'static str, g: &Green) -> Said {
-        Said::new(key).with("kind", Arg::MsgLower(g.kind.name_key())).with("at", Arg::Length(self.left_start(g.from_mm, g.length_mm)))
+        Said::new(key).with("kind", Arg::MsgLower(g.kind.name_key())).with("at", Arg::Along(self.left_start(g.from_mm, g.length_mm)))
     }
 
     /// Records a change of the elements as one revision, writing the length and end they are measured against.
@@ -1647,7 +1647,7 @@ mod tests {
         for who in ["tree", "other"] {
             assert_eq!(c.detail.args.iter().filter(|(n, _)| *n == who).count(), 1, "{who} is named in the detail");
         }
-        assert!(c.zone.unwrap().args.iter().any(|(n, a)| *n == "at" && matches!(a, Arg::Length(10_000))), "the nearer the anchor is named first");
+        assert!(c.zone.unwrap().args.iter().any(|(n, a)| *n == "at" && matches!(a, Arg::Along(10_000))), "the nearer the anchor is named first");
     }
 
     #[test]
