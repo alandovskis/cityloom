@@ -501,7 +501,8 @@ mod tests {
         let mut draft = Draft::new();
         assert!(draft.put_raw(STREETS, "w1", json!({"mine": "shared"})));
         let copy = crate::project::copies::keep(&s, "tok", "Shared", &crate::place::area::default_area().to_query(), &[(EDITS_KEY, &draft.to_json())]).unwrap();
-        assert!(ProjectStore::new(s.clone()).get(&copy).is_some(), "the pages find it");
+        assert!(crate::project::context::find(&*s, &copy).is_some(), "the pages find it");
+        assert!(ProjectStore::new(s.clone()).get(&copy).is_none(), "the person's list does not");
         assert!(!projects(&s).contains(&copy));
         assert!(ids(&s).iter().all(|id| !id.key.starts_with(&copy)), "{:?}", ids(&s));
         assert_eq!(read(&s, &Id::new(Kind::Project, &copy)), None, "its record never leaves the device");
