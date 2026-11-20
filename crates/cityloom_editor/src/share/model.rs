@@ -128,6 +128,18 @@ pub fn valid_token(text: &str) -> bool {
     text.len() == 43 && text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
+/// Whether the share page whose address has the fragment `hash` (without `#`) and the query string `search` opens a
+/// link (`share.html#<token>`) rather than shares a project (`share.html?project=<id>`): for a whole token, or for any
+/// other fragment where no project is named (it is then said not to be a whole link). A project's page keeps its own
+/// anchors (a skip link's, after a reload) and the account's sign-in fragment.
+pub fn opens_a_link(hash: &str, search: &str) -> bool {
+    if valid_token(hash) {
+        return true;
+    }
+    let names_project = search.trim_start_matches('?').split('&').any(|pair| pair == "project" || pair.starts_with("project="));
+    !hash.is_empty() && !crate::shared::ports::is_account_fragment(hash) && !names_project
+}
+
 /// The link that opens the share behind `token`, on the site at `origin`. The token rides in the fragment, which the
 /// browser never sends to a server nor puts in a `Referer`.
 pub fn link(origin: &str, token: &str) -> String {
