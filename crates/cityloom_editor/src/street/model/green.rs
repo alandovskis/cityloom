@@ -608,7 +608,7 @@ pub struct GreenCell {
     pub failing: bool,
 }
 
-/// The Green row: every element along the street, in order.
+/// The Green row: every element along the street, in order from the plan's left end.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct GreenRowView {
     /// The street's length, which the cells are laid along.
@@ -640,7 +640,7 @@ impl Editor {
         // tracks are laid out as if each element were that long.
         let least_mm = length_mm / 20;
         let mut track_ends: Vec<i32> = Vec::new();
-        let cells: Vec<GreenCell> = content
+        let mut cells: Vec<GreenCell> = content
             .green
             .iter()
             .enumerate()
@@ -672,7 +672,12 @@ impl Editor {
                 }
             })
             .collect();
-        GreenRowView { length_mm, tracks: track_ends.len(), selected: self.selected_green(), cells, can_add }
+        // In the plan's order, from its left end: measured from the last end, the element that ends furthest from it.
+        if self.anchor_end() == ZoneEnd::Last {
+            cells.sort_by_key(|c| (std::cmp::Reverse(c.to_mm), c.index));
+        }
+        let selected = self.selected_green().and_then(|i| cells.iter().position(|c| c.index == i));
+        GreenRowView { length_mm, tracks: track_ends.len(), selected, cells, can_add }
     }
 
     /// Element `i`, if there is one.

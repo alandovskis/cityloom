@@ -2209,6 +2209,30 @@ fn the_curb_strip_is_a_listbox_with_one_tab_stop() {
 }
 
 #[test]
+fn on_a_street_anchored_at_its_last_end_the_unfolded_row_runs_as_the_plan_does() {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{Instance, PlanThing, Street, Use, ZoneEnd, ZoneFrame};
+    // Parking at anchored 0 to 6 m on 40 m: 34 m to 40 m from the plan's left end.
+    let street = Street {
+        from_end: ZoneEnd::Last,
+        length_mm: Some(40_000),
+        curb: vec![Instance { side: Side::Right, from_mm: 0, length_mm: 6_000, use_: Use::Parking }],
+        ..Street::sample(0, Side::Right)
+    };
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::Last }));
+    let s = StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None);
+    let parking = s.view_now().plan.objects.iter().find(|o| matches!(o.thing, PlanThing::Curb { side: Side::Right, .. })).map(|o| (o.from_mm, o.to_mm));
+    assert_eq!(parking, Some((34_000, 40_000)), "the plan draws it at its right end");
+    let h = curb_html(&s);
+    let at = |needle: &str| h.find(needle).unwrap_or_else(|| panic!("{needle} in {h}"));
+    let free = at("aria-label=\"Free, 0.0 m to 34.0 m, 34.0 m long, 1 of 2\"");
+    let use_ = at("aria-label=\"Parking, 34.0 m to 40.0 m, 6.0 m long, 2 of 2\"");
+    assert!(free < use_, "the free stretch first, on the left, as on the plan: {h}");
+    assert!(at("id=\"curb-right-0\"") < free && free < at("id=\"curb-right-1\""), "{h}");
+}
+
+#[test]
 fn a_use_that_fails_a_check_says_so_and_a_street_without_a_curbside_lane_has_no_strip() {
     let s = curb_street(Locale::En);
     s.select_curb(crate::shared::catalogue::Side::Right, 0);

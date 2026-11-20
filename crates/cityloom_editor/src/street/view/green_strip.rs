@@ -10,7 +10,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::HtmlElement;
 
 use crate::shared::i18n::Args;
-use crate::street::model::{GreenCell, snap};
+use crate::street::model::{GreenCell, ZoneEnd, snap};
 use crate::street::vm::keys::{ZoneAction, on_strip};
 use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::text::green_cell_text;
@@ -23,17 +23,18 @@ pub const TRACK_PX: u32 = 24;
 pub const TRACKS_SHOWN: usize = 2;
 
 /// Where a cell lies in the row: its place along the strip, at least 24 pixels wide and kept inside the strip, and
-/// its line.
-pub fn cell_style(c: &GreenCell, length_mm: i32) -> String {
+/// its line. The strip runs as the plan does, from its left end: `mirrored` on a street measured from its last end.
+pub fn cell_style(c: &GreenCell, length_mm: i32, mirrored: bool) -> String {
     let length = f64::from(length_mm.max(1));
-    let left = f64::from(c.from_mm) / length * 100.0;
+    let left_mm = if mirrored { length_mm - c.to_mm } else { c.from_mm };
+    let left = f64::from(left_mm) / length * 100.0;
     let width = f64::from(c.to_mm - c.from_mm) / length * 100.0;
     format!("left: min({left:.4}%, calc(100% - {TRACK_PX}px)); width: max({width:.4}%, {TRACK_PX}px); top: {}px", c.track as u32 * TRACK_PX)
 }
 
 /// Where an element starts when the pointer is `dx_px` from where it was pressed: snapped, and kept inside the
-/// street. `mm_per_px` is the street's length over the width of the strip. What it meets on the way is the model's to
-/// refuse.
+/// street. `mm_per_px` is the street's length over the width of the strip, negative on a street measured from its last
+/// end (a rightward drag moves it toward that end). What it meets on the way is the model's to refuse.
 pub fn dragged_green_from_mm(dx_px: f64, from_mm: i32, span_mm: i32, mm_per_px: f64, length_mm: i32) -> i32 {
     let high = (length_mm - span_mm).max(0);
     let mm = (f64::from(from_mm) + dx_px * mm_per_px).round().clamp(0.0, f64::from(high));
@@ -78,7 +79,7 @@ fn green_cell(w: SheetWatch, i: usize, on_down: impl Fn(leptos::ev::PointerEvent
             title=name
             style=move || {
                 let v = w.view();
-                v.green.cells.get(i).map(|c| cell_style(c, v.green.length_mm)).unwrap_or_default()
+                v.green.cells.get(i).map(|c| cell_style(c, v.green.length_mm, v.axis.from_end == ZoneEnd::Last)).unwrap_or_default()
             }
             on:pointerdown=move |e| on_down(e, i)
             on:click=move |_| w.select_green(i)
@@ -116,15 +117,15 @@ pub fn GreenStrip(vm: Rc<crate::street::vm::StreetVm>) -> impl IntoView {
         w.select_green(i);
         let Some(strip) = document().get_element_by_id("green-strip") else { return };
         let width = f64::from(strip.client_width());
-        let (cell, length_mm) = {
+        let (cell, length_mm, mirrored) = {
             let v = w.view_now();
-            (v.green.cells.get(i).cloned(), v.green.length_mm)
+            (v.green.cells.get(i).cloned(), v.green.length_mm, v.axis.from_end == ZoneEnd::Last)
         };
         let Some(cell) = cell else { return };
         if width <= 0.0 || length_mm <= 0 {
             return;
         }
-        let mm_per_px = f64::from(length_mm) / width;
+        let mm_per_px = f64::from(length_mm) / width * if mirrored { -1.0 } else { 1.0 };
         press.set_value(Some(Press {
             start_x: f64::from(ev.client_x()),
             from_mm: cell.from_mm,
@@ -249,13 +250,21 @@ mod tests {
 
     #[test]
     fn a_cell_lies_by_its_place_along_the_street_and_on_its_line() {
-        let s = cell_style(&cell(15_000, 30_000, 1), 60_000);
+        let s = cell_style(&cell(15_000, 30_000, 1), 60_000, false);
         assert_eq!(s, "left: min(25.0000%, calc(100% - 24px)); width: max(25.0000%, 24px); top: 24px");
     }
 
     #[test]
+    fn on_a_street_measured_from_its_last_end_a_cell_lies_where_the_plan_draws_it() {
+        // Anchored 15 m to 30 m on 60 m: 30 m to 45 m from the plan's left end.
+        let s = cell_style(&cell(15_000, 30_000, 0), 60_000, true);
+        assert!(s.starts_with("left: min(50.0000%, calc(100% - 24px)); width: max(25.0000%, 24px)"), "{s}");
+        assert_eq!(dragged_green_from_mm(10.0, 10_000, 1_900, -100.0, 60_000), 9_000, "rightward toward the anchored end");
+    }
+
+    #[test]
     fn a_short_cell_keeps_a_target_and_one_at_the_end_stays_inside() {
-        let s = cell_style(&cell(58_500, 60_000, 0), 60_000);
+        let s = cell_style(&cell(58_500, 60_000, 0), 60_000, false);
         assert!(s.contains("width: max(2.5000%, 24px)") && s.contains("left: min(97.5000%, calc(100% - 24px))"), "{s}");
     }
 

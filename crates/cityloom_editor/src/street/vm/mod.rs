@@ -673,6 +673,12 @@ impl StreetVm {
         self.ports.announcer.say(&text::cell_text(R::CELL_KEY, s, cell, v.axis, &self.i18n, self.units_now()));
     }
 
+    /// `delta_mm` rightward along the plan as a change of an anchored position: the other way on a street measured from
+    /// its last end.
+    fn rightward(&self, delta_mm: i32) -> i32 {
+        if self.read(|e| e.anchor_end()) == ZoneEnd::Last { -delta_mm } else { delta_mm }
+    }
+
     /// The cell `delta` places along from the chosen one on `side` (the first, or the last going back, when none is).
     pub fn select_cell_relative<R: Row>(&self, side: Side, delta: i32) {
         let v = self.view_now();
@@ -706,13 +712,14 @@ impl StreetVm {
         }
     }
 
-    /// Moves the chosen thing along the street by `delta_mm`.
+    /// Moves the chosen thing `delta_mm` rightward along the plan (leftward when negative).
     pub fn nudge_cell<R: Row>(&self, delta_mm: i32) -> bool {
         // The model lets a move through inside a gesture (that is how a drag moves); a command is not a drag.
         if self.core.read(|e| e.dragging()) {
             self.say_refusal(R::SUBJECT, CurbRefusal::Dragging);
             return false;
         }
+        let delta_mm = self.rightward(delta_mm);
         self.on_chosen::<R>(|e, i, from| R::move_to(e, i, from + delta_mm))
     }
 
@@ -970,12 +977,13 @@ impl StreetVm {
         self.on_chosen_calming(|e, i, _| e.move_calming(i, from_mm))
     }
 
-    /// Moves the chosen element along the street by `delta_mm`.
+    /// Moves the chosen element `delta_mm` rightward along the plan (leftward when negative).
     pub fn nudge_calming(&self, delta_mm: i32) -> bool {
         if self.core.read(|e| e.dragging()) {
             self.say_calming_refusal(CalmingRefusal::Dragging);
             return false;
         }
+        let delta_mm = self.rightward(delta_mm);
         self.on_chosen_calming(|e, i, from| e.move_calming(i, from + delta_mm))
     }
 
@@ -1240,8 +1248,9 @@ impl StreetVm {
         if self.core.read(|e| e.dragging()) || i >= self.view_now().green.cells.len() {
             return;
         }
+        let Some(k) = self.view_now().green.cells.get(i).map(|c| c.index) else { return };
         self.ask(Level::Green);
-        self.edit(|e| e.select_green(i));
+        self.edit(|e| e.select_green(k));
         let v = self.view_now();
         self.ports.announcer.say(&text::green_cell_text(&v.green, i, v.axis, &self.i18n, self.units_now()));
     }
@@ -1267,8 +1276,9 @@ impl StreetVm {
         }
     }
 
-    /// Moves the chosen element along the street by `delta_mm`.
+    /// Moves the chosen element `delta_mm` rightward along the plan (leftward when negative).
     pub fn nudge_green(&self, delta_mm: i32) -> bool {
+        let delta_mm = self.rightward(delta_mm);
         self.on_chosen_green(|e, i| {
             let from = e.green_at(i).map_or(0, |g| g.from_mm);
             e.move_green(i, from.saturating_add(delta_mm))
@@ -2512,7 +2522,7 @@ mod curb_tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
     use crate::street::model::StreetExt;
-    use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Instance, Street, Use, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
 
@@ -2730,6 +2740,61 @@ mod curb_tests {
         r.vm.end_gesture(false);
         r.vm.select_curb(Side::Left, 0);
         assert_eq!(r.vm.view_now().curb.sides[0].selected, Some(0), "choosing works again");
+    }
+
+    /// A street 100 m long anchored at its last end, with parking at anchored 0 to 20 m (80 m to 100 m on the plan) and
+    /// loading at anchored 50 m to 60 m (40 m to 50 m on the plan), both on the right.
+    fn anchored_at_last() -> Rig {
+        const LONG: i32 = 100_000;
+        let use_ = |from_mm, length_mm, use_| Instance { side: Side::Right, from_mm, length_mm, use_ };
+        let street = Street {
+            from_end: ZoneEnd::Last,
+            length_mm: Some(LONG),
+            curb: vec![use_(0, 20_000, Use::Parking), use_(50_000, 10_000, Use::Loading)],
+            ..Street::sample(0, Side::Right)
+        };
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LONG, from_end: ZoneEnd::Last }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said }
+    }
+
+    /// `side`'s cells as the plan shows them: each one's use (if any) and span from the plan's left end.
+    fn on_plan(r: &Rig, s: Side) -> Vec<(Option<Use>, i32, i32)> {
+        let v = r.vm.view_now();
+        let cells = &v.curb.sides.iter().find(|x| x.side == s).unwrap().cells;
+        cells
+            .iter()
+            .map(|c| {
+                let (from, to) = v.axis.left_span(c.from_mm, c.to_mm);
+                (c.use_, from, to)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_the_row_runs_left_to_right_as_the_plan_does() {
+        let r = anchored_at_last();
+        assert_eq!(
+            on_plan(&r, Side::Right),
+            [(None, 0, 40_000), (Some(Use::Loading), 40_000, 50_000), (None, 50_000, 80_000), (Some(Use::Parking), 80_000, 100_000)],
+            "the cells in order from the plan's left end"
+        );
+        // Home chooses the leftmost cell; its place is counted from the left.
+        r.vm.select_curb_edge(Side::Right, false);
+        assert_eq!(r.said.take(), ["Free, 0.0 m to 40.0 m, 40.0 m long, 1 of 4"]);
+        // The right arrow goes rightward on the plan.
+        r.vm.select_curb_relative(Side::Right, 1);
+        assert_eq!(r.said.take(), ["Loading, 40.0 m to 50.0 m, 10.0 m long, 2 of 4"]);
+        // Alt with the right arrow moves the use rightward on the plan: its left start grows.
+        assert!(r.vm.nudge_curb(1_000));
+        assert_eq!(on_plan(&r, Side::Right)[1], (Some(Use::Loading), 41_000, 51_000));
+        assert_eq!(r.vm.read(|e| e.snapshot().curb.iter().find(|i| i.use_ == Use::Loading).map(|i| i.from_mm)), Some(49_000), "anchored at the last end");
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(1), "the moved use stays chosen");
+        r.said.take();
+        r.vm.select_curb_relative(Side::Right, 1);
+        r.vm.select_curb_relative(Side::Right, 1);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("Parking, 80.0 m to 100.0 m, 20.0 m long, 4 of 4"));
+        assert!(!r.vm.nudge_curb(1_000), "the right end of the plan is the street's anchored end");
     }
 
     #[test]
@@ -3216,7 +3281,7 @@ mod calming_tests {
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
     use crate::street::model::CalmingKindExt;
     use crate::street::model::StreetExt;
-    use crate::street::model::{Street, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Calming, Street, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
 
@@ -3238,6 +3303,27 @@ mod calming_tests {
 
     fn cells(r: &Rig) -> Vec<(Option<usize>, i32, i32)> {
         r.vm.view_now().calming_strip.cells.iter().map(|c| (c.element, c.from_mm, c.to_mm)).collect()
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_the_raised_elements_run_left_to_right_as_the_plan_does() {
+        // Tables at anchored 0 to 7 m and 30 m to 37 m: 53 m to 60 m and 23 m to 30 m on the plan.
+        let table = |from_mm| Calming { from_mm, length_mm: 7_000, kind: CalmingKind::Table, first: None };
+        let street = Street { from_end: ZoneEnd::Last, length_mm: Some(LENGTH), calming: vec![table(0), table(30_000)], ..Street::sample(0, Side::Right) };
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::Last }));
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said };
+        let on_plan = |r: &Rig| {
+            let v = r.vm.view_now();
+            v.calming_strip.cells.iter().map(|c| (c.element.is_some(), v.axis.left_span(c.from_mm, c.to_mm))).collect::<Vec<_>>()
+        };
+        assert_eq!(on_plan(&r), [(false, (0, 23_000)), (true, (23_000, 30_000)), (false, (30_000, 53_000)), (true, (53_000, 60_000))]);
+        r.vm.select_calming_edge(false);
+        r.vm.select_calming_relative(1);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("Raised table, 23.0 m to 30.0 m, 7.0 m long, 2 of 4"));
+        assert!(r.vm.nudge_calming(1_000));
+        assert_eq!(on_plan(&r)[1], (true, (24_000, 31_000)), "moved rightward on the plan");
+        assert_eq!(r.vm.view_now().calming_strip.selected, Some(1));
     }
 
     /// A 7 m table at the start of the street, chosen.
@@ -3459,7 +3545,7 @@ mod green_tests {
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
     use crate::street::model::StreetExt;
-    use crate::street::model::{GreenForm, GreenKind, Piece, Street, TreeSize, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Green, GreenForm, GreenKind, Piece, Street, TreeSize, ZoneEnd, ZoneFrame};
 
     const LENGTH: i32 = 60_000;
 
@@ -3491,6 +3577,38 @@ mod green_tests {
 
     fn froms(r: &Rig) -> Vec<(i32, usize)> {
         r.vm.view_now().green.cells.iter().map(|c| (c.from_mm, c.track)).collect()
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_the_green_row_runs_left_to_right_as_the_plan_does() {
+        let pieces: Vec<Piece> =
+            CURB.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        // Trees at anchored 10 m and 40 m: 49 m to 50 m and 19 m to 20 m on the plan.
+        let tree = |from_mm| Green { kind: GreenKind::Tree, from_mm, length_mm: 1_000, offset_mm: 1_500, width_mm: 1_000, size: Some(TreeSize::M) };
+        let street = Street {
+            from_end: ZoneEnd::Last,
+            length_mm: Some(LENGTH),
+            green: vec![tree(10_000), tree(40_000)],
+            ..Street::imported(StreetClass::Local, Side::Right, &pieces)
+        };
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::Last }));
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said };
+        let starts = |r: &Rig| r.vm.view_now().green.cells.iter().map(|c| r.vm.green_left_start(c)).collect::<Vec<_>>();
+        assert_eq!(starts(&r), [19_000, 49_000], "the cells in order from the plan's left end");
+        r.vm.select_green_edge(false);
+        assert!(r.said.take()[0].ends_with("19.0 m to 20.0 m, 1.0 m long, 1 of 2"));
+        r.vm.select_green_relative(1);
+        assert!(r.said.take()[0].ends_with("49.0 m to 50.0 m, 1.0 m long, 2 of 2"));
+        r.vm.select_green_relative(-1);
+        assert!(r.vm.nudge_green(1_000));
+        assert_eq!(starts(&r), [20_000, 49_000], "moved rightward on the plan");
+        assert_eq!(r.vm.view_now().green.selected, Some(0), "the moved element stays chosen");
+        assert_eq!(
+            r.vm.read(|e| e.snapshot().green.iter().map(|g| g.from_mm).collect::<Vec<_>>()),
+            [10_000, 39_000],
+            "the one at anchored 40 m moved toward the anchored end"
+        );
     }
 
     #[test]

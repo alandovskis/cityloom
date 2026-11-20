@@ -400,7 +400,7 @@ impl Editor {
                     ok: true,
                 };
                 let items = content.stops.iter().enumerate().filter(|(_, s)| s.side == side).map(|(k, s)| (k, s.from_mm, s.to_mm()));
-                let cells = strip_cells(length_mm, items, gap, |k| {
+                let cells = strip_cells(length_mm, self.anchor_end(), items, gap, |k| {
                     let s = &content.stops[k];
                     StopCell {
                         instance: Some(k),

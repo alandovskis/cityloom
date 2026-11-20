@@ -391,7 +391,7 @@ impl Editor {
         let failing: Vec<usize> = self.calming_failures().iter().map(|f| f.element).collect();
         let gap = |from_mm: i32, to_mm: i32| CalmingCell { element: None, from_mm, to_mm, kind: None, label: Said::new("calming-gap"), ok: true };
         let items = content.calming.iter().enumerate().map(|(k, c)| (k, c.from_mm, c.to_mm()));
-        let cells = super::curb::strip_cells(length_mm, items, gap, |k| {
+        let cells = super::curb::strip_cells(length_mm, self.anchor_end(), items, gap, |k| {
             let c = &content.calming[k];
             CalmingCell {
                 element: Some(k),

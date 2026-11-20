@@ -174,8 +174,15 @@ impl StripCell for CurbCell {
 }
 
 /// The cells of one side along `length_mm`: `items` (an index into the list and where it starts and ends, in
-/// order, not overlapping) with a gap before each, between them and after the last.
-pub(super) fn strip_cells<C>(length_mm: i32, items: impl Iterator<Item = (usize, i32, i32)>, gap: impl Fn(i32, i32) -> C, item: impl Fn(usize) -> C) -> Vec<C> {
+/// order, not overlapping) with a gap before each, between them and after the last. They come in the plan's order, from
+/// its left end: on a street measured from its last end (`from_end`), the other way round from their positions.
+pub(super) fn strip_cells<C>(
+    length_mm: i32,
+    from_end: ZoneEnd,
+    items: impl Iterator<Item = (usize, i32, i32)>,
+    gap: impl Fn(i32, i32) -> C,
+    item: impl Fn(usize) -> C,
+) -> Vec<C> {
     let mut cells = Vec::new();
     let mut at = 0;
     for (k, from, to) in items {
@@ -187,6 +194,9 @@ pub(super) fn strip_cells<C>(length_mm: i32, items: impl Iterator<Item = (usize,
     }
     if at < length_mm {
         cells.push(gap(at, length_mm));
+    }
+    if from_end == ZoneEnd::Last {
+        cells.reverse();
     }
     cells
 }
@@ -329,7 +339,7 @@ impl Editor {
             .map(|side| {
                 let gap = |from_mm: i32, to_mm: i32| CurbCell { instance: None, from_mm, to_mm, use_: None, label: Said::new("curb-gap"), ok: true };
                 let items = content.curb.iter().enumerate().filter(|(_, i)| i.side == side).map(|(k, i)| (k, i.from_mm, i.to_mm()));
-                let cells = strip_cells(length_mm, items, gap, |k| {
+                let cells = strip_cells(length_mm, self.anchor_end(), items, gap, |k| {
                     let i = &content.curb[k];
                     CurbCell {
                         instance: Some(k),
