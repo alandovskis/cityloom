@@ -522,17 +522,6 @@ impl StreetVm {
         }
     }
 
-    /// Moves the selected zone's start by `delta_mm`, saying why when it cannot.
-    pub fn nudge_boundary(&self, delta_mm: i32) -> bool {
-        let view = self.view_now();
-        let Some(from) = view.zones.zones.get(view.zones.selected).map(|z| z.from_mm) else { return false };
-        self.move_boundary(from + delta_mm)
-    }
-
-    pub fn move_boundary(&self, to_mm: i32) -> bool {
-        self.zone_edit(|e| e.move_boundary(to_mm))
-    }
-
     /// Starts a drag of a boundary. False, with the reason said, while another drag (of a boundary or a curbside use)
     /// is under way: then nothing is dragged and `end_boundary_drag` is not to be called.
     pub fn begin_boundary_drag(&self) -> bool {
@@ -541,11 +530,6 @@ impl StreetVm {
         }
         self.edit(|e| e.begin_gesture());
         true
-    }
-
-    /// One step of a drag of the boundary: shown, not announced.
-    pub fn drag_boundary_to(&self, to_mm: i32) {
-        self.quiet(|e| e.move_boundary(to_mm).is_ok());
     }
 
     /// The end of a boundary drag: kept as one edit, and announced, when `commit`.
@@ -2256,10 +2240,6 @@ mod tests {
         Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said, time, storage }
     }
 
-    fn sample_rig(starts: &[i32]) -> Rig {
-        zoned_rig(Street::sample(0, Side::Right), starts)
-    }
-
     /// Picks the stretch from `from_mm` to `to_mm` and narrows its first piece: the stretch becomes a run of its own
     /// (a zone with its own section), picked.
     fn make_run(vm: &StreetVm, from_mm: i32, to_mm: i32) {
@@ -2349,36 +2329,6 @@ mod tests {
         assert_eq!(r.vm.view_now().speed_kmh, Some(50));
         r.vm.end_boundary_drag(false);
         assert!(r.vm.set_speed(Some(30)));
-    }
-
-    #[test]
-    fn a_boundary_drag_is_quiet_while_it_goes_and_one_announced_edit_when_it_ends() {
-        let r = sample_rig(&[0, 20_000]);
-        assert!(r.vm.pick_stretch(20_000, LENGTH));
-        r.said.take();
-        r.vm.begin_boundary_drag();
-        r.vm.drag_boundary_to(22_000);
-        r.vm.drag_boundary_to(25_000);
-        assert!(r.said.take().is_empty());
-        assert!(r.vm.view_now().revisions.is_empty());
-        r.vm.end_boundary_drag(true);
-        assert_eq!(r.said.take(), ["Move the start of Zone 2 to 25.0 m. Every metre of the street is used."]);
-        assert_eq!(r.vm.view_now().revisions.len(), 1);
-        assert_eq!(r.vm.view_now().zones.zones[1].from_mm, 25_000);
-        // cancelled: back as it was, nothing said
-        r.vm.begin_boundary_drag();
-        r.vm.drag_boundary_to(30_000);
-        r.vm.end_boundary_drag(false);
-        assert_eq!(r.vm.view_now().zones.zones[1].from_mm, 25_000);
-        assert!(r.said.take().is_empty());
-        // a nudge says why it stopped
-        assert!(!r.vm.nudge_boundary(-25_000));
-        assert_eq!(r.said.take(), ["A zone must be at least 5.0 m long."]);
-        assert!(r.vm.nudge_boundary(1_000));
-        assert_eq!(r.said.take().len(), 1);
-        r.said.take();
-        assert!(r.vm.move_boundary(27_000));
-        assert_eq!(r.said.take().len(), 1);
     }
 
     #[test]
@@ -4349,7 +4299,6 @@ mod read_only_tests {
             ("transform", Box::new(|vm| vm.apply_choice(crate::street::vm::transform::Choice::Template(Template::Greenway)))),
             ("add a piece", Box::new(move |vm| vm.add_item(Item::Piece(travel)))),
             ("add green", Box::new(|vm| vm.add_green_clear(GreenForm::new(GreenKind::Bed)))),
-            ("boundary", Box::new(|vm| vm.move_boundary(10_000))),
             ("boundary drag", Box::new(|vm| vm.begin_boundary_drag())),
             ("speed", Box::new(|vm| vm.set_speed(Some(30)))),
             ("calming", Box::new(|vm| vm.add_calming(CalmingKind::Table, 7_000))),
