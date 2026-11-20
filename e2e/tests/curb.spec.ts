@@ -128,6 +128,39 @@ test.describe("the curbside strip", () => {
     expect(before).toMatch(/^Street tree, 0\.0 m to 2\.0 m/);
   });
 
+  test("a use is added on the side away from traffic with the mouse alone", async ({ page }) => {
+    // A street with a curbside lane on its left, the side away from traffic.
+    await page.goto("/map.html");
+    for (const href of (await placesOnMap(page)).streets) {
+      await page.goto("/" + href);
+      await expect(page.locator("#plan svg")).toBeVisible();
+      if ((await page.locator("#curb-strip-left").count()) > 0 && (await streetLength(page)) >= 20) break;
+    }
+    await expect(page.locator("#curb-strip-left")).toHaveCount(1);
+    await expect(planThing(page, "curb-left-0")).toHaveCount(0);
+    await page.locator("#plan").scrollIntoViewIfNeeded();
+    const box = (await page.locator("#plan svg").boundingBox())!;
+    const length = await streetLength(page);
+    const x = (m: number) => box.x + (m / length) * box.width;
+    const bands = box.y + 24 + 48;
+    // A drag along the plan picks a stretch.
+    await page.mouse.move(x(5), bands);
+    await page.mouse.down();
+    await page.mouse.move(x(15), bands, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator("#plan-picked")).toHaveText(/^From /);
+    // A press on the empty lane above the bands, where the left side's uses are drawn, picks the run there and
+    // chooses the left curbside's free stretch at its start.
+    await page.mouse.click(x(length / 2), box.y + 12);
+    await expect(page.locator("#p-curb")).toBeVisible();
+    await page.locator("#curb-use").selectOption(USE.patio);
+    await page.locator("#curb-length").fill("6");
+    await page.locator("#curb-add").click();
+    await expect(page.locator('#plan [data-thing^="curb-left-"]')).toHaveCount(1);
+    await expect(page.locator('#curb-strip-left [role="option"][title="Patio"]')).toHaveCount(1);
+    await expect(page.locator('#curb-strip-right [role="option"][title="Patio"]')).toHaveCount(0);
+  });
+
   test("a use is dragged along the street as one undoable step, and Escape cancels a drag", async ({ page }) => {
     await openCurbsideStreet(page, 20);
     const strip = page.locator(".curb-strip").first();

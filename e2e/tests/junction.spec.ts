@@ -1075,19 +1075,18 @@ test.describe("the approach of an arm whose street is divided", () => {
   });
 });
 
-/** The junction at the end of the street on its page that positions along it are measured from: its first end, unless
- *  the edge of the map cuts it, then its last. Its number, as the header's link to it gives it; "" when that end is
- *  not a junction. */
+/** The junction at the end of the street on its page that positions along it are measured from, as the plan says
+ *  (`data-from-end`): its number, as the header's link to it gives it; "" when that end is not a junction. */
 const anchoredJunction = (page: Page) =>
   page.evaluate(() => {
+    const last = document.querySelector("#plan svg")!.getAttribute("data-from-end") === "last";
     const sub = document.getElementById("street-sub")!;
     const text = (sub.textContent ?? "").replace(/\s+/g, " ").trim();
     const links = [...sub.querySelectorAll("a")];
-    const number = (a: HTMLAnchorElement | undefined) =>
-      /junction=(\d+)/.exec(a?.getAttribute("href") ?? "")?.[1] ?? "";
-    if (links[0] && text.startsWith(`between ${(links[0].textContent ?? "").trim()}`)) return number(links[0]);
-    if (text.startsWith("between the edge of the map")) return number(links.at(-1));
-    return "";
+    // The header names the first end, then the last; either may be a junction (a link) or not.
+    const firstIsLink = !!links[0] && text.startsWith(`between ${(links[0].textContent ?? "").trim()}`);
+    const end = last ? (firstIsLink ? links[1] : links[0]) : firstIsLink ? links[0] : undefined;
+    return /junction=(\d+)/.exec(end?.getAttribute("href") ?? "")?.[1] ?? "";
   });
 
 /** The number of the junction at the address `junction` (`intersection.html?junction=…`). */
