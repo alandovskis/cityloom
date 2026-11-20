@@ -3,6 +3,10 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test as base, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
+/** The version the edits document is written as (`IMPORT_STAMP_VERSION` in `city/edits.rs`), which every street record's
+ *  import stamp makes the document hold. */
+export const EDITS_VERSION = 17;
+
 /** `just e2e-archive`: the server serves the Plateau's tile from an unpacked `.citymodel` archive, so the
  *  fixtures do not route them (a route would answer before the server and the run would prove nothing). */
 const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;

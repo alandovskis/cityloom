@@ -3,7 +3,7 @@
 
 import type { Page } from "@playwright/test";
 
-import { expect, live, openJunction, openStreet, test } from "./fixtures";
+import { expect, live, openJunction, openStreet, test, EDITS_VERSION } from "./fixtures";
 
 // The editors are reached from the map, as a person does.
 const PAGES = [
@@ -306,13 +306,13 @@ for (const p of NOTICE_PAGES) {
       await page.setViewportSize({ width: w.width, height: w.height });
       await p.open(page);
       await expect(page.locator(p.ready).first()).toBeAttached();
-      await page.evaluate(() => {
+      await page.evaluate((version) => {
         const record = { ways: [1], nodes: [], leaving: {}, street: {} };
         localStorage.setItem(
           "cityloom-edits@first",
-          JSON.stringify({ version: 17, streets: { w1: record }, junctions: {} }),
+          JSON.stringify({ version, streets: { w1: record }, junctions: {} }),
         );
-      });
+      }, EDITS_VERSION);
       await page.reload();
       const notice = page.locator("p.shell-notice");
       await expect(notice).toHaveAttribute("role", "status");

@@ -265,6 +265,7 @@ fn put_back(storage: &Rc<dyn Storage>, then: &Records, differences: &[Difference
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::city::edits::{IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
     use crate::shared::ports::{MemoryStorage, test_ports};
     use crate::sync::model::Id;
     use serde_json::json;
@@ -276,11 +277,14 @@ mod tests {
 
     fn work(streets: &[(&str, i64)], rules: &[(&str, &str)]) -> (String, String) {
         let streets: serde_json::Map<String, Value> =
-            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "n": n } }))).collect();
+            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": STALE_BEFORE_IMPORT, "street": { "n": n } }))).collect();
         let ring = json!([[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]]);
         let restrictions: serde_json::Map<String, Value> =
             rules.iter().map(|(id, name)| ((*id).to_string(), json!({ "name": name, "rule": { "kind": "car_free" }, "ring": ring }))).collect();
-        (json!({ "version": 17, "streets": streets }).to_string(), json!({ "version": 1, "next_id": 9, "restrictions": restrictions }).to_string())
+        (
+            json!({ "version": IMPORT_STAMP_VERSION, "streets": streets }).to_string(),
+            json!({ "version": 1, "next_id": 9, "restrictions": restrictions }).to_string(),
+        )
     }
 
     fn keep(storage: &Rc<dyn Storage>, streets: &[(&str, i64)], rules: &[(&str, &str)]) {
@@ -476,8 +480,8 @@ mod tests {
 
     fn keep_streets_only(storage: &Rc<dyn Storage>, streets: &[(&str, i64)]) {
         let streets: serde_json::Map<String, Value> =
-            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "n": n } }))).collect();
-        assert!(storage.remember(EDITS_KEY, &json!({ "version": 17, "streets": streets }).to_string()));
+            streets.iter().map(|(k, n)| ((*k).to_string(), json!({ "ways": [1], "import": STALE_BEFORE_IMPORT, "street": { "n": n } }))).collect();
+        assert!(storage.remember(EDITS_KEY, &json!({ "version": IMPORT_STAMP_VERSION, "streets": streets }).to_string()));
     }
 
     #[test]

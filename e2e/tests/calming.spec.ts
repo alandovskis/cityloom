@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { addFromMenu as addItem, expect, placesOnMap, streetLengthM, test } from "./fixtures";
+import { addFromMenu as addItem, expect, placesOnMap, streetLengthM, test, EDITS_VERSION } from "./fixtures";
 
 // Raised tables and crossings: the strip under the zones, its tools, the checks, the 2.5D and the saved document.
 
@@ -68,7 +68,7 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#checks li").filter({ hasText: "Raised elements long enough" })).toHaveCount(1);
 
     // Kept: the document is written as version 17 whatever it holds: every street record carries the importer stamp, and the table is there after a reload.
-    await expect.poll(() => editsVersion(page)).toBe(17);
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Raised table.*8\.0 m long/);
@@ -168,7 +168,7 @@ test.describe("raised tables and crossings", () => {
     // Its checks include the lane row, and the document takes the chicanes' version only while one is held.
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Chicanes clear of bus and bike lanes" })).toHaveCount(1);
-    await expect.poll(() => editsVersion(page)).toBe(17);
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane/);
@@ -209,7 +209,7 @@ test.describe("raised tables and crossings", () => {
     await expect(
       page.locator("#checks li").filter({ hasText: "Modal filters passable on foot and by bike" }),
     ).toHaveCount(1);
-    await expect.poll(() => editsVersion(page)).toBe(17);
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter/);

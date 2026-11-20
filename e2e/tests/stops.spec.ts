@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import {
   addFromMenu,
+  EDITS_VERSION,
   expect,
   live,
   menuItem,
@@ -84,7 +85,7 @@ test.describe("the Stops row", () => {
     await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(0);
 
     // Kept: the document is version 17 (the import stamp) and the stop is still there after a reload.
-    await expect.poll(() => editsVersion(page)).toBe(17);
+    await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
     await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /12\.0 m long/);

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, test } from "./fixtures";
+import { expect, live, test, EDITS_VERSION } from "./fixtures";
 
 // The timeline page: milestones of a project's work, saved by name, compared with the work now, restored after a
 // question and deleted. The first project is every test's own (fixtures.ts); its edits are `cityloom-edits@first`.
@@ -10,14 +10,14 @@ const EDITS_KEY = "cityloom-edits@first";
 /** Keeps streets `[key, name, width]` as the first project's edits, as a page of the project would. */
 async function keepStreets(page: Page, streets: [string, string, number][]) {
   await page.evaluate(
-    ({ key, streets }) => {
+    ({ key, streets, version }) => {
       // Stamped with the importer version, as a saved record is: one without it is stale and discarded.
-      const doc = { version: 17, streets: {} as Record<string, unknown> };
+      const doc = { version, streets: {} as Record<string, unknown> };
       for (const [k, name, width] of streets)
         doc.streets[k] = { ways: [1], import: 11, street: { name, row_mm: width } };
       localStorage.setItem(key, JSON.stringify(doc));
     },
-    { key: EDITS_KEY, streets },
+    { key: EDITS_KEY, streets, version: EDITS_VERSION },
   );
 }
 

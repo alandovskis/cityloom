@@ -3,7 +3,7 @@ use std::rc::Rc;
 use serde_json::json;
 
 use super::vm::{Context, Focus, TimelineVm};
-use crate::city::edits::EDITS_KEY;
+use crate::city::edits::{EDITS_KEY, IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
 use crate::shared::i18n::Locale;
 use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
 
@@ -19,9 +19,11 @@ fn en() -> (Rc<TimelineVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
 
 /// Keeps streets `(key, name, width)` as the project's edits.
 fn keep(storage: &MemoryStorage, streets: &[(&str, &str, i64)]) {
-    let streets: serde_json::Map<String, serde_json::Value> =
-        streets.iter().map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "import": 11, "street": { "name": name, "row_mm": w } }))).collect();
-    assert!(storage.remember(EDITS_KEY, &json!({ "version": 17, "streets": streets }).to_string()));
+    let streets: serde_json::Map<String, serde_json::Value> = streets
+        .iter()
+        .map(|(k, name, w)| ((*k).to_string(), json!({ "ways": [1], "import": STALE_BEFORE_IMPORT, "street": { "name": name, "row_mm": w } })))
+        .collect();
+    assert!(storage.remember(EDITS_KEY, &json!({ "version": IMPORT_STAMP_VERSION, "streets": streets }).to_string()));
 }
 
 #[test]
