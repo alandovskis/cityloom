@@ -626,6 +626,49 @@ mod tests {
         assert_eq!(e.view().selected, Some(earlier), "the same piece, by its counterpart");
     }
 
+    /// A saved street of four zones whose middle two look the same: runs 0 to 20 m, 20 m to 40 m (a boundary at 30 m
+    /// hidden inside it) and 40 m to the end.
+    fn hidden_boundary() -> Editor {
+        editor(&street(&[0, 20_000, 30_000, 40_000], &[0, 100, 100, 0], ZoneEnd::First), frame(LEN, ZoneEnd::First))
+    }
+
+    #[test]
+    fn a_boundary_moved_inside_a_run_with_a_hidden_boundary_joins_it_rather_than_stopping_at_it() {
+        let starts = |e: &Editor| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>();
+        let mut e = hidden_boundary();
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000], "opened as saved");
+        // The boundary at 20 m (zone 1) may go to 35 m, 5 m short of the next one the plan shows, as `boundary_kept`
+        // allows: the hidden one at 30 m is joined, not a wall.
+        assert_eq!(e.move_boundary_of(1, 33_000), Ok(1));
+        assert_eq!(starts(&e), [0, 33_000, 40_000]);
+        assert!(e.undo());
+        // The boundary at 40 m (zone 3) to 25 m: the zone it starts is now the third.
+        assert_eq!(e.move_boundary_of(3, 25_000), Ok(2));
+        assert_eq!(starts(&e), [0, 20_000, 25_000]);
+        assert!(e.undo());
+        // The 5 m rule is the plan's: from the boundaries it shows.
+        assert_eq!(e.move_boundary_of(1, 36_000), Err(ZoneRefusal::TooShort));
+        assert_eq!(e.move_boundary_of(3, 24_000), Err(ZoneRefusal::TooShort));
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000]);
+        // Inside a drag the join is undone with it.
+        e.begin_gesture();
+        assert_eq!(e.move_boundary_of(1, 33_000), Ok(1));
+        e.cancel_gesture();
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000]);
+    }
+
+    #[test]
+    fn the_2_5d_names_the_run_it_shows_and_the_run_across_its_joint_not_their_zones() {
+        let mut e = hidden_boundary();
+        e.pick_run_at(25_000).unwrap();
+        assert_eq!(e.pick(), stretch(20_000, 40_000));
+        let v = e.view();
+        let from_to = super::super::zones::stretch_between;
+        assert_eq!(v.zones.zones[v.zones.selected].label, from_to(20_000, 40_000), "the run shown");
+        let joint = v.zones.joint.expect("a run across a boundary near");
+        assert_eq!((joint.left_mm, joint.label), (40_000, from_to(40_000, LEN)), "the next run, across the boundary the plan shows");
+    }
+
     #[test]
     fn a_new_editor_picks_the_whole_street() {
         let plain = editor(&sample(), frame(LEN, ZoneEnd::First));
@@ -861,15 +904,15 @@ mod tests {
         e.select(Some(uid));
         let revisions = e.states.len();
         e.begin_gesture();
-        assert_eq!(e.move_boundary_of(2, 38_000), Ok(()));
-        assert_eq!(e.move_boundary_of(2, 37_000), Ok(()));
+        assert_eq!(e.move_boundary_of(2, 38_000), Ok(2));
+        assert_eq!(e.move_boundary_of(2, 37_000), Ok(2));
         assert_eq!((e.pick(), e.zone(), e.view().selected), (stretch(10_000, 30_000), 0, Some(uid)), "nothing follows while it lasts");
         assert!(e.end_gesture());
         assert_eq!(e.states.len(), revisions + 1);
         assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
         assert_eq!((e.pick(), e.view().selected), (stretch(10_000, 30_000), Some(uid)));
         e.begin_gesture();
-        assert_eq!(e.move_boundary_of(2, 45_000), Ok(()));
+        assert_eq!(e.move_boundary_of(2, 45_000), Ok(2));
         e.cancel_gesture();
         assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
         assert_eq!(e.move_boundary_of(0, 5_000), Err(ZoneRefusal::NoBoundary));

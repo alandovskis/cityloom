@@ -79,10 +79,24 @@ pub fn zoned(street: Street, starts_mm: &[i32], length_mm: i32) -> Street {
     Street { zones, from_end: ZoneEnd::First, length_mm: Some(length_mm), ..street }.settled()
 }
 
+/// `zoned`, each zone after the first with a speed limit of its own (30 km/h, 40 km/h, and so on): the same pieces, but
+/// every boundary one between runs, as the plan shows them (zones that look the same are one run).
+pub fn zoned_apart(street: Street, starts_mm: &[i32], length_mm: i32) -> Street {
+    let mut s = zoned(street, starts_mm, length_mm);
+    for (z, kmh) in s.zones.iter_mut().zip((20..).step_by(10)).skip(1) {
+        z.speed = Speed::Kmh(kmh);
+    }
+    s
+}
+
 /// A 100 000 mm street of `Street::sample(0, Side::Right)` with zones at 0 and 50 000. Zone 2 has a section of its
-/// own, one travel lane fewer, when `second_own`.
+/// own, one travel lane fewer, when `second_own`; else a speed limit of its own, 30 km/h, so that it is still a run of
+/// its own (a boundary the plan shows, which the 2.5D draws across) with the same pieces.
 pub fn two_zones(second_own: bool) -> Editor {
     let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+    if !second_own {
+        s.zones[1].speed = Speed::Kmh(30);
+    }
     if second_own {
         let mut own = s.segments.clone();
         let lane = own.iter().position(|g| KINDS[g.kind].id == "travel").expect("the sample has a travel lane");

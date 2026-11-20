@@ -316,6 +316,8 @@ mod tests {
         e.add_stop(Side::Right, 10_000, 20_000, StopKind::Bulb).unwrap();
         e.set_stop_shelter(0, true).unwrap();
         e.split_zone(Some(20_000)).unwrap();
+        // A run of its own, so a boundary the 2.5D draws across.
+        assert!(e.set_speed(Some(30)));
         // Zone 1 (0 to 20 m) holds the first half: the platform to its end; the sign stands, the shelter (middle at
         // 20 m, 18 m to 22 m) crosses the zone and is not drawn.
         assert!(e.select_zone(0));

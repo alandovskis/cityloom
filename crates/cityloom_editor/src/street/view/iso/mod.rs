@@ -843,18 +843,18 @@ mod tests {
     /// The sample street divided at 20 m and 40 m of 60 m, with the frame the zone operations need.
     fn three_zones() -> Editor {
         use crate::shared::catalogue::Side;
-        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned_apart};
         let today = Street::sample(0, Side::Right);
-        let now = zoned(today.clone(), &[0, 20_000, 40_000], 60_000);
+        let now = zoned_apart(today.clone(), &[0, 20_000, 40_000], 60_000);
         Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
     }
 
     /// The sample street divided at 100 m of 160 m: no boundary lies near the 40 m shown of zone 1.
     fn zones_far_apart() -> Editor {
         use crate::shared::catalogue::Side;
-        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned_apart};
         let today = Street::sample(0, Side::Right);
-        let now = zoned(today.clone(), &[0, 100_000], 160_000);
+        let now = zoned_apart(today.clone(), &[0, 100_000], 160_000);
         Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 160_000, from_end: ZoneEnd::First }))
     }
 
@@ -1219,8 +1219,8 @@ mod tests {
     /// A view of a street of Sample Avenue 2 (trees, a median) in two zones, zone `selected` shown.
     fn avenue_joined(selected: usize) -> View {
         use crate::shared::catalogue::Side;
-        use crate::street::model::zoned;
-        let s = zoned(crate::street::model::Street::sample(1, Side::Right), &[0, 50_000], 100_000);
+        use crate::street::model::zoned_apart;
+        let s = zoned_apart(crate::street::model::Street::sample(1, Side::Right), &[0, 50_000], 100_000);
         let mut e = Editor::from_street(&s, &s, 0);
         assert!(e.select_zone(selected));
         e.view()

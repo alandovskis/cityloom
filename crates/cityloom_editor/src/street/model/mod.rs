@@ -23,7 +23,7 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
+pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned, zoned_apart};
 pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod beyond;
 mod joint;
@@ -3399,7 +3399,7 @@ mod tests {
     #[test]
     fn the_view_lists_zones_with_the_stretch_they_cover_range_and_whether_each_has_its_own_section() {
         let today = sample_street();
-        let mut now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut now = zoned_apart(today.clone(), &[0, 20_000, 45_000], 60_000);
         now.zones[1].name = Some("Market".into());
         let mut e = Editor::from_street(&today, &now, 0);
         let z = e.view().zones;

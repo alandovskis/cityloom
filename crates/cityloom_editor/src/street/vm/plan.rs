@@ -272,8 +272,7 @@ impl StreetVm {
             PlanGesture::Pending(p, _) if moved(g, x_px) => self.plan_begin(p),
             g => g,
         };
-        self.plan_step(&g, at_mm);
-        g
+        self.plan_step(g, at_mm)
     }
 
     /// The pointer was let go at `at_mm`: a press that did not move is a click (on the street, it picks the run there;
@@ -293,14 +292,14 @@ impl StreetVm {
             PlanGesture::Handle { fixed_mm } => {
                 self.pointer_picked(self.pick_stretch(fixed_mm, at_mm));
             }
-            PlanGesture::Boundary { zone, at_mm: was, pick } => {
-                self.plan_step(&g, at_mm);
+            PlanGesture::Boundary { at_mm: was, pick, .. } => {
+                let PlanGesture::Boundary { zone, .. } = self.plan_step(g, at_mm) else { return };
                 self.end_boundary_drag(true);
                 let now = self.boundary_at(zone).unwrap_or(was);
                 self.repick(pick_after_move(pick, was, now));
             }
             PlanGesture::Thing { thing, .. } => {
-                self.plan_step(&g, at_mm);
+                self.plan_step(g, at_mm);
                 self.end_thing_drag(thing, true);
             }
         }
@@ -362,15 +361,18 @@ impl StreetVm {
     }
 
     /// One step of a drag of a boundary or a thing, the pointer at `at_mm` from the plan's left end: shown, not said.
-    fn plan_step(&self, g: &PlanGesture, at_mm: i32) {
+    /// Gives back the gesture, a boundary's by the zone it starts after the step (a step that joins a boundary hidden
+    /// inside a run changes it).
+    fn plan_step(&self, g: PlanGesture, at_mm: i32) -> PlanGesture {
         let at = self.read(|e| e.anchored_mm(at_mm));
-        match *g {
-            PlanGesture::Boundary { zone, .. } => {
+        match g {
+            PlanGesture::Boundary { zone, at_mm: was, pick } => {
                 let plan = &self.view_now().plan;
-                let Some(own) = self.boundary_at(zone) else { return };
+                let Some(own) = self.boundary_at(zone) else { return g };
                 let others: Vec<i32> = plan.boundaries.iter().filter(|b| b.zone != zone).map(|b| b.at_mm).collect();
                 let to = boundary_kept(&others, own, plan.length_mm.unwrap_or(0), at_mm);
-                self.quiet(|e| e.move_boundary_of(zone, e.anchored_mm(to)).is_ok());
+                let zone = self.quiet(|e| e.move_boundary_of(zone, e.anchored_mm(to)).ok()).unwrap_or(zone);
+                return PlanGesture::Boundary { zone, at_mm: was, pick };
             }
             PlanGesture::Thing { thing, from_mm, grab_mm } => {
                 let to = from_mm + at - grab_mm;
@@ -383,6 +385,7 @@ impl StreetVm {
             }
             _ => {}
         }
+        g
     }
 
     fn end_thing_drag(&self, thing: PlanThing, keep: bool) {
@@ -507,22 +510,28 @@ impl StreetVm {
     /// edit, said; an end of the pick that was on it follows it. False, with the reason said, when it cannot go there.
     fn move_boundary_to(&self, zone: usize, was_mm: i32, to_mm: i32) -> bool {
         let pick = self.view_now().plan.pick;
+        // The zone the boundary starts once moved: a boundary hidden inside a run beside it is joined on the way.
+        let starts = std::cell::Cell::new(zone);
         let moved = self.zone_edit(|e| {
             let to = e.anchored_mm(to_mm);
-            e.move_boundary_of(zone, to)
+            e.move_boundary_of(zone, to).map(|z| starts.set(z))
         });
         if moved {
-            let now = self.boundary_at(zone).unwrap_or(was_mm);
+            let now = self.boundary_at(starts.get()).unwrap_or(was_mm);
+            if self.boundary.get_untracked() == Some((zone, was_mm)) {
+                self.boundary.set(Some((starts.get(), now)));
+            }
             self.repick(pick_after_move(pick, was_mm, now));
         }
         moved
     }
 
-    /// Where the boundary a click chose lies on the plan, from its left end; `None` when none is chosen (or it is gone,
-    /// or can no longer move). Watched.
+    /// Where the boundary a click chose lies on the plan, from its left end; `None` when none is chosen (or it is no
+    /// longer where it was chosen, which an edit of the street or a move through the history may do, or can no longer
+    /// move). Watched.
     pub fn chosen_boundary(&self) -> Option<i32> {
-        let zone = self.boundary.get()?;
-        self.view().plan.boundaries.iter().find(|b| b.zone == zone && b.movable).map(|b| b.at_mm)
+        let (zone, at_mm) = self.boundary.get()?;
+        self.view().plan.boundaries.iter().any(|b| (b.zone, b.at_mm) == (zone, at_mm) && b.movable).then_some(at_mm)
     }
 
     /// What the chosen boundary's Move to field shows: where it is, as a number in the page's units. Watched.
@@ -539,7 +548,7 @@ impl StreetVm {
             return;
         }
         let Some(at_mm) = self.boundary_at(zone) else { return };
-        self.boundary.set(Some(zone));
+        self.boundary.set(Some((zone, at_mm)));
         self.ask(crate::street::vm::level::Level::Street);
         let said = Said::new("boundary-chosen").with("at", crate::shared::said::Arg::Length(at_mm));
         self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &said));
@@ -549,7 +558,7 @@ impl StreetVm {
     /// Move to field. It stays chosen. False, with the reason said, when none is chosen, `typed` is not a number or the
     /// boundary cannot go there.
     pub fn move_chosen_boundary(&self, typed: &str) -> bool {
-        let (Some(zone), Some(was)) = (self.boundary.get_untracked(), untrack(|| self.chosen_boundary())) else { return false };
+        let (Some((zone, _)), Some(was)) = (self.boundary.get_untracked(), untrack(|| self.chosen_boundary())) else { return false };
         let Some(to) = parse_length_mm(typed, self.units_now()) else {
             self.say_bad_number();
             return false;
@@ -1226,6 +1235,37 @@ mod pick_tests {
             r.said.take(),
             ["The changes along this street were drawn on a road of another length or from its other end, so they cannot be moved here."]
         );
+    }
+
+    #[test]
+    fn a_boundary_dragged_over_one_hidden_inside_a_run_goes_where_the_plan_lets_it() {
+        // A saved street whose zones from 20 m and from 30 m look the same: one run from 20 m to 40 m.
+        let s = street(&[0, 20_000, 30_000, 40_000], &[0, 100, 100, 0], ZoneEnd::First);
+        let r = rig_of(&s, ZoneEnd::First);
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 3 }, 400.0);
+        let g = r.vm.plan_move(&g, 350.0, 35_000);
+        let g = r.vm.plan_move(&g, 280.0, 28_000);
+        assert_eq!(boundaries(&r), [20_000, 28_000], "past the hidden boundary at 30 m, as it goes");
+        let g = r.vm.plan_move(&g, 100.0, 10_000);
+        assert_eq!(boundaries(&r), [20_000, 25_000], "kept 5 m from the boundary the plan shows");
+        r.vm.plan_release(g, 10_000);
+        assert_eq!(boundaries(&r), [20_000, 25_000]);
+        assert_eq!(r.vm.read(|e| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>()), [0, 20_000, 25_000]);
+        // Undone, the saved zones come back as they were.
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.read(|e| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>()), [0, 20_000, 30_000, 40_000]);
+        // Alt with an arrow, and a typed move, pass it too, the pick's end following.
+        r.vm.pick_run_at(30_000);
+        r.vm.plan_key(PlanKey::NudgeBoundary(14_000));
+        assert_eq!((boundaries(&r), r.vm.picked()), (vec![34_000, 40_000], Some((34_000, 40_000))));
+        assert!(r.vm.undo());
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert!(r.vm.move_chosen_boundary("33"));
+        assert_eq!((boundaries(&r), r.vm.chosen_boundary()), (vec![33_000, 40_000], Some(33_000)), "still chosen, by the zone it now starts");
+        assert!(r.vm.move_chosen_boundary("21"));
+        assert_eq!(boundaries(&r), [21_000, 40_000]);
     }
 
     #[test]

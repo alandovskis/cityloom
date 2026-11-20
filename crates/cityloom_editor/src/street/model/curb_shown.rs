@@ -238,6 +238,9 @@ mod tests {
         e.add_curb(Side::Right, 12_000, 6_000, Use::Parking).unwrap();
         e.add_curb(Side::Right, 24_000, 6_000, Use::Tree).unwrap();
         e.split_zone(Some(20_000)).unwrap();
+        // A speed limit of its own, so the new zone is a run of its own (with the same pieces) and the 2.5D shows the
+        // boundary.
+        assert!(e.set_speed(Some(30)));
         e
     }
 

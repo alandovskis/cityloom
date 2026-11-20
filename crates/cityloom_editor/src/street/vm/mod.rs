@@ -92,9 +92,9 @@ pub struct StreetVm {
     extend_from: Cell<Option<i32>>,
     /// Whether the keyboard point has moved on its own since the stretch was last picked: its words are then where it is.
     point_alone: ArcRwSignal<bool>,
-    /// The boundary a click on the plan chose, by the zone it starts, to be moved by typing where it goes (a pointer's
-    /// way to move it without dragging); outside the history.
-    boundary: ArcRwSignal<Option<usize>>,
+    /// The boundary a click on the plan chose, by the zone it starts and where it is on the plan, to be moved by typing
+    /// where it goes (a pointer's way to move it without dragging); outside the history.
+    boundary: ArcRwSignal<Option<(usize, i32)>>,
     goal: crate::shared::goals::GoalChoice,
     /// Whether the Checks tab shows its passing checks.
     passes: crate::shared::check_fold::PassFold,

@@ -144,12 +144,15 @@ impl Editor {
         let length_mm = self.street_length_mm().unwrap_or(0);
         let from_end = if content.zones.is_empty() { self.frame.map_or(ZoneEnd::First, |f| f.from_end) } else { content.from_end };
         let failing = self.failing_transitions();
+        let runs = self.runs();
         let one = |z: usize| {
             let (from_mm, to_mm) = content.span(z, length_mm);
             let ok = self.section_passes(content.section(z)) && !failing.iter().any(|(_, host, _)| *host == z);
+            // Named by the run it is part of, which the plan shows: a boundary inside a run is not seen.
+            let label = runs.iter().find(|r| r.zones.contains(&z)).map_or_else(|| self.stretch_said(z), |r| self.stretch_of(r.from_mm, r.to_mm));
             match content.zones.get(z) {
-                Some(g) => ZoneView { index: z, from_mm, to_mm, label: self.stretch_said(z), own: g.segments.is_some(), cut_off: self.is_cut_off(z), ok },
-                None => ZoneView { index: z, from_mm, to_mm, label: self.stretch_said(z), own: false, cut_off: false, ok },
+                Some(g) => ZoneView { index: z, from_mm, to_mm, label, own: g.segments.is_some(), cut_off: self.is_cut_off(z), ok },
+                None => ZoneView { index: z, from_mm, to_mm, label, own: false, cut_off: false, ok },
             }
         };
         ZonesView {
@@ -251,16 +254,21 @@ impl Editor {
     /// gesture it is shown as it goes and recorded as one revision at the end. The pick is the zone's span after it.
     #[cfg(test)]
     pub fn move_boundary(&mut self, to_mm: i32) -> Result<(), ZoneRefusal> {
-        let z = self.zone;
-        self.move_boundary_of(z, to_mm)?;
+        let z = self.move_boundary_of(self.zone, to_mm)?;
         // The pick is the zone's span, which has moved with its start.
         self.follow_zone(z);
         Ok(())
     }
 
     /// Moves the start of zone `z` to `to_mm`, as `move_boundary` does, leaving the pick (clamped once recorded) and
-    /// the selected piece alone: what the plan's boundary drag moves.
-    pub fn move_boundary_of(&mut self, z: usize, to_mm: i32) -> Result<(), ZoneRefusal> {
+    /// the selected piece alone: what the plan's boundary drag moves. Gives back the zone the boundary starts after the
+    /// move.
+    ///
+    /// The boundary is kept `MIN_ZONE_MM` from the boundaries the plan shows (between runs) and the street's ends, as
+    /// `plan::boundary_kept` keeps a drag. A saved street may hold boundaries between zones that look the same (loading
+    /// never joins them), hidden inside a run: the move joins the two runs it lies between into one zone each, so such
+    /// a boundary neither stops it nor is left within the shortest stretch of it.
+    pub fn move_boundary_of(&mut self, z: usize, to_mm: i32) -> Result<usize, ZoneRefusal> {
         let frame = self.structure_frame(true)?;
         let content = &self.states[self.cursor].content;
         if z == 0 || z >= content.zones.len() {
@@ -270,17 +278,30 @@ impl Editor {
         if to_mm < 0 || to_mm > frame.length_mm {
             return Err(ZoneRefusal::OutsideStreet);
         }
-        let (before, _) = content.span(z - 1, frame.length_mm);
-        let (_, after) = content.span(z, frame.length_mm);
+        // The runs either side: zones `first..z` before the boundary, `z..end` after it.
+        let mut first = z - 1;
+        while first > 0 && content.alike(first - 1, first) {
+            first -= 1;
+        }
+        let mut end = z + 1;
+        while end < content.zones.len() && content.alike(end - 1, end) {
+            end += 1;
+        }
+        let (before, _) = content.span(first, frame.length_mm);
+        let (_, after) = content.span(end - 1, frame.length_mm);
         if to_mm - before < MIN_ZONE_MM || after - to_mm < MIN_ZONE_MM {
             return Err(ZoneRefusal::TooShort);
         }
-        if content.zones[z].from_mm == to_mm {
-            return Ok(());
+        let moved = first + 1;
+        if content.zones[z].from_mm == to_mm && (first, end) == (z - 1, z + 1) {
+            return Ok(z);
         }
         let label = Said::new("rev-boundary-move").with("to", Arg::Length(self.left_mm(to_mm)));
         let set = |c: &mut super::Content| {
-            c.zones[z].from_mm = to_mm;
+            // The hidden boundaries go: the earlier zone of each run reaches over the rest of it (as a join keeps it).
+            c.zones.drain(z + 1..end);
+            c.zones.drain(first + 1..z);
+            c.zones[moved].from_mm = to_mm;
             c.from_end = frame.from_end;
             c.length_mm = Some(frame.length_mm);
             true
@@ -291,7 +312,7 @@ impl Editor {
         } else {
             self.edit_content(label, set);
         }
-        Ok(())
+        Ok(moved)
     }
 
     /// Moves the selected zone's start boundary by `delta_mm`. Does nothing where `move_boundary` refuses.
@@ -667,7 +688,13 @@ mod tests {
 
     #[test]
     fn a_boundary_moves_by_typed_value_and_by_nudges_and_stops_5_m_from_its_neighbours() {
-        let mut e = editor(&[0, 20_000, 40_000]);
+        // Each zone its own speed limit, so that every boundary is one the plan shows.
+        let today = sample();
+        let mut now = zoned(today.clone(), &[0, 20_000, 40_000], LEN);
+        for (z, kmh) in now.zones.iter_mut().zip([20, 30, 40]) {
+            z.speed = Speed::Kmh(kmh);
+        }
+        let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(frame()));
         assert_eq!(e.move_boundary(10_000), Err(ZoneRefusal::NoBoundary), "the first zone has no start boundary");
         assert!(e.select_zone(1));
         let before = revisions(&e);
@@ -739,11 +766,16 @@ mod tests {
     #[test]
     fn a_zone_is_called_by_the_stretch_it_covers_from_the_plan_s_left_end_and_never_by_a_saved_name() {
         let labels = |e: &Editor| e.view().zones.zones.into_iter().map(|z| z.label).collect::<Vec<_>>();
-        let e = named_editor(&[0, 20_000, 40_000], 1, "Market");
-        assert_eq!(labels(&e), [stretch_between(0, 20_000), stretch_between(20_000, 40_000), stretch_between(40_000, LEN)]);
-        // Anchored at its last end, the first zone is the plan's rightmost stretch.
         let today = sample();
-        let mut now = zoned(today.clone(), &[0, 20_000], LEN);
+        let mut now = super::super::zoned_apart(today.clone(), &[0, 20_000, 40_000], LEN);
+        now.zones[1].name = Some("Market".into());
+        let e = Editor::from_street(&today, &now, 0).with_frame(Some(frame()));
+        assert_eq!(labels(&e), [stretch_between(0, 20_000), stretch_between(20_000, 40_000), stretch_between(40_000, LEN)]);
+        // Zones that look the same are one run, which names each of them.
+        let e = named_editor(&[0, 20_000, 40_000], 1, "Market");
+        assert_eq!(labels(&e), [stretch_between(0, LEN), stretch_between(0, LEN), stretch_between(0, LEN)]);
+        // Anchored at its last end, the first zone is the plan's rightmost stretch.
+        let mut now = super::super::zoned_apart(today.clone(), &[0, 20_000], LEN);
         now.from_end = ZoneEnd::Last;
         let e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last }));
         assert_eq!(labels(&e), [stretch_between(40_000, LEN), stretch_between(0, 40_000)]);
