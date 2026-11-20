@@ -131,22 +131,6 @@ impl SheetWatch {
         self.vm.with_value(|v| v.end_gesture(commit));
     }
 
-    pub fn nudge_boundary(&self, delta_mm: i32) -> bool {
-        self.vm.with_value(|v| v.nudge_boundary(delta_mm))
-    }
-
-    pub fn begin_boundary_drag(&self) -> bool {
-        self.vm.with_value(|v| v.begin_boundary_drag())
-    }
-
-    pub fn drag_boundary_to(&self, to_mm: i32) {
-        self.vm.with_value(|v| v.drag_boundary_to(to_mm));
-    }
-
-    pub fn end_boundary_drag(&self, commit: bool) {
-        self.vm.with_value(|v| v.end_boundary_drag(commit));
-    }
-
     pub fn select_cell<R: Row>(&self, side: Side, cell: usize) {
         self.vm.with_value(|v| v.select_cell::<R>(side, cell));
     }

@@ -327,6 +327,7 @@ impl Editor {
 
     /// Moves the start of the selected zone to `to_mm`, keeping both neighbours at least `MIN_ZONE_MM` long. Inside a
     /// gesture it is shown as it goes and recorded as one revision at the end. The pick is the zone's span after it.
+    #[cfg(test)]
     pub fn move_boundary(&mut self, to_mm: i32) -> Result<(), ZoneRefusal> {
         let z = self.zone;
         self.move_boundary_of(z, to_mm)?;
@@ -372,6 +373,7 @@ impl Editor {
     }
 
     /// Moves the selected zone's start boundary by `delta_mm`. Does nothing where `move_boundary` refuses.
+    #[cfg(test)]
     pub fn nudge_boundary(&mut self, delta_mm: i32) {
         let Some(from) = self.states[self.cursor].content.zones.get(self.zone).map(|z| z.from_mm) else {
             return;
