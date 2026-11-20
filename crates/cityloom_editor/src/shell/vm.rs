@@ -234,8 +234,12 @@ impl ShellVm {
 
     /// Clears the edits of the page's project that were made against a network from before the importer changed
     /// (`CityStore::discard_stale`) and, when there were any, shows the notice and says so. Nothing is kept: the next
-    /// open finds nothing stale. A page in no project discards nothing.
+    /// open finds nothing stale. A page in no project discards nothing, nor does a page shown read-only, which changes
+    /// nothing: its stale edits, never applied nor sent, wait for the next page that edits the project.
     fn discard_stale_edits(&self) {
+        if self.read_only() {
+            return;
+        }
         let Some(project) = self.target.project() else { return };
         let storage: Rc<dyn crate::shared::ports::Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(self.ports.storage.clone(), &project));
         if crate::city::store::CityStore::current(storage).discard_stale() > 0 {

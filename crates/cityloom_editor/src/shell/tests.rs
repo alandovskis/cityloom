@@ -714,6 +714,29 @@ mod edits_cleared {
         assert_eq!(streets_in(&storage, "cityloom-edits@p1"), 1);
     }
 
+    /// A design opened read-only (`view=1`) is not changed, so its stale edits wait, never applied nor sent, until the
+    /// project is next opened to edit, which clears them and says so.
+    #[test]
+    fn a_page_shown_read_only_discards_nothing_and_the_next_page_to_edit_does() {
+        let storage = storage_with("cityloom-edits@p1", &edits_document(None));
+        let (mut ports, page, _) = test_ports_with_page();
+        let said = Rc::new(RecordingAnnouncer::default());
+        ports.announcer = said.clone();
+        ports.storage = storage.clone();
+        *page.path.borrow_mut() = "/map.html?project=p1&view=1".into();
+        crate::sync::hub::reset();
+        let target = Rc::new(Bare::in_project(Some("p1".into())));
+        let vm = ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true);
+        assert!(vm.read_only());
+        assert!(!vm.edits_cleared());
+        assert!(said.take().is_empty());
+        assert_eq!(streets_in(&storage, "cityloom-edits@p1"), 1, "the read-only page keeps the document as it is");
+        let (vm, said) = open(&storage, Some("p1"));
+        assert!(vm.edits_cleared());
+        assert_eq!(said.take(), vec![MESSAGE.to_string()]);
+        assert_eq!(streets_in(&storage, "cityloom-edits@p1"), 0);
+    }
+
     #[test]
     fn a_page_in_no_project_discards_nothing() {
         let storage = storage_with("cityloom-edits", &edits_document(None));
