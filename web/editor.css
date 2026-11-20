@@ -261,10 +261,6 @@
   border-left-color: var(--accent);
   color: var(--ink);
 }
-.scenario-manage summary {
-  cursor: pointer;
-  font-weight: 600;
-}
 .scenario-manage[open] {
   display: grid;
   gap: 6px;
@@ -1752,7 +1748,8 @@ svg pattern circle {
   padding: 12px 0;
 }
 .standards-manage > summary,
-.standards-import-open > summary {
+.standards-import-open > summary,
+.scenario-manage > summary {
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
