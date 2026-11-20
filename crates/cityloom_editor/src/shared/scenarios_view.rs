@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::i18n::Args;
+use crate::shared::locked::locked;
 use crate::shared::said::say;
 use crate::shared::scenarios::ScenarioHost;
 use crate::shared::units::Units;
@@ -19,6 +20,8 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
         return ().into_any();
     }
     let words = StoredValue::new_local(host.i18n());
+    // shown read-only (#222), the designs can be looked at, and the name and the actions are offered locked
+    let read_only = host.read_only();
     let host = StoredValue::new_local(host);
     // the name typed, kept apart from the model: an action that is done clears it
     let name = RwSignal::new(String::new());
@@ -84,6 +87,7 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
             <p id="scenario-mode" class="scenario-mode" class:in-scenario=move || !baseline_shown()>{mode}</p>
             <details class="scenario-manage">
                 <summary>{tr("scenario-manage")}</summary>
+                {locked(read_only, view! {
                 <label for="scenario-name">{tr("scenario-name")}</label>
                 <input
                     id="scenario-name"
@@ -110,6 +114,7 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
                         </span>
                     </button>
                 </div>
+                })}
             </details>
         </section>
     }
