@@ -120,3 +120,7 @@
 .confirm > * + * {
   margin-top: 10px;
 }
+/* A Delete answer, as the home page's (`shared/contrast.rs` measures its edge on the panel). */
+.btn.danger {
+  border-color: var(--map-bad);
+}
