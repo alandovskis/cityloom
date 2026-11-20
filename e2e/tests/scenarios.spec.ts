@@ -116,8 +116,8 @@ test.describe("a street's scenarios", () => {
     expect(await firstPieceWidth(page)).toEqual(baseline);
     const record = Object.values((await edits(page)).streets)[0] as { scenarios: { name: string }[] };
     expect(record.scenarios.map((s) => s.name)).toEqual(["Wider bike lane", "Parking kept"]);
-    // the record keeps the designs, and nothing of which one was shown
-    expect(Object.keys(record).sort()).toEqual(["leaving", "nodes", "scenarios", "street", "ways"]);
+    // the record keeps the designs (and the importer it was made against, #232), and nothing of which one was shown
+    expect(Object.keys(record).sort()).toEqual(["import", "leaving", "nodes", "scenarios", "street", "ways"]);
     for (const scenario of record.scenarios) expect(Object.keys(scenario).sort()).toEqual(["design", "id", "name"]);
   });
 
@@ -293,8 +293,8 @@ test.describe("a junction's scenarios", () => {
     expect([wider.name, parking.name]).toEqual(["Wider bike lane", "Parking kept"]);
     expect(parking.design).toEqual(record.state);
     expect(wider.design).not.toEqual(record.state);
-    // the record keeps the designs, and nothing of which one was shown
-    expect(Object.keys(record).sort()).toEqual(["arm_streets", "nodes", "scenarios", "state"]);
+    // the record keeps the designs (and the importer it was made against, #232), and nothing of which one was shown
+    expect(Object.keys(record).sort()).toEqual(["arm_streets", "import", "nodes", "scenarios", "state"]);
     for (const scenario of record.scenarios) expect(Object.keys(scenario).sort()).toEqual(["design", "id", "name"]);
   });
 });
