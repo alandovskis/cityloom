@@ -15,6 +15,7 @@ use crate::accounts::{self, RepoError, UnlinkError};
 use crate::app::{Account, json_error, require_origin, require_ready};
 use crate::session::{self, Read};
 
+mod share;
 mod work;
 
 pub(crate) fn store_error(e: RepoError) -> Response {
@@ -157,6 +158,7 @@ pub fn routes(account: Arc<Account>) -> Router {
         .route("/api/me", get(me))
         .merge(changing)
         .merge(work::routes(account.clone()))
+        .merge(share::routes(account.clone()))
         .route("/api/{*rest}", any(not_found))
         .layer(middleware::map_response(|mut res: Response| async move {
             res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));

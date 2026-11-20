@@ -1,13 +1,14 @@
 use cityloom_server::accounts::{self, Claims, Repo};
 use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
+use cityloom_server::share::{ShareRepo, Token};
 use cityloom_server::work::{Id, Kind, Put, WorkRepo};
 use sqlx::{Column, PgPool, Row, TypeInfo, ValueRef};
 
 /// Every column of every row of every table of the schema, as the raw bytes Postgres sends.
 async fn everything(pool: &PgPool) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
-    for table in ["users", "identities", "sessions", "work"] {
+    for table in ["users", "identities", "sessions", "work", "shares"] {
         for row in sqlx::query(sqlx::AssertSqlSafe(format!("select * from {table}"))).fetch_all(pool).await.unwrap() {
             for (i, col) in row.columns().iter().enumerate() {
                 let raw = row.try_get_raw(i).unwrap();
@@ -54,9 +55,15 @@ async fn no_row_holds_anything_the_person_signed_in_with(pool: PgPool) {
     )
     .await
     .unwrap();
+    let token = Token::random();
+    r.create(ada, &token, br#"{"kind":"cityloom-share","format_version":1,"note":"CITYLOOM-MARKER-SHARE-BODY"}"#, now).await.unwrap();
+    let token_text = token.text();
 
     let needles = [
         "CITYLOOM-MARKER-WORK-BODY",
+        "CITYLOOM-MARKER-SHARE-BODY",
+        "cityloom-share",
+        token_text.as_str(),
         "note",
         "Ada Quillfeather",
         "adaq_osm_name",
