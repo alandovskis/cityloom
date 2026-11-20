@@ -110,7 +110,8 @@ fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
                     class="btn danger"
                     id=part("delete", &row.token)
                     aria-label=row.delete_name.clone()
-                    disabled=move || vm.with_value(|v| v.busy())
+                    // Waits without leaving the tab order, so focus stays on it while the server answers.
+                    aria-disabled=move || if vm.with_value(|v| v.busy()) { "true" } else { "false" }
                     on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_token))
                 >
                     {move || word(vm, "share-delete")}
@@ -144,7 +145,11 @@ pub fn ShareView(vm: Rc<ShareVm>) -> impl IntoView {
             id="sharing-create"
             class="btn sharing-create"
             aria-describedby="sharing-blocked"
-            disabled=move || vm.with_value(|v| v.busy() || v.blocked().is_some() || v.account() == Account::Unknown)
+            // Waits without leaving the tab order (`aria-disabled`, not `disabled`): focus stays on it while the server
+            // answers and after a refusal, and the reason it waits is its description.
+            aria-disabled=move || {
+                if vm.with_value(|v| v.busy() || v.blocked().is_some() || v.account() == Account::Unknown) { "true" } else { "false" }
+            }
             on:click=move |_| vm.with_value(|v| v.create())
         >
             {move || word(vm, "share-create")}
