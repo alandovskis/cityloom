@@ -143,6 +143,8 @@ impl StreetVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
         let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
+        // Shown read-only, no boundary of the plan may move, so the plan offers none to the pointer.
+        let street = street.with_fixed_boundaries(ports.storage.read_only());
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
@@ -1459,7 +1461,8 @@ impl StreetVm {
         // What the person made in the last moments is later than anything pulled: it is written (and marked, to be
         // sent on the next run) before the editor is compared with the city.
         self.flush();
-        let Some(mut fresh) = binding.store.open().street_editor(edge, binding.store.region()) else { return };
+        let Some(fresh) = binding.store.open().street_editor(edge, binding.store.region()) else { return };
+        let mut fresh = fresh.with_fixed_boundaries(self.read_only());
         if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
             return;
         }

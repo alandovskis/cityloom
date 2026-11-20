@@ -402,6 +402,9 @@ pub struct Editor {
     frame: Option<ZoneFrame>,
     /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
     ends: [EndInfo; 2],
+    /// The street is shown where nothing may be changed (a design opened read-only): the plan's boundaries are fixed. A
+    /// setting, not part of the history.
+    fixed_boundaries: bool,
     selected: Option<u32>,
     gesture: Option<Content>,
     /// The cell of a curbside strip the person chose, and the move of a use that the next revision records (see
@@ -540,6 +543,7 @@ impl Editor {
             missed: Vec::new(),
             frame: None,
             ends: [EndInfo::default(); 2],
+            fixed_boundaries: false,
             selected: None,
             gesture: None,
             curb_choice: Choice::default(),
@@ -613,6 +617,13 @@ impl Editor {
         if self.zone != before {
             self.selected = None;
         }
+        self
+    }
+
+    /// Shows the plan's boundaries fixed (`PlanBoundary::movable` false) when `fixed`: the street is shown where nothing
+    /// may be changed. A setting, outside the history; it refuses nothing itself.
+    pub fn with_fixed_boundaries(mut self, fixed: bool) -> Editor {
+        self.fixed_boundaries = fixed;
         self
     }
 

@@ -287,19 +287,8 @@ impl StreetVm {
         }
     }
 
-    /// What a press on `p` acts on. Shown read-only, a boundary is no target, since nothing may move it: a press on one
-    /// is a press on the street there, which picks (a click the run, a drag a stretch). The view asks it for the
-    /// pointer's look over the plan too.
-    pub fn plan_target(&self, p: PlanPress) -> PlanPress {
-        match p {
-            PlanPress::Boundary { zone } if self.read_only() => self.boundary_at(zone).map_or(p, |at_mm| PlanPress::Street { at_mm }),
-            p => p,
-        }
-    }
-
     /// A press on the plan: a thing pressed is chosen at once, as on its row. The view keeps the gesture.
     pub fn plan_press(&self, p: PlanPress, x_px: f64) -> PlanGesture {
-        let p = self.plan_target(p);
         if !matches!(p, PlanPress::Boundary { .. }) {
             self.clear_boundary();
         }
@@ -548,8 +537,11 @@ impl StreetVm {
     }
 
     /// Moves the boundary at the pick's left end (else at its right end) by `delta_mm` along the plan, the pick's end
-    /// following it; says why when there is none or it cannot move.
+    /// following it; says why when there is none, it cannot move or the street is shown read-only.
     fn nudge_pick_boundary(&self, delta_mm: i32) {
+        if self.refuse_read_only() {
+            return;
+        }
         let plan = self.view_now().plan.clone();
         let (left, right) = plan.pick.unwrap_or((0, plan.length_mm.unwrap_or(0)));
         let boundary = plan.boundaries.iter().find(|b| b.at_mm == left).or_else(|| plan.boundaries.iter().find(|b| b.at_mm == right));
@@ -595,8 +587,12 @@ impl StreetVm {
     }
 
     /// Chooses the boundary that starts zone `zone`, to be moved by typing where it goes, and says so; the details
-    /// panel's Street level shows its field. Nothing is picked. A boundary that cannot move says why.
+    /// panel's Street level shows its field. Nothing is picked. A boundary that cannot move says why, and so does a
+    /// street shown read-only, whose plan offers no boundary to press.
     fn choose_boundary(&self, zone: usize) {
+        if self.refuse_read_only() {
+            return;
+        }
         if let Some(refusal) = self.read(|e| e.structure_blocked()) {
             self.ports.announcer.say(&text::zone_refused(&self.i18n, self.units_now(), refusal));
             return;
@@ -1540,6 +1536,12 @@ mod pick_tests {
         (Rig { vm, said }, storage)
     }
 
+    #[test]
+    fn the_boundaries_of_a_street_that_may_be_edited_can_move() {
+        let r = three_runs(ZoneEnd::First);
+        assert!(r.vm.view_now().plan.boundaries.iter().all(|b| b.movable));
+    }
+
     /// Shown read-only, a stretch is still picked, by the plan, its point and the pick's fields: picking chooses, it
     /// does not edit. No boundary moves: a click on one picks the run there, as a click on the street does, and chooses
     /// nothing to move; a drag from one picks a stretch; Alt+arrow and a typed Move to are refused and said. The street,
@@ -1566,16 +1568,27 @@ mod pick_tests {
         assert_eq!(r.vm.picked(), Some((26_000, 33_000)), "the fields pick");
         assert!(!refused(r.said.take()), "picking is never refused");
 
+        // No boundary may move, so none is a target of the pointer (the hit layer passes over it) and a press near one
+        // is a press on the street where the pointer is. Nothing says the boundaries were drawn on another road.
+        let v = r.vm.view_now();
+        assert!(v.plan.boundaries.iter().all(|b| !b.movable), "no boundary can be moved: {:?}", v.plan.boundaries);
+        assert!(!v.plan.elsewhere && v.zones.elsewhere.is_none(), "and none is said to be elsewhere");
+        let g = r.vm.plan_press(PlanPress::Street { at_mm: 19_500 }, 195.0);
+        r.vm.plan_release(g, 19_500);
+        assert_eq!(r.vm.picked(), Some((0, 20_000)), "a click just left of a boundary picks the run on its left");
+        drag(&r, PlanPress::Street { at_mm: 14_000 }, 14_000, 33_000);
+        assert_eq!(r.vm.picked(), Some((14_000, 33_000)), "a drag picks from the pointer's press to where it is let go");
+        assert_eq!(boundaries(&r), [20_000, 40_000], "and moves no boundary");
+        assert!(!refused(r.said.take()));
+
+        // A boundary pressed all the same (the plan offers none) is not chosen to be typed, and is not dragged.
         let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
         r.vm.plan_release(g, 20_000);
         assert_eq!(r.vm.chosen_boundary(), None, "nothing is chosen to be moved");
-        assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "the click picks the run there");
-        assert!(!refused(r.said.take()));
-
+        assert_eq!(r.said.take(), [REFUSED], "a click on it");
         drag(&r, PlanPress::Boundary { zone: 1 }, 20_000, 30_000);
-        assert_eq!(r.vm.picked(), Some((20_000, 30_000)), "the drag picks a stretch");
-        assert_eq!(boundaries(&r), [20_000, 40_000], "and moves no boundary");
-        assert!(!refused(r.said.take()));
+        assert_eq!(r.said.take(), [REFUSED], "a drag of it");
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
 
         r.vm.plan_key(PlanKey::NudgeBoundary(-1_000));
         assert_eq!(r.said.take(), [REFUSED], "Alt+arrow");

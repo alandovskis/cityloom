@@ -134,6 +134,7 @@ impl Editor {
             missed: Vec::new(),
             frame: None,
             ends: [EndInfo::default(); 2],
+            fixed_boundaries: false,
             selected: None,
             gesture: None,
             curb_choice: Choice::default(),

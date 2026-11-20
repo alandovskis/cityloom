@@ -60,7 +60,8 @@ pub struct PlanBoundary {
     /// The transition's taper, `(from, to)`, at its true length on the side of the run that holds it; it may reach
     /// past that run (a failing transition) or past the street's end.
     pub taper: Option<(i32, i32)>,
-    /// The boundary may be dragged: the street has an end to measure from and its changes were drawn on this road.
+    /// The boundary may be dragged: the street has an end to measure from, its changes were drawn on this road, and it
+    /// is not shown read-only (`Editor::with_fixed_boundaries`).
     pub movable: bool,
 }
 
@@ -136,7 +137,7 @@ impl Editor {
             .collect();
         plan_runs.sort_by_key(|r| r.from_mm);
         let transitions = self.transitions();
-        let movable = self.structure_frame(true).is_ok();
+        let movable = !self.fixed_boundaries && self.structure_frame(true).is_ok();
         let mut boundaries: Vec<PlanBoundary> = runs
             .windows(2)
             .map(|pair| {
@@ -275,6 +276,13 @@ mod tests {
         assert!(elsewhere.elsewhere);
         assert_eq!(spans(&elsewhere), [(0, 20_000, 0), (20_000, 40_000, 1), (40_000, 58_000, 2)], "drawn at the loaded length");
         assert!(elsewhere.boundaries.iter().all(|b| !b.movable));
+
+        // Shown read-only: drawn the same, here and not elsewhere, with every boundary fixed.
+        let fixed = editor(&street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First), frame(LEN, ZoneEnd::First)).with_fixed_boundaries(true);
+        let fixed = plan(&fixed);
+        assert!(!fixed.elsewhere);
+        assert_eq!(marks(&fixed), [(20_000, 1), (40_000, 2)]);
+        assert!(fixed.boundaries.iter().all(|b| !b.movable));
     }
 
     #[test]
