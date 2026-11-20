@@ -157,16 +157,13 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as, the first that applies: `IMPORT_STAMP_VERSION` while a street or
-    /// junction record carries an import stamp, `SCENARIO_VERSION` while one keeps scenarios, `FILTER_VERSION` while a street record holds a
-    /// modal filter, `CHICANE_VERSION` while one holds a
-    /// chicane, `ZONE_SPEED_VERSION` while a zone of a street
-    /// record has a speed of its own, `CALMING_VERSION` while a street record holds
-    /// raised tables or crossings, `GREEN_VERSION` while one holds green infrastructure, `SIGNAL_VERSION` while a
-    /// junction record holds
-    /// an edited signal plan, `STOP_VERSION` while a street record holds transit stops, `CURB_VERSION` while one holds
-    /// curbside uses, `SPEED_VERSION` while one holds a speed (set, or decided to have none), `ZONES_VERSION` while one
-    /// holds zones, else `VERSION`; never below `IMPORT_STAMP_VERSION` once read at it (`stamp_floor`).
+    /// The version the document is written as: the first that applies of `IMPORT_STAMP_VERSION` (a street or junction
+    /// record carries an import stamp), `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record
+    /// holds a modal filter), `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own),
+    /// `CALMING_VERSION` (raised tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a
+    /// junction's edited signal plan), `STOP_VERSION` (transit stops), `CURB_VERSION` (curbside uses),
+    /// `SPEED_VERSION` (a speed, set or decided to have none), `ZONES_VERSION` (zones), else `VERSION`. Never below
+    /// `IMPORT_STAMP_VERSION` once the document was at it (`written_as`).
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
@@ -180,7 +177,7 @@ impl Edits {
         let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
         let scenarios = self.streets.values().any(|r| !r.scenarios.is_empty()) || self.junctions.values().any(|r| !r.scenarios.is_empty());
         let import = self.streets.values().any(|r| r.import.is_some()) || self.junctions.values().any(|r| r.import.is_some());
-        version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios).max(stamp_floor(self.version.into()))
+        written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
     }
 
     pub fn to_json(&self) -> String {
@@ -194,6 +191,27 @@ impl Edits {
 /// tab would write unstamped records into it, which this build then discards again.
 fn stamp_floor(version: u64) -> u32 {
     if version >= u64::from(IMPORT_STAMP_VERSION) { IMPORT_STAMP_VERSION } else { 0 }
+}
+
+/// The version a document last read or held as `held` is written as, from what its records hold (`version_for`), never
+/// below `stamp_floor(held)`. The one place the floor is applied, so a writer cannot forget it.
+#[allow(clippy::too_many_arguments)]
+fn written_as(
+    held: u64,
+    import: bool,
+    zones: bool,
+    speed: bool,
+    curb: bool,
+    stops: bool,
+    signal: bool,
+    green: bool,
+    calming: bool,
+    zone_speed: bool,
+    chicane: bool,
+    filter: bool,
+    scenarios: bool,
+) -> u32 {
+    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios).max(stamp_floor(held))
 }
 
 /// The version a document is written as, from what its street records hold.
@@ -351,7 +369,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         _ => return Err(damaged()),
     }
     // The version the document would be written as, whichever it was read as.
-    let written = version_for(
+    let written = written_as(
+        read.unwrap_or_default(),
         holds_import(&doc),
         holds_zones(&doc),
         holds_speed(&doc),
@@ -364,8 +383,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_chicane(&doc),
         holds_filter(&doc),
         holds_scenarios(&doc),
-    )
-    .max(stamp_floor(read.unwrap_or_default()));
+    );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
@@ -483,11 +501,11 @@ impl Draft {
     /// `CURB_VERSION` while one holds curbside uses, else
     /// `SPEED_VERSION` while any holds a speed, else
     /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`; never below
-    /// `IMPORT_STAMP_VERSION` once read at it (`stamp_floor`).
+    /// `IMPORT_STAMP_VERSION` once read at it (`written_as`).
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
-        let floor = stamp_floor(doc.get("version").and_then(Value::as_u64).unwrap_or_default());
-        let written = version_for(
+        let written = written_as(
+            doc.get("version").and_then(Value::as_u64).unwrap_or_default(),
             holds_import(&doc),
             holds_zones(&doc),
             holds_speed(&doc),
@@ -500,8 +518,7 @@ impl Draft {
             holds_chicane(&doc),
             holds_filter(&doc),
             holds_scenarios(&doc),
-        )
-        .max(floor);
+        );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
     }
