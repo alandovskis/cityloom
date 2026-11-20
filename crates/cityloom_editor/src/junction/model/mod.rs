@@ -926,7 +926,7 @@ pub struct Junction {
 }
 
 /// Whether two states are the same design, whatever step each is labelled as.
-fn same_design(a: &State, b: &State) -> bool {
+pub fn same_design(a: &State, b: &State) -> bool {
     State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() }
 }
 

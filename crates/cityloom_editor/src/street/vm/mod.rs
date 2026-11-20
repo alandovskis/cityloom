@@ -100,6 +100,9 @@ pub struct StreetVm {
     scenarios: ScenarioState,
     /// Whether the street keeps scenarios: it is a street of the city with a key of its own.
     offers_scenarios: bool,
+    /// The design shown as last opened or kept: a write of the same design changes nothing (choosing a piece asks the
+    /// keeper to write too), so where it finds the scenario gone no change was lost.
+    kept_design: RefCell<Street>,
     me: Weak<StreetVm>,
 }
 
@@ -149,6 +152,7 @@ impl StreetVm {
                 )
             });
             StreetVm {
+                kept_design: RefCell::new(street.snapshot()),
                 core: Core::new(street),
                 ports,
                 i18n,
@@ -1540,6 +1544,7 @@ impl StreetVm {
             self.core.read(|e| fresh.keep_choices(e));
         }
         self.merge.set(None);
+        *self.kept_design.borrow_mut() = fresh.snapshot();
         self.core.edit(|e| *e = fresh);
         self.forget_impact();
     }
@@ -1554,8 +1559,13 @@ impl StreetVm {
     /// Writes the street as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        let kept = binding.keep_street_in(self.core.read(|e| e.snapshot()), self.scenarios.active_now());
-        scenario_actions::kept(self, kept)
+        let street = self.core.read(|e| e.snapshot());
+        let changed = *self.kept_design.borrow() != street;
+        let kept = binding.keep_street_in(street.clone(), self.scenarios.active_now());
+        if kept.is_ok() {
+            *self.kept_design.borrow_mut() = street;
+        }
+        scenario_actions::kept(self, kept, changed)
     }
 
     /// How the street stands before an edit: the class, which an edit may change, and what the impact summary
@@ -2055,6 +2065,23 @@ mod tests {
             assert!(binding.scenarios().is_empty(), "{what}: nothing was made");
             assert_eq!((width(&r), kept_width(&binding, None)), (baseline, baseline), "{what}: the baseline is unchanged");
         }
+    }
+
+    #[test]
+    fn a_scenario_deleted_elsewhere_while_only_a_piece_was_chosen_in_it_says_no_change_was_lost() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        // choosing a piece and a refused undo ask the keeper to write, though nothing changed
+        r.vm.select(Some(first(&r.vm)));
+        assert!(!r.vm.undo());
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
     }
 
     /// Another device's edit of the rig's street, applied to the city.

@@ -132,13 +132,15 @@ pub mod scenario_actions {
 
     /// What a write of the design shown came to, for the page's keeper: false only where the storage failed (which
     /// the keeper says once). A scenario gone since it was shown is no storage failure: the page shows the baseline and
-    /// says why (`gone`), and the keeper's one warning is kept for a real failure.
-    pub fn kept(page: &impl ScenarioPage, outcome: Result<(), ScenarioFailure>) -> bool {
+    /// says why (`gone`), and the keeper's one warning is kept for a real failure. `changed`: the design written
+    /// differs from the one last opened or kept, so a change to it is lost (a write also follows a mere choice of a
+    /// piece, which loses nothing).
+    pub fn kept(page: &impl ScenarioPage, outcome: Result<(), ScenarioFailure>, changed: bool) -> bool {
         match outcome {
             Ok(()) => true,
             Err(ScenarioFailure::NotKept) => false,
             Err(ScenarioFailure::Refused(_)) => {
-                gone(page, true);
+                gone(page, changed);
                 true
             }
         }

@@ -46,6 +46,8 @@ pub struct JunctionVm {
     scenarios: ScenarioState,
     /// Whether the junction keeps scenarios: it is a junction of the city with a key of its own.
     offers_scenarios: bool,
+    /// The design shown as last opened or kept (as `StreetVm`'s): a write of the same design changes nothing.
+    kept_design: std::cell::RefCell<State>,
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
@@ -82,6 +84,7 @@ impl JunctionVm {
                 scenarios.list(b.scenarios());
             }
             JunctionVm {
+                kept_design: std::cell::RefCell::new(junction.snapshot()),
                 core: Core::new(junction),
                 ports,
                 i18n,
@@ -410,6 +413,7 @@ impl JunctionVm {
         fresh.select(self.core.read(|j| j.selected));
         let own = binding.record();
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        *self.kept_design.borrow_mut() = fresh.snapshot();
         self.core.edit(|j| *j = fresh);
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
     }
@@ -432,8 +436,14 @@ impl JunctionVm {
     /// Writes the junction as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        let kept = binding.keep_junction_in(self.core.read(|j| j.snapshot()), self.scenarios.active_now());
-        scenario_actions::kept(self, kept)
+        let state = self.core.read(|j| j.snapshot());
+        // the same design, whatever step it is labelled as
+        let changed = !crate::junction::model::same_design(&self.kept_design.borrow(), &state);
+        let kept = binding.keep_junction_in(state.clone(), self.scenarios.active_now());
+        if kept.is_ok() {
+            *self.kept_design.borrow_mut() = state;
+        }
+        scenario_actions::kept(self, kept, changed)
     }
 
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
@@ -609,6 +619,7 @@ impl ScenarioPage for JunctionVm {
         let Some(fresh) = self.open_design(id) else { return false };
         // another design starts as a page opens: nothing chosen, the junction's own level shown
         self.plan.set(false);
+        *self.kept_design.borrow_mut() = fresh.snapshot();
         self.core.edit(|j| *j = fresh);
         true
     }
@@ -748,6 +759,25 @@ mod tests {
             assert!(binding.scenarios().is_empty(), "{what}");
             assert_eq!((corner(&r), kept_corner(&binding, None)), (imported, imported), "{what}");
         }
+    }
+
+    #[test]
+    fn a_scenario_deleted_elsewhere_while_only_a_part_was_chosen_in_it_says_no_change_was_lost() {
+        use crate::city::scenario::Action;
+        use crate::junction::model::Target;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        r.vm.select(Target::Arm(uid));
+        r.vm.select_relative(1);
+        assert!(!r.vm.redo());
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
     }
 
     #[test]
