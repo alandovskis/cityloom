@@ -396,19 +396,64 @@ fn a_link_is_copied_and_deleted_and_the_server_s_refusals_are_said() {
     t.page.clipboard_refuses.set(true);
     vm.copy(TOKEN);
     assert_eq!(t.announcer.take(), ["The link could not be copied. Select it and copy it yourself."]);
-    vm.delete(TOKEN);
+    vm.ask_delete(TOKEN);
+    vm.confirm_delete();
     assert_eq!(t.share.calls(), [ShareCall::Delete(TOKEN.into())]);
     assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::NotYours))));
     assert_eq!(vm.links().len(), 1, "kept: the server did not delete it");
     assert_eq!(vm.outcome().map(|(_, error)| error), Some(true));
-    vm.delete(TOKEN);
+    vm.ask_delete(TOKEN);
+    vm.confirm_delete();
     assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Network))));
     assert_eq!(vm.outcome().map(|(text, _)| text), Some("The server could not be reached. Check your connection and try again.".into()));
-    vm.delete(TOKEN);
+    vm.ask_delete(TOKEN);
+    vm.confirm_delete();
     assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
     assert!(vm.links().is_empty());
     assert_eq!(t.announcer.take().last().map(String::as_str), Some("Share link deleted. Anyone who opens it is told it was deleted."));
     assert_eq!(vm.focus_request().1, Focus::Create);
+}
+
+/// A link is deleted only once its maker has said yes: the question names it by its expiry, says that whoever has it
+/// loses the design, and starts on its safe answer; cancelling goes back to the row's Delete button.
+#[test]
+fn deleting_a_link_is_asked_first_and_starts_on_the_safe_answer() {
+    let (vm, t) = sharing(Locale::En);
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    t.announcer.take();
+    assert_eq!((vm.deleting(), vm.delete_question()), (None, None));
+    vm.ask_delete(TOKEN);
+    assert_eq!(vm.deleting().as_deref(), Some(TOKEN));
+    assert_eq!(
+        vm.delete_question().as_deref(),
+        Some("Delete the share link that works until April 15, 2027? Anyone who has it will no longer be able to open the design. This cannot be undone.")
+    );
+    assert_eq!(vm.focus_request().1, Focus::DeleteSafe);
+    assert!(t.share.calls().is_empty(), "nothing is deleted while asking");
+    vm.cancel_delete();
+    assert_eq!(vm.deleting(), None);
+    assert_eq!(vm.focus_request().1, Focus::DeleteButton(TOKEN.into()));
+    assert!(t.share.calls().is_empty() && vm.links().len() == 1);
+    assert!(!vm.confirm_delete(), "nothing asked: nothing deleted");
+    assert!(t.share.calls().is_empty());
+    vm.ask_delete("not-a-link-made-here");
+    assert_eq!(vm.deleting(), None, "only a link listed here");
+    vm.ask_delete(TOKEN);
+    assert!(vm.confirm_delete());
+    assert_eq!(vm.deleting(), None);
+    assert_eq!(t.share.calls(), [ShareCall::Delete(TOKEN.into())]);
+    let (fr_vm, fr_t) = sharing(Locale::FrCa);
+    signed_in(&fr_vm, &fr_t, true);
+    fr_vm.create();
+    fr_t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    fr_t.storage.set_now(1_800_000_000_000 + 91 * 86_400_000);
+    fr_vm.ask_delete(TOKEN);
+    assert_eq!(
+        fr_vm.delete_question().as_deref(),
+        Some("Supprimer le lien de partage qui a expiré le 15 avril 2027? Il n’ouvre déjà plus l’aménagement; il sera retiré de cette liste. Cette action est irréversible.")
+    );
 }
 
 #[test]
@@ -418,7 +463,8 @@ fn a_link_the_server_no_longer_has_is_forgotten_when_deleted() {
         signed_in(&vm, &t, true);
         vm.create();
         t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
-        vm.delete(TOKEN);
+        vm.ask_delete(TOKEN);
+        vm.confirm_delete();
         t.share.answer(ShareReply::Deleted(Err(gone)));
         assert!(vm.links().is_empty(), "{gone:?}");
     }
@@ -491,6 +537,25 @@ mod page {
         assert!(out.contains(&format!(r#"for="sharing-link-{TOKEN}""#)), "the field is labelled");
         assert!(out.contains("Works until April 15, 2027") && out.contains("Copy link") && out.contains("Delete link"));
         assert!(out.contains("Share link created."), "{out}");
+    }
+
+    #[test]
+    fn the_question_before_deleting_a_link_is_in_its_row_with_a_safe_and_a_danger_answer() {
+        let (vm, t) = sharing(Locale::En);
+        signed_in(&vm, &t, true);
+        vm.create();
+        t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+        vm.ask_delete(TOKEN);
+        let shown = vm.clone();
+        let out = html(move || view! { <ShareView vm=shown/> }.into_any());
+        let row = out.split(r#"class="share-row""#).nth(1).expect("the row");
+        assert!(row.contains(r#"role="group""#) && row.contains(r#"aria-labelledby="sharing-delete-question""#), "{row}");
+        assert!(row.contains("Anyone who has it will no longer be able to open the design."), "{row}");
+        let safe = crate::shared::testing::button_tag(&out, "sharing-delete-safe");
+        assert!(safe.contains(r#"class="btn""#), "{safe}");
+        let yes = crate::shared::testing::button_tag(&out, "sharing-delete-yes");
+        assert!(yes.contains(r#"class="btn danger""#), "{yes}");
+        assert!(out.contains("Cancel") && out.contains("Delete the link"), "{out}");
     }
 
     #[test]

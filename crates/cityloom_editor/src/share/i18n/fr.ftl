@@ -12,6 +12,13 @@ share-links-empty = Aucun lien de partage n’a encore été créé sur cet appa
 share-link-label = Lien de partage
 share-copy = Copier le lien
 share-delete = Supprimer le lien
+# La question posée avant de supprimer un lien, qui le nomme par son jour d’expiration (share-date).
+share-delete-confirm = { $state ->
+    [expired] Supprimer le lien de partage qui a expiré le { $date }? Il n’ouvre déjà plus l’aménagement; il sera retiré de cette liste. Cette action est irréversible.
+   *[live] Supprimer le lien de partage qui fonctionne jusqu’au { $date }? Quiconque l’a ne pourra plus ouvrir l’aménagement. Cette action est irréversible.
+}
+share-delete-yes = Supprimer le lien
+share-cancel = Annuler
 # Jusqu’à quand un lien fonctionne : un jour, comme l’écrit share-date.
 share-until = Fonctionne jusqu’au { $date }
 share-expired-on = A expiré le { $date }

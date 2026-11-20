@@ -12,6 +12,13 @@ share-links-empty = No share link has been made on this device for this project 
 share-link-label = Share link
 share-copy = Copy link
 share-delete = Delete link
+# The question asked before a link is deleted, naming it by its expiry day (share-date).
+share-delete-confirm = { $state ->
+    [expired] Delete the share link that expired on { $date }? It already no longer opens the design; it will be removed from this list. This cannot be undone.
+   *[live] Delete the share link that works until { $date }? Anyone who has it will no longer be able to open the design. This cannot be undone.
+}
+share-delete-yes = Delete the link
+share-cancel = Cancel
 # Until when a link works: a day, as share-date writes it.
 share-until = Works until { $date }
 share-expired-on = Expired on { $date }

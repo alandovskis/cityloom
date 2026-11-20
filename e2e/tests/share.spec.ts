@@ -134,6 +134,15 @@ test("a share its creator deleted says so", async ({ page, context, baseURL, bro
   const link = await share(page);
   const token = link.split("#")[1];
   await page.locator(`#sharing-delete-${token}`).click();
+  await expect(page.locator("#sharing-delete-safe")).toBeFocused();
+  await expect(page.locator("#sharing-delete-question")).toHaveText(
+    /^Delete the share link that works until \w+ \d+, \d{4}\? Anyone who has it will no longer be able to open the design\./,
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.locator(`#sharing-delete-${token}`)).toBeFocused();
+  await expect(page.locator(".share-row")).toHaveCount(1);
+  await page.locator(`#sharing-delete-${token}`).click();
+  await page.locator("#sharing-delete-yes").click();
   await expect(live(page)).toHaveText("Share link deleted. Anyone who opens it is told it was deleted.");
   await expect(page.locator(".share-row")).toHaveCount(0);
   await expect(page.locator("#sharing-create")).toBeFocused();
