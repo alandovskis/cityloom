@@ -70,7 +70,7 @@ mod tests {
         assert_eq!(back, s.zones);
     }
 
-    use crate::street::model::{Editor, Keep, Said, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Editor, Said, ZoneEnd, ZoneFrame};
 
     const LEN: i32 = 60_000;
 
@@ -151,26 +151,12 @@ mod tests {
     }
 
     #[test]
-    fn splitting_keeps_the_speed_in_both_halves_and_merging_asks_when_they_differ() {
+    fn splitting_keeps_the_speed_in_both_halves() {
         let mut e = split(Speed::Kmh(50));
         assert!(e.set_speed(Some(30)));
         e.split_zone(Some(45_000)).unwrap();
         let s = e.snapshot();
         assert_eq!((s.zones[1].speed, s.zones[2].speed), (Speed::Kmh(30), Speed::Kmh(30)));
-        e.select_zone(0);
-        assert!(e.merge_needs_choice(true), "same pieces, different speeds");
-        e.select_zone(1);
-        assert!(!e.merge_needs_choice(true), "the same speed and pieces");
-    }
-
-    #[test]
-    fn merging_keeps_the_speed_of_the_zone_kept_and_one_zone_left_gives_it_to_the_street() {
-        let mut e = split(Speed::Kmh(50));
-        assert!(e.set_speed(Some(30)));
-        e.merge_zone(false, Keep::Selected).unwrap();
-        let s = e.snapshot();
-        assert!(s.zones.is_empty(), "one zone left is no zoning");
-        assert_eq!(s.speed, Speed::Kmh(30));
     }
 
     #[test]

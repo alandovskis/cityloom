@@ -69,8 +69,6 @@ pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
 pub use unavailable::Unavailable;
 mod zones;
 use zones::Failing;
-#[cfg(test)]
-pub use zones::Keep;
 pub use zones::{Elsewhere, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
@@ -3428,7 +3426,8 @@ mod tests {
     #[test]
     fn the_view_lists_zones_with_label_range_and_whether_each_has_its_own_section() {
         let today = sample_street();
-        let now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        now.zones[1].name = Some("Market".into());
         let mut e = Editor::from_street(&today, &now, 0);
         let z = e.view().zones;
         assert_eq!((z.length_mm, z.from_end, z.selected), (60_000, ZoneEnd::First, 0));
@@ -3436,11 +3435,10 @@ mod tests {
             z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm, g.own, g.cut_off)).collect::<Vec<_>>(),
             vec![(0, 0, 20_000, false, false), (1, 20_000, 45_000, false, false), (2, 45_000, 60_000, false, false)]
         );
-        assert_eq!(z.zones[1].label, Said::new("zone-unnamed").with("n", Arg::Num(2)));
+        assert_eq!(z.zones[2].label, Said::new("zone-unnamed").with("n", Arg::Num(3)));
         assert!(e.select_zone(1));
         let g = e.snapshot().segments[0].clone();
         assert!(e.set_width(g.uid, g.width_mm + 100));
-        assert!(e.name_zone(Some("Market")));
         let z = e.view().zones;
         assert_eq!(z.selected, 1);
         assert_eq!(z.zones.iter().map(|g| g.own).collect::<Vec<_>>(), vec![false, true, false]);

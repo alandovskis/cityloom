@@ -9,8 +9,6 @@ use super::Speed;
 use super::transition::{Host, Transition, transition};
 use super::zone_speed::taper_kmh;
 use super::{Arg, Editor, Said, named_said, snap};
-#[cfg(test)]
-use cityloom_model::street::{same_pieces, speed_in};
 
 /// Why a transition fails its check.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,8 +32,6 @@ pub enum ZoneRefusal {
     /// A zone would be shorter than `MIN_ZONE_MM`.
     TooShort,
     OutsideStreet,
-    /// There is no zone on that side to merge with.
-    NoNeighbour,
     /// The first zone has no start boundary.
     NoBoundary,
     /// A drag is under way: nothing but the drag may change the zones.
@@ -49,7 +45,6 @@ impl ZoneRefusal {
             ZoneRefusal::Elsewhere => "zone-refused-elsewhere",
             ZoneRefusal::TooShort => "zone-refused-too-short",
             ZoneRefusal::OutsideStreet => "zone-refused-outside",
-            ZoneRefusal::NoNeighbour => "zone-refused-no-neighbour",
             ZoneRefusal::NoBoundary => "zone-refused-no-boundary",
             ZoneRefusal::Dragging => "zone-refused-dragging",
         };
@@ -96,14 +91,6 @@ pub struct ZoneView {
 pub struct Elsewhere {
     pub drawn_mm: i32,
     pub loaded_mm: i32,
-}
-
-/// Which zone a merge keeps the section and name of.
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Keep {
-    Selected,
-    Neighbour,
 }
 
 /// What a zone is called: its name, else "Zone n". `n` is its number as shown, counting from 1.
@@ -278,51 +265,9 @@ impl Editor {
         Ok(())
     }
 
-    /// The neighbour a merge would join the selected zone to, if there is one.
-    #[cfg(test)]
-    fn merge_neighbour(&self, next: bool) -> Option<usize> {
-        let count = self.states[self.cursor].content.zones.len();
-        let z = self.zone;
-        if next { (z + 1 < count).then_some(z + 1) } else { (count > 0 && z > 0).then(|| z - 1) }
-    }
-
-    /// Whether merging with the next (or previous) zone must ask which section to keep: the two differ.
-    #[cfg(test)]
-    pub fn merge_needs_choice(&self, next: bool) -> bool {
-        let content = &self.states[self.cursor].content;
-        self.merge_neighbour(next).is_some_and(|n| {
-            !same_pieces(content.section(self.zone), content.section(n))
-                || speed_in(content.speed, &content.zones, self.zone) != speed_in(content.speed, &content.zones, n)
-        })
-    }
-
     /// Why the zones cannot be rearranged now (no anchor, another road, a drag under way), if they cannot.
     pub fn structure_blocked(&self) -> Option<ZoneRefusal> {
         self.structure_frame(false).err()
-    }
-
-    /// Merges the selected zone with the next (or previous) one. The merged zone starts where the earlier did, takes
-    /// the section and name of the zone `keep` names, and is selected. Tests only: the page joins runs when an edit
-    /// makes them alike.
-    #[cfg(test)]
-    pub fn merge_zone(&mut self, next: bool, keep: Keep) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame(false)?;
-        let n = self.merge_neighbour(next).ok_or(ZoneRefusal::NoNeighbour)?;
-        let (lo, hi) = (self.zone.min(n), self.zone.max(n));
-        let kept = if keep == Keep::Selected { self.zone } else { n };
-        // The choice is said by the number the kept zone had before the merge, which is the one the person pressed.
-        let label = Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(zone_label_mid(&self.states[self.cursor].content.zones[kept], kept + 1))));
-        self.edit_content(label, |c| {
-            let survivor = c.zones[kept].clone();
-            c.zones[lo] = Zone { from_mm: c.zones[lo].from_mm, ..survivor };
-            c.zones.remove(hi);
-            c.from_end = frame.from_end;
-            c.length_mm = Some(frame.length_mm);
-            true
-        });
-        self.follow_zone(lo);
-        self.selected = None;
-        Ok(())
     }
 
     /// Moves the start of the selected zone to `to_mm`, keeping both neighbours at least `MIN_ZONE_MM` long. Inside a
@@ -379,26 +324,6 @@ impl Editor {
             return;
         };
         let _ = self.move_boundary(from + delta_mm);
-    }
-
-    /// Names the selected zone; blank clears the name. False when the street has no zones or nothing changed. Tests
-    /// only: a name comes with a saved street and is never typed on the page.
-    #[cfg(test)]
-    pub fn name_zone(&mut self, name: Option<&str>) -> bool {
-        if self.gesture.is_some() {
-            return false;
-        }
-        let name = name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
-        let z = self.zone;
-        if z >= self.states[self.cursor].content.zones.len() {
-            return false;
-        }
-        let label = Said::new(if name.is_some() { "rev-zone-name" } else { "rev-zone-unname" })
-            .with("zone", Arg::Said(Box::new(zone_label_mid(&Zone { from_mm: 0, segments: None, name: name.clone(), speed: Speed::Undecided }, z + 1))));
-        self.edit_content(label, |c| {
-            c.zones[z].name = name;
-            true
-        })
     }
 }
 
@@ -638,6 +563,14 @@ mod tests {
         Editor::from_street(&today, &now, 0).with_frame(Some(frame()))
     }
 
+    /// The same divided street, with zone `z` named `name` as a saved street may have it.
+    fn named_editor(starts: &[i32], z: usize, name: &str) -> Editor {
+        let today = sample();
+        let mut now = zoned(today.clone(), starts, LEN);
+        now.zones[z].name = Some(name.into());
+        Editor::from_street(&today, &now, 0).with_frame(Some(frame()))
+    }
+
     fn revisions(e: &Editor) -> usize {
         e.view().revisions.len()
     }
@@ -686,8 +619,7 @@ mod tests {
 
     #[test]
     fn the_first_half_keeps_the_name_and_the_new_zone_is_unnamed() {
-        let mut e = editor(&[0, 20_000]);
-        assert!(e.name_zone(Some("Terrace")));
+        let mut e = named_editor(&[0, 20_000], 0, "Terrace");
         e.split_zone(Some(10_000)).unwrap();
         let s = e.snapshot();
         assert_eq!(s.zones[0].name.as_deref(), Some("Terrace"));
@@ -722,8 +654,8 @@ mod tests {
     #[test]
     fn every_refusal_has_its_own_message_key() {
         use ZoneRefusal::*;
-        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoNeighbour, NoBoundary, Dragging].map(|r| r.said().key).to_vec();
-        let expected = ["no-anchor", "elsewhere", "too-short", "outside", "no-neighbour", "no-boundary", "dragging"].map(|k| format!("zone-refused-{k}"));
+        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoBoundary, Dragging].map(|r| r.said().key).to_vec();
+        let expected = ["no-anchor", "elsewhere", "too-short", "outside", "no-boundary", "dragging"].map(|k| format!("zone-refused-{k}"));
         assert_eq!(keys, expected);
         assert_eq!(TooShort.said(), Said::new("zone-refused-too-short").with("min", Arg::Length(MIN_ZONE_MM)));
     }
@@ -736,12 +668,10 @@ mod tests {
 
         let mut e = at(58_500, ZoneEnd::First);
         assert_eq!(e.split_zone(Some(10_000)), Err(ZoneRefusal::Elsewhere));
-        assert_eq!(e.merge_zone(true, Keep::Selected), Err(ZoneRefusal::Elsewhere));
         assert!(e.select_zone(1));
         assert_eq!(e.move_boundary(25_000), Err(ZoneRefusal::Elsewhere));
         make_own(&mut e);
         assert!(e.snapshot().zones[1].segments.is_some(), "a piece edit in a zone still works");
-        assert!(e.name_zone(Some("Own")));
 
         let mut near = at(59_500, ZoneEnd::First);
         assert_eq!(near.split_zone(Some(10_000)), Ok(()));
@@ -749,79 +679,6 @@ mod tests {
 
         let mut flipped = at(LEN, ZoneEnd::Last);
         assert_eq!(flipped.split_zone(Some(10_000)), Err(ZoneRefusal::Elsewhere));
-    }
-
-    #[test]
-    fn merging_zones_with_the_same_section_needs_no_choice_and_one_with_another_asks_and_keeps_the_chosen_one() {
-        let plain = editor(&[0, 20_000, 40_000]);
-        assert!(!plain.merge_needs_choice(true), "both on the base");
-        // zone 1 has a section of its own and a name
-        let build = || {
-            let mut e = editor(&[0, 20_000, 40_000]);
-            assert!(e.select_zone(1));
-            make_own(&mut e);
-            assert!(e.name_zone(Some("Mine")));
-            e
-        };
-        let e = build();
-        assert!(e.merge_needs_choice(true));
-        assert!(e.merge_needs_choice(false));
-        let own = e.snapshot().zones[1].segments.clone();
-        let base = e.snapshot().segments;
-
-        let mut keep_selected = build();
-        let before = revisions(&keep_selected);
-        keep_selected.merge_zone(true, Keep::Selected).unwrap();
-        let s = keep_selected.snapshot();
-        assert_eq!(starts(&keep_selected), [0, 20_000]);
-        assert_eq!(s.zones[1].segments, own);
-        assert_eq!(s.zones[1].name.as_deref(), Some("Mine"));
-        assert_eq!(keep_selected.zone(), 1);
-        assert_eq!(revisions(&keep_selected), before + 1);
-        assert_eq!(keep_selected.view().revisions.last().unwrap().label.key, "rev-zone-merge");
-
-        let mut keep_neighbour = build();
-        keep_neighbour.merge_zone(true, Keep::Neighbour).unwrap();
-        let s = keep_neighbour.snapshot();
-        assert_eq!(starts(&keep_neighbour), [0, 20_000]);
-        assert_eq!(s.zones[1].segments, None);
-        assert_eq!(s.zones[1].name, None);
-        assert_eq!(s.segments, base);
-        assert_eq!(keep_neighbour.zone(), 1);
-
-        // the earlier start wins whichever side is merged
-        let mut back = build();
-        back.merge_zone(false, Keep::Selected).unwrap();
-        assert_eq!(starts(&back), [0, 40_000]);
-        assert_eq!(back.zone(), 0);
-        assert_eq!(back.snapshot().zones[0].segments, own);
-    }
-
-    #[test]
-    fn merging_the_last_pair_down_to_one_zone_leaves_no_zoning_and_the_kept_section_as_the_base() {
-        let mut e = editor(&[0, 30_000]);
-        assert!(e.select_zone(1));
-        make_own(&mut e);
-        let own = e.snapshot().zones[1].segments.clone().unwrap();
-        let next_uid = e.snapshot().next_uid;
-        e.merge_zone(false, Keep::Selected).unwrap();
-        let s = e.snapshot();
-        assert!(s.zones.is_empty());
-        assert_eq!(s.segments, own);
-        assert_eq!(s.length_mm, None);
-        assert_eq!(s.next_uid, next_uid);
-        assert_eq!(e.zone(), 0);
-    }
-
-    #[test]
-    fn merge_is_refused_at_the_ends() {
-        let mut e = editor(&[0, 20_000]);
-        assert_eq!(e.merge_zone(false, Keep::Selected), Err(ZoneRefusal::NoNeighbour));
-        assert!(!e.merge_needs_choice(false));
-        assert!(e.select_zone(1));
-        assert_eq!(e.merge_zone(true, Keep::Selected), Err(ZoneRefusal::NoNeighbour));
-        let mut one = editor(&[]);
-        assert_eq!(one.merge_zone(true, Keep::Selected), Err(ZoneRefusal::NoNeighbour));
     }
 
     #[test]
@@ -856,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    fn structure_and_name_edits_are_refused_while_a_drag_is_under_way_and_leave_the_history_intact() {
+    fn structure_edits_are_refused_while_a_drag_is_under_way_and_leave_the_history_intact() {
         let mut e = editor(&[0, 20_000, 40_000]);
         assert!(e.select_zone(1));
         make_own(&mut e);
@@ -864,8 +721,6 @@ mod tests {
         e.begin_gesture();
         assert_eq!(e.move_boundary(25_000), Ok(()));
         assert_eq!(e.split_zone(Some(30_000)), Err(ZoneRefusal::Dragging));
-        assert_eq!(e.merge_zone(true, Keep::Selected), Err(ZoneRefusal::Dragging));
-        assert!(!e.name_zone(Some("x")));
         assert!(e.end_gesture());
         assert_eq!(revisions(&e), before.0 + 1);
         let s = e.snapshot();
@@ -895,26 +750,6 @@ mod tests {
         assert_eq!(e.move_boundary(30_000), Ok(()));
         e.cancel_gesture();
         assert_eq!(starts(&e), [0, 20_000]);
-    }
-
-    #[test]
-    fn naming_a_zone_is_one_undoable_step() {
-        let mut e = editor(&[0, 20_000, 40_000]);
-        assert!(e.select_zone(1));
-        let n = revisions(&e);
-        assert!(e.name_zone(Some("  Market  ")));
-        assert_eq!(e.snapshot().zones[1].name.as_deref(), Some("Market"));
-        assert_eq!(revisions(&e), n + 1);
-        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-name");
-        assert!(!e.name_zone(Some("Market")), "no change, no step");
-        assert!(e.name_zone(Some("   ")));
-        assert_eq!(e.snapshot().zones[1].name, None);
-        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-unname");
-        assert!(e.undo());
-        assert_eq!(e.snapshot().zones[1].name.as_deref(), Some("Market"));
-        // a street of one zone has no zone to name
-        let mut one = editor(&[]);
-        assert!(!one.name_zone(Some("x")));
     }
 
     #[test]
@@ -948,8 +783,6 @@ mod tests {
         check(&e, "split own");
         e.nudge_boundary(1_000);
         check(&e, "move");
-        e.merge_zone(false, Keep::Neighbour).unwrap();
-        check(&e, "merge");
         while e.undo() {
             check(&e, "undo");
         }
@@ -959,32 +792,11 @@ mod tests {
     }
 
     #[test]
-    fn a_merge_names_the_zone_it_keeps_by_the_number_it_had_before_the_merge() {
-        let mut e = editor(&[0, 20_000]);
-        assert!(e.select_zone(1));
-        make_own(&mut e);
-        assert!(e.select_zone(0));
-        e.merge_zone(true, Keep::Neighbour).unwrap();
-        let kept = Said::new("zone-unnamed-mid").with("n", Arg::Num(2));
-        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(kept))));
-
-        let mut e = editor(&[0, 20_000]);
-        e.merge_zone(true, Keep::Selected).unwrap();
-        let kept = Said::new("zone-unnamed-mid").with("n", Arg::Num(1));
-        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(kept))));
-    }
-
-    #[test]
     fn the_view_says_whether_there_are_several_zones_and_which_are_named() {
-        let mut e = editor(&[]);
-        let z = e.view().zones;
+        let z = editor(&[]).view().zones;
         assert!(!z.several && !z.zones[0].named);
-        e.split_zone(None).unwrap();
-        e.split_zone(None).unwrap();
-        assert!(e.view().zones.several);
-        assert!(e.select_zone(1));
-        assert!(e.name_zone(Some("Market")));
-        let z = e.view().zones;
+        let z = named_editor(&[0, 20_000, 40_000], 1, "Market").view().zones;
+        assert!(z.several);
         assert_eq!(z.zones.iter().map(|g| g.named).collect::<Vec<_>>(), [false, true, false]);
     }
 
