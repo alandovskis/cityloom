@@ -3494,6 +3494,68 @@ svg pattern circle {
   gap: 6px;
   min-height: 24px;
 }
+/* Pedestrian calls (#60), in the signal plan's level: a crossing's mode and rate, then the hour's tables. */
+.calls-crossings,
+.calls-findings {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.calls-findings > li {
+  color: var(--warn);
+  font-weight: 600;
+}
+.call-crossing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.call-name {
+  flex-basis: 100%;
+  font-weight: 600;
+}
+.call-crossing > .insp-range {
+  flex-basis: 100%;
+  margin: 0;
+}
+.call-rate {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.call-rate-field {
+  width: 5em;
+  min-height: 24px;
+}
+.calls-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 8px;
+}
+/* A crossing's name keeps a few words a line; the box scrolls sideways instead (it is a focusable region), and the
+   names' column (with its heading) stays at the left edge on the panel's own background, in either theme. */
+.calls-table th[scope="row"] {
+  min-width: 9em;
+}
+.calls-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+.calls-table caption {
+  padding-bottom: 4px;
+  text-align: start;
+  font-size: 13px;
+  font-weight: 600;
+}
+#calls-rows {
+  margin-top: 8px;
+}
 .signal-phases {
   list-style: none;
   margin: 0 0 8px;

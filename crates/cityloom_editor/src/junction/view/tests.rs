@@ -434,6 +434,210 @@ fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_b
 }
 
 #[test]
+fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_placeholders() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).expect("a section for the pedestrian calls")..];
+    assert!(calls.contains("Pedestrian calls") && calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
+    assert!(calls.contains("at most 15 s"), "{calls}");
+    let crossings = s.view_now().signal.as_ref().unwrap().calls.crossings.clone();
+    assert_eq!(crossings.len(), 4, "every crossing is listed");
+    for c in &crossings {
+        assert!(calls.contains(&format!(r#"id="call-on-{}""#, c.uid)), "a box for each crossing: {calls}");
+    }
+    assert_eq!(calls.matches("On recall: walked every time its phases run").count(), 4, "each on recall to begin with");
+    assert!(calls.contains(r#"id="calls-none""#) && !calls.contains(r#"id="calls-totals""#));
+    // On call: its rate field, what it needs of the green, the totals, and every call in a fold.
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(calls.contains(&format!(r#"<label for="call-rate-{e}">Calls an hour</label>"#)), "{calls}");
+    assert!(calls.contains(&format!(r#"id="call-rate-{e}""#)) && calls.contains(r#"value="12""#), "{calls}");
+    assert!(calls.contains("0 to 60 calls an hour (placeholder bound)"));
+    assert!(calls.contains("On call: walk 7 s + clearance "), "{calls}");
+    assert_eq!(calls.matches("On recall:").count(), 3);
+    assert!(calls.contains(r#"id="calls-totals""#) && calls.contains("Longest wait") && !calls.contains(r#"id="calls-none""#));
+    // Each table scrolls in a box the keys reach, named by its caption (a narrow panel cannot show every column).
+    for caption in ["calls-totals-caption", "calls-rows-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = calls.find(&labelled).unwrap_or_else(|| panic!("{caption}: {calls}"));
+        let tag = &calls[calls[..at].rfind("<div").unwrap()..at + calls[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+        assert!(calls.contains(&format!(r#"<caption id="{caption}">"#)), "{caption}: {calls}");
+    }
+    assert!(calls.contains(r#"id="calls-rows""#) && calls.contains("Every call, one row each (12)"), "{calls}");
+    let rows = &calls[calls.find(r#"id="calls-rows""#).unwrap()..];
+    assert_eq!(rows.matches("<tr>").count(), 13, "a heading row and one per call");
+    assert!(rows.contains(" min ") && (rows.contains("Served after") || rows.contains("Delayed")), "{rows}");
+}
+
+#[test]
+fn the_totals_count_every_call_and_mark_the_ones_not_served() {
+    use crate::junction::model::{SIGNAL, TimingField, junction_of};
+    // Five lanes of 3.5 m: 18 s to clear, 25 s with the walk, more than a 5 s green extended by 15 s.
+    let mut j =
+        junction_of(&[("sidewalk", 2000), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("sidewalk", 2000)]);
+    assert_eq!(j.current().control, SIGNAL, "the fixture is a signal");
+    let uids: Vec<u32> = j.current().arms.iter().map(|a| a.uid).collect();
+    for &u in &uids {
+        assert!(j.set_timing(u, TimingField::Green, 5));
+    }
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    s.show_plan();
+    let h = panel(&s);
+    let totals = &h[h.find(r#"id="calls-totals""#).unwrap()..];
+    let totals = &totals[..totals.find("</table>").unwrap()];
+    let heads: Vec<&str> = totals.split("<th scope=\"col\">").skip(1).map(|t| &t[..t.find('<').unwrap()]).collect();
+    assert_eq!(heads, ["Crossing", "Calls", "Served", "Delayed", "Not served", "Green extended", "Longest wait"]);
+    let row = &totals[totals.find("<tbody>").unwrap()..];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[..t.find("</td>").unwrap()]).collect();
+    // The dash is for the eye; a screen reader is told the words.
+    let none = r#"><span aria-hidden="true">–</span><span class="sr-only">none served</span>"#;
+    assert_eq!(cells, [">12", ">0", ">0", r#" class="bad">12"#, ">0", none], "{row}");
+    // A crossing whose calls are all served has no mark.
+    let s = shared(0);
+    assert!(s.set_on_call(arm(&s, 90), true));
+    s.show_plan();
+    let h = panel(&s);
+    let totals = &h[h.find(r#"id="calls-totals""#).unwrap()..];
+    assert!(!totals[..totals.find("</table>").unwrap()].contains("class=\"bad\""));
+}
+
+/// A signal whose streets are all walkways but the north one: one street of traffic, so the signal is suspended, with
+/// the north street's crossing kept on call.
+pub(crate) fn suspended_with_a_call() -> (Junction, State) {
+    use crate::shared::catalogue::{Side, StreetClass};
+    use crate::street::model::Street;
+    let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[]);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid;
+        if a.bearing == 0 {
+            a.calls = Some(12);
+        } else {
+            a.section = Some(walkway.clone());
+        }
+    }
+    (Junction::from_city(crate::street::model::named_said("Test"), &state, &state, 0).expect("it draws"), state)
+}
+
+#[test]
+fn a_suspended_signal_says_which_crossings_stay_on_call_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "1 crossing stays on call for when the signal runs again."),
+        (Locale::FrCa, "1 passage reste sur appel pour quand les feux fonctionneront de nouveau."),
+    ] {
+        let (j, _) = suspended_with_a_call();
+        assert_eq!(j.view().calls_kept, 1);
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        let h = panel(&s);
+        assert!(h.contains(r#"id="calls-kept""#) && h.contains(words), "{h}");
+    }
+    // A signal running, or a junction with none on call, says nothing of it.
+    assert_eq!(Junction::new(0).view().calls_kept, 0);
+    assert!(!panel(&shared(0)).contains(r#"id="calls-kept""#));
+}
+
+#[test]
+fn a_junction_that_opened_without_its_calls_says_so_until_it_is_edited_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "1 crossing was taken off call as the junction opened: it is not run by a signal."),
+        (Locale::FrCa, "1 passage n’est plus sur appel depuis l’ouverture de l’intersection\u{a0}: elle n’est pas réglée par des feux."),
+    ] {
+        let mut kept = Junction::new(0).current().clone();
+        kept.control = PRIORITY;
+        kept.arms[0].calls = Some(12);
+        let j = Junction::from_city(crate::street::model::named_said("J"), &kept, &kept, 0).unwrap();
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        let h = panel(&s);
+        assert!(h.contains(r#"id="calls-dropped""#) && h.contains(words), "{h}");
+        let uid = arm(&s, 90);
+        assert!(s.edit(|j| j.step_corner(uid, 1)));
+        assert!(!panel(&s).contains(r#"id="calls-dropped""#), "said until the first edit");
+    }
+    assert!(!panel(&shared(0)).contains(r#"id="calls-dropped""#));
+}
+
+#[test]
+fn a_plan_cut_to_the_phases_an_edit_can_make_says_so_on_the_plan_in_both_languages() {
+    use crate::junction::model::signal::{self, SignalPlan};
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "2 phases beyond the 10 a plan can hold were left out as the junction opened."),
+        (Locale::FrCa, "2 phases au-delà des 10 qu’un plan peut avoir ont été laissées de côté à l’ouverture de l’intersection."),
+    ] {
+        let today = Junction::new(0).current().clone();
+        let mut now = today.clone();
+        let phase = signal::plan(&today, 0).unwrap().to_stored().phases[0].clone();
+        now.signal_plan = Some(SignalPlan { phases: vec![phase; 12] });
+        let j = Junction::from_city(crate::street::model::named_said("J"), &today, &now, 0).unwrap();
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        s.show_plan();
+        let h = panel(&s);
+        assert!(h.contains(r#"id="signal-phases-cut""#) && h.contains(words), "{h}");
+    }
+    let s = shared(0);
+    s.show_plan();
+    assert!(!panel(&s).contains(r#"id="signal-phases-cut""#));
+}
+
+#[test]
+fn each_crossing_is_a_list_item_holding_a_group_named_for_it() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let list = &h[h.find(r#"class="calls-crossings""#).unwrap()..];
+    let item = &list[list.find("<li").unwrap()..];
+    assert!(item.starts_with("<li>") || item.starts_with("<li class="), "a plain list item: {item}");
+    assert!(item[..item.find("</li>").unwrap()].contains(r#"role="group""#) && !item[..item.find('>').unwrap()].contains("role="), "{item}");
+}
+
+#[test]
+fn a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_is_a_finding() {
+    let s = shared(0);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    assert!(s.set_on_call(e, true));
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: e, to: n }],
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(calls.contains("No phase walks this crossing, so it cannot be on call."), "{calls}");
+    let status = format!(r#"aria-describedby="call-status-{n}""#);
+    assert!(calls.contains(&status), "the box is described by its reason: {calls}");
+    assert!(calls.contains(r#"id="calls-findings""#) && calls.contains("is on call, but no phase walks it"), "{calls}");
+}
+
+#[test]
+fn the_pedestrian_calls_speak_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let e = arm(&s, 90);
+    assert!(s.set_on_call(e, true));
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    for words in ["Appels piétons", "Valeurs provisoires", "1,0 m/s", "Sur appel (bouton-poussoir)", "En rappel", "Appels par heure", "Attente la plus longue"]
+    {
+        assert!(calls.contains(words), "{words}: {calls}");
+    }
+    assert!(!calls.contains("Pedestrian calls") && !calls.contains("On recall"), "no English left: {calls}");
+}
+
+#[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
     let h = panel(&s);

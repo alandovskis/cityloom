@@ -58,7 +58,11 @@ pub const SCENARIO_VERSION: u32 = FILTER_VERSION + 1;
 /// a build that does not know the stamp would write records back without it, which this build then discards, so it
 /// must treat the document as a newer one.
 pub const IMPORT_STAMP_VERSION: u32 = SCENARIO_VERSION + 1;
-pub const NEWEST: u32 = IMPORT_STAMP_VERSION;
+/// What a document is written as while a junction record (its own state or a scenario's) holds a crossing on call
+/// (`Arm.calls`, #60): a build that does not know it would drop the calls on its next write, so it must treat the
+/// document as a newer one. A junction with no crossing on call is written as before.
+pub const CALLS_VERSION: u32 = IMPORT_STAMP_VERSION + 1;
+pub const NEWEST: u32 = CALLS_VERSION;
 /// A record made against an importer older than this (or against none, as before the stamp) is stale: it is never
 /// applied, listed or sent, put back from an archive, or restored from a milestone. A fixed cutoff, not the current
 /// importer version: raising it discards everyone's edits again, so it is a decision, not a side effect of an
@@ -164,13 +168,14 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: the first that applies of `IMPORT_STAMP_VERSION` (a street or junction
-    /// record carries an import stamp), `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record
-    /// holds a modal filter), `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own),
-    /// `CALMING_VERSION` (raised tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a
-    /// junction's edited signal plan), `STOP_VERSION` (transit stops), `CURB_VERSION` (curbside uses),
-    /// `SPEED_VERSION` (a speed, set or decided to have none), `ZONES_VERSION` (zones), else `VERSION`. Never below
-    /// `IMPORT_STAMP_VERSION` once the document was at it (`written_as`).
+    /// The version the document is written as: the first that applies of `CALLS_VERSION` (a junction record holds a
+    /// crossing on call), `IMPORT_STAMP_VERSION` (a street or junction record carries an import stamp),
+    /// `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record holds a modal filter),
+    /// `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own), `CALMING_VERSION` (raised
+    /// tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a junction's edited signal plan),
+    /// `STOP_VERSION` (transit stops), `CURB_VERSION` (curbside uses), `SPEED_VERSION` (a speed, set or decided to have
+    /// none), `ZONES_VERSION` (zones), else `VERSION`. Never below `IMPORT_STAMP_VERSION` once the document was at it
+    /// (`written_as`).
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
@@ -184,7 +189,9 @@ impl Edits {
         let filter = self.streets.values().any(|r| r.street.calming.iter().any(|c| c.kind == crate::street::model::CalmingKind::ModalFilter));
         let scenarios = self.streets.values().any(|r| !r.scenarios.is_empty()) || self.junctions.values().any(|r| !r.scenarios.is_empty());
         let import = self.streets.values().any(|r| r.import.is_some()) || self.junctions.values().any(|r| r.import.is_some());
-        written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios)
+        let on_call = |s: &State| s.arms.iter().any(|a| a.calls.is_some());
+        let calls = self.junctions.values().any(|r| on_call(&r.state) || r.scenarios.iter().any(|sc| on_call(&sc.design)));
+        written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls)
     }
 
     pub fn to_json(&self) -> String {
@@ -217,11 +224,12 @@ fn written_as(
     chicane: bool,
     filter: bool,
     scenarios: bool,
+    calls: bool,
 ) -> u32 {
-    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios).max(stamp_floor(held))
+    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls).max(stamp_floor(held))
 }
 
-/// The version a document is written as, from what its street records hold.
+/// The version a document is written as, from what its street and junction records hold.
 #[allow(clippy::too_many_arguments)]
 fn version_for(
     import: bool,
@@ -236,8 +244,11 @@ fn version_for(
     chicane: bool,
     filter: bool,
     scenarios: bool,
+    calls: bool,
 ) -> u32 {
-    if import {
+    if calls {
+        CALLS_VERSION
+    } else if import {
         IMPORT_STAMP_VERSION
     } else if scenarios {
         SCENARIO_VERSION
@@ -335,6 +346,17 @@ fn holds_scenarios(doc: &Map<String, Value>) -> bool {
     })
 }
 
+/// Whether any junction record holds a crossing on call: an arm with `calls`, in its state or in one of its scenarios'
+/// designs (decided on the raw JSON).
+fn holds_calls(doc: &Map<String, Value>) -> bool {
+    let on_call = |state: Option<&Value>| {
+        state.and_then(|s| s.get("arms")).and_then(Value::as_array).is_some_and(|arms| arms.iter().any(|a| a.get("calls").is_some_and(|c| !c.is_null())))
+    };
+    let mut junctions = doc.get(JUNCTIONS).and_then(Value::as_object).into_iter().flatten();
+    junctions
+        .any(|(_, r)| on_call(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| on_call(sc.get("design")))))
+}
+
 /// Whether any record of the streets section holds a non-empty list of raised elements (decided on the raw JSON).
 fn holds_calming(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
@@ -370,8 +392,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
-        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios
-        // and 17 with the import stamp.
+        // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios,
+        // 17 with the import stamp and 18 with crossings on call.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
@@ -390,6 +412,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_chicane(&doc),
         holds_filter(&doc),
         holds_scenarios(&doc),
+        holds_calls(&doc),
     );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
@@ -498,8 +521,9 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `IMPORT_STAMP_VERSION` while any street or junction record carries an import
-    /// stamp, else `SCENARIO_VERSION` while any keeps scenarios, else `FILTER_VERSION` while any street record holds a modal filter, else
+    /// The document as text, its version `CALLS_VERSION` while any junction record holds a crossing on call, else
+    /// `IMPORT_STAMP_VERSION` while any street or junction record carries an import stamp, else `SCENARIO_VERSION` while
+    /// any keeps scenarios, else `FILTER_VERSION` while any street record holds a modal filter, else
     /// `CHICANE_VERSION` while any holds a chicane, else
     /// `ZONE_SPEED_VERSION` while any zone has a speed of its own, else
     /// `CALMING_VERSION` while any street record holds raised elements, else
@@ -525,6 +549,7 @@ impl Draft {
             holds_chicane(&doc),
             holds_filter(&doc),
             holds_scenarios(&doc),
+            holds_calls(&doc),
         );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
@@ -769,9 +794,51 @@ mod tests {
     }
 
     #[test]
-    fn a_build_before_scenarios_leaves_a_document_with_them_alone() {
-        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, IMPORT_STAMP_VERSION + 1);
+    fn a_document_with_the_import_stamp_is_still_read_at_version_17() {
+        assert_eq!(IMPORT_STAMP_VERSION + 1, CALLS_VERSION, "the version after the import stamp is the calls'");
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, IMPORT_STAMP_VERSION);
+        assert!(matches!(parse(Some(&newer)), Document::Current(_)));
+    }
+
+    /// A junction record of the city on a signal, its first crossing on call when `calls` says how often.
+    fn signal_record(calls: Option<u32>) -> (String, JunctionRecord) {
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        record.state.control = crate::junction::model::SIGNAL;
+        record.state.arms[0].calls = calls;
+        (key, record)
+    }
+
+    #[test]
+    fn a_crossing_on_call_makes_its_document_version_18_and_one_with_none_is_written_as_before() {
+        assert_eq!(CALLS_VERSION, 18);
+        let (key, record) = signal_record(None);
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record);
+        assert!(!e.to_json().contains("calls"));
+        assert_eq!(e.written_version(), VERSION);
+        let (_, on_call) = signal_record(Some(12));
+        e.junctions.insert(key.clone(), on_call);
+        assert_eq!(e.written_version(), CALLS_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.version, CALLS_VERSION);
+        assert_eq!(back.junctions[&key].state.arms[0].calls, Some(12));
+        // The draft decides on the raw JSON, a junction's scenario included.
+        let Ok(mut draft) = draft(Some(&e.to_json())) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+        // The import stamp's floor still holds once the calls go: never below it again.
+        draft.remove_junction(&key);
+        assert!(draft.to_json().contains(&format!("\"version\":{IMPORT_STAMP_VERSION}")), "{}", draft.to_json());
+        let in_a_scenario = r#"{"version":5,"streets":{},"junctions":{"n1":{"scenarios":[{"id":1,"name":"A","design":{"arms":[{"calls":3}]}}]}}}"#;
+        let Ok(draft) = super::draft(Some(in_a_scenario)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+    }
+
+    #[test]
+    fn a_build_before_calls_leaves_a_document_with_them_alone() {
+        assert_eq!(NEWEST, CALLS_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, CALLS_VERSION + 1);
         assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
@@ -895,7 +962,9 @@ mod tests {
         assert_eq!(ZONE_SPEED_VERSION, 13);
         assert_eq!(CHICANE_VERSION, 14);
         assert_eq!(FILTER_VERSION, 15);
-        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
+        assert_eq!(SCENARIO_VERSION, 16);
+        assert_eq!(IMPORT_STAMP_VERSION, 17);
+        assert_eq!(NEWEST, CALLS_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -1125,7 +1194,7 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, IMPORT_STAMP_VERSION);
+        assert_eq!(NEWEST, CALLS_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
