@@ -14,8 +14,17 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 - `providers`: one OpenID Connect client for OpenStreetMap, Google, Microsoft, Apple. `apple.rs` signs/renews Apple's client secret; `microsoft.rs` checks the issuer against the token's own tenant.
 - `auth`, `api` (`api/work.rs` is `/api/work`, see `src/sync/CLAUDE.md`).
 - `work`: rules over metadata, no I/O (`Put`, `plan_batch`, `Ask`); `db/work.rs` is `WorkRepo`. Migration `0002_work.sql`: `users.work_rev`, `users.work_epoch` (new each time storage is turned on), `work` table (row per `(user, kind, key)`, tombstone flag, purged after 90 days). Migration `0003_work_project_kind.sql` lets `work.kind` be `project` (`Kind::Project`; the key is the project id; other kinds' keys may carry a `<project>:` prefix, bare ones are the `first` project's; no row is rewritten, the AD stays `work.<kind>.<key>.<user_id>`). Migration `0004_work_milestone_kind.sql` adds `milestone` (`Kind::Milestone`, a design milestone: one record holding a snapshot of a project's work, key `<id>` for the first project, `<project>:<id>` otherwise; a record may be up to `MAX_RECORD_BYTES`, 1 MiB, and an account holds `MAX_SEALED_BYTES`, 16 MiB).
-- `app`: router, Origin check on changes, `require_ready`, request logs without queries. Rate limits keyed on the rightmost `X-Forwarded-For` (Railway's proxy appends it; `client_address`): `/auth` `AUTH_RATE_PERIOD_SECS`/`AUTH_RATE_BURST` (6 s, 20); `/api/work` own limiter `WORK_RATE_PERIOD_SECS`/`WORK_RATE_BURST` (1 s, 60). `e2e/playwright.config.ts` raises both bursts.
+- `share`: shared designs (#221), rules over the token and metadata, no I/O; `db/share.rs` is `ShareRepo`; `api/share.rs` the routes (see below).
+- `app`: router, Origin check on changes, `require_ready`, request logs without queries (and without a share's token: `loggable_path`). Rate limits keyed on the rightmost `X-Forwarded-For` (Railway's proxy appends it; `client_address`): `/auth` `AUTH_RATE_PERIOD_SECS`/`AUTH_RATE_BURST` (6 s, 20); `/api/work` own limiter `WORK_RATE_PERIOD_SECS`/`WORK_RATE_BURST` (1 s, 60); `/api/share` own limiter `SHARE_RATE_PERIOD_SECS`/`SHARE_RATE_BURST` (1 s, 30). `e2e/playwright.config.ts` raises the bursts.
 - `fake_provider`: feature `test-provider` only, never in a release (`scripts/check-no-fake.sh`); tests pick who signs in with the `fake-login` cookie.
+
+## Shared designs (`share.rs`, migration `0005_shares.sql`)
+
+- `POST /api/share` (signed in, Origin-checked) takes the share document as the browser made it (`kind` `cityloom-share`, integer `format_version` 1; a higher one is `422 newer`, anything else `400`, over `share::MAX_BODY_BYTES` (1 MiB, `work::MAX_RECORD_BYTES`) `413 {"error":"too-large","limit":"share"}`), keeps it 90 days (`RETENTION_DAYS`) and answers `201 {token, expires_at}`. An account holds at most 50 live shares (`MAX_LIVE_SHARES`, `409 full`).
+- `GET /api/share/{token}` needs no session: `200` the body as sent, `404 not-found` (no such link, or text that is no token), `410 expired`, `410 deleted`. `Referrer-Policy: no-referrer`.
+- `DELETE /api/share/{token}` (signed in, Origin-checked): the creator's only (`403 not-yours`), `204`; again, `204`. Without `DATABASE_URL` all of these answer 503.
+- Token: 32 bytes of `getrandom`, base64url (43 characters); never stored, never logged (`app::loggable_path`, `Token`'s `Debug`). Row found by `lookup`, SHA-256 of the token under the domain `cityloom.share.lookup` (not the identity HMAC: `rehash` could not recompute it without the token). Body sealed under `Token::body_key` (HMAC-SHA256 keyed with the token), AD `share.body.<id>`: no master key or data key opens it, so the database and the server's keys together give nothing without the link. No rotation needed.
+- Deleting or expiring drops the body and keeps the row as a marker (`deleted` flag, `expires_at`) until `MARKER_DAYS` (365) past the expiry, so the link says expired/deleted, not not-found. `share::spawn_purge` (start-up, then daily) drops expired bodies and old markers; a read of an expired share drops its body at once. The account's deletion removes its rows (cascade).
 
 ## Auth rules
 
@@ -52,4 +61,4 @@ Workspace binary and library, not built to wasm (`just test` type-checks wasm wi
 
 ## Tests
 
-`cityloom_server/tests/`: `auth_flow`, `api`, `db`, `no_plaintext`, `rotate`, `providers`, `static_files`, `unavailable`, `work_api`, `work_db`, `areas`, `data_mount`.
+`cityloom_server/tests/`: `auth_flow`, `api`, `db`, `no_plaintext`, `rotate`, `providers`, `static_files`, `unavailable`, `work_api`, `work_db`, `share_api`, `share_db`, `areas`, `data_mount`.

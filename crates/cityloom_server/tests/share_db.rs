@@ -1,0 +1,110 @@
+use cityloom_server::accounts::{self, Claims, Repo};
+use cityloom_server::crypto::{LookupKey, MasterKeys};
+use cityloom_server::db::PgRepo;
+use cityloom_server::share::{self, ShareError, ShareRepo, Token};
+use sqlx::PgPool;
+use time::{Duration, OffsetDateTime};
+use uuid::Uuid;
+
+fn repo(pool: PgPool) -> PgRepo {
+    PgRepo::new(pool, MasterKeys::new(&[(1, zeroize::Zeroizing::new([1; 32]))], 1).unwrap(), LookupKey::new(zeroize::Zeroizing::new([3; 32])))
+}
+
+fn t0() -> OffsetDateTime {
+    OffsetDateTime::from_unix_timestamp(1_800_000_000).unwrap()
+}
+
+async fn user(r: &PgRepo, sub: &str) -> Uuid {
+    let claims = Claims {
+        provider: "google".into(),
+        provider_name: "Google".into(),
+        sub: sub.into(),
+        name: Some("Ada".into()),
+        preferred_username: None,
+        first_time_name: None,
+        label: None,
+    };
+    accounts::sign_in(r, &claims).await.unwrap().0
+}
+
+const BODY: &[u8] = br#"{"kind":"cityloom-share","format_version":1,"project":{"name":"Plateau"}}"#;
+
+#[sqlx::test]
+async fn a_share_opens_with_its_token_only_and_comes_back_exactly(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let token = Token::random();
+    let created = r.create(ada, &token, BODY, t0()).await.unwrap();
+    assert_eq!(created.expires_at, t0() + Duration::days(90));
+    assert_eq!(r.open(&token, t0()).await.unwrap(), BODY);
+    assert_eq!(r.open(&Token::random(), t0()).await.unwrap_err(), ShareError::NotFound);
+    // The row holds the token's lookup hash, never the token, and the body sealed under a key only the token gives.
+    let (lookup, body): (Vec<u8>, Vec<u8>) = sqlx::query_as("select lookup, body from shares").fetch_one(&pool).await.unwrap();
+    assert_eq!(lookup, token.lookup());
+    assert_ne!(lookup, token.text().as_bytes());
+    assert_eq!(body.len(), BODY.len() + 1 + 12 + 16, "sealed: version, nonce, tag");
+}
+
+#[sqlx::test]
+async fn a_body_moved_to_another_row_does_not_open(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let (one, two) = (Token::random(), Token::random());
+    r.create(ada, &one, BODY, t0()).await.unwrap();
+    r.create(ada, &two, b"{\"kind\":\"cityloom-share\",\"format_version\":1}", t0()).await.unwrap();
+    // Swap the lookups: each token now finds the other's row, whose body is sealed under the other key and AD.
+    for (from, to) in [(one.lookup(), [0u8; 32]), (two.lookup(), one.lookup()), ([0u8; 32], two.lookup())] {
+        sqlx::query("update shares set lookup = $2 where lookup = $1").bind(&from[..]).bind(&to[..]).execute(&pool).await.unwrap();
+    }
+    assert_eq!(r.open(&one, t0()).await.unwrap_err(), ShareError::Corrupt);
+}
+
+#[sqlx::test]
+async fn an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_it_a_year_on(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    let (read, purged) = (Token::random(), Token::random());
+    r.create(ada, &read, BODY, t0()).await.unwrap();
+    r.create(ada, &purged, BODY, t0() + Duration::days(1)).await.unwrap();
+    let at_90 = t0() + Duration::days(90);
+    assert_eq!(r.open(&read, at_90).await.unwrap_err(), ShareError::Expired);
+    let bodies: i64 = sqlx::query_scalar("select count(*) from shares where body is not null").fetch_one(&pool).await.unwrap();
+    assert_eq!(bodies, 1, "the read dropped the expired body at once");
+    assert_eq!(r.purge(at_90).await.unwrap(), 0, "the other is not expired yet");
+    assert_eq!(r.purge(at_90 + Duration::days(1)).await.unwrap(), 1);
+    let bodies: i64 = sqlx::query_scalar("select count(*) from shares where body is not null").fetch_one(&pool).await.unwrap();
+    assert_eq!(bodies, 0);
+    assert_eq!(r.open(&purged, at_90 + Duration::days(2)).await.unwrap_err(), ShareError::Expired, "the marker still says expired");
+    assert_eq!(r.purge(at_90 + Duration::days(share::MARKER_DAYS + 2)).await.unwrap(), 2, "a year past expiry the markers go");
+    assert_eq!(r.open(&purged, at_90 + Duration::days(share::MARKER_DAYS + 2)).await.unwrap_err(), ShareError::NotFound);
+}
+
+#[sqlx::test]
+async fn only_the_creator_deletes_and_the_body_goes_with_it(pool: PgPool) {
+    let r = repo(pool.clone());
+    let (ada, bea) = (user(&r, "a").await, user(&r, "b").await);
+    let token = Token::random();
+    r.create(ada, &token, BODY, t0()).await.unwrap();
+    assert_eq!(r.delete(bea, &token, t0()).await.unwrap_err(), ShareError::NotYours);
+    assert_eq!(r.open(&token, t0()).await.unwrap(), BODY);
+    r.delete(ada, &token, t0()).await.unwrap();
+    assert_eq!(r.open(&token, t0()).await.unwrap_err(), ShareError::Deleted);
+    let body: Option<Vec<u8>> = sqlx::query_scalar("select body from shares").fetch_one(&pool).await.unwrap();
+    assert_eq!(body, None);
+    assert_eq!(r.delete(ada, &Token::random(), t0()).await.unwrap_err(), ShareError::NotFound);
+}
+
+#[sqlx::test]
+async fn the_cap_counts_live_shares_and_a_gone_account_makes_none(pool: PgPool) {
+    let r = repo(pool.clone());
+    let ada = user(&r, "a").await;
+    for _ in 0..share::MAX_LIVE_SHARES {
+        r.create(ada, &Token::random(), BODY, t0()).await.unwrap();
+    }
+    assert_eq!(r.create(ada, &Token::random(), BODY, t0()).await.unwrap_err(), ShareError::Full);
+    assert!(r.create(ada, &Token::random(), BODY, t0() + Duration::days(90)).await.is_ok(), "expired ones do not count");
+    r.delete_user(ada).await.unwrap();
+    let rows: i64 = sqlx::query_scalar("select count(*) from shares").fetch_one(&pool).await.unwrap();
+    assert_eq!(rows, 0, "the account's shares went with it");
+    assert_eq!(r.create(ada, &Token::random(), BODY, t0()).await.unwrap_err(), ShareError::Gone);
+}
