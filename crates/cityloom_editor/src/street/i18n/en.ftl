@@ -340,8 +340,6 @@ rev-zone-merge = Merge zones, keeping { $kept }
 rev-zone-move = Move the start of { $zone } to { $to }
 rev-zone-name = Zone name: { $zone }
 rev-zone-unname = Clear the name of { $zone }
-rev-zone-reset = Reset { $zone } to the street's section
-rev-zone-use = Use { $zone } for the whole street
 zone-refused-no-anchor = Both ends of this street are cut by the edge of the map, so zones cannot be placed along it.
 zone-refused-elsewhere = The zones of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
 zone-refused-too-short = A zone must be at least { $min } long.
@@ -379,10 +377,6 @@ zones-elsewhere = The zones were drawn on this street when it was { $drawn } lon
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }
 check-zone-in = { $check } in { $zone }
-zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
-        [own] its own section
-       *[base] the base section
-    }, { $n } of { $total }
 # The plan (src/street/view/plan/): the mark on an end of the street cut by the edge of the area.
 plan-cut = Cut by the edge of the map
 
@@ -390,20 +384,8 @@ plan-cut = Cut by the edge of the map
 st-pieces-heading = Pieces of the street
 st-pieces-label = Pieces, left to right
 
-# The commands beside the zone strip (src/street/view/zone_tools.rs).
+# A length typed in a tool of the details panel that is not a number.
 zone-bad-number = That is not a number.
-st-zone-tools = Zone commands
-st-zone-split = Split
-st-zone-split-at = Split at ({ $unit })
-st-zone-start = Start of this zone ({ $unit })
-st-zone-merge-prev = Merge with the previous zone
-st-zone-merge-next = Merge with the next zone
-st-zone-merge-choice = Which section to keep
-st-zone-keep = Keep the section of { $zone }
-st-zone-keep-cancel = Cancel the merge
-st-zone-name = Zone name
-st-zone-reset = Reset to the street's section
-st-zone-use = Use this section for the whole street
 st-street-sub =
     { $class ->
         [motorway] Motorway
@@ -426,29 +408,13 @@ st-street-sub-free =
         [one] 1 zone
        *[other] { $zones } zones
     }
-st-row-zones = Zones
-st-zones-entry-hint = Split the street to give a stretch its own pieces and speed limit.
 st-speed-zone-hint = For { $zone }, the zone chosen.
-st-zone-sub = { $from } to { $to } · { $length } long · { $at } of { $total }
-st-zone-sub-whole = The whole street · { $length }
-st-zone-row-name = Name
-st-zone-row-start = Start
-st-zone-row-section = Section
-st-zone-row-split = Split
-st-zone-row-merge = Merge
-st-zone-own = Its own section
-st-zone-same = The street's section
-st-zone-split-hint = In the middle if left empty. Each part can then have its own pieces and speed limit.
-st-zone-with = With { $zone }
-st-zone-merge-with = Merge with { $zone }
 st-path-label = What the details are of
 st-path-street = Street
 st-path-gap = Free stretch
 # `name` is a kind of piece, or a stop's own name.
 st-path-step = { $name }
 st-path-hint = Choose a piece, a zone or a stretch along the street to change it.
-# `zone` is the selected zone's name (Zone 1, or the name it was given).
-st-path-zone-entry = Zone commands: { $zone }
 st-speed-label = Speed limit
 st-speed-not-set = Not set
 st-speed-kmh = { $kmh } km/h

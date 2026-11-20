@@ -96,27 +96,6 @@ pub fn piece_text(v: &View, i: usize, i18n: &I18n, units: Units) -> String {
     i18n.tr_now("selection-position", &args)
 }
 
-/// The selected zone: its name, where it lies, how long it is, whether it has a section of its own and its place
-/// among the zones. Said whenever a zone is chosen.
-pub fn zone_selection_text(v: &View, i18n: &I18n, units: Units) -> String {
-    zone_text(v, v.zones.selected, i18n, units)
-}
-
-/// The same for zone `index` (the last when past the end).
-pub fn zone_text(v: &View, index: usize, i18n: &I18n, units: Units) -> String {
-    let locale = i18n.locale_now();
-    let zone = &v.zones.zones[index.min(v.zones.zones.len().saturating_sub(1))];
-    let args = Args::new()
-        .str("zone", say_now(i18n, units, &zone.label))
-        .str("from", units.length_in(zone.from_mm, locale))
-        .str("to", units.length_in(zone.to_mm, locale))
-        .str("length", units.length_in(zone.to_mm - zone.from_mm, locale))
-        .str("section", if zone.own { "own" } else { "base" })
-        .num("n", zone.index as i64 + 1)
-        .num("total", v.zones.zones.len() as i64);
-    i18n.tr_now("zone-selected", &args)
-}
-
 /// How a cell of a strip is named (by the message `key`): what it is, where it lies and how long, and its place on
 /// the strip.
 pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n: &I18n, units: Units) -> String {
@@ -493,17 +472,9 @@ mod tests {
     #[test]
     fn the_words_are_in_both_languages_and_the_french_has_its_typography() {
         use crate::street::model::ZoneRefusal;
-        let mut e = zoned_editor();
-        assert!(e.select_zone(1));
-        let v = e.view();
-        assert_eq!(zone_selection_text(&v, &en(), Units::Metres), "Zone 2, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3");
-        assert_eq!(zone_selection_text(&v, &fr(), Units::Metres), "Zone 2, de 10,0\u{a0}m à 30,0\u{a0}m, 20,0\u{a0}m de long, la coupe de base, 2 sur 3");
         assert_eq!(zone_refused(&en(), Units::Metres, ZoneRefusal::TooShort), "A zone must be at least 5.0 m long.");
         assert_eq!(zone_refused(&fr(), Units::Metres, ZoneRefusal::TooShort), "Une zone doit mesurer au moins 5,0\u{a0}m.");
         assert_eq!(zone_refused(&fr(), Units::Feet, ZoneRefusal::NoNeighbour), "Il n’y a pas de zone de ce côté avec laquelle fusionner.");
-        assert!(e.name_zone(Some("Market")));
-        let v = e.view();
-        assert_eq!(zone_selection_text(&v, &en(), Units::Metres), "Market, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3");
     }
 
     #[test]

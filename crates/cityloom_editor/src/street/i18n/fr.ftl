@@ -340,8 +340,6 @@ rev-zone-merge = Fusion des zones; coupe gardée : { $kept }
 rev-zone-move = Début de zone déplacé à { $to } : { $zone }
 rev-zone-name = Nom de la zone : { $zone }
 rev-zone-unname = Nom effacé : { $zone }
-rev-zone-reset = Retour à la coupe de la rue : { $zone }
-rev-zone-use = Coupe appliquée à toute la rue : { $zone }
 zone-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de zones.
 zone-refused-elsewhere = Les zones de cette rue ont été tracées sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
 zone-refused-too-short = Une zone doit mesurer au moins { $min }.
@@ -379,10 +377,6 @@ zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesur
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
 check-zone-in = { $check } : { $zone }
-zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
-        [own] sa propre coupe
-       *[base] la coupe de base
-    }, { $n } sur { $total }
 # Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
 plan-cut = Coupée par le bord de la carte
 
@@ -390,20 +384,8 @@ plan-cut = Coupée par le bord de la carte
 st-pieces-heading = Éléments de la rue
 st-pieces-label = Éléments, de gauche à droite
 
-# The commands beside the zone strip (src/street/view/zone_tools.rs).
+# Une longueur tapée dans un outil du panneau des détails qui n’est pas un nombre.
 zone-bad-number = Ce n’est pas un nombre.
-st-zone-tools = Commandes des zones
-st-zone-split = Diviser
-st-zone-split-at = Diviser à ({ $unit })
-st-zone-start = Début de cette zone ({ $unit })
-st-zone-merge-prev = Fusionner avec la zone précédente
-st-zone-merge-next = Fusionner avec la zone suivante
-st-zone-merge-choice = Quelle coupe garder
-st-zone-keep = Garder la coupe : { $zone }
-st-zone-keep-cancel = Annuler la fusion
-st-zone-name = Nom de la zone
-st-zone-reset = Revenir à la coupe de la rue
-st-zone-use = Utiliser cette coupe pour toute la rue
 st-street-sub =
     { $class ->
         [motorway] Autoroute
@@ -426,29 +408,13 @@ st-street-sub-free =
         [one] 1 zone
        *[other] { $zones } zones
     }
-st-row-zones = Zones
-st-zones-entry-hint = Divisez la rue pour donner à un tronçon ses propres éléments et sa limite de vitesse.
 st-speed-zone-hint = Pour { $zone }, la zone choisie.
-st-zone-sub = { $from } à { $to } · { $length } de long · { $at } sur { $total }
-st-zone-sub-whole = La rue entière · { $length }
-st-zone-row-name = Nom
-st-zone-row-start = Début
-st-zone-row-section = Coupe
-st-zone-row-split = Diviser
-st-zone-row-merge = Fusionner
-st-zone-own = Sa propre coupe
-st-zone-same = La coupe de la rue
-st-zone-split-hint = Au milieu si le champ est vide. Chaque partie peut ensuite avoir ses propres éléments et sa limite de vitesse.
-st-zone-with = Avec { $zone }
-st-zone-merge-with = Fusionner avec { $zone }
 st-path-label = Ce que montrent les détails
 st-path-street = Rue
 st-path-gap = Tronçon libre
 # `name` est un type d’élément, ou le nom propre d’un arrêt.
 st-path-step = { $name }
 st-path-hint = Choisissez un élément, une zone ou un tronçon le long de la rue pour le modifier.
-# `zone` est le nom de la zone sélectionnée (Zone 1, ou le nom qu’on lui a donné).
-st-path-zone-entry = Commandes de zone : { $zone }
 st-speed-label = Limite de vitesse
 st-speed-not-set = Non indiquée
 st-speed-kmh = { $kmh }{" "}km/h

@@ -1622,37 +1622,8 @@ svg pattern circle {
   opacity: 0.6;
   cursor: not-allowed;
 }
-.zone-why {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--ink);
-  font-size: 13px;
-}
-.zone-merge-choice {
-  padding: 4px 8px;
-  border: 1px dashed var(--zone-edge);
-  border-radius: 6px;
-}
-/* The zone pane (`zone_tools`): where the zone lies and a strip of the zones, then one row per setting, a short label
-   beside its control (the field's fuller name is its aria-label): the zone's name, start and section, then split and
-   merge. A merge waiting for its choice comes first. */
-.zone-pane .insp-head {
-  margin-bottom: 8px;
-}
-.zone-badge {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 22px;
-  border: 2px solid var(--accent);
-  border-radius: 4px;
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-  box-sizing: border-box;
-}
+/* A strip of the zones, and the rows of a level of the details panel: one row per setting, a short label beside its
+   control (the field's fuller name is its aria-label). */
 .zone-mini {
   display: flex;
   gap: 2px;
@@ -1668,9 +1639,6 @@ svg pattern circle {
 .zone-mini span.on {
   border-color: var(--accent);
   background: var(--accent);
-}
-.zone-pane .zone-tools {
-  gap: 0;
 }
 .zone-row {
   display: grid;
@@ -1695,31 +1663,8 @@ svg pattern circle {
   min-height: 32px;
   min-width: 0;
 }
-.zone-field {
-  display: inline-flex;
-  flex: 1 1 6em;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-.zone-field input {
-  min-height: 32px;
-  min-width: 0;
-  flex: 1;
-}
-.zone-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.zone-btns .btn {
-  flex: 1 1 auto;
-  justify-content: center;
-  min-height: 32px;
-  font-size: 13px;
-}
-/* A pane's or a dialog's main action (Split, the Transform dialog's Apply): the accent under its ink, also under the
-   pointer; disabled, a plain button with ink-3 on the panel (pinned in shared/contrast.rs). */
+/* A dialog's main action (the Transform dialog's Apply): the accent under its ink, also under the pointer; disabled,
+   a plain button with ink-3 on the panel (pinned in shared/contrast.rs). */
 .btn.primary {
   border-color: var(--accent);
   background: var(--accent);
@@ -1733,39 +1678,13 @@ svg pattern circle {
   background: var(--panel);
   color: var(--ink-3);
 }
-.zone-chip {
-  justify-self: start;
-  padding: 2px 9px;
-  border-radius: 99px;
-  background: var(--fill);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 700;
-}
-.zone-chip.own {
-  background: var(--accent-wash);
-  color: var(--accent);
-}
 .zone-hint {
   margin: 0;
   color: var(--ink-2);
   font-size: 12px;
 }
-.zone-pane .zone-why:empty {
-  display: none;
-}
-.zone-pane .zone-merge-choice {
-  display: grid;
-  gap: 6px;
-  margin: 8px 0;
-  padding: 10px;
-  border: 2px solid var(--accent);
-  border-radius: 10px;
-  background: var(--accent-wash);
-}
-/* The details panel's Street level: the street's name and figures, then rows like the zone pane's (speed limit,
-   zones, the standard in force, with "Manage profiles" a disclosure), and the tip for someone who has chosen nothing
-   at its foot. */
+/* The details panel's Street level: the street's name and figures, then rows (speed limit, the standard in force,
+   with "Manage profiles" a disclosure), and the tip for someone who has chosen nothing at its foot. */
 .street-head .insp-sub {
   margin-top: 2px;
 }
@@ -1800,11 +1719,6 @@ svg pattern circle {
   background: var(--fill);
   color: var(--ink-2);
   font-size: 13px;
-}
-.zone-ask {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
 }
 @media (forced-colors: active) {
   .curb-cell,
@@ -2669,9 +2583,6 @@ svg pattern circle {
 }
 #p-street > .hint {
   margin: 0 0 8px;
-}
-.zone-entry {
-  margin: 0 0 16px;
 }
 
 /* ---- notes ------------------------------------------------------------------- */

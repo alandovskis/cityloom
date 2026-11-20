@@ -92,12 +92,10 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("zones-slot", view! { <view::plan::Plan vm=vm.clone()/> }.into_any());
     mount("curb-slot", view! { <view::curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
     mount("panel-path-slot", view! { <view::panel_path::PanelPath vm=vm.clone()/> }.into_any());
-    mount("zone-entry-slot", view! { <view::panel_path::ZoneEntry vm=vm.clone()/> }.into_any());
     mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("street-head-slot", view! { <view::page::StreetSummary vm=vm.clone()/> }.into_any());
     mount("speed-slot", locked(read_only, view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }));
-    mount("zone-tools-slot", locked(read_only, view! { <view::zone_tools::ZoneTools vm=vm.clone()/> }));
     mount("curb-tools-slot", locked(read_only, view! { <view::curb_tools::CurbTools vm=vm.clone()/> }));
     mount("stop-tools-slot", locked(read_only, view! { <view::stop_tools::StopTools vm=vm.clone()/> }));
     mount("calming-tools-slot", locked(read_only, view! { <view::calming_tools::CalmingTools vm=vm.clone()/> }));

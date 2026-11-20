@@ -1,5 +1,5 @@
-//! What the street page's details panel shows: one level at a time (the street, a zone, a piece, or one of the things
-//! along the street), and the path to it. Pure: it reads the street's view and says nothing in words of its own; the
+//! What the street page's details panel shows: one level at a time (the street, a piece, or one of the things along
+//! the street), and the path to it. Pure: it reads the street's view and says nothing in words of its own; the
 //! view-model words the path.
 
 use crate::shared::catalogue::KINDS;
@@ -12,9 +12,7 @@ use crate::street::model::{StripCell, View};
 pub enum Level {
     /// What is set for the street as a whole.
     Street,
-    /// The selected zone's commands.
-    Zone,
-    /// The selected piece, which belongs to the selected zone's section.
+    /// The selected piece, of the section of the stretch picked.
     Piece,
     /// The chosen stretch of a curbside strip: a use or a free stretch.
     Curb,
@@ -28,13 +26,12 @@ pub enum Level {
 
 impl Level {
     /// Every level, in the order of the panel's markup.
-    pub const ALL: [Level; 7] = [Level::Street, Level::Zone, Level::Piece, Level::Curb, Level::Stop, Level::Calming, Level::Green];
+    pub const ALL: [Level; 6] = [Level::Street, Level::Piece, Level::Curb, Level::Stop, Level::Calming, Level::Green];
 
     /// The word the level's part of the page is named by (`p-<id>`).
     pub fn id(self) -> &'static str {
         match self {
             Level::Street => "street",
-            Level::Zone => "zone",
             Level::Piece => "piece",
             Level::Curb => "curb",
             Level::Stop => "stop",
@@ -43,11 +40,10 @@ impl Level {
         }
     }
 
-    /// The level above it: a piece belongs to its zone, everything else to the street.
+    /// The level above it: everything belongs to the street.
     pub fn parent(self) -> Option<Level> {
         match self {
             Level::Street => None,
-            Level::Piece => Some(Level::Zone),
             _ => Some(Level::Street),
         }
     }
@@ -58,12 +54,10 @@ const GAP_KEY: &str = "st-path-gap";
 /// The message that is only its `name`: a kind of piece, or a stop's own name.
 const STEP_KEY: &str = "st-path-step";
 
-/// What is chosen at `level` in `v`, as the path names it; `None` when nothing is (the street and the selected zone
-/// always are).
+/// What is chosen at `level` in `v`, as the path names it; `None` when nothing is (the street always is).
 fn chosen(level: Level, v: &View) -> Option<Said> {
     match level {
         Level::Street => Some(Said::new("st-path-street")),
-        Level::Zone => v.zones.zones.iter().find(|z| z.index == v.zones.selected).map(|z| z.label.clone()),
         Level::Piece => {
             let uid = v.selected?;
             v.segments.iter().find(|s| s.uid == uid).map(|s| Said::new(STEP_KEY).with("name", Arg::Kind(KINDS[s.kind].id)))

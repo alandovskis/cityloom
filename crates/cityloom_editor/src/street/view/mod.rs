@@ -24,7 +24,6 @@ pub mod stop_tools;
 #[cfg(test)]
 mod tests;
 pub mod transform;
-pub mod zone_tools;
 
 use std::rc::Rc;
 
@@ -36,6 +35,23 @@ use crate::street::view::iso::{fit, iso_label_at, iso_svg, max_height};
 use crate::street::vm::StreetVm;
 use crate::street::vm::keys::{self, Action};
 use crate::street::vm::watch::SheetWatch;
+
+/// Puts the focus on the element, once the page has drawn what was just changed: what a command of the details panel
+/// gives the focus to when the control that had it goes away.
+#[cfg(target_arch = "wasm32")]
+fn focus_later(id: &'static str) {
+    set_timeout(
+        move || {
+            if let Some(e) = document().get_element_by_id(id).and_then(|e| leptos::wasm_bindgen::JsCast::dyn_into::<HtmlElement>(e).ok()) {
+                let _ = e.focus();
+            }
+        },
+        std::time::Duration::ZERO,
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn focus_later(_id: &'static str) {}
 
 #[component]
 pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
