@@ -417,8 +417,14 @@ impl JunctionVm {
         fresh.select(self.core.read(|j| j.selected));
         let own = binding.record();
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        let before = self.before();
         self.core.edit(|j| *j = fresh);
-        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+        // The sync's sentence, then what it did to the calls, as an edit's announcement says it: crossings it took off
+        // call (the junction is not a signal), a finding that arose, crossings kept on call as the signal is suspended.
+        let synced = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
+        let dropped = self.view_now().calls_dropped;
+        let dropped = (dropped > 0).then(|| self.i18n.tr_now("jn-calls-dropped", &Args::new().num("n", dropped as i64)));
+        self.say_parts(std::iter::once(synced).chain(dropped).chain(self.findings_note(&before.findings)).chain(self.kept_note(&before)));
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -702,6 +708,33 @@ mod tests {
         let junction = store.open().junction_editor(node, 0).unwrap();
         let binding = CityBinding { store, place: Place::Junction(node) };
         (Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    #[test]
+    fn a_sync_that_leaves_a_crossing_on_call_unwalked_says_so_after_the_update() {
+        use crate::junction::model::SIGNAL;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        // Another device makes it a signal, puts a crossing on call and walks it in no phase.
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let _ = j.set_control(SIGNAL);
+        let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(j.set_on_call(arm, true));
+        let plan = crate::junction::model::signal::plan(j.current(), 0).unwrap();
+        for i in (0..plan.phases.len()).filter(|&i| plan.phases[i].walks.contains(&arm)) {
+            assert!(j.set_phase_walk(i, arm, false));
+        }
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Updated from another device. The crossing of "), "{t:?}");
+        assert!(t[0].ends_with("is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall."), "{t:?}");
     }
 
     #[test]
