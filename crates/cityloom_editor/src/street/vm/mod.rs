@@ -30,8 +30,8 @@ use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenCell, GreenForm, GreenRefusal, Pick, StopKind, Street, StripCell, Subject, Template, TreeSize,
-    Use, View, ZoneEnd, ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenCell, GreenForm, GreenRefusal, Pick, StopKind, Street, StripCell, Subject, Template, TreeSize, Use,
+    View, ZoneEnd, ZoneRefusal,
 };
 use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::impact::{Cause, Impact, Input};
@@ -475,7 +475,7 @@ impl StreetVm {
         done
     }
 
-    /// Lays the selected zone out as a street template, or says why it cannot (and changes nothing).
+    /// Lays the pick out as a street template, or says why it cannot (and changes nothing).
     pub fn apply_template(&self, template: Template) -> bool {
         if self.refuse_read_only() {
             return false;

@@ -842,6 +842,23 @@ test.describe("changing part of a street", () => {
     await expect(page.locator("#plan .plan-run")).toHaveCount(1);
   });
 
+  test("the Transform dialog previews and applies its choice to the picked stretch alone", async ({ page }) => {
+    await pickStretch(page, 10, 25);
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-ped").click();
+    await page.locator("#transform-dialog .ped-item").first().hover();
+    await expect(page.locator("#transform-preview figcaption", { hasText: "After" })).toBeVisible();
+    await expect(planBoundaries(page), "nothing changes until Apply").toHaveCount(0);
+    await page.locator("#transform-dialog .ped-item").first().click();
+    await page.locator("#transform-apply").click();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
+    await expect(planBoundaries(page), "the stretch alone changed").toHaveCount(2);
+    await expect(page.locator("#plan .plan-run")).toHaveCount(3);
+    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
+    await page.locator("#undo").click();
+    await expect(planBoundaries(page)).toHaveCount(0);
+  });
+
   test("a reload keeps the stretches", async ({ page }) => {
     const tops = () =>
       page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
