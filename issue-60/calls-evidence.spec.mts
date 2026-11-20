@@ -124,3 +124,24 @@ test("a crossing too long for any phase's green is a finding (junction 3)", asyn
   await page.locator("#calls-findings").screenshot({ path: `${OUT}/08b-finding-closeup.png` });
   await shot(page, "08-finding.png", "Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)");
 });
+
+test("a design opened read-only shows the calls but locks them (junction 0)", async ({ page }) => {
+  const href = await openJunction(page, 0);
+  await expect(page.locator("#drawing")).toBeVisible();
+  await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+  await page.locator("#jn-go-plan").click();
+  const box = page.locator(".call-crossing input[type=checkbox]").nth(1);
+  const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
+  await box.click();
+  await expect(page.locator(`#call-rate-${uid}`)).toBeVisible();
+  await page.goto("/map.html");
+  await page.goto(`/${href}&project=first&view=1`);
+  await expect(page.locator("#drawing")).toBeVisible();
+  await page.locator("#jn-go-plan").click();
+  await expect(page.locator("#signal-calls")).toBeVisible();
+  await expect(page.locator(`#call-on-${uid}`)).toBeChecked();
+  for (const b of await page.locator("#signal-calls .call-crossing input[type=checkbox]").all()) await expect(b).toBeDisabled();
+  await expect(page.locator(`#call-rate-${uid}`)).toBeDisabled();
+  await expect(page.locator("#calls-totals")).toBeVisible();
+  await shot(page, "10-read-only.png", "The same junction opened read-only (view=1): the crossing still on call and its totals shown, every On call box and the rate field disabled");
+});

@@ -35,3 +35,6 @@
 08-finding.png
   Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)
   live region: Avenue Casgrain (north-west): green 5 s. One check needs attention: time to cross.
+10-read-only.png
+  The same junction opened read-only (view=1): the crossing still on call and its totals shown, every On call box and the rate field disabled
+  live region: (empty)
