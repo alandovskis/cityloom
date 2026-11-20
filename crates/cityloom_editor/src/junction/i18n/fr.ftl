@@ -542,6 +542,11 @@ jn-sig-earlier = Avancer la phase de { $street }
 jn-sig-later = Reculer la phase de { $street }
 jn-sig-remove = Retirer la phase de { $street }
 jn-sig-restore = Rétablir le plan suggéré
+jn-sig-phases-cut =
+    { $n ->
+        [one] { $n } phase au-delà des { $max } qu’un plan peut avoir a été laissée de côté à l’ouverture de l’intersection.
+       *[other] { $n } phases au-delà des { $max } qu’un plan peut avoir ont été laissées de côté à l’ouverture de l’intersection.
+    }
 jn-sig-earlier-short = Avancer
 jn-sig-later-short = Reculer
 jn-sig-remove-short = Retirer

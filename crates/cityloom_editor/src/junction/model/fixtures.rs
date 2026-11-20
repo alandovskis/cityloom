@@ -58,6 +58,7 @@ impl Junction {
             refusal: None,
             refusal_arm: None,
             calls_dropped: 0,
+            phases_cut: 0,
         };
         j.load_sample(sample);
         j

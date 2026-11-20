@@ -542,6 +542,11 @@ jn-sig-earlier = Move the phase for { $street } earlier
 jn-sig-later = Move the phase for { $street } later
 jn-sig-remove = Remove the phase for { $street }
 jn-sig-restore = Restore the suggested plan
+jn-sig-phases-cut =
+    { $n ->
+        [one] { $n } phase beyond the { $max } a plan can hold was left out as the junction opened.
+       *[other] { $n } phases beyond the { $max } a plan can hold were left out as the junction opened.
+    }
 jn-sig-earlier-short = Earlier
 jn-sig-later-short = Later
 jn-sig-remove-short = Remove

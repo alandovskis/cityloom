@@ -946,6 +946,8 @@ pub struct Junction {
     refusal_arm: Option<Said>,
     /// How many crossings were taken off call as the junction opened (it is not a signal); 0 once it is edited.
     calls_dropped: usize,
+    /// How many phases of its stored plan were left out as it opened (past `signal::MAX_PHASES`); 0 once it is edited.
+    phases_cut: usize,
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -959,7 +961,7 @@ impl Junction {
     /// eased (small corners, no offsets, no roundabout) before it is given up
     /// for `today`. None when not even `today` can be drawn.
     pub fn from_city(name: Said, today: &State, now: &State, region: usize) -> Option<Junction> {
-        let kept_now = now;
+        let (kept_today, kept_now) = (today, now);
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
@@ -978,6 +980,7 @@ impl Junction {
             refusal: None,
             refusal_arm: None,
             calls_dropped: 0,
+            phases_cut: 0,
         };
         let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
@@ -991,6 +994,8 @@ impl Junction {
         let off_signal = j.current().control != SIGNAL;
         let lost = if off_signal { kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count() } else { 0 };
         j.calls_dropped = lost;
+        // A stored plan longer than an edit can make (a record not written here) is read cut: said until the first edit.
+        j.phases_cut = signal::phases_beyond(if j.cursor == 1 { kept_now } else { kept_today }, region);
         if lost > 0 && j.cursor == 1 {
             j.states[1].label = calls_lost_label(earlier(), lost);
         }
@@ -1030,6 +1035,11 @@ impl Junction {
     /// How many crossings were taken off call as the junction opened, until its first edit.
     pub fn calls_dropped(&self) -> usize {
         self.calls_dropped
+    }
+
+    /// How many phases of its stored plan were left out as it opened, until its first edit.
+    pub fn phases_cut(&self) -> usize {
+        self.phases_cut
     }
 
     pub fn is_linked(&self) -> bool {
@@ -1148,6 +1158,7 @@ impl Junction {
         self.refusal = None;
         self.refusal_arm = None;
         self.calls_dropped = 0;
+        self.phases_cut = 0;
         next.label = label;
         self.states.truncate(self.cursor + 1);
         self.states.push(next);
@@ -1504,7 +1515,7 @@ impl Junction {
         }
         let Some(plan) = self.signal_plan_to_edit() else { return false };
         let Some(phase) = signal::phase_for(self.current(), self.region, uid) else { return self.refuse(Refusal::PhaseServesNothing) };
-        if plan.phases.len() >= MAX_ARMS * 2 {
+        if plan.phases.len() >= signal::MAX_PHASES {
             return self.refuse(Refusal::TooManyPhases);
         }
         let mut kept = plan.to_stored();

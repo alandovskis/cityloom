@@ -1686,6 +1686,13 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    {move || {
+                        let n = w.view().phases_cut;
+                        let max = crate::junction::model::signal::MAX_PHASES as i64;
+                        (n > 0).then(|| view! {
+                            <p class="insp-range" id="signal-phases-cut">{move || tr(w, "jn-sig-phases-cut", Args::new().num("n", n as i64).num("max", max))}</p>
+                        })
+                    }}
                     {signal_phases(w)}
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
                     {locked(w.read_only(), view! { <div class="signal-tools">

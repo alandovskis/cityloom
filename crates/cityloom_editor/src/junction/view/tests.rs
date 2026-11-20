@@ -567,6 +567,29 @@ fn a_junction_that_opened_without_its_calls_says_so_until_it_is_edited_in_both_l
 }
 
 #[test]
+fn a_plan_cut_to_the_phases_an_edit_can_make_says_so_on_the_plan_in_both_languages() {
+    use crate::junction::model::signal::{self, SignalPlan};
+    use crate::shared::i18n::Locale;
+    for (locale, words) in [
+        (Locale::En, "2 phases beyond the 10 a plan can hold were left out as the junction opened."),
+        (Locale::FrCa, "2 phases au-delà des 10 qu’un plan peut avoir ont été laissées de côté à l’ouverture de l’intersection."),
+    ] {
+        let today = Junction::new(0).current().clone();
+        let mut now = today.clone();
+        let phase = signal::plan(&today, 0).unwrap().to_stored().phases[0].clone();
+        now.signal_plan = Some(SignalPlan { phases: vec![phase; 12] });
+        let j = Junction::from_city(crate::street::model::named_said("J"), &today, &now, 0).unwrap();
+        let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+        s.show_plan();
+        let h = panel(&s);
+        assert!(h.contains(r#"id="signal-phases-cut""#) && h.contains(words), "{h}");
+    }
+    let s = shared(0);
+    s.show_plan();
+    assert!(!panel(&s).contains(r#"id="signal-phases-cut""#));
+}
+
+#[test]
 fn each_crossing_is_a_list_item_holding_a_group_named_for_it() {
     let s = shared(0);
     s.show_plan();

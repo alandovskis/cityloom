@@ -1031,6 +1031,8 @@ pub struct JView {
     pub calls_kept: usize,
     /// The crossings taken off call as the junction opened, it not being a signal; 0 once it is edited.
     pub calls_dropped: usize,
+    /// The phases of a stored plan left out as the junction opened (past `signal::MAX_PHASES`); 0 once it is edited.
+    pub phases_cut: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
     /// The turbo the roundabout has, if any.
@@ -1663,6 +1665,7 @@ impl Junction {
             control_index: s.control,
             traffic_arms: traffic_arms(s),
             calls_dropped: self.calls_dropped(),
+            phases_cut: self.phases_cut(),
             calls_kept: if self.current().control == SIGNAL && s.control != SIGNAL {
                 self.current().arms.iter().filter(|a| a.calls.is_some()).count()
             } else {

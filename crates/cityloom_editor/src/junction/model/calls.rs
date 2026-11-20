@@ -570,6 +570,24 @@ mod tests {
     }
 
     #[test]
+    fn a_stored_plan_longer_than_an_edit_can_make_says_how_many_phases_it_left_out_until_edited() {
+        use crate::junction::model::MAX_ARMS;
+        let today = cross();
+        let mut now = today.clone();
+        let phase = signal::plan(&today, 0).unwrap().to_stored().phases[0].clone();
+        now.signal_plan = Some(SignalPlan { phases: vec![phase; MAX_ARMS * 2 + 2] });
+        let opened = Junction::from_city(crate::street::model::named_said("J"), &today, &now, 0).unwrap();
+        assert_eq!(signal::plan(opened.current(), 0).unwrap().phases.len(), MAX_ARMS * 2);
+        assert_eq!((opened.phases_cut(), opened.view().phases_cut), (2, 2), "the two past the bound");
+        let mut edited = opened;
+        let uid = edited.current().arms[0].uid;
+        assert!(edited.step_corner(uid, 1));
+        assert_eq!(edited.view().phases_cut, 0, "said until the first edit, which writes the plan as it is read");
+        let plain = Junction::from_city(crate::street::model::named_said("J"), &today, &today, 0).unwrap();
+        assert_eq!(plain.phases_cut(), 0);
+    }
+
+    #[test]
     fn a_junction_that_stops_being_a_signal_takes_its_crossings_off_call_and_says_so() {
         let mut j = Junction::new(0);
         let e = at(j.current(), 90);
