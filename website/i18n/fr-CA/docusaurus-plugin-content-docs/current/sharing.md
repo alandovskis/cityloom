@@ -44,12 +44,15 @@ refusé la copie.
   vos réglages ou de vos autres projets. Les modifications apportées au projet ensuite ne sont pas dans le lien : créez-en
   un nouveau pour les partager.
 - **Qui peut le consulter** : quiconque a le lien, et personne d’autre. Le secret du lien (256 bits aléatoires) se trouve
-  dans la partie de l’adresse qui suit `#`, que les navigateurs n’envoient jamais à un serveur. Traitez un lien comme une
-  clé : la personne à qui vous le donnez peut le transmettre.
+  dans la partie de l’adresse qui suit `#`, que les navigateurs n’envoient jamais à un serveur dans une adresse, ni à un
+  autre site dans un `Referer`. Pour récupérer l’aménagement, la page de partage envoie le secret au seul serveur de
+  CityLoom, dans un en-tête de requête (`Share-Token`) plutôt que dans une adresse, que les mandataires en chemin
+  peuvent journaliser; le serveur s’en sert pour retrouver et déchiffrer l’instantané, et ne le conserve pas. Traitez
+  un lien comme une clé : la personne à qui vous le donnez peut le transmettre.
 - **Ce que le serveur conserve** : l’instantané, chiffré avec une clé tirée du secret du lien, de sorte que le serveur ne
   détient rien qu’il puisse lire sans le lien; une empreinte du secret pour le retrouver; votre compte, comme créateur;
   et les dates de création et d’expiration. Le secret lui-même n’est jamais conservé ni inscrit dans les journaux du
-  serveur.
+  serveur, qui n’enregistrent aucun en-tête de requête.
 - **Pendant combien de temps** : 90 jours à partir de la création du lien. L’instantané est alors supprimé, et le lien
   indique qu’il a expiré. Un lien supprimé ou expiré continue de le dire pendant un an; ensuite, il indique qu’aucun
   aménagement partagé n’a ce lien.

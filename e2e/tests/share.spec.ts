@@ -67,9 +67,18 @@ test("a project shared by a signed-in person opens read-only, rules and all, for
   await expect(page.locator(".share-expiry").first()).toHaveText(/^Works until /);
 
   const other = await anotherBrowser(browser, baseURL!);
+  // The link's secret goes to the server in a header only: no address the page fetches holds it (the page's own
+  // address keeps it after `#`, which is never sent).
+  const token = link.split("#")[1];
+  const asked: { url: string; header?: string }[] = [];
+  other.page.on("request", (request) => {
+    if (request.resourceType() !== "document") asked.push({ url: request.url(), header: request.headers()["share-token"] });
+  });
   await other.page.goto(link);
   await expect(other.page).toHaveURL(/\/map\.html\?project=s-[0-9a-f]{12}&view=1$/);
   const copy = new URL(other.page.url()).searchParams.get("project")!;
+  expect(asked.filter((r) => r.url.includes(token))).toEqual([]);
+  expect(asked.filter((r) => r.header === token).map((r) => new URL(r.url).pathname)).toEqual(["/api/share"]);
   await expect(other.page.locator("#read-only-tag")).toBeVisible();
   // the edited street and the area rule are there
   expect(
@@ -120,7 +129,7 @@ test("a made-up link says no shared design has it, in English and in French, and
 
 test("a link that is not whole is refused without asking the server", async ({ page }) => {
   let asked = false;
-  await page.route("**/api/share/**", (route) => {
+  await page.route("**/api/share", (route) => {
     asked = true;
     return route.continue();
   });
@@ -153,7 +162,7 @@ test("a share its creator deleted says so", async ({ page, context, baseURL, bro
 });
 
 test("an expired share says it has expired, in English and in French", async ({ page, errors }) => {
-  await page.route("**/api/share/**", (route) => route.fulfill({ status: 410, json: { error: "expired" } }));
+  await page.route("**/api/share", (route) => route.fulfill({ status: 410, json: { error: "expired" } }));
   await page.goto(`/share.html#${MADE_UP}`);
   await expect(page.getByRole("alert")).toContainText(
     "This shared design has expired: a share link works for 90 days. Ask the person who shared it for a new link.",

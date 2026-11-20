@@ -162,7 +162,8 @@ pub fn opens_a_link(hash: &str, search: &str) -> bool {
 }
 
 /// The link that opens the share behind `token`, on the site at `origin`. The token rides in the fragment, which the
-/// browser never sends to a server nor puts in a `Referer`.
+/// browser never sends as part of an address nor puts in a `Referer`; the page sends it to this site's server alone, in
+/// a request header (`ShareApi`), to fetch the share.
 pub fn link(origin: &str, token: &str) -> String {
     format!("{origin}/{PAGE}#{token}")
 }

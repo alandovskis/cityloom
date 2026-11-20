@@ -1,13 +1,14 @@
 //! `/api/share`: make a shared design (signed in), read one by its link (anyone), delete one (its creator). The server
 //! checks what it must know of a body (`share::check_body`) and passes the rest through sealed, as the browser sent it.
-//! A token is never logged (`app::loggable_path` hides it in the request log).
+//! A link's token rides in the `Share-Token` header, never in the path or the query, which proxies and edge logs may
+//! keep; the request log holds neither headers nor a token (`app::loggable_path` hides one put in a path all the same).
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, FromRequest, Path, Request, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::extract::{DefaultBodyLimit, FromRequest, Request, State};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::post;
 use axum::{Router, middleware};
 use axum_extra::extract::CookieJar;
 use tower_governor::GovernorLayer;
@@ -58,14 +59,23 @@ async fn create(State(a): State<Arc<Account>>, jar: CookieJar, request: Request)
     }
 }
 
-/// No session needed: the link is the permission. A text that is no token is a 404, like a token nobody made.
-async fn open(State(a): State<Arc<Account>>, Path(token): Path<String>) -> Response {
-    let Some(token) = Token::parse(&token) else { return share_error(ShareError::NotFound) };
+/// The header a link's token rides in.
+pub const TOKEN_HEADER: &str = "share-token";
+
+/// The token the request's `Share-Token` header holds; None where it holds none, or text that is no token.
+fn token_of(headers: &HeaderMap) -> Option<Token> {
+    headers.get(TOKEN_HEADER).and_then(|v| v.to_str().ok()).and_then(Token::parse)
+}
+
+/// No session needed: the link is the permission. No token, or a text that is no token, is a 404, like a token nobody
+/// made.
+async fn open(State(a): State<Arc<Account>>, headers: HeaderMap) -> Response {
+    let Some(token) = token_of(&headers) else { return share_error(ShareError::NotFound) };
     match a.shares.open(&token, a.clock.now()).await {
         Ok(body) => {
             let mut res = (StatusCode::OK, body).into_response();
             res.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
-            // The address holds the link's secret: a page that follows a link from here must not be told it.
+            // Nothing here leads anywhere, and nothing that does should be told where it came from.
             res.headers_mut().insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
             res
         }
@@ -73,12 +83,12 @@ async fn open(State(a): State<Arc<Account>>, Path(token): Path<String>) -> Respo
     }
 }
 
-async fn delete(State(a): State<Arc<Account>>, jar: CookieJar, Path(token): Path<String>) -> Response {
+async fn delete(State(a): State<Arc<Account>>, jar: CookieJar, headers: HeaderMap) -> Response {
     let (user, jar) = match authed(&a, jar).await {
         Ok(x) => x,
         Err(r) => return r,
     };
-    let Some(token) = Token::parse(&token) else { return share_error(ShareError::NotFound) };
+    let Some(token) = token_of(&headers) else { return share_error(ShareError::NotFound) };
     match a.shares.delete(user, &token, a.clock.now()).await {
         Ok(()) => no_content(jar),
         Err(e) => share_error(e),
@@ -108,8 +118,7 @@ pub fn routes(account: Arc<Account>) -> Router<Arc<Account>> {
         });
     }
     Router::new()
-        .route("/api/share", post(create))
-        .route("/api/share/{token}", get(open).delete(delete))
+        .route("/api/share", post(create).get(open).delete(delete))
         // A little over the largest body, so a body just over it is read and refused by `check_body` as `share`.
         .layer(DefaultBodyLimit::max(share::MAX_BODY_BYTES + 1024))
         .route_layer(middleware::from_fn_with_state(account, require_origin))

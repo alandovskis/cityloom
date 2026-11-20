@@ -36,6 +36,20 @@ async fn share(b: &mut Browser, body: &Value) -> Reply {
     b.request("POST", "/api/share", Some(ORIGIN), Some(body.clone())).await
 }
 
+/// Reads the share behind `token`, which rides in the `Share-Token` header: never in the path, which proxies log.
+async fn open_link(b: &mut Browser, token: &str) -> Reply {
+    b.send(http::Request::builder().uri("/api/share").header("share-token", token).body(Body::empty()).unwrap()).await
+}
+
+/// Deletes the share behind `token` (in the `Share-Token` header), from the page at `origin`.
+async fn delete_link(b: &mut Browser, token: &str, origin: Option<&str>) -> Reply {
+    let mut req = http::Request::builder().method("DELETE").uri("/api/share").header("share-token", token);
+    if let Some(origin) = origin {
+        req = req.header(header::ORIGIN, origin);
+    }
+    b.send(req.body(Body::empty()).unwrap()).await
+}
+
 async fn made(b: &mut Browser) -> String {
     let r = share(b, &design()).await;
     assert_eq!(r.status, StatusCode::CREATED, "{}", r.body);
@@ -55,7 +69,7 @@ async fn a_share_is_made_signed_in_and_read_by_anyone_with_the_link(pool: PgPool
     assert_eq!(out["expires_at"].as_str(), Some("2027-04-15T08:00:00.000Z"), "90 days after t0 (2027-01-15T08:00Z)");
 
     let mut anyone = app.browser(); // no account, no cookie
-    let got = anyone.get(&format!("/api/share/{token}")).await;
+    let got = open_link(&mut anyone, &token).await;
     assert_eq!(got.status, StatusCode::OK, "{}", got.body);
     assert_eq!(got.json(), design(), "the body comes back as sent, a newer build's fields too");
     assert_eq!(got.headers[header::CACHE_CONTROL], "no-store");
@@ -72,8 +86,8 @@ async fn signed_out_nobody_makes_or_deletes_a_share(pool: PgPool) {
     assert_eq!(share(&mut anyone, &design()).await.status, StatusCode::UNAUTHORIZED);
     let mut ada = signed_in(&app, "ada").await;
     let token = made(&mut ada).await;
-    assert_eq!(anyone.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::UNAUTHORIZED);
-    assert_eq!(anyone.get(&format!("/api/share/{token}")).await.status, StatusCode::OK, "still there");
+    assert_eq!(delete_link(&mut anyone, &token, Some(ORIGIN)).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(open_link(&mut anyone, &token).await.status, StatusCode::OK, "still there");
 }
 
 #[sqlx::test]
@@ -83,7 +97,7 @@ async fn a_change_needs_the_sites_own_origin(pool: PgPool) {
     let r = ada.request("POST", "/api/share", Some("https://evil.example"), Some(design())).await;
     assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::FORBIDDEN, Some("origin")));
     let token = made(&mut ada).await;
-    let r = ada.request("DELETE", &format!("/api/share/{token}"), None, None).await;
+    let r = delete_link(&mut ada, &token, None).await;
     assert_eq!(r.status, StatusCode::FORBIDDEN);
 }
 
@@ -91,10 +105,12 @@ async fn a_change_needs_the_sites_own_origin(pool: PgPool) {
 async fn an_unknown_or_malformed_link_is_not_found(pool: PgPool) {
     let app = TestApp::new(pool);
     let mut anyone = app.browser();
-    for token in ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "not-a-token", "%2E%2E"] {
-        let r = anyone.get(&format!("/api/share/{token}")).await;
+    for token in ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "not-a-token", "..", ""] {
+        let r = open_link(&mut anyone, token).await;
         assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::NOT_FOUND, Some("not-found")), "{token}");
     }
+    let r = anyone.get("/api/share").await;
+    assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::NOT_FOUND, Some("not-found")), "no token at all");
 }
 
 #[sqlx::test]
@@ -104,11 +120,11 @@ async fn after_ninety_days_the_link_says_expired(pool: PgPool) {
     let token = made(&mut ada).await;
     let mut anyone = app.browser();
     app.clock.advance(time::Duration::days(90) - time::Duration::seconds(1));
-    assert_eq!(anyone.get(&format!("/api/share/{token}")).await.status, StatusCode::OK, "the last second of the 90 days");
+    assert_eq!(open_link(&mut anyone, &token).await.status, StatusCode::OK, "the last second of the 90 days");
     app.clock.advance(time::Duration::seconds(1));
-    let r = anyone.get(&format!("/api/share/{token}")).await;
+    let r = open_link(&mut anyone, &token).await;
     assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::GONE, Some("expired")));
-    let again = anyone.get(&format!("/api/share/{token}")).await;
+    let again = open_link(&mut anyone, &token).await;
     assert_eq!((again.status, again.json()["error"].as_str()), (StatusCode::GONE, Some("expired")), "and so it stays, body gone");
 }
 
@@ -118,19 +134,19 @@ async fn the_creator_deletes_a_share_and_its_link_then_says_so(pool: PgPool) {
     let mut ada = signed_in(&app, "ada").await;
     let token = made(&mut ada).await;
     let mut bea = signed_in(&app, "bea").await;
-    let r = bea.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await;
+    let r = delete_link(&mut bea, &token, Some(ORIGIN)).await;
     assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::FORBIDDEN, Some("not-yours")));
-    assert_eq!(bea.get(&format!("/api/share/{token}")).await.status, StatusCode::OK, "another account cannot delete it");
+    assert_eq!(open_link(&mut bea, &token).await.status, StatusCode::OK, "another account cannot delete it");
 
-    let r = ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await;
+    let r = delete_link(&mut ada, &token, Some(ORIGIN)).await;
     assert_eq!(r.status, StatusCode::NO_CONTENT, "{}", r.body);
-    let r = bea.get(&format!("/api/share/{token}")).await;
+    let r = open_link(&mut bea, &token).await;
     assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::GONE, Some("deleted")));
-    assert_eq!(ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT, "again: nothing to do");
-    let r = ada.request("DELETE", "/api/share/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", Some(ORIGIN), None).await;
+    assert_eq!(delete_link(&mut ada, &token, Some(ORIGIN)).await.status, StatusCode::NO_CONTENT, "again: nothing to do");
+    let r = delete_link(&mut ada, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", Some(ORIGIN)).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
     app.clock.advance(time::Duration::days(91));
-    let r = app.browser().get(&format!("/api/share/{token}")).await;
+    let r = open_link(&mut app.browser(), &token).await;
     assert_eq!(r.json()["error"].as_str(), Some("deleted"), "deleted, not expired, after the 90 days too");
 }
 
@@ -165,7 +181,7 @@ async fn an_account_holds_at_most_fifty_live_shares(pool: PgPool) {
     }
     let r = share(&mut ada, &design()).await;
     assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::CONFLICT, Some("full")));
-    assert_eq!(ada.request("DELETE", &format!("/api/share/{}", tokens[0]), Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT);
+    assert_eq!(delete_link(&mut ada, &tokens[0], Some(ORIGIN)).await.status, StatusCode::NO_CONTENT);
     made(&mut ada).await; // a deleted one no longer counts
     let mut bea = signed_in(&app, "bea").await;
     made(&mut bea).await; // the cap is per account
@@ -180,7 +196,7 @@ async fn deleting_the_account_deletes_its_shares(pool: PgPool) {
     let mut ada = signed_in(&app, "ada").await;
     let token = made(&mut ada).await;
     assert_eq!(ada.request("DELETE", "/api/me", Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT);
-    let r = app.browser().get(&format!("/api/share/{token}")).await;
+    let r = open_link(&mut app.browser(), &token).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
 }
 
@@ -188,12 +204,12 @@ async fn deleting_the_account_deletes_its_shares(pool: PgPool) {
 async fn reading_links_has_its_own_rate_limit(pool: PgPool) {
     let app = TestApp::with_share_rate(pool, RateLimit { period_secs: 3600, burst: 2 });
     let mut anyone = app.browser();
-    let path = "/api/share/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-    assert_eq!(anyone.get(path).await.status, StatusCode::NOT_FOUND);
-    assert_eq!(anyone.get(path).await.status, StatusCode::NOT_FOUND);
-    assert_eq!(anyone.get(path).await.status, StatusCode::TOO_MANY_REQUESTS);
+    let token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    assert_eq!(open_link(&mut anyone, token).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(open_link(&mut anyone, token).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(open_link(&mut anyone, token).await.status, StatusCode::TOO_MANY_REQUESTS);
     anyone.forwarded_for = "198.51.100.9".into();
-    assert_eq!(anyone.get(path).await.status, StatusCode::NOT_FOUND, "counted per address");
+    assert_eq!(open_link(&mut anyone, token).await.status, StatusCode::NOT_FOUND, "counted per address");
     assert_eq!(anyone.get("/api/providers").await.status, StatusCode::OK, "the other routes are not counted with it");
 }
 
@@ -203,8 +219,20 @@ async fn an_account_makes_a_bounded_number_of_shares_a_day(pool: PgPool) {
     let mut ada = signed_in(&app, "ada").await;
     for _ in 0..MAX_SHARES_PER_DAY {
         let token = made(&mut ada).await;
-        assert_eq!(ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT);
+        assert_eq!(delete_link(&mut ada, &token, Some(ORIGIN)).await.status, StatusCode::NO_CONTENT);
     }
     let r = share(&mut ada, &design()).await;
     assert_eq!((r.status, r.json()["error"].as_str(), r.json()["limit"].as_u64()), (StatusCode::CONFLICT, Some("too-many-today"), Some(MAX_SHARES_PER_DAY as u64)));
+}
+
+#[sqlx::test]
+async fn a_link_s_token_is_never_in_a_path(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut ada = signed_in(&app, "ada").await;
+    let token = made(&mut ada).await;
+    // The token in a path, as an older page sent it, is no route: a proxy's log of the path holds no working link.
+    let r = app.browser().get(&format!("/api/share/{token}")).await;
+    assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::NOT_FOUND, Some("not-found")));
+    assert_eq!(ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::NOT_FOUND);
+    assert_eq!(open_link(&mut app.browser(), &token).await.status, StatusCode::OK, "neither deleted it");
 }

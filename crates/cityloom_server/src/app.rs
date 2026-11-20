@@ -115,7 +115,8 @@ pub async fn require_origin(State(a): State<Arc<Account>>, req: Request, next: N
     }
 }
 
-/// The path as the log may say it: a shared design's link secret (`/api/share/<token>`) is never written down.
+/// The path as the log may say it. A shared design's link secret rides in a header (`api::share`), which is never
+/// logged; one put in a path all the same (`/api/share/<token>`, which no route takes) is never written down either.
 pub fn loggable_path(path: &str) -> String {
     match path.strip_prefix("/api/share/") {
         Some(rest) if !rest.is_empty() => "/api/share/{token}".to_string(),
