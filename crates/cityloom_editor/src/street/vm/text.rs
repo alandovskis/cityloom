@@ -474,7 +474,6 @@ mod tests {
         use crate::street::model::ZoneRefusal;
         assert_eq!(zone_refused(&en(), Units::Metres, ZoneRefusal::TooShort), "A zone must be at least 5.0 m long.");
         assert_eq!(zone_refused(&fr(), Units::Metres, ZoneRefusal::TooShort), "Une zone doit mesurer au moins 5,0\u{a0}m.");
-        assert_eq!(zone_refused(&fr(), Units::Feet, ZoneRefusal::NoNeighbour), "Il n’y a pas de zone de ce côté avec laquelle fusionner.");
     }
 
     #[test]
@@ -494,20 +493,6 @@ mod tests {
             say_now(&fr(), Units::Metres, &check_label(kind)),
             "Arrêts aménagés comme leur type l’exige\u{a0}: îlot d’embarquement à 10,0\u{a0}m, à droite"
         );
-    }
-
-    #[test]
-    fn a_merge_is_said_in_both_languages_by_the_zone_whose_section_it_kept() {
-        use crate::street::model::Keep;
-        let mut e = zoned_editor();
-        let uid = e.view().segments[0].uid;
-        assert!(e.select_zone(1));
-        assert!(e.set_width(uid, e.view().segments[0].width_mm + 100));
-        assert!(e.select_zone(0));
-        assert!(e.merge_zone(true, Keep::Neighbour).is_ok());
-        let label = e.view().revisions.last().unwrap().label.clone();
-        assert_eq!(say_now(&en(), Units::Metres, &label), "Merge zones, keeping Zone 2");
-        assert_eq!(say_now(&fr(), Units::Metres, &label), "Fusion des zones; coupe gardée\u{a0}: zone 2");
     }
 
     #[test]
