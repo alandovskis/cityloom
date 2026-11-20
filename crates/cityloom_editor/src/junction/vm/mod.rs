@@ -775,6 +775,32 @@ mod tests {
     }
 
     #[test]
+    fn a_sync_that_suspends_the_signal_says_its_crossings_stay_on_call() {
+        use crate::shared::catalogue::StreetClass;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let (node, state) = on_call_record(&binding);
+        assert!(binding.store.write_junction(node, state));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        r.said.take();
+        // Every street but the one on call is made a walkway elsewhere: one street of traffic, the signal suspended.
+        let opened = binding.store.open().junction_editor(node, 0).unwrap();
+        let on_call = opened.current().arms.iter().find(|a| a.calls.is_some()).unwrap().uid;
+        for a in opened.current().arms.iter().filter(|a| a.uid != on_call) {
+            let mut walkway = a.section.clone().unwrap();
+            walkway.class = StreetClass::Pedestrian;
+            assert!(binding.store.write_street(a.edge, walkway));
+        }
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        let t = r.said.take();
+        assert!(r.vm.view_now().calls_kept == 1, "suspended, the call kept");
+        assert_eq!(t, ["Updated from another device. 1 crossing stays on call for when the signal runs again."]);
+    }
+
+    #[test]
     fn a_refusal_for_an_arm_off_square_names_the_arm_in_a_second_sentence() {
         use crate::junction::model::ROUNDABOUT;
         let r = rig(0);
