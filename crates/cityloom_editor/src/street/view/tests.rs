@@ -1899,11 +1899,12 @@ fn the_plan_point_is_one_tab_stop_with_slider_semantics() {
         "aria-valuemax=\"40\"",
         "aria-valuenow=\"0\"",
         "aria-valuetext=\"The whole street, 40.0 m long.\"",
-        "aria-labelledby=\"plan\"",
+        "aria-label=\"Point along the street\"",
         "aria-keyshortcuts=\"",
     ] {
         assert!(point.contains(attr), "{attr} in {point}");
     }
+    assert!(!point.contains("aria-labelledby"), "its own short name, not the plan's again: {point}");
     // The point is inside the plan; the stretch picked is the line under it.
     assert!(h.find("id=\"plan\"").unwrap() < h.find("id=\"plan-point\"").unwrap());
     assert!(h.contains("The whole street, 40.0 m long."), "{h}");
@@ -1937,11 +1938,21 @@ fn the_plan_shows_the_ends_and_a_notice_when_the_zones_were_drawn_elsewhere() {
 }
 
 #[test]
+fn a_plan_with_no_length_leaves_the_point_with_no_words_rather_than_empty_ones() {
+    let s = zoned_street(&[0, 10_000, 30_000], None, Locale::En);
+    let h = plan_html(&s);
+    let point = plan_tag(&h, "plan-point");
+    assert!(!point.contains("aria-valuetext"), "{point}");
+    assert!(point.contains("aria-label=\"Point along the street\""), "{point}");
+}
+
+#[test]
 fn the_plan_follows_the_language() {
     let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
     let h = plan_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(plan_tag(&h, "plan").contains("aria-label=\"La rue de sa première extrémité à sa dernière, 40,0 m de long\""), "{h}");
     assert!(plan_tag(&h, "plan-point").contains("aria-valuetext=\"Toute la rue, 40,0 m de long.\""), "{h}");
+    assert!(plan_tag(&h, "plan-point").contains("aria-label=\"Point le long de la rue\""), "{h}");
 }
 
 #[test]
@@ -1974,9 +1985,11 @@ fn the_plan_scrolls_inside_itself_and_keeps_its_point_in_sight() {
     };
     assert!(rule(".plan-box").contains("overflow-x: auto;"));
     assert!(rule(".plan-section").contains("min-width: 0;"));
-    // The point takes no press from the plan beneath it and is a target wide; its focus shows in the plan's two tones.
+    // The point takes no press from the plan beneath it and is a target wide; its line is always seen, and its focus
+    // shows as a ring in the plan's two tones.
     let point = rule("#plan-point");
     assert!(point.contains("pointer-events: none;") && point.contains("width: 24px;"), "{point}");
+    assert!(!point.contains("opacity"), "{point}");
     let focused = rule("#plan-point:focus-visible");
     assert!(focused.contains("var(--plan-pick-edge)") && focused.contains("var(--plan-pick-casing)"), "{focused}");
 }

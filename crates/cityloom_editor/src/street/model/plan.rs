@@ -24,6 +24,8 @@ pub struct PlanView {
     /// The changes along the street were drawn on a road of another length or from its other end: nothing may be
     /// rearranged.
     pub elsewhere: bool,
+    /// The end the street keeps positions from (its anchor); `None` when it has none.
+    pub from_end: Option<ZoneEnd>,
 }
 
 /// A part of the street that looks the same (`Editor::runs`).
@@ -121,6 +123,7 @@ impl Editor {
                 pick: None,
                 cut: [true, true],
                 elsewhere: false,
+                from_end: None,
             };
         };
         let length = frame.length_mm;
@@ -191,6 +194,7 @@ impl Editor {
             // last end says the first is cut; the city says of each end whether the area's edge cuts it.
             cut: [frame.from_end == ZoneEnd::Last || self.ends[0].cut, self.ends[1].cut],
             elsewhere: self.elsewhere().is_some(),
+            from_end: Some(frame.from_end),
         }
     }
 
@@ -260,6 +264,7 @@ mod tests {
         let e = editor(&street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First), frame(LEN, ZoneEnd::First));
         let p = plan(&e);
         assert_eq!(p.length_mm, Some(LEN));
+        assert_eq!(p.from_end, Some(ZoneEnd::First));
         assert_eq!(spans(&p), [(0, 20_000, 0), (20_000, 40_000, 1), (40_000, LEN, 2)]);
         let base = sample().segments;
         let bands: Vec<PlanBand> = base.iter().map(|s| PlanBand { uid: s.uid, kind: s.kind, material: s.material, width_mm: s.width_mm }).collect();
@@ -285,6 +290,7 @@ mod tests {
         // Zone 0 lies at the last end, so at the plan's right; zone 2 at its left.
         let e = editor(&street(&[0, 20_000, 40_000], &[0, 100, 200], ZoneEnd::Last), frame(LEN, ZoneEnd::Last));
         let p = plan(&e);
+        assert_eq!(p.from_end, Some(ZoneEnd::Last), "positions along it are measured from its last end");
         assert_eq!(spans(&p), [(0, 20_000, 2), (20_000, 40_000, 1), (40_000, LEN, 0)]);
         let width = sample().segments.last().unwrap().width_mm;
         assert_eq!(p.runs.iter().map(last_width).collect::<Vec<_>>(), [width + 200, width + 100, width]);
@@ -396,6 +402,7 @@ mod tests {
         assert!(!e.view().curb.sides.is_empty(), "the strips still lay the use along the length the zones were drawn on");
         let p = plan(&e);
         assert_eq!(p.length_mm, None);
+        assert_eq!(p.from_end, None);
         assert!(p.objects.is_empty());
         assert!(p.boundaries.is_empty());
         assert_eq!(p.runs.len(), 1, "the shown run alone, drawn schematic");

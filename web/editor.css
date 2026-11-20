@@ -1444,8 +1444,8 @@ svg pattern circle {
 .plan-svg svg {
   display: block;
 }
-/* The keyboard's point along the street: a target wide, a line in the pick's two tones down its middle, seen while it
-   has the focus; presses go through it to the plan. */
+/* The keyboard's point along the street: a target wide, a line in the pick's two tones down its middle, always seen; a
+   ring shows when it has the focus. Presses go through it to the plan. */
 #plan-point {
   position: absolute;
   top: 0;
@@ -1453,13 +1453,11 @@ svg pattern circle {
   width: 24px;
   margin-left: -12px;
   pointer-events: none;
-  opacity: 0;
   background:
     linear-gradient(var(--plan-pick-edge), var(--plan-pick-edge)) center / 2px 100% no-repeat,
     linear-gradient(var(--plan-pick-casing), var(--plan-pick-casing)) center / 6px 100% no-repeat;
 }
 #plan-point:focus-visible {
-  opacity: 1;
   outline: 2px solid var(--plan-pick-edge);
   outline-offset: -2px;
   box-shadow: inset 0 0 0 4px var(--plan-pick-casing);
