@@ -373,6 +373,8 @@ st-plan-label = The street from its first end to its last, { $length } long
 st-stretch = From { $from } to { $to } · { $length } long
 # Where the plan's keyboard point is, said while it moves on its own (src/street/vm/text.rs, point_said).
 st-point = At { $at }
+# The name of the plan's keyboard point, a slider (src/street/view/plan/component.rs).
+st-plan-point-label = Point along the street
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }

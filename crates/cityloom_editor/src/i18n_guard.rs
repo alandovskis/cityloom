@@ -238,6 +238,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("hint archive-error", "two CSS classes of the design archive's refusal line"),
     ("an archive serialises", "a panic message about the code, never shown"),
     ("lit warn", "two CSS classes of a movement in a phase drawing"),
+    ("(any-pointer: coarse)", "a CSS media query the street plan asks for its target size (street/view/plan/component.rs), not words"),
     (
         "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight",
         "the keys of the street plan's point as aria-keyshortcuts names them (street/view/plan/component.rs), not words",

@@ -373,6 +373,8 @@ st-plan-label = La rue de sa première extrémité à sa dernière, { $length } 
 st-stretch = De { $from } à { $to } · { $length } de long
 # Où se trouve le point du plan au clavier, dit tant qu’il se déplace seul (src/street/vm/text.rs, point_said).
 st-point = À { $at }
+# Le nom du point du plan au clavier, un curseur (src/street/view/plan/component.rs).
+st-plan-point-label = Point le long de la rue
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
