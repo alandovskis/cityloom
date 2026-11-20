@@ -1,4 +1,4 @@
-On main (6ee5bf90) with the branch's specs:
+On main (6ee5bf90) with the branch's specs as of 22740aa5 (the three #60 browser tests that existed then):
   ✘  10 [ui] › tests/junction-a11y.spec.ts:224:3 › pedestrian calls in the signal plan (#60) › each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways (30.8s)
   ✘  66 [ui] › tests/junction.spec.ts:880:3 › signal timing on a junction of the city › a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French (10.5s)
   ✘  67 [ui] › tests/junction.spec.ts:960:3 › signal timing on a junction of the city › a crossing too long for any phase's green, even extended by 15 s, is a finding (15.0s)

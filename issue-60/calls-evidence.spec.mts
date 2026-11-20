@@ -79,6 +79,24 @@ test("pedestrian calls, step by step (junction 0, English then French)", async (
   await shot(page, "07-french.png", "Switched to fr-CA: the same section in French, with OQLF spacing");
 });
 
+test("a crossing already on call keeps its call when an edit takes its walk away, as a finding (junction 0)", async ({ page }) => {
+  await signalPlan(page, 0);
+  const section = page.locator("#signal-calls");
+  const boxes = section.locator(".call-crossing input[type=checkbox]");
+  const uid = (await boxes.nth(1).getAttribute("id"))!.replace("call-on-", "");
+  await page.locator(`#call-on-${uid}`).click();
+  await expect(page.locator(`#call-on-${uid}`)).toBeChecked();
+  await expect(page.locator("#calls-findings")).toHaveCount(0);
+  await shot(page, "09a-on-call-walked.png", "A crossing put on call while a phase walks it: no findings");
+  const walks = page.locator(`#inspector input[id^="sig-walks-"][id$="-${uid}"]`);
+  for (let i = 0; i < (await walks.count()); i++) if (await walks.nth(i).isChecked()) await walks.nth(i).uncheck();
+  await expect(page.locator(`#call-on-${uid}`)).toBeChecked();
+  await expect(page.locator("#calls-findings")).toBeVisible();
+  appendFileSync(LOG, `09b findings text: ${(await page.locator("#calls-findings").innerText()).replace(/\s+/g, " ")}\n09b crossing status: ${(await page.locator(`#call-status-${uid}`).innerText()).trim()}\n`);
+  await shot(page, "09b-walk-taken-away.png", "Then its walk unticked in every phase: it stays on call (box still ticked), and the findings say no phase walks it; the edit's announcement says so too");
+  await page.locator("#calls-findings").screenshot({ path: `${OUT}/09c-finding-closeup.png` });
+});
+
 test("a crossing too long for any phase's green is a finding (junction 3)", async ({ page }) => {
   await signalPlan(page, 3);
   for (const box of await page.locator(".call-crossing input[type=checkbox]").all()) await box.click();
@@ -102,5 +120,7 @@ test("a crossing too long for any phase's green is a finding (junction 3)", asyn
   await expect(extended.first()).toBeVisible();
   const totals = (await page.locator("#calls-totals").innerText()).replace(/\s+/g, " ");
   appendFileSync(LOG, `08 totals table text: ${totals}\n08 rows with an extension: ${await extended.count()}, first: ${(await extended.first().innerText()).replace(/\s+/g, " ")}\n`);
+  await page.locator("#calls-totals").locator("xpath=ancestor::*[@role='region'][1]").screenshot({ path: `${OUT}/08a-totals-closeup.png` });
+  await page.locator("#calls-findings").screenshot({ path: `${OUT}/08b-finding-closeup.png` });
   await shot(page, "08-finding.png", "Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)");
 });

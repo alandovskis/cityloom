@@ -22,7 +22,15 @@
 07-french.png
   Switched to fr-CA: the same section in French, with OQLF spacing
   live region: Langue : français.
-08 totals table text: Calls in one hour, by crossing Crossing Served Delayed Green extended Longest wait Rue Saint-Viateur Est (north-east) 9 3 12 20 s Avenue Casgrain (south-east) 4 8 12 19 s Rue Saint-Viateur Est (south-west) 7 5 12 26 s Avenue Casgrain (north-west) 0 0 0 0 s
+09a-on-call-walked.png
+  A crossing put on call while a phase walks it: no findings
+  live region: Crossing of Boulevard Saint-Laurent (south-east) on call. 4 streets, traffic signal. Every check passes. Crossing of Boulevard Saint-Laurent (south-east): 12 calls in the hour; served 9, delayed 3, green extended 0, not served 0; longest wait 44 s.
+09b findings text: The crossing of Boulevard Saint-Laurent (south-east) is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall.
+09b crossing status: No phase walks this crossing, so it cannot be on call.
+09b-walk-taken-away.png
+  Then its walk unticked in every phase: it stays on call (box still ticked), and the findings say no phase walks it; the edit's announcement says so too
+  live region: Phase 2 for Avenue Laurier Ouest (south-west): people no longer walk across Boulevard Saint-Laurent (south-east). One check needs attention: time to cross. The crossing of Boulevard Saint-Laurent (south-east) is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall. Phase 2 no longer follows a ready-made pattern.
+08 totals table text: Calls in one hour, by crossing Crossing Calls Served Delayed Not served Green extended Longest wait Rue Saint-Viateur Est (north-east) 12 9 3 0 12 20 s Avenue Casgrain (south-east) 12 4 8 0 12 19 s Rue Saint-Viateur Est (south-west) 12 7 5 0 12 26 s Avenue Casgrain (north-west) 12 0 0 12 0 – none served
 08 rows with an extension: 36, first: Avenue Casgrain (south-east) 2 min 16 s Served after 4 s, green extended by 13 s
 08-finding.png
   Junction 3, every crossing on call and every green at 5 s: greens extended for the shorter crossings (totals scrolled to Green extended / Longest wait, rows open), and the 21 s crossing cannot be served safely (at most 20 s)
