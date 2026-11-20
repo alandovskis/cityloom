@@ -81,6 +81,7 @@ fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
             <input
                 id=field_id
                 class="share-link"
+                aria-label=row.field_name.clone()
                 type="text"
                 readonly
                 value=row.link.clone()
@@ -98,6 +99,7 @@ fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
                     type="button"
                     class="btn"
                     id=part("copy", &row.token)
+                    aria-label=row.copy_name.clone()
                     disabled=row.expired
                     on:click=move |_| vm.with_value(|v| v.copy(&copy_token))
                 >
@@ -107,6 +109,7 @@ fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
                     type="button"
                     class="btn danger"
                     id=part("delete", &row.token)
+                    aria-label=row.delete_name.clone()
                     disabled=move || vm.with_value(|v| v.busy())
                     on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_token))
                 >
