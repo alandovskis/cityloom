@@ -1984,10 +1984,10 @@ body.map-page {
 }
 /* On an editor's page, where the bar floats, so do the stage and the panels: the notice floats just below the bar,
    above the stage, below the bar's menus, centred between the side panels as the status bar is (`--lw` / `--rw`), so
-   it never covers their heads; with no panel open it has the whole width. A page in flow (the timeline) places it
-   in its own sheet. */
+   it never covers their heads; with no panel open it has the whole width. An editor with a column (street,
+   intersection) holds it at the top of that column, and a page in flow (the timeline) in its own sheet. */
 @media (min-width: 900px) {
-  body:has(main.stage) .shell-notice {
+  body:has(main.stage) > div > .shell-notice {
     position: fixed;
     z-index: 25;
     top: calc(var(--pad) + var(--bar-h) + 12px);
@@ -1998,7 +1998,7 @@ body.map-page {
     margin: 0;
     box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--warn-line);
   }
-  body:has(main.stage):not(:has(.panel)) .shell-notice {
+  body:has(main.stage):not(:has(.panel)) > div > .shell-notice {
     --lw: 0px;
     --rw: 0px;
   }

@@ -147,13 +147,21 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
     bind_sync(&vm);
-    // The notice that earlier edits were cleared goes before the page's `main`, where a screen reader meets it first.
-    if let Some(main) = document().query_selector("main").ok().flatten()
-        && let Ok(slot) = document().create_element("div")
-    {
-        let _ = main.before_with_node_1(&slot);
-        let notice = vm.clone();
-        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+    // The notice that earlier edits were cleared goes where a screen reader meets it first: at the top of an editor's
+    // column (street, intersection), above its title, so it pushes the title down instead of covering it; elsewhere
+    // before the page's `main`.
+    if let Ok(slot) = document().create_element("div") {
+        let placed = if let Some(column) = document().query_selector(".stage-main").ok().flatten() {
+            column.prepend_with_node_1(&slot).is_ok()
+        } else if let Some(main) = document().query_selector("main").ok().flatten() {
+            main.before_with_node_1(&slot).is_ok()
+        } else {
+            false
+        };
+        if placed {
+            let notice = vm.clone();
+            leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+        }
     }
     // The effects live as long as the page.
     let owner = Owner::new();

@@ -320,7 +320,8 @@ for (const p of NOTICE_PAGES) {
       await expect(notice).toBeVisible();
       await expect(notice).toBeInViewport({ ratio: 1 });
       const box = (await notice.boundingBox())!;
-      for (const panel of await page.locator(".panel:visible").all()) {
+      // nor the street or intersection editor's title and tools above its drawing
+      for (const panel of await page.locator(".panel:visible, .stage-head:visible").all()) {
         const covered = (await panel.boundingBox())!;
         expect(
           overlap(box, covered),
