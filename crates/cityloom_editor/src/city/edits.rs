@@ -62,7 +62,8 @@ pub const NEWEST: u32 = IMPORT_STAMP_VERSION;
 /// A record made against an importer older than this (or against none, as before the stamp) is stale: it is never
 /// applied, listed or sent, put back from an archive, or restored from a milestone. A fixed cutoff, not the current
 /// importer version: raising it discards everyone's edits again, so it is a decision, not a side effect of an
-/// importer bump.
+/// importer bump. Raising it also needs a new `shell-edits-cleared` wording: the current text names the rebuild that
+/// set this cutoff.
 pub const STALE_BEFORE_IMPORT: u32 = 11;
 
 /// The staleness rule, kept once: a record is stale when its import stamp is none (as before the stamp) or below
