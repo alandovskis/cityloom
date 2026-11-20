@@ -54,11 +54,16 @@ impl ShareRepo for PgRepo {
     }
 
     async fn open(&self, token: &Token, now: OffsetDateTime) -> Result<Vec<u8>, ShareError> {
-        let row = sqlx::query("select id, expires_at, deleted, body from shares where lookup = $1")
-            .bind(&token.lookup()[..])
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db)?;
+        // The body is read only for a live share: an expired or deleted one is answered from its metadata alone.
+        let row = sqlx::query(
+            "select id, expires_at, deleted, body is not null as kept, case when not deleted and expires_at > $2 then body end as body \
+             from shares where lookup = $1",
+        )
+        .bind(&token.lookup()[..])
+        .bind(now)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(db)?;
         let Some(row) = row else { return Err(ShareError::NotFound) };
         let id: Uuid = row.try_get("id").map_err(db)?;
         let expires_at: OffsetDateTime = row.try_get("expires_at").map_err(db)?;
@@ -67,7 +72,10 @@ impl ShareRepo for PgRepo {
             Standing::Deleted => return Err(ShareError::Deleted),
             Standing::Expired => {
                 // Not served once expired, whether or not the purge has come by: and dropped now, at the latest.
-                sqlx::query("update shares set body = null where id = $1").bind(id).execute(&self.pool).await.map_err(db)?;
+                let kept: bool = row.try_get("kept").map_err(db)?;
+                if kept {
+                    sqlx::query("update shares set body = null where id = $1 and body is not null").bind(id).execute(&self.pool).await.map_err(db)?;
+                }
                 return Err(ShareError::Expired);
             }
             Standing::Live => {}
