@@ -365,6 +365,11 @@ st-stretch = From { $from } to { $to } · { $length } long
 st-point = At { $at }
 # The name of the plan's keyboard point, a slider (src/street/view/plan/component.rs).
 st-plan-point-label = Point along the street
+# The picked stretch's ends as fields on the details panel's Street level (src/street/view/plan/fields.rs), from the
+# plan's left end.
+st-pick-fields = Picked stretch
+st-pick-from = From ({ $unit })
+st-pick-to = To ({ $unit })
 stretches-elsewhere = The changes along this street were drawn when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }

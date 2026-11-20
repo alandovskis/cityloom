@@ -1947,6 +1947,33 @@ fn a_plan_with_no_length_leaves_the_point_with_no_words_rather_than_empty_ones()
 }
 
 #[test]
+fn the_picked_stretch_s_ends_are_fields_on_the_street_level_in_the_page_s_language() {
+    let html = |s: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::plan::PickFields vm=s.clone()/> });
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    let h = html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Picked stretch\""), "{h}");
+    assert!(plan_tag(&h, "pick-from").contains("value=\"0.0\"") && plan_tag(&h, "pick-to").contains("value=\"40.0\""), "the whole street: {h}");
+    assert!(h.contains("for=\"pick-from\">From (m)</label>") && h.contains("for=\"pick-to\">To (m)</label>"), "{h}");
+    assert!(plan_tag(&h, "pick-from").contains("inputmode=\"decimal\""), "{h}");
+    assert!(s.pick_stretch(10_000, 25_500));
+    let h = html(&s);
+    assert!(plan_tag(&h, "pick-from").contains("value=\"10.0\"") && plan_tag(&h, "pick-to").contains("value=\"25.5\""), "{h}");
+    let fr = zoned_street(&[0], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 25_500));
+    let h = html(&fr);
+    assert!(h.contains("aria-label=\"Tronçon choisi\"") && h.contains(">De (m)</label>") && h.contains(">À (m)</label>"), "{h}");
+    assert!(plan_tag(&h, "pick-to").contains("value=\"25,5\""), "{h}");
+    // No end to measure from: no positions to type.
+    assert!(!html(&zoned_street(&[0], None, Locale::En)).contains("pick-from"));
+    // The details panel's Street level holds them, under the street's head.
+    let page = include_str!("../../../../../web/street.html");
+    let head = page.find("<div id=\"street-head-slot\"").expect("the head's slot");
+    let slot = page.find("<div id=\"pick-slot\"").expect("the fields' slot");
+    assert!(page.find("id=\"p-street\"").unwrap() < head && head < slot && slot < page.find("<div id=\"speed-slot\"").unwrap());
+    assert!(include_str!("../mod.rs").contains("mount(\"pick-slot\", view! { <view::plan::PickFields vm=vm.clone()/> }"));
+}
+
+#[test]
 fn the_plan_follows_the_language() {
     let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
     let h = plan_html(&s).replace(['\u{a0}', '\u{202f}'], " ");

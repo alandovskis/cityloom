@@ -365,6 +365,11 @@ st-stretch = De { $from } à { $to } · { $length } de long
 st-point = À { $at }
 # Le nom du point du plan au clavier, un curseur (src/street/view/plan/component.rs).
 st-plan-point-label = Point le long de la rue
+# Les extrémités du tronçon choisi, en champs, au niveau Rue du panneau des détails (src/street/view/plan/fields.rs),
+# depuis l’extrémité gauche du plan.
+st-pick-fields = Tronçon choisi
+st-pick-from = De ({ $unit })
+st-pick-to = À ({ $unit })
 stretches-elsewhere = Les changements le long de cette rue ont été tracés lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }

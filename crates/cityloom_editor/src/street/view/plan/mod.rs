@@ -11,10 +11,12 @@
 //! view-model's.
 
 mod component;
+mod fields;
 mod hit;
 mod scale;
 
 pub use component::Plan;
+pub use fields::PickFields;
 pub use hit::{COARSE_TARGET_PX, Hit, TARGET_PX, hit, plan_mm};
 pub use scale::{MIN_PX_PER_M, mm_per_px, x_px};
 

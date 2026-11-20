@@ -7,6 +7,7 @@ use leptos::prelude::*;
 
 use crate::shared::catalogue::Side;
 use crate::shared::said::{Said, say, say_now};
+use crate::shared::units::parse_length_mm;
 use crate::street::model::StripCell;
 use crate::street::model::{Editor, MIN_ZONE_MM, Pick, PickRefusal, PlanThing, ZoneEnd, snap};
 use crate::street::vm::keys::PlanKey;
@@ -126,6 +127,30 @@ impl StreetVm {
     pub fn pick_stretch(&self, a_mm: i32, b_mm: i32) -> bool {
         self.extend_from.set(None);
         self.pick_between(a_mm, b_mm)
+    }
+
+    /// What the pick's From and To fields show: its ends from the plan's left end, as numbers in the page's units (the
+    /// whole street: 0 and its length). `None` for a street with no end to measure from, which has no positions. Watched.
+    pub fn pick_ends_shown(&self) -> Option<(String, String)> {
+        let plan = &self.view().plan;
+        let length = plan.length_mm?;
+        let (from, to) = plan.pick.unwrap_or((0, length));
+        let (units, locale) = (self.units(), self.i18n.locale());
+        Some((units.number_in(from, locale), units.number_in(to, locale)))
+    }
+
+    /// Picks the stretch between the ends typed in the pick's From and To fields (from the plan's left end, in the
+    /// page's units, either order), saying what was picked or why not: a pointer's way to pick part of a run without
+    /// dragging. A field that does not hold a number is said, and nothing is picked.
+    pub fn pick_typed(&self, from: &str, to: &str) -> bool {
+        let units = self.units_now();
+        match (parse_length_mm(from, units), parse_length_mm(to, units)) {
+            (Some(a), Some(b)) => self.pick_stretch(a, b),
+            _ => {
+                self.say_bad_number();
+                false
+            }
+        }
     }
 
     /// Picks the run at `at_mm` (from the plan's left end), saying what was picked or why not.
@@ -921,6 +946,41 @@ mod pick_tests {
             r.vm.plan_release(g, 10_000);
             assert_eq!(r.vm.picked(), None, "{from_end:?}: the street's one run");
         }
+    }
+
+    #[test]
+    fn the_pick_s_ends_typed_in_its_fields_pick_a_stretch_from_the_plan_s_left_end() {
+        let shown = |r: &Rig| r.vm.pick_ends_shown().map(|(a, b)| (a, b));
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = rig_of(&sample(), from_end);
+            assert_eq!(shown(&r), Some(("0.0".to_string(), "60.0".to_string())), "{from_end:?}: the whole street, 0 to its length");
+            assert!(r.vm.pick_typed("10", "30,5"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, 30_500)), "{from_end:?}");
+            assert_eq!(r.said.take(), ["From 10.0 m to 30.5 m, 20.5 m long."], "{from_end:?}");
+            assert_eq!(shown(&r), Some(("10.0".to_string(), "30.5".to_string())), "{from_end:?}");
+            // Either order, and a unit word typed after the number.
+            assert!(r.vm.pick_typed("40 m", "20"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "{from_end:?}");
+            r.said.take();
+            // Refusals are said, as for any pick, and the pick stays.
+            assert!(!r.vm.pick_typed("20", "22"));
+            assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."]);
+            assert!(!r.vm.pick_typed("20", "70"));
+            assert_eq!(r.said.take(), ["That position is outside the street."]);
+            assert!(!r.vm.pick_typed("twenty", "40"));
+            assert_eq!(r.said.take(), ["That is not a number."]);
+            assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "{from_end:?}");
+            // The full length is the whole street.
+            assert!(r.vm.pick_typed("0", "60"));
+            assert_eq!((r.vm.picked(), shown(&r)), (None, Some(("0.0".to_string(), "60.0".to_string()))));
+        }
+        let r = rig_in(&sample(), ZoneEnd::First, Locale::FrCa);
+        assert!(r.vm.pick_typed("10,5", "20"));
+        assert_eq!(shown(&r), Some(("10,5".to_string(), "20,0".to_string())));
+        // A street with no anchor has no positions to type.
+        let (ports, _, _, _) = test_ports_with_time();
+        let free = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&sample(), &sample(), 0).with_frame(None), None);
+        assert_eq!(free.pick_ends_shown(), None);
     }
 
     #[test]

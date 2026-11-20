@@ -778,6 +778,25 @@ test.describe("changing part of a street", () => {
     await expect(live(page)).toHaveText(/^The whole street, [\d.]+ m long\./);
   });
 
+  test("a stretch is picked by typing its ends in the details panel, with no drag", async ({ page }) => {
+    const from = page.locator("#pick-from");
+    const to = page.locator("#pick-to");
+    await expect(from).toHaveValue("0.0");
+    await from.click();
+    await from.fill("10");
+    await to.click();
+    await to.fill("25");
+    await page.keyboard.press("Enter");
+    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
+    await expect(live(page)).toHaveText("From 10.0 m to 25.0 m, 15.0 m long.");
+    await expect(from).toHaveValue("10.0");
+    // A stretch too short is refused, said, and the fields show the pick again.
+    await to.fill("12");
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText("A stretch must be at least 5.0 m long.");
+    await expect(to).toHaveValue("25.0");
+  });
+
   test("Shift and the arrows pick a stretch from the keyboard, and the point says where it is on the way", async ({
     page,
   }) => {
