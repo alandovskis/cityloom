@@ -273,10 +273,19 @@ impl CityStore {
         edge: u32,
         change: impl FnOnce(&mut Scenarios<Street>, &Street) -> Result<R, Refusal>,
     ) -> Result<R, ScenarioFailure> {
-        let city = self.open();
+        self.change_street_scenarios_on(&self.open(), edge, change)
+    }
+
+    /// `change_street_scenarios` on `city`, the city as kept now, already open.
+    fn change_street_scenarios_on<R>(
+        &self,
+        city: &City,
+        edge: u32,
+        change: impl FnOnce(&mut Scenarios<Street>, &Street) -> Result<R, Refusal>,
+    ) -> Result<R, ScenarioFailure> {
         let Some((key, mut record)) = city.street_record(edge) else { return Err(ScenarioFailure::NotKept) };
         let answer = change(&mut record.scenarios, &record.street).map_err(ScenarioFailure::Refused)?;
-        if self.put_street(&city, edge, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
+        if self.put_street(city, edge, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
     }
 
     /// The same for the junction at `node` (each arm's `edge` 0 in the baseline and the scenarios, as kept).
@@ -285,24 +294,35 @@ impl CityStore {
         node: u32,
         change: impl FnOnce(&mut Scenarios<State>, &State) -> Result<R, Refusal>,
     ) -> Result<R, ScenarioFailure> {
-        let city = self.open();
+        self.change_junction_scenarios_on(&self.open(), node, change)
+    }
+
+    /// `change_junction_scenarios` on `city`, the city as kept now, already open.
+    fn change_junction_scenarios_on<R>(
+        &self,
+        city: &City,
+        node: u32,
+        change: impl FnOnce(&mut Scenarios<State>, &State) -> Result<R, Refusal>,
+    ) -> Result<R, ScenarioFailure> {
         let Some((key, mut record)) = city.junction_record(node) else { return Err(ScenarioFailure::NotKept) };
         let answer = change(&mut record.scenarios, &record.state).map_err(ScenarioFailure::Refused)?;
-        if self.put_junction(&city, node, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
+        if self.put_junction(city, node, key, record) { Ok(answer) } else { Err(ScenarioFailure::NotKept) }
     }
 
     /// Takes `street` as the design of scenario `id` of street `edge` (an edit made within it), leaving the baseline
     /// alone. Why it was not taken and kept: `Refused(Missing)` where there is no such scenario (deleted elsewhere),
     /// `NotKept` where the street could not take the design or the document could not be written.
     pub fn write_street_scenario(&self, edge: u32, id: u32, street: Street) -> Result<(), ScenarioFailure> {
-        let Some(design) = self.open().street_design(edge, street) else { return Err(ScenarioFailure::NotKept) };
-        self.change_street_scenarios(edge, |scenarios, _| scenarios.set_design(id, design))
+        let city = self.open();
+        let Some(design) = city.street_design(edge, street) else { return Err(ScenarioFailure::NotKept) };
+        self.change_street_scenarios_on(&city, edge, |scenarios, _| scenarios.set_design(id, design))
     }
 
     /// The same for the junction at `node`.
     pub fn write_junction_scenario(&self, node: u32, id: u32, state: State) -> Result<(), ScenarioFailure> {
-        let Some(design) = self.open().junction_design(node, state) else { return Err(ScenarioFailure::NotKept) };
-        self.change_junction_scenarios(node, |scenarios, _| scenarios.set_design(id, design))
+        let city = self.open();
+        let Some(design) = city.junction_design(node, state) else { return Err(ScenarioFailure::NotKept) };
+        self.change_junction_scenarios_on(&city, node, |scenarios, _| scenarios.set_design(id, design))
     }
 
     /// The city as first laid out, with no edit: what a place's record is until the person changes it.
@@ -1321,6 +1341,64 @@ mod tests {
         assert_eq!(names, ["Parking kept, wider"]);
         let (keyless, _) = (CityStore::sample_without_osm_ids(test_ports().0.storage), ());
         assert_eq!(keyless.change_street_scenarios(1, |s, base| s.create("A", base.clone())), Err(ScenarioFailure::NotKept), "a place with no key keeps none");
+    }
+
+    /// A storage that counts how often the edits document is read: each read is a load of the city or of the draft.
+    struct Counting {
+        inner: Rc<MemoryStorage>,
+        reads: std::cell::Cell<u32>,
+    }
+
+    impl Storage for Counting {
+        fn recall(&self, key: &str) -> Option<String> {
+            if key == EDITS_KEY {
+                self.reads.set(self.reads.get() + 1);
+            }
+            self.inner.recall(key)
+        }
+        fn remember(&self, key: &str, value: &str) -> bool {
+            self.inner.remember(key, value)
+        }
+        fn keys(&self) -> Vec<String> {
+            self.inner.keys()
+        }
+        fn now_ms(&self) -> u64 {
+            self.inner.now_ms()
+        }
+        fn random_hex(&self) -> Option<String> {
+            self.inner.random_hex()
+        }
+        fn identity(&self) -> usize {
+            self.inner.identity()
+        }
+    }
+
+    #[test]
+    fn a_scenario_write_reads_the_edits_no_more_often_than_a_baseline_write() {
+        let counting = Rc::new(Counting { inner: Rc::new(MemoryStorage::default()), reads: std::cell::Cell::new(0) });
+        let store = CityStore::sample(counting.clone());
+        let id = store.change_street_scenarios(1, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        let reads = |write: &dyn Fn()| {
+            counting.reads.set(0);
+            write();
+            counting.reads.get()
+        };
+        let once = narrowed(&store, 1);
+        let baseline = reads(&|| assert!(store.write_street(1, once.clone())));
+        let narrowed_more = {
+            let mut s = narrowed(&store, 1);
+            s.segments[0].width_mm -= 100;
+            s.segments[1].width_mm += 100;
+            s
+        };
+        let scenario = reads(&|| assert_eq!(store.write_street_scenario(1, id, narrowed_more.clone()), Ok(())));
+        assert_eq!(scenario, baseline, "a scenario write opens the city once, as a baseline write does");
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let jid = store.change_junction_scenarios(node, |s, base| s.create("Raised", base.clone())).unwrap();
+        let state = store.open().junction_editor_in(node, 0, Some(jid)).unwrap().snapshot();
+        let junction_baseline = reads(&|| assert!(store.write_junction(node, state.clone())));
+        let junction_scenario = reads(&|| assert_eq!(store.write_junction_scenario(node, jid, state.clone()), Ok(())));
+        assert_eq!(junction_scenario, junction_baseline);
     }
 
     #[test]
