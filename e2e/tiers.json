@@ -35,7 +35,7 @@
     "webgl",
     "world"
   ],
-  "integration": ["account-server", "sync"],
+  "integration": ["account-server", "share", "sync"],
   "e2e": ["archive", "delivery", "serve"],
   "archive_also": ["map", "street"]
 }
