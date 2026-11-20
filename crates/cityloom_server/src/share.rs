@@ -105,18 +105,30 @@ pub enum Invalid {
     Newer,
 }
 
+/// What the server reads of a body: its kind and its format's version.
+#[derive(serde::Deserialize)]
+struct Head<'a> {
+    #[serde(borrow)]
+    kind: Option<std::borrow::Cow<'a, str>>,
+    format_version: Option<serde_json::Number>,
+}
+
 /// Checks what the server must know of a body: its size, that it is a share, and of a format this server knows. The
 /// rest passes through sealed, as the browser sent it.
 pub fn check_body(body: &[u8]) -> Result<(), Invalid> {
     if body.len() > MAX_BODY_BYTES {
         return Err(Invalid::TooLarge);
     }
-    let value: serde_json::Value = serde_json::from_slice(body).map_err(|_| Invalid::NotAShare)?;
-    let doc = value.as_object().ok_or(Invalid::NotAShare)?;
-    if doc.get("kind").and_then(serde_json::Value::as_str) != Some(MAGIC) {
+    // Only the two fields are kept; the rest is checked to be JSON and skipped, never built into values. A struct reads
+    // from a JSON array too, so the body must be an object first.
+    if body.iter().find(|b| !b.is_ascii_whitespace()) != Some(&b'{') {
         return Err(Invalid::NotAShare);
     }
-    match doc.get("format_version").and_then(serde_json::Value::as_u64) {
+    let head: Head = serde_json::from_slice(body).map_err(|_| Invalid::NotAShare)?;
+    if head.kind.as_deref() != Some(MAGIC) {
+        return Err(Invalid::NotAShare);
+    }
+    match head.format_version.as_ref().and_then(serde_json::Number::as_u64) {
         None | Some(0) => Err(Invalid::NotAShare),
         Some(v) if v > FORMAT_VERSION => Err(Invalid::Newer),
         Some(_) => Ok(()),
@@ -287,6 +299,9 @@ mod tests {
             br#"{"kind":"cityloom-share","format_version":0}"#,
             br#"{"kind":"cityloom-share","format_version":"1"}"#,
             b"[1]",
+            br#"["cityloom-share", 1]"#,
+            br#"{"kind":"cityloom-share","format_version":1.5}"#,
+            br#"{"kind":7,"format_version":1}"#,
             b"not json",
         ] {
             assert_eq!(check_body(bad), Err(Invalid::NotAShare), "{}", String::from_utf8_lossy(bad));
