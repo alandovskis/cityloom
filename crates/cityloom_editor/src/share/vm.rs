@@ -65,6 +65,10 @@ pub enum Focus {
     Link(String),
     /// The button that makes a link (after one was deleted).
     Create,
+    /// The safe answer of the question asked before deleting a link.
+    DeleteSafe,
+    /// The Delete button of the row of a link (the question was cancelled).
+    DeleteButton(String),
 }
 
 pub struct ShareVm {
@@ -77,6 +81,8 @@ pub struct ShareVm {
     outcome: ArcRwSignal<Option<Outcome>>,
     version: ArcRwSignal<u32>,
     focus: ArcRwSignal<(u32, Focus)>,
+    /// The link the question before deleting is about, while it is asked.
+    deleting: ArcRwSignal<Option<String>>,
 }
 
 impl ShareVm {
@@ -92,6 +98,7 @@ impl ShareVm {
             outcome: ArcRwSignal::new(None),
             version: ArcRwSignal::new(0),
             focus: ArcRwSignal::new((0, Focus::None)),
+            deleting: ArcRwSignal::new(None),
         })
     }
 
@@ -256,9 +263,47 @@ impl ShareVm {
         );
     }
 
+    /// Asks before deleting the link `token` made here; its question starts on the safe answer.
+    pub fn ask_delete(&self, token: &str) {
+        if !self.store.list().iter().any(|m| m.token == token) {
+            return;
+        }
+        self.deleting.set(Some(token.to_string()));
+        self.ask_focus(Focus::DeleteSafe);
+    }
+
+    /// The link the question before deleting is about, while it is asked (tracked).
+    pub fn deleting(&self) -> Option<String> {
+        self.deleting.get()
+    }
+
+    /// The question asked before deleting a link, naming it by when it stops or stopped working (tracked).
+    pub fn delete_question(&self) -> Option<String> {
+        let token = self.deleting.get()?;
+        let made = self.store.list().into_iter().find(|m| m.token == token)?;
+        let state = if made.expires_at <= stamp(self.ports.storage.now_ms()) { "expired" } else { "live" };
+        Some(self.i18n.tr("share-delete-confirm", &Args::new().str("state", state).str("date", date_text(&self.i18n, &made.expires_at))))
+    }
+
+    /// Drops the question; focus goes back to the row's Delete button.
+    pub fn cancel_delete(&self) {
+        if let Some(token) = self.deleting.get_untracked() {
+            self.deleting.set(None);
+            self.ask_focus(Focus::DeleteButton(token));
+        }
+    }
+
+    /// Deletes the link the question is about. False where nothing was asked.
+    pub fn confirm_delete(self: &Rc<Self>) -> bool {
+        let Some(token) = self.deleting.get_untracked() else { return false };
+        self.deleting.set(None);
+        self.delete(&token);
+        true
+    }
+
     /// Deletes the share behind `token` on the server and forgets it here; a share the server no longer has (not found,
     /// expired, deleted) is forgotten too.
-    pub fn delete(self: &Rc<Self>, token: &str) {
+    fn delete(self: &Rc<Self>, token: &str) {
         if self.busy.get_untracked() {
             return;
         }

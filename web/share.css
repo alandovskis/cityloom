@@ -107,3 +107,16 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* The question asked in a row before its link is deleted, as the home page's before a project is. */
+.share-row > .confirm {
+  margin-top: 8px;
+}
+.confirm {
+  padding: 14px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+}
+.confirm > * + * {
+  margin-top: 10px;
+}

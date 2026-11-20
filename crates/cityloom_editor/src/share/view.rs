@@ -28,6 +28,8 @@ fn follow_focus(vm: Vm) {
             Focus::None => return,
             Focus::Link(token) => part("link", &token),
             Focus::Create => "sharing-create".to_string(),
+            Focus::DeleteSafe => "sharing-delete-safe".to_string(),
+            Focus::DeleteButton(token) => part("delete", &token),
         };
         if let Some(el) = document().get_element_by_id(&id).and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
             let _ = el.focus();
@@ -35,10 +37,44 @@ fn follow_focus(vm: Vm) {
     });
 }
 
+/// The question asked in a row before its link is deleted.
+fn delete_question(vm: Vm) -> impl IntoView {
+    view! {
+        <div
+            role="group"
+            class="confirm"
+            aria-labelledby="sharing-delete-question"
+            on:keydown=move |e| {
+                if e.key() == "Escape" {
+                    e.stop_propagation();
+                    vm.with_value(|v| v.cancel_delete());
+                }
+            }
+        >
+            <p id="sharing-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
+            <div class="share-buttons">
+                <button type="button" id="sharing-delete-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
+                    {move || word(vm, "share-cancel")}
+                </button>
+                <button
+                    type="button"
+                    id="sharing-delete-yes"
+                    class="btn danger"
+                    on:click=move |_| {
+                        vm.with_value(|v| v.confirm_delete());
+                    }
+                >
+                    {move || word(vm, "share-delete-yes")}
+                </button>
+            </div>
+        </div>
+    }
+}
+
 /// One link made here: the link itself, to select or copy, until when it works, and its two buttons.
 fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
     let (field_id, expiry_id) = (part("link", &row.token), part("expiry", &row.token));
-    let (copy_token, delete_token) = (row.token.clone(), row.token.clone());
+    let (copy_token, delete_token, here) = (row.token.clone(), row.token.clone(), row.token.clone());
     view! {
         <li class="share-row" class:share-expired=row.expired>
             <label for=field_id.clone()>{move || word(vm, "share-link-label")}</label>
@@ -72,11 +108,12 @@ fn link_view(vm: Vm, row: LinkRow) -> impl IntoView {
                     class="btn danger"
                     id=part("delete", &row.token)
                     disabled=move || vm.with_value(|v| v.busy())
-                    on:click=move |_| vm.with_value(|v| v.delete(&delete_token))
+                    on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_token))
                 >
                     {move || word(vm, "share-delete")}
                 </button>
             </div>
+            {move || (vm.with_value(|v| v.deleting()).as_deref() == Some(here.as_str())).then(|| delete_question(vm))}
         </li>
     }
 }

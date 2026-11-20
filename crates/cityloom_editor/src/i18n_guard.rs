@@ -534,6 +534,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("timeline-slot", "the id of the element the timeline is drawn into (web/timeline.html)"),
     ("sharing-slot", "the id of the element the share page is drawn into (web/share.html); not `share-slot`, which is the shell's share menu"),
     ("sharing-create", "the id of the share page's button that makes a link, where focus goes after a link is deleted"),
+    ("sharing-delete-safe", "the id of the Cancel button of the question before deleting a share link, where focus goes"),
     ("timeline-name", "the id of the save form's name field, where focus goes"),
     ("timeline-restore-question", "the id of the question asked before restoring, which names its group"),
     ("timeline-delete-question", "the id of the question asked before deleting a milestone, which names its group"),
