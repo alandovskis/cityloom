@@ -78,5 +78,6 @@ share-error-read-only = This design is open read-only: it cannot be shared from 
 share-error-unusable = This project's work cannot be read, so it cannot be shared.
 share-error-too-large = This project is too large to share: a share holds at most { $megabytes } MB.
 share-error-full = You have { $count } share links already. Delete one before making another.
+share-error-too-many-today = You have made { $count } share links in the last 24 hours, as many as an account may. Try again later.
 share-error-not-yours = Another account made this link: only the account that made it can delete it.
 share-error-refused = The server refused the request.

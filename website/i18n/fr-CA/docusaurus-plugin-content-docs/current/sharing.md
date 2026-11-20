@@ -21,7 +21,8 @@ Sur la page d’accueil, choisissez **Partager** dans la rangée d’un projet. 
   fonctionner. Les liens que vous avez créés y sont de nouveau listés sur le même appareil, du plus récent au plus ancien.
 - **Supprimer le lien** supprime la copie partagée du serveur avant son expiration. Quiconque ouvre le lien ensuite
   apprend que la personne qui l’a partagé l’a supprimé.
-- Un compte peut avoir au plus 50 liens qui fonctionnent encore, et une copie partagée pèse au plus 1 Mo.
+- Un compte peut avoir au plus 50 liens qui fonctionnent encore et créer au plus 100 liens en 24 heures (les liens
+  supprimés comptent aussi), et une copie partagée pèse au plus 1 Mo.
 
 ## Ouvrir un lien
 

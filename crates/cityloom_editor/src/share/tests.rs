@@ -138,7 +138,7 @@ fn the_page_opens_a_link_only_for_a_whole_token_or_where_it_names_no_project() {
 fn every_failure_is_said_in_english_and_in_french() {
     use ShareError::*;
     let all =
-        [BadLink, NotFound, Expired, Deleted, Newer, Damaged, Network, Unavailable, Storage, SignedOut, ReadOnly, Unusable, TooLarge, Full, NotYours, Refused];
+        [BadLink, NotFound, Expired, Deleted, Newer, Damaged, Network, Unavailable, Storage, SignedOut, ReadOnly, Unusable, TooLarge, Full, TooManyToday, NotYours, Refused];
     let mut seen = std::collections::BTreeSet::new();
     for e in all {
         let (english, french) = (en(&e.said()), fr(&e.said()));
@@ -154,6 +154,7 @@ fn every_failure_is_said_in_english_and_in_french() {
     assert!(en(&NotFound.said()).starts_with("No shared design has this link."));
     assert!(fr(&NotFound.said()).starts_with("Aucun aménagement partagé n’a ce lien."));
     assert!(en(&Full.said()).contains("50 share links"));
+    assert_eq!(en(&TooManyToday.said()), "You have made 100 share links in the last 24 hours, as many as an account may. Try again later.");
     assert!(en(&TooLarge.said()).contains("1 MB"));
 }
 
@@ -182,6 +183,7 @@ fn the_server_s_refusals_become_the_slice_s_errors() {
         (ShareFailure::Deleted, ShareError::Deleted),
         (ShareFailure::NotYours, ShareError::NotYours),
         (ShareFailure::Full, ShareError::Full),
+        (ShareFailure::TooManyToday, ShareError::TooManyToday),
         (ShareFailure::TooLarge, ShareError::TooLarge),
         (ShareFailure::Newer, ShareError::Newer),
         (ShareFailure::Network, ShareError::Network),

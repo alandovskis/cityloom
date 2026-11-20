@@ -33,6 +33,9 @@ pub const MARKER_DAYS: i64 = 365;
 pub const MAX_BODY_BYTES: usize = crate::work::MAX_RECORD_BYTES;
 /// The most live shares (not expired, not deleted) one account may hold.
 pub const MAX_LIVE_SHARES: usize = 50;
+/// The most shares one account may make in any 24 hours, deleted ones included: making and deleting shares in a loop
+/// would otherwise leave a marker row for each, a year past its expiry.
+pub const MAX_SHARES_PER_DAY: usize = 100;
 /// The `kind` of every share document.
 pub const MAGIC: &str = "cityloom-share";
 /// The newest share format this server takes.
@@ -180,6 +183,8 @@ pub enum ShareError {
     NotYours,
     #[error("the account holds as many shares as it may")]
     Full,
+    #[error("the account made as many shares as it may in a day")]
+    TooMany,
 }
 
 impl From<crate::accounts::RepoError> for ShareError {
@@ -197,7 +202,8 @@ impl From<crate::accounts::RepoError> for ShareError {
 #[async_trait]
 pub trait ShareRepo: Send + Sync {
     /// Keeps `body` (checked already) for `user` behind `token`, until `now` + `RETENTION_DAYS`. `Full` past
-    /// `MAX_LIVE_SHARES` live shares, `Gone` for an account that is no more.
+    /// `MAX_LIVE_SHARES` live shares, `TooMany` past `MAX_SHARES_PER_DAY` made in the 24 hours before `now` (deleted
+    /// ones too), `Gone` for an account that is no more.
     async fn create(&self, user: Uuid, token: &Token, body: &[u8], now: OffsetDateTime) -> Result<Created, ShareError>;
     /// The body behind `token`: `NotFound`, `Expired` (its body dropped then if it was not yet) or `Deleted`.
     async fn open(&self, token: &Token, now: OffsetDateTime) -> Result<Vec<u8>, ShareError>;

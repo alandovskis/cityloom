@@ -81,5 +81,6 @@ share-error-read-only = Cet aménagement est ouvert en lecture seule : il ne peu
 share-error-unusable = Le travail de ce projet est illisible; il ne peut donc pas être partagé.
 share-error-too-large = Ce projet est trop volumineux pour être partagé : un partage contient au plus { $megabytes } Mo.
 share-error-full = Vous avez déjà { $count } liens de partage. Supprimez-en un avant d’en créer un autre.
+share-error-too-many-today = Vous avez créé { $count } liens de partage au cours des dernières 24 heures, le maximum pour un compte. Réessayez plus tard.
 share-error-not-yours = Un autre compte a créé ce lien : seul le compte qui l’a créé peut le supprimer.
 share-error-refused = Le serveur a refusé la demande.
