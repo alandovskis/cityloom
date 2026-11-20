@@ -1296,8 +1296,10 @@ svg pattern circle {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  /* room for the point's focus ring at the plan's edges */
-  padding: 4px 0;
+  /* room for the point's focus ring at the plan's edges: above and below, and half the point's 24 px either side, so
+     that at an end of the street the whole ring is inside the box that clips the plan's scroll (the plan is fitted to
+     the box less that room, POINT_ROOM_PX in street/view/plan/component.rs) */
+  padding: 4px 12px;
 }
 .plan-canvas {
   position: relative;

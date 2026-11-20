@@ -2050,6 +2050,23 @@ fn the_plan_scrolls_inside_itself_and_keeps_its_point_in_sight() {
     assert!(focused.contains("var(--plan-pick-edge)") && focused.contains("var(--plan-pick-casing)"), "{focused}");
 }
 
+#[test]
+fn the_point_s_focus_ring_is_seen_whole_at_either_end_of_the_plan() {
+    let editor = include_str!("../../../../../web/editor.css");
+    let rule = |sel: &str| {
+        let i = editor.find(&format!("\n{sel} {{")).unwrap_or_else(|| panic!("{sel}"));
+        &editor[i..i + editor[i..].find('}').unwrap()]
+    };
+    // The point is 24 px wide about its line, so at the plan's ends half of it lies past the drawing: the box that
+    // clips the plan's scroll keeps that much room on each side.
+    assert!(rule("#plan-point").contains("width: 24px;") && rule("#plan-point").contains("margin-left: -12px;"));
+    assert!(rule(".plan-box").contains("padding: 4px 12px;"), "{}", rule(".plan-box"));
+    // The plan is fitted to the box less that room, so it still fits without a scroll.
+    let component = include_str!("plan/component.rs");
+    assert!(component.contains("const POINT_ROOM_PX: f64 = 12.0;"), "the room, as the CSS has it");
+    assert!(component.contains("el.client_width()) - 2.0 * POINT_ROOM_PX"), "the plan is fitted inside it");
+}
+
 // ---- the street level of the details panel ------------------------------------------
 
 #[test]
