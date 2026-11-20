@@ -549,7 +549,8 @@ mod tests {
     fn translucent_dark(css: &str, name: &str) -> (String, f64) {
         let at = css.find(&format!("--{name}: ")).unwrap_or_else(|| panic!("--{name}"));
         let line = &css[at..at + css[at..].find(';').unwrap()];
-        let rgb = line.split("rgb(").nth(1).unwrap_or_else(|| panic!("--{name} has no rgb() value: {line}"));
+        // The dark value is light-dark()'s second, so the last rgb() of the line.
+        let rgb = line.rsplit_once("rgb(").map(|(_, r)| r).unwrap_or_else(|| panic!("--{name} has no rgb() value: {line}"));
         let rgb = rgb.split(')').next().unwrap();
         let (channels, alpha) = rgb.split_once('/').unwrap_or_else(|| panic!("--{name} has no alpha: {line}"));
         let c: Vec<u8> = channels.split_whitespace().map(|v| v.parse().unwrap()).collect();
