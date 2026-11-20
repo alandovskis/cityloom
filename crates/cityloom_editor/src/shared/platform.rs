@@ -434,21 +434,25 @@ impl WorkSync for BrowserWork {
 
 struct BrowserShare;
 
-/// A request to `/api/share`: the body's text, or why not. No answer at all (the network) is status 0.
+/// A request to `/api/share`: the body's text, or why not. A link's token rides in the `Share-Token` header, never in
+/// the path, which proxies and edge logs may keep. No answer at all (the network) is status 0.
 #[cfg(target_arch = "wasm32")]
-async fn share_api(method: &str, path: &str, json: Option<&str>) -> Result<String, ShareFailure> {
+async fn share_api(method: &str, json: Option<&str>, token: Option<&str>) -> Result<String, ShareFailure> {
     use crate::shared::ports::share_failure;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::JsFuture;
     let init = web_sys::RequestInit::new();
     init.set_method(method);
+    let headers = web_sys::Headers::new().map_err(|_| ShareFailure::Unavailable)?;
     if let Some(json) = json {
         init.set_body(&wasm_bindgen::JsValue::from_str(json));
-        let headers = web_sys::Headers::new().map_err(|_| ShareFailure::Unavailable)?;
         headers.set("content-type", "application/json").map_err(|_| ShareFailure::Unavailable)?;
-        init.set_headers(&headers);
     }
-    let request = web_sys::Request::new_with_str_and_init(path, &init).map_err(|_| ShareFailure::Unavailable)?;
+    if let Some(token) = token {
+        headers.set("share-token", token).map_err(|_| ShareFailure::Unavailable)?;
+    }
+    init.set_headers(&headers);
+    let request = web_sys::Request::new_with_str_and_init("/api/share", &init).map_err(|_| ShareFailure::Unavailable)?;
     let window = web_sys::window().ok_or(ShareFailure::Unavailable)?;
     // A fetch that rejects never had an answer: the network, not the server.
     let response: web_sys::Response =
@@ -462,31 +466,32 @@ async fn share_api(method: &str, path: &str, json: Option<&str>) -> Result<Strin
 }
 
 /// Runs the request and tells `done`; natively (no network) the answer is at once `Network`.
-fn ask_share<T: 'static>(method: &'static str, path: String, json: Option<String>, read: fn(&str) -> Result<T, ShareFailure>, done: ShareAnswer<T>) {
+fn ask_share<T: 'static>(method: &'static str, json: Option<String>, token: Option<String>, read: fn(&str) -> Result<T, ShareFailure>, done: ShareAnswer<T>) {
+    let token = token.map(|token| token_header(&token));
     #[cfg(target_arch = "wasm32")]
-    wasm_bindgen_futures::spawn_local(async move { done(share_api(method, &path, json.as_deref()).await.and_then(|body| read(&body))) });
+    wasm_bindgen_futures::spawn_local(async move { done(share_api(method, json.as_deref(), token.as_deref()).await.and_then(|body| read(&body))) });
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let _ = (method, path, json, read);
+        let _ = (method, json, token, read);
         done(Err(ShareFailure::Network));
     }
 }
 
-/// A token in a path: only the characters a token has (base64url) pass, so no text can reach another route.
-fn token_path(token: &str) -> String {
-    let clean: String = token.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
-    format!("/api/share/{clean}")
+/// A token as its header carries it: only the characters a token has (base64url) pass, so no other text, and no other
+/// header, can ride with it.
+fn token_header(token: &str) -> String {
+    token.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect()
 }
 
 impl ShareApi for BrowserShare {
     fn create(&self, body: String, done: ShareAnswer<ShareMade>) {
-        ask_share("POST", "/api/share".into(), Some(body), ShareMade::parse, done);
+        ask_share("POST", Some(body), None, ShareMade::parse, done);
     }
     fn open(&self, token: &str, done: ShareAnswer<String>) {
-        ask_share("GET", token_path(token), None, |body| Ok(body.to_string()), done);
+        ask_share("GET", None, Some(token.to_string()), |body| Ok(body.to_string()), done);
     }
     fn delete(&self, token: &str, done: ShareAnswer<()>) {
-        ask_share("DELETE", token_path(token), None, |_| Ok(()), done);
+        ask_share("DELETE", None, Some(token.to_string()), |_| Ok(()), done);
     }
 }
 
@@ -743,14 +748,14 @@ mod tests {
     }
 
     #[test]
-    fn natively_the_browser_share_says_no_network_and_a_token_reaches_only_its_own_path() {
+    fn natively_the_browser_share_says_no_network_and_a_token_reaches_only_its_own_header() {
         let ports = browser_ports();
         let got = Rc::new(RefCell::new(None));
         let g = got.clone();
         ports.share.open("tok", Box::new(move |r| *g.borrow_mut() = Some(r)));
         assert_eq!(*got.borrow(), Some(Err(ShareFailure::Network)));
-        assert_eq!(token_path("AbC-_9"), "/api/share/AbC-_9");
-        assert_eq!(token_path("../me?x=1#y"), "/api/share/mex1y");
+        assert_eq!(token_header("AbC-_9"), "AbC-_9");
+        assert_eq!(token_header("../me?x=1#y\r\nX: 1"), "mex1yX1", "only a token's characters: no other header, no other text");
         assert_eq!((ports.page.hash(), ports.page.origin()), (String::new(), String::new()));
     }
 

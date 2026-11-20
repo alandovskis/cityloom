@@ -17,8 +17,8 @@ async fn auth_and_api_answer_503_when_the_account_side_is_off_and_the_site_is_st
         ("GET", "/auth/google/start"),
         ("DELETE", "/api/me"),
         ("POST", "/api/share"),
-        ("GET", "/api/share/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
-        ("DELETE", "/api/share/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        ("GET", "/api/share"),
+        ("DELETE", "/api/share"),
     ] {
         let res = app.clone().oneshot(Request::builder().method(method).uri(path).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE, "{method} {path}");
@@ -58,7 +58,7 @@ async fn a_database_that_cannot_be_reached_answers_503_without_a_panic_and_the_s
         ("GET", "/auth/google/start"),
         ("POST", "/auth/signout"),
         ("DELETE", "/api/me"),
-        ("GET", "/api/share/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        ("GET", "/api/share"),
     ] {
         let res = app.clone().oneshot(Request::builder().method(method).uri(path).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE, "{method} {path}");

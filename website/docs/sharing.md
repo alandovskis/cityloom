@@ -41,11 +41,14 @@ reached, or the browser's storage refused the copy.
   junction edits, and its area rules. Not its timeline, nor anything of your account, your settings or your other
   projects. Changes you make to the project afterwards are not in the link: make a new one to share them.
 - **Who can see it**: anyone who has the link, and nobody else. The link's secret (256 random bits) is in the part of
-  the address after `#`, which browsers never send to a server. Treat a link like a key: whoever you give it to can
-  pass it on.
+  the address after `#`, which browsers never send to a server as part of an address, nor to another site in a
+  `Referer`. To fetch the design, the share page sends the secret to CityLoom's server alone, in a request header
+  (`Share-Token`) rather than in an address, which proxies along the way may log; the server uses it to find and
+  decrypt the snapshot, and does not keep it. Treat a link like a key: whoever you give it to can pass it on.
 - **What the server keeps**: the snapshot, encrypted under a key derived from the link's secret, so that the server
   holds nothing it could read without the link; a fingerprint of the secret to find it; your account, as its creator;
-  and when it was made and expires. The secret itself is never stored nor written in the server's logs.
+  and when it was made and expires. The secret itself is never stored, nor written in the server's logs, which record
+  no request header.
 - **For how long**: 90 days from when the link was made. The snapshot is then deleted, and the link says it has expired.
   A deleted or expired link keeps saying so for a year; after that it says no shared design has it.
 - **Deleting**: you can delete a link at any time from the share page of the device you made it on. Deleting your

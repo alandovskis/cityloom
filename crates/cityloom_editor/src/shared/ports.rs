@@ -397,7 +397,7 @@ pub type ShareAnswer<T> = Box<dyn FnOnce(Result<T, ShareFailure>)>;
 pub trait ShareApi {
     /// Keeps `body` (a share document) behind a new link; needs a signed-in account.
     fn create(&self, body: String, done: ShareAnswer<ShareMade>);
-    /// The share document behind `token`, as text; needs no account.
+    /// The share document behind `token`, as text; needs no account. The token is sent in a header, never in a path.
     fn open(&self, token: &str, done: ShareAnswer<String>);
     /// Deletes the share behind `token`; its creator's only.
     fn delete(&self, token: &str, done: ShareAnswer<()>);
