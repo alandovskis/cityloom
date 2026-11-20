@@ -1,0 +1,33 @@
+Captured at 2eebe708.
+== 1. Revert city/model.rs:887 (City::street_record writes no scenarios), as before the fix:
+diff --git a/crates/cityloom_editor/src/city/model.rs b/crates/cityloom_editor/src/city/model.rs
+index e008a667..af5d396f 100644
+--- a/crates/cityloom_editor/src/city/model.rs
++++ b/crates/cityloom_editor/src/city/model.rs
+@@ -887 +887 @@ impl City {
+-                scenarios: self.street_scenarios.get(&edge).cloned().unwrap_or_default(),
++                scenarios: Default::default(),
+test city::store::tests::a_baseline_write_keeps_the_street_s_scenarios ... FAILED
+thread 'city::store::tests::a_baseline_write_keeps_the_street_s_scenarios' (36590586) panicked at crates/cityloom_editor/src/city/store.rs:1122:9:
+assertion `left == right` failed: the baseline write dropped the scenarios
+  left: []
+ right: ["Wider"]
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3363 filtered out; finished in 0.10s
+
+== 2. Revert street/vm/mod.rs:1580 (no fresh.begin_history() on a switch), as before the fix:
+diff --git a/crates/cityloom_editor/src/street/vm/mod.rs b/crates/cityloom_editor/src/street/vm/mod.rs
+index 565691d9..85019dab 100644
+--- a/crates/cityloom_editor/src/street/vm/mod.rs
++++ b/crates/cityloom_editor/src/street/vm/mod.rs
+@@ -1580 +1580 @@ impl ScenarioPage for StreetVm {
+-        fresh.begin_history();
++        // fresh.begin_history();
+(built without -D warnings: with the call gone `fresh` needs no `mut`, which -D warnings refuses)
+test street::vm::tests::right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown ... FAILED
+thread 'street::vm::tests::right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown' (36602546) panicked at crates/cityloom_editor/src/street/vm/mod.rs:1771:13:
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3363 filtered out; finished in 0.33s
+
+== 3. With the change as committed (2eebe708), both pass:
+test city::store::tests::a_baseline_write_keeps_the_street_s_scenarios ... ok
+test street::vm::tests::right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3362 filtered out; finished in 3.12s

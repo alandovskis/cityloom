@@ -1,0 +1,1291 @@
+[
+  {
+    "step": 1,
+    "caption": "1. Open a street (street.html?street=1): it opens on the baseline; first piece 1.50 m wide",
+    "file": "01.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 2,
+    "caption": "2. Type “Wider bike lane” and press New from baseline (keyboard only): the scenario is made and shown, the live region announces it",
+    "file": "02.png",
+    "state": {
+      "live": "Scenario “Wider bike lane” made from the baseline. Now editing it.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 3,
+    "caption": "3. Widen the first piece with + inside “Wider bike lane”: now 1.60 m (baseline 1.50 m); Undo enabled: true",
+    "file": "03.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 4,
+    "caption": "4. Undo inside the scenario: first piece back to 1.50 m",
+    "file": "04.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 5,
+    "caption": "5. Redo inside the scenario: first piece 1.60 m again",
+    "file": "05.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 6,
+    "caption": "6. Make “Parking kept” from the baseline: shown and announced",
+    "file": "06.png",
+    "state": {
+      "live": "Scenario “Parking kept” made from the baseline. Now editing it.",
+      "mode": "Scenario “Parking kept”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider bike lane",
+        "▶ Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 7,
+    "caption": "7. In “Parking kept” the first piece is 1.50 m: the baseline's width, not the other scenario's",
+    "file": "07.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Scenario “Parking kept”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider bike lane",
+        "▶ Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 8,
+    "caption": "8. Show “Wider bike lane” with the picker: announced; Undo enabled right after the switch: false",
+    "file": "08.png",
+    "state": {
+      "live": "Now showing scenario “Wider bike lane”.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 9,
+    "caption": "9. In “Wider bike lane” the first piece is 1.60 m: its edit is kept",
+    "file": "09.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 10,
+    "caption": "10. Show the baseline with the picker: announced",
+    "file": "10.png",
+    "state": {
+      "live": "Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 11,
+    "caption": "11. On the baseline the first piece is 1.50 m: untouched by the scenario edit",
+    "file": "11.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 12,
+    "caption": "12. Reload: the page opens on the baseline (1.50 m) and lists both scenarios; the kept record holds [\"Wider bike lane\",\"Parking kept\"]",
+    "file": "12.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 13,
+    "caption": "13. After the reload, “Wider bike lane” still has 1.60 m; Undo enabled: false",
+    "file": "13.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 14,
+    "caption": "14. Reload while “Wider bike lane” is shown: the page opens on the baseline (first piece 1.50 m); the kept street record's keys are [\"leaving\",\"nodes\",\"scenarios\",\"street\",\"ways\"], with no active-scenario field",
+    "file": "14.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 15,
+    "caption": "15. Rename the shown scenario to “Wider lane”: renamed in the picker and announced",
+    "file": "15.png",
+    "state": {
+      "live": "Scenario “Wider bike lane” renamed “Wider lane”.",
+      "mode": "Scenario “Wider lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 16,
+    "caption": "16. Duplicate it as “Wider lane, parking kept”: the copy is shown and announced",
+    "file": "16.png",
+    "state": {
+      "live": "Scenario “Wider lane” duplicated as “Wider lane, parking kept”. Now editing the copy.",
+      "mode": "Scenario “Wider lane, parking kept”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept",
+        "▶ Wider lane, parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-duplicate"
+    }
+  },
+  {
+    "step": 17,
+    "caption": "17. Press Delete: it asks once, the button now reads Confirm delete",
+    "file": "17.png",
+    "state": {
+      "live": "Delete scenario “Wider lane, parking kept”? Press Confirm delete to delete it.",
+      "mode": "Scenario “Wider lane, parking kept”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept",
+        "▶ Wider lane, parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-delete"
+    }
+  },
+  {
+    "step": 18,
+    "caption": "18. Press Confirm delete: the copy is deleted, the baseline is shown, announced",
+    "file": "18.png",
+    "state": {
+      "live": "Scenario “Wider lane, parking kept” deleted. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 19,
+    "caption": "19. On the baseline, Delete disabled: true, Rename disabled: true",
+    "file": "19.png",
+    "state": {
+      "live": "Scenario “Wider lane, parking kept” deleted. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 20,
+    "caption": "20. In English, try “PARKING kept” (taken, case ignored): refused under the field and in the live region",
+    "file": "20.png",
+    "state": {
+      "live": "Another scenario is already called “PARKING kept”.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "Another scenario is already called “PARKING kept”.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 21,
+    "caption": "21. In English, try a blank name: refused",
+    "file": "21.png",
+    "state": {
+      "live": "Give the scenario a name.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "Give the scenario a name.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 22,
+    "caption": "22. In English, try a 61-character name: refused, name too long",
+    "file": "22.png",
+    "state": {
+      "live": "A scenario name can be at most 60 characters long.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept"
+      ],
+      "refusal": "A scenario name can be at most 60 characters long.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 23,
+    "caption": "23. Make scenarios up to the limit: the picker lists the baseline and 8 scenarios",
+    "file": "23.png",
+    "state": {
+      "live": "Scenario “Option 8” made from the baseline. Now editing it.",
+      "mode": "Scenario “Option 8”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept",
+        "Option 3",
+        "Option 4",
+        "Option 5",
+        "Option 6",
+        "Option 7",
+        "▶ Option 8"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 24,
+    "caption": "24. In English, try a ninth scenario: refused, the place is full",
+    "file": "24.png",
+    "state": {
+      "live": "A place keeps at most 8 scenarios. Delete one to make another.",
+      "mode": "Scenario “Option 8”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider lane",
+        "Parking kept",
+        "Option 3",
+        "Option 4",
+        "Option 5",
+        "Option 6",
+        "Option 7",
+        "▶ Option 8"
+      ],
+      "refusal": "A place keeps at most 8 scenarios. Delete one to make another.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 25,
+    "caption": "25. In fr-CA, make “Parking kept”: announced in French",
+    "file": "25.png",
+    "state": {
+      "live": "Scénario « Parking kept » créé à partir de la référence. Vous le modifiez maintenant.",
+      "mode": "Scénario « Parking kept » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 26,
+    "caption": "26. In fr-CA, try “parking KEPT”: refused (name taken, case ignored) under the field and in the live region, aria-invalid set",
+    "file": "26.png",
+    "state": {
+      "live": "Un autre scénario s’appelle déjà « parking KEPT ».",
+      "mode": "Scénario « Parking kept » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Parking kept"
+      ],
+      "refusal": "Un autre scénario s’appelle déjà « parking KEPT ».",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 27,
+    "caption": "27. In fr-CA, try a blank name: refused, “Donnez un nom au scénario.”",
+    "file": "27.png",
+    "state": {
+      "live": "Donnez un nom au scénario.",
+      "mode": "Scénario « Parking kept » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Parking kept"
+      ],
+      "refusal": "Donnez un nom au scénario.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 28,
+    "caption": "28. In fr-CA, try a 200-character name: refused, name too long",
+    "file": "28.png",
+    "state": {
+      "live": "Un nom de scénario compte au plus 60 caractères.",
+      "mode": "Scénario « Parking kept » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Parking kept"
+      ],
+      "refusal": "Un nom de scénario compte au plus 60 caractères.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 29,
+    "caption": "29. In fr-CA, try a ninth scenario: refused, the place is full",
+    "file": "29.png",
+    "state": {
+      "live": "Un lieu garde au plus 8 scénarios. Supprimez-en un pour en créer un autre.",
+      "mode": "Scénario « Option 8 » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Parking kept",
+        "Option 2",
+        "Option 3",
+        "Option 4",
+        "Option 5",
+        "Option 6",
+        "Option 7",
+        "▶ Option 8"
+      ],
+      "refusal": "Un lieu garde au plus 8 scénarios. Supprimez-en un pour en créer un autre.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 30,
+    "caption": "30. Open a junction (intersection.html?junction=1): it opens on the baseline",
+    "file": "30.png",
+    "state": {
+      "live": "",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 31,
+    "caption": "31. Make “Wider bike lane” on the junction (keyboard only): shown and announced",
+    "file": "31.png",
+    "state": {
+      "live": "Scenario “Wider bike lane” made from the baseline. Now editing it.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 32,
+    "caption": "32. Turn the selected street with Shift+Arrow inside the scenario: Undo enabled: true; the scenario now differs from the baseline at .arms.0.bearing: 35 → 40",
+    "file": "32.png",
+    "state": {
+      "live": "Avenue Laurier Est bearing: 40°. 4 streets, traffic signal. Every check passes.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "wrap"
+    }
+  },
+  {
+    "step": 33,
+    "caption": "33. Undo inside the junction scenario: differences from the baseline left: none",
+    "file": "33.png",
+    "state": {
+      "live": "Undone.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 34,
+    "caption": "34. Redo: the scenario differs from the baseline again at .arms.0.bearing: 35 → 40",
+    "file": "34.png",
+    "state": {
+      "live": "Avenue Laurier Est bearing: 40°. 4 streets, traffic signal. Every check passes.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 35,
+    "caption": "35. Make “Parking kept”: shown and announced; Undo enabled: false",
+    "file": "35.png",
+    "state": {
+      "live": "Scenario “Parking kept” made from the baseline. Now editing it.",
+      "mode": "Scenario “Parking kept”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider bike lane",
+        "▶ Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 36,
+    "caption": "36. Show “Wider bike lane” with the picker: announced; Undo enabled: false; the turned street is still turned: true",
+    "file": "36.png",
+    "state": {
+      "live": "Now showing scenario “Wider bike lane”.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 37,
+    "caption": "37. Show the baseline with the picker: announced",
+    "file": "37.png",
+    "state": {
+      "live": "Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 38,
+    "caption": "38. Reload the junction: baseline shown and unchanged by the reload: true; both scenarios listed; “Parking kept” equals the baseline: true",
+    "file": "38.png",
+    "state": {
+      "live": "",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 39,
+    "caption": "39. After the reload, show “Wider bike lane”: announced; its edit is kept: .arms.0.bearing: 35 → 40",
+    "file": "39.png",
+    "state": {
+      "live": "Now showing scenario “Wider bike lane”.",
+      "mode": "Scenario “Wider bike lane”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 40,
+    "caption": "40. Reload while “Wider bike lane” is shown: the junction opens on the baseline; the kept junction record's keys are [\"arm_streets\",\"nodes\",\"scenarios\",\"state\"], with no active-scenario field",
+    "file": "40.png",
+    "state": {
+      "live": "",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider bike lane",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 41,
+    "caption": "41. Rename it to “Turned arm” on the junction: renamed in the picker and announced",
+    "file": "41.png",
+    "state": {
+      "live": "Scenario “Wider bike lane” renamed “Turned arm”.",
+      "mode": "Scenario “Turned arm”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Turned arm",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 42,
+    "caption": "42. Duplicate it as “Turned arm, copy”: the copy is shown and announced",
+    "file": "42.png",
+    "state": {
+      "live": "Scenario “Turned arm” duplicated as “Turned arm, copy”. Now editing the copy.",
+      "mode": "Scenario “Turned arm, copy”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Turned arm",
+        "Parking kept",
+        "▶ Turned arm, copy"
+      ],
+      "refusal": "",
+      "focused": "scenario-duplicate"
+    }
+  },
+  {
+    "step": 43,
+    "caption": "43. Try “parking KEPT” on the junction: refused under the field and in the live region",
+    "file": "43.png",
+    "state": {
+      "live": "Another scenario is already called “parking KEPT”.",
+      "mode": "Scenario “Turned arm, copy”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Turned arm",
+        "Parking kept",
+        "▶ Turned arm, copy"
+      ],
+      "refusal": "Another scenario is already called “parking KEPT”.",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 44,
+    "caption": "44. Press Delete on the junction: it asks once, the button reads Confirm delete",
+    "file": "44.png",
+    "state": {
+      "live": "Delete scenario “Turned arm, copy”? Press Confirm delete to delete it.",
+      "mode": "Scenario “Turned arm, copy”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Turned arm",
+        "Parking kept",
+        "▶ Turned arm, copy"
+      ],
+      "refusal": "",
+      "focused": "scenario-delete"
+    }
+  },
+  {
+    "step": 45,
+    "caption": "45. Press Confirm delete: the copy is deleted, the baseline is shown, announced",
+    "file": "45.png",
+    "state": {
+      "live": "Scenario “Turned arm, copy” deleted. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Turned arm",
+        "Parking kept"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 46,
+    "caption": "46. Start over, street: on the baseline, widen the first piece from 1.50 m (as imported) to 1.60 m",
+    "file": "46.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 47,
+    "caption": "47. Make “Wider still” from the baseline and widen it to 1.70 m, then make “Untouched” (1.60 m) and show “Wider still” again",
+    "file": "47.png",
+    "state": {
+      "live": "Now showing scenario “Wider still”.",
+      "mode": "Scenario “Wider still”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 48,
+    "caption": "48. Press Start over in “Wider still”: the live region announces it",
+    "file": "48.png",
+    "state": {
+      "live": "Started over from the street as it is today. Undo brings your changes back.",
+      "mode": "Scenario “Wider still”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 49,
+    "caption": "49. After the Start over, the first piece of “Wider still” is 1.50 m: the street as imported",
+    "file": "49.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Scenario “Wider still”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 50,
+    "caption": "50. Undo the Start over: “Wider still” is back to 1.70 m",
+    "file": "50.png",
+    "state": {
+      "live": "Sidewalk, 1.7 m, 1 of 8",
+      "mode": "Scenario “Wider still”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 51,
+    "caption": "51. Start over in “Wider still” again: its first piece is 1.50 m (as imported), shown in the inspector",
+    "file": "51.png",
+    "state": {
+      "live": "Sidewalk, 1.5 m, 1 of 8",
+      "mode": "Scenario “Wider still”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 52,
+    "caption": "52. Then show the baseline: its first piece is still 1.60 m (the baseline's own edit), shown in the inspector",
+    "file": "52.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Wider still",
+        "Untouched"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 53,
+    "caption": "53. Then show “Untouched”: its first piece is still 1.60 m, shown in the inspector; only the design shown was started over",
+    "file": "53.png",
+    "state": {
+      "live": "Sidewalk, 1.6 m, 1 of 8",
+      "mode": "Scenario “Untouched”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "Wider still",
+        "▶ Untouched"
+      ],
+      "refusal": "",
+      "focused": "width"
+    }
+  },
+  {
+    "step": 54,
+    "caption": "54. Missing, tab A: make and show “Doomed”",
+    "file": "54.png",
+    "state": {
+      "live": "Scenario “Doomed” made from the baseline. Now editing it.",
+      "mode": "Scenario “Doomed”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Doomed"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 55,
+    "caption": "55. Missing, tab B: show “Doomed” and delete it, confirmed",
+    "file": "55.png",
+    "state": {
+      "live": "Scenario “Doomed” deleted. Now showing the baseline.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 56,
+    "caption": "56. Missing, back in tab A without reloading: what it shows after the other tab deleted “Doomed”",
+    "file": "56.png",
+    "state": {
+      "live": "Scenario “Doomed” made from the baseline. Now editing it.",
+      "mode": "Scenario “Doomed”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Doomed"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 57,
+    "caption": "57. Missing, tab A: try to rename the shown design to “Doomed again”",
+    "file": "57.png",
+    "state": {
+      "live": "That scenario is no longer here.",
+      "mode": "Scenario “Doomed”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Doomed"
+      ],
+      "refusal": "That scenario is no longer here.",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 58,
+    "caption": "58. Missing en fr-CA, onglet A : créer et afficher « Condamné »",
+    "file": "58.png",
+    "state": {
+      "live": "Scénario « Condamné » créé à partir de la référence. Vous le modifiez maintenant.",
+      "mode": "Scénario « Condamné » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Condamné"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 59,
+    "caption": "59. Missing en fr-CA, onglet B : afficher « Condamné » et le supprimer, confirmé",
+    "file": "59.png",
+    "state": {
+      "live": "Scénario « Condamné » supprimé. La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 60,
+    "caption": "60. Missing en fr-CA, onglet A : renommer la conception affichée est refusé, sous le champ et dans la zone d’annonces",
+    "file": "60.png",
+    "state": {
+      "live": "Ce scénario n’existe plus.",
+      "mode": "Scénario « Condamné » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Condamné"
+      ],
+      "refusal": "Ce scénario n’existe plus.",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 61,
+    "caption": "61. fr-CA, rue : créer « Voie élargie », annoncé",
+    "file": "61.png",
+    "state": {
+      "live": "Scénario « Voie élargie » créé à partir de la référence. Vous le modifiez maintenant.",
+      "mode": "Scénario « Voie élargie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Voie élargie"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 62,
+    "caption": "62. fr-CA, rue : afficher la référence avec le menu, annoncé",
+    "file": "62.png",
+    "state": {
+      "live": "La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)",
+        "Voie élargie"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 63,
+    "caption": "63. fr-CA, rue : afficher « Voie élargie » avec le menu, annoncé",
+    "file": "63.png",
+    "state": {
+      "live": "Le scénario « Voie élargie » est maintenant affiché.",
+      "mode": "Scénario « Voie élargie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Voie élargie"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 64,
+    "caption": "64. fr-CA, rue : renommer en « Voie cyclable large », annoncé",
+    "file": "64.png",
+    "state": {
+      "live": "Scénario « Voie élargie » renommé « Voie cyclable large ».",
+      "mode": "Scénario « Voie cyclable large » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Voie cyclable large"
+      ],
+      "refusal": "",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 65,
+    "caption": "65. fr-CA, rue : dupliquer en « Voie cyclable large, copie », annoncé",
+    "file": "65.png",
+    "state": {
+      "live": "Scénario « Voie cyclable large » dupliqué sous le nom « Voie cyclable large, copie ». Vous modifiez maintenant la copie.",
+      "mode": "Scénario « Voie cyclable large, copie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Voie cyclable large",
+        "▶ Voie cyclable large, copie"
+      ],
+      "refusal": "",
+      "focused": "scenario-duplicate"
+    }
+  },
+  {
+    "step": 66,
+    "caption": "66. fr-CA, rue : Supprimer demande une confirmation, annoncée",
+    "file": "66.png",
+    "state": {
+      "live": "Supprimer le scénario « Voie cyclable large, copie »? Appuyez sur Confirmer la suppression pour le supprimer.",
+      "mode": "Scénario « Voie cyclable large, copie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Voie cyclable large",
+        "▶ Voie cyclable large, copie"
+      ],
+      "refusal": "",
+      "focused": "scenario-delete"
+    }
+  },
+  {
+    "step": 67,
+    "caption": "67. fr-CA, rue : confirmer la suppression, annoncée, la référence est affichée",
+    "file": "67.png",
+    "state": {
+      "live": "Scénario « Voie cyclable large, copie » supprimé. La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)",
+        "Voie cyclable large"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 68,
+    "caption": "68. fr-CA, intersection : la page s’ouvre sur la référence",
+    "file": "68.png",
+    "state": {
+      "live": "",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 69,
+    "caption": "69. fr-CA, intersection : créer « Virage protégé », annoncé",
+    "file": "69.png",
+    "state": {
+      "live": "Scénario « Virage protégé » créé à partir de la référence. Vous le modifiez maintenant.",
+      "mode": "Scénario « Virage protégé » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Virage protégé"
+      ],
+      "refusal": "",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 70,
+    "caption": "70. fr-CA, intersection : afficher la référence avec le menu, annoncé",
+    "file": "70.png",
+    "state": {
+      "live": "La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)",
+        "Virage protégé"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 71,
+    "caption": "71. fr-CA, intersection : afficher « Virage protégé » avec le menu, annoncé",
+    "file": "71.png",
+    "state": {
+      "live": "Le scénario « Virage protégé » est maintenant affiché.",
+      "mode": "Scénario « Virage protégé » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Virage protégé"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 72,
+    "caption": "72. fr-CA, intersection : renommer en « Virage sûr », annoncé",
+    "file": "72.png",
+    "state": {
+      "live": "Scénario « Virage protégé » renommé « Virage sûr ».",
+      "mode": "Scénario « Virage sûr » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "▶ Virage sûr"
+      ],
+      "refusal": "",
+      "focused": "scenario-rename"
+    }
+  },
+  {
+    "step": 73,
+    "caption": "73. fr-CA, intersection : dupliquer en « Virage sûr, copie », annoncé",
+    "file": "73.png",
+    "state": {
+      "live": "Scénario « Virage sûr » dupliqué sous le nom « Virage sûr, copie ». Vous modifiez maintenant la copie.",
+      "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Virage sûr",
+        "▶ Virage sûr, copie"
+      ],
+      "refusal": "",
+      "focused": "scenario-duplicate"
+    }
+  },
+  {
+    "step": 74,
+    "caption": "74. fr-CA, intersection : « virage SÛR » est refusé, nom déjà pris",
+    "file": "74.png",
+    "state": {
+      "live": "Un autre scénario s’appelle déjà « virage SÛR ».",
+      "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Virage sûr",
+        "▶ Virage sûr, copie"
+      ],
+      "refusal": "Un autre scénario s’appelle déjà « virage SÛR ».",
+      "focused": "scenario-new"
+    }
+  },
+  {
+    "step": 75,
+    "caption": "75. fr-CA, intersection : Supprimer demande une confirmation, annoncée",
+    "file": "75.png",
+    "state": {
+      "live": "Supprimer le scénario « Virage sûr, copie »? Appuyez sur Confirmer la suppression pour le supprimer.",
+      "mode": "Scénario « Virage sûr, copie » : les modifications ne changent que ce scénario.",
+      "options": [
+        "Référence (ce que montre la carte)",
+        "Virage sûr",
+        "▶ Virage sûr, copie"
+      ],
+      "refusal": "",
+      "focused": "scenario-delete"
+    }
+  },
+  {
+    "step": 76,
+    "caption": "76. fr-CA, intersection : confirmer la suppression, annoncée, la référence est affichée",
+    "file": "76.png",
+    "state": {
+      "live": "Scénario « Virage sûr, copie » supprimé. La référence est maintenant affichée.",
+      "mode": "Référence : les modifications changent la conception que montre la carte.",
+      "options": [
+        "▶ Référence (ce que montre la carte)",
+        "Virage sûr"
+      ],
+      "refusal": "",
+      "focused": "scenario-pick"
+    }
+  },
+  {
+    "step": 77,
+    "caption": "77. Start over, junction: on the baseline, turn the first street: the kept baseline's bearing is 40°",
+    "file": "77.png",
+    "state": {
+      "live": "Avenue Laurier Est bearing: 40°. 4 streets, traffic signal. Every check passes.",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)"
+      ],
+      "refusal": "",
+      "focused": "wrap"
+    }
+  },
+  {
+    "step": 78,
+    "caption": "78. Make “Turned more” and turn the street again: the scenario's bearing is 45°, the baseline's 40°",
+    "file": "78.png",
+    "state": {
+      "live": "Avenue Laurier Est bearing: 45°. 4 streets, traffic signal. Every check passes.",
+      "mode": "Scenario “Turned more”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Turned more"
+      ],
+      "refusal": "",
+      "focused": "wrap"
+    }
+  },
+  {
+    "step": 79,
+    "caption": "79. Press Start over in “Turned more”: “Started over from the junction as it is today.”; the scenario's bearing is 35° (as imported), the baseline's still 40°; Undo enabled: true",
+    "file": "79.png",
+    "state": {
+      "live": "Started over from the junction as it is today.",
+      "mode": "Scenario “Turned more”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Turned more"
+      ],
+      "refusal": "",
+      "focused": "BODY"
+    }
+  },
+  {
+    "step": 80,
+    "caption": "80. Undo the Start over: the scenario's bearing is 45° again, the baseline's 40°",
+    "file": "80.png",
+    "state": {
+      "live": "Undone.",
+      "mode": "Scenario “Turned more”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Turned more"
+      ],
+      "refusal": "",
+      "focused": "undo"
+    }
+  },
+  {
+    "step": 81,
+    "caption": "81. Start over in “Turned more” again: the first street's bearing field reads 35° (as imported)",
+    "file": "81.png",
+    "state": {
+      "live": "Avenue Laurier Est (north-east), 35 degrees",
+      "mode": "Scenario “Turned more”: edits change this scenario only.",
+      "options": [
+        "Baseline (what the map shows)",
+        "▶ Turned more"
+      ],
+      "refusal": "",
+      "focused": "SUMMARY"
+    }
+  },
+  {
+    "step": 82,
+    "caption": "82. Then show the baseline: the first street's bearing field reads 40°, the baseline's own turn, untouched by the scenario's Start over",
+    "file": "82.png",
+    "state": {
+      "live": "Avenue Laurier Est (north-east), 40 degrees",
+      "mode": "Baseline: edits change the design the map shows.",
+      "options": [
+        "▶ Baseline (what the map shows)",
+        "Turned more"
+      ],
+      "refusal": "",
+      "focused": "SUMMARY"
+    }
+  }
+]
