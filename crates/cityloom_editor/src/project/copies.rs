@@ -5,8 +5,9 @@
 //! kept in a document of its own, `cityloom-shared-copies` (`{"version":1,"copies":[…]}`, oldest first), which a page
 //! showing a design read-only cannot write (`shared::scoped::DESIGN_KEYS`).
 //!
-//! Opening the same link again replaces its copy (the same id). At most `MAX_COPIES` are kept: the oldest goes first,
-//! documents and all. Ids are `s-` and 12 hex digits where storage has randomness, else `s<n>`: never a project's own
+//! Opening the same link again replaces its copy (the same id). At most `MAX_COPIES` are kept, holding at most
+//! `MAX_COPIES_BYTES` together, and the browser's storage refusing a copy makes the oldest make room: the oldest goes
+//! first, documents and all. Ids are `s-` and 12 hex digits where storage has randomness, else `s<n>`: never a project's own
 //! (`p-…`, `p<n>`, `first`), so no record the sync brings can land in a copy. No wording here.
 
 use std::rc::Rc;
@@ -26,6 +27,9 @@ pub const COPIES_KEY: &str = "cityloom-shared-copies";
 pub const VERSION: u32 = 1;
 /// The most copies kept on one device: the browser's storage also holds the person's own work.
 pub const MAX_COPIES: usize = 10;
+/// The most text the copies' documents may hold together (two shares of the largest size the server keeps): a
+/// browser keeps about 5 MB for a site, and the person's own work comes first. The newest copy is always kept.
+pub const MAX_COPIES_BYTES: usize = 2 * 1024 * 1024;
 
 /// A copy as listed: the project it opens as, and the link it came from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -96,36 +100,58 @@ fn write_list(storage: &Rc<dyn Storage>, copies: &[SharedCopy]) -> bool {
     storage.remember(COPIES_KEY, &json!({ "version": VERSION, "copies": copies }).to_string())
 }
 
+/// How much text the documents of copy `id` hold.
+fn size_of(storage: &Rc<dyn Storage>, id: &str) -> usize {
+    SCOPED_KEYS.iter().filter_map(|key| storage.recall(&format!("{key}@{id}"))).map(|text| text.len()).sum()
+}
+
 /// Keeps a copy of the shared design behind `token`: its project's `name` and `area`, and `documents` (each a key of
-/// `SCOPED_KEYS` and the text to keep under it). The copy that link made before is replaced, under the same id; the
-/// oldest copy goes past `MAX_COPIES`. Takes the root storage. Nothing is marked. Where a write is refused, what was
-/// written is blanked and the list left as it was, a replaced copy gone with it (`Unusable`): the link can be opened
-/// again. Returns the copy's id.
+/// `SCOPED_KEYS` and the text to keep under it). The copy that link made before is replaced, under the same id. The
+/// oldest copies go, documents and all, past `MAX_COPIES` or `MAX_COPIES_BYTES` (the new one counted first), before
+/// anything is written; and where the browser still refuses a write (its storage is full: the person's own work is
+/// there too), the oldest copy left goes and the copy is written again, until none is left to go. Takes the root
+/// storage. Nothing is marked. Where the copy cannot be kept, what was written of it is blanked and it is not listed
+/// (`Unusable`), a replaced copy gone with it: every copy can be opened again from its link. Returns the copy's id.
 pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, documents: &[(&str, &str)]) -> Result<String, Refused> {
-    let mut copies = list(&**storage);
+    let copies = list(&**storage);
     let id = copies.iter().find(|c| c.token == token).map(|c| c.id.clone()).unwrap_or_else(|| fresh_id(storage, &copies));
     blank(storage, &id);
-    let scoped = ScopedStorage::new(storage.clone(), &id);
-    let written = documents.iter().all(|(key, text)| SCOPED_KEYS.contains(key) && scoped.remember(key, text));
-    copies.retain(|c| c.token != token);
-    copies.push(SharedCopy {
+    // The budget, newest first: once a copy does not fit, it and every older one go.
+    let mut total: usize = documents.iter().map(|(_, text)| text.len()).sum();
+    let (mut others, mut full) = (Vec::new(), false);
+    for copy in copies.into_iter().rev().filter(|c| c.token != token) {
+        let size = size_of(storage, &copy.id);
+        full = full || others.len() + 1 >= MAX_COPIES || total + size > MAX_COPIES_BYTES;
+        if full {
+            blank(storage, &copy.id);
+        } else {
+            total += size;
+            others.insert(0, copy);
+        }
+    }
+    let copy = SharedCopy {
         id: id.clone(),
         token: token.to_string(),
         name: name.to_string(),
         area: area.to_string(),
         opened_at: crate::sync::model::stamp(storage.now_ms()),
-    });
-    let dropped: Vec<String> = if copies.len() > MAX_COPIES { copies.drain(..copies.len() - MAX_COPIES).map(|c| c.id).collect() } else { Vec::new() };
-    if !(written && write_list(storage, &copies)) {
+    };
+    let known = documents.iter().all(|(key, _)| SCOPED_KEYS.contains(key));
+    let scoped = ScopedStorage::new(storage.clone(), &id);
+    loop {
+        let listed: Vec<SharedCopy> = others.iter().cloned().chain([copy.clone()]).collect();
+        if known && documents.iter().all(|(key, text)| scoped.remember(key, text)) && write_list(storage, &listed) {
+            return Ok(id);
+        }
         blank(storage, &id);
-        let before: Vec<SharedCopy> = list(&**storage).into_iter().filter(|c| c.id != id).collect();
-        write_list(storage, &before);
-        return Err(Refused::Unusable);
+        if !known || others.is_empty() {
+            break;
+        }
+        // The browser's storage is full: the oldest copy left makes room.
+        blank(storage, &others.remove(0).id);
     }
-    for gone in dropped {
-        blank(storage, &gone);
-    }
-    Ok(id)
+    write_list(storage, &others);
+    Err(Refused::Unusable)
 }
 
 #[cfg(test)]
@@ -185,6 +211,45 @@ mod tests {
         assert_eq!(ids.len(), MAX_COPIES);
         assert!(!ids.contains(&"s1".to_string()));
         assert_eq!(memory.recall("cityloom-edits@s1").as_deref(), Some(""));
+    }
+
+    #[test]
+    fn past_the_size_budget_the_oldest_copies_go_with_their_documents() {
+        let (memory, storage) = root();
+        let big = "x".repeat(MAX_COPIES_BYTES / 2 - 10);
+        let first = keep(&storage, "tok-a", "A", "q", &[(EDITS, &big)]).unwrap();
+        let second = keep(&storage, "tok-b", "B", "q", &[(EDITS, &big)]).unwrap();
+        assert_eq!(list(&*storage).len(), 2, "two halves of the budget fit");
+        let third = keep(&storage, "tok-c", "C", "q", &[(EDITS, &big)]).unwrap();
+        let ids: Vec<String> = list(&*storage).into_iter().map(|c| c.id).collect();
+        assert_eq!(ids, [second.clone(), third.clone()], "the oldest went for the newest");
+        assert_eq!(memory.recall(&format!("cityloom-edits@{first}")).as_deref(), Some(""));
+        // Replacing a copy counts its new documents, not its old ones too.
+        keep(&storage, "tok-c", "C", "q", &[(EDITS, &big)]).unwrap();
+        assert_eq!(list(&*storage).len(), 2);
+        // A copy over the whole budget alone is still kept: the others make room for it.
+        keep(&storage, "tok-d", "D", "q", &[(EDITS, &"y".repeat(MAX_COPIES_BYTES + 1))]).unwrap();
+        assert_eq!(list(&*storage).into_iter().map(|c| c.token).collect::<Vec<_>>(), ["tok-d"]);
+    }
+
+    /// The browser's storage is shared with the person's own work: when it refuses a copy, the oldest copies make room,
+    /// one at a time, before the copy is given up.
+    #[test]
+    fn a_full_storage_drops_the_oldest_copies_to_keep_a_new_one() {
+        let (memory, storage) = root();
+        let doc = "x".repeat(1000);
+        let first = keep(&storage, "tok-a", "A", "q", &[(EDITS, &doc)]).unwrap();
+        let second = keep(&storage, "tok-b", "B", "q", &[(EDITS, &doc)]).unwrap();
+        // Room for what is kept now and a little more, not for a third copy.
+        memory.hold_at_most(memory.held() + 500);
+        let third = keep(&storage, "tok-c", "C", "q", &[(EDITS, &doc)]).expect("the oldest made room");
+        let ids: Vec<String> = list(&*storage).into_iter().map(|c| c.id).collect();
+        assert_eq!(ids, [second.clone(), third.clone()]);
+        assert_eq!(memory.recall(&format!("cityloom-edits@{first}")).as_deref(), Some(""));
+        assert_eq!(memory.recall(&format!("cityloom-edits@{third}")).as_deref(), Some(doc.as_str()));
+        // With no other copy to drop, a copy too large for what is left is given up and nothing of it is kept.
+        assert_eq!(keep(&storage, "tok-d", "D", "q", &[(EDITS, &"z".repeat(10_000))]), Err(Refused::Unusable));
+        assert!(list(&*storage).iter().all(|c| c.token != "tok-d"));
     }
 
     #[test]
