@@ -198,6 +198,8 @@
 }
 .scenarios {
   display: grid;
+  /* a track that may be narrower than its content: the menu holds the names, and a long one must not widen it */
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   box-sizing: border-box;
   max-width: 100%;
@@ -241,6 +243,12 @@
 #scenario-name:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+/* A scenario's name is the person's: one with no spaces still wraps, so a narrow window never scrolls sideways
+   (WCAG 1.4.10), as `.path-here` does. */
+.scenario-mode,
+.scenario-refusal {
+  overflow-wrap: anywhere;
 }
 .scenario-mode {
   margin: 0;

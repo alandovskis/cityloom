@@ -211,6 +211,27 @@ test.describe("a street's scenarios", () => {
   });
 });
 
+test("at 280 px a 60-character name with no spaces wraps, so the page does not scroll sideways, on both pages", async ({
+  page,
+}) => {
+  const name = "Wider".padEnd(60, "x");
+  for (const open of [openStreet, openJunction]) {
+    await open(page);
+    await page.setViewportSize({ width: 280, height: 700 });
+    // the name in the line that says which design is shown, and in a refusal under the name field
+    await act(page, "scenario-new", name);
+    await act(page, "scenario-new", name);
+    await expect(page.locator("#scenario-refusal")).toContainText(name);
+    await expect(page.locator("#scenario-mode")).toContainText(name);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), {
+        message: page.url(),
+      })
+      .toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
+});
+
 test("on both pages the focus ring of the first action never reaches the refusal above it", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const open of [openStreet, openJunction]) {
