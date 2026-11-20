@@ -1402,6 +1402,30 @@ mod tests {
     }
 
     #[test]
+    fn a_street_is_kept_and_read_back_the_same_way_as_the_baseline_and_as_a_scenario() {
+        let (store, storage) = store();
+        let id = store.change_street_scenarios(1, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        // the road's own speed, which a record leaves undecided so that it follows the import
+        let street = narrowed(&store, 1);
+        assert!(store.write_street(1, street.clone()));
+        assert_eq!(store.write_street_scenario(1, id, street.clone()), Ok(()));
+        let e = document(&storage);
+        let record = e.streets.values().next().unwrap();
+        assert!(record.street.speed.is_undecided());
+        assert_eq!(record.scenarios.get(id).unwrap().design, record.street, "stored alike");
+        let open = |s| store.open().street_editor_in(1, 0, s).unwrap().snapshot();
+        assert_eq!(open(Some(id)), open(None), "read back alike");
+        assert_eq!(open(None), street);
+        // a street that is not sound is taken by neither
+        let mut unsound = street.clone();
+        unsound.segments[0].kind = usize::MAX;
+        assert!(!unsound.is_sound());
+        assert!(!store.write_street(1, unsound.clone()), "the baseline does not take it");
+        assert_eq!(store.write_street_scenario(1, id, unsound), Err(ScenarioFailure::NotKept), "nor does a scenario");
+        assert_eq!(open(None), street);
+    }
+
+    #[test]
     fn a_junction_scenario_starts_as_the_baseline_and_an_edit_in_it_leaves_the_baseline_alone() {
         let (store, _) = store();
         let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
