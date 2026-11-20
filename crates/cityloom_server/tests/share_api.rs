@@ -60,6 +60,8 @@ async fn a_share_is_made_signed_in_and_read_by_anyone_with_the_link(pool: PgPool
     assert_eq!(got.json(), design(), "the body comes back as sent, a newer build's fields too");
     assert_eq!(got.headers[header::CACHE_CONTROL], "no-store");
     assert_eq!(got.headers[header::REFERRER_POLICY], "no-referrer");
+    assert_eq!(got.headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "the body as sent is never read as anything but JSON");
+    assert_eq!(r.headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "nor is any other answer of the API");
     assert_ne!(made(&mut ada).await, token, "each share has a link of its own");
 }
 
