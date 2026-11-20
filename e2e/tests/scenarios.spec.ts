@@ -162,6 +162,35 @@ test.describe("a street's scenarios", () => {
     expect(slot!.x).toBeGreaterThan(title!.x + title!.width - 1);
   });
 
+  test("an edit of a scenario another tab deleted shows the baseline, says so, and leaves the baseline alone", async ({
+    page,
+    context,
+  }) => {
+    const href = await openStreet(page);
+    await act(page, "scenario-new", "Wider bike lane");
+    const baseline = (Object.values((await edits(page)).streets)[0] as { street: unknown }).street;
+    // tab B deletes the scenario tab A shows
+    const other = await context.newPage();
+    await other.goto("/" + href);
+    await show(other, "Wider bike lane");
+    await act(other, "scenario-delete");
+    await other.keyboard.press("Enter");
+    await expect(live(other)).toHaveText("Scenario “Wider bike lane” deleted. Now showing the baseline.");
+    // tab A goes on editing it
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("+");
+    await expect(live(page)).toHaveText(
+      "That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.",
+    );
+    await expect(pick(page)).toHaveValue("");
+    await expect(pick(page).locator("option")).toHaveText(["Baseline (what the map shows)"]);
+    const record = Object.values((await edits(page)).streets)[0] as { street: unknown; scenarios?: unknown[] };
+    expect(record.street).toEqual(baseline);
+    expect(record.scenarios ?? []).toEqual([]);
+  });
+
   test("in French a name already taken is refused, under the field and in the live region", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await openStreet(page);

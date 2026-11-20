@@ -442,18 +442,14 @@ impl JunctionVm {
         scenario_actions::refresh(self);
         // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
         let shown = self.scenarios.active_now();
-        let (mut fresh, shown) = match self.open_design(shown) {
-            Some(fresh) => (fresh, shown),
-            None => match self.open_design(None) {
-                Some(fresh) => (fresh, None),
-                None => return,
-            },
+        let Some(mut fresh) = self.open_design(shown) else {
+            if shown.is_some() {
+                // the scenario shown was deleted elsewhere: the baseline, said as that rather than as an update
+                scenario_actions::gone(self, false);
+            }
+            return;
         };
-        if shown != self.scenarios.active_now() {
-            // another design starts as a page opens: the junction's own level, not the signal plan
-            self.plan.set(false);
-            self.scenarios.show(shown);
-        } else if self.core.read(|j| j.drawn_as(&fresh)) {
+        if self.core.read(|j| j.drawn_as(&fresh)) {
             // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
             return;
         }
@@ -490,7 +486,8 @@ impl JunctionVm {
     /// Writes the junction as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        binding.keep_junction_in(self.core.read(|j| j.snapshot()), self.scenarios.active_now())
+        let kept = binding.keep_junction_in(self.core.read(|j| j.snapshot()), self.scenarios.active_now());
+        scenario_actions::kept(self, kept)
     }
 
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
@@ -765,19 +762,48 @@ mod tests {
         // another tab edits the scenario
         let mut j = binding.junction_editor(Some(id)).unwrap();
         assert!(j.set_corner(j.current().arms[0].uid, imported + 1_000));
-        assert!(binding.keep_junction_in(j.snapshot(), Some(id)));
+        assert_eq!(binding.keep_junction_in(j.snapshot(), Some(id)), Ok(()));
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(corner(&r), imported + 1_000, "the scenario shown, as the other tab left it");
         assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
         assert_eq!(corner(&r), imported + 1_000);
+        // (a refused undo still asks the keeper to write: that write is done before the other tab acts)
+        r.vm.flush();
         // and then deletes it
         binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."));
         assert_eq!(corner(&r), imported);
         assert!(!r.vm.view_now().can_undo);
         assert!(!r.vm.plan.get_untracked(), "another design starts at the junction's own level");
         hub::reset();
+    }
+
+    #[test]
+    fn an_edit_of_a_scenario_deleted_elsewhere_shows_the_baseline_says_so_and_leaves_the_storage_warning_for_real_failures() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let imported = corner(&r);
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        binding.act(Action::Delete(id)).unwrap();
+        let uid = r.vm.read(|j| j.current().arms[0].uid);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 1_000)));
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(
+            r.said.take(),
+            ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."]
+        );
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!((corner(&r), kept_corner(&binding, None)), (imported, imported));
+        r.storage.refuse(crate::city::edits::EDITS_KEY);
+        assert!(r.vm.apply(|j| j.set_corner(uid, imported + 500)));
+        r.time.advance(1_000);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("This browser is not keeping your changes, so other pages will not see them."));
     }
 
     #[test]

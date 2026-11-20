@@ -58,3 +58,5 @@ scenario-name-too-long = Un nom de scénario compte au plus { $max } caractères
 scenario-name-taken = Un autre scénario s’appelle déjà « { $name } ».
 scenario-full = Un lieu garde au plus { $max } scénarios. Supprimez-en un pour en créer un autre.
 scenario-missing = Ce scénario n’existe plus.
+scenario-gone = Ce scénario n’existe plus : il a été supprimé ailleurs. La référence est maintenant affichée.
+scenario-gone-edit = Ce scénario n’existe plus : il a été supprimé ailleurs, et votre dernière modification n’a donc pas été conservée. La référence est maintenant affichée.

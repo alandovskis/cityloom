@@ -1552,16 +1552,14 @@ impl StreetVm {
         scenario_actions::refresh(self);
         // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
         let shown = self.scenarios.active_now();
-        let (fresh, shown) = match self.open_design(shown) {
-            Some(fresh) => (fresh, shown),
-            None => match self.open_design(None) {
-                Some(fresh) => (fresh, None),
-                None => return,
-            },
+        let Some(fresh) = self.open_design(shown) else {
+            if shown.is_some() {
+                // the scenario shown was deleted elsewhere: the baseline, said as that rather than as an update
+                scenario_actions::gone(self, false);
+            }
+            return;
         };
-        if shown != self.scenarios.active_now() {
-            self.scenarios.show(shown);
-        } else if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
+        if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
             return;
         }
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
@@ -1605,7 +1603,8 @@ impl StreetVm {
     /// Writes the street as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        binding.keep_street_in(self.core.read(|e| e.snapshot()), self.scenarios.active_now())
+        let kept = binding.keep_street_in(self.core.read(|e| e.snapshot()), self.scenarios.active_now());
+        scenario_actions::kept(self, kept)
     }
 
     /// How the street stands before an edit: the class, which an edit may change, and what the impact summary
@@ -2044,19 +2043,52 @@ mod tests {
         let mut s = binding.street_editor(Some(id)).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
         s.segments[1].width_mm += 100;
-        assert!(binding.keep_street_in(s, Some(id)));
+        assert_eq!(binding.keep_street_in(s, Some(id)), Ok(()));
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(width(&r), baseline - 100, "the scenario shown, as the other tab left it");
         assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
         assert_eq!(width(&r), baseline - 100);
+        // (a refused undo still asks the keeper to write: that write is done before the other tab acts)
+        r.vm.flush();
         // and then deletes it
         binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
         assert!(r.vm.scenario_state().items().is_empty());
         assert_eq!(width(&r), baseline);
         assert!(!r.vm.view_now().can_undo, "the baseline shown starts a history of its own");
         hub::reset();
+    }
+
+    #[test]
+    fn an_edit_of_a_scenario_deleted_elsewhere_shows_the_baseline_says_so_and_leaves_the_storage_warning_for_real_failures() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        // another tab deletes it, and this one goes on editing it
+        binding.act(Action::Delete(id)).unwrap();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(
+            r.said.take(),
+            ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."]
+        );
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert!(r.vm.scenario_state().items().is_empty());
+        assert_eq!((width(&r), kept_width(&binding, None)), (baseline, baseline), "the edit did not reach the baseline");
+        assert!(!r.vm.view_now().can_undo, "the baseline shown starts a history of its own");
+        // a storage that really fails is still said
+        r.storage.refuse(crate::city::edits::EDITS_KEY);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        r.time.advance(1_000);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("This browser is not keeping your changes, so other pages will not see them."));
     }
 
     /// Another device's edit of the rig's street, applied to the city.

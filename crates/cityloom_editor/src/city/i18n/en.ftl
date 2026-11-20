@@ -58,3 +58,5 @@ scenario-name-too-long = A scenario name can be at most { $max } characters long
 scenario-name-taken = Another scenario is already called “{ $name }”.
 scenario-full = A place keeps at most { $max } scenarios. Delete one to make another.
 scenario-missing = That scenario is no longer here.
+scenario-gone = That scenario is no longer here: it was deleted elsewhere. Now showing the baseline.
+scenario-gone-edit = That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.
