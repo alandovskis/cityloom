@@ -84,7 +84,7 @@ test.describe("the Stops row", () => {
     await expect(page.locator("#drawing .iso-stop-sign").first()).toBeAttached();
     await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(0);
 
-    // Kept: the document is version 17 (the import stamp) and the stop is still there after a reload.
+    // Kept: the document is EDITS_VERSION (the import stamp) and the stop is still there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();

@@ -101,7 +101,7 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  // The speed is unchanged from OpenStreetMap's, so the record holds none (it follows the import); the document is version 17, the import stamp.
+  // The speed is unchanged from OpenStreetMap's, so the record holds none (it follows the import); the document is EDITS_VERSION, the import stamp.
   expect(doc.version).toBe(EDITS_VERSION);
   expect(Object.values<any>(doc.streets)[0].street).not.toHaveProperty("speed_kmh");
   expect(Object.keys(doc.streets)).toHaveLength(1);

@@ -125,7 +125,7 @@ test.describe("street trees and green infrastructure", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Trees and plantings shown: /);
     await expect(crowns(page).first()).toBeAttached();
 
-    // Version 17 is the document that holds the import stamp every street record carries.
+    // EDITS_VERSION is the document that holds the import stamp every street record carries.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#green-strip").locator('[role="option"]')).toHaveCount(1);

@@ -67,7 +67,7 @@ test.describe("raised tables and crossings", () => {
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Raised elements long enough" })).toHaveCount(1);
 
-    // Kept: the document is written as version 17 whatever it holds: every street record carries the importer stamp, and the table is there after a reload.
+    // Kept: the document is written as EDITS_VERSION whatever it holds: every street record carries the importer stamp, and the table is there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
     await expect(page.locator("#zone-0")).toBeVisible();
@@ -203,7 +203,7 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /modal filter/);
     await page.screenshot({ path: "test-results/modal-filter.png", fullPage: true });
 
-    // Its checks include the bus-lane and passage rows, and the document is version 17 (the import stamp, held whatever the street holds).
+    // Its checks include the bus-lane and passage rows, and the document is EDITS_VERSION (the import stamp, held whatever the street holds).
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").filter({ hasText: "Modal filters clear of bus lanes" })).toHaveCount(1);
     await expect(
