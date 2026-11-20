@@ -655,7 +655,7 @@ impl Editor {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Keep, Piece};
+    use super::super::Piece;
     use super::*;
     use crate::shared::catalogue::kind_index;
     use crate::street::model::Street;
@@ -833,18 +833,20 @@ mod tests {
         e.select_zone(1);
         e.move_boundary(25_000).unwrap();
         assert_eq!(e.snapshot().curb, vec![Instance { side: Side::Right, from_mm: 12_000, length_mm: 5_500, use_: Use::Parking }]);
-        e.merge_zone(true, Keep::Selected).unwrap();
-        assert_eq!(e.snapshot().curb.len(), 1);
         // A zone with no parking on the instance's side does not drop it.
         e.select_zone(0);
         assert!(e.make_pedestrian(kind_index("sidewalk").unwrap()));
         assert_eq!(e.snapshot().curb.len(), 1);
-        // Merging back to no zones keeps the anchor the instance needs.
+        // Joining back to no zones keeps the anchor the instance needs: an edit of a stretch, then the edit back.
         let mut e = editor();
         e.add_curb(Side::Right, 12_000, 5_500, Use::Parking).unwrap();
-        e.split_zone(Some(20_000)).unwrap();
-        e.merge_zone(false, Keep::Selected).unwrap();
+        e.pick_stretch(20_000, LEN).unwrap();
+        let uid = e.view().segments[0].uid;
+        assert!(e.nudge_width(uid, 100));
+        assert_eq!(e.snapshot().zones.len(), 2);
+        assert!(e.nudge_width(uid, -100));
         let s = e.snapshot();
+        assert_eq!(s.curb.len(), 1);
         assert!(s.zones.is_empty());
         assert_eq!((s.length_mm, s.from_end), (Some(LEN), ZoneEnd::First));
     }
