@@ -32,6 +32,8 @@ pub enum Account {
     Unknown,
     SignedOut,
     SignedIn,
+    /// The server could not say (down, no network): a link may be asked for, and the server's answer is said.
+    Unchecked,
 }
 
 /// What the last command did, as data: the words follow a language switch.
@@ -113,12 +115,17 @@ impl ShareVm {
         crate::shared::project_id::link_for("map.html", &*self.ports.storage)
     }
 
-    /// Asks the server who is signed in, once; the answer arrives later.
+    /// Asks the server who is signed in, once; the answer arrives later. Only a server that says nobody is makes the
+    /// page signed out; one that could not answer leaves it `Unchecked`.
     pub fn load_account(self: &Rc<Self>) {
         let me = Rc::downgrade(self);
         self.ports.account.me(Box::new(move |answer| {
             if let Some(vm) = me.upgrade() {
-                vm.account.set(if answer.is_ok() { Account::SignedIn } else { Account::SignedOut });
+                vm.account.set(match answer {
+                    Ok(_) => Account::SignedIn,
+                    Err(crate::shared::ports::AccountError::SignedOut) => Account::SignedOut,
+                    Err(_) => Account::Unchecked,
+                });
             }
         }));
     }
