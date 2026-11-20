@@ -928,6 +928,20 @@ mod tests {
     }
 
     #[test]
+    fn no_calls_an_hour_are_said_as_none_in_french_never_as_one() {
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        let e = fr.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+        assert!(fr.set_on_call(e, true));
+        said.take();
+        assert!(fr.set_call_rate(e, 0));
+        let t = said.take();
+        // French counts 0 with the singular: "0 appel", which [one] must say with the number, not "1 appel".
+        assert!(t[0].contains("0\u{a0}appel dans l’heure") || t[0].contains(" 0 appel dans l’heure"), "{t:?}");
+        assert!(!t[0].contains("1 appel"), "{t:?}");
+    }
+
+    #[test]
     fn a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit() {
         let r = rig(0);
         let e = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);

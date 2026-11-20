@@ -602,12 +602,12 @@ jn-rev-call-on = Passage de { $arm } sur appel
 jn-rev-call-off = Passage de { $arm } remis en rappel
 jn-rev-calls-lost =
     { $change }; { $n ->
-        [one] 1 passage qui n’est plus sur appel
+        [one] { $n } passage qui n’est plus sur appel
        *[other] { $n } passages qui ne sont plus sur appel
     }
 jn-rev-call-rate =
     Passage de { $arm } : { $rate ->
-        [one] 1 appel par heure
+        [one] { $rate } appel par heure
        *[other] { $rate } appels par heure
     }
 jn-calls-heading = Appels piétons
@@ -623,7 +623,7 @@ jn-calls-unwalked = Aucune phase n’ouvre ce passage : il ne peut pas être sur
 jn-calls-none = Aucun passage n’est sur appel : chaque passage est ouvert chaque fois que ses phases passent.
 jn-calls-kept =
     { $n ->
-        [one] 1 passage reste sur appel pour quand les feux fonctionneront de nouveau.
+        [one] { $n } passage reste sur appel pour quand les feux fonctionneront de nouveau.
        *[other] { $n } passages restent sur appel pour quand les feux fonctionneront de nouveau.
     }
 jn-calls-totals-caption = Appels en une heure, par passage
@@ -656,12 +656,12 @@ jn-calls-finding-cannot = Le passage de { $arm } ne peut pas être servi en séc
 jn-calls-finding-unwalked = Le passage de { $arm } est sur appel, mais aucune phase ne l’ouvre : ses appels ne sont pas servis. Ouvrez-le dans une phase ou remettez-le en rappel.
 jn-calls-said =
     Passage de { $arm } : { $calls ->
-        [one] 1 appel
+        [one] { $calls } appel
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; attente la plus longue { $wait } s.
 jn-calls-said-no-wait =
     Passage de { $arm } : { $calls ->
-        [one] 1 appel
+        [one] { $calls } appel
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; aucun appel n’a été servi.
 
