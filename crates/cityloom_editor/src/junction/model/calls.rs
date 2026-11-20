@@ -260,9 +260,11 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The calls still waiting for their walk (places in `calls`), and whether each has missed one.
     let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
     let mut missed = vec![false; calls.len()];
-    // The clock, in u64 so no timing can wrap it, and when to stop: a whole cycle past the last call.
+    // The clock, in u64 so no timing can wrap it, and when to stop: a cycle at its longest past the last call.
     let length = |k: usize| u64::from(plan.phases[k].length_s);
-    let cycle: u64 = (0..plan.phases.len()).map(|k| length(k).max(1)).sum();
+    // A cycle as long as it can run: each phase's green may be extended, by at most MAX_EXTENSION_S, and a call that
+    // misses an extended walk waits for the next, which can start that much later.
+    let cycle: u64 = (0..plan.phases.len()).map(|k| length(k).max(1) + u64::from(MAX_EXTENSION_S)).sum();
     let last = calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0);
     let (mut start, mut turn) = (0u64, 0usize);
     while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= last + cycle {
@@ -482,6 +484,16 @@ mod tests {
             assert!((lo as u32..=hi as u32).contains(&f.get(&t)), "{f:?} is {} on load", f.get(&t));
         }
         assert_eq!(t.transit_lead_s, 0, "no transit lane: no early green, as an edit settles it");
+    }
+
+    #[test]
+    fn a_call_that_misses_an_extended_walk_is_delayed_to_the_next_however_long_the_extension() {
+        // The first phase walks street 9's crossing, green 25 s, 30 s in all; the second runs 30 s. The crossing needs
+        // 35 s, so the green is extended by 10 s: the first phase runs 0 to 40 s, the second 40 to 70 s. The call at 5 s
+        // missed that walk; the next starts at 70 s, past the last call and a cycle of the phases unextended (65 s).
+        let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
+        let asked = [Asked { arm: 9, need_s: 35, at_s: vec![0, 5] }];
+        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 10), call(9, 5, Outcome::Delayed, 65, 10)]);
     }
 
     #[test]
