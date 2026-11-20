@@ -2013,3 +2013,8 @@ body.map-page {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }
+@media (any-pointer: coarse) {
+  .shell-notice button {
+    min-height: 44px;
+  }
+}
