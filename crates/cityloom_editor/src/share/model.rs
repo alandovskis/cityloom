@@ -48,7 +48,7 @@ pub const MAX_LIVE: i64 = 50;
 /// The page a share link opens.
 pub const PAGE: &str = "share.html";
 
-/// Why a share was not made, opened or deleted. Nothing was kept on the device in any of these.
+/// Why a share was not made, opened or deleted. Opening one keeps nothing on the device when it fails (`said_opening`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShareError {
     /// The address holds no token, or not a whole one.
@@ -101,6 +101,20 @@ impl ShareError {
             ShareError::Full => Said::new("share-error-full").with("count", Arg::Num(MAX_LIVE)),
             ShareError::NotYours => Said::new("share-error-not-yours"),
             ShareError::Refused => Said::new("share-error-refused"),
+        }
+    }
+}
+
+impl ShareError {
+    /// What to tell the person whose link did not open: every such failure ends saying that nothing was kept on this
+    /// device. The failures a link's maker meets too (no network, no server, a refusal) have words of their own here,
+    /// since a link that could not be deleted is still kept.
+    pub fn said_opening(&self) -> Said {
+        match self {
+            ShareError::Network => Said::new("share-open-error-network"),
+            ShareError::Unavailable => Said::new("share-open-error-unavailable"),
+            ShareError::Refused => Said::new("share-open-error-refused"),
+            other => other.said(),
         }
     }
 }

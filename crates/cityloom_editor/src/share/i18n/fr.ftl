@@ -41,6 +41,10 @@ share-deleted = Lien de partage supprimé. Quiconque l’ouvre apprend qu’il a
 share-open-heading = Aménagement partagé
 share-opening = Ouverture de l’aménagement partagé…
 share-open-projects = Aller à vos projets
+# Pourquoi un lien n’a pas pu être ouvert, là où créer ou supprimer un lien le dit autrement : rien n’a été conservé.
+share-open-error-network = Le serveur n’a pas pu être joint. Vérifiez votre connexion et réessayez. Rien n’a été conservé sur cet appareil.
+share-open-error-unavailable = Le serveur qui conserve les aménagements partagés ne peut pas répondre pour le moment. Réessayez plus tard. Rien n’a été conservé sur cet appareil.
+share-open-error-refused = Le serveur a refusé d’ouvrir ce lien. Rien n’a été conservé sur cet appareil.
 # Pourquoi un partage n’a pas pu être ouvert, créé ou supprimé.
 share-error-bad-link = Ce n’est pas un lien de partage complet. Vérifiez qu’il a été copié en entier. Rien n’a été conservé sur cet appareil.
 share-error-not-found = Aucun aménagement partagé n’a ce lien. Il a peut-être été mal copié, ou supprimé avec le compte qui l’a partagé. Rien n’a été conservé sur cet appareil.

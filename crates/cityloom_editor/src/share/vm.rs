@@ -309,7 +309,7 @@ impl OpenVm {
     pub fn message(&self) -> String {
         match self.state.get() {
             Opening::Working => self.word("share-opening"),
-            Opening::Failed(e) => say(&self.i18n, Units::Metres, &e.said()),
+            Opening::Failed(e) => say(&self.i18n, Units::Metres, &e.said_opening()),
         }
     }
 

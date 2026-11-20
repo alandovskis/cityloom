@@ -38,6 +38,10 @@ share-deleted = Share link deleted. Anyone who opens it is told it was deleted.
 share-open-heading = Shared design
 share-opening = Opening the shared design…
 share-open-projects = Go to your projects
+# Why a link could not be opened, where making or deleting a link says it otherwise: nothing was kept.
+share-open-error-network = The server could not be reached. Check your connection and try again. Nothing was kept on this device.
+share-open-error-unavailable = The server that keeps shared designs cannot answer now. Try again later. Nothing was kept on this device.
+share-open-error-refused = The server refused to open this link. Nothing was kept on this device.
 # Why a share could not be opened, made or deleted.
 share-error-bad-link = This is not a whole share link. Check that it was copied in full. Nothing was kept on this device.
 share-error-not-found = No shared design has this link. It may have been copied wrong, or deleted with the account that shared it. Nothing was kept on this device.

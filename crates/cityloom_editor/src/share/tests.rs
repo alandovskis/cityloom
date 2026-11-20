@@ -157,6 +157,22 @@ fn every_failure_is_said_in_english_and_in_french() {
     assert!(en(&TooLarge.said()).contains("1 MB"));
 }
 
+/// Whatever stops a link from opening, the page says that nothing was kept on this device; a failure to make or delete
+/// a link does not say so (a link it could not delete is still kept).
+#[test]
+fn every_failure_to_open_a_link_ends_saying_nothing_was_kept() {
+    use ShareError::*;
+    for e in [BadLink, NotFound, Expired, Deleted, Newer, Damaged, Network, Unavailable, Storage, Refused] {
+        let (english, french) = (en(&e.said_opening()), fr(&e.said_opening()));
+        assert!(english.ends_with(" Nothing was kept on this device."), "{e:?}: {english}");
+        assert!(french.ends_with(" Rien n’a été conservé sur cet appareil."), "{e:?}: {french}");
+    }
+    for e in [Network, Unavailable, Refused] {
+        assert!(!en(&e.said()).contains("Nothing was kept"), "{e:?} when making or deleting a link: {}", en(&e.said()));
+    }
+    assert_eq!(en(&Network.said_opening()), "The server could not be reached. Check your connection and try again. Nothing was kept on this device.");
+}
+
 #[test]
 fn the_server_s_refusals_become_the_slice_s_errors() {
     let pairs = [
