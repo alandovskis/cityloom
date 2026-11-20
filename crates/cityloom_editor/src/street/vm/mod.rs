@@ -1753,10 +1753,9 @@ impl ScenarioPage for StreetVm {
         StreetVm::flush(self);
     }
 
-    fn show_design(&self, id: Option<u32>) -> bool {
+    fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool {
         let Some(fresh) = self.open_design(id) else { return false };
-        // another design: what was chosen in this one may not be there, and the drawing starts as a page opens
-        self.replace_street(fresh, false);
+        self.replace_street(fresh, keep_choices);
         true
     }
 
@@ -2148,6 +2147,23 @@ mod tests {
         r.time.advance(1_000);
         assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
         assert_eq!(r.vm.scenario_state().active_now(), None);
+    }
+
+    #[test]
+    fn the_baseline_shown_for_a_scenario_deleted_elsewhere_keeps_the_piece_chosen() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.view_now().segments[1].uid;
+        r.vm.select(Some(uid));
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        binding.act(Action::Delete(id)).unwrap();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.vm.view_now().selected, Some(uid), "the piece is still chosen in the baseline, which has it");
+        assert_eq!(r.vm.level(), Level::Piece, "and the details panel still shows it");
     }
 
     /// Another device's edit of the rig's street, applied to the city.

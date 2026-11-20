@@ -704,10 +704,15 @@ impl ScenarioPage for JunctionVm {
         JunctionVm::flush(self);
     }
 
-    fn show_design(&self, id: Option<u32>) -> bool {
-        let Some(fresh) = self.open_design(id) else { return false };
-        // another design starts as a page opens: nothing chosen, the junction's own level shown
-        self.plan.set(false);
+    fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool {
+        let Some(mut fresh) = self.open_design(id) else { return false };
+        if keep_choices {
+            // as a sync reload does: the part chosen stays chosen where the junction shown has it
+            fresh.select(self.core.read(|j| j.selected));
+        } else {
+            // another design the person asked for starts as a page opens: nothing chosen, the junction's own level
+            self.plan.set(false);
+        }
         *self.kept_design.borrow_mut() = fresh.snapshot();
         self.core.edit(|j| *j = fresh);
         true
@@ -788,7 +793,7 @@ mod tests {
         assert_eq!(r.said.take().last().map(String::as_str), Some("That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."));
         assert_eq!(corner(&r), imported);
         assert!(!r.vm.view_now().can_undo);
-        assert!(!r.vm.plan.get_untracked(), "another design starts at the junction's own level");
+        assert!(r.vm.plan.get_untracked(), "a fallback the person did not ask for keeps what they were looking at, as it keeps the part chosen");
         hub::reset();
     }
 
@@ -867,6 +872,24 @@ mod tests {
         r.time.advance(1_000);
         assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
         assert_eq!(r.vm.scenario_state().active_now(), None);
+    }
+
+    #[test]
+    fn the_baseline_shown_for_a_scenario_deleted_elsewhere_keeps_the_part_chosen() {
+        use crate::city::scenario::Action;
+        use crate::junction::model::Target;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Raised"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.read(|j| j.current().arms[1].uid);
+        r.vm.select(Target::Corner(uid));
+        let corner_mm = r.vm.read(|j| j.current().arms[1].corner_mm);
+        assert!(r.vm.apply(|j| j.set_corner(uid, corner_mm + 1_000)));
+        binding.act(Action::Delete(id)).unwrap();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.vm.read(|j| j.selected), Target::Corner(uid), "the corner is still chosen in the baseline, which has it");
     }
 
     #[test]

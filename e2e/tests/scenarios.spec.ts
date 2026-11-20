@@ -176,16 +176,25 @@ test.describe("a street's scenarios", () => {
     await act(other, "scenario-delete");
     await other.keyboard.press("Enter");
     await expect(live(other)).toHaveText("Scenario “Wider bike lane” deleted. Now showing the baseline.");
-    // tab A goes on editing it
+    // tab A goes on editing it, from the width field of a chosen piece
     await page.locator("#wrap").focus();
     await page.keyboard.press("Escape");
     await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("+");
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await expect(width).toBeFocused();
+    await page.keyboard.press("ArrowUp");
     await expect(live(page)).toHaveText(
       "That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.",
     );
     await expect(pick(page)).toHaveValue("");
     await expect(pick(page).locator("option")).toHaveText(["Baseline (what the map shows)"]);
+    // the piece is still chosen in the baseline, its details still shown, and the focus has a place on the page
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    await expect(page.locator("#inspector input").first()).toBeVisible();
+    expect(await page.evaluate(() => document.activeElement !== document.body && document.activeElement !== null)).toBe(
+      true,
+    );
     const record = Object.values((await edits(page)).streets)[0] as { street: unknown; scenarios?: unknown[] };
     expect(record.street).toEqual(baseline);
     expect(record.scenarios ?? []).toEqual([]);

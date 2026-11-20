@@ -108,8 +108,10 @@ pub trait ScenarioPage: ScenarioHost {
     /// that write finds it gone and the page then shows the baseline and says why (`gone`): what is shown may change.
     fn flush(&self);
     /// Shows design `id` (None: the baseline) as the city keeps it, starting a history of its own: what could be
-    /// undone in the design shown before is not carried over. Whether it could be shown.
-    fn show_design(&self, id: Option<u32>) -> bool;
+    /// undone in the design shown before is not carried over. With `keep_choices`, what is chosen stays chosen where
+    /// the design has it too (a fallback to the baseline the person did not ask for); otherwise the design starts as
+    /// a page opens. Whether it could be shown.
+    fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool;
     /// Tells the person (the live region).
     fn tell(&self, said: &Said);
 }
@@ -125,7 +127,8 @@ pub mod scenario_actions {
     /// history of its own, and the person is told, `edit_lost` where a change made to it could not be kept.
     pub fn gone(page: &impl ScenarioPage, edit_lost: bool) {
         refresh(page);
-        page.show_design(None);
+        // the person did not ask for this: what they had chosen stays chosen, so the details panel and its focus stay
+        page.show_design(None, true);
         page.scenario_state().show(None);
         page.tell(&News::Gone { edit_lost }.said());
     }
@@ -171,7 +174,7 @@ pub mod scenario_actions {
             return false;
         }
         let state = page.scenario_state();
-        if !page.show_design(id) {
+        if !page.show_design(id, false) {
             // gone since it was listed (deleted in another tab, say)
             refresh(page);
             let why = Refusal::Missing.said("");
@@ -210,7 +213,7 @@ pub mod scenario_actions {
 
     /// Shows scenario `made`, just made, and says `news` of it.
     fn show_made(page: &impl ScenarioPage, made: u32, news: impl FnOnce(String) -> News) -> bool {
-        if !page.show_design(Some(made)) {
+        if !page.show_design(Some(made), false) {
             return false;
         }
         let state = page.scenario_state();
@@ -272,7 +275,7 @@ pub mod scenario_actions {
         if act(page, Action::Delete(id), "").is_none() {
             return false;
         }
-        page.show_design(None);
+        page.show_design(None, false);
         state.show(None);
         page.tell(&News::Deleted(name).said());
         true
