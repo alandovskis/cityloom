@@ -11,7 +11,7 @@
     padding-top: 16px;
   }
 }
-#share-slot {
+#sharing-slot {
   display: grid;
   gap: 12px;
   width: min(780px, 100%);
@@ -21,25 +21,25 @@
   box-shadow: var(--shadow);
 }
 @media (max-width: 520px) {
-  #share-slot {
+  #sharing-slot {
     padding: 24px 18px;
   }
 }
-#share-slot h1 {
+#sharing-slot h1 {
   font-size: clamp(26px, 4vw, 38px);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
-#share-slot h1:focus {
+#sharing-slot h1:focus {
   outline: none;
 }
-#share-slot h1:focus-visible {
+#sharing-slot h1:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
-#share-slot h2 {
+#sharing-slot h2 {
   margin-top: 16px;
   font-size: 18px;
   font-weight: 700;
@@ -47,21 +47,21 @@
 .share-intro {
   font-size: 16px;
 }
-.share-blocked,
+.sharing-blocked,
 .share-error {
   color: var(--warn);
   font-weight: 600;
 }
-.share-outcome:empty {
+.sharing-outcome:empty {
   display: none;
 }
-.btn.share-create {
+.btn.sharing-create {
   justify-self: start;
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
 }
-.btn.share-create:hover:not(:disabled) {
+.btn.sharing-create:hover:not(:disabled) {
   background: var(--accent);
   filter: brightness(1.08);
 }

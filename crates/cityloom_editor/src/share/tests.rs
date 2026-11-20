@@ -433,16 +433,16 @@ mod page {
         signed_in(&vm, &t, true);
         let shown = vm.clone();
         let out = html(move || view! { <ShareView vm=shown/> }.into_any());
-        assert!(out.contains(r#"id="share-heading""#) && out.contains("Share Plateau"), "{out}");
+        assert!(out.contains(r#"id="sharing-heading""#) && out.contains("Share Plateau"), "{out}");
         assert!(out.contains("read-only and with no account") && out.contains("for 90 days"), "{out}");
-        assert!(out.contains(r#"id="share-create""#) && out.contains("Create a share link"));
+        assert!(out.contains(r#"id="sharing-create""#) && out.contains("Create a share link"));
         assert!(out.contains("No share link has been made on this device for this project yet."));
         vm.create();
         t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
         let shown = vm.clone();
         let out = html(move || view! { <ShareView vm=shown/> }.into_any());
-        assert!(out.contains(&format!(r#"id="share-link-{TOKEN}""#)) && out.contains(&format!("{FAKE_ORIGIN}/share.html#{TOKEN}")), "{out}");
-        assert!(out.contains(&format!(r#"for="share-link-{TOKEN}""#)), "the field is labelled");
+        assert!(out.contains(&format!(r#"id="sharing-link-{TOKEN}""#)) && out.contains(&format!("{FAKE_ORIGIN}/share.html#{TOKEN}")), "{out}");
+        assert!(out.contains(&format!(r#"for="sharing-link-{TOKEN}""#)), "the field is labelled");
         assert!(out.contains("Works until April 15, 2027") && out.contains("Copy link") && out.contains("Delete link"));
         assert!(out.contains("Share link created."), "{out}");
     }
@@ -453,7 +453,7 @@ mod page {
         signed_in(&vm, &t, false);
         let shown = vm.clone();
         let out = html(move || view! { <ShareView vm=shown/> }.into_any());
-        let button = crate::shared::testing::button_tag(&out, "share-create");
+        let button = crate::shared::testing::button_tag(&out, "sharing-create");
         assert!(button.contains("disabled"), "{button}");
         assert!(out.contains("Connectez-vous pour partager ce projet"), "{out}");
     }

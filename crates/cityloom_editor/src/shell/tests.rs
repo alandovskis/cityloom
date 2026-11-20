@@ -560,6 +560,22 @@ fn the_tray_is_worded_in_french() {
     assert!(h.contains("<span>Vérifications</span>") && h.contains("<span>Modifications</span>"), "{h}");
 }
 
+/// A copy of a shared design (#221) is only ever looked at: the top bar says so, and the links keep it so, whether or
+/// not the address says `view=1`.
+#[test]
+fn a_copy_of_a_shared_design_is_shown_read_only_whatever_its_address_says() {
+    crate::sync::hub::reset();
+    let (ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let root: std::rc::Rc<dyn crate::shared::ports::Storage> = storage.clone();
+    let copy = crate::project::copies::keep(&root, "tok", "Shared", "q", &[]).unwrap();
+    *page.path.borrow_mut() = format!("/street.html?street=7&project={copy}");
+    let target = std::rc::Rc::new(crate::shell::Bare::in_project(Some(copy.clone())));
+    let vm = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true);
+    assert!(vm.read_only());
+    assert_eq!(vm.link("map.html"), format!("map.html?project={copy}&view=1"));
+    crate::sync::hub::reset();
+}
+
 /// A page whose address opens its project read-only (`view=1`): the shell's links to the project's pages keep it, and
 /// its top bar says so in the page's language.
 #[test]
