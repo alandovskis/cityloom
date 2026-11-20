@@ -154,7 +154,7 @@ impl GreenRefusal {
     /// The refusal, in words.
     pub fn said(self) -> Said {
         Said::new(match self {
-            GreenRefusal::NoAnchor => "zone-refused-no-anchor",
+            GreenRefusal::NoAnchor => "green-refused-no-anchor",
             GreenRefusal::Elsewhere => "green-refused-elsewhere",
             GreenRefusal::Dragging => "green-refused-dragging",
             GreenRefusal::OffStreet => "green-refused-off-street",
@@ -1298,7 +1298,7 @@ mod tests {
         {
             assert!(!r.said().key.is_empty());
         }
-        assert_eq!(GreenRefusal::NoAnchor.said().key, "zone-refused-no-anchor");
+        assert_eq!(GreenRefusal::NoAnchor.said().key, "green-refused-no-anchor");
         assert_eq!(GreenRefusal::OnRoadway.said().key, "green-refused-on-roadway");
     }
 

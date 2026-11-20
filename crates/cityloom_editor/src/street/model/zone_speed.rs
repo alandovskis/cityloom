@@ -93,10 +93,10 @@ mod tests {
         assert_eq!(e.view().speed_kmh, Some(30));
         assert_eq!(e.view().street_speed_kmh, Some(50));
         assert!(!e.view().speed_follows);
-        let zone = Said::new("zone-unnamed-mid").with("n", crate::street::model::Arg::Num(2));
+        let stretch = crate::street::model::stretch_between(30_000, LEN);
         assert_eq!(
             e.view().revisions.last().unwrap().label,
-            Said::new("rev-zone-speed").with("zone", crate::street::model::Arg::Said(Box::new(zone))).with("kmh", crate::street::model::Arg::Num(30))
+            Said::new("rev-stretch-speed").with("stretch", crate::street::model::Arg::Said(Box::new(stretch))).with("kmh", crate::street::model::Arg::Num(30))
         );
         e.select_zone(0);
         assert_eq!((e.view().speed_kmh, e.view().speed_follows), (Some(50), true));

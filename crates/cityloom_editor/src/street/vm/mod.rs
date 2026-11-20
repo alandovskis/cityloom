@@ -2287,12 +2287,12 @@ mod tests {
         assert!(r.vm.pick_stretch(0, 20_000));
         r.said.take();
         assert!(r.vm.set_speed(Some(30)));
-        assert!(r.said.take()[0].starts_with("Speed limit 30 km/h: Zone 1"));
+        assert!(r.said.take()[0].starts_with("Speed limit 30 km/h from 0.0 m to 20.0 m"));
         let o = r.vm.speed_options();
         assert!(!o[0].selected);
         assert_eq!(o.iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(30)));
         assert!(r.vm.follow_street_speed());
-        assert!(r.said.take()[0].starts_with("Speed limit back to the street's: Zone 1"));
+        assert!(r.said.take()[0].starts_with("Speed limit back to the street's from 0.0 m to 20.0 m"));
         // Alike again, the two zones joined: the street's own speed is shown.
         assert_eq!(r.vm.speed_options().iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(50)));
         assert!(!r.vm.follow_street_speed());
@@ -2677,11 +2677,11 @@ mod curb_tests {
     }
 
     #[test]
-    fn a_zone_drag_is_refused_during_a_curb_drag_and_the_curb_drags_undo_step_holds_no_boundary_move() {
+    fn a_boundary_drag_is_refused_during_a_curb_drag_and_the_curb_drags_undo_step_holds_no_boundary_move() {
         let r = with_one_use();
         assert!(r.vm.begin_curb_drag());
         assert!(!r.vm.begin_boundary_drag());
-        assert_eq!(r.said.take(), ["Finish the drag before changing the zones."]);
+        assert_eq!(r.said.take(), ["Finish the drag before changing the street."]);
         r.vm.drag_curb_to(5_000);
         r.vm.end_curb_drag(true);
         assert!(r.vm.undo());
@@ -3071,7 +3071,7 @@ mod stop_tests {
             r.said.take(),
             [
                 "Finish the drag before changing the stops.",
-                "Finish the drag before changing the zones.",
+                "Finish the drag before changing the street.",
                 "Finish the drag before changing the curbside.",
                 "Finish the drag before changing the stops.",
                 "Finish the drag before changing the stops.",

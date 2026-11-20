@@ -256,11 +256,11 @@ svg-iso-label = { $name } in 2.5D, along a { $length } stretch. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }.
-svg-iso-label-zone = { $name } in 2.5D, { $zone }, { $from } to { $to }, along a { $length } stretch. { $count ->
+svg-iso-label-stretch = { $name } in 2.5D, { $stretch }, along a { $length } stretch. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }.
-svg-iso-label-joint = { $name } in 2.5D, along a { $length } stretch centred on the boundary between { $near } in front and { $far } beyond. The section changes abruptly there. { $zone } has { $count ->
+svg-iso-label-joint = { $name } in 2.5D, along a { $length } stretch centred on { $at }, where the section changes abruptly: the stretch { $near } is in front and the one { $far } beyond. The stretch { $stretch } has { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }.
@@ -323,26 +323,22 @@ transform-family-f = Contraflow lanes
 rev-made-pedestrian = Made pedestrian
 rev-speed = Speed limit { $kmh } km/h
 rev-speed-not-set = Speed limit not set
-rev-zone-speed = Speed limit { $kmh } km/h: { $zone }
-rev-zone-speed-not-set = Speed limit not set: { $zone }
-rev-zone-speed-street = Speed limit back to the street's: { $zone }
+rev-stretch-speed = Speed limit { $kmh } km/h { $stretch }
+rev-stretch-speed-not-set = Speed limit not set { $stretch }
+rev-stretch-speed-street = Speed limit back to the street's { $stretch }
 street-now-pedestrian = { $street } is now a pedestrian street.
 street-traffic-again = { $street } carries traffic again.
 check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
 check-access-ped-bad = No unbroken sidewalk of { $amount } or more
 check-detail-no-edges-pedestrian = No roadway, so no sidewalk is asked for
 
-# Zones (src/street/model/zones.rs): what the model says it did to a street's zones, and why it refused.
-zone-unnamed = Zone { $n }
-zone-unnamed-mid = Zone { $n }
-rev-zone-split = Split the street at { $at }
-rev-zone-move = Move the start of { $zone } to { $to }
-zone-refused-no-anchor = Both ends of this street are cut by the edge of the map, so zones cannot be placed along it.
-zone-refused-elsewhere = The zones of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
-zone-refused-too-short = A zone must be at least { $min } long.
-zone-refused-outside = That position is outside the street.
-zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
-zone-refused-dragging = Finish the drag before changing the zones.
+# Where the street changes along its length (src/street/model/zones.rs): a boundary moved, and why one cannot be.
+# `to` counts from the plan's left end.
+rev-boundary-move = Move a change along the street to { $to }
+boundary-refused-elsewhere = The changes along this street were drawn on a road of another length or from its other end, so they cannot be moved here.
+zone-refused-dragging = Finish the drag before changing the street.
+# A stretch named in the middle of a sentence, its ends from the plan's left end ("Room for the transition from 49 m to 82 m").
+stretch-mid = from { $from } to { $to }
 pick-refused-no-anchor = Both ends of this street are cut by the edge of the map, so it can only be changed along its whole length.
 pick-refused-too-short = A stretch must be at least { $min } long.
 pick-refused-outside = That position is outside the street.
@@ -369,10 +365,10 @@ st-stretch = From { $from } to { $to } · { $length } long
 st-point = At { $at }
 # The name of the plan's keyboard point, a slider (src/street/view/plan/component.rs).
 st-plan-point-label = Point along the street
-zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
+stretches-elsewhere = The changes along this street were drawn when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }
-check-zone-in = { $check } in { $zone }
+check-stretch-in = { $check } { $stretch }
 # The plan (src/street/view/plan/): the mark on an end of the street cut by the edge of the area.
 plan-cut = Cut by the edge of the map
 
@@ -389,10 +385,7 @@ st-street-sub =
         [collector] Collector street
         [pedestrian] Pedestrian street
        *[local] Local street
-    } · { $width } wide · { $length } long · { $zones ->
-        [one] 1 zone
-       *[other] { $zones } zones
-    }
+    } · { $width } wide · { $length } long
 st-street-sub-free =
     { $class ->
         [motorway] Motorway
@@ -400,23 +393,22 @@ st-street-sub-free =
         [collector] Collector street
         [pedestrian] Pedestrian street
        *[local] Local street
-    } · { $width } wide · { $zones ->
-        [one] 1 zone
-       *[other] { $zones } zones
-    }
-st-speed-zone-hint = For { $zone }, the zone chosen.
+    } · { $width } wide
+st-speed-stretch-hint = For the stretch from { $from } to { $to }.
+# Under a figure that differs between the runs of the pick: the one shown is the shown run's.
+st-varies = Varies along the stretch
 st-path-label = What the details are of
 st-path-street = Street
 st-path-gap = Free stretch
 # `name` is a kind of piece, or a stop's own name.
 st-path-step = { $name }
-st-path-hint = Choose a piece, a zone or a stretch along the street to change it.
+st-path-hint = Choose a piece, or pick a stretch on the plan, to change it.
 st-speed-label = Speed limit
 st-speed-not-set = Not set
 st-speed-kmh = { $kmh } km/h
 st-speed-street = Same as the street: { $kmh } km/h
 st-speed-street-not-set = Same as the street: not set
-svg-iso-transition = A transition of { $length } leads into { $zone }.
+svg-iso-transition = A transition of { $length } leads into the stretch { $stretch }.
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
@@ -438,11 +430,11 @@ svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
        *[other] { $count } transit stops are shown ({ $kinds }).
     }
-check-boundary = between { $a } and { $b }
+check-boundary = where the street changes at { $at }
 check-label-transition-room = Room for the transition
 check-label-lane-drop = Lane drops
-check-detail-transition-room = The transition needs { $need } but { $zone } is { $room } long.
-check-detail-transition-room-ok = Every transition fits in its zone.
+check-detail-transition-room = The transition needs { $need } but the stretch { $stretch } is { $room } long.
+check-detail-transition-room-ok = Every transition fits in its stretch.
 check-detail-lane-drop = A lane ends with no lane beside it to merge into.
 check-detail-lane-drop-ok = Every lane that ends can merge.
 
@@ -460,6 +452,7 @@ rev-curb-use = Change the use at { $at } to { $use }
 rev-curb-resize = Resize the { $use } at { $at }
 rev-curb-move = Move the { $use } to { $at }
 rev-curb-remove = Remove the { $use } at { $at }
+curb-refused-no-anchor = Both ends of this street are cut by the edge of the map, so curbside uses cannot be placed along it.
 curb-refused-elsewhere = The uses of this curbside were drawn on a road of another length or from its other end, so they cannot be rearranged here.
 curb-refused-overlap = That would overlap another use on the same side.
 curb-refused-too-long = That would run past the end of the street.
@@ -699,10 +692,10 @@ template-greenway = Neighbourhood greenway
 template-bus-corridor = Bus corridor
 template-industrial = Industrial access street
 transform-templates-heading = Street templates
-transform-templates-hint = Lay the street out as one of these templates. It replaces the pieces of the selected zone with ordinary ones that you can edit and undo as one change.
+transform-templates-hint = Lay the street out as one of these templates. It replaces the pieces of the picked stretch with ordinary ones that you can edit and undo as one change.
 template-school-applied-zone = The school zone runs from { $from } to { $to }.
-template-school-skipped-zone = No separate school zone was made, so the selected zone as a whole is the school zone. { $reason }
-template-school-room = The zone is shorter than a school zone of { $length } with { $min } to spare on each side.
+template-school-skipped-zone = No separate school zone was made, so the picked stretch as a whole is the school zone. { $reason }
+template-school-room = The stretch is shorter than a school zone of { $length } with { $min } to spare on each side.
 template-school-applied-speed = The speed limit there is { $kmh } km/h.
 template-school-skipped-speed = The speed limit stays at { $kmh } km/h: it is not above { $limit } km/h.
 template-school-applied-table = A raised table is at { $at }.
@@ -714,7 +707,7 @@ template-refused-wide = { $name } cannot use a street wider than { $max }. This 
 
 # The design checks of the raised elements (src/street/model/calming.rs).
 calming-instance = { $kind } at { $at }
-calming-instance-zone = { $kind } at { $at }, in { $zone }
+calming-instance-stretch = { $kind } at { $at }, in the stretch { $stretch }
 check-calming-in = { $check }: { $instance }
 check-label-calming-length = Raised elements long enough, on a roadway
 check-detail-calming-length = A raised element of { $length } is too short: with ramps of { $ramp } it needs { $min } or more.
@@ -766,7 +759,7 @@ src-summary = Source: { $status }
 src-confidence-placeholder = placeholder, no source
 src-confidence-unchecked = named, figures not checked
 src-applies-placeholder = A placeholder of CityLoom's own. It stands in until an authoritative source replaces it.
-src-applies-transition = Applies where two zones of a street have different sections: it sizes the taper between them. The figures are placeholders, not yet checked against these sources.
+src-applies-transition = Applies where a street's section changes along it: it sizes the taper between the two. The figures are placeholders, not yet checked against these sources.
 src-jurisdiction-ca = Canada
 src-jurisdiction-qc = Québec
 src-source = { $publisher }, { $title } ({ $jurisdiction })

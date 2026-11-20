@@ -72,7 +72,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         let e = w.view().zones.elsewhere.as_ref().map(|e| (e.drawn_mm, e.loaded_mm))?;
         let (i18n, units) = (w.i18n(), w.units());
         let locale = i18n.locale();
-        Some(i18n.tr("zones-elsewhere", &Args::new().str("drawn", units.length_in(e.0, locale)).str("loaded", units.length_in(e.1, locale))))
+        Some(i18n.tr("stretches-elsewhere", &Args::new().str("drawn", units.length_in(e.0, locale)).str("loaded", units.length_in(e.1, locale))))
     };
 
     // Where the pointer is on the drawing, from its top left.

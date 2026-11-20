@@ -98,7 +98,7 @@ impl CurbRefusal {
     /// The refusal of an edit of `subject`, in the words that fit it.
     pub fn said_for(self, subject: Subject) -> Said {
         let (curb, stop) = match self {
-            CurbRefusal::NoAnchor => ("zone-refused-no-anchor", "stop-refused-no-anchor"),
+            CurbRefusal::NoAnchor => ("curb-refused-no-anchor", "stop-refused-no-anchor"),
             CurbRefusal::Elsewhere => ("curb-refused-elsewhere", "stop-refused-elsewhere"),
             CurbRefusal::Overlap => ("curb-refused-overlap", "stop-refused-overlap"),
             CurbRefusal::TooLong => ("curb-refused-too-long", "stop-refused-too-long"),

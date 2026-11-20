@@ -1622,24 +1622,8 @@ svg pattern circle {
   opacity: 0.6;
   cursor: not-allowed;
 }
-/* A strip of the zones, and the rows of a level of the details panel: one row per setting, a short label beside its
-   control (the field's fuller name is its aria-label). */
-.zone-mini {
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  margin-bottom: 4px;
-}
-.zone-mini span {
-  min-width: 4px;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--fill);
-}
-.zone-mini span.on {
-  border-color: var(--accent);
-  background: var(--accent);
-}
+/* The rows of a level of the details panel: one row per setting, a short label beside its control (the field's
+   fuller name is its aria-label). */
 .zone-row {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr);
@@ -1687,9 +1671,6 @@ svg pattern circle {
    with "Manage profiles" a disclosure), and the tip for someone who has chosen nothing at its foot. */
 .street-head .insp-sub {
   margin-top: 2px;
-}
-.street-head .zone-mini {
-  margin-top: 10px;
 }
 .speed-limit label.zone-l {
   color: var(--ink);

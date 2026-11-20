@@ -918,21 +918,25 @@ test.describe("changing part of a street", () => {
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
     await expect(drawing.locator(".iso-across").first()).toBeAttached();
     expect(await drawing.locator(".iso-across [data-uid]").count(), "the neighbour's pieces are not pressable").toBe(0);
+    // The shown stretch is the street's second half, from the boundary the label is centred on.
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 2 has /,
+      /centred on ([\d.]+ m), where the section changes abruptly: .* The stretch from \1 to [\d.]+ m has /,
     );
     const second = await drawing.innerHTML();
     await pickRunAt(page, 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 1 has /,
+      /where the section changes abruptly: .* The stretch from 0\.0 m to [\d.]+ m has /,
     );
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
     const first = await drawing.innerHTML();
     expect(first, "the across run swaps with the run shown").not.toBe(second);
     await pickRunAt(page, Math.floor((await streetLength(page)) / 2) + 1);
-    await expect(drawing).toHaveAttribute("aria-label", /Zone 2 beyond\..* Zone 2 has /);
+    await expect(drawing).toHaveAttribute(
+      "aria-label",
+      /centred on ([\d.]+ m), .* The stretch from \1 to [\d.]+ m has /,
+    );
     expect(await drawing.innerHTML(), "the second run's own pieces again").not.toBe(first);
   });
 
@@ -948,7 +952,7 @@ test.describe("changing part of a street", () => {
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /A transition of [\d.]+ m leads into Zone 2\./,
+      /centred on ([\d.]+ m), .* A transition of [\d.]+ m leads into the stretch from \1 to [\d.]+ m\./,
     );
     await expect(page.locator("#drawing .iso-taper").first()).toBeAttached();
     await expect(page.locator("#plan .plan-taper")).toHaveCount(1);
@@ -959,7 +963,7 @@ test.describe("changing part of a street", () => {
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li", { hasText: "Room for the transition" });
     await expect(row).toBeVisible();
-    await expect(row).toContainText(/needs .* but Zone 1 is/);
+    await expect(row).toContainText(/needs .* but the stretch from [\d.]+ m to [\d.]+ m is/);
   });
 
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {
@@ -975,7 +979,7 @@ test.describe("changing part of a street", () => {
     await page.locator('[data-lang="fr-CA"]').click();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /centré sur la limite entre zone 1 au premier plan et zone 2 au-delà/,
+      /centré sur [\d,]+\sm, là où la coupe change brusquement\s: le tronçon de [\d,]+\sm à [\d,]+\sm est au premier plan/,
     );
   });
 

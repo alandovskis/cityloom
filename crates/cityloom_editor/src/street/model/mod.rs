@@ -69,7 +69,7 @@ pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
 pub use unavailable::Unavailable;
 mod zones;
 use zones::Failing;
-pub use zones::{Elsewhere, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
+pub use zones::{Elsewhere, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, ZoneRefusal, ZoneView, ZonesView, stretch_between};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -1302,17 +1302,15 @@ impl Editor {
     /// is kept, never set) or when every zone in the pick has that speed already.
     pub fn set_speed(&mut self, kmh: Option<u16>) -> bool {
         let content = &self.states[self.cursor].content;
-        let z = self.zone;
-        let zoned = content.zones.len() > 1 && self.pick != Pick::Whole;
         let already = self.zones_in_pick().all(|z| speed_in(content.speed, &content.zones, z).kmh() == kmh);
         if kmh.is_some_and(|n| !standards::speed_choices().contains(&n)) || already {
             return false;
         }
-        let label = match (zoned, kmh) {
-            (false, Some(n)) => Said::new("rev-speed").with("kmh", Arg::Num(i64::from(n))),
-            (false, None) => Said::new("rev-speed-not-set"),
-            (true, Some(n)) => Said::new("rev-zone-speed").with("zone", Arg::Said(Box::new(self.label_of(z)))).with("kmh", Arg::Num(i64::from(n))),
-            (true, None) => Said::new("rev-zone-speed-not-set").with("zone", Arg::Said(Box::new(self.label_of(z)))),
+        let label = match (self.picked_stretch(), kmh) {
+            (None, Some(n)) => Said::new("rev-speed").with("kmh", Arg::Num(i64::from(n))),
+            (None, None) => Said::new("rev-speed-not-set"),
+            (Some(stretch), Some(n)) => Said::new("rev-stretch-speed").with("stretch", Arg::Said(Box::new(stretch))).with("kmh", Arg::Num(i64::from(n))),
+            (Some(stretch), None) => Said::new("rev-stretch-speed-not-set").with("stretch", Arg::Said(Box::new(stretch))),
         };
         let speed = Speed::from_kmh(kmh);
         self.over_pick(label, |c, range, _, whole| {
@@ -1335,12 +1333,12 @@ impl Editor {
     /// Gives every zone in the pick the street's speed limit again (`over_pick`). False, with no revision, for a
     /// street of one zone or a pick whose zones all follow the street already.
     pub fn follow_street_speed(&mut self) -> bool {
-        let z = self.zone;
         let content = &self.states[self.cursor].content;
         if content.zones.len() < 2 || self.zones_in_pick().all(|z| content.zones[z].speed.is_undecided()) {
             return false;
         }
-        let label = Said::new("rev-zone-speed-street").with("zone", Arg::Said(Box::new(self.label_of(z))));
+        let stretch = self.picked_stretch().unwrap_or_else(|| self.stretch_of(0, self.pick_length_mm()));
+        let label = Said::new("rev-stretch-speed-street").with("stretch", Arg::Said(Box::new(stretch)));
         self.over_pick(label, |c, range, _, _| {
             c.zones[range].iter_mut().for_each(|g| g.speed = Speed::Undecided);
             Vec::new()
@@ -1438,6 +1436,7 @@ impl Editor {
                 speed_in(content.speed, &content.zones, self.zone).kmh()
             },
             street_speed_kmh: self.states[self.cursor].content.speed.kmh(),
+            speed_varies: self.speeds_vary(),
             speed_follows: {
                 let content = &self.states[self.cursor].content;
                 content.zones.len() > 1 && content.zones.get(self.zone).is_some_and(|z| z.speed.is_undecided())
@@ -1447,7 +1446,7 @@ impl Editor {
             total_mm,
             delta_mm: total_mm - self.row_mm(),
             time_min: self.time_min,
-            segments: self.seg_views(segs),
+            segments: self.seg_views(segs).into_iter().zip(self.widths_vary()).map(|(s, varies)| SegView { varies, ..s }).collect(),
             existing: self.seg_views(existing),
             existing_total_mm: total(existing),
             selected: self.selected,
@@ -1490,7 +1489,7 @@ impl Editor {
     }
 
     /// The street's checks: a check passes only when it passes in every zone. Where it does not, its detail and the
-    /// zone it names are the first failing zone's; else they are the selected zone's.
+    /// stretch it names are the first failing zone's; else they are the selected zone's.
     /// With two zones or more and a transition at some boundary, the boundary checks follow them (`transition_checks`).
     fn street_checks(&self) -> Vec<Check> {
         let mut street = self.zone_checks();
@@ -1519,11 +1518,11 @@ impl Editor {
             return street;
         }
         let transitions = !self.transitions().is_empty();
-        for (z, zone) in content.zones.iter().enumerate() {
+        for z in 0..content.zones.len() {
             for (check, in_zone) in street.iter_mut().zip(self.section_checks(content.section(z))) {
                 if !in_zone.ok && check.zone.is_none() {
                     check.ok = false;
-                    check.zone = Some(zone_label(zone, z + 1));
+                    check.zone = Some(self.stretch_said(z));
                     check.detail = in_zone.detail;
                 }
             }
@@ -1536,7 +1535,6 @@ impl Editor {
 
     /// The checks of the boundaries: one per failing boundary, else one passing check of each kind.
     fn transition_checks(&self, content: &Content) -> Vec<Check> {
-        let label = |z: usize| zone_label_mid(&content.zones[z], z + 1);
         let failing = self.failing_transitions();
         let units = |mm| Arg::Length(mm);
         let make = |id: &'static str, ok: bool, detail: Said, zone: Option<Said>| Check {
@@ -1551,12 +1549,13 @@ impl Editor {
         for id in ["transition-room", "lane-drop"] {
             let before = out.len();
             for (b, host, why) in &failing {
-                let boundary = || Said::new("check-boundary").with("a", Arg::Said(Box::new(label(*b)))).with("b", Arg::Said(Box::new(label(*b + 1))));
+                let at = self.left_mm(content.zones[*b + 1].from_mm);
+                let boundary = || Said::new("check-boundary").with("at", Arg::Length(at));
                 match (id, why) {
                     ("transition-room", Failing::Room { need_mm, room_mm }) => {
                         let detail = Said::new("check-detail-transition-room")
                             .with("need", units(*need_mm))
-                            .with("zone", Arg::Said(Box::new(label(*host))))
+                            .with("stretch", Arg::Said(Box::new(self.stretch_said(*host))))
                             .with("room", units(*room_mm));
                         out.push(make(id, false, detail, Some(boundary())));
                     }
@@ -1617,6 +1616,7 @@ impl Editor {
                         .collect(),
                     active_variant: s.variant_at(self.time_min),
                     alt_kinds: s.alt_kinds(),
+                    varies: false,
                 };
                 x += s.width_mm;
                 v
@@ -1776,6 +1776,8 @@ pub struct SegView {
     pub active_variant: Option<usize>,
     /// Types this piece may take at other times.
     pub alt_kinds: Vec<usize>,
+    /// Its width differs between its counterparts in the picked runs: the width shown is the shown run's.
+    pub varies: bool,
 }
 
 #[derive(Serialize)]
@@ -1843,6 +1845,8 @@ pub struct View {
     pub speed_kmh: Option<u16>,
     /// The street has several zones and the selected one follows the street's speed limit.
     pub speed_follows: bool,
+    /// The picked runs have different speed limits: the one shown is the shown run's.
+    pub speed_varies: bool,
     /// The street's own speed limit, which a zone with none of its own follows.
     pub street_speed_kmh: Option<u16>,
     /// The side of the road traffic keeps, for the 2.5D sign.
@@ -3323,7 +3327,7 @@ mod tests {
         let fits = |e: &Editor| e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
         let (street, zone0) = (fits(&e), e.view().delta_mm);
         assert!(!street.ok, "zone 1 does not fit, so the street does not");
-        assert_eq!(street.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+        assert_eq!(street.zone, Some(stretch_between(20_000, 40_000)), "named by the stretch the zone covers");
         assert!(zone0 <= 0, "the status line is the selected zone's, and zone 0 fits");
         assert!(e.select_zone(1));
         assert!(e.view().delta_mm > 0);
@@ -3353,7 +3357,8 @@ mod tests {
             e.set_width(g.uid, g.bounds().1);
         }
         let fits = e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
-        assert_eq!(fits.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+        // Widened alike, the second and third zones joined: the stretch named is both.
+        assert_eq!(fits.zone, Some(stretch_between(20_000, 60_000)));
     }
 
     #[test]
@@ -3377,7 +3382,7 @@ mod tests {
     }
 
     #[test]
-    fn the_view_lists_zones_with_label_range_and_whether_each_has_its_own_section() {
+    fn the_view_lists_zones_with_the_stretch_they_cover_range_and_whether_each_has_its_own_section() {
         let today = sample_street();
         let mut now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
         now.zones[1].name = Some("Market".into());
@@ -3388,14 +3393,14 @@ mod tests {
             z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm, g.own, g.cut_off)).collect::<Vec<_>>(),
             vec![(0, 0, 20_000, false, false), (1, 20_000, 45_000, false, false), (2, 45_000, 60_000, false, false)]
         );
-        assert_eq!(z.zones[2].label, Said::new("zone-unnamed").with("n", Arg::Num(3)));
+        assert_eq!(z.zones[2].label, stretch_between(45_000, 60_000));
         assert!(e.select_zone(1));
         let g = e.snapshot().segments[0].clone();
         assert!(e.set_width(g.uid, g.width_mm + 100));
         let z = e.view().zones;
         assert_eq!(z.selected, 1);
         assert_eq!(z.zones.iter().map(|g| g.own).collect::<Vec<_>>(), vec![false, true, false]);
-        assert_eq!(z.zones[1].label, named_said("Market"));
+        assert_eq!(z.zones[1].label, stretch_between(20_000, 45_000), "a saved name is never said");
     }
 
     #[test]

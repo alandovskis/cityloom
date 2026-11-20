@@ -216,6 +216,8 @@ jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
 }. Its end zone reaches { $reach } from the centre, then { $zone }.
+# The zone across an end zone's boundary, by its number from the street's anchored end (src/street/model/beyond.rs).
+zone-unnamed-mid = Zone { $n }
 jn-side-left = on the left as seen from the centre
 jn-side-right = on the right as seen from the centre
 jn-sel-arm-stop = { $kind } { $side }, { $at } from the centre, in lane { $n } of { $of }, which goes { $uses }.
