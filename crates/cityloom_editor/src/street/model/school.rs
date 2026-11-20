@@ -39,6 +39,7 @@ impl Editor {
     /// is left as it was.
     pub(super) fn apply_school(&mut self, arranged: Vec<Segment>, next_uid: u32, label: Said) -> TemplateReport {
         let start = self.cursor;
+        let picked = self.pick;
         let mut report = TemplateReport::default();
 
         // The stretch.
@@ -93,6 +94,10 @@ impl Editor {
         self.next_uid = self.next_uid.max(next_uid);
         self.selected = None;
         self.squash_since(start, label);
+        // Undone, the person's pick comes back, not the school stretch the template picked.
+        if self.cursor > start {
+            self.states[self.cursor].pick_move = Some((picked, self.pick));
+        }
         report
     }
 
@@ -252,7 +257,25 @@ mod tests {
         assert!(e.undo());
         let s = e.snapshot();
         assert_eq!((s.segments, s.zones, s.speed, s.calming), (before.segments, before.zones, before.speed, before.calming));
-        assert_eq!(e.pick(), stretch(40_000, 100_000), "the pick is kept, clamped to the street");
+        assert_eq!(e.pick(), stretch(20_000, 120_000), "the pick the template was made in");
+    }
+
+    #[test]
+    fn undoing_the_school_template_gives_back_the_pick_it_was_made_in_and_redoing_it_the_school_stretch() {
+        let mut e = two_runs();
+        e.pick_stretch(20_000, 120_000).unwrap();
+        e.apply_template(Template::School).unwrap();
+        assert_eq!(e.pick(), stretch(40_000, 100_000), "the school stretch is picked");
+        assert!(e.undo());
+        assert_eq!(e.pick(), stretch(20_000, 120_000), "the person's pick, not the school stretch");
+        assert!(e.redo());
+        assert_eq!(e.pick(), stretch(40_000, 100_000));
+        // A later edit's undo leaves the pick alone, as any undo does.
+        e.pick_stretch(10_000, 30_000).unwrap();
+        let uid = e.current()[0].uid;
+        assert!(e.set_width(uid, 4_000));
+        assert!(e.undo());
+        assert_eq!(e.pick(), stretch(10_000, 30_000));
     }
 
     #[test]

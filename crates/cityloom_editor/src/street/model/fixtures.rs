@@ -169,6 +169,7 @@ impl Editor {
             stop_move: None,
             calming_move: None,
             green_move: None,
+            pick_move: None,
         }];
         self.cursor = 0;
         self.selected = None;

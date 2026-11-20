@@ -323,6 +323,7 @@ impl Editor {
             self.missed = spans;
             return true;
         }
+        let edited = next.section(shown).to_vec();
         if self.elsewhere().is_none() {
             next.join_alike(range);
         }
@@ -331,8 +332,25 @@ impl Editor {
             return false;
         }
         self.push(label, next);
+        self.follow_selected(&edited);
         self.missed = spans;
         true
+    }
+
+    /// After an edit that may have joined the shown run into its neighbour: the selected piece, when the section shown
+    /// no longer has it, is its counterpart there (`counterpart`, from `edited`, the section it was chosen in as the
+    /// edit left it), else nothing is selected. A joined run keeps the earlier zone's uids, so a piece chosen in the
+    /// later one is found again by kind. A piece the edit removed is left to the edit.
+    pub(super) fn follow_selected(&mut self, edited: &[Segment]) {
+        let Some(uid) = self.selected else { return };
+        let shown = self.current();
+        if shown.iter().any(|s| s.uid == uid) {
+            return;
+        }
+        // A piece the edit itself took away is the edit's to let go of.
+        let Some(i) = edited.iter().position(|s| s.uid == uid) else { return };
+        let found = counterpart(edited, shown).get(i).copied().flatten().map(|j| shown[j].uid);
+        self.selected = found;
     }
 
     /// The content an edit over the pick starts from, split at the pick's ends when the zones can be rearranged, and
@@ -585,6 +603,27 @@ mod tests {
 
     fn stretch(from_mm: i32, to_mm: i32) -> Pick {
         Pick::Stretch { from_mm, to_mm }
+    }
+
+    #[test]
+    fn after_a_join_the_selected_piece_is_its_counterpart_in_the_run_shown() {
+        // Two zones: 0 to 20 m on the base section, 20 m to the end with new uids (as a template gives) and its first
+        // piece 100 mm wider.
+        let base = sample();
+        let mut s = zoned(base.clone(), &[0, 20_000], LEN);
+        let mut own = base.segments.clone();
+        own.iter_mut().for_each(|p| p.uid += 1_000);
+        own[0].width_mm += 100;
+        s.zones[1].segments = Some(own.clone());
+        let mut e = editor(&s.settled(), frame(LEN, ZoneEnd::First));
+        e.pick_run_at(30_000).unwrap();
+        let (later, earlier) = (own[0].uid, base.segments[0].uid);
+        e.select(Some(later));
+        assert_eq!(e.view().selected, Some(later));
+        // Narrowed back, the later run is like the earlier and joins it, which keeps the earlier uids.
+        assert!(e.set_width(later, base.segments[0].width_mm));
+        assert_eq!(e.snapshot().zones.len(), 0, "joined");
+        assert_eq!(e.view().selected, Some(earlier), "the same piece, by its counterpart");
     }
 
     #[test]

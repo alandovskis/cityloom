@@ -366,6 +366,9 @@ struct State {
     calming_move: Option<(Side, i32, i32)>,
     /// The same for the trees and green infrastructure (see `State.stop_move`).
     green_move: Option<((i32, i32), (i32, i32))>,
+    /// The pick an edit that picks a stretch of its own (the School template) was made in, and the one it left, so
+    /// that undo gives the person's pick back and redo the edit's; `None` for an edit that leaves the pick alone.
+    pick_move: Option<(Pick, Pick)>,
 }
 
 pub use crate::standards::model::SPEED_CHOICES;
@@ -526,6 +529,7 @@ impl Editor {
                 stop_move: None,
                 calming_move: None,
                 green_move: None,
+                pick_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -695,7 +699,7 @@ impl Editor {
         let row_mm = self.row_mm();
         let (curb_move, stop_move, green_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved(), self.green_choice.take_moved());
         let calming_move = self.calming_choice.take_moved();
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move });
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move, pick_move: None });
         // Settling can leave fewer zones than there were: the shown one is found again from the pick.
         self.clamp_pick();
     }
@@ -739,6 +743,7 @@ impl Editor {
             return false;
         };
         let mut now = self.states[self.cursor].content.clone();
+        let edited = now.section(self.zone.min(now.zone_count() - 1)).to_vec();
         // The zones the drag's edits acted on join their identical neighbours, as any edit's do.
         if let Some((_, range)) = self.gesture_pick.take()
             && self.elsewhere().is_none()
@@ -766,6 +771,7 @@ impl Editor {
             return false;
         };
         self.push(label, now);
+        self.follow_selected(&edited);
         true
     }
 
@@ -1277,6 +1283,9 @@ impl Editor {
         self.stop_choice.undo(self.states[self.cursor].stop_move);
         self.calming_choice.undo(self.states[self.cursor].calming_move);
         self.green_choice.undo(self.states[self.cursor].green_move);
+        if let Some((before, _)) = self.states[self.cursor].pick_move {
+            self.pick = before;
+        }
         self.cursor -= 1;
         self.reselect();
         true
@@ -1292,6 +1301,9 @@ impl Editor {
         self.stop_choice.redo(self.states[self.cursor].stop_move);
         self.calming_choice.redo(self.states[self.cursor].calming_move);
         self.green_choice.redo(self.states[self.cursor].green_move);
+        if let Some((_, after)) = self.states[self.cursor].pick_move {
+            self.pick = after;
+        }
         self.reselect();
         true
     }
@@ -1352,7 +1364,7 @@ impl Editor {
         if first.content == self.states[self.cursor].content && first.row_mm == self.row_mm() {
             return false;
         }
-        self.push_state(State { label: Said::new("rev-reset"), ..first });
+        self.push_state(State { label: Said::new("rev-reset"), pick_move: None, ..first });
         self.missed.clear();
         self.clamp_pick();
         self.selected = None;
