@@ -311,6 +311,20 @@ mod tests {
         assert_eq!(report.applied[2].args, vec![("at", Arg::Along(61_500))]);
     }
 
+    /// Avenue Henri-Julien: 90.744 m, measured from its last end, picked whole. The report puts the table where the
+    /// plan and the raised elements' row do, from the plan's left end (36.9 m), not from the anchored end (46.8 m).
+    #[test]
+    fn on_a_street_of_odd_length_measured_from_its_last_end_the_table_is_reported_where_the_plan_draws_it() {
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 90_744, from_end: ZoneEnd::Last }));
+        let report = e.apply_template(Template::School).unwrap();
+        let at = report.applied.iter().find(|r| r.key == "template-school-applied-table").expect("a table").args[0].1.clone();
+        let drawn = e.view().plan.objects.iter().find(|o| matches!(o.thing, super::super::PlanThing::Calming { .. })).map(|o| o.from_mm).expect("drawn");
+        assert_eq!(at, Arg::Along(drawn), "the report and the plan agree");
+        let anchored = e.snapshot().calming[0].from_mm;
+        assert_eq!(drawn, 90_744 - anchored - DEFAULT_TABLE_MM, "counted from the left end, not the anchored one ({anchored})");
+    }
+
     #[test]
     fn it_is_one_revision_that_undo_takes_back_whole() {
         let mut e = editor(100_000, Speed::Kmh(50));
