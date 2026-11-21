@@ -137,8 +137,25 @@ fn the_page_opens_a_link_only_for_a_whole_token_or_where_it_names_no_project() {
 #[test]
 fn every_failure_is_said_in_english_and_in_french() {
     use ShareError::*;
-    let all =
-        [BadLink, NotFound, Expired, Deleted, Newer, Damaged, Network, Unavailable, Storage, SignedOut, ReadOnly, Unusable, TooLarge, Full, TooManyToday, NotYours, Refused];
+    let all = [
+        BadLink,
+        NotFound,
+        Expired,
+        Deleted,
+        Newer,
+        Damaged,
+        Network,
+        Unavailable,
+        Storage,
+        SignedOut,
+        ReadOnly,
+        Unusable,
+        TooLarge,
+        Full,
+        TooManyToday,
+        NotYours,
+        Refused,
+    ];
     let mut seen = std::collections::BTreeSet::new();
     for e in all {
         let (english, french) = (en(&e.said()), fr(&e.said()));
@@ -454,7 +471,9 @@ fn deleting_a_link_is_asked_first_and_starts_on_the_safe_answer() {
     fr_vm.ask_delete(TOKEN);
     assert_eq!(
         fr_vm.delete_question().as_deref(),
-        Some("Supprimer le lien de partage qui a expiré le 15 avril 2027? Il n’ouvre déjà plus l’aménagement; il sera retiré de cette liste. Cette action est irréversible.")
+        Some(
+            "Supprimer le lien de partage qui a expiré le 15 avril 2027? Il n’ouvre déjà plus l’aménagement; il sera retiré de cette liste. Cette action est irréversible."
+        )
     );
 }
 
@@ -571,6 +590,71 @@ fn a_project_whose_work_cannot_be_read_is_not_sent() {
     vm.create();
     assert!(t.share.calls().is_empty());
     assert_eq!(vm.outcome(), Some(("This project's work cannot be read, so it cannot be shared.".to_string(), true)));
+}
+
+// ---- a project's links, ended before it goes ----
+
+/// A browser whose project `p1` has links made here: two that still work and one expired.
+fn project_links() -> (TestPorts, super::links::ProjectShares) {
+    let t = test_ports_full();
+    t.storage.set_now(1_800_000_000_000); // 2027-01-15T08:00:00Z
+    let store = super::store::ShareStore::new(Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), "p1")));
+    for (token, expires_at) in [("old", "2026-12-01T00:00:00.000Z"), ("one", "2027-04-15T08:00:00.000Z"), ("two", "2027-04-16T08:00:00.000Z")] {
+        store.add(super::store::Made { token: token.into(), created_at: "2026-09-01T00:00:00.000Z".into(), expires_at: expires_at.into() });
+    }
+    let links = super::links::ProjectShares::new(t.ports.clone());
+    (t, links)
+}
+
+fn kept_links(t: &TestPorts) -> Vec<String> {
+    super::store::ShareStore::new(Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), "p1")))
+        .list()
+        .into_iter()
+        .map(|m| m.token)
+        .collect()
+}
+
+#[test]
+fn a_project_s_links_that_still_work_are_deleted_on_the_server_one_after_the_other() {
+    use crate::project::model::ProjectLinks;
+    let (t, links) = project_links();
+    assert_eq!((links.live("p1"), links.live("p2")), (2, 0), "an expired link needs no deleting");
+    let got = Rc::new(std::cell::RefCell::new(None));
+    let g = got.clone();
+    links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    assert_eq!(t.share.calls(), [ShareCall::Delete("one".into())]);
+    assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+    assert_eq!(t.share.calls(), [ShareCall::Delete("two".into())], "then the next");
+    assert!(got.borrow().is_none());
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Deleted))), "one the server has deleted already counts as done");
+    assert_eq!(*got.borrow(), Some(Ok(())));
+    assert_eq!(kept_links(&t), ["old"]);
+    let got = Rc::new(std::cell::RefCell::new(None));
+    let g = got.clone();
+    links.end("p2", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    assert_eq!(*got.borrow(), Some(Ok(())), "none to delete");
+}
+
+#[test]
+fn a_link_that_could_not_be_deleted_stops_the_rest_and_says_why() {
+    use crate::project::model::ProjectLinks;
+    for (failure, english) in [
+        (ShareFailure::SignedOut, "Sign in with the account that made them to delete them, or wait until they expire."),
+        (ShareFailure::Network, "The server could not be reached. Check your connection and try again."),
+        (ShareFailure::NotYours, "Another account made this link: only the account that made it can delete it."),
+    ] {
+        let (t, links) = project_links();
+        let got = Rc::new(std::cell::RefCell::new(None));
+        let g = got.clone();
+        links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+        assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+        assert!(t.share.answer(ShareReply::Deleted(Err(failure))));
+        let said = got.borrow_mut().take().unwrap().unwrap_err();
+        assert_eq!(en(&said), english, "{failure:?}");
+        assert!(t.share.calls().is_empty());
+        assert_eq!(kept_links(&t), ["old", "two"], "{failure:?}: the one deleted is forgotten, the other kept");
+    }
+    assert!(fr(&crate::shared::said::Said::new("share-error-end-signed-out")).starts_with("Connectez-vous avec le compte qui les a créés"));
 }
 
 // ---- the views ----

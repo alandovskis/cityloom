@@ -79,5 +79,7 @@ share-error-unusable = This project's work cannot be read, so it cannot be share
 share-error-too-large = This project is too large to share: a share holds at most { $megabytes } MB.
 share-error-full = You have { $count } share links already. Delete one before making another.
 share-error-too-many-today = You have made { $count } share links in the last 24 hours, as many as an account may. Try again later.
+# Deleting a project's share links before the project (#221) needs the account that made them.
+share-error-end-signed-out = Sign in with the account that made them to delete them, or wait until they expire.
 share-error-not-yours = Another account made this link: only the account that made it can delete it.
 share-error-refused = The server refused the request.

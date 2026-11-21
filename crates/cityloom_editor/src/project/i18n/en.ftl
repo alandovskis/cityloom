@@ -38,6 +38,13 @@ project-delete = Delete
 project-delete-named = Delete { $name }
 project-delete-confirm = Delete { $name } and everything in it? This cannot be undone.
 project-delete-yes = Delete the project
+# Before deleting a project that has share links made on this device (#221): they are deleted on the server first.
+project-delete-confirm-links = { $count ->
+    [one] Delete { $name } and everything in it? Its share link made on this device stops working too. This cannot be undone.
+   *[other] Delete { $name } and everything in it? Its { $count } share links made on this device stop working too. This cannot be undone.
+}
+# Its share links could not be deleted on the server, so the project was kept; $reason says why, as a sentence.
+project-delete-links-failed = { $name } was not deleted: its share links could not be deleted first. { $reason }
 project-gone = That project is no longer here.
 project-first-name = First project
 # A project whose places came before its record, until its record or a rename names it.

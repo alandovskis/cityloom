@@ -51,7 +51,10 @@ reached, or the browser's storage refused the copy.
   no request header.
 - **For how long**: 90 days from when the link was made. The snapshot is then deleted, and the link says it has expired.
   A deleted or expired link keeps saying so for a year; after that it says no shared design has it.
-- **Deleting**: you can delete a link at any time from the share page of the device you made it on. Deleting your
+- **Deleting**: you can delete a link at any time from the share page of the device you made it on. Deleting a
+  project on the home page deletes the links made of it on that device first (you must be signed in with the account
+  that made them); if one cannot be deleted, the project is kept and the page says why. A project deleted on another
+  device leaves the links made of it on this one working until they expire. Deleting your
   account deletes every link you made at once; those links then say no shared design has them.
 - **On the opener's device**: the copy is kept in that browser's storage only, until it is replaced or the ten-copy
   limit pushes it out, or the browser's site data is cleared.

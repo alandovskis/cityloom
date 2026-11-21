@@ -47,3 +47,26 @@ pub fn clean_name(name: &str) -> Result<String, Refused> {
         Ok(name.to_string())
     }
 }
+
+/// The share links made on this device of a project (#221), which must stop working before the project goes, so that
+/// whoever made them can still end them: once the project is gone, its list of links is gone with it. The share slice
+/// keeps them; the composition root (`lib.rs`) hands them to the home page, so the project slice uses no other slice.
+pub trait ProjectLinks {
+    /// How many links made on this device of project `id` still work.
+    fn live(&self, id: &str) -> usize;
+    /// Deletes them on the server, one after the other; `done` hears `Ok` once none is left, or why one could not be
+    /// deleted (data: a `Said`), the rest then left as they are.
+    fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>);
+}
+
+/// No links: a page that makes none (and the tests that need none).
+pub struct NoLinks;
+
+impl ProjectLinks for NoLinks {
+    fn live(&self, _: &str) -> usize {
+        0
+    }
+    fn end(&self, _: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+        done(Ok(()));
+    }
+}

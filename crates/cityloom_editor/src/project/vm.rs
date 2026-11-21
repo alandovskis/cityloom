@@ -7,13 +7,13 @@ use leptos::prelude::*;
 
 use crate::place::area::{Area, Metro, default_metro, metro, metro_of, metros};
 use crate::project::migrate::move_legacy_work;
-use crate::project::model::Project;
+use crate::project::model::{NoLinks, Project, ProjectLinks};
 use crate::project::store::{ProjectStore, last_changed};
 use crate::project::text::{changed_text, refused_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Ports;
 use crate::shared::project_id::{FIRST, link};
-use crate::shared::said::say;
+use crate::shared::said::{Said, say, say_now};
 use crate::shared::units::Units;
 use crate::sync::hub;
 
@@ -69,6 +69,13 @@ pub struct ProjectsVm {
     renaming: ArcRwSignal<Option<String>>,
     rename_error: ArcRwSignal<Option<&'static str>>,
     deleting: ArcRwSignal<Option<String>>,
+    /// The project's share links, which end before it does (#221).
+    links: Rc<dyn ProjectLinks>,
+    /// Its links are being deleted on the server: the question waits.
+    ending: ArcRwSignal<bool>,
+    /// Why its links could not be deleted, so the project was kept: the project's name and the reason.
+    delete_error: ArcRwSignal<Option<(String, Said)>>,
+    me: Weak<ProjectsVm>,
     /// The catalogue id of the metropolitan area a new project is made in.
     metro: ArcRwSignal<&'static str>,
     /// Whether the page was sent here because its project is no longer here, until the person does something.
@@ -85,12 +92,17 @@ impl ProjectsVm {
     /// The list of the browser whose ROOT storage `ports` has. The work kept from before projects is first moved into
     /// the first project, named in the page's language; that project is then the one the pages open.
     pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<ProjectsVm> {
+        ProjectsVm::new_with(ports, i18n, Rc::new(NoLinks))
+    }
+
+    /// `new`, with the projects' share links (#221), which a project's deletion ends first.
+    pub fn new_with(ports: Ports, i18n: Rc<I18n>, links: Rc<dyn ProjectLinks>) -> Rc<ProjectsVm> {
         let store = ProjectStore::new(ports.storage.clone());
         // A page sent here because it named no project (a bookmark from before projects) has its project once the
         // work is moved: nothing is gone then.
         let moved = move_legacy_work(&ports.storage, &i18n);
         let missing = was_missing(&ports.page.path()) && !moved;
-        let vm = Rc::new(ProjectsVm {
+        let vm = Rc::new_cyclic(|me| ProjectsVm {
             ports,
             i18n,
             store,
@@ -99,6 +111,10 @@ impl ProjectsVm {
             renaming: ArcRwSignal::new(None),
             rename_error: ArcRwSignal::new(None),
             deleting: ArcRwSignal::new(None),
+            links,
+            ending: ArcRwSignal::new(false),
+            delete_error: ArcRwSignal::new(None),
+            me: me.clone(),
             metro: ArcRwSignal::new(default_metro().id),
             missing: ArcRwSignal::new(missing),
             focus: ArcRwSignal::new((0, Focus::None)),
@@ -310,10 +326,11 @@ impl ProjectsVm {
 
     /// Asks before deleting project `id`; any rename form is closed.
     pub fn ask_delete(&self, id: &str) {
-        if self.store.get(id).is_none() {
+        if self.ending.get_untracked() || self.store.get(id).is_none() {
             return;
         }
         self.renaming.set(None);
+        self.delete_error.set(None);
         self.deleting.set(Some(id.to_string()));
         self.ask_focus(Focus::DeleteSafe);
     }
@@ -324,26 +341,85 @@ impl ProjectsVm {
         self.rows().into_iter().find(|r| r.id == id)
     }
 
-    /// The question asked before deleting; tracked.
+    /// The question asked before deleting, which says that the project's share links made here stop working too;
+    /// tracked.
     pub fn delete_question(&self) -> Option<String> {
-        self.deleting().map(|row| self.named("project-delete-confirm", &row.name))
+        let row = self.deleting()?;
+        Some(match self.links.live(&row.id) {
+            0 => self.named("project-delete-confirm", &row.name),
+            n => self.i18n.tr("project-delete-confirm-links", &Args::new().str("name", row.name).num("count", n as i64)),
+        })
     }
 
+    /// The project's share links are being deleted on the server, before it is (tracked): the question waits.
+    pub fn ending(&self) -> bool {
+        self.ending.get()
+    }
+
+    /// Why the project was kept: its share links could not be deleted first (tracked).
+    pub fn delete_error(&self) -> Option<String> {
+        let (name, reason) = self.delete_error.get()?;
+        let reason = say(&self.i18n, Units::Metres, &reason);
+        Some(self.i18n.tr("project-delete-links-failed", &Args::new().str("name", name).str("reason", reason)))
+    }
+
+    /// Drops the question, unless the project's links are being deleted (it then waits for them).
     pub fn cancel_delete(&self) {
+        if self.ending.get_untracked() {
+            return;
+        }
         if let Some(id) = self.deleting.get_untracked() {
             self.deleting.set(None);
+            self.delete_error.set(None);
             self.ask_focus(Focus::DeleteButton(id));
         }
     }
 
-    /// Deletes the project the question is about, with everything in it. False where nothing was asked or the list
-    /// could not be changed.
+    /// Deletes the project the question is about, with everything in it. Where share links made here of it still work,
+    /// they are deleted on the server first (#221) and the project goes once they are; should one not be, the project
+    /// is kept and the question says why. True where the project was deleted now; false where nothing was asked, its
+    /// links are being deleted, or the list could not be changed.
     pub fn confirm_delete(&self) -> bool {
+        if self.ending.get_untracked() {
+            return false;
+        }
         let Some(id) = self.deleting.get_untracked() else { return false };
         self.acted();
+        self.delete_error.set(None);
+        if self.links.live(&id) == 0 {
+            return self.delete_now(&id);
+        }
+        self.ending.set(true);
+        let (me, kept) = (self.me.clone(), id.clone());
+        self.links.end(
+            &id,
+            Box::new(move |answer| {
+                let Some(vm) = me.upgrade() else { return };
+                vm.ending.set(false);
+                match answer {
+                    Ok(()) => {
+                        vm.delete_now(&kept);
+                    }
+                    Err(reason) => {
+                        let name = vm.store.get(&kept).map(|p| vm.name_of(&p)).unwrap_or_default();
+                        let words = vm.i18n.tr_now(
+                            "project-delete-links-failed",
+                            &Args::new().str("name", name.clone()).str("reason", say_now(&vm.i18n, Units::Metres, &reason)),
+                        );
+                        vm.ports.announcer.say(&words);
+                        vm.delete_error.set(Some((name, reason)));
+                    }
+                }
+            }),
+        );
+        false
+    }
+
+    /// Deletes project `id` now, with everything in it.
+    fn delete_now(&self, id: &str) -> bool {
         self.deleting.set(None);
-        let name = self.store.get(&id).map(|p| self.name_of(&p)).unwrap_or_default();
-        let done = self.store.delete(&id);
+        let name = self.store.get(id).map(|p| self.name_of(&p)).unwrap_or_default();
+        let done = self.store.delete(id);
         self.refresh();
         if done {
             self.say("project-deleted", &name);

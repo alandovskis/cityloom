@@ -72,7 +72,8 @@ test("a project shared by a signed-in person opens read-only, rules and all, for
   const token = link.split("#")[1];
   const asked: { url: string; header?: string }[] = [];
   other.page.on("request", (request) => {
-    if (request.resourceType() !== "document") asked.push({ url: request.url(), header: request.headers()["share-token"] });
+    if (request.resourceType() !== "document")
+      asked.push({ url: request.url(), header: request.headers()["share-token"] });
   });
   await other.page.goto(link);
   await expect(other.page).toHaveURL(/\/map\.html\?project=s-[0-9a-f]{12}&view=1$/);
@@ -179,4 +180,26 @@ test("signed out, the share page says to sign in and makes no link", async ({ pa
     "Sign in to share this project: the server keeps shared copies for your account.",
   );
   await expect(page.locator("#sharing-create")).toBeDisabled();
+});
+
+test("deleting a project deletes its share links first, so its link then says it was deleted", async ({
+  page,
+  context,
+  baseURL,
+  browser,
+}) => {
+  await newAccount(page, context, baseURL!);
+  const link = await share(page);
+  const token = link.split("#")[1];
+  await page.goto("/index.html");
+  await page.locator("#project-delete-first").click();
+  await expect(page.locator("#project-delete-question")).toHaveText(
+    "Delete First project and everything in it? Its share link made on this device stops working too. This cannot be undone.",
+  );
+  await page.locator("#project-delete-yes").click();
+  await expect(live(page)).toHaveText("Project First project deleted.");
+
+  const other = await opened(browser, baseURL!, token);
+  await expect(other.page.getByRole("alert")).toContainText("The person who shared this design deleted it.");
+  await other.context.close();
 });

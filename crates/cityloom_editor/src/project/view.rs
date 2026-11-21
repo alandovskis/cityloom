@@ -99,13 +99,29 @@ fn delete_question(vm: Vm) -> impl IntoView {
             }
         >
             <p id="project-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
+            <p class="project-error" hidden=move || vm.with_value(|v| v.delete_error()).is_none()>
+                {move || vm.with_value(|v| v.delete_error())}
+            </p>
             <div class="project-buttons">
-                <button type="button" id="project-delete-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
+                // While the project's share links are deleted, both wait without leaving the tab order.
+                <button
+                    type="button"
+                    id="project-delete-safe"
+                    class="btn"
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
+                    on:click=move |_| vm.with_value(|v| v.cancel_delete())
+                >
                     {move || word(vm, "project-cancel")}
                 </button>
-                <button type="button" id="project-delete-yes" class="btn danger" on:click=move |_| {
-                    vm.with_value(|v| v.confirm_delete());
-                }>
+                <button
+                    type="button"
+                    id="project-delete-yes"
+                    class="btn danger"
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
+                    on:click=move |_| {
+                        vm.with_value(|v| v.confirm_delete());
+                    }
+                >
                     {move || word(vm, "project-delete-yes")}
                 </button>
             </div>
