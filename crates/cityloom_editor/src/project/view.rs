@@ -124,6 +124,24 @@ fn delete_question(vm: Vm) -> impl IntoView {
                 >
                     {move || word(vm, "project-delete-yes")}
                 </button>
+                // Once the project's share links could not be ended from here, it can be deleted without them.
+                {move || {
+                    vm.with_value(|v| v.can_delete_anyway())
+                        .then(|| {
+                            view! {
+                                <button
+                                    type="button"
+                                    id="project-delete-anyway"
+                                    class="btn danger"
+                                    on:click=move |_| {
+                                        vm.with_value(|v| v.delete_anyway());
+                                    }
+                                >
+                                    {move || word(vm, "project-delete-anyway")}
+                                </button>
+                            }
+                        })
+                }}
             </div>
         </div>
     }

@@ -1650,8 +1650,7 @@ mod page {
         links.answer(Err(crate::shared::said::Said::new("share-error-network")));
         assert_eq!(names(&vm), ["Plateau"], "kept, links and all");
         assert_eq!(vm.deleting().map(|r| r.id), Some(id.clone()), "the question stays, to try again or cancel");
-        let words =
-            "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again.";
+        let words = "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again. You can delete it anyway: its share links then keep working until they expire.";
         assert_eq!(t.announcer.take(), [words]);
         assert_eq!(vm.delete_error().as_deref(), Some(words));
         assert!(!vm.ending());
@@ -1663,6 +1662,37 @@ mod page {
         links.answer(Err(crate::shared::said::Said::new("share-error-network")));
         vm.cancel_delete();
         assert_eq!((vm.deleting(), vm.delete_error()), (None, None));
+    }
+
+    /// A project whose links cannot be ended from here (the account that made them was deleted, so every request is
+    /// signed out; or another account is signed in) can still be deleted: the question then offers to delete it anyway,
+    /// saying that its links keep working until they expire.
+    #[test]
+    fn a_project_whose_links_cannot_be_ended_from_here_can_be_deleted_anyway() {
+        for reason in ["share-error-end-signed-out", "share-error-not-yours"] {
+            let (vm, t, links) = page_with_links(1);
+            vm.create("Plateau");
+            let id = id_of(&vm, "Plateau");
+            vm.ask_delete(&id);
+            assert!(!vm.delete_anyway(), "{reason}: offered only once its links could not be ended");
+            assert!(!vm.can_delete_anyway());
+            let out = markup(vm.clone());
+            assert!(!out.contains(r#"id="project-delete-anyway""#), "{out}");
+            vm.confirm_delete();
+            links.answer(Err(crate::shared::said::Said::new(reason)));
+            assert!(vm.can_delete_anyway());
+            assert!(vm.delete_error().unwrap().ends_with("You can delete it anyway: its share links then keep working until they expire."));
+            let out = markup(vm.clone());
+            let anyway = crate::shared::testing::button_tag(&out, "project-delete-anyway");
+            assert!(anyway.contains(r#"class="btn danger""#), "{anyway}");
+            assert!(out.contains("Delete anyway"), "{out}");
+            t.announcer.take();
+            assert!(vm.delete_anyway(), "{reason}");
+            assert_eq!(names(&vm), Vec::<String>::new(), "{reason}");
+            assert_eq!(vm.deleting(), None);
+            assert_eq!(t.announcer.take(), ["Project Plateau deleted."]);
+            assert!(!vm.can_delete_anyway());
+        }
     }
 
     #[test]

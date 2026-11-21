@@ -360,7 +360,8 @@ impl ProjectsVm {
     pub fn delete_error(&self) -> Option<String> {
         let (name, reason) = self.delete_error.get()?;
         let reason = say(&self.i18n, Units::Metres, &reason);
-        Some(self.i18n.tr("project-delete-links-failed", &Args::new().str("name", name).str("reason", reason)))
+        let failed = self.i18n.tr("project-delete-links-failed", &Args::new().str("name", name).str("reason", reason));
+        Some(self.i18n.tr("project-delete-anyway-offer", &Args::new().str("failed", failed)))
     }
 
     /// Drops the question, unless the project's links are being deleted (it then waits for them).
@@ -406,13 +407,31 @@ impl ProjectsVm {
                             "project-delete-links-failed",
                             &Args::new().str("name", name.clone()).str("reason", say_now(&vm.i18n, Units::Metres, &reason)),
                         );
-                        vm.ports.announcer.say(&words);
+                        vm.ports.announcer.say(&vm.i18n.tr_now("project-delete-anyway-offer", &Args::new().str("failed", words)));
                         vm.delete_error.set(Some((name, reason)));
                     }
                 }
             }),
         );
         false
+    }
+
+    /// Whether the question offers to delete the project without ending its share links (tracked): once they could not
+    /// be ended from here (signed out, another account, no server), so that a project is never kept for good by them.
+    pub fn can_delete_anyway(&self) -> bool {
+        self.delete_error.with(Option::is_some)
+    }
+
+    /// Deletes the project the question is about although its share links could not be ended: they keep working until
+    /// they expire. False where that was not offered.
+    pub fn delete_anyway(&self) -> bool {
+        if self.ending.get_untracked() || self.delete_error.with_untracked(Option::is_none) {
+            return false;
+        }
+        let Some(id) = self.deleting.get_untracked() else { return false };
+        self.acted();
+        self.delete_error.set(None);
+        self.delete_now(&id)
     }
 
     /// Deletes project `id` now, with everything in it.
