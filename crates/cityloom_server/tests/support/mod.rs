@@ -360,3 +360,52 @@ impl TestApp {
         Browser::new(self.router.clone())
     }
 }
+
+/// What the log says while the running test captures it (`capture_logs`).
+pub struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl Captured {
+    pub fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+thread_local! { static LOG_SINK: std::cell::RefCell<Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>> = const { std::cell::RefCell::new(None) }; }
+
+/// Writes to the sink of the thread that logs, if it captures.
+struct Routed;
+
+impl std::io::Write for Routed {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        LOG_SINK.with(|s| {
+            if let Some(sink) = s.borrow().as_ref() {
+                sink.lock().unwrap().extend_from_slice(b);
+            }
+        });
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+struct RoutedWriters;
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RoutedWriters {
+    type Writer = Routed;
+    fn make_writer(&'a self) -> Routed {
+        Routed
+    }
+}
+
+/// Captures what the running test's thread logs from now on. One global subscriber for the whole test binary, writing
+/// to whichever sink the running test's thread holds (a `sqlx::test` runs on one thread, so that is all of its log). A
+/// per-thread subscriber (`set_default`) is not enough: tracing caches whether a call site is wanted, and a test of
+/// another thread that ran first, with no subscriber, makes it "never", so a test would randomly miss lines.
+pub fn capture_logs() -> Captured {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| tracing::subscriber::set_global_default(tracing_subscriber::fmt().with_writer(RoutedWriters).with_ansi(false).finish()).unwrap());
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    LOG_SINK.with(|s| *s.borrow_mut() = Some(sink.clone()));
+    Captured(sink)
+}
