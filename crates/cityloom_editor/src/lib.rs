@@ -106,7 +106,9 @@ pub fn mount_projects() -> HomePage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = shared::platform::browser_ports();
     let i18n = i18n_browser(&ports);
-    project::mount_list(ports, i18n.clone());
+    // A project's share links made here end before it does (#221): the share slice keeps them.
+    let links = std::rc::Rc::new(share::links::ProjectShares::new(ports.clone()));
+    project::mount_list(ports, i18n.clone(), links);
     HomePage(i18n)
 }
 

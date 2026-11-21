@@ -1570,6 +1570,114 @@ mod page {
         assert!(!vm.confirm_delete(), "nothing is asked any more");
     }
 
+    /// A project's share links made on this device, as the share slice would end them (#221): `live` of them, each
+    /// ending answered when a test says.
+    #[derive(Default)]
+    struct Links {
+        live: std::cell::Cell<usize>,
+        asked: std::cell::RefCell<Vec<(String, Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>)>>,
+    }
+
+    impl crate::project::model::ProjectLinks for Links {
+        fn live(&self, _: &str) -> usize {
+            self.live.get()
+        }
+        fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+            self.asked.borrow_mut().push((id.to_string(), done));
+        }
+    }
+
+    impl Links {
+        fn answer(&self, answer: Result<(), crate::shared::said::Said>) {
+            let (_, done) = self.asked.borrow_mut().remove(0);
+            done(answer);
+        }
+    }
+
+    fn page_with_links(live: usize) -> (Rc<ProjectsVm>, TestPorts, Rc<Links>) {
+        let t = test_ports_full();
+        let links = Rc::new(Links::default());
+        links.live.set(live);
+        (ProjectsVm::new_with(t.ports.clone(), crate::i18n_for(Locale::En), links.clone()), t, links)
+    }
+
+    /// The links made of a project stop working with it, so that their maker can still end them: they are deleted on the
+    /// server before the project is, and the question says so first.
+    #[test]
+    fn a_project_with_share_links_has_them_deleted_on_the_server_before_it_goes() {
+        let (vm, t, links) = page_with_links(2);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.ask_delete(&id);
+        assert_eq!(
+            vm.delete_question().as_deref(),
+            Some("Delete Plateau and everything in it? Its 2 share links made on this device stop working too. This cannot be undone.")
+        );
+        assert!(!vm.confirm_delete(), "not deleted yet: its links first");
+        assert_eq!(links.asked.borrow().iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), [id.clone()]);
+        assert!(vm.ending() && names(&vm) == ["Plateau"]);
+        assert!(!vm.confirm_delete(), "asked once only");
+        vm.cancel_delete();
+        assert!(vm.deleting().is_some(), "the question stays while its links are deleted");
+        assert_eq!(links.asked.borrow().len(), 1);
+        links.answer(Ok(()));
+        assert!(!vm.ending());
+        assert_eq!(names(&vm), Vec::<String>::new());
+        assert_eq!(vm.deleting(), None);
+        assert_eq!(t.announcer.take().last().map(String::as_str), Some("Project Plateau deleted."));
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Verdun");
+        vm.ask_delete(&id_of(&vm, "Verdun"));
+        assert_eq!(
+            vm.delete_question().as_deref(),
+            Some("Delete Verdun and everything in it? Its share link made on this device stops working too. This cannot be undone.")
+        );
+        let (vm, _, links0) = page_with_links(0);
+        vm.create("Rosemont");
+        vm.ask_delete(&id_of(&vm, "Rosemont"));
+        assert!(vm.confirm_delete(), "no link: deleted at once");
+        assert!(links0.asked.borrow().is_empty() && links.asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_project_whose_share_links_could_not_be_deleted_is_kept_and_says_why() {
+        let (vm, t, links) = page_with_links(1);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.ask_delete(&id);
+        vm.confirm_delete();
+        t.announcer.take();
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        assert_eq!(names(&vm), ["Plateau"], "kept, links and all");
+        assert_eq!(vm.deleting().map(|r| r.id), Some(id.clone()), "the question stays, to try again or cancel");
+        let words =
+            "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again.";
+        assert_eq!(t.announcer.take(), [words]);
+        assert_eq!(vm.delete_error().as_deref(), Some(words));
+        assert!(!vm.ending());
+        vm.confirm_delete();
+        assert_eq!(links.asked.borrow().len(), 1, "tried again");
+        assert_eq!(vm.delete_error(), None, "the reason goes while it tries again");
+        vm.cancel_delete();
+        assert!(vm.deleting().is_some());
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        vm.cancel_delete();
+        assert_eq!((vm.deleting(), vm.delete_error()), (None, None));
+    }
+
+    #[test]
+    fn while_its_links_are_deleted_the_question_s_buttons_wait_and_keep_focus() {
+        let (vm, _, _links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        vm.confirm_delete();
+        let out = markup(vm);
+        for id in ["project-delete-safe", "project-delete-yes"] {
+            let button = crate::shared::testing::button_tag(&out, id);
+            assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "{button}");
+        }
+    }
+
     #[test]
     fn the_rows_are_newest_change_first() {
         let (vm, t) = page();

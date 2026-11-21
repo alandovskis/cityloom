@@ -1,6 +1,7 @@
 //! Sharing a design by a link (#221, see `CLAUDE.md`): the share format, the page that makes a project's links and the
 //! page that opens one.
 
+pub mod links;
 pub mod model;
 pub mod store;
 pub mod text;

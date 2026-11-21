@@ -57,7 +57,10 @@ refusé la copie.
   indique qu’il a expiré. Un lien supprimé ou expiré continue de le dire pendant un an; ensuite, il indique qu’aucun
   aménagement partagé n’a ce lien.
 - **Suppression** : vous pouvez supprimer un lien à tout moment depuis la page de partage de l’appareil où vous l’avez
-  créé. Supprimer votre compte supprime d’un coup tous les liens que vous avez créés; ces liens indiquent alors qu’aucun
+  créé. Supprimer un projet sur la page d’accueil supprime d’abord les liens qui en ont été créés sur cet appareil (vous
+  devez être connecté avec le compte qui les a créés); si l’un d’eux ne peut pas l’être, le projet est conservé et la
+  page dit pourquoi. Un projet supprimé sur un autre appareil laisse fonctionner les liens qui en ont été créés sur
+  celui-ci jusqu’à leur expiration. Supprimer votre compte supprime d’un coup tous les liens que vous avez créés; ces liens indiquent alors qu’aucun
   aménagement partagé ne les a.
 - **Sur l’appareil de la personne qui l’ouvre** : la copie est conservée dans l’espace de stockage de ce navigateur
   seulement, jusqu’à ce qu’elle soit remplacée, que la limite de dix copies la pousse dehors ou que les données du site

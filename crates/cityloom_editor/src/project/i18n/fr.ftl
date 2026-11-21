@@ -41,6 +41,13 @@ project-delete = Supprimer
 project-delete-named = Supprimer { $name }
 project-delete-confirm = Supprimer { $name } et tout ce qu’il contient? Cette action est irréversible.
 project-delete-yes = Supprimer le projet
+# Avant de supprimer un projet qui a des liens de partage créés sur cet appareil (#221) : ils sont d’abord supprimés sur le serveur.
+project-delete-confirm-links = { $count ->
+    [one] Supprimer { $name } et tout ce qu’il contient? Son lien de partage créé sur cet appareil cessera aussi de fonctionner. Cette action est irréversible.
+   *[other] Supprimer { $name } et tout ce qu’il contient? Ses { $count } liens de partage créés sur cet appareil cesseront aussi de fonctionner. Cette action est irréversible.
+}
+# Ses liens de partage n’ont pas pu être supprimés sur le serveur, donc le projet a été conservé; $reason dit pourquoi, en une phrase.
+project-delete-links-failed = { $name } n’a pas été supprimé : ses liens de partage n’ont pas pu être supprimés d’abord. { $reason }
 project-gone = Ce projet n’est plus ici.
 project-first-name = Premier projet
 # A project whose places came before its record, until its record or a rename names it.

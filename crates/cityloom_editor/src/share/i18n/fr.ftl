@@ -82,5 +82,7 @@ share-error-unusable = Le travail de ce projet est illisible; il ne peut donc pa
 share-error-too-large = Ce projet est trop volumineux pour être partagé : un partage contient au plus { $megabytes } Mo.
 share-error-full = Vous avez déjà { $count } liens de partage. Supprimez-en un avant d’en créer un autre.
 share-error-too-many-today = Vous avez créé { $count } liens de partage au cours des dernières 24 heures, le maximum pour un compte. Réessayez plus tard.
+# Supprimer les liens de partage d’un projet avant le projet (#221) demande le compte qui les a créés.
+share-error-end-signed-out = Connectez-vous avec le compte qui les a créés pour les supprimer, ou attendez qu’ils expirent.
 share-error-not-yours = Un autre compte a créé ce lien : seul le compte qui l’a créé peut le supprimer.
 share-error-refused = Le serveur a refusé la demande.
