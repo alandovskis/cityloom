@@ -429,9 +429,10 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (15, json!({"street": {"calming": [{"from_mm": 0, "length_mm": 2000, "kind": "modal_filter"}]}}), 15),
         (16, json!({"street": {}, "scenarios": [{"id": 1, "name": "A", "design": {}}]}), 16),
         (17, json!({"street": {}, "import": 11}), 17),
+        (18, plain.clone(), 5),
         (NEWEST.into(), plain.clone(), 5),
     ];
-    assert_eq!(NEWEST, 18, "a new edits version needs a row here (18, a crossing on call, is a junction's: below)");
+    assert_eq!(NEWEST, 19, "a new edits version needs a row here (18, a crossing on call, and 19, passive detection, are a junction's: below)");
     for (version, mut record, written) in cases {
         record["import"] = json!(11); // an unstamped record is stale and never imported
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
@@ -458,6 +459,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
     assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::CALLS_VERSION);
+    // a crossing on call with passive detection needs version 19
+    let passive = json!({"state": {"arms": [{"calls": 12, "detection": "passive"}]}, "import": 11});
+    let doc = json!({"version": 19, "streets": {}, "junctions": {"n9": passive}});
+    let b = device();
+    let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::DETECTION_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }
