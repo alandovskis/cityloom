@@ -35,7 +35,7 @@ env:
 jobs:
   # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a pull
   # request runs every unit test but only the browser specs its files can affect, in the tiers that own them
-  # (e2e/tiers.json); anything doubtful runs every spec. postsubmit.yml runs every spec on main.
+  # (e2e/tiers.json: UI and integration; the E2E tier runs only in postsubmit.yml, on every spec of main).
   changes:
     name: Changes
     runs-on: ubuntu-26.04
@@ -48,8 +48,6 @@ jobs:
       ui_specs: ${{ steps.select.outputs.ui_specs }}
       integration: ${{ steps.select.outputs.integration }}
       integration_specs: ${{ steps.select.outputs.integration_specs }}
-      e2e: ${{ steps.select.outputs.e2e }}
-      e2e_specs: ${{ steps.select.outputs.e2e_specs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -289,37 +287,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # E2E tier: the whole path from data to page. The archive is packed from the fixtures (citymodel_builder, so this job has
-  # Rust, and no database) and unpacked by a fresh server; the delivery specs read the real server's headers and ranges.
-  e2e:
-    name: E2E tests
-    needs: [changes, build]
-    if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: ./.github/actions/browser-tests
-      # `e2e_specs` narrows the tier on a pull request (the archive spec brings the map and street specs it repeats).
-      - run: scripts/e2e-archive.sh $SPECS
-        env:
-          SPECS: ${{ needs.changes.outputs.e2e_specs }}
-      - name: Keep the report and traces of a failed run
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-report-e2e
-          path: |
-            e2e/playwright-report/
-            e2e/test-results/
-          retention-days: 14
-          if-no-files-found: ignore
+  # No E2E tier here: it packs and unpacks an archive and reads the real server's headers, which only main needs to prove
+  # (postsubmit.yml runs it, in full, before the deploy).
 
   # Every pull request raises the version in crates/cityloom_editor/Cargo.toml (semantic versioning); the pages show it in the menu. A change
   # made only of documentation and CI configuration (CI_CONFIGURATION in scripts/ci/ci_changes.py) does not need one: it
@@ -343,7 +312,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [changes, format, test, wasm, build, ui, integration, e2e, server-release, version]
+    needs: [changes, format, test, wasm, build, ui, integration, server-release, version]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:

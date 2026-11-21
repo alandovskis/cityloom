@@ -402,6 +402,13 @@ class Pipelines(unittest.TestCase):
         # Debug info is most of the time the linker spends on the test binaries, and a CI log never shows it.
         self.assertIn('CARGO_PROFILE_TEST_DEBUG: "0"', self.text("presubmit.yml"))
 
+    def test_the_e2e_tier_runs_only_after_the_merge(self):
+        # The E2E tier (an archive packed and served, the real server's headers) is the slowest to set up and proves what
+        # only main needs to: postsubmit runs it before the deploy, presubmit never does.
+        self.assertNotIn("e2e", self.jobs("presubmit.yml"))
+        self.assertNotIn("scripts/e2e-archive.sh", self.text("presubmit.yml"))
+        self.assertIn("e2e", self.jobs("postsubmit.yml"))
+
     def test_only_a_pull_request_is_cancelled_by_a_newer_push(self):
         self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
         self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))
