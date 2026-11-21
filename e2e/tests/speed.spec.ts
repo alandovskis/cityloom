@@ -122,7 +122,7 @@ test.describe("the details panel's path", () => {
     await expect(page.locator("#p-piece")).toBeHidden();
   });
 
-  test("a pressed piece shows under its zone, and the path's steps go back up with the piece still chosen", async ({
+  test("a pressed piece shows under the street, and the path's step goes back up with the piece still chosen", async ({
     page,
   }) => {
     await page.goto("/map.html");
@@ -131,33 +131,17 @@ test.describe("the details panel's path", () => {
     await first.click();
     await expect(page.locator("#p-piece")).toBeVisible();
     await expect(page.locator("#p-street")).toBeHidden();
-    await expect(path(page).locator("li")).toHaveCount(3);
-    await expect(step(page, "zone")).toHaveText("Zone 1");
-
-    await step(page, "zone").click();
-    await expect(page.locator("#p-zone")).toBeVisible();
-    await expect(page.locator("#zone-split")).toBeVisible();
-    await expect(here(page)).toHaveText("Zone 1");
-    await expect(here(page)).toBeFocused();
-    await expect(first).toHaveAttribute("aria-selected", "true");
+    await expect(path(page).locator("li")).toHaveCount(2);
+    await expect(path(page).locator(".path-step")).toHaveCount(1);
 
     await step(page, "street").click();
     await expect(speed(page)).toBeVisible();
+    await expect(here(page)).toHaveText("Street");
     await expect(here(page)).toBeFocused();
+    await expect(first).toHaveAttribute("aria-selected", "true");
 
     await first.click();
     await expect(page.locator("#p-piece")).toBeVisible();
-  });
-
-  test("from the street, one button shows the selected zone's commands", async ({ page }) => {
-    await page.goto("/map.html");
-    await page.goto("/" + (await placesOnMap(page)).streets[0]);
-    await expect(page.locator("#zone-split")).toBeHidden();
-    await page.locator("#zone-entry").click();
-    await expect(page.locator("#p-zone")).toBeVisible();
-    await expect(page.locator("#zone-split")).toBeVisible();
-    await expect(here(page)).toHaveText("Zone 1");
-    await expect(here(page)).toBeFocused();
   });
 
   test("a stretch of the curbside shows along the street, not under a zone", async ({ page }) => {
@@ -209,6 +193,9 @@ test.describe("a stretch's speed limit", () => {
     await expect(speed(page)).toHaveValue(street);
     await page.locator("#undo").click();
     await expect(planBoundaries(page)).toHaveCount(1);
+    await pickRunAt(page, half + 1);
+    await showStreetLevel(page);
+    await expect(speed(page)).toHaveValue(chosen);
     await page.locator("#undo").click();
     await expect(planBoundaries(page)).toHaveCount(0);
   });

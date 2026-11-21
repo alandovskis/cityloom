@@ -47,15 +47,14 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | School street | Rue scolaire | Template. |
 | Street page | Neighbourhood greenway | Voie verte de quartier | Template. To confirm: `voie partagée de quartier` is the form some boroughs use. |
 | Street page | Bus corridor | Corridor d’autobus | Template; the Atlas's measures say `transport en commun`, this one is the street's use. To confirm. |
-| Street page | Previous street / Next street (arrows to the street that carries on from each end) | Rue précédente / Rue suivante | `vers la limite de la carte`; not `segment` (a piece) or `tronçon` (the 2.5D’s stretch). |
+| Street page | Previous street / Next street (arrows to the street that carries on from each end) | Rue précédente / Rue suivante | `vers la limite de la carte`; not `segment` (a piece) or `tronçon` (a stretch along the street). |
 | Street page | Industrial access street | Rue d’accès industriel | Template. |
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |
-| Street page | Zone (a lengthways part of a street with its own section) | zone | `Zone 2`, `la zone sélectionnée`. `Tronçon` is kept for the 2.5D’s stretch of street (`svg-iso-label-zone`: `sur un tronçon de 40 m`), so the two are not confused. To confirm, see below. |
-| Street page | Stretch (the part of a street a person picks along its length: a start and an end) | tronçon | `Un tronçon doit mesurer au moins 5 m`, `choisir un autre tronçon`. Replaces `zone` for what a person picks on the street page; the 2.5D’s `tronçon de 40 m` is the same word for the same thing. |
-| Street page | Zone boundary | limite | `Limite entre deux zones`; the start of a zone is its `début`. To confirm, see below. |
-| Street page | 2.5D boundary label (the two zones that meet in the drawing) | limite … au premier plan … au-delà | `sur un tronçon de 40 m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà` (`svg-iso-label-joint`). To confirm, see below. |
+| Street page | Stretch (a part of a street along its length: a start and an end, named by where it lies from the plan’s left end) | tronçon | `Un tronçon doit mesurer au moins 5 m`, `choisir un autre tronçon`, `le tronçon de 49 m à 82 m` (`stretch-mid`: `de 49 m à 82 m`), `Varie le long du tronçon`. The street page says no `zone` of a street any more (only `zone scolaire`, `zone de chargement`, `zone tampon`); the 2.5D’s `tronçon de 40 m` is the same word for the same thing. |
+| Street page | Boundary (where the street changes along its length) | limite; changement le long de la rue | The plan’s boundary is a `limite` (`Aucune limite entre tronçons…`); moved, it is a change along the street: `Changement le long de la rue déplacé à 52 m`. A check names it `là où la rue change, à 49 m`. To confirm, see below. |
+| Street page | 2.5D boundary label (the two stretches that meet in the drawing) | au premier plan … au-delà | `sur un tronçon de 40 m centré sur 50 m, là où la coupe change brusquement : le tronçon de 0 m à 50 m est au premier plan et celui de 50 m à 100 m, au-delà` (`svg-iso-label-joint`). To confirm, see below. |
 | Street page | Curbside (the lane at the edge of the street and what stands along it) | bord de rue | `Usages du bord de rue`, `Bord de rue, à droite`. |
 | Street page | Standards profile (a set of local thresholds the checks use) | profil de normes | `Norme en vigueur`, `Normes de base` (the built-in ones), `Norme X : 3,5 m (de base : 3,0 m)`. `norme` for the set of thresholds, `seuil` for one figure. |
 | Street page | Export / Import a profile | Exporter / Importer le profil | As for the design archive. |
@@ -100,10 +99,10 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page frame | Start over | Recommencer |  |
 | Street page frame | Undo / Redo | Annuler / Rétablir |  |
 | Street page | Details (the panel of what is chosen) | Détails | As the junction page's panel. |
-| Street page | path (Street › Zone 1 › Driving lane, above the Details panel) | chemin | `Ce que montrent les détails` names it for a screen reader; its first step is `Rue`. |
+| Street page | path (Street › Driving lane, above the Details panel) | chemin | `Ce que montrent les détails` names it for a screen reader; its first step is `Rue`. |
 | Street page | free stretch (a strip's cell with nothing in it, on the path) | tronçon libre | As in `Choisissez d’abord un tronçon libre`. |
 | Street page | tray (the Notes under the drawing) and its handle | tiroir, poignée | The Notes keep their name (`Notes`); only the guide names the tray. |
-| Street page | Same as the street (a zone that follows the street's speed limit) | Comme la rue | `Comme la rue : 50 km/h`. |
+| Street page | Same as the street (a stretch that follows the street's speed limit) | Comme la rue | `Comme la rue : 50 km/h`. |
 | Street page frame | Add a piece | Ajouter un élément |  |
 | Street page frame | Time of day | Heure de la journée |  |
 | Street page frame | except (clock note) | sauf |  |
@@ -372,8 +371,8 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Junction N (city names) | `Jonction N` | `Intersection` is also used in Québec; `jonction` follows the app's junction editor. |
 | Main Street junction (one street) (city names) | `Jonction Rue Principale` |  |
 | End of X (city names) | `Bout de X` | In a sentence: `le bout de X`. Alternatives: `extrémité de X`, `fin de X`. |
-| Zone (of a street) | `zone` | `section` (taken by the cross-section, `coupe`), `segment` (the model’s word for a piece), `secteur`; `tronçon` stays the 2.5D’s stretch |
-| Zone boundary | `limite` | `frontière`, `séparation` |
+| Stretch (of a street) | `tronçon` | `zone` (no longer said of a street; kept for `zone scolaire` and the map’s areas), `section` (taken by the cross-section, `coupe`), `segment` (the model’s word for a piece), `secteur` |
+| Boundary between stretches | `limite` | `frontière`, `séparation` |
 | Connection on X (city names) | `Raccordement sur X` | In a sentence: `un raccordement sur X`; in a street's own heading, where X is that street, just `un raccordement`. |
 | An unnamed {class} street, in a sentence (city names) | `une rue { $class } sans nom` | For a place on an unnamed road: `Raccordement sur une rue locale sans nom`. A motorway: `une autoroute sans nom`. |
 | End of an unnamed street (city names) | `Bout d’une rue locale sans nom` | Its own message because `de` elides before `une`; in a sentence: `le bout d’une rue locale sans nom`. |

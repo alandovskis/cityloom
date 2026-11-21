@@ -241,7 +241,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                         value=value
                         prop:value=value
                         aria-labelledby="i-h-width"
-                        aria-describedby="i-width-range"
+                        aria-describedby="i-width-range i-width-varies"
                         on:keydown=move |e| {
                             if let Some(dir) = width_key(&e.key()) {
                                 e.prevent_default();
@@ -278,6 +278,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 <span class="insp-meter" style=move || format!("width: {:.0}%", w.segment(uid, meter_pct).unwrap_or(0.0))></span>
             </span>
             <p class="insp-range" id="i-width-range">{range}{move || standard().map(|s| view! { " " <span class="check-standard">{s}</span> })}</p>
+            {move || w.segment(uid, |s| s.varies).unwrap_or(false).then(|| view! { <p class="insp-range" id="i-width-varies">{say(w, "st-varies")}</p> })}
         </section>
     }
 }

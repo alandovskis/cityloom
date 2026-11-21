@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use super::CalmingKind as Kind;
 use super::stop_end::stop_gap_mm;
-use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap, zone_label_mid};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, ZoneEnd, ZoneFrame, snap};
 use crate::shared::catalogue::{KINDS, Side, is_roadway};
 use cityloom_model::street::{max_kmh, speed_in};
 
@@ -430,7 +430,7 @@ impl Editor {
 /// How the checks name a raised element, and where a chicane's build-outs stand.
 pub trait CalmingExt {
     fn named(&self) -> Said;
-    fn named_in(&self, zone: Said) -> Said;
+    fn named_in(&self, stretch: Said) -> Said;
     fn buildouts(&self) -> Vec<(i32, i32, Side)>;
 }
 
@@ -440,12 +440,12 @@ impl CalmingExt for Calming {
         Said::new("calming-instance").with("kind", Arg::MsgLower(self.kind.name_key())).with("at", Arg::Length(self.from_mm))
     }
 
-    /// The same, in the zone where it fails.
-    fn named_in(&self, zone: Said) -> Said {
-        Said::new("calming-instance-zone")
+    /// The same, in the stretch where it fails (`stretch`: "from 49 m to 82 m").
+    fn named_in(&self, stretch: Said) -> Said {
+        Said::new("calming-instance-stretch")
             .with("kind", Arg::MsgLower(self.kind.name_key()))
             .with("at", Arg::Length(self.from_mm))
-            .with("zone", Arg::Said(Box::new(zone)))
+            .with("stretch", Arg::Said(Box::new(stretch)))
     }
 
     /// A chicane's build-outs as (from, to, side) in millimetres from the anchored end, alternating from side to side
@@ -580,7 +580,7 @@ impl Editor {
                 for z in 0..content.zone_count() {
                     let (from, to) = content.span(z, length_mm);
                     if from < c.to_mm() && c.from_mm < to && !content.section(z).iter().any(|g| is_roadway(g.kind)) {
-                        fail(0, Said::new("check-detail-calming-roadway"), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                        fail(0, Said::new("check-detail-calming-roadway"), Some(c.named_in(self.stretch_said(z))));
                     }
                 }
             }
@@ -598,7 +598,7 @@ impl Editor {
                     let (from, to) = content.span(z, length_mm);
                     let kmh = speed_in(content.speed, &content.zones, z).kmh().filter(|&n| n > u16::from(max));
                     if let Some(kmh) = kmh.filter(|_| from < c.to_mm() && c.from_mm < to) {
-                        fail(1, too_fast(kmh), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                        fail(1, too_fast(kmh), Some(c.named_in(self.stretch_said(z))));
                     }
                 }
             }
@@ -614,7 +614,7 @@ impl Editor {
                     for z in 0..content.zone_count() {
                         let (from, to) = content.span(z, length_mm);
                         if from < c.to_mm() && c.from_mm < to && lane(content.section(z)) {
-                            fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(zone_label_mid(&content.zones[z], z + 1))));
+                            fail(4, Said::new("check-detail-calming-lane"), Some(c.named_in(self.stretch_said(z))));
                         }
                     }
                 }
@@ -636,7 +636,7 @@ impl Editor {
                     for z in 0..content.zone_count() {
                         let (from, to) = content.span(z, length_mm);
                         if from < c.to_mm() && c.from_mm < to {
-                            let named = || Some(c.named_in(zone_label_mid(&content.zones[z], z + 1)));
+                            let named = || Some(c.named_in(self.stretch_said(z)));
                             if bus(content.section(z)) {
                                 fail(5, Said::new("check-detail-filter-bus"), named());
                             }
@@ -1265,9 +1265,9 @@ mod tests {
         assert!(!c.ok);
         assert_eq!(c.detail.key, "check-detail-calming-roadway");
         let named = c.zone.unwrap();
-        assert_eq!(named.key, "calming-instance-zone");
-        let Some((_, Arg::Said(zone))) = named.args.iter().find(|(n, _)| *n == "zone") else { panic!("the zone is named") };
-        assert_eq!((zone.key, zone.args.clone()), ("zone-unnamed-mid", vec![("n", Arg::Num(2))]));
+        assert_eq!(named.key, "calming-instance-stretch");
+        let Some((_, Arg::Said(stretch))) = named.args.iter().find(|(n, _)| *n == "stretch") else { panic!("the stretch is named") };
+        assert_eq!(**stretch, crate::street::model::stretch_between(30_000, LEN));
         // A table wholly in the first zone is not affected.
         let mut e = with_table(5_000, 10_000);
         e.split_zone(Some(30_000)).unwrap();

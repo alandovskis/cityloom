@@ -8,6 +8,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::HtmlSelectElement;
 
 use crate::shared::i18n::Args;
+use crate::shared::said::{Arg, Said, say};
 use crate::street::vm::watch::SheetWatch;
 use crate::street::vm::{SpeedOption, StreetVm};
 
@@ -61,13 +62,16 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                 }}
             </select>
             {move || {
-                // With several zones the limit set here is the chosen zone's (a known limit: there is no zone-level
-                // control), so a line says whose.
-                let v = w.view();
-                (v.zones.several)
-                    .then(|| v.zones.zones.get(v.zones.selected).map(|z| crate::shared::said::say(&w.i18n(), w.units(), &z.label)))
-                    .flatten()
-                    .map(|zone| view! { <p class="zone-hint">{w.i18n().tr("st-speed-zone-hint", &Args::new().str("zone", zone))}</p> })
+                // With a stretch picked the limit set here is the stretch's, so a line says which; where the picked
+                // runs have different limits, the one shown is the shown run's, and a line says it varies.
+                let (v, units) = w.now();
+                let i18n = w.i18n();
+                let stretch = v.plan.pick.map(|(from, to)| {
+                    let hint = Said::new("st-speed-stretch-hint").with("from", Arg::Length(from)).with("to", Arg::Length(to));
+                    view! { <p class="zone-hint">{say(&i18n, units, &hint)}</p> }
+                });
+                let varies = v.speed_varies.then(|| view! { <p class="zone-hint">{i18n.tr("st-varies", &Args::new())}</p> });
+                (stretch, varies)
             }}
             </div>
         </div>

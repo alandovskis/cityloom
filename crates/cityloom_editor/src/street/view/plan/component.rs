@@ -8,7 +8,7 @@ use std::rc::Rc;
 use leptos::ev::{KeyboardEvent, PointerEvent};
 use leptos::prelude::*;
 
-use super::{hit, plan_layout, plan_mm, plan_svg};
+use super::{TARGET_PX, hit, plan_layout, plan_mm, plan_svg};
 use crate::shared::i18n::Args;
 use crate::shared::said::say;
 use crate::street::vm::StreetVm;
@@ -23,7 +23,7 @@ const SHORTCUTS: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+Pag
 /// What the pointer is over when nothing is pressed, for its cursor.
 fn hover_of(p: PlanPress) -> &'static str {
     match p {
-        PlanPress::Street { .. } => "street",
+        PlanPress::Street { .. } | PlanPress::Lane { .. } => "street",
         PlanPress::Handle { .. } | PlanPress::Boundary { .. } => "edge",
         PlanPress::Thing { .. } => "thing",
     }
@@ -49,6 +49,8 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
     // The press under way, and how far the pointer was from the line it took.
     let gesture = StoredValue::new_local(None::<(PlanGesture, f64)>);
     let hover = RwSignal::new("street");
+    // How big a target is: larger on a coarse pointer (a finger), as the browser says when the plan is drawn.
+    let target = StoredValue::new(coarse_target().unwrap_or(TARGET_PX));
 
     let svg = Memo::new(move |_| {
         let (v, units) = w.now();
@@ -70,7 +72,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         let e = w.view().zones.elsewhere.as_ref().map(|e| (e.drawn_mm, e.loaded_mm))?;
         let (i18n, units) = (w.i18n(), w.units());
         let locale = i18n.locale();
-        Some(i18n.tr("zones-elsewhere", &Args::new().str("drawn", units.length_in(e.0, locale)).str("loaded", units.length_in(e.1, locale))))
+        Some(i18n.tr("stretches-elsewhere", &Args::new().str("drawn", units.length_in(e.0, locale)).str("loaded", units.length_in(e.1, locale))))
     };
 
     // Where the pointer is on the drawing, from its top left.
@@ -92,7 +94,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         }
         cancel();
         let Some((x, y)) = local(&e) else { return };
-        let h = hit(&w.view_now().plan, width.get_untracked(), x, y);
+        let h = hit(&w.view_now().plan, width.get_untracked(), x, y, target.get_value());
         let g = vm.with_value(|vm| vm.plan_press(h.press, f64::from(e.client_x())));
         gesture.set_value(Some((g, h.grab_px)));
         // The drawing holds the pointer: it is never replaced, only what it shows.
@@ -113,7 +115,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
     let on_move = move |e: PointerEvent| {
         let Some((x, y)) = local(&e) else { return };
         let Some((g, grab)) = gesture.get_value() else {
-            let over = hover_of(hit(&w.view_now().plan, width.get_untracked(), x, y).press);
+            let over = hover_of(hit(&w.view_now().plan, width.get_untracked(), x, y, target.get_value()).press);
             if hover.get_untracked() != over {
                 hover.set(over);
             }
@@ -127,8 +129,11 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
     let on_up = move |e: PointerEvent| {
         let Some((g, grab)) = gesture.get_value() else { return };
         gesture.set_value(None);
-        let at = local(&e).map_or(0, |(x, _)| along(x, grab));
-        vm.with_value(|vm| vm.plan_release(g, at));
+        // Let go where the drawing cannot be measured, the press is given up rather than ended at some made-up place.
+        match local(&e) {
+            Some((x, _)) => vm.with_value(|vm| vm.plan_release(g, along(x, grab))),
+            None => vm.with_value(|vm| vm.plan_cancel(g)),
+        }
     };
     let on_key = move |e: KeyboardEvent| {
         if e.key() == "Escape" && gesture.with_value(Option::is_some) {
@@ -195,12 +200,12 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
                         node_ref=point
                         role="slider"
                         tabindex="0"
-                        aria-labelledby="plan"
+                        aria-label=move || w.i18n().tr("st-plan-point-label", &Args::new())
                         aria-orientation="horizontal"
                         aria-valuemin="0"
                         aria-valuemax=move || metres(length())
                         aria-valuenow=move || metres(vm.with_value(|vm| vm.plan_point()))
-                        aria-valuetext=move || vm.with_value(|vm| vm.plan_point_text())
+                        aria-valuetext=move || Some(vm.with_value(|vm| vm.plan_point_text())).filter(|t| !t.is_empty())
                         aria-keyshortcuts=SHORTCUTS
                         style:left=move || format!("{}px", layout(vm.with_value(|vm| vm.plan_point())).1)
                         on:keydown=on_key
@@ -211,6 +216,17 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
             <p class="plan-notice" role="status">{notice}</p>
         </div>
     }
+}
+
+/// The target size for a coarse pointer, when the browser says one is in use; else `None` (also off the browser).
+fn coarse_target() -> Option<f64> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let coarse = window().match_media("(any-pointer: coarse)").ok().flatten().is_some_and(|m| m.matches());
+        coarse.then_some(super::COARSE_TARGET_PX)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    None
 }
 
 /// Keeps `width` as wide as the plan's box.

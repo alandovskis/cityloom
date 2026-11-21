@@ -70,7 +70,7 @@ mod tests {
         assert_eq!(back, s.zones);
     }
 
-    use crate::street::model::{Editor, Keep, Said, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Editor, Said, ZoneEnd, ZoneFrame};
 
     const LEN: i32 = 60_000;
 
@@ -93,10 +93,10 @@ mod tests {
         assert_eq!(e.view().speed_kmh, Some(30));
         assert_eq!(e.view().street_speed_kmh, Some(50));
         assert!(!e.view().speed_follows);
-        let zone = Said::new("zone-unnamed-mid").with("n", crate::street::model::Arg::Num(2));
+        let stretch = crate::street::model::stretch_between(30_000, LEN);
         assert_eq!(
             e.view().revisions.last().unwrap().label,
-            Said::new("rev-zone-speed").with("zone", crate::street::model::Arg::Said(Box::new(zone))).with("kmh", crate::street::model::Arg::Num(30))
+            Said::new("rev-stretch-speed").with("stretch", crate::street::model::Arg::Said(Box::new(stretch))).with("kmh", crate::street::model::Arg::Num(30))
         );
         e.select_zone(0);
         assert_eq!((e.view().speed_kmh, e.view().speed_follows), (Some(50), true));
@@ -151,26 +151,12 @@ mod tests {
     }
 
     #[test]
-    fn splitting_keeps_the_speed_in_both_halves_and_merging_asks_when_they_differ() {
+    fn splitting_keeps_the_speed_in_both_halves() {
         let mut e = split(Speed::Kmh(50));
         assert!(e.set_speed(Some(30)));
         e.split_zone(Some(45_000)).unwrap();
         let s = e.snapshot();
         assert_eq!((s.zones[1].speed, s.zones[2].speed), (Speed::Kmh(30), Speed::Kmh(30)));
-        e.select_zone(0);
-        assert!(e.merge_needs_choice(true), "same pieces, different speeds");
-        e.select_zone(1);
-        assert!(!e.merge_needs_choice(true), "the same speed and pieces");
-    }
-
-    #[test]
-    fn merging_keeps_the_speed_of_the_zone_kept_and_one_zone_left_gives_it_to_the_street() {
-        let mut e = split(Speed::Kmh(50));
-        assert!(e.set_speed(Some(30)));
-        e.merge_zone(false, Keep::Selected).unwrap();
-        let s = e.snapshot();
-        assert!(s.zones.is_empty(), "one zone left is no zoning");
-        assert_eq!(s.speed, Speed::Kmh(30));
     }
 
     #[test]

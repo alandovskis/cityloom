@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use super::matching::match_pieces;
+use super::matching::{counterpart, match_pieces};
 use super::zones::MIN_ZONE_MM;
 use super::{Arg, Content, Editor, Said, Segment, Speed, Zone, ZoneEnd, ZoneFrame, snap};
 use crate::shared::catalogue::KINDS;
@@ -138,6 +138,39 @@ impl Editor {
             ZoneEnd::First => anchored_mm,
             ZoneEnd::Last => self.pick_length_mm() - anchored_mm,
         }
+    }
+
+    /// The picked stretch as the page names it ("from 49 m to 82 m"); `None` for the whole street.
+    pub(super) fn picked_stretch(&self) -> Option<Said> {
+        match self.pick {
+            Pick::Whole => None,
+            Pick::Stretch { from_mm, to_mm } => Some(self.stretch_of(from_mm, to_mm)),
+        }
+    }
+
+    /// For each piece of the shown section, whether its width differs from its counterpart's (`counterpart`: by uid,
+    /// then by kind) in another zone of the pick.
+    pub(super) fn widths_vary(&self) -> Vec<bool> {
+        let content = &self.states[self.cursor].content;
+        let shown = self.current();
+        let mut varies = vec![false; shown.len()];
+        for z in self.zones_in_pick() {
+            let other = content.section(z);
+            for (i, j) in counterpart(shown, other).into_iter().enumerate() {
+                if j.is_some_and(|j| other[j].width_mm != shown[i].width_mm) {
+                    varies[i] = true;
+                }
+            }
+        }
+        varies
+    }
+
+    /// Whether the zones of the pick have different speed limits (each its own, else the street's).
+    pub(super) fn speeds_vary(&self) -> bool {
+        let content = &self.states[self.cursor].content;
+        let mut speeds = self.zones_in_pick().map(|z| speed_in(content.speed, &content.zones, z).kmh());
+        let first = speeds.next();
+        speeds.any(|k| Some(k) != first)
     }
 
     /// Where a position counted from the plan's left end lies from the anchored end: `left_mm`'s inverse.
@@ -310,7 +343,7 @@ impl Editor {
 
     /// The length the pick lies along: the road as loaded (the plan is drawn at it), else the one the zones were
     /// drawn on.
-    fn pick_length_mm(&self) -> i32 {
+    pub(super) fn pick_length_mm(&self) -> i32 {
         self.frame.map(|f| f.length_mm).or(self.states[self.cursor].content.length_mm).unwrap_or(0)
     }
 
@@ -1131,5 +1164,21 @@ mod tests {
         assert_eq!(starts(&e), [0, 20_000, 25_000, 35_000, 40_000]);
         assert_eq!(widths_of(&e, 0), [3_300, 3_400, 3_000, 3_400, 3_300]);
         assert_eq!(&e.snapshot().sections()[2][1..], &zoned.sections()[1][1..]);
+    }
+
+    #[test]
+    fn a_piece_whose_width_differs_across_the_picked_runs_says_it_varies() {
+        // The middle run has its first piece 100 mm wider than the runs either side.
+        let mut e = three_runs();
+        let varies = |e: &Editor| e.view().segments.iter().map(|s| s.varies).collect::<Vec<_>>();
+        let pieces = e.view().segments.len();
+        assert_eq!(varies(&e)[0], true, "the whole street holds both widths of the first piece");
+        assert!(varies(&e)[1..].iter().all(|v| !v), "the other pieces are alike in every run");
+        e.pick_stretch(20_000, 40_000).unwrap();
+        assert_eq!(varies(&e), vec![false; pieces], "one run: nothing to differ from");
+        e.pick_stretch(10_000, 30_000).unwrap();
+        assert_eq!(varies(&e)[0], true, "a pick across a boundary holds both widths");
+        e.pick_stretch(45_000, LEN).unwrap();
+        assert_eq!(varies(&e), vec![false; pieces]);
     }
 }

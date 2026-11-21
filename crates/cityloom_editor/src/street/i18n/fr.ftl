@@ -256,11 +256,11 @@ svg-iso-label = { $name } en 2,5D, sur un tronçon de { $length }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }.
-svg-iso-label-zone = { $name } en 2,5D, { $zone }, de { $from } à { $to }, sur un tronçon de { $length }. { $count ->
+svg-iso-label-stretch = { $name } en 2,5D, { $stretch }, sur un tronçon de { $length }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }.
-svg-iso-label-joint = { $name } en 2,5D, sur un tronçon de { $length } centré sur la limite entre { $near } au premier plan et { $far } au-delà. La coupe change brusquement à cet endroit. { $zone } compte { $count ->
+svg-iso-label-joint = { $name } en 2,5D, sur un tronçon de { $length } centré sur { $at }, là où la coupe change brusquement : le tronçon { $near } est au premier plan et celui { $far }, au-delà. Le tronçon { $stretch } compte { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }.
@@ -323,32 +323,22 @@ transform-family-f = Voies à contresens
 rev-made-pedestrian = Rendue piétonne
 rev-speed = Limite de vitesse : { $kmh }{" "}km/h
 rev-speed-not-set = Limite de vitesse non indiquée
-rev-zone-speed = Limite de vitesse de { $kmh }{" "}km/h : { $zone }
-rev-zone-speed-not-set = Limite de vitesse non indiquée : { $zone }
-rev-zone-speed-street = Retour à la limite de vitesse de la rue : { $zone }
+rev-stretch-speed = Limite de vitesse de { $kmh }{" "}km/h { $stretch }
+rev-stretch-speed-not-set = Limite de vitesse non indiquée { $stretch }
+rev-stretch-speed-street = Retour à la limite de vitesse de la rue { $stretch }
 street-now-pedestrian = { $street } est maintenant une rue piétonne.
 street-traffic-again = { $street } accueille de nouveau la circulation.
 check-access-ped-ok = Les trottoirs offrent un passage continu de { $amount } ou plus
 check-access-ped-bad = Aucun trottoir continu de { $amount } ou plus
 check-detail-no-edges-pedestrian = Pas de chaussée, donc pas de trottoir exigé
 
-# Zones (src/street/model/zones.rs) : ce que le modèle dit avoir fait aux zones d’une rue, et pourquoi il refuse.
-zone-unnamed = Zone { $n }
-zone-unnamed-mid = zone { $n }
-rev-zone-split = Division de la rue à { $at }
-rev-zone-merge = Fusion des zones; coupe gardée : { $kept }
-rev-zone-move = Début de zone déplacé à { $to } : { $zone }
-rev-zone-name = Nom de la zone : { $zone }
-rev-zone-unname = Nom effacé : { $zone }
-rev-zone-reset = Retour à la coupe de la rue : { $zone }
-rev-zone-use = Coupe appliquée à toute la rue : { $zone }
-zone-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de zones.
-zone-refused-elsewhere = Les zones de cette rue ont été tracées sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
-zone-refused-too-short = Une zone doit mesurer au moins { $min }.
-zone-refused-outside = Cette position est hors de la rue.
-zone-refused-no-neighbour = Il n’y a pas de zone de ce côté avec laquelle fusionner.
-zone-refused-no-boundary = La première zone commence à l’extrémité de la rue : elle n’a pas de limite à déplacer.
-zone-refused-dragging = Terminez le glissement avant de modifier les zones.
+# Là où la rue change le long de sa longueur (src/street/model/zones.rs) : une limite déplacée, et pourquoi elle ne peut pas l’être.
+# `to` se compte depuis l’extrémité gauche du plan.
+rev-boundary-move = Changement le long de la rue déplacé à { $to }
+boundary-refused-elsewhere = Les changements le long de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les déplacer ici.
+zone-refused-dragging = Terminez le glissement avant de modifier la rue.
+# Un tronçon nommé au milieu d’une phrase, ses extrémités depuis l’extrémité gauche du plan (« Place pour la transition de 49 m à 82 m »).
+stretch-mid = de { $from } à { $to }
 pick-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut la modifier que sur toute sa longueur.
 pick-refused-too-short = Un tronçon doit mesurer au moins { $min }.
 pick-refused-outside = Cette position est hors de la rue.
@@ -373,14 +363,12 @@ st-plan-label = La rue de sa première extrémité à sa dernière, { $length } 
 st-stretch = De { $from } à { $to } · { $length } de long
 # Où se trouve le point du plan au clavier, dit tant qu’il se déplace seul (src/street/vm/text.rs, point_said).
 st-point = À { $at }
-zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
+# Le nom du point du plan au clavier, un curseur (src/street/view/plan/component.rs).
+st-plan-point-label = Point le long de la rue
+stretches-elsewhere = Les changements le long de cette rue ont été tracés lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
-check-zone-in = { $check } : { $zone }
-zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
-        [own] sa propre coupe
-       *[base] la coupe de base
-    }, { $n } sur { $total }
+check-stretch-in = { $check } { $stretch }
 # Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
 plan-cut = Coupée par le bord de la carte
 
@@ -388,20 +376,8 @@ plan-cut = Coupée par le bord de la carte
 st-pieces-heading = Éléments de la rue
 st-pieces-label = Éléments, de gauche à droite
 
-# The commands beside the zone strip (src/street/view/zone_tools.rs).
+# Une longueur tapée dans un outil du panneau des détails qui n’est pas un nombre.
 zone-bad-number = Ce n’est pas un nombre.
-st-zone-tools = Commandes des zones
-st-zone-split = Diviser
-st-zone-split-at = Diviser à ({ $unit })
-st-zone-start = Début de cette zone ({ $unit })
-st-zone-merge-prev = Fusionner avec la zone précédente
-st-zone-merge-next = Fusionner avec la zone suivante
-st-zone-merge-choice = Quelle coupe garder
-st-zone-keep = Garder la coupe : { $zone }
-st-zone-keep-cancel = Annuler la fusion
-st-zone-name = Nom de la zone
-st-zone-reset = Revenir à la coupe de la rue
-st-zone-use = Utiliser cette coupe pour toute la rue
 st-street-sub =
     { $class ->
         [motorway] Autoroute
@@ -409,10 +385,7 @@ st-street-sub =
         [collector] Rue collectrice
         [pedestrian] Rue piétonne
        *[local] Rue locale
-    } · { $width } de large · { $length } de long · { $zones ->
-        [one] 1 zone
-       *[other] { $zones } zones
-    }
+    } · { $width } de large · { $length } de long
 st-street-sub-free =
     { $class ->
         [motorway] Autoroute
@@ -420,39 +393,22 @@ st-street-sub-free =
         [collector] Rue collectrice
         [pedestrian] Rue piétonne
        *[local] Rue locale
-    } · { $width } de large · { $zones ->
-        [one] 1 zone
-       *[other] { $zones } zones
-    }
-st-row-zones = Zones
-st-zones-entry-hint = Divisez la rue pour donner à un tronçon ses propres éléments et sa limite de vitesse.
-st-speed-zone-hint = Pour { $zone }, la zone choisie.
-st-zone-sub = { $from } à { $to } · { $length } de long · { $at } sur { $total }
-st-zone-sub-whole = La rue entière · { $length }
-st-zone-row-name = Nom
-st-zone-row-start = Début
-st-zone-row-section = Coupe
-st-zone-row-split = Diviser
-st-zone-row-merge = Fusionner
-st-zone-own = Sa propre coupe
-st-zone-same = La coupe de la rue
-st-zone-split-hint = Au milieu si le champ est vide. Chaque partie peut ensuite avoir ses propres éléments et sa limite de vitesse.
-st-zone-with = Avec { $zone }
-st-zone-merge-with = Fusionner avec { $zone }
+    } · { $width } de large
+st-speed-stretch-hint = Pour le tronçon de { $from } à { $to }.
+# Sous une valeur qui diffère d’une partie du tronçon choisi à l’autre : celle montrée est celle de la partie montrée.
+st-varies = Varie le long du tronçon
 st-path-label = Ce que montrent les détails
 st-path-street = Rue
 st-path-gap = Tronçon libre
 # `name` est un type d’élément, ou le nom propre d’un arrêt.
 st-path-step = { $name }
-st-path-hint = Choisissez un élément, une zone ou un tronçon le long de la rue pour le modifier.
-# `zone` est le nom de la zone sélectionnée (Zone 1, ou le nom qu’on lui a donné).
-st-path-zone-entry = Commandes de zone : { $zone }
+st-path-hint = Choisissez un élément, ou un tronçon sur le plan, pour le modifier.
 st-speed-label = Limite de vitesse
 st-speed-not-set = Non indiquée
 st-speed-kmh = { $kmh }{" "}km/h
 st-speed-street = Comme la rue : { $kmh }{" "}km/h
 st-speed-street-not-set = Comme la rue : non indiquée
-svg-iso-transition = Une transition de { $length } mène à { $zone }.
+svg-iso-transition = Une transition de { $length } mène au tronçon { $stretch }.
 svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
@@ -474,11 +430,11 @@ svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
     }
-check-boundary = entre { $a } et { $b }
+check-boundary = là où la rue change, à { $at }
 check-label-transition-room = Place pour la transition
 check-label-lane-drop = Fins de voie
-check-detail-transition-room = La transition demande { $need }, mais { $zone } mesure { $room }.
-check-detail-transition-room-ok = Chaque transition tient dans sa zone.
+check-detail-transition-room = La transition demande { $need }, mais le tronçon { $stretch } mesure { $room }.
+check-detail-transition-room-ok = Chaque transition tient dans son tronçon.
 check-detail-lane-drop = Une voie se termine sans voie voisine où s’insérer.
 check-detail-lane-drop-ok = Chaque voie qui se termine peut s’insérer.
 
@@ -496,6 +452,7 @@ rev-curb-use = Usage changé à { $at } : { $use }
 rev-curb-resize = Longueur modifiée à { $at } : { $use }
 rev-curb-move = Usage déplacé à { $at } : { $use }
 rev-curb-remove = Usage retiré à { $at } : { $use }
+curb-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’usages du bord de rue.
 curb-refused-elsewhere = Les usages de ce bord de rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
 curb-refused-overlap = Cet usage chevaucherait un autre usage du même côté.
 curb-refused-too-long = Cet usage dépasserait l’extrémité de la rue.
@@ -735,10 +692,10 @@ template-greenway = Voie verte de quartier
 template-bus-corridor = Corridor d’autobus
 template-industrial = Rue d’accès industriel
 transform-templates-heading = Modèles de rue
-transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les éléments de la zone choisie sont remplacés par des éléments ordinaires, modifiables et annulables en une seule modification.
+transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les éléments du tronçon choisi sont remplacés par des éléments ordinaires, modifiables et annulables en une seule modification.
 template-school-applied-zone = La zone scolaire va de { $from } à { $to }.
-template-school-skipped-zone = Aucune zone scolaire distincte n’a été créée : la zone sélectionnée tout entière est la zone scolaire. { $reason }
-template-school-room = La zone est plus courte qu’une zone scolaire de { $length }, avec { $min } de marge de chaque côté.
+template-school-skipped-zone = Aucune zone scolaire distincte n’a été créée : le tronçon choisi tout entier est la zone scolaire. { $reason }
+template-school-room = Le tronçon est plus court qu’une zone scolaire de { $length }, avec { $min } de marge de chaque côté.
 template-school-applied-speed = La limite de vitesse y est de { $kmh }{" "}km/h.
 template-school-skipped-speed = La limite de vitesse reste à { $kmh }{" "}km/h : elle ne dépasse pas { $limit }{" "}km/h.
 template-school-applied-table = Un plateau surélevé est placé à { $at }.
@@ -750,7 +707,7 @@ template-refused-wide = Le modèle « { $name } » ne peut pas servir une rue de
 
 # Les vérifications des éléments surélevés (src/street/model/calming.rs).
 calming-instance = { $kind } à { $at }
-calming-instance-zone = { $kind } à { $at }, dans { $zone }
+calming-instance-stretch = { $kind } à { $at }, dans le tronçon { $stretch }
 check-calming-in = { $check } : { $instance }
 check-label-calming-length = Éléments surélevés assez longs, sur une chaussée
 check-detail-calming-length = Un élément surélevé de { $length } est trop court : avec des rampes de { $ramp }, il en faut { $min } ou plus.
@@ -802,7 +759,7 @@ src-summary = Source : { $status }
 src-confidence-placeholder = provisoire, sans source
 src-confidence-unchecked = citée, chiffres non vérifiés
 src-applies-placeholder = Une valeur provisoire de CityLoom. Elle en tient lieu jusqu’à ce qu’une source faisant autorité la remplace.
-src-applies-transition = S’applique là où deux zones d’une rue ont des sections différentes : il dimensionne l’empattement entre elles. Les chiffres sont provisoires et n’ont pas encore été vérifiés auprès de ces sources.
+src-applies-transition = S’applique là où la coupe d’une rue change le long de celle-ci : il dimensionne l’empattement entre les deux. Les chiffres sont provisoires et n’ont pas encore été vérifiés auprès de ces sources.
 src-jurisdiction-ca = Canada
 src-jurisdiction-qc = Québec
 src-source = { $publisher }, { $title } ({ $jurisdiction })
