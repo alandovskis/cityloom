@@ -44,7 +44,24 @@ const LANE_GAP: f64 = 2.0;
 /// The plan drawn `width_px` wide, or wider for a street too long to fit at `MIN_PX_PER_M`. A plan with no length
 /// (no end to measure from) is schematic: its one run fills the width and both ends are marked cut.
 pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> String {
-    let at = Along::of(p, width_px);
+    plan_at(p, Along::of(p, width_px), across_scale(p), i18n, units)
+}
+
+/// Two designs of one street drawn at one scale each way: along the street at the scale of the longer, so a metre is
+/// as wide in both, and across at the scale that fits the widest run of either into `BANDS_H`, so a band as wide
+/// across as another is as tall in both. A plan with no length is schematic, `width_px` wide, as in `plan_svg`.
+pub fn plan_pair(a: &PlanView, b: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> (String, String) {
+    let along = [a, b].iter().filter_map(|p| p.length_mm).map(|l| mm_per_px(l, width_px)).reduce(f64::max);
+    let across = BANDS_H / widest(a).max(widest(b)).max(1) as f64;
+    let draw = |p: &PlanView| {
+        let at = along.map_or_else(|| Along::of(p, width_px), |mm| Along::scaled(p, mm, width_px));
+        plan_at(p, at, across, i18n, units)
+    };
+    (draw(a), draw(b))
+}
+
+/// The plan drawn `at` its scale along the street and `across` px to the millimetre across.
+fn plan_at(p: &PlanView, at: Along, across: f64, i18n: &I18n, units: Units) -> String {
     let width = at.width;
     let mut out = format!(
         "<svg class=\"plan\" xmlns=\"http://www.w3.org/2000/svg\"{}{} width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">",
@@ -56,7 +73,6 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
         w = f1(width),
         h = f1(HEIGHT),
     );
-    let across = BANDS_H / p.runs.iter().map(run_total).max().unwrap_or(0).max(1) as f64;
     let stacks: Vec<Vec<(f64, f64)>> = p.runs.iter().map(|r| stack(r, across)).collect();
     for (r, ys) in p.runs.iter().zip(&stacks) {
         out.push_str(&run(r, ys, at.span(r.from_mm, r.to_mm)));
@@ -135,6 +151,14 @@ struct Along {
 }
 
 impl Along {
+    /// `p` at `mm_per_px` along the street; a plan with no length stays schematic.
+    fn scaled(p: &PlanView, mm_per_px: f64, width_px: f64) -> Along {
+        match p.length_mm {
+            Some(length) => Along { length_mm: Some(length), mm_per_px, width: x_px(length, mm_per_px) },
+            None => Along::of(p, width_px),
+        }
+    }
+
     fn of(p: &PlanView, width_px: f64) -> Along {
         match p.length_mm {
             Some(length) => {
@@ -172,6 +196,16 @@ impl Along {
         let (from, to) = (from_mm.max(0), to_mm.min(length));
         (from < to).then(|| (self.x(from), self.x(to)))
     }
+}
+
+/// The widest of a plan's runs across, in millimetres.
+fn widest(p: &PlanView) -> i32 {
+    p.runs.iter().map(run_total).max().unwrap_or(0)
+}
+
+/// Pixels to the millimetre across for a plan alone: its widest run fills `BANDS_H`.
+fn across_scale(p: &PlanView) -> f64 {
+    BANDS_H / widest(p).max(1) as f64
 }
 
 /// How wide a run's section is across.
@@ -358,6 +392,30 @@ mod tests {
         let open = format!("<g class=\"plan-run\" data-zone=\"{zone}\"");
         let at = markup.find(&open).unwrap_or_else(|| panic!("the run of zone {zone}"));
         &markup[at..at + markup[at..].find("</g>").unwrap()]
+    }
+
+    #[test]
+    fn a_pair_of_equal_plans_is_drawn_as_one_plan_is() {
+        let p = two_runs();
+        let (a, b) = plan_pair(&p, &p, WIDTH, &en(), Units::Metres);
+        assert_eq!(a, drawn(&p));
+        assert_eq!(b, a);
+    }
+
+    #[test]
+    fn a_wider_design_draws_the_narrower_one_thinner() {
+        let a = two_runs();
+        let mut b = two_runs();
+        b.runs[0].bands[1].width_mm += 3_000;
+        let (widest_a, widest_b) = (widest(&a), widest(&b));
+        assert!(widest_b > widest_a);
+        let (pa, pb) = plan_pair(&a, &b, WIDTH, &en(), Units::Metres);
+        let height = |markup: &str| num(tags(run_group(markup, 0), "plan-band")[0], "height");
+        let ratio = widest_a as f64 / widest_b as f64;
+        assert!((height(&pa) - height(&drawn(&a)) * ratio).abs() < 0.11, "{} {}", height(&pa), height(&drawn(&a)));
+        assert!(height(&pa) < height(&drawn(&a)));
+        // B holds the widest run, so it is drawn as it is alone.
+        assert_eq!(pb, drawn(&b));
     }
 
     #[test]
