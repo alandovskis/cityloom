@@ -839,6 +839,7 @@ jn-bikes-no-wait-said = aucun cycliste servi
 jn-bikes-rows-caption = Chaque appel de cycliste de l’heure, dans l’ordre où il a été fait
 jn-bikes-finding-cannot = Les vélos de { $arm } ne peuvent pas être servis en sécurité : leur vert minimal et leur dégagement demandent { $need } s de vert, et aucune phase qui les fait passer ne peut donner plus de { $most } s.
 jn-bikes-finding-not-ridden = Les vélos de { $arm } sont sur détection, mais aucune phase ne les fait passer : leurs appels ne sont pas servis. Faites-les passer dans une phase ou remettez-les en rappel.
+jn-bikes-finding-past-max = Les vélos de { $arm } demandent { $need } s de vert, plus que le vert maximal de { $max } s de { $phase } : un appel servi là retient le vert au-delà du maximum.
 jn-bikes-said =
     Vélos de { $arm } : { $calls ->
         [one] { $calls } appel

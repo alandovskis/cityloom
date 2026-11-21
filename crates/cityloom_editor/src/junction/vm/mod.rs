@@ -1584,6 +1584,28 @@ mod tests {
     }
 
     #[test]
+    fn bikes_needing_more_than_an_actuated_phase_s_maximum_are_a_finding_said_with_the_edit_in_both_languages() {
+        use crate::junction::model::actuation::Field;
+        use crate::shared::i18n::Locale;
+        for (locale, words) in [
+            (Locale::En, "need 11 s of green, longer than the 10 s maximum green of"),
+            (Locale::FrCa, "demandent 11\u{a0}s de vert, plus que le vert maximal de 10\u{a0}s de"),
+        ] {
+            let (vm, said, n, _) = biked_rig(locale);
+            // North actuated with a 10 s maximum; its bikes need 5 s + 6 s (21.4 m at 4 m/s) = 11 s.
+            assert!(vm.set_actuated(n, true) && vm.set_actuation(n, Field::MaxGreen, 10));
+            said.take();
+            assert!(vm.set_bike_detection(n, true));
+            let t = said.take();
+            let plain = t[0].replace('\u{a0}', " ");
+            assert!(plain.contains(&words.replace("\u{a0}", " ")), "{t:?}");
+            // Said once: the next edit leaves it as it was.
+            assert!(vm.set_cyclists(n, 12));
+            assert!(!said.take()[0].replace('\u{a0}', " ").contains(&words.replace("\u{a0}", " ")));
+        }
+    }
+
+    #[test]
     fn no_vehicles_an_hour_are_said_as_none_served_never_as_a_wait_of_0_s() {
         use crate::junction::model::actuation::Field;
         let r = rig(0);

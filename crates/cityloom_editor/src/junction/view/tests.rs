@@ -4262,6 +4262,13 @@ fn a_bike_movement_no_phase_runs_says_why_it_cannot_be_on_detection_and_one_left
     let h = panel(&s);
     let bikes = bikes_of(&h);
     assert!(bikes.contains(r#"id="bikes-findings""#) && bikes.contains("are on detection, but no phase runs them"), "{bikes}");
+    // North actuated with a 10 s maximum, its bikes on detection needing 11 s: a finding, its green held all the same.
+    let a = biked_in(crate::shared::i18n::Locale::En);
+    assert!(a.set_actuated(n, true) && a.set_actuation(n, crate::junction::model::actuation::Field::MaxGreen, 10));
+    assert!(a.set_bike_detection(n, true));
+    let ha = panel(&a);
+    let found = &bikes_of(&ha)[bikes_of(&ha).find(r#"id="bikes-findings""#).expect("the findings")..];
+    assert!(found.contains("need 11 s of green, longer than the 10 s maximum green of"), "{found}");
     assert!(bikes.contains(&format!(r#"id="bike-status-{e}" class="insp-range">No phase runs this street's bike movement"#)), "{bikes}");
     assert!(!bikes.contains(&format!(r#"id="bike-mode-{}""#, arm(&s, 270))), "west's bikes are run by no phase and on recall: not listed");
     assert!(s.set_bike_detection(e, false));

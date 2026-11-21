@@ -147,6 +147,10 @@ pub enum Finding {
     /// The movement is on detection, but no phase runs it any more (an edit took it or the bike lane away): it is kept on
     /// detection, and serves nobody until a phase runs it again.
     NotRidden { arm: u32 },
+    /// An actuated phase of street `phase` runs the movement, and its minimum green and clearance (`need_s`) are longer
+    /// than the phase's maximum green (`max_s`): a call served there holds the green past the maximum (as a walk does,
+    /// actuation's `WalkPastMax`).
+    PastMax { arm: u32, phase: u32, need_s: u32, max_s: u32 },
 }
 
 impl Finding {
@@ -155,6 +159,7 @@ impl Finding {
         match *self {
             Finding::CannotServe { arm, .. } => (20, arm, 0),
             Finding::NotRidden { arm } => (21, arm, 0),
+            Finding::PastMax { arm, phase, .. } => (22, arm, phase),
         }
     }
 }
@@ -192,6 +197,22 @@ pub(crate) fn asked(s: &State, plan: &Plan, lengths: &[(u32, i32)], out: &mut Su
 /// A finding for each movement that no phase running it can serve by `rules` (the pedestrian calls' rule).
 pub(crate) fn cannot_serve(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) -> Vec<Finding> {
     calls::unserved(plan, rules, asked, rides_it).into_iter().map(|(arm, need_s, most_s)| Finding::CannotServe { arm, need_s, most_s }).collect()
+}
+
+/// A finding for each movement of `asked` that an actuated phase runs whose maximum green is shorter than what a call
+/// needs: the green is held for it all the same, past the maximum.
+pub(crate) fn past_max(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for a in asked {
+        for (p, rule) in plan.phases.iter().zip(rules) {
+            let control::Rule::Actuated { bounds, .. } = rule else { continue };
+            let found = Finding::PastMax { arm: a.arm, phase: p.uid, need_s: a.need_s, max_s: bounds.max_green_s };
+            if rides_it(p, a.arm) && a.need_s > bounds.max_green_s && !out.contains(&found) {
+                out.push(found);
+            }
+        }
+    }
+    out
 }
 
 /// The bicycle calls as a demand on the controller: `calls::Walks` over the phases that run each movement.
@@ -485,6 +506,25 @@ mod tests {
         arm_mut(&mut quiet, e).lanes.clear();
         let far = [n, so, w].map(|u| dist(mouth(e), mouth(u))).into_iter().fold(0.0, f64::max);
         assert_eq!(ride_lengths(&quiet, &v.arms).iter().find(|(u, _)| *u == e).unwrap().1, far.round() as i32);
+    }
+
+    #[test]
+    fn a_movement_whose_need_outlasts_an_actuated_phase_s_maximum_is_a_finding_and_its_green_still_held() {
+        let mut s = biked();
+        let n = at(&s, 0);
+        arm_mut(&mut s, n).cyclists = Some(30);
+        arm_mut(&mut s, n).actuation = Some(Actuation { max_green_s: 10, ..Actuation::default() });
+        let plan = signal::plan(&s, 0).unwrap();
+        // 40 m to clear: 5 s + 10 s = 15 s, past north's 10 s maximum.
+        let h = control::hour(&s, &plan, &[], &[(n, 40_000)]);
+        assert_eq!(h.bicycles.findings, vec![Finding::PastMax { arm: n, phase: n, need_s: 15, max_s: 10 }]);
+        assert_eq!(h.bicycles.totals[0].not_served, 0, "served all the same");
+        assert!(h.bicycles.rides.iter().all(|r| r.outcome != Outcome::NotServed));
+        // Within the maximum: no finding.
+        assert!(control::hour(&s, &plan, &[], &[(n, 20_000)]).bicycles.findings.is_empty());
+        // A fixed phase has no maximum to outlast.
+        arm_mut(&mut s, n).actuation = None;
+        assert!(control::hour(&s, &plan, &[], &[(n, 40_000)]).bicycles.findings.is_empty());
     }
 
     #[test]

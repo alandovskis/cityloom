@@ -984,6 +984,11 @@ fn bicycles_view(s: &State, plan: &signal::Plan, arms: &[ArmView], lengths: &[(u
                 .with("need", Arg::Num(i64::from(need_s)))
                 .with("most", Arg::Num(i64::from(most_s))),
             bicycles::Finding::NotRidden { arm } => Said::new("jn-bikes-finding-not-ridden").with("arm", Arg::Said(Box::new(name(arm)))),
+            bicycles::Finding::PastMax { arm, phase, need_s, max_s } => Said::new("jn-bikes-finding-past-max")
+                .with("arm", Arg::Said(Box::new(name(arm))))
+                .with("phase", Arg::Said(Box::new(name(phase))))
+                .with("need", Arg::Num(i64::from(need_s)))
+                .with("max", Arg::Num(i64::from(max_s))),
         })
         .collect();
     BicyclesView { movements, rows, findings, found: summary.findings }

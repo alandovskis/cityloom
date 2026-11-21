@@ -61,6 +61,7 @@ pub fn hour(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &[(u32, i32
     out.actuation.findings = found;
     let ridden = bicycles::asked(s, plan, rides, &mut out.bicycles);
     out.bicycles.findings.extend(bicycles::cannot_serve(plan, &rules, &ridden));
+    out.bicycles.findings.extend(bicycles::past_max(plan, &rules, &ridden));
     let mut walks = calls::Walks::new(plan, &rules, &asked);
     let mut vehicles = actuation::Vehicles::new(plan, &approaches);
     let mut riders = bicycles::riders(plan, &rules, &ridden);
