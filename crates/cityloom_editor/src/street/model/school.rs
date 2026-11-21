@@ -49,7 +49,8 @@ impl Editor {
                 if to - from >= SCHOOL_ZONE_MM + 2 * MIN_ZONE_MM
                     && let Ok(Pick::Stretch { from_mm, to_mm }) = self.pick_stretch(a, a + SCHOOL_ZONE_MM)
                 {
-                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(from_mm)).with("to", Arg::Length(to_mm)));
+                    let (a, b) = (self.left_mm(from_mm), self.left_mm(to_mm));
+                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a.min(b))).with("to", Arg::Length(a.max(b))));
                 } else {
                     let room = Said::new("template-school-room").with("length", Arg::Length(SCHOOL_ZONE_MM)).with("min", Arg::Length(MIN_ZONE_MM));
                     report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(room))));
@@ -80,7 +81,11 @@ impl Editor {
 
         // A raised table in the middle of it, by the table's own rules.
         match self.school_table() {
-            Ok(at) => report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Length(at))),
+            Ok(at) => {
+                // Where the table starts on the plan, from its left end, as every position the page shows.
+                let at = self.left_mm(at).min(self.left_mm(at + DEFAULT_TABLE_MM));
+                report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Length(at)))
+            }
             Err(reason) => report.skipped.push(Said::new("template-school-skipped-table").with("reason", Arg::Said(Box::new(reason)))),
         }
 
@@ -265,6 +270,22 @@ mod tests {
         assert_eq!(s.calming.len(), 1);
         assert_eq!((s.calming[0].from_mm, s.calming[0].length_mm), (46_500, DEFAULT_TABLE_MM));
         assert_eq!(e.zone(), 1, "the school zone is the selected one");
+    }
+
+    #[test]
+    fn on_a_street_anchored_at_its_last_end_the_report_counts_from_the_plan_s_left_end() {
+        // 120 m, anchored at its last end: the pick from 10 m to 100 m from the anchor is from 20 m to 110 m on the plan.
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 120_000, from_end: ZoneEnd::Last }));
+        e.pick_stretch(10_000, 100_000).unwrap();
+        let report = e.apply_template(Template::School).unwrap();
+        assert_eq!(keys(&report.applied), ["template-school-applied-zone", "template-school-applied-speed", "template-school-applied-table"]);
+        // The school stretch is 25 m to 85 m from the anchor, so 35 m to 95 m on the plan; its table, 7 m long, starts
+        // 51.5 m from the anchor and 61.5 m from the left (120 - 51.5 - 7).
+        assert_eq!(e.pick(), stretch(25_000, 85_000));
+        assert_eq!(report.applied[0].args, vec![("from", Arg::Length(35_000)), ("to", Arg::Length(95_000))]);
+        assert_eq!(e.snapshot().calming[0].from_mm, 51_500);
+        assert_eq!(report.applied[2].args, vec![("at", Arg::Length(61_500))]);
     }
 
     #[test]

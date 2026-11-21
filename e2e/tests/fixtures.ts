@@ -230,13 +230,6 @@ export async function showStreetLevel(page: Page) {
   await expect(page.locator("#p-street")).toBeVisible();
 }
 
-/** Shows the commands of the zone the pick starts in, with the button the Street level has for them. */
-export async function showZoneLevel(page: Page) {
-  await showStreetLevel(page);
-  await page.locator("#zone-entry").click();
-  await expect(page.locator("#p-zone")).toBeVisible();
-}
-
 /** Presses `key` `times` times. */
 async function press(page: Page, key: string, times: number) {
   for (let k = 0; k < times; k++) await page.keyboard.press(key);

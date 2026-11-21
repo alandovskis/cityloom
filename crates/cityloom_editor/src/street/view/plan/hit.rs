@@ -1,14 +1,18 @@
 //! What a press on the plan lands on, from where it is on the drawing: the plan's hit layer. Every target is at least
-//! `TARGET_PX` each way (WCAG 2.5.8), however small the mark drawn for it, and where targets overlap the one drawn on
-//! top wins: a handle of the pick, then the things along the street (the last drawn first), then a boundary between
-//! runs; anywhere else is the street itself.
+//! a given size each way, however small the mark drawn for it: `TARGET_PX` (WCAG 2.5.8), `COARSE_TARGET_PX` on a coarse
+//! pointer. Where targets overlap the one drawn on top wins: a handle of the pick, then the things along the street (the
+//! last drawn first), then a boundary between runs that may move; anywhere else is the street itself, or, beside the
+//! bands, the empty lane of that side.
 
 use super::{Along, BANDS_H, HANDLE_OVER, LANE_H, across_of, stack};
+use crate::shared::catalogue::Side;
 use crate::street::model::PlanView;
 use crate::street::vm::plan::PlanPress;
 
 /// The smallest a target is, each way, in pixels.
 pub const TARGET_PX: f64 = 24.0;
+/// The same on a coarse pointer (a finger).
+pub const COARSE_TARGET_PX: f64 = 44.0;
 
 /// A press on the plan: what it landed on, and how far the pointer was from the line it took (a handle or a boundary),
 /// so that the line follows the pointer from where it was taken instead of jumping under it.
@@ -18,8 +22,9 @@ pub struct Hit {
     pub grab_px: f64,
 }
 
-/// What a press at `(x, y)` px from the top left of the plan drawn `width_px` wide (`plan_svg`) lands on.
-pub fn hit(p: &PlanView, width_px: f64, x: f64, y: f64) -> Hit {
+/// What a press at `(x, y)` px from the top left of the plan drawn `width_px` wide (`plan_svg`) lands on, every target
+/// at least `target_px` each way.
+pub fn hit(p: &PlanView, width_px: f64, x: f64, y: f64, target_px: f64) -> Hit {
     let at = Along::of(p, width_px);
     let on = |press| Hit { press, grab_px: 0.0 };
     let bands = (LANE_H, LANE_H + BANDS_H);
@@ -27,7 +32,7 @@ pub fn hit(p: &PlanView, width_px: f64, x: f64, y: f64) -> Hit {
         let reach = (bands.0 - HANDLE_OVER, bands.1 + HANDLE_OVER);
         let nearest = [(true, from), (false, to)]
             .into_iter()
-            .filter(|&(_, hx)| within(x, y, (hx - TARGET_PX / 2.0, hx + TARGET_PX / 2.0), reach))
+            .filter(|&(_, hx)| within(x, y, (hx - target_px / 2.0, hx + target_px / 2.0), reach))
             .min_by(|a, b| (x - a.1).abs().total_cmp(&(x - b.1).abs()));
         if let Some((left, hx)) = nearest {
             return Hit { press: PlanPress::Handle { left }, grab_px: x - hx };
@@ -38,20 +43,28 @@ pub fn hit(p: &PlanView, width_px: f64, x: f64, y: f64) -> Hit {
     for o in p.objects.iter().rev() {
         let Some(span) = at.cut_span(o.from_mm, o.to_mm) else { continue };
         let (top, h) = across_of(o, p, &stacks);
-        if within(x, y, widened(span), widened((top, top + h))) {
+        if within(x, y, widened(span, target_px), widened((top, top + h), target_px)) {
             return on(PlanPress::Thing { thing: o.thing, at_mm: at.mm(x) });
         }
     }
     let nearest = p
         .boundaries
         .iter()
+        .filter(|b| b.movable)
         .map(|b| (b.zone, at.x(b.at_mm)))
-        .filter(|&(_, bx)| at.length_mm.is_some() && within(x, y, (bx - TARGET_PX / 2.0, bx + TARGET_PX / 2.0), bands))
+        .filter(|&(_, bx)| at.length_mm.is_some() && within(x, y, (bx - target_px / 2.0, bx + target_px / 2.0), bands))
         .min_by(|a, b| (x - a.1).abs().total_cmp(&(x - b.1).abs()));
     if let Some((zone, bx)) = nearest {
         return Hit { press: PlanPress::Boundary { zone }, grab_px: x - bx };
     }
-    on(PlanPress::Street { at_mm: at.mm(x) })
+    let at_mm = at.mm(x);
+    on(if y < bands.0 {
+        PlanPress::Lane { side: Side::Left, at_mm }
+    } else if y > bands.1 {
+        PlanPress::Lane { side: Side::Right, at_mm }
+    } else {
+        PlanPress::Street { at_mm }
+    })
 }
 
 /// Where `x_px` from the plan's left edge lies along the street, from its left end, kept on the street (0 on a plan with
@@ -60,9 +73,9 @@ pub fn plan_mm(p: &PlanView, width_px: f64, x_px: f64) -> i32 {
     Along::of(p, width_px).mm(x_px)
 }
 
-/// The span `(from, to)`, widened about its middle to `TARGET_PX` when it is narrower.
-fn widened((from, to): (f64, f64)) -> (f64, f64) {
-    let short = TARGET_PX - (to - from);
+/// The span `(from, to)`, widened about its middle to `target_px` when it is narrower.
+fn widened((from, to): (f64, f64), target_px: f64) -> (f64, f64) {
+    let short = target_px - (to - from);
     if short > 0.0 { (from - short / 2.0, to + short / 2.0) } else { (from, to) }
 }
 
@@ -73,9 +86,9 @@ fn within(x: f64, y: f64, (left, right): (f64, f64), (top, bottom): (f64, f64)) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::catalogue::{MATERIALS, Side, kind_index};
+    use crate::shared::catalogue::{MATERIALS, kind_index};
     use crate::shared::said::Said;
-    use crate::street::model::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing};
+    use crate::street::model::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing, ZoneEnd};
 
     const LEN: i32 = 60_000;
     /// Drawn 600 px wide, a 60 m street is 100 mm to the pixel.
@@ -106,17 +119,23 @@ mod tests {
             pick: None,
             cut: [false, false],
             elsewhere: false,
+            from_end: Some(ZoneEnd::First),
         }
     }
 
     fn press(p: &PlanView, x: f64, y: f64) -> PlanPress {
-        hit(p, WIDTH, x, y).press
+        hit(p, WIDTH, x, y, TARGET_PX).press
+    }
+
+    fn press_at(p: &PlanView, x: f64, y: f64, target: f64) -> PlanPress {
+        hit(p, WIDTH, x, y, target).press
     }
 
     #[test]
     fn an_empty_part_of_the_street_is_the_street_at_that_place() {
         assert_eq!(press(&plan(), 450.0, MID), PlanPress::Street { at_mm: 45_000 });
-        assert_eq!(press(&plan(), 450.0, 2.0), PlanPress::Street { at_mm: 45_000 }, "an empty lane is the street too");
+        assert_eq!(press(&plan(), 450.0, 2.0), PlanPress::Lane { side: Side::Left, at_mm: 45_000 }, "the empty lane of the side above");
+        assert_eq!(press(&plan(), 450.0, LANE_H + BANDS_H + 2.0), PlanPress::Lane { side: Side::Right, at_mm: 45_000 }, "and below");
         assert_eq!(plan_mm(&plan(), WIDTH, -30.0), 0, "kept on the street");
         assert_eq!(plan_mm(&plan(), WIDTH, 900.0), LEN);
         let schematic = PlanView { length_mm: None, boundaries: Vec::new(), ..plan() };
@@ -132,20 +151,20 @@ mod tests {
         }
         assert_eq!(press(&plan(), 187.0, MID), PlanPress::Street { at_mm: 18_700 });
         assert_eq!(press(&plan(), 213.0, MID), PlanPress::Street { at_mm: 21_300 });
-        assert_eq!(hit(&plan(), WIDTH, 207.0, MID).grab_px, 7.0);
+        assert_eq!(hit(&plan(), WIDTH, 207.0, MID, TARGET_PX).grab_px, 7.0);
     }
 
     #[test]
     fn a_handle_is_a_target_wide_and_wins_over_what_lies_under_it() {
         let p = PlanView { pick: Some((20_000, 40_000)), objects: vec![thing(PlanThing::Calming { cell: 0 }, 39_000, 41_000, None)], ..plan() };
         // The left handle sits on the boundary, the right one on the raised element.
-        assert_eq!(hit(&p, WIDTH, 195.0, MID), Hit { press: PlanPress::Handle { left: true }, grab_px: -5.0 });
+        assert_eq!(hit(&p, WIDTH, 195.0, MID, TARGET_PX), Hit { press: PlanPress::Handle { left: true }, grab_px: -5.0 });
         assert_eq!(press(&p, 411.0, MID), PlanPress::Handle { left: false });
         assert_eq!(press(&p, 389.0, MID), PlanPress::Handle { left: false });
         assert_eq!(press(&p, 300.0, MID), PlanPress::Street { at_mm: 30_000 }, "inside the pick is the street");
         // The handles reach a little past the bands, no further.
         assert_eq!(press(&p, 400.0, LANE_H - HANDLE_OVER), PlanPress::Handle { left: false });
-        assert_eq!(press(&p, 200.0, LANE_H - HANDLE_OVER - 1.0), PlanPress::Street { at_mm: 20_000 });
+        assert_eq!(press(&p, 200.0, LANE_H - HANDLE_OVER - 1.0), PlanPress::Lane { side: Side::Left, at_mm: 20_000 });
         // A pick 5 m long at the minimum scale: each handle takes the half nearer it.
         let long = 2_000_000;
         let p = PlanView { length_mm: Some(long), runs: vec![run(0, long, 0)], boundaries: Vec::new(), pick: Some((100_000, 105_000)), ..plan() };
@@ -175,6 +194,38 @@ mod tests {
         for y in [0.0, LANE_H - 0.5] {
             assert!(matches!(press(&p, 102.0, y), PlanPress::Thing { .. }), "{y}");
         }
+    }
+
+    #[test]
+    fn on_a_coarse_pointer_every_target_is_44_px_each_way() {
+        const COARSE: f64 = 44.0;
+        // The boundary's line at 200 px.
+        for x in [178.0, 222.0] {
+            assert_eq!(press_at(&plan(), x, MID, COARSE), PlanPress::Boundary { zone: 1 }, "{x}");
+        }
+        assert_eq!(press_at(&plan(), 177.0, MID, COARSE), PlanPress::Street { at_mm: 17_700 });
+        // A tree 1 m long (10 px) on the right sidewalk: 44 px about its middle, along and across.
+        let tree = PlanObject { host: Some(3), ..thing(PlanThing::Green { i: 0 }, 50_000, 51_000, None) };
+        let p = PlanView { objects: vec![tree], ..plan() };
+        let is_tree = |x: f64, y: f64| matches!(press_at(&p, x, y, COARSE), PlanPress::Thing { .. });
+        assert!(is_tree(483.0, MID + 30.0) && is_tree(527.0, MID + 30.0));
+        assert!(!is_tree(482.0, MID + 30.0) && !is_tree(528.0, MID + 30.0));
+        // A stop in the lane above the bands reaches 44 px down from its middle's 22 px past the lane.
+        let stop = thing(PlanThing::Stop { side: Side::Left, cell: 0 }, 10_000, 10_500, Some(Side::Left));
+        let p = PlanView { objects: vec![stop], ..plan() };
+        assert!(matches!(press_at(&p, 102.0, 33.0, COARSE), PlanPress::Thing { .. }));
+        assert!(matches!(press_at(&p, 81.0, 12.0, COARSE), PlanPress::Thing { .. }));
+        assert!(!matches!(press_at(&p, 79.0, 12.0, COARSE), PlanPress::Thing { .. }));
+        // The handles too.
+        let p = PlanView { pick: Some((20_000, 40_000)), ..plan() };
+        assert_eq!(press_at(&p, 421.0, MID, COARSE), PlanPress::Handle { left: false });
+        assert_eq!(press_at(&p, 423.0, MID, COARSE), PlanPress::Street { at_mm: 42_300 });
+    }
+
+    #[test]
+    fn a_boundary_that_cannot_move_is_no_target() {
+        let p = PlanView { boundaries: vec![PlanBoundary { movable: false, ..plan().boundaries[0] }], ..plan() };
+        assert_eq!(press(&p, 205.0, MID), PlanPress::Street { at_mm: 20_500 });
     }
 
     #[test]

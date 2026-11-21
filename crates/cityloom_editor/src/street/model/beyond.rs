@@ -5,10 +5,9 @@
 //! `junction::model::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
 
 use super::StreetExt;
-use super::zones::zone_label_mid;
 use super::{Host, LENGTH_TOLERANCE_MM, Segment, Street, ZoneEnd, ZoneFrame, total, transition};
 use crate::shared::catalogue::is_roadway;
-use crate::shared::said::Said;
+use crate::shared::said::{Arg, Said};
 use cityloom_model::street::same_pieces;
 
 /// The first boundary met going out from an arm's end, and what is across it.
@@ -18,7 +17,8 @@ pub struct Beyond {
     pub boundary_mm: i32,
     /// The zone across the boundary as the arm sees it: looking out from the junction.
     pub next: Vec<Segment>,
-    /// What the zone across is called, as it stands in the middle of a sentence.
+    /// What the zone across is called, as it stands in the middle of a sentence: its number counting from the
+    /// anchored end (`zone-unnamed-mid`, a junction message). A saved name is never said.
     pub zone: Said,
     /// The taper the boundary needs, when the two sections need one (otherwise the boundary is a jog).
     pub taper: Option<BeyondTaper>,
@@ -115,7 +115,7 @@ pub(super) fn beyond(street: &Street, first_end: bool, frame: Option<ZoneFrame>)
     if !first_end {
         across = across.reversed();
     }
-    Some(Beyond { boundary_mm, next: across.segments, zone: zone_label_mid(&street.zones[neighbour], neighbour + 1), taper })
+    Some(Beyond { boundary_mm, next: across.segments, zone: Said::new("zone-unnamed-mid").with("n", Arg::Num(neighbour as i64 + 1)), taper })
 }
 
 type Row = (usize, Option<(i32, i32)>, Option<(i32, i32)>);
@@ -138,8 +138,7 @@ fn anchor(changes: &[Row], at: usize, side: fn(&Row) -> Option<(i32, i32)>) -> O
 mod tests {
     use super::*;
     use crate::shared::catalogue::{Side, kind_index};
-    use crate::shared::said::Arg;
-    use crate::street::model::{Speed, named_said, zoned};
+    use crate::street::model::{Speed, zoned};
     use ZoneEnd::{First, Last};
 
     const LEN: i32 = 100_000;
@@ -195,7 +194,7 @@ mod tests {
         assert_eq!(zone(&s, true), Said::new("zone-unnamed-mid").with("n", Arg::Num(2)));
         assert_eq!(zone(&s, false), Said::new("zone-unnamed-mid").with("n", Arg::Num(1)));
         s.zones[1].name = Some("Market".into());
-        assert_eq!(zone(&s, true), named_said("Market"));
+        assert_eq!(zone(&s, true), Said::new("zone-unnamed-mid").with("n", Arg::Num(2)), "a saved name is never said");
     }
 
     #[test]

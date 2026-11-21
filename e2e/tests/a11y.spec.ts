@@ -132,7 +132,7 @@ test("the plan's point is one tab stop under the drawing and is named", async ({
   const point = page.locator("#plan-point");
   await expect(page.locator("#plan")).toBeVisible();
   expect(((await page.locator("#plan").getAttribute("aria-label")) ?? "").trim().length).toBeGreaterThan(0);
-  await expect(point).toHaveAttribute("aria-labelledby", "plan");
+  await expect(point).toHaveAttribute("aria-label", "Point along the street");
   // In the page's order: the title card, then the drawing, then the plan under it.
   const order = await page.evaluate(() => {
     const before = (a: Element | null, b: Element | null) =>

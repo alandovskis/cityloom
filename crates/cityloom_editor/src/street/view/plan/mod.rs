@@ -15,7 +15,7 @@ mod hit;
 mod scale;
 
 pub use component::Plan;
-pub use hit::{Hit, TARGET_PX, hit, plan_mm};
+pub use hit::{COARSE_TARGET_PX, Hit, TARGET_PX, hit, plan_mm};
 pub use scale::{MIN_PX_PER_M, mm_per_px, x_px};
 
 use crate::shared::catalogue::{KINDS, MATERIALS, Side, is_roadway};
@@ -23,7 +23,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::{esc, f1};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{PlanObject, PlanRun, PlanThing, PlanView};
+use crate::street::model::{PlanObject, PlanRun, PlanThing, PlanView, ZoneEnd};
 use crate::street::vm::row::{CalmingRow, CurbRow, StopRow, cell_id};
 
 /// The height of the lane beside the bands on each side, where what stands on that side is drawn: a target high.
@@ -47,8 +47,12 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
     let at = Along::of(p, width_px);
     let width = at.width;
     let mut out = format!(
-        "<svg class=\"plan\" xmlns=\"http://www.w3.org/2000/svg\"{} width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">",
+        "<svg class=\"plan\" xmlns=\"http://www.w3.org/2000/svg\"{}{} width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">",
         p.length_mm.map_or(String::new(), |l| format!(" data-length-mm=\"{l}\"")),
+        p.from_end.map_or("", |end| match end {
+            ZoneEnd::First => " data-from-end=\"first\"",
+            ZoneEnd::Last => " data-from-end=\"last\"",
+        }),
         w = f1(width),
         h = f1(HEIGHT),
     );
@@ -274,7 +278,7 @@ mod tests {
     use crate::shared::catalogue::kind_index;
     use crate::shared::i18n::{Args, Locale};
     use crate::shared::said::{Arg, Said, say};
-    use crate::street::model::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing};
+    use crate::street::model::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing, ZoneEnd};
 
     const LEN: i32 = 60_000;
     /// Drawn 600 px wide, a 60 m street is 100 mm to the pixel.
@@ -317,6 +321,7 @@ mod tests {
             pick: None,
             cut: [false, false],
             elsewhere: false,
+            from_end: Some(ZoneEnd::First),
         }
     }
 
@@ -360,6 +365,9 @@ mod tests {
         let svg = drawn(&two_runs());
         assert!(svg.starts_with("<svg ") && attr(&svg[..svg.find('>').unwrap()], "class") == "plan", "{svg}");
         assert_eq!(attr(&svg[..svg.find('>').unwrap()], "data-length-mm"), "60000");
+        assert_eq!(attr(&svg[..svg.find('>').unwrap()], "data-from-end"), "first", "the end positions are measured from");
+        let last = drawn(&PlanView { from_end: Some(ZoneEnd::Last), ..two_runs() });
+        assert_eq!(attr(&last[..last.find('>').unwrap()], "data-from-end"), "last");
         assert_eq!(tags(&svg, "plan-run").len(), 2);
         assert_eq!(tags(&svg, "plan-band").len(), 3 + 4);
         let first = tags(run_group(&svg, 0), "plan-band");
@@ -525,10 +533,10 @@ mod tests {
 
     #[test]
     fn a_schematic_plan_has_no_length_attribute_and_two_cut_marks() {
-        let p = PlanView { length_mm: None, runs: vec![run(0, 0, 2, true)], boundaries: Vec::new(), cut: [true, true], ..two_runs() };
+        let p = PlanView { length_mm: None, runs: vec![run(0, 0, 2, true)], boundaries: Vec::new(), cut: [true, true], from_end: None, ..two_runs() };
         let i18n = en();
         let svg = plan_svg(&p, 500.0, &i18n, Units::Metres);
-        assert!(!svg.contains("data-length-mm"));
+        assert!(!svg.contains("data-length-mm") && !svg.contains("data-from-end"), "no end to measure from");
         assert_eq!(attr(&svg[..svg.find('>').unwrap()], "width"), "500");
         let bands = tags(&svg, "plan-band");
         assert_eq!(bands.len(), 4);

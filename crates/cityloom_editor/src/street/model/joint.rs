@@ -3,7 +3,6 @@
 use serde::Serialize;
 
 use super::ZoneEnd;
-use super::zones::{zone_label, zone_label_mid};
 use super::{Change, Editor, Host, Said, SegView};
 
 /// The stretch the 2.5D shows, in millimetres (a test pins it to `iso::STRETCH_MM`).
@@ -21,10 +20,12 @@ pub struct Joint {
     pub far: bool,
     /// The boundary's position from the anchored end.
     pub at_mm: i32,
+    /// The same from the plan's left end, the street's first end: where the page says it is.
+    pub left_mm: i32,
     /// The neighbour's index.
     pub zone: usize,
+    /// The neighbour as the stretch of the plan it covers: "from 49 m to 82 m".
     pub label: Said,
-    pub label_mid: Said,
     /// The transition at this boundary, when the two sections need one; the 2.5D draws it.
     #[serde(skip)]
     pub taper: Option<Taper>,
@@ -80,9 +81,9 @@ impl Editor {
             segments,
             far,
             at_mm,
+            left_mm: self.left_mm(at_mm),
             zone,
-            label: zone_label(&content.zones[zone], zone + 1),
-            label_mid: zone_label_mid(&content.zones[zone], zone + 1),
+            label: self.stretch_said(zone),
             taper,
         })
     }
@@ -92,7 +93,6 @@ impl Editor {
 mod tests {
     use super::super::fixtures::two_zones;
     use super::*;
-    use crate::shared::said::Arg;
 
     #[test]
     fn a_joint_carries_the_transition_from_the_hosts_side() {
@@ -161,7 +161,7 @@ mod tests {
         assert_eq!((j.zone, j.far, j.at_mm), (0, false, 50_000));
         assert_eq!(j.segments.len(), Editor::new(0).view().segments.len());
         assert_eq!(j.total_mm, j.segments.iter().map(|s| s.width_mm).sum::<i32>());
-        assert_eq!(j.label, Said::new("zone-unnamed").with("n", Arg::Num(1)));
+        assert_eq!((j.label, j.left_mm), (crate::street::model::stretch_between(0, 50_000), 50_000));
         assert!(e.select_zone(0));
         assert_eq!(e.view().zones.joint.unwrap().segments.len(), Editor::new(0).view().segments.len() - 1, "from zone 1 the neighbour is zone 2's own section");
     }

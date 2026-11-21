@@ -14,7 +14,7 @@ use crate::shared::said::{self, hhmm};
 use crate::shared::tick::Tick;
 use crate::street::model::SegView;
 use crate::street::vm::StreetVm;
-use crate::street::vm::text::status_text;
+use crate::street::vm::text::{status_text, stretch_label};
 use crate::street::vm::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
@@ -118,8 +118,8 @@ fn street_title(w: SheetWatch) -> String {
     said::say(&w.i18n(), w.units(), &w.view().name)
 }
 
-/// The head of the details panel's Street level: the street's name, then its class, width, length and zones, and a
-/// strip of its zones (seen only: the line says it). A street with no end to measure from has no length to give.
+/// The head of the details panel's Street level: the street's name, then its class, width and length, and the picked
+/// stretch when it is not the whole street. A street with no end to measure from has no length to give.
 #[component]
 pub fn StreetSummary(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
@@ -135,26 +135,18 @@ pub fn StreetSummary(vm: Rc<StreetVm>) -> impl IntoView {
             crate::shared::catalogue::StreetClass::Pedestrian => "pedestrian",
         };
         let length = v.zones.length_mm;
-        let args = Args::new()
-            .str("class", class)
-            .str("width", units.length_fine_in(v.row_mm, locale))
-            .str("length", units.length_in(length, locale))
-            .num("zones", v.zones.zones.len().max(1) as i64);
+        let args = Args::new().str("class", class).str("width", units.length_fine_in(v.row_mm, locale)).str("length", units.length_in(length, locale));
         i18n.tr(if length > 0 { "st-street-sub" } else { "st-street-sub-free" }, &args)
     };
-    let mini = move || {
-        let v = w.view();
-        let zones = &v.zones.zones;
-        if zones.is_empty() {
-            return view! { <span style="flex-grow: 1"></span> }.into_any();
-        }
-        zones.iter().map(|z| view! { <span style=format!("flex-grow: {}", (z.to_mm - z.from_mm).max(1))></span> }).collect_view().into_any()
+    let stretch = move || {
+        let (v, units) = w.now();
+        stretch_label(&v.plan).map(|said| view! { <p class="insp-sub street-stretch">{said::say(&w.i18n(), units, &said)}</p> })
     };
     view! {
         <div class="street-head">
             <h2 class="insp-name">{move || street_title(w)}</h2>
             <p class="insp-sub">{sub}</p>
-            <div class="zone-mini" aria-hidden="true">{mini}</div>
+            {stretch}
         </div>
     }
 }
