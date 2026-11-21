@@ -707,11 +707,19 @@ fn a_link_refused_by_the_rate_limit_is_asked_again_after_a_growing_wait() {
     t.scheduler.advance(1);
     assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
     assert_eq!(t.share.calls(), [ShareCall::Delete("two".into())], "the next at once");
-    for n in 0..super::links::MAX_TRIES {
-        assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))), "{n}");
-        assert!(got.borrow().is_none() || n + 1 == super::links::MAX_TRIES);
-        t.scheduler.advance(120_000);
+    // Every wait, pinned: 1, 2, 4, 8 and 16 seconds, each to the millisecond, then the sixth refusal gives up.
+    for (n, wait) in [1_000u32, 2_000, 4_000, 8_000, 16_000].into_iter().enumerate() {
+        assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))), "try {n}");
+        assert!(got.borrow().is_none(), "try {n}: not given up yet");
+        t.scheduler.advance(wait - 1);
+        assert!(t.share.calls().is_empty(), "try {n}: still waiting at {} ms", wait - 1);
+        t.scheduler.advance(1);
+        assert_eq!(t.share.calls(), [ShareCall::Delete("two".into())], "try {n}: asked again after {wait} ms");
     }
+    assert_eq!(super::links::MAX_TRIES, 6);
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))));
+    t.scheduler.advance(120_000);
+    assert!(t.share.calls().is_empty(), "no seventh try");
     let said = got.borrow_mut().take().expect("it gave up").unwrap_err();
     assert_eq!(en(&said), "The server that keeps shared designs cannot answer now. Try again later.");
     assert_eq!(kept_links(&t), ["two"]);
