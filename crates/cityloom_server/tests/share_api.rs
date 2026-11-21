@@ -239,3 +239,63 @@ async fn a_link_s_token_is_never_in_a_path(pool: PgPool) {
     assert_eq!(ada.request("DELETE", &format!("/api/share/{token}"), Some(ORIGIN), None).await.status, StatusCode::NOT_FOUND);
     assert_eq!(open_link(&mut app.browser(), &token).await.status, StatusCode::OK, "neither deleted it");
 }
+
+/// The two 409s are told apart in the log: an account at its bound of shares a day is a warning, naming the account
+/// and the bound; one holding as many live shares as it may is ordinary. Neither line holds a token.
+#[sqlx::test]
+async fn the_log_tells_the_daily_bound_from_a_full_account(pool: PgPool) {
+    use std::cell::RefCell;
+    use std::sync::{Arc, Mutex, Once};
+    // As in `auth_flow.rs`: one global subscriber for the test binary, writing to the running test's thread's sink.
+    thread_local! { static SINK: RefCell<Option<Arc<Mutex<Vec<u8>>>>> = const { RefCell::new(None) }; }
+    struct Routed;
+    impl std::io::Write for Routed {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            SINK.with(|s| {
+                if let Some(sink) = s.borrow().as_ref() {
+                    sink.lock().unwrap().extend_from_slice(b);
+                }
+            });
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    struct RoutedWriters;
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RoutedWriters {
+        type Writer = Routed;
+        fn make_writer(&'a self) -> Routed {
+            Routed
+        }
+    }
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| tracing::subscriber::set_global_default(tracing_subscriber::fmt().with_writer(RoutedWriters).with_ansi(false).finish()).unwrap());
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    SINK.with(|s| *s.borrow_mut() = Some(sink.clone()));
+    let app = TestApp::new(pool);
+    let mut ada = signed_in(&app, "ada").await;
+    let mut tokens = Vec::new();
+    for _ in 0..MAX_LIVE_SHARES {
+        tokens.push(made(&mut ada).await);
+    }
+    assert_eq!(share(&mut ada, &design()).await.json()["error"].as_str(), Some("full"));
+    for token in &tokens {
+        delete_link(&mut ada, token, Some(ORIGIN)).await;
+    }
+    for _ in MAX_LIVE_SHARES..MAX_SHARES_PER_DAY {
+        let token = made(&mut ada).await;
+        delete_link(&mut ada, &token, Some(ORIGIN)).await;
+        tokens.push(token);
+    }
+    assert_eq!(share(&mut ada, &design()).await.json()["error"].as_str(), Some("too-many-today"));
+    let logs = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+    let line = |needle: &str| logs.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no {needle:?} in:\n{logs}")).to_string();
+    let full = line("holds as many live shares");
+    assert!(full.contains(" INFO ") && full.contains(&format!("limit={MAX_LIVE_SHARES}")) && full.contains("user="), "{full}");
+    let today = line("made as many shares as it may in a day");
+    assert!(today.contains(" WARN ") && today.contains(&format!("limit={MAX_SHARES_PER_DAY}")) && today.contains("user="), "{today}");
+    for token in &tokens {
+        assert!(!logs.contains(token.as_str()), "the log holds a token");
+    }
+}
