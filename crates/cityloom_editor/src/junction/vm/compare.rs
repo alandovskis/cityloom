@@ -4,19 +4,16 @@
 //! The view-model never writes: it reads the designs as the city keeps them and rewrites the page's address (the
 //! picks), nothing else. It takes ports already scoped to the project (`project::context::peek`).
 
-use std::cell::RefCell;
 use std::rc::Rc;
-
-use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::junction::model::State;
 use crate::junction::model::compare::{arms, checks, control, others, signal};
 use crate::junction::model::read_model::JView;
-use crate::shared::compare::{CompareHost, CompareState, DiffGroup, Pick, Summary, initial_picks, with_picks};
-use crate::shared::i18n::{Args, I18n};
+use crate::shared::compare::{Compare, CompareHost, CompareState, DiffGroup, Pick, Summary};
+use crate::shared::i18n::I18n;
 use crate::shared::ports::Ports;
-use crate::shared::said::{Arg, Said, say_now};
+use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
 
 /// One side's design: the junction as kept, and what the drawing and the summary read of it.
@@ -26,15 +23,9 @@ struct Side {
 }
 
 pub struct JunctionCompareVm {
-    ports: Ports,
-    i18n: Rc<I18n>,
+    shared: Compare<Side>,
     binding: CityBinding,
     node: u32,
-    state: CompareState,
-    sides: RefCell<(Side, Side)>,
-    /// Changes whenever a side is opened again.
-    version: ArcRwSignal<u32>,
-    units: ArcRwSignal<Units>,
 }
 
 impl JunctionCompareVm {
@@ -42,30 +33,8 @@ impl JunctionCompareVm {
     /// None where the baseline cannot be opened (not a junction, or not in the city, or not drawable).
     pub fn new(ports: Ports, i18n: Rc<I18n>, binding: CityBinding) -> Option<Rc<Self>> {
         let Place::Junction(node) = binding.place else { return None };
-        let items = binding.scenarios();
-        let ids: Vec<u32> = items.iter().map(|(id, _)| *id).collect();
-        let (a, b, missing) = initial_picks(&ports.page.path(), &ids);
-        let state = CompareState::default();
-        state.list(items);
-        let open = |id: Option<u32>| Self::open_side(&binding, id);
-        // A listed design that will not open is the baseline.
-        let (a, side_a) = open(a).map(|s| (a, s)).or_else(|| open(None).map(|s| (None, s)))?;
-        let (b, side_b) = open(b).map(|s| (b, s)).or_else(|| open(None).map(|s| (None, s)))?;
-        state.set(Pick::A, a);
-        state.set(Pick::B, b);
-        if missing {
-            state.refuse(Said::new("scenario-missing"));
-        }
-        Some(Rc::new(JunctionCompareVm {
-            ports,
-            i18n,
-            binding,
-            node,
-            state,
-            sides: RefCell::new((side_a, side_b)),
-            version: ArcRwSignal::new(0),
-            units: ArcRwSignal::new(Units::default()),
-        }))
+        let shared = Compare::open(ports, i18n, binding.scenarios(), |id| Self::open_side(&binding, id))?;
+        Some(Rc::new(JunctionCompareVm { shared, binding, node }))
     }
 
     fn open_side(binding: &CityBinding, id: Option<u32>) -> Option<Side> {
@@ -75,28 +44,19 @@ impl JunctionCompareVm {
 
     /// The two designs' views, for the drawings (watched: they change when a side is chosen again).
     pub fn views(&self) -> (Rc<JView>, Rc<JView>) {
-        self.version.track();
-        let sides = self.sides.borrow();
-        (sides.0.view.clone(), sides.1.view.clone())
+        self.shared.read(|a, b| (a.view.clone(), b.view.clone()))
     }
 
     /// The units lengths are shown in (watched).
     pub fn units(&self) -> Units {
-        self.units.get()
+        self.shared.units()
     }
 
     pub fn set_units(&self, units: Units) {
-        self.units.set(units);
+        self.shared.set_units(units);
     }
 
-    fn pick_names(&self) -> (String, String) {
-        let baseline = self.i18n.tr_now("cmp-baseline", &Args::new());
-        (self.state.name_of(self.state.pick_now(Pick::A), &baseline), self.state.name_of(self.state.pick_now(Pick::B), &baseline))
-    }
-
-    fn summary_now(&self) -> Summary {
-        let sides = self.sides.borrow();
-        let (a, b) = (&sides.0, &sides.1);
+    fn summary_of(a: &Side, b: &Side) -> Summary {
         let arm_lines = arms(&a.view, &b.view).iter().flat_map(|c| c.lines()).collect();
         let (passes, fails) = checks(&a.view, &b.view);
         let check = |key: &'static str, label: Said| Said::new(key).with("check", Arg::Said(Box::new(label)));
@@ -116,47 +76,23 @@ impl JunctionCompareVm {
 
 impl CompareHost for JunctionCompareVm {
     fn i18n(&self) -> Rc<I18n> {
-        self.i18n.clone()
+        self.shared.i18n.clone()
     }
 
     fn compare_state(&self) -> &CompareState {
-        &self.state
+        &self.shared.state
     }
 
     fn choose(&self, side: Pick, id: Option<u32>) {
-        self.state.list(self.binding.scenarios());
-        // A design deleted meanwhile opens nothing: the side shows the baseline, and it is said.
-        let scenario = id.and_then(|id| Self::open_side(&self.binding, Some(id)).map(|opened| (id, opened)));
-        let missing = id.is_some() && scenario.is_none();
-        let (id, opened) = match scenario {
-            Some((id, opened)) => (Some(id), Some(opened)),
-            None => (None, Self::open_side(&self.binding, None)),
-        };
-        self.state.set(side, id);
-        if let Some(opened) = opened {
-            let mut sides = self.sides.borrow_mut();
-            match side {
-                Pick::A => sides.0 = opened,
-                Pick::B => sides.1 = opened,
-            }
-        }
-        if missing {
-            self.state.refuse(Said::new("scenario-missing"));
-        }
-        self.version.update(|v| *v += 1);
-        let (a, b) = (self.state.pick_now(Pick::A), self.state.pick_now(Pick::B));
-        self.ports.page.replace_path(&with_picks(&self.ports.page.path(), a, b));
-        let (name_a, name_b) = self.pick_names();
-        self.ports.announcer.say(&say_now(&self.i18n, self.units.get_untracked(), &self.summary_now().headline(&name_a, &name_b)));
+        self.shared.choose(side, id, self.binding.scenarios(), |id| Self::open_side(&self.binding, id), Self::summary_of);
     }
 
     fn summary(&self) -> Summary {
-        self.version.track();
-        self.summary_now()
+        self.shared.read(Self::summary_of)
     }
 
     fn back_href(&self) -> String {
-        crate::shared::project_id::link_for(&format!("intersection.html?junction={}", self.node), &*self.ports.storage)
+        crate::shared::project_id::link_for(&format!("intersection.html?junction={}", self.node), &*self.shared.ports.storage)
     }
 
     fn back_key(&self) -> &'static str {
@@ -164,7 +100,7 @@ impl CompareHost for JunctionCompareVm {
     }
 
     fn place_name(&self) -> Said {
-        self.sides.borrow().0.view.name.clone()
+        self.shared.read_now(|a, _| a.view.name.clone())
     }
 }
 
@@ -176,6 +112,7 @@ mod tests {
     use crate::junction::model::{PRIORITY, SIGNAL};
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakePage, MemoryStorage, Page, RecordingAnnouncer, Storage, test_ports_with_time};
+    use crate::shared::said::say_now;
     use crate::shared::scoped::ScopedStorage;
 
     struct Rig {

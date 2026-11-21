@@ -2,13 +2,16 @@
 //! `b=` in the address, `base` for the baseline), what differs between them, and the state and host the page's
 //! view-model and view share. No wording here: the summary is `Said` data the view words.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::i18n::I18n;
-use crate::shared::said::{Arg, Said};
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::ports::Ports;
+use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::scenarios::ScenarioItem;
+use crate::shared::units::Units;
 
 /// One of the two sides of the comparison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,6 +193,98 @@ impl CompareState {
             None => baseline.to_string(),
             Some(id) => self.items.with_untracked(|items| items.iter().find(|i| i.id == id).map(|i| i.name.clone())).unwrap_or_else(|| baseline.to_string()),
         }
+    }
+}
+
+/// What both comparison view-models share: the two opened sides (`S`, whatever the place reads of a design), the
+/// picks and their rules, the address, the announcement. The fallback and announcement rules live here so the pages
+/// cannot drift; a view-model supplies how a design is opened and how two sides are summarised.
+pub struct Compare<S> {
+    pub ports: Ports,
+    pub i18n: Rc<I18n>,
+    pub state: CompareState,
+    sides: RefCell<(S, S)>,
+    /// Changes whenever a side is opened again.
+    version: ArcRwSignal<u32>,
+    units: ArcRwSignal<Units>,
+}
+
+impl<S> Compare<S> {
+    /// The picks the page's address makes among `items` (the place's scenarios), each opened with `open` (None: the
+    /// baseline). A pick that will not open is the baseline; a pick the address names that is not a scenario is
+    /// said. None where the baseline itself cannot be opened.
+    pub fn open(ports: Ports, i18n: Rc<I18n>, items: Vec<(u32, String)>, open: impl Fn(Option<u32>) -> Option<S>) -> Option<Self> {
+        let ids: Vec<u32> = items.iter().map(|(id, _)| *id).collect();
+        let (a, b, missing) = initial_picks(&ports.page.path(), &ids);
+        let state = CompareState::default();
+        state.list(items);
+        let resolve = |id: Option<u32>| open(id).map(|s| (id, s)).or_else(|| open(None).map(|s| (None, s)));
+        let ((a, side_a), (b, side_b)) = (resolve(a)?, resolve(b)?);
+        state.set(Pick::A, a);
+        state.set(Pick::B, b);
+        if missing {
+            state.refuse(Said::new("scenario-missing"));
+        }
+        Some(Compare { ports, i18n, state, sides: RefCell::new((side_a, side_b)), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()) })
+    }
+
+    /// Reads the two sides, watched: the caller is run again when a side is chosen again.
+    pub fn read<R>(&self, f: impl FnOnce(&S, &S) -> R) -> R {
+        self.version.track();
+        self.read_now(f)
+    }
+
+    /// The same, for a command.
+    pub fn read_now<R>(&self, f: impl FnOnce(&S, &S) -> R) -> R {
+        let sides = self.sides.borrow();
+        f(&sides.0, &sides.1)
+    }
+
+    /// The units lengths are shown in (watched).
+    pub fn units(&self) -> Units {
+        self.units.get()
+    }
+
+    pub fn set_units(&self, units: Units) {
+        self.units.set(units);
+    }
+
+    /// Picks design `id` (None: the baseline) on `side`, with the place's scenarios as kept now (`items`): a design
+    /// deleted meanwhile opens nothing, the side shows the baseline and it is said. The address is rewritten and the
+    /// headline of what differs (`summary` of the two sides) is announced.
+    pub fn choose(
+        &self,
+        side: Pick,
+        id: Option<u32>,
+        items: Vec<(u32, String)>,
+        open: impl Fn(Option<u32>) -> Option<S>,
+        summary: impl FnOnce(&S, &S) -> Summary,
+    ) {
+        self.state.list(items);
+        let scenario = id.and_then(|id| open(Some(id)).map(|opened| (id, opened)));
+        let missing = id.is_some() && scenario.is_none();
+        let (id, opened) = match scenario {
+            Some((id, opened)) => (Some(id), Some(opened)),
+            None => (None, open(None)),
+        };
+        self.state.set(side, id);
+        if let Some(opened) = opened {
+            let mut sides = self.sides.borrow_mut();
+            match side {
+                Pick::A => sides.0 = opened,
+                Pick::B => sides.1 = opened,
+            }
+        }
+        if missing {
+            self.state.refuse(Said::new("scenario-missing"));
+        }
+        self.version.update(|v| *v += 1);
+        let (a, b) = (self.state.pick_now(Pick::A), self.state.pick_now(Pick::B));
+        self.ports.page.replace_path(&with_picks(&self.ports.page.path(), a, b));
+        let baseline = self.i18n.tr_now("cmp-baseline", &Args::new());
+        let (name_a, name_b) = (self.state.name_of(a, &baseline), self.state.name_of(b, &baseline));
+        let headline = self.read_now(summary).headline(&name_a, &name_b);
+        self.ports.announcer.say(&say_now(&self.i18n, self.units.get_untracked(), &headline));
     }
 }
 

@@ -43,6 +43,7 @@ fn columns(vm: &StreetCompareVm) -> [Column; 2] {
 pub fn StreetCompare(vm: Rc<StreetCompareVm>) -> impl IntoView {
     // The view-model is not `Send`: the memo holds it in a local store.
     let held = StoredValue::new_local(vm.clone());
+    // Never equal: the memo runs again only when a side, the units or the language change, and the pair is then new.
     let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), |_, _| false);
     let column = move |at: usize| {
         move || {

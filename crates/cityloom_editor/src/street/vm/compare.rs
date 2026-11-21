@@ -4,17 +4,14 @@
 //! The view-model never writes: it reads the designs as the city keeps them and rewrites the page's address (the
 //! picks), nothing else. It takes ports already scoped to the project (`project::context::peek`).
 
-use std::cell::RefCell;
 use std::rc::Rc;
-
-use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
-use crate::shared::compare::{CompareHost, CompareState, DiffGroup, Pick, Summary, initial_picks, with_picks};
-use crate::shared::i18n::{Args, I18n};
+use crate::shared::compare::{Compare, CompareHost, CompareState, DiffGroup, Pick, Summary};
+use crate::shared::i18n::I18n;
 use crate::shared::ports::Ports;
-use crate::shared::said::{Arg, Said, say_now};
+use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
 use crate::street::model::compare::{lanes, others, pieces};
 use crate::street::model::{Street, StreetExt, View};
@@ -28,17 +25,11 @@ struct Side {
 }
 
 pub struct StreetCompareVm {
-    ports: Ports,
-    i18n: Rc<I18n>,
+    shared: Compare<Side>,
     binding: CityBinding,
     edge: u32,
     /// The areas the street lies in, read once when the page opens.
     areas: Vec<Restriction>,
-    state: CompareState,
-    sides: RefCell<(Side, Side)>,
-    /// Changes whenever a side is opened again.
-    version: ArcRwSignal<u32>,
-    units: ArcRwSignal<Units>,
 }
 
 impl StreetCompareVm {
@@ -47,31 +38,8 @@ impl StreetCompareVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>, binding: CityBinding) -> Option<Rc<Self>> {
         let Place::Street(edge) = binding.place else { return None };
         let areas = super::areas_holding(&ports, Some(&binding));
-        let items = binding.scenarios();
-        let ids: Vec<u32> = items.iter().map(|(id, _)| *id).collect();
-        let (a, b, missing) = initial_picks(&ports.page.path(), &ids);
-        let state = CompareState::default();
-        state.list(items);
-        let open = |id: Option<u32>| Self::open_side(&binding, &areas, id);
-        // A listed design that will not open is the baseline.
-        let (a, side_a) = open(a).map(|s| (a, s)).or_else(|| open(None).map(|s| (None, s)))?;
-        let (b, side_b) = open(b).map(|s| (b, s)).or_else(|| open(None).map(|s| (None, s)))?;
-        state.set(Pick::A, a);
-        state.set(Pick::B, b);
-        if missing {
-            state.refuse(Said::new("scenario-missing"));
-        }
-        Some(Rc::new(StreetCompareVm {
-            ports,
-            i18n,
-            binding,
-            edge,
-            areas,
-            state,
-            sides: RefCell::new((side_a, side_b)),
-            version: ArcRwSignal::new(0),
-            units: ArcRwSignal::new(Units::default()),
-        }))
+        let shared = Compare::open(ports, i18n, binding.scenarios(), |id| Self::open_side(&binding, &areas, id))?;
+        Some(Rc::new(StreetCompareVm { shared, binding, edge, areas }))
     }
 
     fn open_side(binding: &CityBinding, areas: &[Restriction], id: Option<u32>) -> Option<Side> {
@@ -83,32 +51,19 @@ impl StreetCompareVm {
 
     /// The two designs' views, for the drawings (watched: they change when a side is chosen again).
     pub fn views(&self) -> (Rc<View>, Rc<View>) {
-        self.version.track();
-        let sides = self.sides.borrow();
-        (sides.0.view.clone(), sides.1.view.clone())
+        self.shared.read(|a, b| (a.view.clone(), b.view.clone()))
     }
 
     /// The units lengths are shown in (watched).
     pub fn units(&self) -> Units {
-        self.units.get()
+        self.shared.units()
     }
 
     pub fn set_units(&self, units: Units) {
-        self.units.set(units);
+        self.shared.set_units(units);
     }
 
-    fn baseline_name(&self) -> String {
-        self.i18n.tr_now("cmp-baseline", &Args::new())
-    }
-
-    fn pick_names(&self) -> (String, String) {
-        let baseline = self.baseline_name();
-        (self.state.name_of(self.state.pick_now(Pick::A), &baseline), self.state.name_of(self.state.pick_now(Pick::B), &baseline))
-    }
-
-    fn summary_now(&self) -> Summary {
-        let sides = self.sides.borrow();
-        let (a, b) = (&sides.0, &sides.1);
+    fn summary_of(a: &Side, b: &Side) -> Summary {
         let impact = diff(Cause::Edit, &Input::of(&a.view, &a.findings), &Input::of(&b.view, &b.findings));
         let mut space: Vec<Said> = impact.uses.iter().map(|u| u.said()).collect();
         space.extend(impact.class.clone());
@@ -133,47 +88,23 @@ impl StreetCompareVm {
 
 impl CompareHost for StreetCompareVm {
     fn i18n(&self) -> Rc<I18n> {
-        self.i18n.clone()
+        self.shared.i18n.clone()
     }
 
     fn compare_state(&self) -> &CompareState {
-        &self.state
+        &self.shared.state
     }
 
     fn choose(&self, side: Pick, id: Option<u32>) {
-        self.state.list(self.binding.scenarios());
-        // A design deleted meanwhile opens nothing: the side shows the baseline, and it is said.
-        let scenario = id.and_then(|id| Self::open_side(&self.binding, &self.areas, Some(id)).map(|opened| (id, opened)));
-        let missing = id.is_some() && scenario.is_none();
-        let (id, opened) = match scenario {
-            Some((id, opened)) => (Some(id), Some(opened)),
-            None => (None, Self::open_side(&self.binding, &self.areas, None)),
-        };
-        self.state.set(side, id);
-        if let Some(opened) = opened {
-            let mut sides = self.sides.borrow_mut();
-            match side {
-                Pick::A => sides.0 = opened,
-                Pick::B => sides.1 = opened,
-            }
-        }
-        if missing {
-            self.state.refuse(Said::new("scenario-missing"));
-        }
-        self.version.update(|v| *v += 1);
-        let (a, b) = (self.state.pick_now(Pick::A), self.state.pick_now(Pick::B));
-        self.ports.page.replace_path(&with_picks(&self.ports.page.path(), a, b));
-        let (name_a, name_b) = self.pick_names();
-        self.ports.announcer.say(&say_now(&self.i18n, self.units.get_untracked(), &self.summary_now().headline(&name_a, &name_b)));
+        self.shared.choose(side, id, self.binding.scenarios(), |id| Self::open_side(&self.binding, &self.areas, id), Self::summary_of);
     }
 
     fn summary(&self) -> Summary {
-        self.version.track();
-        self.summary_now()
+        self.shared.read(Self::summary_of)
     }
 
     fn back_href(&self) -> String {
-        crate::shared::project_id::link_for(&format!("street.html?street={}", self.edge), &*self.ports.storage)
+        crate::shared::project_id::link_for(&format!("street.html?street={}", self.edge), &*self.shared.ports.storage)
     }
 
     fn back_key(&self) -> &'static str {
@@ -181,7 +112,7 @@ impl CompareHost for StreetCompareVm {
     }
 
     fn place_name(&self) -> Said {
-        self.sides.borrow().0.street.title()
+        self.shared.read_now(|a, _| a.street.title())
     }
 }
 
