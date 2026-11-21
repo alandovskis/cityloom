@@ -45,6 +45,9 @@ project-delete-confirm-links = { $count ->
 }
 # Its share links could not be deleted on the server, so the project was kept; $reason says why, as a sentence.
 project-delete-links-failed = { $name } was not deleted: its share links could not be deleted first. { $reason }
+# The reason the project was kept ($failed, project-delete-links-failed), and what can still be done.
+project-delete-anyway-offer = { $failed } You can delete it anyway: its share links then keep working until they expire.
+project-delete-anyway = Delete anyway
 project-gone = That project is no longer here.
 project-first-name = First project
 # A project whose places came before its record, until its record or a rename names it.

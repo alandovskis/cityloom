@@ -48,6 +48,9 @@ project-delete-confirm-links = { $count ->
 }
 # Ses liens de partage n’ont pas pu être supprimés sur le serveur, donc le projet a été conservé; $reason dit pourquoi, en une phrase.
 project-delete-links-failed = { $name } n’a pas été supprimé : ses liens de partage n’ont pas pu être supprimés d’abord. { $reason }
+# La raison pour laquelle le projet a été conservé ($failed, project-delete-links-failed), et ce qui peut encore être fait.
+project-delete-anyway-offer = { $failed } Vous pouvez le supprimer quand même : ses liens de partage fonctionneront alors jusqu’à leur expiration.
+project-delete-anyway = Supprimer quand même
 project-gone = Ce projet n’est plus ici.
 project-first-name = Premier projet
 # A project whose places came before its record, until its record or a rename names it.

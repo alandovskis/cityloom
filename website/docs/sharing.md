@@ -53,7 +53,8 @@ reached, or the browser's storage refused the copy.
   A deleted or expired link keeps saying so for a year; after that it says no shared design has it.
 - **Deleting**: you can delete a link at any time from the share page of the device you made it on. Deleting a
   project on the home page deletes the links made of it on that device first (you must be signed in with the account
-  that made them); if one cannot be deleted, the project is kept and the page says why. A project deleted on another
+  that made them); if one cannot be deleted, the page says why and offers to delete the project anyway, its links then working until
+  they expire. A project deleted on another
   device leaves the links made of it on this one working until they expire. Deleting your
   account deletes every link you made at once; those links then say no shared design has them.
 - **On the opener's device**: the copy is kept in that browser's storage only, until it is replaced or the ten-copy
