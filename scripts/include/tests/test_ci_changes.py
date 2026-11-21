@@ -62,17 +62,17 @@ class Selection(unittest.TestCase):
         # Neither changes anything the pages show (the version is in their menu).
         for files in (
             ["website/docs/intro.md"],
-            [".github/workflows/ci.yml"],
+            [".github/workflows/presubmit.yml"],
             [".github/workflows/docs.yml", "website/docs/intro.md", "CLAUDE.md"],
             [".github/labels.yml", ".github/ISSUE_TEMPLATE/bug.yml"],
             ["scripts/ci/ci_changes.py", "scripts/ci/spec-map.json", "scripts/include/tests/test_ci_changes.py"],
-            [".claude/agents/deploy.md", ".github/workflows/ci.yml"],
+            [".claude/agents/deploy.md", ".github/workflows/presubmit.yml"],
         ):
             with self.subTest(files):
                 self.assertFalse(pick(*files).version)
 
     def test_ci_configuration_alone_still_runs_every_test(self):
-        s = pick(".github/workflows/ci.yml", "website/docs/intro.md")
+        s = pick(".github/workflows/presubmit.yml", "website/docs/intro.md")
         self.assertFalse(s.version)
         self.assertTrue(s.all)
         self.assertTrue(s.unit)
@@ -80,7 +80,7 @@ class Selection(unittest.TestCase):
     def test_anything_else_needs_a_version_bump(self):
         for files in (
             ["crates/cityloom_editor/src/junction/model.rs"],
-            [".github/workflows/ci.yml", "web/app.css"],
+            [".github/workflows/presubmit.yml", "web/app.css"],
             ["scripts/build.sh"],
             ["something-new/file.rs"],
         ):
@@ -167,7 +167,7 @@ class Selection(unittest.TestCase):
         self.assertTrue(pick("e2e/playwright.config.ts").all)
 
     def test_shared_code_and_the_build_run_all(self):
-        for f in ("crates/cityloom_editor/src/shared/ports.rs", "web/app.css", "justfile", ".github/workflows/ci.yml", "Cargo.lock", "crates/cityloom_server/src/app.rs", "scripts/build.sh"):
+        for f in ("crates/cityloom_editor/src/shared/ports.rs", "web/app.css", "justfile", ".github/workflows/presubmit.yml", "Cargo.lock", "crates/cityloom_server/src/app.rs", "scripts/build.sh"):
             with self.subTest(f):
                 self.assertTrue(pick(f).all)
 
@@ -301,17 +301,82 @@ class Coverage(unittest.TestCase):
                 self.assertIn(specs, ("all", "none", "self"))
 
     def test_the_workflows_ignore_exactly_the_documentation(self):
-        # ci.yml and sonar.yml do not start for documentation alone; their `paths-ignore` lists must be the `docs` rule,
-        # or a file would start no test at all, or start every job for a change the selector calls documentation.
-        # Every event a change starts (all but a manual run) has the list; the order does not matter.
+        # presubmit.yml, postsubmit.yml and sonar.yml do not start for documentation alone; their `paths-ignore` lists
+        # must be the `docs` rule, or a file would start no test at all, or start every job for a change the selector
+        # calls documentation. Every event a change starts (all but a manual run) has the list; the order does not matter.
         docs = sorted(next(r["paths"] for r in MAP["rules"] if r.get("docs")))
-        for workflow in ("ci.yml", "sonar.yml"):
+        events = {
+            "presubmit.yml": {"pull_request"},
+            "postsubmit.yml": {"push"},
+            "sonar.yml": {"push", "pull_request"},
+        }
+        for workflow, started_by in events.items():
             with self.subTest(workflow):
                 lists = paths_ignore(ROOT / ".github" / "workflows" / workflow)
-                self.assertTrue({"push", "pull_request"} <= set(lists), f"{workflow}: {sorted(lists)}")
+                self.assertTrue(started_by <= set(lists), f"{workflow}: {sorted(lists)}")
                 for event, paths in lists.items():
                     if event != "workflow_dispatch":
                         self.assertEqual(sorted(paths or []), docs, f"{workflow} {event}")
+
+
+class Pipelines(unittest.TestCase):
+    """CI is two workflows: presubmit.yml checks a pull request, postsubmit.yml checks main and deploys it."""
+
+    WORKFLOWS = ROOT / ".github" / "workflows"
+
+    def text(self, name: str) -> str:
+        return (self.WORKFLOWS / name).read_text(encoding="utf-8")
+
+    def jobs(self, name: str) -> dict[str, str]:
+        """The top-level jobs of a workflow, each with its own text."""
+        found: dict[str, list[str]] = {}
+        inside, job = False, None
+        for line in self.text(name).splitlines():
+            if not inside:
+                inside = line.startswith("jobs:")
+            elif m := re.fullmatch(r"  ([\w-]+):\s*", line):
+                job = m.group(1)
+                found[job] = []
+            elif job is not None:
+                found[job].append(line)
+        return {k: "\n".join(v) for k, v in found.items()}
+
+    def test_ci_yml_is_gone(self):
+        self.assertFalse((self.WORKFLOWS / "ci.yml").exists())
+
+    def test_presubmit_runs_on_pull_requests_only(self):
+        self.assertEqual(set(paths_ignore(self.WORKFLOWS / "presubmit.yml")), {"pull_request"})
+
+    def test_postsubmit_runs_on_main_and_by_hand_only(self):
+        self.assertEqual(set(paths_ignore(self.WORKFLOWS / "postsubmit.yml")), {"push", "workflow_dispatch"})
+
+    def test_only_postsubmit_deploys(self):
+        self.assertNotIn("deploy", self.jobs("presubmit.yml"))
+        self.assertIn("deploy", self.jobs("postsubmit.yml"))
+        self.assertNotIn("RAILWAY_TOKEN", self.text("presubmit.yml"))
+
+    def test_the_deploy_waits_for_every_check(self):
+        jobs = self.jobs("postsubmit.yml")
+        self.assertRegex(jobs["deploy"], r"needs: \[ci\b")
+        checks = set(jobs) - {"ci", "deploy"}
+        needed = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])
+        self.assertIsNotNone(needed)
+        self.assertEqual(checks, {n.strip() for n in needed.group(1).split(",")})
+
+    def test_presubmit_has_the_one_check_to_require(self):
+        jobs = self.jobs("presubmit.yml")
+        self.assertIn("name: CI", jobs["ci"])
+        needed = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])
+        self.assertIsNotNone(needed)
+        self.assertEqual(set(jobs) - {"ci"}, {n.strip() for n in needed.group(1).split(",")})
+
+    def test_only_presubmit_checks_the_version(self):
+        self.assertIn("version", self.jobs("presubmit.yml"))
+        self.assertNotIn("version", self.jobs("postsubmit.yml"))
+
+    def test_only_a_pull_request_is_cancelled_by_a_newer_push(self):
+        self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
+        self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))
 
 
 class Revisions(unittest.TestCase):

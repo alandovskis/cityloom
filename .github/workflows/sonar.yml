@@ -2,7 +2,7 @@ name: SonarCloud
 
 # A change to documentation alone is not analysed (the unit tests and the coverage it would report are unchanged).
 # No check is required on main and this one is not part of the `CI` job, so a path filter is safe. The list is
-# ci.yml's and the `docs` rule of scripts/ci/spec-map.json (scripts/include/tests/test_ci_changes.py checks it).
+# presubmit.yml's and postsubmit.yml's and the `docs` rule of scripts/ci/spec-map.json (scripts/include/tests/test_ci_changes.py checks it).
 on:
   push:
     branches: [main]
@@ -27,8 +27,8 @@ concurrency:
 permissions:
   contents: read
 
-# Not part of the `CI` aggregate job in ci.yml: the analysis reports and never blocks a merge or the deploy.
-# It has no -D warnings (Clippy's findings are Sonar's to judge), which is why it is not a job of ci.yml.
+# Not part of the `CI` aggregate job in presubmit.yml, nor of postsubmit.yml's: the analysis reports and never blocks a merge or the deploy.
+# It has no -D warnings (Clippy's findings are Sonar's to judge), which is why it is not a job of presubmit.yml or postsubmit.yml.
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"

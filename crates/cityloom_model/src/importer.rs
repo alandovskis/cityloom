@@ -35,7 +35,7 @@
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
 ///
 /// CI keeps the tiles until the sources that make them change, and does not count this crate's `street` and
-/// `catalogue` modules among them (`.github/workflows/ci.yml`, the `tiles` cache key): the importer and the tile code
+/// `catalogue` modules among them (`.github/workflows/postsubmit.yml`, the `tiles` cache key): the importer and the tile code
 /// must not use them, or the key must count them again.
 pub const IMPORTER_VERSION: u32 = 11;
 
