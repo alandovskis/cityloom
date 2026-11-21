@@ -154,8 +154,9 @@ pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, docu
     Err(Refused::Unusable)
 }
 
-/// The documents a fork takes from its copy: the design as it was shared (`share::model`'s two documents).
-const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restriction::store::RESTRICTIONS_KEY];
+/// The documents a fork takes from its copy: the design as it was shared (`share::model`'s two documents; the share
+/// slice's tests check every document a share holds is here).
+pub const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restriction::store::RESTRICTIONS_KEY];
 
 /// Makes the copy `id` of a shared design one of the person's projects, to edit (#223): a new project, listed, with
 /// the copy's name and area and a copy of its design, marked for the sync with each of its places as the person's own
