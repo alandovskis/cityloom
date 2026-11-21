@@ -94,13 +94,19 @@ impl IsoFrame {
     /// The frame for a drawing `width` wide in a window `window_height` high, as big as the plan's, that holds
     /// the points of `content` (on the ground) and the tallest thing standing above them.
     pub fn fit(content: &[P], width: f64, window_height: f64) -> IsoFrame {
+        IsoFrame::fit_capped(content, width, window_height, f64::INFINITY)
+    }
+
+    /// `fit`, drawn no larger than `cap` pixels to the millimetre: the content is centred at that scale. Two pictures
+    /// side by side take the smaller of their scales as the cap, so that they can be compared by eye.
+    pub fn fit_capped(content: &[P], width: f64, window_height: f64, cap: f64) -> IsoFrame {
         let plan = Frame::fit(width, window_height);
         let ground: Vec<P> = content.iter().map(|&c| project(c, 0.0)).collect();
         let (min_x, max_x) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
         let (min_y, max_y) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
         let min_y = min_y - TALLEST_MM * LIFT;
         let (pad_x, pad_y) = if plan.narrow { (24.0, 40.0) } else { ((plan.width * 0.1).min(80.0), 40.0) };
-        let scale = ((plan.width - 2.0 * pad_x) / (max_x - min_x)).min((plan.height - 2.0 * pad_y) / (max_y - min_y));
+        let scale = ((plan.width - 2.0 * pad_x) / (max_x - min_x)).min((plan.height - 2.0 * pad_y) / (max_y - min_y)).min(cap);
         IsoFrame {
             scale,
             ox: plan.width / 2.0 - (min_x + max_x) / 2.0 * scale,
@@ -268,6 +274,20 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
     // The defs come before the group, as an element of the picture's own.
     let defs = std::mem::take(&mut diagram.defs);
     IsoSvg { frame, markup: format!("{defs}<g class=\"iso iso-junction\">{}</g>", render(&diagram, &frame)) }
+}
+
+/// Two junctions in 2.5D side by side, each in a drawing `width` wide in a window `window_height` high, at one scale
+/// (the smaller of the two that fit), so that a longer street in one does not make the other look larger. They are
+/// only looked at: nothing is outlined and nothing can be pressed, whatever either junction has selected.
+pub fn iso_pair(a: &JView, b: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoSvg, IsoSvg) {
+    let (pa, pb) = (content_points(a), content_points(b));
+    let cap = IsoFrame::fit(&pa, width, window_height).scale.min(IsoFrame::fit(&pb, width, window_height).scale);
+    let one = |v: &JView, points: &[P]| {
+        let (frame, mut diagram) = build::build_with(v, i18n, IsoFrame::fit_capped(points, width, window_height, cap), false, units);
+        let defs = std::mem::take(&mut diagram.defs);
+        IsoSvg { frame, markup: format!("{defs}<g class=\"iso iso-junction\">{}</g>", render(&diagram, &frame)) }
+    };
+    (one(a, &pa), one(b, &pb))
 }
 
 #[cfg(test)]
@@ -461,19 +481,19 @@ mod tests {
 
     #[test]
     fn no_wall_is_drawn_where_two_surfaces_at_the_same_height_meet_and_one_is_where_they_differ() {
-        let mut one = Scene::new(frame());
+        let mut one = Scene::new(frame(), true);
         one.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
         let alone = walls(one);
         assert!(alone > 0);
         let pair = |h: f64| {
-            let mut d = Scene::new(frame());
+            let mut d = Scene::new(frame(), true);
             d.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
             d.stand("median", square(1000.0, 2000.0), h, true);
             walls(d)
         };
         assert_eq!(pair(150.0), 2 * alone - 1, "the wall where they touch is not drawn");
         assert_eq!(pair(300.0), 2 * alone, "a step is a wall");
-        let mut table = Scene::new(frame());
+        let mut table = Scene::new(frame(), true);
         table.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
         table.table("sidewalk", &square(1000.0, 2000.0), 150.0);
         assert_eq!(walls(table), alone - 1, "nor is one where a surface level with it begins");
@@ -481,7 +501,7 @@ mod tests {
 
     #[test]
     fn a_divider_is_drawn_as_the_open_line_it_is_and_never_joined_to_its_start() {
-        let mut d = Scene::new(frame());
+        let mut d = Scene::new(frame(), true);
         d.divider(&[(-3_000.0, 0.0), (0.0, 3_000.0), (3_000.0, 0.0), (0.0, -3_000.0)]);
         assert_eq!(count(&finished(d), "<path class=\"iso-paint white"), 2 * 3, "a double line of three segments: two lines of three quads, not four");
     }
@@ -1121,5 +1141,51 @@ mod tests {
         assert_eq!(height_of("sidewalk"), 150.0);
         assert_eq!(height_of("median"), 150.0);
         assert_eq!(height_of("planting"), 150.0);
+    }
+
+    fn pair(a: &Junction, b: &Junction, width: f64) -> (IsoSvg, IsoSvg) {
+        iso_pair(&a.view(), &b.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), width, 1000.0, Units::Metres)
+    }
+
+    #[test]
+    fn a_pair_of_equal_junctions_is_drawn_as_one_does() {
+        let j = Junction::new(0);
+        let (a, b) = pair(&j, &j, 1000.0);
+        assert_eq!(a.frame, b.frame);
+        assert_eq!(a.markup, b.markup);
+        assert_eq!(a.frame, svg(&j).frame, "alone or paired, the same junction has the same frame");
+    }
+
+    #[test]
+    fn a_pair_is_drawn_at_the_smaller_scale_of_the_two_and_each_stays_in_the_drawing() {
+        let mut differed = false;
+        for (i, j) in (0..4).map(Junction::new).enumerate() {
+            let other = Junction::new((i + 1) % 4);
+            let smaller = svg(&j).frame.scale.min(svg(&other).frame.scale);
+            differed |= svg(&j).frame.scale != svg(&other).frame.scale;
+            let (a, b) = pair(&j, &other, 1000.0);
+            assert_eq!((a.frame.scale, b.frame.scale), (smaller, smaller), "sample {i}");
+            assert_eq!((a.frame.width, a.frame.height), (b.frame.width, b.frame.height));
+            for (s, v) in [(&a, j.view()), (&b, other.view())] {
+                for p in v.arms.iter().flat_map(|x| flatten(&x.outline)) {
+                    let (x, y) = s.frame.at(p, 0.0);
+                    assert!((0.0..=s.frame.width).contains(&x) && (0.0..=s.frame.height).contains(&y), "sample {i}");
+                }
+            }
+        }
+        assert!(differed, "the samples must not all fit at one scale, or this proves nothing");
+    }
+
+    #[test]
+    fn a_pair_has_no_outline_and_nothing_to_press() {
+        for (name, mut j) in every_kind() {
+            for t in j.targets() {
+                j.select(t);
+                let (a, _) = pair(&j, &j, 1000.0);
+                for needle in ["iso-sel", "data-role", "data-uid", "data-lane", "iso-hit", "t-blue"] {
+                    assert_eq!(count(&a.markup, needle), 0, "{name}: {t:?} leaves {needle}");
+                }
+            }
+        }
     }
 }

@@ -701,3 +701,16 @@ jn-check-curb-near-bad = { $uses }
 jn-curb-near = Bordure : { $use } sur { $arm } à { $gap } de la traverse; il en faut { $need } ou plus.
 jn-curb-near-inside = Bordure : { $use } sur { $arm } atteint la traverse.
 jn-sel-arm-curb = { $use } { $side }, à { $at } du centre.
+
+# Ce qui distingue deux conceptions d’une jonction (src/junction/model/compare.rs).
+cmp-jn-control = Signalisation : { $a } → { $b }
+cmp-jn-turbo = Giratoire turbo : { $a } → { $b }
+cmp-jn-turbo-none = aucun
+cmp-jn-entering = { $street } : voies entrantes, { $a } → { $b }
+cmp-jn-leaving = { $street } : voies sortantes, { $a } → { $b }
+cmp-jn-crossing-added = { $street } : un passage pour piétons est ajouté
+cmp-jn-crossing-removed = { $street } : le passage pour piétons est retiré
+cmp-jn-bike-box-added = { $street } : un sas cyclable est ajouté
+cmp-jn-bike-box-removed = { $street } : le sas cyclable est retiré
+cmp-jn-phases = Phases des feux : { $a } → { $b }
+cmp-jn-cycle = Cycle des feux : { $a } s → { $b } s

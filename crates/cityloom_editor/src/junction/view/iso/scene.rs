@@ -103,11 +103,14 @@ pub(super) struct Scene {
     names: Vec<Shape>,
     /// How much of `flat` is the carriageway where the streets meet and the ring's arrows.
     ground: usize,
+    /// Whether the shapes may be made pressable; a picture that is only looked at has none.
+    pressable: bool,
 }
 
 impl Scene {
-    pub(super) fn new(f: IsoFrame) -> Scene {
+    pub(super) fn new(f: IsoFrame, pressable: bool) -> Scene {
         Scene {
+            pressable,
             f,
             flat: Vec::new(),
             solids: Vec::new(),
@@ -321,7 +324,9 @@ impl Scene {
 
     /// Makes the shapes `draw` draws pressable: a press on one selects what `attrs` (`hit_attrs`) says.
     pub(super) fn pressing(&mut self, attrs: String, draw: impl FnOnce(&mut Scene)) {
-        self.hit = attrs;
+        if self.pressable {
+            self.hit = attrs;
+        }
         draw(self);
         self.hit.clear();
     }
@@ -329,7 +334,7 @@ impl Scene {
     /// A shape that is only a place to press, with nothing painted in it. `class` is its CSS class, `title` what the
     /// pointer is told it is.
     pub(super) fn press_area(&mut self, class: &str, attrs: &str, foot: &[P], h_mm: f64, title: Option<&str>) {
-        if foot.len() < 3 {
+        if foot.len() < 3 || !self.pressable {
             return;
         }
         // A part narrower than a finger is given the rest of the 24 px as a stroke nobody sees, which a press also lands on.
