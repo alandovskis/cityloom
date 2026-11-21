@@ -19,6 +19,11 @@ fn picked(value: &str) -> Option<u32> {
     if value == BASELINE { None } else { value.parse().ok() }
 }
 
+/// The menu value of a design (None: the baseline).
+fn value_of(id: Option<u32>) -> String {
+    id.map_or_else(|| BASELINE.to_string(), |id| id.to_string())
+}
+
 /// The comparison page: `column_a` and `column_b` are the two halves' columns.
 #[component]
 pub fn CompareFrame<H: CompareHost + 'static>(
@@ -52,14 +57,19 @@ pub fn CompareFrame<H: CompareHost + 'static>(
                 })
                 .collect_view()
         };
+        let select = NodeRef::<leptos::html::Select>::new();
+        // A refused pick changes no signal, so the menu would go on showing it: put it back to the design kept.
         let change = move |ev: leptos::ev::Event| {
             let id = picked(&event_target_value(&ev));
             host.with_value(|h| h.choose(side, id));
+            if let Some(select) = select.get_untracked() {
+                select.set_value(&value_of(state().pick_now(side)));
+            }
         };
         view! {
             <div class="compare-pick">
                 <label for=id>{tr(label)}</label>
-                <select id=id on:change=change>
+                <select node_ref=select id=id on:change=change>
                     <option value=BASELINE prop:selected=move || state().pick(side).is_none()>{tr("cmp-baseline")}</option>
                     {options}
                 </select>
@@ -255,6 +265,18 @@ mod tests {
         host.state.refuse(Said::new("scenario-missing"));
         let out = render(host);
         let at = out.find("id=\"compare-refusal\"").unwrap();
-        assert!(out[at..].starts_with("id=\"compare-refusal\"") && out[at..at + 200].contains("That scenario is no longer here."), "{out}");
+        let paragraph = &out[at..];
+        let text = &paragraph[paragraph.find('>').unwrap() + 1..paragraph.find("</p>").unwrap()];
+        assert_eq!(text, "That scenario is no longer here.", "{out}");
+    }
+
+    #[test]
+    fn a_menu_value_is_the_baseline_or_an_id() {
+        assert_eq!(picked("base"), None);
+        assert_eq!(picked("3"), Some(3));
+        // not a design of the menu: taken as the baseline, which the menu always holds
+        assert_eq!(picked("x"), None);
+        assert_eq!(value_of(None), "base");
+        assert_eq!(value_of(Some(3)), "3");
     }
 }
