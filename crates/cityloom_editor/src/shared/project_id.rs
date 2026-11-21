@@ -91,7 +91,7 @@ pub fn editable_in(href: &str, project: &str) -> String {
     let (rest, fragment) = href.split_once('#').map_or((href, None), |(r, f)| (r, Some(f)));
     let (path, query) = rest.split_once('?').map_or((rest, ""), |(p, q)| (p, q));
     let page = path.rsplit('/').next().unwrap_or(path);
-    if !["map.html", "street.html", "intersection.html", "timeline.html"].contains(&page) {
+    if page == "share.html" || !PROJECT_PAGES.contains(&page) {
         return format!("map.html?project={project}");
     }
     let mut pairs: Vec<String> =
