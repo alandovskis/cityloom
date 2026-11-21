@@ -131,7 +131,14 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         slot.set_class_name("read-only-slot");
         let _ = end.insert_before(&slot, end.first_child().as_ref());
         let i18n = vm.i18n();
-        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ReadOnlyTag i18n=i18n/> }).forget();
+        let forkable = vm.can_fork().then(|| vm.clone());
+        leptos::mount::mount_to(slot.unchecked_into(), move || {
+            view! {
+                <ReadOnlyTag i18n=i18n/>
+                {forkable.map(|vm| view! { <ForkAction vm=vm/> })}
+            }
+        })
+        .forget();
     }
     // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
     // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
@@ -228,6 +235,49 @@ pub fn ReadOnlyTag(i18n: Rc<I18n>) -> impl IntoView {
             <span aria-hidden="true">{say("read-only-tag")}</span>
             <span class="sr-only">{say("read-only-note")}</span>
         </p>
+    }
+}
+
+/// Beside the read-only tag of a copy of a shared design (#223): a button that makes it one of the person's projects
+/// (`ShellVm::fork`), described by what it does; once made, a link to the same page of the new project, opened to edit,
+/// which takes the focus (the result is announced too); a failure shown beside the button, which stays to try again.
+#[component]
+pub fn ForkAction(vm: Rc<ShellVm>) -> impl IntoView {
+    let vm = StoredValue::new_local(vm);
+    let say = move |key: &'static str| move || vm.with_value(|v| v.i18n().tr(key, &Args::new()));
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        if vm.with_value(|v| v.forked()).is_some()
+            && let Some(link) = by_id("fork-open").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+        {
+            let _ = link.focus();
+        }
+    });
+    view! {
+        {move || match vm.with_value(|v| v.forked()) {
+            Some(href) => {
+                view! {
+                    <a class="btn fork-open" id="fork-open" href=href>
+                        {say("shell-fork-open")}
+                    </a>
+                }
+                    .into_any()
+            }
+            None => {
+                view! {
+                    <button type="button" id="fork-btn" class="btn fork-btn" aria-describedby="fork-hint" on:click=move |_| vm.with_value(|v| v.fork())>
+                        <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                            <rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/>
+                            <path d="M10.5 3.5v-1h-8v8h1"/>
+                        </svg>
+                        <span>{say("shell-fork")}</span>
+                    </button>
+                    <span class="sr-only" id="fork-hint">{say("shell-fork-hint")}</span>
+                    {move || vm.with_value(|v| v.fork_error()).map(|error| view! { <span class="fork-error" id="fork-error">{error}</span> })}
+                }
+                    .into_any()
+            }
+        }}
     }
 }
 

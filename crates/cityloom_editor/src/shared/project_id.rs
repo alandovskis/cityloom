@@ -84,6 +84,23 @@ pub fn link_in(href: &str, project: Option<&str>, read_only: bool) -> String {
     format!("{path}?{}{fragment}", pairs.join("&"))
 }
 
+/// `href`, a page of a project, as the same page of `project` opened to edit: its `project=` names `project` and
+/// `VIEW` is gone; the rest of its query and its fragment stay. An address of no page that shows a project's work (the
+/// list, the page that opens a share link) gives `project`'s map.
+pub fn editable_in(href: &str, project: &str) -> String {
+    let (rest, fragment) = href.split_once('#').map_or((href, None), |(r, f)| (r, Some(f)));
+    let (path, query) = rest.split_once('?').map_or((rest, ""), |(p, q)| (p, q));
+    let page = path.rsplit('/').next().unwrap_or(path);
+    if !["map.html", "street.html", "intersection.html", "timeline.html"].contains(&page) {
+        return format!("map.html?project={project}");
+    }
+    let mut pairs: Vec<String> =
+        query.split('&').filter(|pair| !pair.is_empty() && *pair != VIEW && *pair != "project" && !pair.starts_with("project=")).map(str::to_string).collect();
+    pairs.push(format!("project={project}"));
+    let fragment = fragment.map(|f| format!("#{f}")).unwrap_or_default();
+    format!("{path}?{}{fragment}", pairs.join("&"))
+}
+
 /// `link_in` from a page whose project's storage is `storage`: its project, and read-only where it is.
 pub fn link_for(href: &str, storage: &dyn crate::shared::ports::Storage) -> String {
     link_in(href, storage.project().as_deref(), storage.read_only())
@@ -169,6 +186,17 @@ mod tests {
             assert_eq!(link_in(other, Some("p1"), true), other);
         }
         assert_eq!(link_in("map.html", None, true), "map.html");
+    }
+
+    #[test]
+    fn the_same_page_in_another_project_opened_to_edit() {
+        assert_eq!(editable_in("/street.html?street=7&project=s1&view=1", "p-abc"), "/street.html?street=7&project=p-abc");
+        assert_eq!(editable_in("/map.html?view=1&project=s1#x", "p2"), "/map.html?project=p2#x");
+        assert_eq!(editable_in("map.html", "p2"), "map.html?project=p2");
+        assert_eq!(editable_in("/intersection.html?junction=3&project=&view=1", "p2"), "/intersection.html?junction=3&project=p2");
+        // a page outside a project opens the project's map
+        assert_eq!(editable_in("/share.html#token", "p2"), "map.html?project=p2");
+        assert_eq!(editable_in("/index.html", "p2"), "map.html?project=p2");
     }
 
     #[test]

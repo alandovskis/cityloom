@@ -154,6 +154,10 @@ pub struct ShellVm {
     tab: ArcRwSignal<String>,
     /// Whether the project's earlier edits were just cleared (the importer changed) and the notice says so.
     edits_cleared: ArcRwSignal<bool>,
+    /// The page of the project a copy of a shared design was just forked into, opened to edit (#223).
+    forked: ArcRwSignal<Option<String>>,
+    /// Why the last fork failed: a message key.
+    fork_error: ArcRwSignal<Option<&'static str>>,
 }
 
 /// The message that names a side of the road.
@@ -223,6 +227,8 @@ impl ShellVm {
             notes_open: ArcRwSignal::new(notes_open),
             tab: ArcRwSignal::new(tab),
             edits_cleared: ArcRwSignal::new(false),
+            forked: ArcRwSignal::new(None),
+            fork_error: ArcRwSignal::new(None),
             ports,
         };
         vm.take_region(recall(REGION_KEY).as_deref());
@@ -295,6 +301,47 @@ impl ShellVm {
         let path = self.ports.page.path();
         let search = path.split_once('?').map_or("", |(_, search)| search);
         crate::project::context::read_only(&*self.ports.storage, self.target.project().as_deref(), search)
+    }
+
+    // ---- fork (#223) ----
+
+    /// Whether the page offers to fork its project: it is a copy of a shared design (a project of the person's own
+    /// shown with `view=1` is theirs already) not forked from this page yet.
+    pub fn can_fork(&self) -> bool {
+        self.forked.get().is_none() && self.target.project().is_some_and(|id| crate::project::copies::is_copy(&*self.ports.storage, &id))
+    }
+
+    /// Makes the copy one of the person's projects, to edit (`project::copies::fork`), and says so; the page then
+    /// offers the same page of the new project (`forked`). A failure is said and shown (`fork_error`), a copy gone since
+    /// the page offered the fork (another tab's links made room) among them. Once forked, nothing more.
+    pub fn fork(&self) {
+        if self.forked.get_untracked().is_some() {
+            return;
+        }
+        let Some(copy) = self.target.project() else { return };
+        match crate::project::copies::fork(&self.ports.storage, &copy) {
+            Ok(project) => {
+                self.fork_error.set(None);
+                self.forked.set(Some(crate::shared::project_id::editable_in(&self.ports.page.path(), &project.id)));
+                let args = Args::new().str("name", project.name);
+                self.ports.announcer.say(&self.i18n.tr_now("shell-forked", &args));
+            }
+            Err(refused) => {
+                let key = if refused == crate::project::Refused::Unknown { "shell-fork-gone" } else { "shell-fork-failed" };
+                self.fork_error.set(Some(key));
+                self.ports.announcer.say(&self.say(key));
+            }
+        }
+    }
+
+    /// The page of the project just forked, opened to edit; none before.
+    pub fn forked(&self) -> Option<String> {
+        self.forked.get()
+    }
+
+    /// Why the last fork failed, in the page's language; none after a fork that worked.
+    pub fn fork_error(&self) -> Option<String> {
+        self.fork_error.get().map(|key| self.i18n.tr(key, &Args::new()))
     }
 
     // ---- units ----

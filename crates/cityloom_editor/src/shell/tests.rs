@@ -576,6 +576,126 @@ fn a_copy_of_a_shared_design_is_shown_read_only_whatever_its_address_says() {
     crate::sync::hub::reset();
 }
 
+/// A shell over the street page of a copy of a shared design (#221), what it says recorded.
+fn shell_of_a_copy(
+    locale: Locale,
+) -> (std::rc::Rc<crate::shell::vm::ShellVm>, std::rc::Rc<crate::shared::ports::RecordingAnnouncer>, std::rc::Rc<crate::shared::ports::MemoryStorage>, String) {
+    crate::sync::hub::reset();
+    let (mut ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let said = std::rc::Rc::new(crate::shared::ports::RecordingAnnouncer::default());
+    ports.announcer = said.clone();
+    let root: std::rc::Rc<dyn crate::shared::ports::Storage> = storage.clone();
+    let copy = crate::project::copies::keep(&root, "tok", "Shared", "area=45.5,-73.5&name=Plateau", &[("cityloom-restrictions", "{}")]).unwrap();
+    *page.path.borrow_mut() = format!("/street.html?street=7&project={copy}&view=1");
+    let target = std::rc::Rc::new(crate::shell::Bare::in_project(Some(copy.clone())));
+    let vm = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(locale), target, "details-details", vec![], false, true);
+    (vm, said, storage, copy)
+}
+
+/// A copy of a shared design can be made one of the person's projects to edit (#223): it is said, and the same page of
+/// the new project, opened to edit, is offered; the copy itself stays read-only.
+#[test]
+fn a_copy_of_a_shared_design_is_forked_to_a_project_of_ones_own_and_it_is_said() {
+    let (vm, said, storage, copy) = shell_of_a_copy(Locale::En);
+    assert!(vm.can_fork());
+    assert_eq!(vm.forked(), None);
+    vm.fork();
+    let projects = crate::project::ProjectStore::new(storage.clone()).list();
+    assert_eq!(projects.len(), 1, "one new project of the person's own");
+    let id = projects[0].id.clone();
+    assert_eq!(projects[0].name, "Shared");
+    assert_eq!(said.take(), ["A copy of Shared is now one of your projects. Open it to make changes."]);
+    assert_eq!(vm.forked(), Some(format!("/street.html?street=7&project={id}")));
+    assert!(!vm.can_fork(), "the copy is made: the page offers to open it");
+    assert_eq!(vm.fork_error(), None);
+    assert!(vm.read_only(), "this page still shows the shared design");
+    assert!(crate::project::copies::is_copy(&*storage, &copy));
+    crate::sync::hub::reset();
+}
+
+#[test]
+fn a_fork_is_said_in_french() {
+    let (vm, said, _, _) = shell_of_a_copy(Locale::FrCa);
+    vm.fork();
+    assert_eq!(said.take(), ["Une copie de Shared fait maintenant partie de vos projets. Ouvrez-la pour la modifier."]);
+    crate::sync::hub::reset();
+}
+
+/// Only a copy of a shared design is forked: a project of the person's own opened with `view=1` is theirs already.
+#[test]
+fn a_project_of_ones_own_shown_read_only_offers_no_fork() {
+    crate::sync::hub::reset();
+    let (ports, page, storage) = crate::shared::ports::test_ports_with_page();
+    let own = crate::project::ProjectStore::new(storage.clone()).create("Mine").unwrap();
+    *page.path.borrow_mut() = format!("/map.html?project={}&view=1", own.id);
+    let target = std::rc::Rc::new(crate::shell::Bare::in_project(Some(own.id.clone())));
+    let vm = crate::shell::vm::ShellVm::new_with(ports, crate::i18n_for(Locale::En), target, "details-details", vec![], false, true);
+    assert!(vm.read_only() && !vm.can_fork());
+    vm.fork();
+    assert_eq!(crate::project::ProjectStore::new(storage.clone()).list().len(), 1, "nothing made");
+    crate::sync::hub::reset();
+}
+
+/// A fork the browser cannot keep, or of a copy gone meanwhile (another tab opened ten other links), is said, shown
+/// beside the button, and leaves no project; the button stays to try again.
+#[test]
+fn a_fork_that_fails_is_said_and_leaves_nothing() {
+    use crate::shared::ports::Storage;
+    let (vm, said, storage, _) = shell_of_a_copy(Locale::En);
+    storage.refuse("cityloom-restrictions@p1");
+    vm.fork();
+    let full = "No copy was made: this browser could not keep it. Free some space and try again.";
+    assert_eq!(said.take(), [full]);
+    assert_eq!(vm.fork_error().as_deref(), Some(full));
+    assert!(vm.can_fork() && vm.forked().is_none());
+    assert!(crate::project::ProjectStore::new(storage.clone()).list().is_empty());
+
+    storage.refuse_nothing();
+    storage.remember(crate::project::copies::COPIES_KEY, "");
+    vm.fork();
+    let gone = "No copy was made: this shared design is no longer kept on this device. Open its link again.";
+    assert_eq!(said.take(), [gone]);
+    assert_eq!(vm.fork_error().as_deref(), Some(gone));
+    crate::sync::hub::reset();
+}
+
+fn fork_html(vm: std::rc::Rc<crate::shell::vm::ShellVm>) -> String {
+    crate::shared::testing::html(move || {
+        use leptos::prelude::IntoAny;
+        leptos::view! { <crate::shell::view::ForkAction vm=vm/> }.into_any()
+    })
+}
+
+/// The top bar of a copy offers the fork as a button (keyboard reachable, described by what it does); once forked, a
+/// link to the new project in its place; a failure is shown beside the button.
+#[test]
+fn the_fork_is_a_described_button_then_a_link_to_the_new_project() {
+    let (vm, _, storage, _) = shell_of_a_copy(Locale::En);
+    let before = fork_html(vm.clone());
+    assert!(before.contains(r#"<button type="button" id="fork-btn""#), "{before}");
+    assert!(before.contains(r#"aria-describedby="fork-hint""#), "{before}");
+    assert!(before.contains(">Edit a copy<"), "{before}");
+    assert!(before.contains("Adds a copy of this design to your projects, where you can change it."), "{before}");
+    assert!(!before.contains("fork-open"), "{before}");
+    assert!(!before.contains(r#"id="fork-error""#), "no failure shown: {before}");
+    vm.fork();
+    let id = crate::project::ProjectStore::new(storage.clone()).list()[0].id.clone();
+    let after = fork_html(vm.clone());
+    assert!(!after.contains("fork-btn"), "{after}");
+    assert!(after.contains(&format!(r#"href="/street.html?street=7&amp;project={id}""#)), "{after}");
+    assert!(after.contains(r#"id="fork-open""#) && after.contains(">Open your copy<"), "{after}");
+    crate::sync::hub::reset();
+
+    let (vm, _, storage, _) = shell_of_a_copy(Locale::FrCa);
+    storage.refuse("cityloom-restrictions@p1");
+    vm.fork();
+    let failed = fork_html(vm);
+    assert!(failed.contains(">Modifier une copie<"), "{failed}");
+    assert!(failed.contains(r#"id="fork-error""#), "{failed}");
+    assert!(failed.contains("Aucune copie n’a été faite\u{a0}: ce navigateur n’a pas pu la conserver."), "{failed}");
+    crate::sync::hub::reset();
+}
+
 /// A page whose address opens its project read-only (`view=1`): the shell's links to the project's pages keep it, and
 /// its top bar says so in the page's language.
 #[test]

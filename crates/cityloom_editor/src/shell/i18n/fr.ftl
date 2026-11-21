@@ -8,6 +8,13 @@ not-kept = Ce navigateur ne conserve pas vos modifications, alors les autres pag
 read-only-tag = Lecture seule
 read-only-note = Cet aménagement est ouvert en lecture seule : vous pouvez le consulter, mais pas le modifier.
 read-only-refused = Cet aménagement est ouvert en lecture seule : rien ne peut y être modifié.
+# Making a copy of a shared design one of the person's projects, to edit (#223).
+shell-fork = Modifier une copie
+shell-fork-hint = Ajoute une copie de cet aménagement à vos projets, où vous pourrez la modifier. L’aménagement partagé reste tel quel.
+shell-forked = Une copie de { $name } fait maintenant partie de vos projets. Ouvrez-la pour la modifier.
+shell-fork-open = Ouvrir votre copie
+shell-fork-failed = Aucune copie n’a été faite : ce navigateur n’a pas pu la conserver. Libérez de l’espace et réessayez.
+shell-fork-gone = Aucune copie n’a été faite : cet aménagement partagé n’est plus conservé sur cet appareil. Ouvrez de nouveau son lien.
 notes-hidden = Notes masquées.
 details-shown = { $what } affichés.
 details-hidden = { $what } masqués.

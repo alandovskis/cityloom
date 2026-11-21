@@ -383,6 +383,19 @@ a.btn {
   font-weight: 600;
   white-space: nowrap;
 }
+/* Beside the tag of a copy of a shared design: make it one of the person's projects, then open it
+   (`shell::view::ForkAction`). */
+.fork-btn,
+.fork-open {
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.fork-error {
+  max-width: 22rem;
+  margin-left: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
 .session-box[hidden] {
   display: none;
 }

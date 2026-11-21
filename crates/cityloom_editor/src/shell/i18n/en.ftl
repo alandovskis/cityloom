@@ -8,6 +8,13 @@ not-kept = This browser is not keeping your changes, so other pages will not see
 read-only-tag = Read-only
 read-only-note = This design is open read-only: you can look at it, but not change it.
 read-only-refused = This design is open read-only: nothing can be changed.
+# Making a copy of a shared design one of the person's projects, to edit (#223).
+shell-fork = Edit a copy
+shell-fork-hint = Adds a copy of this design to your projects, where you can change it. The shared design stays as it is.
+shell-forked = A copy of { $name } is now one of your projects. Open it to make changes.
+shell-fork-open = Open your copy
+shell-fork-failed = No copy was made: this browser could not keep it. Free some space and try again.
+shell-fork-gone = No copy was made: this shared design is no longer kept on this device. Open its link again.
 notes-hidden = Notes hidden.
 details-shown = { $what } shown.
 details-hidden = { $what } hidden.
