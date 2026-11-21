@@ -1,10 +1,10 @@
 $ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
-6febe2c6de6fab61be8112f9ffcdddb769bd386d
-$ DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8317 just e2e tests/share.spec.ts
+90c289c92c626f4e049cf0c7e646da226c066210
+$ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8317 just e2e tests/share.spec.ts
 ./scripts/build.sh
-    Finished `release` profile [optimized] target(s) in 0.45s
-web/pkg/cityloom_editor.js: 93201 B, br 12573 B, gzip 15025 B
-web/pkg/cityloom_editor_bg.wasm: 6991934 B, br 1242296 B, gzip 1878622 B
+    Finished `release` profile [optimized] target(s) in 0.17s
+web/pkg/cityloom_editor.js: 93280 B, br 12573 B, gzip 15054 B
+web/pkg/cityloom_editor_bg.wasm: 7077060 B, br 1252117 B, gzip 1891392 B
 web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2309 B
 web/pkg/cityloom_report_pdf_bg.wasm: 2372530 B, br 562187 B, gzip 770312 B
 web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
@@ -13,17 +13,18 @@ web/vendor/maplibre-gl.css: 71596 B, br 8326 B, gzip 10191 B
 web/vendor/maplibre-gl.mjs: 1108049 B, br 241249 B, gzip 294314 B
 14 compressed copies
 cargo build -p cityloom_server --features test-provider
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.95s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
 ./scripts/pin-server.sh
 
-Running 6 tests using 6 workers
+Running 7 tests using 7 workers
 
-  ✓  5 [integration] › tests/share.spec.ts:121:1 › a link that is not whole is refused without asking the server (562ms)
-  ✓  2 [integration] › tests/share.spec.ts:158:1 › signed out, the share page says to sign in and makes no link (576ms)
-  ✓  3 [integration] › tests/share.spec.ts:146:1 › an expired share says it has expired, in English and in French (968ms)
-  ✓  4 [integration] › tests/share.spec.ts:102:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing (1.5s)
-  ✓  1 [integration] › tests/share.spec.ts:132:1 › a share its creator deleted says so (5.9s)
-  ✓  6 [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link (14.3s)
+  ✓  6 [integration] › tests/share.spec.ts:131:1 › a link that is not whole is refused without asking the server (382ms)
+  ✓  2 [integration] › tests/share.spec.ts:177:1 › signed out, the share page says to sign in and makes no link (453ms)
+  ✓  1 [integration] › tests/share.spec.ts:165:1 › an expired share says it has expired, in English and in French (593ms)
+  ✓  5 [integration] › tests/share.spec.ts:112:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing (919ms)
+  ✓  7 [integration] › tests/share.spec.ts:142:1 › a share its creator deleted says so (3.3s)
+  ✓  4 [integration] › tests/share.spec.ts:185:1 › deleting a project deletes its share links first, so its link then says it was deleted (3.4s)
+  ✓  3 [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link (7.3s)
 
-  6 passed (18.1s)
+  7 passed (8.9s)
 exit status: 0

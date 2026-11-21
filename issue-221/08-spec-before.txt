@@ -1,3 +1,5 @@
+# Copied unchanged from ev221/08-spec-before.txt: the 6-test share.spec.ts of 6febe2c6de6fab61be8112f9ffcdddb769bd386d, run on 29330ad1 (the base has not changed). The 7-test spec of 90c289c92c626f4e049cf0c7e646da226c066210 run on 29330ad1 is in 08-spec-before-7.txt.
+
 $ git worktree add --detach /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221 29330ad1   # origin/main, without the change
 $ cp /Users/alex/src/cityloom/main-issue-221/e2e/tests/share.spec.ts /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221/e2e/tests/   # only the new spec
 $ (e2e/tiers.json: "share" added to the integration tier, which playwright.config.ts requires of every spec)
