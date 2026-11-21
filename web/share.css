@@ -1,0 +1,138 @@
+/* The share page: one card under the bar, as the timeline's. Its colours are the home page's tokens (the pairs
+   `shared/contrast.rs` measures are the ones used here). */
+
+.share-page {
+  position: relative;
+  z-index: 5;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 24px;
+}
+@media (max-width: 899px) {
+  .share-page {
+    padding-top: 16px;
+  }
+}
+#sharing-slot {
+  display: grid;
+  gap: 12px;
+  width: min(780px, 100%);
+  padding: 36px 40px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+@media (max-width: 520px) {
+  #sharing-slot {
+    padding: 24px 18px;
+  }
+}
+#sharing-slot h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+#sharing-slot h1:focus {
+  outline: none;
+}
+#sharing-slot h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+#sharing-slot h2 {
+  margin-top: 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.share-intro {
+  font-size: 16px;
+}
+.sharing-blocked,
+.share-error {
+  color: var(--warn);
+  font-weight: 600;
+}
+.sharing-outcome:empty {
+  display: none;
+}
+.btn.sharing-create {
+  justify-self: start;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.sharing-create:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.share-empty {
+  color: var(--ink-2);
+}
+
+.share-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.share-row {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0;
+}
+.share-row + .share-row {
+  border-top: 1px solid var(--rule);
+}
+.share-row label {
+  font-weight: 600;
+}
+.share-link {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1.5px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font: 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.share-link:focus-visible {
+  border-color: var(--accent);
+}
+.share-expiry {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* The question asked in a row before its link is deleted, as the home page's before a project is. */
+.share-row > .confirm {
+  margin-top: 8px;
+}
+.confirm {
+  padding: 14px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+}
+.confirm > * + * {
+  margin-top: 10px;
+}
+/* A Delete answer, as the home page's (`shared/contrast.rs` measures its edge on the panel). */
+.btn.danger {
+  border-color: var(--map-bad);
+}
+/* A button whose request is on its way, or that cannot be used yet, waits without leaving the tab order
+   (`aria-disabled`), so focus stays on it; it looks as a disabled one does (`app.css`). */
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+.btn[aria-disabled="true"]:hover {
+  background: var(--panel);
+}
+.btn.sharing-create[aria-disabled="true"]:hover {
+  background: var(--accent);
+}

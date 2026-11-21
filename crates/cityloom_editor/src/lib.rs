@@ -13,6 +13,7 @@ pub mod map;
 pub mod place;
 pub mod project;
 pub mod restriction;
+pub mod share;
 pub mod shared;
 pub mod shell;
 pub mod standards;
@@ -105,7 +106,9 @@ pub fn mount_projects() -> HomePage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = shared::platform::browser_ports();
     let i18n = i18n_browser(&ports);
-    project::mount_list(ports, i18n.clone());
+    // A project's share links made here end before it does (#221): the share slice keeps them.
+    let links = std::rc::Rc::new(share::links::ProjectShares::new(ports.clone()));
+    project::mount_list(ports, i18n.clone(), links);
     HomePage(i18n)
 }
 
@@ -134,10 +137,55 @@ pub fn mount_timeline() -> Option<TimelinePage> {
     let ports = project::context::open_page(shared::platform::browser_ports())?;
     let i18n = i18n_browser(&ports);
     let project = ports.storage.project();
-    let name = project.as_deref().and_then(|id| project::store::find(&*ports.storage, id)).map(|p| p.name).unwrap_or_default();
+    let name = project.as_deref().and_then(|id| project::context::find(&*ports.storage, id)).map(|p| p.name).unwrap_or_default();
     let context = timeline::vm::Context { project_name: name, app_version: env!("CARGO_PKG_VERSION").to_string() };
     timeline::mount_timeline(ports, i18n.clone(), context);
     Some(TimelinePage { i18n, project })
+}
+
+/// The share page as its script sees it (#221): the links of the project it is opened in, or a link being opened.
+#[wasm_bindgen]
+pub struct SharePage {
+    i18n: std::rc::Rc<shared::i18n::I18n>,
+    project: Option<String>,
+}
+
+#[wasm_bindgen]
+impl SharePage {
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page.
+    pub fn mount_shell(&self) {
+        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", shell::NotesAtStart::Open);
+    }
+}
+
+/// Draws the share page. Its address carries either a share link's token (`share.html#<token>`, or a fragment where
+/// no project is named: `share::model::opens_a_link`): the page is in no project, moves the work from before projects first as such a page does, and opens the link (`share::mount_open`);
+/// or a project (`share.html?project=<id>`, `project::context::open_page`): the page makes and lists that project's
+/// links (`share::mount_share`), and where the project is not here it has gone to the list and draws nothing. Put
+/// together here, where slices may meet: the project slice says which project, what it is called and where it is.
+#[wasm_bindgen]
+pub fn mount_share() -> Option<SharePage> {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let root = shared::platform::browser_ports();
+    let search = root.page.path().split_once('?').map(|(_, search)| search.to_string()).unwrap_or_default();
+    if share::model::opens_a_link(&root.page.hash(), &search) {
+        let i18n = i18n_browser(&root);
+        project::migrate::move_legacy_work(&root.storage, &i18n);
+        share::mount_open(root, i18n.clone());
+        return Some(SharePage { i18n, project: None });
+    }
+    let ports = project::context::open_page(root)?;
+    let i18n = i18n_browser(&ports);
+    let project = ports.storage.project();
+    let record = project.as_deref().and_then(|id| project::context::find(&*ports.storage, id));
+    let context = share::vm::Context {
+        project_name: record.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+        project_area: record.map(|p| p.area).unwrap_or_else(|| place::area::default_area().to_query()),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+    };
+    share::mount_share(ports, i18n.clone(), context);
+    Some(SharePage { i18n, project })
 }
 
 /// The About page as its script sees it: what CityLoom is for, with the city of the project opened last drawn behind
@@ -186,6 +234,7 @@ const RESOURCES: &[shared::i18n::Resources] = &[
     archive::RESOURCES,
     project::RESOURCES,
     timeline::RESOURCES,
+    share::RESOURCES,
     standards::RESOURCES,
 ];
 

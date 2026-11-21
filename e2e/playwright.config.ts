@@ -80,6 +80,9 @@ export default defineConfig({
       // The sync specs poll /api/work from many parallel tests of one address: the default burst would answer 429.
       WORK_RATE_BURST: "100000",
       WORK_RATE_PERIOD_SECS: "1",
+      // The share spec reads and makes links from parallel tests of one address too.
+      SHARE_RATE_BURST: "100000",
+      SHARE_RATE_PERIOD_SECS: "1",
     },
     url: `http://127.0.0.1:${port}/map.html`,
     // A server already running without the archive would give false results.

@@ -686,4 +686,26 @@ mod tests {
         assert_eq!(editor.matches("\n.plan-thing-mark {").count(), 1);
         assert!(!editor.contains(".plan-thing["), "no thing is drawn in colours of its own");
     }
+
+    /// The share page (#221): its Delete answer is drawn as the home page's, its edge clearing 3:1, and the question
+    /// before deleting a link reads at 4.5:1 on its wash, as the home page's does.
+    #[test]
+    fn the_share_page_s_question_and_its_danger_answer_clear_aa_in_both_themes() {
+        let (app, share) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/share.css"));
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let pick = |name: &str| {
+                let t = token(app, name);
+                if i == 0 { t.0 } else { t.1 }
+            };
+            let panel = pick("panel").unwrap();
+            let wash = pick("warn-wash").unwrap_or_else(|| blend("#f59e0b", &panel, 0.18));
+            let ink = pick("ink").unwrap();
+            assert!(contrast(&ink, &wash) >= 4.5, "ink (the question) on warn-wash {theme}: {:.2}", contrast(&ink, &wash));
+            let bad = pick("map-bad").unwrap();
+            assert!(contrast(&bad, &panel) >= 3.0, "map-bad (Delete the link) on panel {theme}: {:.2}", contrast(&bad, &panel));
+            assert!(contrast(&ink, &panel) >= 4.5, "ink (the Delete answer's words) on panel {theme}: {:.2}", contrast(&ink, &panel));
+        }
+        assert!(rule(share, ".btn.danger").contains("border-color: var(--map-bad);"));
+        assert!(rule(share, "\n.confirm").contains("background: var(--warn-wash);"));
+    }
 }

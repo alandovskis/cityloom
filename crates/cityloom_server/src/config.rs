@@ -58,6 +58,7 @@ pub struct AccountConfig {
     pub providers: Vec<ProviderCreds>,
     pub rate: RateLimit,
     pub work_rate: RateLimit,
+    pub share_rate: RateLimit,
     pub fake_provider: bool,
 }
 
@@ -189,6 +190,8 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
         RateLimit { period_secs: positive("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS as u32)? as u64, burst: positive("AUTH_RATE_BURST", DEFAULT_BURST)? };
     // The work routes (sync) are called after edits, debounced: their own limit, much more generous than a sign-in's.
     let work_rate = RateLimit { period_secs: positive("WORK_RATE_PERIOD_SECS", 1)? as u64, burst: positive("WORK_RATE_BURST", 60)? };
+    // Shared designs: a link is read without an account, so its guesses are counted apart: one a second, in bursts of 30.
+    let share_rate = RateLimit { period_secs: positive("SHARE_RATE_PERIOD_SECS", 1)? as u64, burst: positive("SHARE_RATE_BURST", 30)? };
     // An empty value (`.env.example` ships them) is not set.
     let set = |variable: &str| get(variable).filter(|v| !v.trim().is_empty());
     let pair = |slug: &'static str, id: &str, secret: &str| -> Option<ProviderCreds> {
@@ -222,6 +225,7 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
         providers,
         rate,
         work_rate,
+        share_rate,
         fake_provider: get("FAKE_PROVIDER").as_deref() == Some("1"),
     })
 }
@@ -472,6 +476,18 @@ mod tests {
         assert_eq!((a.work_rate.period_secs, a.work_rate.burst), (2, 5));
         let c = with(&account_vars(), &[], &[("WORK_RATE_BURST", "0")]);
         assert!(matches!(off(&c), OffReason::Invalid { variable: "WORK_RATE_BURST", .. }));
+    }
+
+    #[test]
+    fn the_share_routes_have_their_own_rate_limit() {
+        let c = with(&account_vars(), &[], &[]);
+        let AccountSide::On(a) = &c.account else { panic!() };
+        assert_eq!((a.share_rate.period_secs, a.share_rate.burst), (1, 30));
+        let c = with(&account_vars(), &[], &[("SHARE_RATE_PERIOD_SECS", "3"), ("SHARE_RATE_BURST", "7")]);
+        let AccountSide::On(a) = &c.account else { panic!() };
+        assert_eq!((a.share_rate.period_secs, a.share_rate.burst), (3, 7));
+        let c = with(&account_vars(), &[], &[("SHARE_RATE_PERIOD_SECS", "0")]);
+        assert!(matches!(off(&c), OffReason::Invalid { variable: "SHARE_RATE_PERIOD_SECS", .. }));
     }
 
     #[test]

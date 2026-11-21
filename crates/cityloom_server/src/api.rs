@@ -15,6 +15,7 @@ use crate::accounts::{self, RepoError, UnlinkError};
 use crate::app::{Account, json_error, require_origin, require_ready};
 use crate::session::{self, Read};
 
+mod share;
 mod work;
 
 pub(crate) fn store_error(e: RepoError) -> Response {
@@ -157,9 +158,12 @@ pub fn routes(account: Arc<Account>) -> Router {
         .route("/api/me", get(me))
         .merge(changing)
         .merge(work::routes(account.clone()))
+        .merge(share::routes(account.clone()))
         .route("/api/{*rest}", any(not_found))
         .layer(middleware::map_response(|mut res: Response| async move {
             res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            // A body is what its Content-Type says, never sniffed: a shared design comes back exactly as it was sent.
+            res.headers_mut().insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
             res
         }))
         // Outermost, as for `/auth/*` in Task 10: 503 while the database is not ready (`use crate::app::require_ready`).
