@@ -312,6 +312,13 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Passive detection (kerbside radar, infrared or video, CLM-17) | Détection passive |  |
 | Junction inspector | Cancelled (a call whose pedestrian left before the walk) | Annulé (appel) | `Annulés` in the totals; `Annulé : parti après 30 s d’attente` in each call's row. |
 | Junction inspector | Walk (the pedestrian signal) / Walks skipped | Marche / Marches omises | As the plan's bounds, `marche de 7 s`. |
+| Junction inspector | Actuated / On recall (a street's signal phase, CLM-12) | À la demande / En rappel | `Rue à la demande`; `En rappel` as for a crossing (#60). To confirm, see below. |
+| Junction inspector | Vehicle actuation (the section) | Actionnement par les véhicules | To confirm, see below. |
+| Junction inspector | Minimum green / Maximum green | Vert minimal / Vert maximal |  |
+| Junction inspector | Gap (passage time) | Intervalle de passage | To confirm, see below. |
+| Junction inspector | Vehicles an hour | Véhicules par heure | `véh./h` beside a field. |
+| Junction inspector | Skipped / Extended / Ended early (an actuated phase's greens) | Omises / Prolongées / Terminées tôt | Feminine plural, as the greens of `Phases à la demande` in the table; `omis`, `prolongé`, `terminé tôt` said of `son vert`. |
+| Junction inspector | Approach (the street's traffic entering the junction) | Approche |  |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |
@@ -434,6 +441,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Green, yellow, all-red (a signal’s intervals) | `Vert`, `Jaune`, `Rouge intégral` | `Tout rouge` for all-red (suggestion) |
 | Transit early green (a head start for buses) | `Avance pour le transport en commun` | `Priorité de départ pour les autobus` (suggestion) |
 | Cycle (a signal’s) | `Cycle` | `Durée du cycle` (suggestion) |
+| Actuated (a street’s signal phase, CLM-12) | `À la demande` | `Actionné par les véhicules`, `À commande par les véhicules` (suggestion) |
+| Vehicle actuation (the section) | `Actionnement par les véhicules` | `Détection des véhicules`, `Feux à la demande` (suggestion) |
+| Gap, passage time (an actuated green’s) | `Intervalle de passage` | `Temps de passage`, `Intervalle entre véhicules` (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

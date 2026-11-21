@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
+use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
 use crate::junction::model::read_model::{CallRowView, CrossingView, JView};
 use crate::junction::model::signal::Pattern;
@@ -1711,6 +1712,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     </div> })}
                 </section>
                 {calls_section(w)}
+                {actuation_section(w)}
             }
         })
     }
@@ -1967,6 +1969,264 @@ fn calls_section(w: Watch) -> impl IntoView {
             }
         })
     }
+}
+
+/// Vehicle actuation (CLM-12), in the plan's level after the pedestrian calls: each street with a phase of its own on
+/// recall (its phase every cycle at its green) or actuated (called and extended by the vehicles on its approach), with,
+/// while actuated, its trigger and bounds, the four settings as number fields with steppers, and what its phase did
+/// over the hour; then the placeholder figures, the actuated phases and the approaches added up, and the findings. A
+/// street without a phase of its own says so, and choosing actuated there is refused with that reason. It decides
+/// nothing: the modes, settings, totals and findings all come from the view.
+fn actuation_section(w: Watch) -> impl IntoView {
+    // Everything below reads the actuation through this memo, so an edit that leaves it as it was redraws none of it.
+    let act = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.actuation.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| act.with(|a| a.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
+    let street = move |uid: u32| act.with(|a| a.streets.iter().find(|s| s.uid == uid).cloned());
+    let name_of = move |uid: u32| act.with(|a| a.streets.iter().find(|s| s.uid == uid).map(|s| w.say(&s.label)).unwrap_or_default());
+    let bounds = move || {
+        let d = Actuation::default();
+        let args = Args::new().num("min", i64::from(d.min_green_s)).num("gap", i64::from(d.gap_s)).num("max", i64::from(d.max_green_s));
+        tr(w, "jn-act-bounds", args.num("vehicles", i64::from(d.vehicles)))
+    };
+    let item = move |uid: u32| {
+        let settings = move || street(uid).and_then(|s| s.settings);
+        // Made again only when the street goes on or off recall, so a radio or a field keeps the focus.
+        let actuated = Memo::new(move |_| settings().is_some());
+        let status_id = format!("act-status-{uid}");
+        let status = move || match street(uid) {
+            Some(s) if !s.has_phase && s.settings.is_none() => w.tr("jn-act-no-phase"),
+            Some(s) => match s.settings {
+                None => w.tr("jn-act-recall"),
+                Some(a) => {
+                    let args = Args::new().num("min", i64::from(a.min_green_s)).num("gap", i64::from(a.gap_s)).num("max", i64::from(a.max_green_s));
+                    let trigger = tr(w, "jn-act-trigger", args);
+                    // The floor its own phase runs, when a walk on recall makes it more than the minimum.
+                    let floor = act.with(|v| v.phases.iter().filter(|p| p.arm == uid).map(|p| p.floor_s).max()).filter(|&f| f > a.min_green_s);
+                    match floor {
+                        Some(f) => format!("{trigger} {}", tr(w, "jn-act-floor", Args::new().num("floor", i64::from(f)))),
+                        None => trigger,
+                    }
+                }
+            },
+            None => String::new(),
+        };
+        let effect = move || {
+            let mine: Vec<PhaseTotals> = act.with(|v| v.phases.iter().filter(|p| p.arm == uid).copied().collect());
+            (actuated.get() && !mine.is_empty()).then(|| {
+                let sum = |f: fn(&PhaseTotals) -> u32| mine.iter().map(f).sum::<u32>();
+                let args = Args::new()
+                    .num("greens", i64::from(sum(|p| p.served)))
+                    .num("skipped", i64::from(sum(|p| p.skipped)))
+                    .num("extended", i64::from(sum(|p| p.extended)))
+                    .num("extended_s", i64::from(sum(|p| p.extended_s)))
+                    .num("early", i64::from(sum(|p| p.ended_early)));
+                view! { <p class="insp-range" id=format!("act-effect-{uid}")>{tr(w, "jn-act-effect", args)}</p> }
+            })
+        };
+        let (group, head) = (format!("act-mode-{uid}"), format!("act-mode-h-{uid}"));
+        let radio = move |on: bool, id: &'static str, key: &'static str| {
+            let chosen = move || actuated.get() == on;
+            view! {
+                <label class="phase-move">
+                    <input type="radio" name=format!("act-mode-{uid}") id=format!("act-mode-{uid}-{id}") checked=chosen prop:checked=chosen
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            // Refused (no phase of its own, say): the radios show the mode the model kept.
+                            if !w.set_actuated(uid, on) {
+                                input.set_checked(chosen());
+                            }
+                        } />
+                    <span>{words(w, key)}</span>
+                </label>
+            }
+        };
+        let fields = move || {
+            actuated.get().then(|| view! { <div class="act-fields">{Field::ALL.into_iter().map(|f| act_field(w, uid, f, settings)).collect_view()}</div> })
+        };
+        let (named_by, described_by) = (head.clone(), status_id.clone());
+        view! {
+            <li>
+                <div class="act-street" role="group" aria-label=move || tr(w, "jn-act-group", Args::new().str("street", name_of(uid)))>
+                    <span class="act-name">{move || name_of(uid)}</span>
+                    <div class="act-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="act-mode-h" id=head>{words(w, "jn-act-mode")}</span>
+                        {radio(false, "recall", "jn-act-mode-recall")}
+                        {radio(true, "actuated", "jn-act-mode-actuated")}
+                    </div>
+                    <p class="insp-range" id=status_id>{status}</p>
+                    {fields}
+                    {effect}
+                </div>
+            </li>
+        }
+    };
+    let has_phases = Memo::new(move |_| act.with(|a| !a.phases.is_empty()));
+    // A phase's name is looked up by its place, never copied in: an undo that renames a street keeps the rows right.
+    let phase_name = move |k: usize| w.view().signal.as_ref().and_then(|s| s.phases.get(k)).map(|p| w.say(&p.name)).unwrap_or_default();
+    let phase_rows = move || act.with(|a| a.phases.clone());
+    let phase_row = move |t: PhaseTotals| {
+        view! {
+            <tr>
+                <th scope="row">{move || phase_name(t.phase)}</th>
+                <td>{t.served}</td>
+                <td>{t.skipped}</td>
+                <td>{t.extended}</td>
+                <td>{move || tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(t.extended_s)))}</td>
+                <td>{t.ended_early}</td>
+            </tr>
+        }
+    };
+    let phases_table = move || {
+        has_phases.get().then(|| {
+            view! {
+                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
+                <div class="calls-table" role="region" tabindex="0" aria-labelledby="actuation-phases-caption">
+                    <table class="nt" id="actuation-phases">
+                        <caption id="actuation-phases-caption">{words(w, "jn-act-phases-caption")}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{words(w, "jn-act-col-phase")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-served")}</th>
+                                <th scope="col">{words(w, "jn-act-col-skipped")}</th>
+                                <th scope="col">{words(w, "jn-act-col-extended")}</th>
+                                <th scope="col">{words(w, "jn-act-col-extended-by")}</th>
+                                <th scope="col">{words(w, "jn-act-col-ended-early")}</th>
+                            </tr>
+                        </thead>
+                        <tbody><For each=phase_rows key=|t| *t children=phase_row/></tbody>
+                    </table>
+                </div>
+            }
+        })
+    };
+    let approach_rows = move || act.with(|a| a.approaches.clone());
+    let wait = move |s: Option<u32>| match s {
+        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
+        None => {
+            view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-act-no-wait-said")}</span> }.into_any()
+        }
+    };
+    let approach_row = move |t: ApproachTotals| {
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(t.arm)}</th>
+                <td>{t.vehicles}</td>
+                <td>{t.served}</td>
+                // Vehicles the hour could not serve are a problem, marked as the checks mark one.
+                <td class=(t.not_served > 0).then_some("bad")>{t.not_served}</td>
+                <td>{move || wait(t.average_wait_s)}</td>
+                <td>{move || wait(t.longest_wait_s)}</td>
+            </tr>
+        }
+    };
+    let approaches_table = move || {
+        act.with(|a| !a.approaches.is_empty()).then(|| {
+            view! {
+                <div class="calls-table" role="region" tabindex="0" aria-labelledby="actuation-approaches-caption">
+                    <table class="nt" id="actuation-approaches">
+                        <caption id="actuation-approaches-caption">{words(w, "jn-act-approaches-caption")}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{words(w, "jn-act-col-approach")}</th>
+                                <th scope="col">{words(w, "jn-act-col-vehicles")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-served")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-not-served")}</th>
+                                <th scope="col">{words(w, "jn-act-col-average")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-longest")}</th>
+                            </tr>
+                        </thead>
+                        <tbody><For each=approach_rows key=|t| *t children=approach_row/></tbody>
+                    </table>
+                </div>
+            }
+        })
+    };
+    let findings = move || {
+        let found = act.with(|a| a.findings.clone());
+        (!found.is_empty()).then(|| {
+            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
+            view! {
+                <h4 class="phase-moves-h" id="actuation-findings-h">{words(w, "jn-calls-findings")}</h4>
+                <ul class="calls-findings" id="actuation-findings" aria-labelledby="actuation-findings-h">{items}</ul>
+            }
+        })
+    };
+    let none_actuated = Memo::new(move |_| act.with(|a| !a.streets.iter().any(|s| s.settings.is_some())));
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
+                    <h3 class="note-h" id="i-h-actuation">{words(w, "jn-act-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-act-intro")}</p>
+                    <p class="insp-range" id="actuation-bounds">{bounds}</p>
+                    // The modes and the settings edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="act-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+                    {move || none_actuated.get().then(|| view! { <p class="insp-range" id="actuation-none">{words(w, "jn-act-none")}</p> })}
+                    {phases_table}
+                    {approaches_table}
+                    {findings}
+                </section>
+            }
+        })
+    }
+}
+
+/// One setting of actuated street `uid` as a number field with steppers (the street page's and the timing's `.stepper`
+/// markup): its name as the label, the value the model holds, a step down and up (and the arrow keys) by
+/// `Field::step`, and its placeholder bound under it, which the field is described by. A typed value is rounded to a
+/// whole one; one the model refuses (out of its bound, a minimum above the maximum) is said and the field shows the
+/// value kept.
+fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Actuation> + Copy + Send + Sync + 'static) -> AnyView {
+    let (id, range_id) = (format!("act-{}-{uid}", field.id()), format!("act-{}-range-{uid}", field.id()));
+    let value = move || settings().map(|a| field.get(&a).to_string()).unwrap_or_default();
+    let step = move |dir: i32| {
+        if let Some(a) = settings() {
+            w.set_actuation(uid, field, (field.get(&a) as i32).saturating_add(dir * field.step() as i32));
+        }
+    };
+    let set = move |v: f64| {
+        if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+            w.set_actuation(uid, field, v.round() as i32);
+        }
+    };
+    let (lo, hi) = field.range();
+    let (range_key, unit_key) = match field {
+        Field::Vehicles => ("jn-act-range-vehicles", "jn-act-unit-vehicles"),
+        _ => ("jn-act-range-seconds", "jn-act-unit-seconds"),
+    };
+    let stepper = move |key: &'static str| move || tr(w, key, Args::new().str("field", w.tr(field.key())).num("step", i64::from(field.step())));
+    let (label_for, described_by) = (id.clone(), range_id.clone());
+    view! {
+        <div class="act-field">
+            <label for=label_for>{words(w, field.key())}</label>
+            <div class="stepper">
+                <button type="button" class="ico" id=format!("{id}-less") aria-label=stepper("jn-act-less") on:click=move |_| step(-1)>
+                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
+                </button>
+                <span class="wfield">
+                    <input type="text" inputmode="numeric" autocomplete="off" id=id aria-describedby=described_by value=value prop:value=value
+                        on:keydown=move |ev| {
+                            if let Some(dir) = step_key(&ev.key()) {
+                                ev.prevent_default();
+                                step(dir);
+                            }
+                        }
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            commit_typed(&input.value(), &set);
+                            // What the field holds is the model's value, whether it took the edit or refused it.
+                            input.set_value(&value());
+                        } />
+                    <span class="unit-tag" aria-hidden="true">{words(w, unit_key)}</span>
+                </span>
+                <button type="button" class="ico" id=format!("act-{}-{uid}-more", field.id()) aria-label=stepper("jn-act-more") on:click=move |_| step(1)>
+                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
+                </button>
+            </div>
+            <span class="insp-range" id=range_id>{move || tr(w, range_key, Args::new().num("min", i64::from(lo)).num("max", i64::from(hi)))}</span>
+        </div>
+    }
+    .into_any()
 }
 
 /// A part of a street's level that is rarely set, folded: its name and, beside it, what is set, so a measure in place is

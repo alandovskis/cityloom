@@ -220,6 +220,53 @@ test.describe("the junction's parts are reached without a pointer, and with one 
   });
 });
 
+test.describe("vehicle actuation in the signal plan (CLM-12)", () => {
+  test("each street's mode is a radio group named by its heading and described by its state, the arrow keys choose it, its settings are labelled fields, and at 280 px nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const street = page.locator(".act-street").first();
+    const name = (await street.locator(".act-name").innerText()).trim();
+    await expect(page.getByRole("group", { name: `Phase of ${name}` })).toHaveCount(1);
+    const mode = street.getByRole("radiogroup", { name: "Phase" });
+    await expect(mode).toHaveAccessibleDescription(/^Phase on recall: runs every cycle at its green/);
+    const recall = mode.getByRole("radio", { name: "On recall" });
+    const actuated = mode.getByRole("radio", { name: "Actuated" });
+    await expect(recall).toBeChecked();
+    await recall.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(actuated).toBeChecked();
+    await expect(actuated).toBeFocused();
+    await expect(live(page)).toContainText(": actuated.");
+    await expect(mode).toHaveAccessibleDescription(/^Actuated: vehicles detected on its approach call its phase/);
+    for (const [label, range] of [
+      ["Minimum green", "5 to 30 s (placeholder bound)"],
+      ["Gap", "1 to 10 s (placeholder bound)"],
+      ["Maximum green", "10 to 120 s (placeholder bound)"],
+      ["Vehicles an hour", "0 to 1800 vehicles an hour (placeholder bound)"],
+    ]) {
+      await expect(street.getByRole("textbox", { name: label, exact: true })).toHaveAccessibleDescription(range);
+    }
+    const min = street.getByRole("textbox", { name: "Minimum green", exact: true });
+    await street.getByRole("button", { name: "Minimum green, 1 more" }).click();
+    await expect(min).toHaveValue("8");
+    await min.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(min).toHaveValue("7");
+    await expect(min).toBeFocused();
+    await expect(page.getByRole("region", { name: "Actuated phases in one hour" })).toHaveAttribute("tabindex", "0");
+    await expect(page.getByRole("region", { name: "Vehicles in one hour, by approach" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("pedestrian calls in the signal plan (#60)", () => {
   test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
     page,

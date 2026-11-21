@@ -109,6 +109,14 @@ impl Field {
         }
     }
 
+    /// How much a stepper or an arrow key changes it: a second, or ten vehicles an hour.
+    pub fn step(self) -> u32 {
+        match self {
+            Field::Vehicles => 10,
+            _ => 1,
+        }
+    }
+
     /// The part of an element id that names it.
     pub fn id(self) -> &'static str {
         match self {

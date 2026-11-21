@@ -1053,6 +1053,125 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator(`#call-detect-help-${uid}`)).toContainText("the call stays placed after they leave");
   });
 
+  test("a street made actuated shows its trigger, its bounds and how its phase ran, keeps them on reload, and speaks French (CLM-12)", async ({
+    page,
+  }) => {
+    const section = page.locator("#signal-actuation");
+    await expect(section).toContainText("Vehicle actuation");
+    await expect(page.locator("#actuation-bounds")).toHaveText(
+      "Placeholder figures: a street made actuated has a minimum green of 7 s, a gap of 3 s, a maximum green of 45 s and 300 vehicles an hour, spread over one hour. A walk being served holds the green as long as it needs; the yellow and all-red are never shortened.",
+    );
+    await expect(page.locator("#actuation-none")).toBeVisible();
+    const uid = (await section.locator(".act-mode").first().getAttribute("id"))!.replace("act-mode-", "");
+    const recall = page.locator(`#act-mode-${uid}-recall`);
+    const actuated = page.locator(`#act-mode-${uid}-actuated`);
+    const status = page.locator(`#act-status-${uid}`);
+    await expect(recall).toBeChecked();
+    await expect(status).toHaveText(/^Phase on recall: runs every cycle at its green/);
+    await expect(page.locator(`#act-min-${uid}`)).toHaveCount(0);
+
+    // Actuated: its trigger and bounds, its four settings, and the hour of its phase and its approach.
+    await actuated.check();
+    await expect(actuated).toBeChecked();
+    await expect(live(page)).toContainText(": actuated.");
+    await expect(live(page)).toContainText(/\d+ vehicles in the hour; served \d+, not served \d+/);
+    await expect(status).toContainText("vehicles detected on its approach call its phase");
+    await expect(status).toContainText("Its green runs at least 7 s, each vehicle holds it 3 s more, up to 45 s.");
+    const field = (f: string) => page.locator(`#act-${f}-${uid}`);
+    for (const [f, value] of [
+      ["min", "7"],
+      ["gap", "3"],
+      ["max", "45"],
+      ["rate", "300"],
+    ]) {
+      await expect(field(f)).toHaveValue(value);
+    }
+    await expect(field("min")).toHaveAccessibleName("Minimum green");
+    await expect(field("min")).toHaveAccessibleDescription("5 to 30 s (placeholder bound)");
+    await expect(field("rate")).toHaveAccessibleDescription("0 to 1800 vehicles an hour (placeholder bound)");
+    await expect(page.locator("#actuation-none")).toHaveCount(0);
+    const phase = page.locator("#actuation-phases tbody tr");
+    const approach = page.locator("#actuation-approaches tbody tr");
+    await expect(phase).toHaveCount(1);
+    await expect(approach).toHaveCount(1);
+    await expect(page.locator("#actuation-phases thead th")).toHaveText([
+      "Phase",
+      "Served",
+      "Skipped",
+      "Extended",
+      "Extended by",
+      "Ended early",
+    ]);
+    await expect(page.locator("#actuation-approaches thead th")).toHaveText([
+      "Approach",
+      "Vehicles",
+      "Served",
+      "Not served",
+      "Average wait",
+      "Longest wait",
+    ]);
+    await expect(approach.locator("td").first()).toHaveText("300");
+    await expect(page.locator(`#act-effect-${uid}`)).toHaveText(
+      /^In the hour its green was given \d+ times, skipped \d+, extended \d+ times by \d+ s in all, and ended early \d+ times\.$/,
+    );
+
+    // A stepper and an arrow key change a setting; a minimum above the maximum is refused and the field keeps its value.
+    await page.locator(`#act-max-${uid}-more`).click();
+    await expect(field("max")).toHaveValue("46");
+    await field("min").focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(field("min")).toHaveValue("8");
+    await expect(live(page)).toContainText(": minimum green 8 s.");
+    await field("max").fill("20");
+    await field("max").press("Enter");
+    await expect(field("max")).toHaveValue("20");
+    await field("min").fill("25");
+    await field("min").press("Enter");
+    await expect(live(page)).toHaveText("The minimum green cannot be longer than the maximum green.");
+    await expect(field("min")).toHaveValue("8");
+
+    // With no vehicles at all, nothing calls its phase: it is never given its green, only skipped.
+    await field("rate").fill("0");
+    await field("rate").press("Enter");
+    await expect(field("rate")).toHaveValue("0");
+    await expect(live(page)).toContainText("no vehicle was served");
+    await expect(phase.locator("td").first()).toHaveText("0");
+    await expect.poll(async () => Number(await phase.locator("td").nth(1).innerText())).toBeGreaterThan(0);
+    await expect(approach.locator("td").last().locator("[aria-hidden=true]")).toHaveText("–");
+    await field("rate").fill("600");
+    await field("rate").press("Enter");
+    await expect(field("rate")).toHaveValue("600");
+
+    // Kept: a reload opens it actuated with its settings.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page);
+    await expect(actuated).toBeChecked();
+    await expect(field("min")).toHaveValue("8");
+    await expect(field("max")).toHaveValue("20");
+    await expect(field("rate")).toHaveValue("600");
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(section.locator("#i-h-actuation")).toHaveText("Actionnement par les véhicules");
+    await expect(page.locator(`label:has(#act-mode-${uid}-actuated)`)).toHaveText("À la demande");
+    await expect(page.locator(`label[for=act-min-${uid}]`)).toHaveText("Vert minimal");
+    await expect(page.locator(`label[for=act-gap-${uid}]`)).toHaveText("Intervalle de passage");
+    await expect(status).toContainText(
+      "Son vert dure au moins 8 s, chaque véhicule le retient 3 s de plus, jusqu’à 20 s.",
+    );
+    await expect(page.locator("#actuation-phases thead th").nth(5)).toHaveText("Terminées tôt");
+
+    // Back on recall: the settings and the hour's tables go.
+    await page.locator(`#act-mode-${uid}-recall`).check();
+    await expect(recall).toBeChecked();
+    await expect(field("min")).toHaveCount(0);
+    await expect(page.locator("#actuation-phases")).toHaveCount(0);
+    await expect(page.locator("#actuation-none")).toBeVisible();
+  });
+
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
     page,
   }) => {

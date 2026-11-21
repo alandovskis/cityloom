@@ -756,3 +756,46 @@ jn-act-min-green = Vert minimal
 jn-act-gap = Intervalle de passage
 jn-act-max-green = Vert maximal
 jn-act-vehicles = Véhicules par heure
+jn-act-heading = Actionnement par les véhicules
+jn-act-intro = La phase d’une rue à la demande est appelée par les véhicules détectés à son approche : omise quand aucun n’attend, prolongée tant qu’ils continuent d’arriver et terminée tôt au premier intervalle libre. Une rue en rappel a sa phase à chaque cycle, à son vert.
+jn-act-bounds = Valeurs provisoires : une rue mise à la demande a un vert minimal de { $min } s, un intervalle de passage de { $gap } s, un vert maximal de { $max } s et { $vehicles } véhicules par heure, répartis sur une heure. Une marche servie retient le vert aussi longtemps qu’il le faut; le jaune et le rouge intégral ne sont jamais raccourcis.
+jn-act-group = Phase de { $street }
+jn-act-mode = Phase
+jn-act-mode-recall = En rappel
+jn-act-mode-actuated = À la demande
+jn-act-recall = Phase en rappel : elle passe à chaque cycle, à son vert, quelle que soit la circulation.
+jn-act-trigger = À la demande : les véhicules détectés à son approche appellent sa phase, qui est omise quand aucun n’attend. Son vert dure au moins { $min } s, chaque véhicule le retient { $gap } s de plus, jusqu’à { $max } s.
+jn-act-floor = Une marche en rappel dans sa phase demande { $floor } s de vert : son vert dure donc au moins autant.
+jn-act-no-phase = Aucune phase du plan n’est propre à cette rue : elle ne peut pas être à la demande.
+jn-act-effect =
+    Dans l’heure, son vert a été donné { $greens } fois, omis { $skipped } fois, prolongé { $extended } fois de { $extended_s } s en tout et terminé tôt { $early } fois.
+jn-act-range-seconds = De { $min } à { $max } s (borne provisoire)
+jn-act-range-vehicles = De { $min } à { $max } véhicules par heure (borne provisoire)
+jn-act-unit-seconds = s
+jn-act-unit-vehicles = véh./h
+jn-act-less = { $field }, { $step } de moins
+jn-act-more = { $field }, { $step } de plus
+jn-act-none = Aucune rue n’est à la demande : chaque phase passe à chaque cycle, à son vert.
+jn-act-phases-caption = Phases à la demande en une heure
+jn-act-approaches-caption = Véhicules en une heure, par approche
+jn-act-col-phase = Phase
+jn-act-col-skipped = Omises
+jn-act-col-extended = Prolongées
+jn-act-col-extended-by = Prolongées de
+jn-act-col-ended-early = Terminées tôt
+jn-act-col-approach = Approche
+jn-act-col-vehicles = Véhicules
+jn-act-col-average = Attente moyenne
+jn-act-no-wait-said = aucun véhicule servi
+jn-act-finding-no-phase = { $arm } est à la demande, mais aucune phase du plan ne lui est propre : ses véhicules n’appellent rien. Donnez-lui une phase ou remettez-la en rappel.
+jn-act-finding-walk-past-max = La marche sur { $crossing } demande { $need } s de vert, plus que le vert maximal de { $max } s de { $arm } : la marche retient le vert au-delà du maximum chaque fois qu’elle est servie.
+jn-act-said =
+    { $arm } : { $vehicles ->
+        [one] { $vehicles } véhicule
+       *[other] { $vehicles } véhicules
+    } dans l’heure; servis { $served }, non servis { $not_served }; attente moyenne { $average } s, la plus longue { $longest } s. Son vert : donné { $greens }, omis { $skipped }, prolongé { $extended } de { $extended_s } s en tout, terminé tôt { $early }.
+jn-act-said-no-wait =
+    { $arm } : { $vehicles ->
+        [one] { $vehicles } véhicule
+       *[other] { $vehicles } véhicules
+    } dans l’heure; servis { $served }, non servis { $not_served }; aucun véhicule n’a été servi. Son vert : donné { $greens }, omis { $skipped }, prolongé { $extended } de { $extended_s } s en tout, terminé tôt { $early }.

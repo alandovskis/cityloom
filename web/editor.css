@@ -3658,6 +3658,7 @@ svg pattern circle {
 }
 /* Pedestrian calls (#60), in the signal plan's level: a crossing's mode and rate, then the hour's tables. */
 .calls-crossings,
+.act-streets,
 .calls-findings {
   margin: 6px 0 0;
   padding: 0;
@@ -3669,17 +3670,20 @@ svg pattern circle {
   color: var(--warn);
   font-weight: 600;
 }
-.call-crossing {
+.call-crossing,
+.act-street {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
 }
-.call-name {
+.call-name,
+.act-name {
   flex-basis: 100%;
   font-weight: 600;
 }
-.call-crossing > .insp-range {
+.call-crossing > .insp-range,
+.act-street > .insp-range {
   flex-basis: 100%;
   margin: 0;
 }
@@ -3703,6 +3707,28 @@ svg pattern circle {
 }
 .call-detect > .insp-range {
   flex-basis: 100%;
+  margin: 0;
+}
+/* Vehicle actuation (CLM-12): a street's mode as a radio pair under its heading, then its four settings with steppers. */
+.act-mode {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.act-fields {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
+  gap: 8px 12px;
+}
+.act-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.act-field > .insp-range {
   margin: 0;
 }
 .calls-table {

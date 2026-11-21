@@ -126,6 +126,16 @@ impl Watch {
         self.vm.with_value(|v| v.set_call_rate(uid, rate))
     }
 
+    /// Makes street `uid`'s phase actuated or puts it back on recall as the person does. Whether it was done.
+    pub fn set_actuated(&self, uid: u32, on: bool) -> bool {
+        self.vm.with_value(|v| v.set_actuated(uid, on))
+    }
+
+    /// Sets one setting of actuated street `uid` as the person does. Whether it was done.
+    pub fn set_actuation(&self, uid: u32, field: crate::junction::model::actuation::Field, value: i32) -> bool {
+        self.vm.with_value(|v| v.set_actuation(uid, field, value))
+    }
+
     /// Gives the crossing of street `uid`, on call, its detection as the person does. Whether it was done.
     pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
         self.vm.with_value(|v| v.set_detection(uid, detection))

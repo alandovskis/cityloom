@@ -756,3 +756,46 @@ jn-act-min-green = Minimum green
 jn-act-gap = Gap
 jn-act-max-green = Maximum green
 jn-act-vehicles = Vehicles an hour
+jn-act-heading = Vehicle actuation
+jn-act-intro = An actuated street's phase is called by the vehicles detected on its approach: skipped when none is waiting, extended while they keep coming, and ended early at the first gap. A street on recall has its phase every cycle at its green.
+jn-act-bounds = Placeholder figures: a street made actuated has a minimum green of { $min } s, a gap of { $gap } s, a maximum green of { $max } s and { $vehicles } vehicles an hour, spread over one hour. A walk being served holds the green as long as it needs; the yellow and all-red are never shortened.
+jn-act-group = Phase of { $street }
+jn-act-mode = Phase
+jn-act-mode-recall = On recall
+jn-act-mode-actuated = Actuated
+jn-act-recall = Phase on recall: runs every cycle at its green, whatever the traffic.
+jn-act-trigger = Actuated: vehicles detected on its approach call its phase, which is skipped when none is waiting. Its green runs at least { $min } s, each vehicle holds it { $gap } s more, up to { $max } s.
+jn-act-floor = A walk on recall in its phase needs { $floor } s of green, so its green runs at least that.
+jn-act-no-phase = No phase of the plan is this street's own, so it cannot be actuated.
+jn-act-effect =
+    In the hour its green was given { $greens } times, skipped { $skipped }, extended { $extended } times by { $extended_s } s in all, and ended early { $early } times.
+jn-act-range-seconds = { $min } to { $max } s (placeholder bound)
+jn-act-range-vehicles = { $min } to { $max } vehicles an hour (placeholder bound)
+jn-act-unit-seconds = s
+jn-act-unit-vehicles = veh./h
+jn-act-less = { $field }, { $step } less
+jn-act-more = { $field }, { $step } more
+jn-act-none = No street is actuated: every phase runs every cycle at its green.
+jn-act-phases-caption = Actuated phases in one hour
+jn-act-approaches-caption = Vehicles in one hour, by approach
+jn-act-col-phase = Phase
+jn-act-col-skipped = Skipped
+jn-act-col-extended = Extended
+jn-act-col-extended-by = Extended by
+jn-act-col-ended-early = Ended early
+jn-act-col-approach = Approach
+jn-act-col-vehicles = Vehicles
+jn-act-col-average = Average wait
+jn-act-no-wait-said = no vehicle served
+jn-act-finding-no-phase = { $arm } is actuated, but no phase of the plan is its own, so its vehicles call nothing. Give it a phase, or put it back on recall.
+jn-act-finding-walk-past-max = The walk across { $crossing } needs { $need } s of green, longer than the { $max } s maximum green of { $arm }: the walk holds the green past the maximum whenever it is served.
+jn-act-said =
+    { $arm }: { $vehicles ->
+        [one] 1 vehicle
+       *[other] { $vehicles } vehicles
+    } in the hour; served { $served }, not served { $not_served }; average wait { $average } s, longest { $longest } s. Its green: given { $greens }, skipped { $skipped }, extended { $extended } by { $extended_s } s in all, ended early { $early }.
+jn-act-said-no-wait =
+    { $arm }: { $vehicles ->
+        [one] 1 vehicle
+       *[other] { $vehicles } vehicles
+    } in the hour; served { $served }, not served { $not_served }; no vehicle was served. Its green: given { $greens }, skipped { $skipped }, extended { $extended } by { $extended_s } s in all, ended early { $early }.
