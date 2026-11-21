@@ -855,3 +855,18 @@ jn-bikes-said-no-wait =
         [one] 1 call
        *[other] { $calls } calls
     } in the hour; served { $served }, delayed { $delayed }, green extended { $extended } by { $extended_s } s in all, not served { $not_served }; no call was served.
+
+## Transit signal priority (src/junction/model/transit.rs, CLM-14): a street's buses are given an early green, a green extension or both, within bounds
+jn-refusal-priority-no-transit = This street has no transit, so its buses cannot be given priority: give it a bus lane, a queue jump, a bus gate, a bus stop or a transit filter first.
+jn-refusal-priority-no-phase = No phase of the plan is this street's own, so its buses cannot be given priority: give it a phase first.
+jn-refusal-not-on-priority = Only a street whose buses have priority has buses an hour: give them priority first.
+jn-refusal-buses-out-of-range = That many buses an hour is outside the placeholder bound shown.
+jn-rev-priority-early-green = Buses on { $arm }: early green
+jn-rev-priority-extension = Buses on { $arm }: green extension
+jn-rev-priority-both = Buses on { $arm }: early green and green extension
+jn-rev-priority-off = Buses on { $arm }: no priority
+jn-rev-buses =
+    Buses on { $arm }: { $rate ->
+        [one] 1 bus an hour
+       *[other] { $rate } buses an hour
+    }

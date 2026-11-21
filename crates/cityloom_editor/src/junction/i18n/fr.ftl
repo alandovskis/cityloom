@@ -855,3 +855,18 @@ jn-bikes-said-no-wait =
         [one] { $calls } appel
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended } de { $extended_s } s en tout, non servis { $not_served }; aucun appel n’a été servi.
+
+## Transit signal priority (src/junction/model/transit.rs, CLM-14): a street's buses are given an early green, a green extension or both, within bounds
+jn-refusal-priority-no-transit = Cette rue n’a pas de transport en commun, ses autobus ne peuvent donc pas recevoir la priorité : donnez-lui d’abord une voie réservée, un dépassement de file, une porte d’autobus, un arrêt ou un filtre pour le transport en commun.
+jn-refusal-priority-no-phase = Aucune phase du plan n’est propre à cette rue, ses autobus ne peuvent donc pas recevoir la priorité : donnez-lui d’abord une phase.
+jn-refusal-not-on-priority = Seule une rue dont les autobus ont la priorité a des autobus par heure : donnez-leur d’abord la priorité.
+jn-refusal-buses-out-of-range = Ce nombre d’autobus par heure dépasse la borne provisoire indiquée.
+jn-rev-priority-early-green = Autobus de { $arm } : vert hâtif
+jn-rev-priority-extension = Autobus de { $arm } : prolongation du vert
+jn-rev-priority-both = Autobus de { $arm } : vert hâtif et prolongation du vert
+jn-rev-priority-off = Autobus de { $arm } : sans priorité
+jn-rev-buses =
+    Autobus de { $arm } : { $rate ->
+        [one] { $rate } autobus par heure
+       *[other] { $rate } autobus par heure
+    }

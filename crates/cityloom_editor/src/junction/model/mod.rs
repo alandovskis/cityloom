@@ -14,6 +14,7 @@ pub mod geometry;
 pub mod read_model;
 pub mod signal;
 pub mod stops;
+pub mod transit;
 pub mod turbo;
 pub mod turbo_ring;
 pub mod turbo_spiral;
@@ -340,6 +341,11 @@ pub struct Arm {
     /// detection is written as it was. Read it through `bicycles::rate_of`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cyclists: Option<u32>,
+    /// The street's buses are given transit priority (CLM-14): an early green, a green extension or both, at this many
+    /// buses an hour (the scenario `control::hour` runs). None: no priority, as before. Saved only once set, so a
+    /// junction with no street given priority is written as it was. Read it through `transit::priority_of`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transit_priority: Option<transit::Priority>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -537,6 +543,7 @@ impl Arm {
             detection: calls::Detection::PushButton,
             actuation: None,
             cyclists: None,
+            transit_priority: None,
             walked: false,
         }
     }
@@ -877,10 +884,14 @@ pub enum Refusal {
     BikeDetectionAlready,
     NotOnBikeDetection,
     CyclistsOutOfRange,
+    PriorityNoTransit,
+    PriorityNoPhase,
+    NotOnPriority,
+    BusesOutOfRange,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 48] = [
+    pub const ALL: [Refusal; 52] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -929,6 +940,10 @@ impl Refusal {
         Refusal::BikeDetectionAlready,
         Refusal::NotOnBikeDetection,
         Refusal::CyclistsOutOfRange,
+        Refusal::PriorityNoTransit,
+        Refusal::PriorityNoPhase,
+        Refusal::NotOnPriority,
+        Refusal::BusesOutOfRange,
     ];
 
     /// The message that says why.
@@ -982,6 +997,10 @@ impl Refusal {
             Refusal::BikeDetectionAlready => "jn-refusal-bike-detection-already",
             Refusal::NotOnBikeDetection => "jn-refusal-not-on-bike-detection",
             Refusal::CyclistsOutOfRange => "jn-refusal-cyclists-out-of-range",
+            Refusal::PriorityNoTransit => "jn-refusal-priority-no-transit",
+            Refusal::PriorityNoPhase => "jn-refusal-priority-no-phase",
+            Refusal::NotOnPriority => "jn-refusal-not-on-priority",
+            Refusal::BusesOutOfRange => "jn-refusal-buses-out-of-range",
         }
     }
 }
@@ -1876,6 +1895,59 @@ impl Junction {
         )
     }
 
+    /// Gives street `uid`'s buses transit priority (CLM-14): `Some` mode (an early green, a green extension or both), at
+    /// `transit::DEFAULT_BUSES_PER_HOUR` buses an hour until a rate is set (a change of mode keeps the rate), or none
+    /// (`None`). Priority needs a signal, transit on the street and a phase of its own in the plan (`transit::refusal`);
+    /// none is always allowed, so a street an edit has left without transit can be cleared. The mode it has is no edit.
+    pub fn set_transit_priority(&mut self, uid: u32, mode: Option<transit::Mode>) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let now = transit::priority_of(arm);
+        if now.map(|p| p.mode) == mode {
+            return true;
+        }
+        if mode.is_some()
+            && let Some(why) = transit::refusal(self.current(), self.region, uid)
+        {
+            return self.refuse(why);
+        }
+        let key = match mode {
+            Some(transit::Mode::EarlyGreen) => "jn-rev-priority-early-green",
+            Some(transit::Mode::Extension) => "jn-rev-priority-extension",
+            Some(transit::Mode::Both) => "jn-rev-priority-both",
+            None => "jn-rev-priority-off",
+        };
+        let buses = now.map_or(transit::DEFAULT_BUSES_PER_HOUR, |p| p.buses);
+        self.arm_edit(
+            uid,
+            |a| about(key, a),
+            |a| {
+                a.transit_priority = mode.map(|mode| transit::Priority { mode, buses });
+                true
+            },
+        )
+    }
+
+    /// Sets how many buses an hour come on the approach of street `uid`, given priority: 0 to
+    /// `transit::MAX_BUSES_PER_HOUR`. A street with no priority has no rate. A rate it has already is not an edit.
+    pub fn set_buses(&mut self, uid: u32, rate: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = transit::priority_of(arm) else { return self.refuse(Refusal::NotOnPriority) };
+        let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= transit::MAX_BUSES_PER_HOUR) else {
+            return self.refuse(Refusal::BusesOutOfRange);
+        };
+        if rate == now.buses {
+            return true;
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-buses", a).with("rate", Arg::Num(i64::from(rate))),
+            |a| {
+                a.transit_priority = Some(transit::Priority { buses: rate, ..now });
+                true
+            },
+        )
+    }
+
     /// Gives the junction the suggested plan again, in place of the one the person edited.
     pub fn restore_suggestion(&mut self) -> bool {
         if self.signal_plan_to_edit().is_none() {
@@ -2119,10 +2191,12 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        // An actuated street's settings and a bike movement's detection are signal timing too, and go with it.
+        // An actuated street's settings, a bike movement's detection and a street's transit priority are signal timing
+        // too, and go with it.
         let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none())
-            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none());
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none())
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.transit_priority.is_some() && b.transit_priority.is_none());
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
@@ -2367,6 +2441,7 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
             a.calls = None;
             a.actuation = None;
             a.cyclists = None;
+            a.transit_priority = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
@@ -2683,7 +2758,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 48);
+        assert_eq!(Refusal::ALL.len(), 52);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
