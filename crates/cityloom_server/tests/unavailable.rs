@@ -52,14 +52,9 @@ async fn a_database_that_cannot_be_reached_answers_503_without_a_panic_and_the_s
         .await
         .expect("no connection is made at start-up, so this cannot fail on a closed port");
     let app = cityloom_server::app::router(&config, Some(account.clone()));
-    for (method, path) in [
-        ("GET", "/api/me"),
-        ("GET", "/api/providers"),
-        ("GET", "/auth/google/start"),
-        ("POST", "/auth/signout"),
-        ("DELETE", "/api/me"),
-        ("GET", "/api/share"),
-    ] {
+    for (method, path) in
+        [("GET", "/api/me"), ("GET", "/api/providers"), ("GET", "/auth/google/start"), ("POST", "/auth/signout"), ("DELETE", "/api/me"), ("GET", "/api/share")]
+    {
         let res = app.clone().oneshot(Request::builder().method(method).uri(path).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE, "{method} {path}");
         assert_eq!(res.headers()["cache-control"], "no-store");

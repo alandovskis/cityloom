@@ -222,7 +222,10 @@ async fn an_account_makes_a_bounded_number_of_shares_a_day(pool: PgPool) {
         assert_eq!(delete_link(&mut ada, &token, Some(ORIGIN)).await.status, StatusCode::NO_CONTENT);
     }
     let r = share(&mut ada, &design()).await;
-    assert_eq!((r.status, r.json()["error"].as_str(), r.json()["limit"].as_u64()), (StatusCode::CONFLICT, Some("too-many-today"), Some(MAX_SHARES_PER_DAY as u64)));
+    assert_eq!(
+        (r.status, r.json()["error"].as_str(), r.json()["limit"].as_u64()),
+        (StatusCode::CONFLICT, Some("too-many-today"), Some(MAX_SHARES_PER_DAY as u64))
+    );
 }
 
 #[sqlx::test]
