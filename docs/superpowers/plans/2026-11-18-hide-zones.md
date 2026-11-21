@@ -84,7 +84,7 @@ The zone UI keeps working on top of it: `select_zone(z)` becomes "pick zone z's 
 
 **Interfaces:**
 - Consumes: `counterpart` (Task 1).
-- Produces: `pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) -> Replayed` (`missed` when a changed, removed or moved piece had no counterpart).
+- Produces: `pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) -> Vec<Segment>`.
 
 Semantics (decided here):
 - Pieces of `before` found in `after` by uid: every field that differs between the two (kind, width, material, curb,
@@ -96,9 +96,6 @@ Semantics (decided here):
 - Order: when the relative order of matched pieces changed (a move), the moved piece's counterpart is placed after the
   counterpart of its new left neighbour.
 - A piece with no counterpart in the target leaves the target unchanged for that piece.
-- Replay never refuses: refusals come only from the edit on the shown section, so "refused in any run" reduces to
-  "refused in the shown run" (the spec's per-edit confirmation). It reports what it could not place:
-  `pub(super) struct Replayed { pub section: Vec<Segment>, pub missed: bool }` is the actual return type.
 
 - [ ] **Step 1: Write the failing tests:**
   `a_width_change_reaches_the_same_piece_and_nothing_else` (target's other widths kept);
@@ -193,10 +190,7 @@ range that is not cut off, `section_mut(z) = if z == shown { after } else { repl
 Inside a gesture the split happens on the first changing step only (the live content already holds it afterwards) and
 `join_alike` runs in `end_gesture` before `push`. Speed: `set_speed` sets every picked zone (a `Whole` pick on a zoned
 street sets `Street.speed` and every zone to `Undecided`); `follow_street_speed` sets every picked zone `Undecided`.
-After the edit, `zone` and `pick` are recomputed (the pick keeps its anchored span). The zones where a replay
-`missed` are kept on the editor as `pub fn missed(&self) -> Vec<(i32, i32)>` (anchored spans, cleared by the next edit)
-for the view-model to say "Not changed from { $from } to { $to }: that stretch has no { $kind }." (`edit-missed`,
-Task 8).
+After the edit, `zone` and `pick` are recomputed (the pick keeps its anchored span).
 
 - [ ] **Step 1: Write the failing tests** (in `pick.rs` tests, using `Editor::with_frame`):
   `picking_alone_never_splits` (pick 40–80 m of 120 m, no edit → `snapshot().zones` empty);
@@ -210,8 +204,7 @@ Task 8).
   `undo_after_split_and_join_restores_the_zones_exactly_and_clamps_the_pick`;
   `the_speed_of_a_stretch_is_set_for_it_and_whole_street_speed_clears_the_zones_own`;
   `an_elsewhere_street_edits_every_zone_of_the_picked_run_without_splitting_or_joining`;
-  `cut_off_zones_are_never_edited`;
-  `a_change_to_a_piece_one_run_lacks_reports_that_run_as_missed`.
+  `cut_off_zones_are_never_edited`.
 - [ ] **Step 2:** `cargo test street::model` → the new tests fail.
 - [ ] **Step 3:** Implement as above. `make_pedestrian` switches to `edit_each`.
 - [ ] **Step 4:** `cargo test --workspace --features test-provider` (`just test`) → all pass, including every existing
@@ -325,9 +318,8 @@ stretch are untouched. The template report keeps its sentences; positions are no
 - Produces:
   ```rust
   // vm/keys.rs
-  pub enum PlanKey { Move(i32), To(bool /* last */), Extend(i32), ExtendTo(bool), PickRun, PickWhole, NudgeBoundary(i32) }
-  // NudgeBoundary moves the boundary at the pick's left end (else its right end), as Alt+arrow moves a zone's start today: keyboard access to boundaries is kept
-  pub fn on_plan(key: &str, shift: bool, alt: bool) -> Option<PlanKey>; // ←/→ ±1000, PageUp/PageDown ±10000, Home/End, Enter, Escape; Alt+←/→ (Shift+Alt 10 m) → NudgeBoundary
+  pub enum PlanKey { Move(i32), To(bool /* last */), Extend(i32), ExtendTo(bool), PickRun, PickWhole }
+  pub fn on_plan(key: &str, shift: bool) -> Option<PlanKey>; // ←/→ ±1000, PageUp/PageDown ±10000, Home/End, Enter, Escape
   // vm/plan.rs
   pub enum PlanPress { Street { at_mm: i32 }, Handle { left: bool }, Boundary { zone: usize }, Thing(PlanThing) }
   pub enum PlanGesture { Pending(PlanPress, f64), Picking { anchor_mm: i32 }, Handle { fixed_mm: i32 }, Boundary, Thing }
@@ -346,21 +338,12 @@ stretch are untouched. The template report keeps its sentences; positions are no
   "bike lane added on the right", builder words a short list) / `stretch-whole` "The whole street, { $length } long." /
   `st-plan-label` "The street from its first end to its last, { $length } long" / `st-stretch` "From { $from } to
   { $to } · { $length } long" / `st-varies` "Varies along the stretch". Lengths via `Arg::Length` (never `format!`).
-- Adding along the street: `add_curb`, `add_stop`, `add_calming` (and the Add menu's items for them) add at the start
-  of the picked stretch when no free stretch is chosen in the rows: picking a stretch chooses, on each row, the free
-  stretch containing the pick's left end (`Editor::select_curb(side, at)`, `select_stop`, `select_calming` with that
-  anchored position), so today's "start of the chosen free stretch" is the pick's start. Green keeps
-  `add_green_clear` (first clear place from the street's start) unchanged.
-- After an edit, `Editor::missed()` non-empty → announce `edit-missed` after the edit's own announcement.
 - Clicking the Street step of the panel path (`show_level(Level::Street)`) calls `pick_whole` (Phase 3 removes the
   Zone level; here it only adds the pick).
 
 - [ ] **Step 1: Write the failing tests** (native, `test_ports()`):
   `on_plan_keys` (table: ArrowRight → Move(1000), Shift+PageDown → Extend(10000), Home → To(false), Enter → PickRun,
-  Escape → PickWhole, Alt+ArrowLeft → NudgeBoundary(-1000), others None);
-  `alt_arrow_moves_the_boundary_at_the_picks_left_end_and_the_pick_follows_it`;
-  `picking_a_stretch_chooses_the_free_stretch_at_its_start_so_adding_a_stop_lands_there`;
-  `a_change_that_missed_a_stretch_says_where`;
+  Escape → PickWhole, others None);
   `a_press_then_release_without_moving_picks_the_run_and_announces_it`;
   `a_drag_picks_from_press_to_release_in_left_positions_on_a_street_anchored_at_its_last_end`;
   `dragging_a_handle_moves_that_end_only`; `a_too_short_pick_says_why_and_keeps_the_pick`;
@@ -417,8 +400,8 @@ stretch are untouched. The template report keeps its sentences; positions are no
 - Delete: `street/view/zone_tools.rs`; `ZoneEntry` in `street/view/panel_path.rs`
 - Modify: `street/vm/level.rs` (`Level::Zone` removed, `Piece` parent is `Street`, `Level::ALL` of 6),
   `street/vm/mod.rs` (remove `select_zone*`, `split_zone`, `begin_merge`/`pending_merge*`/`finish_merge`/`cancel_merge`,
-  `name_zone`, `reset_zone`, `use_for_street`, `zone_entry`, the `merge` signal; `nudge_boundary` stays, used by
-  `PlanKey::NudgeBoundary`), `street/mod.rs` (no
+  `name_zone`, `reset_zone`, `use_for_street`, `zone_entry`, `nudge_boundary` (keyboard moves a boundary through the plan
+  only by pointer drag and through the stretch's ends; see spec), the `merge` signal), `street/mod.rs` (no
   `zone-entry-slot`/`zone-tools-slot` mounts), `web/street.html` (remove `#p-zone` and the `.zone-entry` row),
   `street/model/zones.rs` (`split_zone`, `merge_zone`, `name_zone`, `reset_zone`, `use_for_street`, `Keep`,
   `merge_needs_choice` become `#[cfg(test)]` or are deleted where nothing uses them; `move_boundary` stays)
@@ -439,8 +422,6 @@ stretch are untouched. The template report keeps its sentences; positions are no
   `street/model/zone_speed.rs`, `school.rs`, `calming.rs` (`calming-instance-zone`), `street/view/page.rs`
   (`StreetSummary`: no `.zone-mini`, no zone count, `st-stretch` when the pick is not whole), `street/view/speed_view.rs`
   (hint → `st-speed-stretch-hint` "For the stretch from { $from } to { $to }."; `st-varies` when the picked runs differ),
-  `street/model/mod.rs` `SegView.varies: bool` (the piece's width differs between its counterparts in the picked runs)
-  and `street/view/inspector.rs` (`st-varies` under the width when `varies`),
   `i18n_guard.rs` lists, `docs/glossary-fr-ca.md` (tronçon)
 
 **Interfaces:**
@@ -457,8 +438,7 @@ stretch are untouched. The template report keeps its sentences; positions are no
   `st-zone-*`, `st-row-zones`, `st-street-sub*` (no zone count), `st-path-hint` ("Choose a piece, or pick a stretch on
   the plan, to change it."), `st-path-zone-entry` (removed), `zone-cut-off` → `plan-cut` ("Cut by the edge of the map").
 
-- [ ] **Step 1: Failing tests:** `a_piece_whose_width_differs_across_the_picked_runs_says_it_varies` (model) and,
-  in `street/vm/text.rs` tests (or `i18n` tests):
+- [ ] **Step 1: Failing test** in `street/vm/text.rs` tests (or `i18n` tests):
   `no_street_message_says_zone_except_school_and_loading_zones` — iterate every message id of `street::RESOURCES` in
   both languages, format with sample args, assert no `zone`/`Zone` outside the allowed phrases ("school zone", "loading
   zone", "zone scolaire", "zone de livraison"; fr checks `zone` too).
