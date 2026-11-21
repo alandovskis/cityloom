@@ -714,3 +714,4 @@ cmp-jn-bike-box-added = { $street } : un sas cyclable est ajouté
 cmp-jn-bike-box-removed = { $street } : le sas cyclable est retiré
 cmp-jn-phases = Phases des feux : { $a } → { $b }
 cmp-jn-cycle = Cycle des feux : { $a } s → { $b } s
+cmp-other-arm-details = détails des rues à la jonction

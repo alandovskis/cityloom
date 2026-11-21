@@ -4,8 +4,8 @@
 //!
 //! Pure: no wording but `Said`. The designs are the junction's own views (`JView`); nothing is read from the page.
 
-use super::control_key;
 use super::read_model::{ArmView, Check, JView};
+use super::{Arm, State, control_key};
 use crate::shared::said::{Arg, Said};
 
 /// One street of the junction that is not the same in the two designs; the street is the same in both by its `uid`.
@@ -52,6 +52,9 @@ pub enum JOther {
     Raised,
     Bus,
     Corners,
+    /// Something else about the streets at the junction as the design keeps them: where each lane may go, the turns
+    /// banned, a crossing's width or island, the bulbs, the stop line, the bus lane, the approach, the street's pieces.
+    ArmDetails,
 }
 
 impl JOther {
@@ -62,6 +65,7 @@ impl JOther {
             JOther::Raised => "cmp-other-raised",
             JOther::Bus => "cmp-other-bus",
             JOther::Corners => "cmp-other-corners",
+            JOther::ArmDetails => "cmp-other-arm-details",
         }
     }
 }
@@ -129,8 +133,11 @@ pub fn checks(a: &JView, b: &JView) -> (Vec<Said>, Vec<Said>) {
     let (mut passes, mut fails) = (Vec::new(), Vec::new());
     for now in &b.checks {
         match find(&a.checks, now.id) {
+            // Passed in A, fails in B.
             Some(was) if was && !now.ok => fails.push(now.label.clone()),
+            // Failed in A, passes in B.
             Some(was) if !was && now.ok => passes.push(now.label.clone()),
+            // Not asked for in A and failing in B.
             None if !now.ok => fails.push(now.label.clone()),
             _ => {}
         }
@@ -141,10 +148,59 @@ pub fn checks(a: &JView, b: &JView) -> (Vec<Said>, Vec<Said>) {
     (passes, fails)
 }
 
+/// An arm as far as nothing else reports it: what `arms`, `signal`, `Corners` and the streets' lane counts already say
+/// is cleared, as are the uids of the street's pieces, which say nothing of what the design holds.
+fn arm_details(arm: &Arm, other: &Arm, counts_differ: bool, plan_differs: bool) -> Arm {
+    let mut x = arm.clone();
+    x.edge = 0;
+    x.corner_mm = 0;
+    x.bike_box = false;
+    if x.crossing.is_none() != other.crossing.is_none() {
+        x.crossing = None;
+    }
+    if x.lanes.len() != other.lanes.len() {
+        x.lanes.clear();
+    }
+    if plan_differs {
+        x.timing = None;
+        x.calls = None;
+    }
+    if counts_differ {
+        x.section = None;
+    }
+    if let Some(street) = &mut x.section {
+        street.segments.iter_mut().for_each(|p| p.uid = 0);
+        street.zones.iter_mut().flat_map(|z| z.segments.iter_mut().flatten()).for_each(|p| p.uid = 0);
+    }
+    x
+}
+
+/// Whether any street of the junction, matched by uid, differs in what its design keeps beyond what `arms`,
+/// `signal`, `Corners` and the control say. A street only one design has counts.
+fn arm_details_differ(sa: &State, sb: &State, a: &JView, b: &JView) -> bool {
+    let plan_differs = !signal(a, b).is_empty();
+    let mut uids_a: Vec<u32> = sa.arms.iter().map(|x| x.uid).collect();
+    let mut uids_b: Vec<u32> = sb.arms.iter().map(|x| x.uid).collect();
+    uids_a.sort_unstable();
+    uids_b.sort_unstable();
+    if uids_a != uids_b {
+        return true;
+    }
+    sa.arms.iter().any(|x| {
+        let Some(y) = sb.arms.iter().find(|y| y.uid == x.uid) else {
+            return true;
+        };
+        let counts = |v: &JView| v.arms.iter().find(|m| m.uid == x.uid).map(|m| (m.lanes.len(), m.leave_arrows.len()));
+        let counts_differ = counts(a) != counts(b);
+        arm_details(x, y, counts_differ, plan_differs) != arm_details(y, x, counts_differ, plan_differs)
+    })
+}
+
 /// The things beyond the others that differ between the two designs, in the order of `JOther`. Only what the person
-/// can see counts: the ring's presence and size, a raised table, the bus lane's streets and width, and each
-/// corner's radius by its street.
-pub fn others(a: &JView, b: &JView) -> Vec<JOther> {
+/// can see counts: the ring's presence and size (not when the control already says a roundabout came or went), a
+/// raised table, the bus lane's streets and width, each corner's radius by its street, and the details of the
+/// streets (`arm_details_differ`). `sa` and `sb` are the designs `a` and `b` were read from (`Junction::current`).
+pub fn others(a: &JView, b: &JView, sa: &State, sb: &State) -> Vec<JOther> {
     let ring = |v: &JView| v.ring.as_ref().map(|r| (r.radius_mm, r.road_mm, r.island_mm, r.cycle_mm));
     let bus = |v: &JView| v.bus.as_ref().map(|x| (x.from.min(x.to), x.from.max(x.to), x.width_mm));
     let corners = |v: &JView| {
@@ -152,10 +208,16 @@ pub fn others(a: &JView, b: &JView) -> Vec<JOther> {
         all.sort_unstable();
         all
     };
-    [(JOther::Ring, ring(a) != ring(b)), (JOther::Raised, a.raised != b.raised), (JOther::Bus, bus(a) != bus(b)), (JOther::Corners, corners(a) != corners(b))]
-        .into_iter()
-        .filter_map(|(other, differs)| differs.then_some(other))
-        .collect()
+    [
+        (JOther::Ring, a.control_index == b.control_index && ring(a) != ring(b)),
+        (JOther::Raised, a.raised != b.raised),
+        (JOther::Bus, bus(a) != bus(b)),
+        (JOther::Corners, corners(a) != corners(b)),
+        (JOther::ArmDetails, arm_details_differ(sa, sb, a, b)),
+    ]
+    .into_iter()
+    .filter_map(|(other, differs)| differs.then_some(other))
+    .collect()
 }
 
 #[cfg(test)]
@@ -166,6 +228,10 @@ mod tests {
 
     fn base() -> Junction {
         Junction::new(0)
+    }
+
+    fn others_of(a: &Junction, b: &Junction) -> Vec<JOther> {
+        others(&a.view(), &b.view(), a.current(), b.current())
     }
 
     fn views(a: &Junction, b: &Junction) -> (JView, JView) {
@@ -179,7 +245,7 @@ mod tests {
         assert!(arms(&a, &b).is_empty());
         assert!(signal(&a, &b).is_empty());
         assert_eq!(checks(&a, &b), (vec![], vec![]));
-        assert!(others(&a, &b).is_empty());
+        assert!(others_of(&base(), &base()).is_empty());
     }
 
     #[test]
@@ -212,7 +278,7 @@ mod tests {
         let uid = a.arms[0].uid;
         assert!(j.set_corner(uid, a.corners.iter().find(|c| c.uid == uid).unwrap().radius_mm + 1000));
         let b = j.view();
-        assert_eq!(others(&a, &b), vec![JOther::Corners]);
+        assert_eq!(others_of(&base(), &j), vec![JOther::Corners]);
         assert!(arms(&a, &b).is_empty() && control(&a, &b).is_empty());
     }
 
@@ -261,14 +327,53 @@ mod tests {
     }
 
     #[test]
-    fn a_roundabout_has_a_ring_and_a_raised_table_is_raised() {
+    fn a_ring_is_an_other_only_between_two_roundabouts() {
         let mut r = base();
         assert!(r.set_control(ROUNDABOUT));
-        assert_eq!(others(&base().view(), &r.view()), vec![JOther::Ring]);
+        // A roundabout that comes is the control line's, not the ring's.
+        assert!(!others_of(&base(), &r).contains(&JOther::Ring));
+        assert!(!others_of(&r, &base()).contains(&JOther::Ring));
+        assert_eq!(control(&base().view(), &r.view()).len(), 1);
+        let mut bigger = r.clone();
+        assert!(bigger.set_ring(2000));
+        assert_eq!(others_of(&r, &bigger), vec![JOther::Ring]);
+    }
+
+    #[test]
+    fn priority_to_signal_is_a_control_line_and_no_signal_lines() {
+        let mut p = base();
+        assert!(p.set_control(PRIORITY));
+        let (a, b) = views(&p, &base());
+        assert_eq!(control(&a, &b).iter().map(|s| s.key).collect::<Vec<_>>(), ["cmp-jn-control"]);
+        assert!(signal(&a, &b).is_empty());
+    }
+
+    #[test]
+    fn a_lane_destination_alone_is_an_arm_detail() {
+        let a = base();
+        let (uid, lane, to) = a.current().arms.iter().find_map(|x| x.lanes.first().and_then(|l| l.to.first().map(|t| (x.uid, 0, *t)))).unwrap();
+        let mut b = base();
+        assert!(b.set_lane_dest(uid, lane, to, false));
+        assert_eq!(others_of(&a, &b), vec![JOther::ArmDetails]);
+    }
+
+    #[test]
+    fn a_crossing_width_alone_is_an_arm_detail() {
+        let a = base();
+        let uid = a.current().arms.iter().find(|x| x.crossing.is_some()).unwrap().uid;
+        let mut b = base();
+        assert!(b.step_crossing_width(uid, 1));
+        assert_eq!(others_of(&a, &b), vec![JOther::ArmDetails]);
+        assert!(arms(&a.view(), &b.view()).is_empty());
+    }
+
+    #[test]
+    fn the_ring_and_a_raised_table_are_named() {
         let mut t = base();
         assert!(t.set_raised(true));
-        assert_eq!(others(&base().view(), &t.view()), vec![JOther::Raised]);
+        assert_eq!(others_of(&base(), &t), vec![JOther::Raised]);
         assert_eq!(JOther::Bus.key(), "cmp-other-bus");
         assert_eq!(JOther::Ring.key(), "cmp-other-ring");
+        assert_eq!(JOther::ArmDetails.key(), "cmp-other-arm-details");
     }
 }

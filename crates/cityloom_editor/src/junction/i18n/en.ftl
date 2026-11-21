@@ -714,3 +714,4 @@ cmp-jn-bike-box-added = { $street }: a bike box is added
 cmp-jn-bike-box-removed = { $street }: the bike box is removed
 cmp-jn-phases = Signal phases: { $a } → { $b }
 cmp-jn-cycle = Signal cycle: { $a } s → { $b } s
+cmp-other-arm-details = details of the streets at the junction
