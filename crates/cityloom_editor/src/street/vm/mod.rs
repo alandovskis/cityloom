@@ -3,6 +3,7 @@
 //! send it what the person does.
 
 pub mod add_menu;
+pub mod compare;
 pub mod impact;
 pub mod keys;
 pub mod level;
