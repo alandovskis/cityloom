@@ -242,6 +242,12 @@
   align-items: center;
   gap: 4px 8px;
 }
+/* The link to the comparison page is in the row, not under the disclosure (it manages nothing and stays usable
+   read-only): in a narrow slot it wraps below the menu with the row. */
+.scenario-row .btn {
+  box-sizing: border-box;
+  min-height: 32px;
+}
 .scenario-row label,
 .scenario-manage label {
   font-weight: 600;

@@ -46,6 +46,7 @@ scenario-duplicate = Dupliquer
 scenario-rename = Renommer
 scenario-delete = Supprimer
 scenario-delete-confirm = Confirmer la suppression
+scenario-compare = Comparer les conceptions
 scenario-created = Scénario « { $name } » créé à partir de la référence. Vous le modifiez maintenant.
 scenario-duplicated = Scénario « { $from } » dupliqué sous le nom « { $name } ». Vous modifiez maintenant la copie.
 scenario-renamed = Scénario « { $from } » renommé « { $name } ».

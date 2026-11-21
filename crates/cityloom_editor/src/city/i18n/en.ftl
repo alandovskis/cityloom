@@ -46,6 +46,7 @@ scenario-duplicate = Duplicate
 scenario-rename = Rename
 scenario-delete = Delete
 scenario-delete-confirm = Confirm delete
+scenario-compare = Compare designs
 scenario-created = Scenario “{ $name }” made from the baseline. Now editing it.
 scenario-duplicated = Scenario “{ $from }” duplicated as “{ $name }”. Now editing the copy.
 scenario-renamed = Scenario “{ $from }” renamed “{ $name }”.

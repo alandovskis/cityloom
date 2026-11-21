@@ -1656,6 +1656,12 @@ impl ScenarioHost for StreetVm {
         StreetVm::read_only(self)
     }
 
+    fn compare_href(&self) -> Option<String> {
+        let Some(Place::Street(edge)) = self.binding().map(|b| b.place) else { return None };
+        let b = self.scenarios.active().map(|id| format!("&b={id}")).unwrap_or_default();
+        Some(self.link(&format!("compare.html?street={edge}{b}")))
+    }
+
     fn switch_scenario(&self, id: Option<u32>) -> bool {
         scenario_actions::switch(self, id)
     }

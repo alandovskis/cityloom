@@ -3187,6 +3187,61 @@ fn shown_read_only_the_scenarios_menu_is_offered_and_the_name_and_actions_are_lo
     assert!(!scenarios_drawn(&city_street()).contains("read-only-controls"), "a page that can edit locks nothing");
 }
 
+/// A street of the sample city kept in `storage`, bound to it, so that it keeps scenarios.
+fn street_kept_in(storage: Rc<dyn crate::shared::ports::Storage>) -> (Rc<StreetVm>, u32) {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(storage.clone());
+    let edge = store.open().view(0).edges[0].uid;
+    let street = store.open().street_editor(edge, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(edge) };
+    (StreetVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(Locale::En), street, Some(binding)), edge)
+}
+
+fn project_storage(read_only: bool) -> Rc<dyn crate::shared::ports::Storage> {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let scoped = crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1");
+    Rc::new(if read_only { scoped.only_to_read() } else { scoped })
+}
+
+#[test]
+fn the_compare_link_appears_with_the_first_scenario_names_the_design_shown_and_goes_with_the_last() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    let (s, edge) = street_kept_in(project_storage(false));
+    assert!(!scenarios_drawn(&s).contains("scenario-compare"), "no scenario, nothing to compare");
+    assert!(s.create_scenario("Wider"));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(&format!(r#"id="scenario-compare" href="compare.html?street={edge}&amp;b=1&amp;project=p1" class="btn""#)), "{h}");
+    assert!(h.contains(">Compare designs</a>"), "{h}");
+    let manage = h.find(r#"<details class="scenario-manage""#).unwrap();
+    assert!(h.find("scenario-compare").unwrap() < manage, "outside the management disclosure: {h}");
+    // the baseline shown: no design B is named
+    assert!(s.switch_scenario(None));
+    assert!(scenarios_drawn(&s).contains(&format!(r#"href="compare.html?street={edge}&amp;project=p1""#)));
+    assert!(s.switch_scenario(Some(1)) && !s.delete_scenario() && s.delete_scenario());
+    assert!(!scenarios_drawn(&s).contains("scenario-compare"), "the last scenario is gone");
+}
+
+#[test]
+fn shown_read_only_the_compare_link_keeps_the_page_read_only_and_stays_outside_the_lock() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    // the scenario is made where the project can be edited, then the same records are opened read-only
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let base = ports.storage.clone();
+    let editable: Rc<dyn crate::shared::ports::Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(base.clone(), "p1"));
+    let read_only: Rc<dyn crate::shared::ports::Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(base, "p1").only_to_read());
+    let (s, _) = street_kept_in(editable);
+    assert!(s.create_scenario("Wider"));
+    let (s, edge) = street_kept_in(read_only);
+    assert_eq!(s.compare_href().as_deref(), Some(format!("compare.html?street={edge}&project=p1&view=1").as_str()));
+    let h = scenarios_drawn(&s);
+    let locked = h.find(r#"<fieldset disabled class="read-only-controls""#).expect("locked");
+    assert!(h.find(r#"id="scenario-compare""#).expect("the link is offered") < locked, "{h}");
+}
+
 // ---- the comparison page's street half ---------------------------------------------------
 
 #[test]
