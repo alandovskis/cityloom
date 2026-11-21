@@ -117,6 +117,10 @@ mod tests {
     #[test]
     fn a_zone_may_be_given_no_limit_and_may_follow_the_street_again() {
         let mut e = split(Speed::Kmh(50));
+        // The first zone has a speed of its own, so that the second, following the street again, stays apart from it.
+        assert!(e.select_zone(0));
+        assert!(e.set_speed(Some(40)));
+        assert!(e.select_zone(1));
         assert!(e.set_speed(None));
         assert_eq!(e.snapshot().zones[1].speed, Speed::NotSet);
         assert_eq!(e.view().speed_kmh, None);
@@ -131,7 +135,9 @@ mod tests {
         let mut e = split(Speed::Kmh(50));
         assert!(e.set_speed(Some(30)));
         assert!(e.set_speed(Some(50)));
-        assert_eq!(e.snapshot().zones[1].speed, Speed::Undecided);
+        let s = e.snapshot();
+        assert!(s.zones.is_empty(), "the street's speed again, the zone joins the one before it");
+        assert_eq!(s.speed, Speed::Kmh(50));
     }
 
     #[test]
