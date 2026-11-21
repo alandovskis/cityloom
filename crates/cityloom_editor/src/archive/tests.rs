@@ -430,9 +430,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (16, json!({"street": {}, "scenarios": [{"id": 1, "name": "A", "design": {}}]}), 16),
         (17, json!({"street": {}, "import": 11}), 17),
         (18, plain.clone(), 5),
+        (19, plain.clone(), 5),
         (NEWEST.into(), plain.clone(), 5),
     ];
-    assert_eq!(NEWEST, 19, "a new edits version needs a row here (18, a crossing on call, and 19, passive detection, are a junction's: below)");
+    assert_eq!(
+        NEWEST, 20,
+        "a new edits version needs a row here (18, a crossing on call, 19, passive detection, and 20, an actuated street, are a junction's: below)"
+    );
     for (version, mut record, written) in cases {
         record["import"] = json!(11); // an unstamped record is stale and never imported
         let text = raw(edits_with(version, json!({"w1~n2~n3": record})), Value::Null);
@@ -466,6 +470,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
     assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::DETECTION_VERSION);
+    // an actuated street needs version 20
+    let actuated = json!({"state": {"arms": [{"actuation": {"min_green_s": 7, "gap_s": 3, "max_green_s": 45, "vehicles": 300}}]}, "import": 11});
+    let doc = json!({"version": 20, "streets": {}, "junctions": {"n9": actuated}});
+    let b = device();
+    let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::ACTUATION_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }

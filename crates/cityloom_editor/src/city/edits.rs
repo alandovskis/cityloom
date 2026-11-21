@@ -67,7 +67,12 @@ pub const CALLS_VERSION: u32 = IMPORT_STAMP_VERSION + 1;
 /// and drop the detection on its next write, so it must treat the document as a newer one. A junction whose crossings
 /// on call all have push buttons is written as before.
 pub const DETECTION_VERSION: u32 = CALLS_VERSION + 1;
-pub const NEWEST: u32 = DETECTION_VERSION;
+/// What a document is written as while a junction record (its own state or a scenario's) holds an actuated street
+/// (`Arm.actuation`, CLM-12): a build that does not know it would run the street's phase on recall and drop its
+/// settings on its next write, so it must treat the document as a newer one. A junction with every street on recall is
+/// written as before.
+pub const ACTUATION_VERSION: u32 = DETECTION_VERSION + 1;
+pub const NEWEST: u32 = ACTUATION_VERSION;
 /// A record made against an importer older than this (or against none, as before the stamp) is stale: it is never
 /// applied, listed or sent, put back from an archive, or restored from a milestone. A fixed cutoff, not the current
 /// importer version: raising it discards everyone's edits again, so it is a decision, not a side effect of an
@@ -173,8 +178,8 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: the first that applies of `DETECTION_VERSION` (a junction record holds a
-    /// crossing with passive detection), `CALLS_VERSION` (a junction record holds a crossing on call), `IMPORT_STAMP_VERSION` (a street or junction record carries an import stamp),
+    /// The version the document is written as: the first that applies of `ACTUATION_VERSION` (a junction record holds an
+    /// actuated street), `DETECTION_VERSION` (a junction record holds a crossing with passive detection), `CALLS_VERSION` (a junction record holds a crossing on call), `IMPORT_STAMP_VERSION` (a street or junction record carries an import stamp),
     /// `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record holds a modal filter),
     /// `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own), `CALMING_VERSION` (raised
     /// tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a junction's edited signal plan),
@@ -198,7 +203,26 @@ impl Edits {
         let calls = self.junctions.values().any(|r| on_call(&r.state) || r.scenarios.iter().any(|sc| on_call(&sc.design)));
         let passive = |s: &State| s.arms.iter().any(|a| !crate::junction::model::calls::detection_of(a).is_push_button());
         let detection = self.junctions.values().any(|r| passive(&r.state) || r.scenarios.iter().any(|sc| passive(&sc.design)));
-        written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls, detection)
+        let actuated = |s: &State| s.arms.iter().any(|a| a.actuation.is_some());
+        let actuation = self.junctions.values().any(|r| actuated(&r.state) || r.scenarios.iter().any(|sc| actuated(&sc.design)));
+        written_as(
+            self.version.into(),
+            import,
+            zones,
+            speed,
+            curb,
+            stops,
+            signal,
+            green,
+            calming,
+            zone_speed,
+            chicane,
+            filter,
+            scenarios,
+            calls,
+            detection,
+            actuation,
+        )
     }
 
     pub fn to_json(&self) -> String {
@@ -233,8 +257,10 @@ fn written_as(
     scenarios: bool,
     calls: bool,
     detection: bool,
+    actuation: bool,
 ) -> u32 {
-    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls, detection).max(stamp_floor(held))
+    version_for(import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls, detection, actuation)
+        .max(stamp_floor(held))
 }
 
 /// The version a document is written as, from what its street and junction records hold.
@@ -254,8 +280,11 @@ fn version_for(
     scenarios: bool,
     calls: bool,
     detection: bool,
+    actuation: bool,
 ) -> u32 {
-    if detection {
+    if actuation {
+        ACTUATION_VERSION
+    } else if detection {
         DETECTION_VERSION
     } else if calls {
         CALLS_VERSION
@@ -382,6 +411,17 @@ fn holds_detection(doc: &Map<String, Value>) -> bool {
         .any(|(_, r)| passive(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| passive(sc.get("design")))))
 }
 
+/// Whether any junction record holds an actuated street: an arm with an `actuation` that is not null, in its state or in
+/// one of its scenarios' designs (decided on the raw JSON).
+fn holds_actuation(doc: &Map<String, Value>) -> bool {
+    let actuated = |state: Option<&Value>| {
+        state.and_then(|s| s.get("arms")).and_then(Value::as_array).is_some_and(|arms| arms.iter().any(|a| a.get("actuation").is_some_and(|x| !x.is_null())))
+    };
+    let mut junctions = doc.get(JUNCTIONS).and_then(Value::as_object).into_iter().flatten();
+    junctions
+        .any(|(_, r)| actuated(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| actuated(sc.get("design")))))
+}
+
 /// Whether any record of the streets section holds a non-empty list of raised elements (decided on the raw JSON).
 fn holds_calming(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
@@ -418,7 +458,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
         // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios,
-        // 17 with the import stamp, 18 with crossings on call and 19 with passive detection.
+        // 17 with the import stamp, 18 with crossings on call, 19 with passive detection and 20 with actuated streets.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
@@ -439,6 +479,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_scenarios(&doc),
         holds_calls(&doc),
         holds_detection(&doc),
+        holds_actuation(&doc),
     );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
@@ -547,8 +588,8 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `DETECTION_VERSION` while any junction record holds a crossing with passive
-    /// detection, else `CALLS_VERSION` while any junction record holds a crossing on call, else
+    /// The document as text, its version `ACTUATION_VERSION` while any junction record holds an actuated street, else
+    /// `DETECTION_VERSION` while any junction record holds a crossing with passive detection, else `CALLS_VERSION` while any junction record holds a crossing on call, else
     /// `IMPORT_STAMP_VERSION` while any street or junction record carries an import stamp, else `SCENARIO_VERSION` while
     /// any keeps scenarios, else `FILTER_VERSION` while any street record holds a modal filter, else
     /// `CHICANE_VERSION` while any holds a chicane, else
@@ -578,6 +619,7 @@ impl Draft {
             holds_scenarios(&doc),
             holds_calls(&doc),
             holds_detection(&doc),
+            holds_actuation(&doc),
         );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
@@ -908,9 +950,43 @@ mod tests {
     }
 
     #[test]
-    fn a_build_before_passive_detection_leaves_a_document_with_it_alone() {
-        assert_eq!(NEWEST, DETECTION_VERSION);
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, DETECTION_VERSION + 1);
+    fn a_document_with_passive_detection_is_still_read_at_version_19() {
+        assert_eq!(DETECTION_VERSION + 1, ACTUATION_VERSION, "the version after passive detection is actuation's");
+        let older = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, DETECTION_VERSION);
+        assert!(matches!(parse(Some(&older)), Document::Current(_)));
+    }
+
+    #[test]
+    fn an_actuated_street_makes_its_document_version_20_and_a_junction_on_recall_is_written_as_before() {
+        assert_eq!(ACTUATION_VERSION, 20);
+        // A signal with a crossing on call and no street actuated: still 18, and no actuation is written.
+        let (key, record) = signal_record(Some(12));
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record.clone());
+        assert!(!e.to_json().contains("actuation"));
+        assert_eq!(e.written_version(), CALLS_VERSION);
+        let mut actuated = record;
+        actuated.state.arms[0].actuation = Some(crate::junction::model::actuation::Actuation::default());
+        e.junctions.insert(key.clone(), actuated);
+        assert_eq!(e.written_version(), ACTUATION_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.version, ACTUATION_VERSION);
+        assert_eq!(back.junctions[&key].state.arms[0].actuation, Some(crate::junction::model::actuation::Actuation::default()));
+        // The draft decides on the raw JSON, a junction's scenario included; a street on recall (null) is no decision.
+        let Ok(draft) = draft(Some(&e.to_json())) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":20"#), "{}", draft.to_json());
+        let in_a_scenario = r#"{"version":5,"streets":{},"junctions":{"n1":{"scenarios":[{"id":1,"name":"A","design":{"arms":[{"actuation":{"min_green_s":7,"gap_s":3,"max_green_s":45,"vehicles":300}}]}}]}}}"#;
+        let Ok(draft) = super::draft(Some(in_a_scenario)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":20"#), "{}", draft.to_json());
+        let on_recall = r#"{"version":5,"streets":{},"junctions":{"n1":{"state":{"arms":[{"calls":3,"actuation":null}]}}}}"#;
+        let Ok(draft) = super::draft(Some(on_recall)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+    }
+
+    #[test]
+    fn a_build_before_actuation_leaves_a_document_with_it_alone() {
+        assert_eq!(NEWEST, ACTUATION_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, ACTUATION_VERSION + 1);
         assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
@@ -1037,7 +1113,8 @@ mod tests {
         assert_eq!(SCENARIO_VERSION, 16);
         assert_eq!(IMPORT_STAMP_VERSION, 17);
         assert_eq!(CALLS_VERSION, 18);
-        assert_eq!(NEWEST, DETECTION_VERSION);
+        assert_eq!(DETECTION_VERSION, 19);
+        assert_eq!(NEWEST, ACTUATION_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -1267,7 +1344,7 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, DETECTION_VERSION);
+        assert_eq!(NEWEST, ACTUATION_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
