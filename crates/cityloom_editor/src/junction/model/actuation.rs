@@ -539,7 +539,8 @@ mod tests {
         let (ran, totals, turns) = hour_of(&plan, &rules, &[approach(1, vec![100])], &[]);
         // Nothing until 100 s: the first phase runs its minimum, 7 s, its yellow and all-red kept (12 s in all).
         assert_eq!(ran, vec![(0, 100, 7, 112)]);
-        assert!(turns.iter().filter(|t| t.skipped).all(|t| t.start <= 100 && t.end == t.start), "a skipped phase takes no time");
+        assert!(turns.iter().filter(|t| t.skipped).all(|t| t.end == t.start), "a skipped phase takes no time");
+        assert_eq!(turns.iter().filter(|t| t.skipped).count(), 4, "both at 0 s and both at 112 s; then rest");
         assert_eq!((totals[0].served, totals[0].longest_wait_s), (1, Some(0)));
     }
 
@@ -553,7 +554,7 @@ mod tests {
         assert_eq!(ran[0], (0, 0, 10, 15));
         assert_eq!(ran[1], (1, 15, 25, 45), "the fixed phase runs at its timing");
         assert_eq!(ran[2], (0, 45, 7, 57));
-        assert_eq!(ran.len(), 3);
+        assert!(ran[3..].iter().all(|r| r.0 == 1), "then only the fixed phase runs, to the end of the hour");
         assert_eq!(totals, vec![ApproachTotals { arm: 1, rate: 4, vehicles: 4, served: 4, not_served: 0, average_wait_s: Some(8), longest_wait_s: Some(32) }]);
     }
 

@@ -144,7 +144,8 @@ pub fn fixed(plan: &Plan) -> Vec<Rule> {
 }
 
 /// The phases of `plan` run in turn from second 0, round and round, by their `rules`, until no demand has anyone waiting
-/// or still to come, the run stops a cycle at its longest past the last arrival (`stop_at`), or `turns` phases have run.
+/// or still to come (and, when a phase is actuated, the hour is over), the run stops a cycle at its longest past the
+/// last arrival or the hour (`stop_at`), or `turns` phases have run.
 ///
 /// Each turn: an actuated phase that no demand calls is skipped, taking no time; when every phase in a row of the plan's
 /// length is skipped, nothing is waiting, and the controller rests (all red) until the next arrival. A phase that runs
@@ -158,10 +159,13 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
     if n == 0 || rules.len() != n {
         return out;
     }
-    let last = demands.iter().map(|d| d.last()).max().unwrap_or(0);
+    // With a phase actuated the run covers the hour, so its skips are counted to the end of it, not only until the
+    // last arrival is served; a plan of fixed phases stops as soon as nobody is waiting or still to come.
+    let cover = if rules.iter().any(|r| matches!(r, Rule::Actuated { .. })) { u64::from(HOUR_S) } else { 0 };
+    let last = demands.iter().map(|d| d.last()).max().unwrap_or(0).max(cover);
     let stop = stop_at(plan, rules, last, demands);
     let (mut start, mut turn, mut ran, mut idle) = (0u64, 0usize, 0usize, 0usize);
-    while demands.iter().any(|d| d.pending()) && ran < turns && start <= stop {
+    while (start < cover || demands.iter().any(|d| d.pending())) && ran < turns && start <= stop {
         let k = turn % n;
         turn += 1;
         let phase = &plan.phases[k];
@@ -297,13 +301,30 @@ mod tests {
         let rules = vec![Rule::Actuated { bounds: BOUNDS, floor_s: 7 }; 2];
         let mut d = Someone { wants: vec![1], at: vec![100], served: vec![] };
         let turns = run(&plan, &rules, &mut [&mut d], 100);
-        // Both skipped at 0 s, then rest until 100 s; the first is skipped again, the second runs its 7 s minimum.
+        // Both skipped at 0 s, then rest until 100 s; the first is skipped again, the second runs its 7 s minimum; then
+        // both are skipped and, nobody else coming, the signal rests the hour out.
         assert_eq!(
             turns.iter().map(|t| (t.phase, t.start, t.skipped, t.green_s())).collect::<Vec<_>>(),
-            vec![(0, 0, true, 0), (1, 0, true, 0), (0, 100, true, 0), (1, 100, false, 7)]
+            vec![(0, 0, true, 0), (1, 0, true, 0), (0, 100, true, 0), (1, 100, false, 7), (0, 112, true, 0), (1, 112, true, 0)]
         );
         assert_eq!(turns[3].end, 112, "7 s of green, the yellow and the all-red kept");
         assert_eq!(d.served, vec![(100, 100)]);
+    }
+
+    #[test]
+    fn with_a_phase_actuated_the_run_covers_the_hour_and_counts_each_skip_even_with_nobody_coming() {
+        // An actuated phase nobody calls beside a fixed one of 30 s: the fixed one runs every 30 s through the hour, and
+        // the actuated one is skipped as often.
+        let plan = plan_of(vec![phase(1, 25), phase(2, 25)]);
+        let rules = vec![Rule::Actuated { bounds: BOUNDS, floor_s: 7 }, Rule::Fixed];
+        let mut d = Someone { wants: vec![], at: vec![], served: vec![] };
+        let turns = run(&plan, &rules, &mut [&mut d], 100_000);
+        assert_eq!(turns.iter().filter(|t| t.skipped).count(), 120);
+        assert_eq!(turns.iter().filter(|t| !t.skipped).count(), 120);
+        assert!(turns.iter().all(|t| t.start < u64::from(HOUR_S)));
+        // Every phase actuated and nobody coming: each is skipped once, and the signal rests the hour out.
+        let rules = vec![Rule::Actuated { bounds: BOUNDS, floor_s: 7 }; 2];
+        assert_eq!(run(&plan, &rules, &mut [&mut d], 100_000).len(), 2);
     }
 
     #[test]
