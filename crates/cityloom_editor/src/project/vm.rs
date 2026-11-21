@@ -413,7 +413,8 @@ impl ProjectsVm {
         let Some(id) = self.deleting.get_untracked() else { return false };
         self.acted();
         self.delete_error.set(None);
-        if self.links.live(&id) == 0 {
+        // Any link listed goes to the server, one this device's clock says has expired too: the server decides.
+        if self.links.listed(&id) == 0 {
             return self.delete_now(&id);
         }
         self.ending.set(true);

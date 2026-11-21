@@ -1575,6 +1575,8 @@ mod page {
     #[derive(Default)]
     struct Links {
         live: std::cell::Cell<usize>,
+        /// Listed, but past their expiry by this device's clock.
+        expired_here: std::cell::Cell<usize>,
         /// Ends them before `end` returns.
         at_once: std::cell::Cell<bool>,
         asked: std::cell::RefCell<Vec<(String, Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>)>>,
@@ -1583,6 +1585,9 @@ mod page {
     impl crate::project::model::ProjectLinks for Links {
         fn live(&self, _: &str) -> usize {
             self.live.get()
+        }
+        fn listed(&self, _: &str) -> usize {
+            self.live.get() + self.expired_here.get()
         }
         fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
             if self.at_once.get() {
@@ -1667,6 +1672,31 @@ mod page {
         links.answer(Err(crate::shared::said::Said::new("share-error-network")));
         vm.cancel_delete();
         assert_eq!((vm.deleting(), vm.delete_error()), (None, None));
+    }
+
+    /// A link this device's clock says has expired may still work on the server (the clock may be wrong): it is sent
+    /// to the server before the project goes all the same, though the question does not count it.
+    #[test]
+    fn a_link_expired_by_this_device_s_clock_is_still_sent_before_the_project_goes() {
+        let t = test_ports_full();
+        t.storage.set_now(1_800_000_000_000); // 2027-01-15T08:00:00Z
+        let links = Rc::new(crate::share::links::ProjectShares::new(t.ports.clone()));
+        let vm = ProjectsVm::new_with(t.ports.clone(), crate::i18n_for(Locale::En), links);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        let store = crate::share::store::ShareStore::new(Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), &id)));
+        store.add(crate::share::store::Made {
+            token: "late".into(),
+            created_at: "2026-10-17T08:00:00.000Z".into(),
+            expires_at: "2027-01-15T07:00:00.000Z".into(),
+        });
+        vm.ask_delete(&id);
+        assert_eq!(vm.delete_question().as_deref(), Some("Delete Plateau and everything in it? This cannot be undone."), "none still works by this clock");
+        assert!(!vm.confirm_delete());
+        assert_eq!(t.share.calls(), [crate::shared::ports::ShareCall::Delete("late".into())], "sent all the same");
+        assert_eq!(names(&vm), ["Plateau"]);
+        assert!(t.share.answer(crate::shared::ports::ShareReply::Deleted(Ok(()))));
+        assert_eq!(names(&vm), Vec::<String>::new());
     }
 
     /// A project whose links cannot be ended from here (the account that made them was deleted, so every request is

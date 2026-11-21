@@ -77,6 +77,10 @@ impl ProjectLinks for ProjectShares {
         live(&self.ports, id).len()
     }
 
+    fn listed(&self, id: &str) -> usize {
+        store_of(&self.ports, id).list().len()
+    }
+
     /// Asks for every link listed, not only those this device's clock thinks still work: the server decides, and one it
     /// has let expire (or deleted, or never had) counts as done.
     fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), Said>)>) {
