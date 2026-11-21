@@ -99,6 +99,10 @@ fn delete_question(vm: Vm) -> impl IntoView {
             }
         >
             <p id="project-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
+            // One status node for the question's life: what happens while its share links are deleted.
+            <p id="project-delete-status" role="status">
+                {move || vm.with_value(|v| v.ending_status())}
+            </p>
             <p class="project-error" hidden=move || vm.with_value(|v| v.delete_error()).is_none()>
                 {move || vm.with_value(|v| v.delete_error())}
             </p>

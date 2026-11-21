@@ -73,6 +73,8 @@ pub struct ProjectsVm {
     links: Rc<dyn ProjectLinks>,
     /// Its links are being deleted on the server: the question waits.
     ending: ArcRwSignal<bool>,
+    /// How many of its links still work, as the question says: counted when it is asked and when the deleting stops.
+    links_left: ArcRwSignal<usize>,
     /// Why its links could not be deleted, so the project was kept: the project's name and the reason.
     delete_error: ArcRwSignal<Option<(String, Said)>>,
     me: Weak<ProjectsVm>,
@@ -113,6 +115,7 @@ impl ProjectsVm {
             deleting: ArcRwSignal::new(None),
             links,
             ending: ArcRwSignal::new(false),
+            links_left: ArcRwSignal::new(0),
             delete_error: ArcRwSignal::new(None),
             me: me.clone(),
             metro: ArcRwSignal::new(default_metro().id),
@@ -276,6 +279,9 @@ impl ProjectsVm {
 
     /// Opens the rename form of project `id`; any question before deleting is dropped.
     pub fn start_rename(&self, id: &str) {
+        if self.waits() {
+            return;
+        }
         self.deleting.set(None);
         self.rename_error.set(None);
         self.renaming.set(Some(id.to_string()));
@@ -283,6 +289,9 @@ impl ProjectsVm {
     }
 
     pub fn cancel_rename(&self) {
+        if self.waits() {
+            return;
+        }
         if let Some(id) = self.renaming.get_untracked() {
             self.renaming.set(None);
             self.rename_error.set(None);
@@ -302,6 +311,9 @@ impl ProjectsVm {
 
     /// Gives project `id` the name `name`; says why where it is refused, and the form stays open. True where it was kept.
     pub fn rename(&self, id: &str, name: &str) -> bool {
+        if self.waits() {
+            return false;
+        }
         self.acted();
         match self.store.rename(id, name) {
             Ok(()) => {
@@ -324,13 +336,20 @@ impl ProjectsVm {
 
     // ---- delete ----
 
+    /// While a project's share links are deleted on the server, every command over the question and the rename form
+    /// waits (they would close the question, and the reason it may come to show), the question saying why.
+    fn waits(&self) -> bool {
+        self.ending.get_untracked()
+    }
+
     /// Asks before deleting project `id`; any rename form is closed.
     pub fn ask_delete(&self, id: &str) {
-        if self.ending.get_untracked() || self.store.get(id).is_none() {
+        if self.waits() || self.store.get(id).is_none() {
             return;
         }
         self.renaming.set(None);
         self.delete_error.set(None);
+        self.links_left.set(self.links.live(id));
         self.deleting.set(Some(id.to_string()));
         self.ask_focus(Focus::DeleteSafe);
     }
@@ -345,7 +364,7 @@ impl ProjectsVm {
     /// tracked.
     pub fn delete_question(&self) -> Option<String> {
         let row = self.deleting()?;
-        Some(match self.links.live(&row.id) {
+        Some(match self.links_left.get() {
             0 => self.named("project-delete-confirm", &row.name),
             n => self.i18n.tr("project-delete-confirm-links", &Args::new().str("name", row.name).num("count", n as i64)),
         })
@@ -354,6 +373,12 @@ impl ProjectsVm {
     /// The project's share links are being deleted on the server, before it is (tracked): the question waits.
     pub fn ending(&self) -> bool {
         self.ending.get()
+    }
+
+    /// What the question says while the project's share links are deleted on the server (tracked): also why Cancel
+    /// and Escape wait.
+    pub fn ending_status(&self) -> Option<String> {
+        self.ending.get().then(|| self.word("project-delete-ending"))
     }
 
     /// Why the project was kept: its share links could not be deleted first (tracked).
@@ -366,7 +391,7 @@ impl ProjectsVm {
 
     /// Drops the question, unless the project's links are being deleted (it then waits for them).
     pub fn cancel_delete(&self) {
-        if self.ending.get_untracked() {
+        if self.waits() {
             return;
         }
         if let Some(id) = self.deleting.get_untracked() {
@@ -378,10 +403,11 @@ impl ProjectsVm {
 
     /// Deletes the project the question is about, with everything in it. Where share links made here of it still work,
     /// they are deleted on the server first (#221) and the project goes once they are; should one not be, the project
-    /// is kept and the question says why. True where the project was deleted now; false where nothing was asked, its
-    /// links are being deleted, or the list could not be changed.
+    /// is kept and the question says why. True where the project was deleted by the time this returns (its links, if
+    /// any, ended at once); false where nothing was asked, its links are still being deleted or could not be, or the
+    /// list could not be changed.
     pub fn confirm_delete(&self) -> bool {
-        if self.ending.get_untracked() {
+        if self.waits() {
             return false;
         }
         let Some(id) = self.deleting.get_untracked() else { return false };
@@ -391,16 +417,15 @@ impl ProjectsVm {
             return self.delete_now(&id);
         }
         self.ending.set(true);
-        let (me, kept) = (self.me.clone(), id.clone());
+        let deleted = Rc::new(std::cell::Cell::new(false));
+        let (me, kept, told) = (self.me.clone(), id.clone(), deleted.clone());
         self.links.end(
             &id,
             Box::new(move |answer| {
                 let Some(vm) = me.upgrade() else { return };
                 vm.ending.set(false);
                 match answer {
-                    Ok(()) => {
-                        vm.delete_now(&kept);
-                    }
+                    Ok(()) => told.set(vm.delete_now(&kept)),
                     Err(reason) => {
                         let name = vm.store.get(&kept).map(|p| vm.name_of(&p)).unwrap_or_default();
                         let words = vm.i18n.tr_now(
@@ -409,11 +434,13 @@ impl ProjectsVm {
                         );
                         vm.ports.announcer.say(&vm.i18n.tr_now("project-delete-anyway-offer", &Args::new().str("failed", words)));
                         vm.delete_error.set(Some((name, reason)));
+                        // Some may have gone before one could not: the question counts what is left.
+                        vm.links_left.set(vm.links.live(&kept));
                     }
                 }
             }),
         );
-        false
+        deleted.get()
     }
 
     /// Whether the question offers to delete the project without ending its share links (tracked): once they could not
@@ -425,7 +452,7 @@ impl ProjectsVm {
     /// Deletes the project the question is about although its share links could not be ended: they keep working until
     /// they expire. False where that was not offered.
     pub fn delete_anyway(&self) -> bool {
-        if self.ending.get_untracked() || self.delete_error.with_untracked(Option::is_none) {
+        if self.waits() || self.delete_error.with_untracked(Option::is_none) {
             return false;
         }
         let Some(id) = self.deleting.get_untracked() else { return false };
