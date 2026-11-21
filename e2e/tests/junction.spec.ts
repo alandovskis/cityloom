@@ -1,4 +1,5 @@
 import {
+  chooseCell,
   addFromMenu,
   TURBO_TILE,
   expect,
@@ -6,8 +7,10 @@ import {
   openJunction,
   openStreet,
   placesOnMap,
-  splitInto,
-  streetLengthM,
+  pickRunAt,
+  pickToEnd,
+  planBoundaries,
+  streetLength,
   test,
   tileFrom,
   transform,
@@ -966,7 +969,7 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
 // ---- approaches: what lies beyond an arm's end zone ---------------------------------------------------------
 
 test.describe("the approach of an arm whose street is divided", () => {
-  const options = (page: Page) => page.locator('#zone-strip [role="option"]');
+  const line = (page: Page) => page.locator("#plan .plan-boundary-line");
 
   /** Opens, from the map, the junction whose first arm is the street `name` running to `toward`, and that street, by
    *  the arm's "Open the cross-section" link. Leaves the page on the street, and says the junction's address and the
@@ -983,7 +986,7 @@ test.describe("the approach of an arm whose street is divided", () => {
       await expect(link).toBeVisible();
       const street = await link.getAttribute("href");
       await link.click();
-      await expect(page.locator("#zone-0")).toBeVisible();
+      await expect(page.locator("#plan svg")).toBeVisible();
       const named = (await page.locator("#street-name").innerText()).trim() === name;
       if (named && (await page.locator("#street-sub").innerText()).includes(toward))
         return { junction, street: street! };
@@ -1016,10 +1019,10 @@ test.describe("the approach of an arm whose street is divided", () => {
     // 41 m. Halved, its end zone reaches 20 m from the centre, past what its stop line and arrows need, and with its
     // 9.3 m transition it ends inside the 36 m an arm is drawn to.
     const { junction, street } = await junctionWithStreet(page, "Rue Saint-Viateur Ouest", "Rue Saint-Urbain");
-    await splitInto(page, 2);
-    // Zone 2 loses its first piece, so its section differs from zone 1's.
-    await page.locator("#zone-1").click();
+    // The street's second half loses its first piece, so its section differs from the first half's.
+    await pickToEnd(page, Math.floor((await streetLength(page)) / 2));
     await changeZone(page);
+    await expect(planBoundaries(page)).toHaveCount(1);
     await page.waitForTimeout(500); // the debounced write (250 ms) has nothing observable to await
 
     await page.goto("/" + junction);
@@ -1050,13 +1053,13 @@ test.describe("the approach of an arm whose street is divided", () => {
       ["Shift+Alt+ArrowLeft", 24],
     ] as const) {
       await page.goto("/" + street);
-      await expect(options(page)).toHaveCount(2);
-      await page.locator("#zone-strip").focus();
-      await page.keyboard.press("ArrowRight"); // zone 2
-      const before = await options(page).first().getAttribute("aria-label");
+      await expect(planBoundaries(page)).toHaveCount(1);
+      // The run after the boundary: Alt and the arrows move the boundary at its left end.
+      await pickRunAt(page, Math.floor(await streetLength(page)) - 1);
+      const before = await line(page).getAttribute("x1");
       for (let i = 0; i < presses; i++) await page.keyboard.press(key);
-      // The presses are handled synchronously; the zone's label (its length) shows they took effect.
-      await expect(options(page).first()).not.toHaveAttribute("aria-label", before!);
+      // The presses are handled synchronously; the boundary's place on the plan shows they took effect.
+      await expect(line(page)).not.toHaveAttribute("x1", before!);
       await page.waitForTimeout(500); // the debounced write (250 ms) has nothing observable to await
       await page.goto("/" + junction);
       await expect(page.locator("#drawing")).toBeVisible();
@@ -1072,6 +1075,24 @@ test.describe("the approach of an arm whose street is divided", () => {
   });
 });
 
+/** The junction at the end of the street on its page that positions along it are measured from: its first end, unless
+ *  the edge of the map cuts it, then its last. Its number, as the header's link to it gives it; "" when that end is
+ *  not a junction. */
+const anchoredJunction = (page: Page) =>
+  page.evaluate(() => {
+    const sub = document.getElementById("street-sub")!;
+    const text = (sub.textContent ?? "").replace(/\s+/g, " ").trim();
+    const links = [...sub.querySelectorAll("a")];
+    const number = (a: HTMLAnchorElement | undefined) =>
+      /junction=(\d+)/.exec(a?.getAttribute("href") ?? "")?.[1] ?? "";
+    if (links[0] && text.startsWith(`between ${(links[0].textContent ?? "").trim()}`)) return number(links[0]);
+    if (text.startsWith("between the edge of the map")) return number(links.at(-1));
+    return "";
+  });
+
+/** The number of the junction at the address `junction` (`intersection.html?junction=…`). */
+const junctionNumber = (junction: string) => /junction=(\d+)/.exec(junction)?.[1];
+
 // ---- transit stops on an arm ---------------------------------------------------------------------------------
 
 test.describe("a street's transit stop on the arm that meets it", () => {
@@ -1082,29 +1103,22 @@ test.describe("a street's transit stop on the arm that meets it", () => {
   /** Finds a junction whose first arm has two entering lanes (a stop's lane can then be trapped in a turning lane)
    *  and a street of 50 m or more with a Stops row on the side where traffic enters the junction. Traffic keeps
    *  right, so a bus enters on the street's left half where the junction is at the end the stops are measured from,
-   *  and on its right half at the other end. The end is read from the street page: it says it measures from the
-   *  junction's own name when the junction lies at that end. Says where the stop goes. Leaves the page on the street. */
+   *  and on its right half at the other end. The end is read from the street page: its header links the junction at
+   *  the end it measures from. Says where the stop goes. Leaves the page on the street. */
   const nearSideArm = async (page: Page) => {
     await page.goto("/map.html");
     for (const junction of (await placesOnMap(page)).junctions) {
       await page.goto("/" + junction);
       await expect(page.locator("#drawing")).toBeVisible();
-      const name = (await page.locator("#street-name").innerText()).trim();
       await page.locator("#wrap").focus();
       await page.keyboard.press("ArrowRight"); // the first street
       const link = page.locator('#inspector a.btn[href^="street.html?street="]');
       await expect(link).toBeVisible();
       if ((await page.locator("#inspector .lane-row").count()) < 2) continue;
       await link.click();
-      await expect(page.locator("#zone-0")).toBeVisible();
-      const length = await streetLengthM(page);
-      const from = (
-        await page
-          .getByText(/^Measured from /)
-          .first()
-          .innerText()
-      ).trim();
-      const origin = from === `Measured from ${name}`;
+      await expect(page.locator("#plan svg")).toBeVisible();
+      const length = await streetLength(page);
+      const origin = (await anchoredJunction(page)) === junctionNumber(junction);
       const side = origin ? "left" : "right";
       if (length >= 50 && (await page.locator(`#stop-strip-${side}`).count()) === 1) {
         return { junction, length, origin, side };
@@ -1118,14 +1132,14 @@ test.describe("a street's transit stop on the arm that meets it", () => {
   const placeStop = async (page: Page, arm: { length: number; origin: boolean; side: string }, near: number) => {
     const strip = page.locator(`#stop-strip-${arm.side}`);
     const used = strip.locator('[role="option"].stop-cell:not(.gap)');
-    await page.locator(`#stop-${arm.side}-0`).click();
+    await chooseCell(page, page.locator(`#stop-${arm.side}-0`));
     await addFromMenu(page, "Curb stop");
-    await page.locator(`#stop-${arm.side}-0`).click();
+    await chooseCell(page, page.locator(`#stop-${arm.side}-0`));
     await page.locator("#stop-length").fill(String(STOP_M));
     await page.locator("#stop-length").press("Enter");
     await expect(used).toHaveCount(1);
     await expect(used).toHaveAttribute("aria-label", new RegExp(`, 0\\.0 m to ${STOP_M}\\.0 m,`));
-    await used.click();
+    await chooseCell(page, used);
     await strip.focus();
     await moveStop(page, strip, 0, arm.origin ? near : Math.floor(arm.length - STOP_M - near));
   };
@@ -1169,7 +1183,7 @@ test.describe("a street's transit stop on the arm that meets it", () => {
 
     // A stop 6 m from the centre.
     await page.goto(street);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await placeStop(page, arm, 6);
     const near = arm.origin ? 6 : Math.floor(arm.length - STOP_M - 6);
     await kept(page, near);
@@ -1192,11 +1206,11 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     // The street page reads the junctions when it opens: with the stop kept, it now judges it, and the same stop
     // 20 m out is clear on both pages.
     await page.goto(street);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await page.locator("#t-checks").click();
     await expect(checkRow(page, "Stops clear of the junction")).toHaveClass("bad");
     const strip = page.locator(`#stop-strip-${arm.side}`);
-    await strip.locator('[role="option"].stop-cell:not(.gap)').click();
+    await chooseCell(page, strip.locator('[role="option"].stop-cell:not(.gap)'));
     await strip.focus();
     const to = arm.origin ? 20 : Math.floor(arm.length - STOP_M - 20);
     await moveStop(page, strip, near, to);
@@ -1260,22 +1274,15 @@ test.describe("a street's curbside use on the arm that meets it", () => {
     for (const junction of (await placesOnMap(page)).junctions) {
       await page.goto("/" + junction);
       await expect(page.locator("#drawing")).toBeVisible();
-      const name = (await page.locator("#street-name").innerText()).trim();
       await page.locator("#wrap").focus();
       await page.keyboard.press("ArrowRight");
       const link = page.locator('#inspector a.btn[href^="street.html?street="]');
       await expect(link).toBeVisible();
       await link.click();
-      await expect(page.locator("#zone-0")).toBeVisible();
-      const from = (
-        await page
-          .getByText(/^Measured from /)
-          .first()
-          .innerText()
-      ).trim();
+      await expect(page.locator("#plan svg")).toBeVisible();
       if (
-        from === `Measured from ${name}` &&
-        (await streetLengthM(page)) >= 50 &&
+        (await anchoredJunction(page)) === junctionNumber(junction) &&
+        (await streetLength(page)) >= 50 &&
         (await page.locator(".curb-strip").count()) > 0
       ) {
         return { junction, street: page.url() };
@@ -1308,10 +1315,10 @@ test.describe("a street's curbside use on the arm that meets it", () => {
 
     // A parking use at the street's origin: it stands on the crossing, which the junction says.
     await page.goto(arm.street);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     const strip = page.locator(".curb-strip").first();
     const cells = strip.locator('[role="option"]');
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await page.locator("#curb-use").selectOption(PARKING);
     await page.locator("#curb-length").fill(String(USE_M));
     await page.locator("#curb-add").click();
@@ -1326,8 +1333,8 @@ test.describe("a street's curbside use on the arm that meets it", () => {
 
     // Moved 30 m out, it is drawn on the arm and clear.
     await page.goto(arm.street);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    await cells.nth(0).click();
+    await expect(page.locator("#plan svg")).toBeVisible();
+    await chooseCell(page, cells.nth(0));
     await strip.focus();
     for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+Alt+ArrowRight");
     await kept(page, 30);

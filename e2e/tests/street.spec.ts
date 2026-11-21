@@ -8,9 +8,13 @@ import {
   menuItem,
   OPEN_ENDS_TILE,
   openStreet,
-  showZoneLevel,
-  splitInto,
-  streetLengthM,
+  makeStretches,
+  pickRunAt,
+  pickStretch,
+  pickToEnd,
+  pickWhole,
+  planBoundaries,
+  streetLength,
   test,
   tileFrom,
   transform,
@@ -722,185 +726,186 @@ test.describe("the Transform dialog", () => {
   });
 });
 
-// ---- zones: a street divided along its length --------------------------------------------------------------
+// ---- changing part of a street: the plan, a stretch picked on it, the runs an edit makes ---------------------------
 
-const cellLabel = (page: Page, i: number) => page.locator(`#zone-${i}`).getAttribute("aria-label");
+/** Where `atM` metres from the plan's left end lies on the screen, across the middle of its bands. */
+const planAt = async (page: Page, atM: number) => {
+  await page.locator("#plan").scrollIntoViewIfNeeded();
+  const box = (await page.locator("#plan svg").boundingBox())!;
+  const length = await streetLength(page);
+  return { x: box.x + (atM / length) * box.width, y: box.y + 24 + 48 };
+};
 
-test.describe("the zones of a street", () => {
+/** The stretch picked, as the line under the plan says it. */
+const picked = (page: Page) => page.locator("#plan-picked");
+
+test.describe("changing part of a street", () => {
   test.beforeEach(async ({ page }) => {
     await openStreet(page);
-    await expect(page.locator("#zone-strip")).toBeVisible();
-    await showZoneLevel(page);
+    await expect(page.locator("#plan svg")).toBeVisible();
   });
 
-  test("the zone strip is one line, at most 48 px, and the commands sit in the details panel", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const slot = await page.locator("#zones-slot").evaluate((e) => {
-      const kids = [...e.children].map((c) => c.getBoundingClientRect());
-      return Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
-    });
-    expect(slot).toBeLessThanOrEqual(48);
-    await expect(page.locator("#zone-split")).toBeVisible();
-    expect(await page.locator("#zone-split").evaluate((e) => !!e.closest("#details-panel"))).toBe(true);
-    expect(await page.locator("#zones-slot #zone-split").count()).toBe(0);
+  test("the whole street is picked at first, and the plan's point is one tab stop under the drawing", async ({
+    page,
+  }) => {
+    await expect(picked(page)).toHaveText(/^The whole street, [\d.]+ m long\.$/);
+    await expect(page.locator("#plan")).toHaveAttribute("role", "group");
+    await expect(page.locator("#plan-point")).toHaveAttribute("role", "slider");
+    await expect(page.locator("#plan-point")).toHaveAttribute("aria-valuetext", /^The whole street/);
+    await expect(page.locator("#plan [tabindex]")).toHaveCount(1);
   });
 
-  test("splits a street by keyboard and moves the boundary with Alt and the arrows", async ({ page }) => {
-    const url = page.url();
-    await page.locator("#zone-split-at").focus(); // the commands are in the details panel
-    await page.keyboard.press("Tab"); // Split
-    await expect(page.locator("#zone-split")).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await expect(live(page)).toHaveText(/Split/);
+  test("a drag along the plan picks a stretch", async ({ page }) => {
+    const a = await planAt(page, 10);
+    const b = await planAt(page, 25);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up();
+    await expect(picked(page)).toHaveText(/^From 1\d\.\d m to 2\d\.\d m · 1\d\.\d m long$/);
+    await expect(live(page)).toHaveText(/^From 1\d\.\d m to 2\d\.\d m, 1\d\.\d m long/);
+    await expect(page.locator("#plan .plan-pick")).toHaveCount(1);
+    await expect(page.locator("#plan .plan-handle")).toHaveCount(2);
+    await expect(page.locator("#plan-point")).toBeFocused();
+  });
 
-    await page.locator("#zone-strip").focus();
-    await page.keyboard.press("ArrowRight"); // zone 2
-    const before = await cellLabel(page, 1);
-    await page.keyboard.press("Alt+ArrowRight");
-    const after1 = await cellLabel(page, 1);
-    expect(after1).not.toBe(before);
-    await page.keyboard.press("Shift+Alt+ArrowLeft");
-    const after2 = await cellLabel(page, 1);
-    expect(after2).not.toBe(after1);
-    expect(page.url(), "Alt+Arrow is not the browser's Back").toBe(url);
+  test("a click picks the run under the pointer", async ({ page }) => {
+    await pickStretch(page, 10, 25);
+    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
+    const at = await planAt(page, 30);
+    await page.mouse.click(at.x, at.y);
+    await expect(picked(page)).toHaveText(/^The whole street/);
+    await expect(live(page)).toHaveText(/^The whole street, [\d.]+ m long\./);
+  });
 
-    await page.locator("#undo").click();
-    await page.locator("#undo").click();
-    expect(await cellLabel(page, 1)).toBe(before);
+  test("Shift and the arrows pick a stretch from the keyboard, and the point says where it is on the way", async ({
+    page,
+  }) => {
+    const point = page.locator("#plan-point");
+    await point.focus();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("PageDown");
+    await expect(point).toHaveAttribute("aria-valuenow", "10");
+    await expect(point).toHaveAttribute("aria-valuetext", "At 10.0 m");
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(point).toHaveAttribute("aria-valuetext", "At 11.0 m");
+    for (let k = 0; k < 7; k++) await page.keyboard.press("Shift+ArrowRight");
+    await expect(picked(page)).toHaveText("From 10.0 m to 18.0 m · 8.0 m long");
+    await expect(point).toHaveAttribute("aria-valuetext", "From 10.0 m to 18.0 m, 8.0 m long.");
+    await expect(live(page)).toHaveText("From 10.0 m to 18.0 m, 8.0 m long.");
+    await page.keyboard.press("Escape");
+    await expect(picked(page)).toHaveText(/^The whole street/);
+  });
+
+  test("an edit in the stretch makes a boundary the plan shows, and editing it back joins it", async ({ page }) => {
+    await expect(planBoundaries(page)).toHaveCount(0);
+    await pickStretch(page, 10, 25);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-");
+    await expect(planBoundaries(page)).toHaveCount(2);
+    await expect(page.locator("#plan .plan-run")).toHaveCount(3);
+    await page.keyboard.press("+");
+    await expect(planBoundaries(page)).toHaveCount(0);
+    await expect(page.locator("#plan .plan-run")).toHaveCount(1);
+  });
+
+  test("a reload keeps the stretches", async ({ page }) => {
+    await pickStretch(page, 10, 25);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-");
+    await expect(planBoundaries(page)).toHaveCount(2);
+    const plan = await page.locator("#plan svg").innerHTML();
+    await page.waitForTimeout(500); // the debounced write
+    await page.reload();
+    await expect(planBoundaries(page)).toHaveCount(2);
+    await pickWhole(page);
+    const runs = page.locator("#plan .plan-run");
+    await expect(runs).toHaveCount(3);
+    expect(await page.locator("#plan .plan-boundary").evaluateAll((b) => b.map((e) => e.outerHTML))).toEqual(
+      [...plan.matchAll(/<g class="plan-boundary"[^]*?<\/g>/g)].map((m) => m[0]),
+    );
   });
 
   test("drags a boundary with the pointer as one undoable step, keeping the pointer captured", async ({ page }) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    const before = await cellLabel(page, 1);
-    const handle = page.locator(".zone-handle");
-    await handle.scrollIntoViewIfNeeded(); // the strip lies below the fold of a street with rows under the drawing
-    const box = (await handle.boundingBox())!;
-    expect(box.width, "a handle is a 24 px target").toBeGreaterThanOrEqual(24);
-    // the handle node itself must survive the view changes of a drag
-    await handle.evaluate((el) => ((window as any).__handle = el));
+    await makeStretches(page, 2);
+    const line = page.locator("#plan .plan-boundary-line");
+    const before = await line.getAttribute("x1");
+    const box = (await line.boundingBox())!;
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
+    // the drawing that holds the pointer must survive the redraws of a drag
+    await page.locator("#plan .plan-canvas").evaluate((el) => ((window as any).__canvas = el));
     await page.mouse.move(x, y);
     await page.mouse.down();
+    await page.mouse.move(x + 20, y, { steps: 4 });
     await page.mouse.move(x + 40, y, { steps: 4 });
-    await page.mouse.move(x + 80, y, { steps: 4 });
     const state = await page.evaluate(() => {
-      const el = (window as any).__handle as HTMLElement;
+      const el = (window as any).__canvas as HTMLElement;
       return { connected: el.isConnected, captured: el.hasPointerCapture(1) };
     });
-    expect(state, "the handle is kept and holds the pointer").toEqual({ connected: true, captured: true });
-    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", before!);
+    expect(state, "the drawing is kept and holds the pointer").toEqual({ connected: true, captured: true });
+    await expect(line).not.toHaveAttribute("x1", before!);
     await page.mouse.up();
-    const dragged = await cellLabel(page, 1);
-    expect(dragged).not.toBe(before);
+    const dragged = await line.getAttribute("x1");
+    expect(Number(dragged)).toBeGreaterThan(Number(before));
     await page.locator("#undo").click();
-    expect(await cellLabel(page, 1)).toBe(before);
-    await expect(page.locator("#undo")).toBeEnabled(); // the split is still there to undo
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(line).toHaveAttribute("x1", before!);
+    await expect(planBoundaries(page)).toHaveCount(1);
   });
 
   test("Escape cancels a drag", async ({ page }) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    const before = await cellLabel(page, 1);
-    await page.locator(".zone-handle").scrollIntoViewIfNeeded(); // below the fold of a street with rows under the drawing
-    const box = (await page.locator(".zone-handle").boundingBox())!;
+    await makeStretches(page, 2);
+    const line = page.locator("#plan .plan-boundary-line");
+    const before = await line.getAttribute("x1");
+    const box = (await line.boundingBox())!;
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     await page.mouse.move(x, y);
     await page.mouse.down();
-    await page.mouse.move(x + 60, y, { steps: 6 });
-    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", before!);
+    await page.mouse.move(x + 30, y, { steps: 6 });
+    await expect(line).not.toHaveAttribute("x1", before!);
     await page.keyboard.press("Escape");
     await page.mouse.up();
-    expect(await cellLabel(page, 1)).toBe(before);
+    await expect(line).toHaveAttribute("x1", before!);
   });
 
-  test("changes one zone's section and reloads to the same zones", async ({ page }) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", /its own section/);
-    await page.locator("#zone-1").click();
-    const tops = () =>
-      page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
-    const unchanged = await tops();
-    await selectFirstPiece(page);
-    await page.keyboard.press("-");
-    await expect.poll(tops).not.toBe(unchanged);
-    const edited = await tops();
-    await page.locator("#zone-0").click();
-    await expect(page.locator("#zone-0")).not.toHaveAttribute("aria-label", /its own section/);
-    await page.waitForTimeout(500); // the debounced write
-    await page.reload();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await expect(page.locator("#zone-1")).toHaveAttribute("aria-label", /its own section/);
-    await page.locator("#zone-1").click();
-    await expect.poll(tops).toBe(edited);
+  test("Alt and the arrows move the boundary at the pick's end", async ({ page }) => {
+    const url = page.url();
+    await makeStretches(page, 2);
+    const line = page.locator("#plan .plan-boundary-line");
+    const before = await line.getAttribute("x1");
+    const half = Math.floor((await streetLength(page)) / 2);
+    await pickToEnd(page, half);
+    await page.keyboard.press("Alt+ArrowRight");
+    await expect(line).not.toHaveAttribute("x1", before!);
+    await expect(picked(page)).toHaveText(new RegExp(`^From ${half + 1}\\.0 m to`));
+    expect(page.url(), "Alt+Arrow is not the browser's Back").toBe(url);
+    await page.locator("#undo").click();
+    await expect(line).toHaveAttribute("x1", before!);
   });
 
-  test("pressing a zone cell below the fold after editing by keyboard does not move it from under the pointer", async ({
-    page,
-  }) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await page.locator("#zone-1").click();
-    await selectFirstPiece(page);
-    await page.keyboard.press("-");
-    // the drawing and the strips under it scroll in the street page's column, under the title and the tools
-    const stage = page.locator(".stage-scroll");
-    await stage.evaluate((e) => (e.scrollTop = e.scrollHeight));
-    const before = await stage.evaluate((e) => [e.scrollTop, e.scrollHeight]);
-    const box = (await page.locator("#zone-0").boundingBox())!;
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    expect(
-      await stage.evaluate((e) => [e.scrollTop, e.scrollHeight]),
-      "the press neither scrolls nor resizes the stage",
-    ).toEqual(before);
-    await page.mouse.up();
-    await expect(page.locator("#zone-0")).toHaveAttribute("aria-selected", "true");
+  test("the plan at 375 px wide makes the page scroll no further sideways", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await expect(page.locator("#plan svg")).toBeVisible();
+    const m = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth,
+      inner: innerWidth,
+      plan: document.getElementById("plan")!.getBoundingClientRect().right,
+    }));
+    expect(m.page).toBeLessThanOrEqual(m.inner);
+    expect(m.plan).toBeLessThanOrEqual(m.inner);
   });
 
-  test("shows the selected zone in 2.5D", async ({ page }) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await selectFirstPiece(page);
-    await page.keyboard.press("-"); // the second zone gets a section of its own
-    await expect(page.locator("#drawing.iso")).toBeAttached();
-    const label = () => page.locator("#drawing").getAttribute("aria-label");
-    const markup = () => page.locator("#drawing").innerHTML();
-    expect(await label()).toMatch(
-      /in 2\.5D, along a .* stretch centred on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 2 has /,
-    );
-    await expect(page.locator("#drawing .iso-across").first()).toBeAttached();
-    const second = await markup();
-    await page.locator("#zone-0").click();
-    await expect(page.locator("#drawing")).toHaveAttribute(
-      "aria-label",
-      /on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 1 has /,
-    );
-    const first = await markup();
-    expect(first, "the other zone's pieces are drawn").not.toBe(second);
-    await page.locator("#zone-1").click();
-    await expect(page.locator("#drawing")).toHaveAttribute(
-      "aria-label",
-      /on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 2 has /,
-    );
-    expect(await markup(), "zone 2's own pieces again").not.toBe(first);
-  });
-
-  /** Splits the street in two, gives zone 2 its own section, shows it in 2.5D. Zone 2 is selected. */
+  /** Picks the street's second half and narrows its first piece there: the second half is a run of its own, picked. */
   const isoAcrossBoundary = async (page: Page) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await pickToEnd(page, Math.floor((await streetLength(page)) / 2));
     await selectFirstPiece(page);
-    await page.keyboard.press("-"); // the second zone gets a section of its own
+    await page.keyboard.press("-");
+    await expect(planBoundaries(page)).toHaveCount(1);
     await expect(page.locator("#drawing.iso")).toBeAttached();
   };
 
-  test("the 2.5D draws the neighbouring zone across a boundary", async ({ page }) => {
+  test("the 2.5D shows the run where the pick starts, with its neighbour across a boundary", async ({ page }) => {
     await isoAcrossBoundary(page);
     const drawing = page.locator("#drawing");
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
@@ -911,35 +916,39 @@ test.describe("the zones of a street", () => {
       /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 2 has /,
     );
     const second = await drawing.innerHTML();
-    await page.locator("#zone-0").click();
+    await pickRunAt(page, 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
       /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 1 has /,
     );
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
-    expect(await drawing.innerHTML(), "the across run swaps with the selected zone").not.toBe(second);
+    const first = await drawing.innerHTML();
+    expect(first, "the across run swaps with the run shown").not.toBe(second);
+    await pickRunAt(page, Math.floor((await streetLength(page)) / 2) + 1);
+    await expect(drawing).toHaveAttribute("aria-label", /Zone 2 beyond\..* Zone 2 has /);
+    expect(await drawing.innerHTML(), "the second run's own pieces again").not.toBe(first);
   });
 
-  /** Splits the street in two and gives zone 2 (`#zone-1`, the ids start at 0) a travel lane zone 1 lacks: zone 1 hosts the transition and it leads into zone 2. */
-  const addLaneInZone2 = async (page: Page) => {
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await page.locator("#zone-1").click();
+  /** Adds a driving lane to the street's second half: the first run hosts the transition, which leads into the second. */
+  const addLaneInSecondHalf = async (page: Page) => {
+    await pickToEnd(page, Math.floor((await streetLength(page)) / 2));
     await addFromMenu(page, "Driving lane");
+    await expect(planBoundaries(page)).toHaveCount(1);
   };
 
-  test("the 2.5D says how long the transition is that leads into the zone beyond", async ({ page }) => {
-    await addLaneInZone2(page);
+  test("the 2.5D says how long the transition is that leads into the run beyond", async ({ page }) => {
+    await addLaneInSecondHalf(page);
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
       /A transition of [\d.]+ m leads into Zone 2\./,
     );
     await expect(page.locator("#drawing .iso-taper").first()).toBeAttached();
+    await expect(page.locator("#plan .plan-taper")).toHaveCount(1);
   });
 
-  test("the checks say a zone is too short for its transition", async ({ page }) => {
-    await addLaneInZone2(page);
+  test("the checks say a run is too short for its transition", async ({ page }) => {
+    await addLaneInSecondHalf(page);
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li", { hasText: "Room for the transition" });
     await expect(row).toBeVisible();
@@ -947,7 +956,7 @@ test.describe("the zones of a street", () => {
   });
 
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
+    await expect(planBoundaries(page)).toHaveCount(0);
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing .iso-section")).toHaveCount(0);
     await expect(page.locator("#drawing .iso-across")).toHaveCount(0);
@@ -963,11 +972,10 @@ test.describe("the zones of a street", () => {
     );
   });
 
-  test("the merge choice takes the focus and gives it back to the strip", async ({ page }) => {
-    const length = await streetLengthM(page);
-    test.skip(length < 15, "the street is too short for three zones");
-    await splitInto(page, 3);
-    await page.locator("#zone-1").click();
+  test("the merge choice takes the focus and gives it back to the plan", async ({ page }) => {
+    test.skip((await streetLength(page)) < 15, "the street is too short for three stretches");
+    await makeStretches(page, 3);
+    await pickRunAt(page, Math.floor((await streetLength(page)) / 2));
     await selectFirstPiece(page);
     await page.keyboard.press("-");
     // the piece's details show: the zone's commands are one step up the panel's path
@@ -975,31 +983,15 @@ test.describe("the zones of a street", () => {
     await page.locator("#zone-merge-prev").click();
     await expect(page.locator("#zone-keep-this")).toBeFocused();
     await page.locator("#zone-keep-this").click();
-    await expect(page.locator("#zone-strip")).toBeFocused();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(page.locator("#plan-point")).toBeFocused();
+    await expect(planBoundaries(page)).toHaveCount(1);
   });
 
-  test("a merge of zones with the same section, made by keyboard, leaves the focus on the strip", async ({ page }) => {
-    const length = await streetLengthM(page);
-    test.skip(length < 15, "the street is too short for three zones");
-    await splitInto(page, 3);
-    await page.locator("#zone-1").click();
-    await page.locator("#zone-merge-prev").focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await expect(page.locator("#zone-strip")).toBeFocused();
-    // the last merge takes the commands that need two zones away: the focus is still on the strip
-    await page.locator("#zone-merge-next").focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
-    await expect(page.locator("#zone-strip")).toBeFocused();
-  });
-
-  test("the zones are in French when the page is", async ({ page }) => {
+  test("the plan is in French when the page is", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.locator('[data-lang="fr-CA"]').click();
-    await expect(page.locator("#zone-strip")).toHaveAttribute("aria-label", /Zones de la rue/);
-    await expect(page.locator("#zone-0")).toHaveAttribute("aria-label", /de long/);
+    await expect(page.locator("#plan")).toHaveAttribute("aria-label", /^La rue de sa première extrémité à sa dernière/);
+    await expect(picked(page)).toHaveText(/^Toute la rue, /);
   });
 });
 
@@ -1013,7 +1005,7 @@ test("a street cut at both ends says it cannot be split", async ({ page }) => {
   );
   expect(hot).toMatch(/^s-\d+$/);
   await page.goto(`/street.html?street=${hot.slice(2)}`);
-  await expect(page.locator("#zone-strip")).toBeVisible();
+  await expect(page.locator("#plan")).toBeVisible();
   await expect(page.locator("#zone-split")).toHaveAttribute("aria-disabled", "true");
   await expect(page.locator("#zone-split-why")).toContainText("cut by the edge of the map");
 });

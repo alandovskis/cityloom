@@ -3,16 +3,16 @@
 //! The edit is read as the difference between the section before and after it (the same section, so its pieces keep
 //! their uids except the ones added or removed) and made again on the target section, on each piece's counterpart there
 //! (`counterpart`: by uid, then by kind left to right). Replay never refuses: refusals come from the edit on the shown
-//! section alone. It reports whether a changed, removed or moved piece had no counterpart in the target.
+//! section alone. It reports the kind of a changed, removed or moved piece that had no counterpart in the target.
 
 use super::Segment;
 use super::matching::{counterpart, rising};
 
-/// The target section after the replay, and whether some of the edit found nowhere to land in it.
+/// The target section after the replay, and the kind of the first piece of the edit that found nowhere to land in it.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Replayed {
     pub section: Vec<Segment>,
-    pub missed: bool,
+    pub missed: Option<usize>,
 }
 
 /// Makes the edit that turned `before` into `after` on `target`.
@@ -26,12 +26,12 @@ pub(super) struct Replayed {
 /// - A piece the edit moved (its order among the pieces kept changed) has its counterpart placed in the same way.
 /// - A piece whose kind the edit changed is then brought inside what the new kind allows (`fit_to_kind`).
 /// - A piece with no counterpart leaves the target as it was for that piece; when the edit changed, removed or moved
-///   it, the replay `missed`.
+///   it, the replay `missed` that piece's kind (the first such piece's).
 pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) -> Replayed {
     let to_target = counterpart(before, target);
     let to_after: Vec<Option<usize>> = before.iter().map(|b| after.iter().position(|a| a.uid == b.uid)).collect();
     let moved = moved(&to_after);
-    let mut missed = false;
+    let mut missed = None;
     let mut section = target.to_vec();
     // For each piece of the target: the piece of `after` it now stands for, and whether it leaves its place.
     let mut stands_for: Vec<Option<usize>> = vec![None; target.len()];
@@ -41,7 +41,11 @@ pub(super) fn replay(before: &[Segment], after: &[Segment], target: &[Segment]) 
     for (i, b) in before.iter().enumerate() {
         let edited = moved[i] || to_after[i].is_none_or(|a| after[a] != *b);
         match (to_target[i], to_after[i]) {
-            (None, _) => missed |= edited,
+            (None, _) => {
+                if edited && missed.is_none() {
+                    missed = Some(b.kind);
+                }
+            }
             (Some(t), None) => lifted[t] = true,
             (Some(t), Some(a)) => {
                 carry(&mut section[t], b, &after[a]);
@@ -165,7 +169,7 @@ mod tests {
         let out = replay(&before, &after, &target);
         assert_eq!(widths(&out.section), vec![3000, 3200, 2200]);
         assert_eq!(uids(&out.section), vec![1, 2, 3]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -178,7 +182,7 @@ mod tests {
         let out = replay(&before, &after, &target);
         assert_eq!(widths(&out.section), vec![3000, 3200, 2200]);
         assert_eq!(uids(&out.section), vec![11, 12, 13]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -204,7 +208,7 @@ mod tests {
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 9, 12, 13, 14]);
         assert_eq!(out.section[1], after[1]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -214,7 +218,7 @@ mod tests {
         let target = vec![seg(11, "parking", 2400), seg(12, "sidewalk", 1800), seg(13, "travel", 3200)];
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 9, 12, 13]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -233,12 +237,12 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2000), seg(13, "travel", 3200)];
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 13]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
 
         let lacking = vec![seg(11, "sidewalk", 1800), seg(13, "travel", 3200)];
         let out = replay(&before, &after, &lacking);
         assert_eq!(out.section, lacking);
-        assert!(out.missed);
+        assert!(out.missed.is_some());
     }
 
     #[test]
@@ -249,7 +253,7 @@ mod tests {
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 13, 14, 12]);
         assert_eq!(widths(&out.section), vec![1800, 2000, 3200, 1800]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -260,7 +264,7 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(13, "travel", 3200)];
         let out = replay(&before, &after, &target);
         assert_eq!(out.section, target);
-        assert!(out.missed);
+        assert!(out.missed.is_some());
     }
 
     #[test]
@@ -271,7 +275,7 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(13, "travel", 3500)];
         let out = replay(&before, &after, &target);
         assert_eq!(widths(&out.section), vec![1800, 3200]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -281,7 +285,7 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(13, "parking", 2000), seg(14, "travel", 3200)];
         let out = replay(&before, &after, &target);
         assert_eq!(out.section, target);
-        assert!(out.missed);
+        assert!(out.missed.is_some());
     }
 
     #[test]
@@ -296,7 +300,7 @@ mod tests {
         assert_eq!((bike.material, bike.curb, bike.direction), (after[1].material, after[1].curb, after[1].direction));
         assert_eq!(out.section[0], target[0]);
         assert_eq!(out.section[2], target[2]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -313,7 +317,7 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(12, "parking", 2400), seg(14, "travel", 3200), seg(15, "sidewalk", 2200)];
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 9, 12, 14, 15]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]
@@ -323,7 +327,7 @@ mod tests {
         let target = vec![seg(11, "sidewalk", 1800), seg(12, "travel", 3200), seg(13, "parking", 2400)];
         let out = replay(&before, &after, &target);
         assert_eq!(uids(&out.section), vec![11, 12, 13, 9]);
-        assert!(!out.missed);
+        assert_eq!(out.missed, None);
     }
 
     #[test]

@@ -216,10 +216,10 @@ export async function addFromMenu(page: Page, name: string): Promise<void> {
   await menuItem(page, name).click();
 }
 
-/** The length of the street in metres, from the label of its only zone. */
-export async function streetLengthM(page: Page) {
-  const label = (await page.locator("#zone-0").getAttribute("aria-label")) ?? "";
-  return Number(/([\d.]+) m long/.exec(label)?.[1]);
+/** The length of the street in metres, from the plan's drawing. */
+export async function streetLength(page: Page) {
+  const mm = await page.locator("#plan svg").getAttribute("data-length-mm");
+  return Number(mm) / 1000;
 }
 
 /** Shows the Street level of the street page's details panel (the speed limit, the standards): the first step of the
@@ -230,36 +230,95 @@ export async function showStreetLevel(page: Page) {
   await expect(page.locator("#p-street")).toBeVisible();
 }
 
-/** Shows the selected zone's commands in the details panel, by choosing that zone again in the zone strip. */
+/** Shows the commands of the zone the pick starts in, with the button the Street level has for them. */
 export async function showZoneLevel(page: Page) {
-  await page.locator('#zone-strip [role="option"][aria-selected="true"]').click();
+  await showStreetLevel(page);
+  await page.locator("#zone-entry").click();
   await expect(page.locator("#p-zone")).toBeVisible();
 }
 
-/** Cuts the street into `count` zones with the Split command, at whole metres, evenly. The street needs room for
- *  them (5 m a zone): the test names the shortest it can use. */
-export async function splitInto(page: Page, count: number) {
-  await showZoneLevel(page);
-  const length = await streetLengthM(page);
-  const step = Math.floor(length / count);
-  expect(step, `a street of ${length} m is too short for ${count} zones`).toBeGreaterThanOrEqual(5);
-  for (let k = 1; k < count; k++) {
-    await page.locator("#zone-split-at").fill(String(k * step));
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(k + 1);
-  }
+/** Presses `key` `times` times. */
+async function press(page: Page, key: string, times: number) {
+  for (let k = 0; k < times; k++) await page.keyboard.press(key);
 }
 
-/** Opens the first street of the city with a real end to measure from (it has a raised-tables strip, which needs the
- *  zones' anchor) that is at least `minM` metres long. */
+/** Moves the plan's point to `atM` metres from its left end, from the keyboard (whole metres). */
+async function pointTo(page: Page, atM: number) {
+  await page.locator("#plan-point").focus();
+  await page.keyboard.press("Home");
+  await press(page, "PageDown", Math.floor(atM / 10));
+  await press(page, "ArrowRight", atM % 10);
+  await expect(page.locator("#plan-point")).toHaveAttribute("aria-valuenow", String(atM));
+}
+
+/** Picks the stretch from `fromM` to `toM` metres from the plan's left end with the keyboard: the point to `fromM`,
+ *  then Shift and the arrows to `toM`. */
+export async function pickStretch(page: Page, fromM: number, toM: number) {
+  await pointTo(page, fromM);
+  const by = toM - fromM;
+  await press(page, "Shift+PageDown", Math.floor(by / 10));
+  await press(page, "Shift+ArrowRight", by % 10);
+}
+
+/** Picks the stretch from `fromM` metres to the plan's right end with the keyboard (Shift+End). */
+export async function pickToEnd(page: Page, fromM: number) {
+  await pointTo(page, fromM);
+  await page.keyboard.press("Shift+End");
+}
+
+/** Picks the run at `atM` metres from the plan's left end with the keyboard (Enter at the point). */
+export async function pickRunAt(page: Page, atM: number) {
+  await pointTo(page, atM);
+  await page.keyboard.press("Enter");
+}
+
+/** Picks the whole street with the keyboard (Escape on the plan's point). */
+export async function pickWhole(page: Page) {
+  await page.locator("#plan-point").focus();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#plan-picked")).toHaveText(/^The whole street/);
+}
+
+/** The boundaries between the runs of the street, as the plan draws them. */
+export const planBoundaries = (page: Page) => page.locator("#plan .plan-boundary");
+
+/** Makes `count` stretches of whole metres, evenly, by picking each and giving it a speed limit its neighbours do not
+ *  have (20 and 30 km/h in turn), so they stay apart. The street needs room for them (5 m a stretch). The whole street
+ *  is picked again at the end. */
+export async function makeStretches(page: Page, count: number) {
+  const length = await streetLength(page);
+  const step = Math.floor(length / count);
+  expect(step, `a street of ${length} m is too short for ${count} stretches`).toBeGreaterThanOrEqual(5);
+  for (let k = 0; k < count; k++) {
+    if (k < count - 1) await pickStretch(page, k * step, (k + 1) * step);
+    else await pickToEnd(page, k * step);
+    await showStreetLevel(page);
+    await page.locator("#speed-limit").selectOption(k % 2 === 0 ? "20" : "30");
+  }
+  await expect(planBoundaries(page)).toHaveCount(count - 1);
+  await pickWhole(page);
+}
+
+/** Chooses a cell of a row along the street (curbside, stops, raised elements): the rows are folded under the plan
+ *  until the keyboard is in one, so its listbox takes the focus first, then the cell is pressed. */
+export async function chooseCell(page: Page, cell: Locator) {
+  await cell.locator("xpath=ancestor::*[@role='listbox'][1]").focus();
+  await cell.click();
+}
+
+/** The thing a row's cell `id` stands for, as the plan draws it. */
+export const planThing = (page: Page, id: string) => page.locator(`#plan [data-thing="${id}"]`);
+
+/** Opens the first street of the city with a real end to measure from (it has a raised-tables strip, which needs an
+ *  end to measure from) that is at least `minM` metres long. */
 export async function openAnchoredStreet(page: Page, minM: number) {
   await page.goto("/map.html");
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     if ((await page.locator("#calming-strip").count()) === 0) continue;
-    if ((await streetLengthM(page)) >= minM) return href;
+    if ((await streetLength(page)) >= minM) return href;
   }
   throw new Error(`no street of ${minM} m or more with a real end`);
 }
@@ -275,14 +334,14 @@ export async function openPedestrianStreet(page: Page) {
 }
 
 /** Opens the first street of the city that is at least `minM` metres long (the first is about 40 m, too short for
- *  many zones of 5 m). */
+ *  many stretches of 5 m). */
 export async function openLongStreet(page: Page, minM: number) {
   await page.goto("/map.html");
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) >= minM) return href;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await streetLength(page)) >= minM) return href;
   }
   throw new Error(`no street of ${minM} m or more`);
 }

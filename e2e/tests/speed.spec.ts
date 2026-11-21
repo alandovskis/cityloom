@@ -1,6 +1,17 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openAnchoredStreet, placesOnMap, showStreetLevel, splitInto, test } from "./fixtures";
+import {
+  chooseCell,
+  expect,
+  openAnchoredStreet,
+  pickRunAt,
+  pickToEnd,
+  placesOnMap,
+  planBoundaries,
+  showStreetLevel,
+  streetLength,
+  test,
+} from "./fixtures";
 
 const speed = (page: Page) => page.locator("#speed-limit");
 /** The speed limit sign the 2.5D used to draw: it is gone, the limit is set at the details panel's Street level. */
@@ -153,10 +164,10 @@ test.describe("the details panel's path", () => {
     await page.goto("/map.html");
     for (const href of (await placesOnMap(page)).streets) {
       await page.goto("/" + href);
-      await expect(page.locator("#zone-0")).toBeVisible();
+      await expect(page.locator("#plan svg")).toBeVisible();
       if ((await page.locator("#curb-strip-right").count()) > 0) break;
     }
-    await page.locator("#curb-right-0").click();
+    await chooseCell(page, page.locator("#curb-right-0"));
     await expect(page.locator("#p-curb")).toBeVisible();
     await expect(page.locator("#curb-use")).toBeVisible();
     await expect(path(page).locator("li")).toHaveCount(2);
@@ -164,42 +175,41 @@ test.describe("the details panel's path", () => {
   });
 });
 
-// A zone has a speed limit of its own (#148): the select at the Street level sets the selected zone's, and a zone may
-// follow the street's again.
-test.describe("a zone's speed limit", () => {
+// A stretch has a speed limit of its own (#148): the select at the Street level sets the picked stretch's, and a stretch
+// may follow the street's again.
+test.describe("a stretch's speed limit", () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test("is set for the selected zone only, the others follow the street, and Undo takes it back", async ({ page }) => {
+  test("is set for the picked stretch only, the rest follows the street, and Undo takes it back", async ({ page }) => {
     await openAnchoredStreet(page, 30);
-    await splitInto(page, 2);
+    const half = Math.floor((await streetLength(page)) / 2);
+    await pickToEnd(page, half);
     await showStreetLevel(page);
-    await expect(speed(page).locator("option").first()).toHaveText(/^Same as the street/);
-    await expect(speed(page)).toHaveValue("street");
-    const own = await speed(page).locator("option").first().textContent();
-    expect(own).toMatch(/^Same as the street: (\d+ km\/h|not set)$/);
+    // One run: the street's own speed limit is the one shown, and there is no street to follow.
+    await expect(speed(page).locator("option").first()).toHaveText("Not set");
+    const street = await speed(page).inputValue();
 
-    // The new zone is selected; give it a speed the street does not have.
-    const chosen = own?.includes("20 km/h") ? "30" : "20";
+    // Give the picked stretch a speed the street does not have: it becomes a run of its own.
+    const chosen = street === "20" ? "30" : "20";
     await speed(page).selectOption(chosen);
     await expect(speed(page)).toHaveValue(chosen);
-    await page.locator("#zone-0").click();
+    await expect(planBoundaries(page)).toHaveCount(1);
+    const own = await speed(page).locator("option").first().textContent();
+    expect(own).toMatch(/^Same as the street: (\d+ km\/h|not set)$/);
+    await pickRunAt(page, 1);
     await expect(speed(page)).toHaveValue("street");
-    await page.locator("#zone-1").click();
+    await pickRunAt(page, half + 1);
     await expect(speed(page)).toHaveValue(chosen);
 
-    // Following the street again, the zone looks like its neighbour, and neighbours alike join: one zone is left, so
-    // there is no "Same as the street" to choose and the select shows the street's own speed limit.
-    const streetValue = /(\d+) km\/h/.exec(own ?? "")?.[1] ?? "";
-    const zones = page.locator('#zone-strip [role="option"]');
+    // Following the street again, the stretch is the same as the rest and joins it.
     await showStreetLevel(page);
     await speed(page).selectOption("street");
-    await expect(zones).toHaveCount(1);
-    await expect(speed(page)).toHaveValue(streetValue);
-    // Undo takes back the edit and its join, then the speed limit.
+    await expect(planBoundaries(page)).toHaveCount(0);
+    // One run again: the street's own speed limit is shown.
+    await expect(speed(page)).toHaveValue(street);
     await page.locator("#undo").click();
-    await expect(zones).toHaveCount(2);
-    await expect(speed(page)).toHaveValue(chosen);
+    await expect(planBoundaries(page)).toHaveCount(1);
     await page.locator("#undo").click();
-    await expect(speed(page)).toHaveValue("street");
+    await expect(planBoundaries(page)).toHaveCount(0);
   });
 });

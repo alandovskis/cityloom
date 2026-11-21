@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import {
+  chooseCell,
   addFromMenu,
   expect,
   live,
@@ -9,8 +10,10 @@ import {
   openLongStreet,
   openStreet,
   placesOnMap,
-  showZoneLevel,
-  streetLengthM,
+  makeStretches,
+  pickToEnd,
+  planBoundaries,
+  streetLength,
   test,
   transform,
 } from "./fixtures";
@@ -542,13 +545,11 @@ const ticks = (page: Page) =>
       });
   });
 
-/** Splits a long street of the city in two on its page and goes back to the map. Says the street's name. */
+/** Makes two stretches of a long street of the city on its page and goes back to the map. Says the street's name. */
 async function splitOneStreet(page: Page) {
   await openLongStreet(page, 20);
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
-  await showZoneLevel(page);
-  await page.locator("#zone-split").click();
-  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+  await makeStretches(page, 2);
   await page.goto("/map.html");
   await mapReady(page);
   return name;
@@ -625,11 +626,9 @@ test.describe("the zone boundaries on the map", () => {
 
   test("a boundary with a transition is a band along the street", async ({ page }) => {
     await openLongStreet(page, 20);
-    await showZoneLevel(page);
-    await page.locator("#zone-split").click();
-    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await page.locator("#zone-1").click();
+    await pickToEnd(page, Math.floor((await streetLength(page)) / 2));
     await addFromMenu(page, "Driving lane");
+    await expect(planBoundaries(page)).toHaveCount(1);
     await page.goto("/map.html"); // leaving the page flushes the debounced write
     await mapReady(page);
     await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(MERGED_BOUNDARIES + 1);
@@ -692,10 +691,10 @@ async function openProgrammeStreet(page: Page, minM: number) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     if ((await page.locator("#stop-strip-right").count()) === 0) continue;
     if ((await page.locator("#curb-strip-right").count()) === 0) continue;
-    if ((await streetLengthM(page)) >= minM) return href.split("=")[1];
+    if ((await streetLength(page)) >= minM) return href.split("=")[1];
   }
   throw new Error(`no street of ${minM} m or more with a curbside strip and a Stops row`);
 }
@@ -707,7 +706,7 @@ async function addPatio(page: Page, spacerM = 0) {
   const cells = page.locator("#curb-strip-right").locator('[role="option"]');
   let count = 1;
   const add = async (cell: number, use: string, metres: number) => {
-    await cells.nth(cell).click();
+    await chooseCell(page, cells.nth(cell));
     await page.locator("#curb-use").selectOption(use);
     await page.locator("#curb-length").fill(String(metres));
     await page.locator("#curb-add").click();
@@ -720,13 +719,13 @@ async function addPatio(page: Page, spacerM = 0) {
 /** Adds a named stop of 12 m at the start of the right Stops row. */
 async function addNamedStop(page: Page, name: string) {
   const cells = page.locator("#stop-strip-right").locator('[role="option"]');
-  await page.locator("#stop-right-0").click();
+  await chooseCell(page, page.locator("#stop-right-0"));
   await addFromMenu(page, "Curb extension");
-  await page.locator("#stop-right-0").click();
+  await chooseCell(page, page.locator("#stop-right-0"));
   await page.locator("#stop-length").fill("12");
   await page.locator("#stop-length").press("Enter");
   await expect(cells).toHaveCount(2);
-  await page.locator("#stop-right-0").click();
+  await chooseCell(page, page.locator("#stop-right-0"));
   await page.locator("#stop-name").fill(name);
   await page.locator("#stop-name").press("Enter");
   await expect(cells.nth(0)).toHaveAttribute("aria-label", new RegExp(`^${name} `));

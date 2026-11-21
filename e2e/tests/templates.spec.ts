@@ -6,6 +6,8 @@ import {
   openAnchoredStreet,
   openStreet,
   openStreetWithUnfitTemplate,
+  pickRunAt,
+  planBoundaries,
   showStreetLevel,
   test,
   transform,
@@ -81,29 +83,29 @@ test.describe("street templates", () => {
 
     test("is a zone with a lower speed and a raised table, made in one step that Undo takes back", async ({ page }) => {
       await openAnchoredStreet(page, 80);
-      const zones = page.locator('#zone-strip [role="option"]');
+      const boundaries = planBoundaries(page);
       const table = page.locator("#calming-strip").locator('[role="option"]');
-      await expect(zones).toHaveCount(1);
+      await expect(boundaries).toHaveCount(0);
       await fasterThanSchool(page);
       await transform(page, '[data-template="school"]', "templates");
 
-      await expect(zones).toHaveCount(3);
-      await expect(page.locator("#zone-1")).toHaveAttribute("aria-selected", "true");
+      await expect(boundaries).toHaveCount(2);
+      await expect(page.locator("#plan-picked"), "the school stretch is picked").toHaveText(/^From /);
       await expect(table).toHaveCount(3);
       await expect(table.nth(1)).toHaveAttribute("aria-label", /Raised table/);
       await expect(live(page)).toContainText("The school zone runs from");
       await expect(live(page)).toContainText("The speed limit there is 30 km/h.");
       await expect(live(page)).toContainText("A raised table is at");
 
-      // The zone's speed is the Street level's, for the selected zone; the other zones follow the street.
+      // The stretch's speed is the Street level's, for the picked stretch; the rest of the street follows the street.
       await showStreetLevel(page);
       await expect(page.locator("#speed-limit")).toHaveValue("30");
-      await page.locator("#zone-0").click();
+      await pickRunAt(page, 1);
       await expect(page.locator("#speed-limit")).toHaveValue("street");
 
       // One step: a single Undo takes the zones, the speed and the table back.
       await page.locator("#undo").click();
-      await expect(zones).toHaveCount(1);
+      await expect(boundaries).toHaveCount(0);
       await expect(table).toHaveCount(1);
       await showStreetLevel(page);
       await expect(page.locator("#speed-limit")).toHaveValue("50");

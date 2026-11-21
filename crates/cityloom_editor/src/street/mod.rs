@@ -89,7 +89,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("h-drawing", view! { <view::page::DrawingHeading vm=vm.clone()/> }.into_any());
     mount("street", view! { <view::page::StreetHeader vm=vm.clone() ends=ends.clone() neighbours=neighbours/> }.into_any());
     mount("pieces-slot", view! { <view::piece_list::PieceList vm=vm.clone()/> }.into_any());
-    mount("zones-slot", view! { <view::strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("zones-slot", view! { <view::plan::Plan vm=vm.clone()/> }.into_any());
     mount("curb-slot", view! { <view::curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
     mount("panel-path-slot", view! { <view::panel_path::PanelPath vm=vm.clone()/> }.into_any());
     mount("zone-entry-slot", view! { <view::panel_path::ZoneEntry vm=vm.clone()/> }.into_any());

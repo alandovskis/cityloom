@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import {
+  chooseCell,
+  planThing,
   addFromMenu,
   EDITS_VERSION,
   expect,
@@ -8,11 +10,11 @@ import {
   menuItem,
   openPedestrianStreet,
   placesOnMap,
-  streetLengthM,
+  streetLength,
   test,
 } from "./fixtures";
 
-// The transit stops: the Stops rows under the zones, the checks, the 2.5D and the saved document.
+// The transit stops: the Stops rows under the plan, the checks, the 2.5D and the saved document.
 
 const ROWS = [
   "Stops have a lane for the bus",
@@ -31,10 +33,10 @@ async function openStopStreet(page: Page, minM: number, curbside = true) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     if ((await page.locator("#stop-strip-right").count()) === 0) continue;
     if (curbside && (await page.locator(".curb-strip").count()) === 0) continue;
-    if ((await streetLengthM(page)) >= minM) return;
+    if ((await streetLength(page)) >= minM) return;
   }
   throw new Error(`no street of ${minM} m or more with a Stops row${curbside ? " and a curbside strip" : ""}`);
 }
@@ -42,9 +44,9 @@ async function openStopStreet(page: Page, minM: number, curbside = true) {
 /** Chooses cell `cell` of the right Stops row, adds a stop of `kind` there from the Add a piece menu (8 m), then
  *  gives it `metres`. */
 async function addStop(page: Page, cell: number, metres: number, kind = "Curb extension") {
-  await page.locator("#stop-right-" + cell).click();
+  await chooseCell(page, page.locator("#stop-right-" + cell));
   await addFromMenu(page, kind);
-  await page.locator("#stop-right-" + cell).click();
+  await chooseCell(page, page.locator("#stop-right-" + cell));
   await page.locator("#stop-length").fill(String(metres));
   await page.locator("#stop-length").press("Enter");
 }
@@ -87,7 +89,7 @@ test.describe("the Stops row", () => {
     // Kept: the document is EDITS_VERSION (the import stamp) and the stop is still there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /12\.0 m long/);
 
     // Undo takes it away.
@@ -99,13 +101,13 @@ test.describe("the Stops row", () => {
     await openStopStreet(page, 20);
     const cells = page.locator("#stop-strip-right").locator('[role="option"]');
     await addStop(page, 0, 12);
-    await page.locator("#stop-right-0").click();
+    await chooseCell(page, page.locator("#stop-right-0"));
     await page.locator("#stop-name").fill("Mont-Royal");
     await page.locator("#stop-name").press("Enter");
     await expect(cells.nth(0)).toHaveAttribute("aria-label", /^Mont-Royal \(curb extension\), /);
     await page.reload();
     await expect(page.locator("#stop-right-0")).toHaveAttribute("aria-label", /^Mont-Royal \(curb extension\), /);
-    await page.locator("#stop-right-0").click();
+    await chooseCell(page, page.locator("#stop-right-0"));
     await page.locator("#stop-remove").click();
     await expect(cells).toHaveCount(1);
   });
@@ -117,7 +119,7 @@ test.describe("the Stops row", () => {
     await addStop(page, 0, 12);
     await expect(cells).toHaveCount(2);
 
-    await cells.nth(0).click();
+    await chooseCell(page, cells.nth(0));
     await strip.focus();
     await expect(strip).toHaveAttribute("aria-activedescendant", /-0$/);
     await page.keyboard.press("ArrowRight");
@@ -144,8 +146,10 @@ test.describe("the Stops row", () => {
     const where = async () => await used().getAttribute("aria-label");
     const before = await where();
 
-    await used().scrollIntoViewIfNeeded();
-    const box = (await used().boundingBox())!;
+    // The plan draws the stop; a drag on it moves it.
+    const thing = planThing(page, (await used().getAttribute("id"))!);
+    await page.locator("#plan").scrollIntoViewIfNeeded();
+    const box = (await thing.boundingBox())!;
     const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
 
     // Escape during a drag puts the stop back.

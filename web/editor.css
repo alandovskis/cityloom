@@ -43,13 +43,20 @@
   /* The outline of a rain garden or a bioswale in 2.5D, drawn inside its dark fill: the same in both themes like the
      materials, 3:1 against the fill (a test in shared/contrast.rs). */
   --iso-green-edge: #bfe6d0;
-  /* The zone strip: two fills (the base section and a zone's own), the text on them, the edges between cells and
-     the chosen cell's outline; each is measured against the fills and the panel by a test in shared/contrast.rs. */
+  /* The cells of the rows along the street and of the piece list: their fill, the text on it, the edges between cells
+     and the chosen cell's outline; each is measured against the fill and the panel by a test in shared/contrast.rs. */
   --zone-fill: light-dark(#eef2f6, #262e36);
-  --zone-fill-own: light-dark(#dbe7fb, #2b3a52);
   --zone-ink: light-dark(#111827, #e8edf2);
   --zone-edge: light-dark(#536070, #9aa6b2);
   --zone-sel: light-dark(#1f5ee0, #8ab4ff);
+  /* The plan (street/view/plan/): the picked stretch, a tint of its edge's blue with a light edge on a dark casing,
+     and the plan's marks (a boundary, a cut end, a taper, a thing), a light line on a dark casing; the same in both themes like
+     the materials the bands are drawn in, so that one of each two tones is 3:1 against any material and the panel
+     (tests in shared/contrast.rs). */
+  --plan-pick-edge: #8ab4ff;
+  --plan-pick-casing: #0b1220;
+  --plan-mark: #fbfbf8;
+  --plan-mark-casing: #10151a;
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -1174,21 +1181,194 @@ svg pattern circle {
 .title-card.with-view .street-steps {
   grid-area: 3 / 1 / 4 / 3;
 }
-/* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
+/* ---- the plan: the whole street from above, first end left (street/view/plan/) ---------- */
 
-.zone-strip-section {
+/* Each band is the colour of its piece's material, over the kind's tint (`k-*`), with a faint line between bands. */
+.plan-band {
+  stroke: var(--plan-mark-casing);
+  stroke-opacity: 0.35;
+  stroke-width: 0.5;
+}
+.plan-band.mat-asphalt {
+  fill: var(--mat-asphalt);
+}
+.plan-band.mat-concrete {
+  fill: var(--mat-concrete);
+}
+.plan-band.mat-permeable {
+  fill: var(--mat-permeable);
+}
+.plan-band.mat-brick {
+  fill: var(--mat-brick);
+}
+.plan-band.mat-grass {
+  fill: var(--mat-grass);
+}
+.plan-band.mat-planted {
+  fill: var(--mat-planted);
+}
+.plan-band.mat-gravel {
+  fill: var(--mat-gravel);
+}
+.plan-band.mat-trees {
+  fill: var(--mat-trees);
+}
+.plan-band.mat-rain_garden {
+  fill: var(--mat-rain_garden);
+}
+/* The picked stretch: a tint over the bands, edged in two tones, a handle at each end. Every mark on the plan is a
+   light line over a dark casing twice its width, so one of the two is 3:1 on any band and the panel; the fills only
+   tint (shared/contrast.rs). */
+.plan-pick-casing {
+  fill: none;
+  stroke: var(--plan-pick-casing);
+  stroke-width: 4;
+}
+.plan-pick {
+  fill: var(--plan-pick-edge);
+  fill-opacity: 0.3;
+  stroke: var(--plan-pick-edge);
+  stroke-width: 2;
+}
+.plan-handle {
+  fill: var(--plan-pick-casing);
+  stroke: var(--plan-pick-edge);
+  stroke-width: 1.5;
+}
+/* A boundary between runs, a cut end, a taper (dashed, over the bands it reaches) and a thing along the street. */
+.plan-boundary-casing,
+.plan-cut-casing,
+.plan-taper-casing,
+.plan-thing-casing {
+  fill: none;
+  stroke: var(--plan-mark-casing);
+  stroke-width: 4;
+}
+.plan-boundary-line,
+.plan-cut-line {
+  fill: none;
+  stroke: var(--plan-mark);
+  stroke-width: 2;
+}
+.plan-taper {
+  fill: var(--plan-mark);
+  fill-opacity: 0.15;
+  stroke: var(--plan-mark);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+.plan-thing-mark {
+  fill: var(--plan-mark);
+  fill-opacity: 0.6;
+  stroke: var(--plan-mark);
+  stroke-width: 2;
+}
+/* The chosen thing is edged in the pick's two tones. */
+.plan-chosen .plan-thing-casing {
+  stroke: var(--plan-pick-casing);
+  stroke-width: 4;
+}
+.plan-chosen .plan-thing-mark {
+  stroke: var(--plan-pick-edge);
+  stroke-width: 2;
+}
+
+/* The plan on the street page (street/view/plan/component.rs): the street's ends above it, the drawing in a box that
+   scrolls sideways for a street too long to fit at the plan's smallest scale (never the page), the stretch picked under
+   it. */
+.plan-section {
   min-width: 0;
   max-width: 100%;
-  /* one line on a desktop width: the caption beside the strip (it wraps above it on a narrow window) */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 12px;
   padding: 4px 12px;
   border-radius: var(--r-card);
   background: var(--panel);
   box-shadow: var(--shadow-soft);
 }
+.plan-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 2px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.plan-box {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* room for the point's focus ring at the plan's edges */
+  padding: 4px 0;
+}
+.plan-canvas {
+  position: relative;
+  /* a sideways drag picks; the page still scrolls up and down over the plan */
+  touch-action: pan-y;
+  user-select: none;
+  cursor: crosshair;
+}
+.plan-canvas[data-hover="edge"] {
+  cursor: ew-resize;
+}
+.plan-canvas[data-hover="thing"] {
+  cursor: grab;
+}
+.plan-svg svg {
+  display: block;
+}
+/* The keyboard's point along the street: a target wide, a line in the pick's two tones down its middle, seen while it
+   has the focus; presses go through it to the plan. */
+#plan-point {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  margin-left: -12px;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(var(--plan-pick-edge), var(--plan-pick-edge)) center / 2px 100% no-repeat,
+    linear-gradient(var(--plan-pick-casing), var(--plan-pick-casing)) center / 6px 100% no-repeat;
+}
+#plan-point:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--plan-pick-edge);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--plan-pick-casing);
+}
+.plan-picked {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.plan-notice:empty {
+  margin: 0;
+}
+.plan-notice {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+/* The rows of what stands along the street, under the plan: out of sight (the plan draws what they hold) until the
+   keyboard is in one of them, then shown as they always were. */
+.plan-rows {
+  display: contents;
+}
+.plan-rows:not(:focus-within) {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- the rows along the street (curbside, stops, raised elements, green): a bar for the street's length, a cell per
+   thing and per free stretch ---- */
+
 @media (min-width: 900px) {
   .zone-caption {
     /* beside the strip, never taking more than its share: a long street name is cut with an ellipsis (the whole
@@ -1209,8 +1389,7 @@ svg pattern circle {
 .curb-strip,
 .stop-strip,
 .calming-strip,
-.green-strip,
-.zone-strip {
+.green-strip {
   flex: 1 1 14em;
   min-width: 0;
   display: flex;
@@ -1223,7 +1402,6 @@ svg pattern circle {
   padding: 3px;
   border-radius: 6px;
 }
-.zone-strip:focus-visible,
 .piece-list:focus-visible,
 .curb-strip:focus-visible,
 .stop-strip:focus-visible,
@@ -1234,10 +1412,9 @@ svg pattern circle {
 }
 .curb-cell,
 .stop-cell,
-.calming-cell,
-.zone-cell {
+.calming-cell {
   flex: 1 1 0;
-  /* the target size (WCAG 2.5.8): a short zone is still 24 px wide */
+  /* the target size (WCAG 2.5.8): a short thing is still 24 px wide */
   min-width: 24px;
   display: flex;
   align-items: center;
@@ -1266,7 +1443,7 @@ svg pattern circle {
   border-radius: 6px;
 }
 /* A cell is as wide as its words, a row of them wrapping at a narrow window; each is 24 px at least both ways
-   (WCAG 2.5.8). The selected one has the zone strip's heavy outline, so it is not shown by colour alone. */
+   (WCAG 2.5.8). The selected one has the rows' heavy outline, so it is not shown by colour alone. */
 .piece-cell {
   display: flex;
   align-items: center;
@@ -1283,18 +1460,6 @@ svg pattern circle {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.zone-cell.own {
-  background: var(--zone-fill-own);
-  /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
-  border-top-width: 5px;
-}
-.zone-cell[aria-disabled="true"] {
-  cursor: default;
-  /* a cut-off zone has a dashed outline, which forced colours keep */
-  border-style: dashed;
-  background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
-}
-.zone-cell[aria-selected="true"],
 .piece-cell[aria-selected="true"],
 .curb-cell[aria-selected="true"],
 .stop-cell[aria-selected="true"],
@@ -1304,8 +1469,7 @@ svg pattern circle {
   font-weight: 600;
 }
 .stop-name,
-.calming-name,
-.zone-name {
+.calming-name {
   min-width: 0;
   padding: 0 8px;
   overflow: hidden;
@@ -1313,24 +1477,7 @@ svg pattern circle {
   white-space: nowrap;
   font-size: 13px;
 }
-.zone-handle {
-  flex: none;
-  /* the target size (WCAG 2.5.8): 24 px wide between the cells, with the boundary drawn as a line down its middle */
-  width: 24px;
-  background: linear-gradient(var(--zone-edge), var(--zone-edge)) center / 3px 70% no-repeat;
-  cursor: ew-resize;
-  touch-action: none;
-}
-.zone-notice:empty {
-  margin: 0;
-}
-.zone-notice {
-  flex-basis: 100%;
-  margin: 6px 0 0;
-  color: var(--ink);
-  font-size: 13px;
-}
-/* ---- the curbside strips, under the zone strip: a row for each side, a cell per use and per gap ---- */
+/* ---- the curbside strips, under the plan: a row for each side, a cell per use and per gap ---- */
 
 .curb-strip-section {
   min-width: 0;
@@ -1662,7 +1809,6 @@ svg pattern circle {
   font-weight: 700;
 }
 @media (forced-colors: active) {
-  .zone-cell,
   .curb-cell,
   .stop-cell,
   .calming-cell {
@@ -1678,21 +1824,10 @@ svg pattern circle {
   .calming-cell.failing {
     border-bottom-width: 5px;
   }
-  .zone-cell.own {
-    border-top-width: 5px;
-  }
-  .zone-cell[aria-disabled="true"] {
-    border-style: dashed;
-    background-image: none;
-  }
-  .zone-cell[aria-selected="true"],
   .curb-cell[aria-selected="true"],
   .stop-cell[aria-selected="true"],
   .calming-cell[aria-selected="true"] {
     outline-color: Highlight;
-  }
-  .zone-handle {
-    background-image: linear-gradient(CanvasText, CanvasText);
   }
 }
 #drawing .mv {

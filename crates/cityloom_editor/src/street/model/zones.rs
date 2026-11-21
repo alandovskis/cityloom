@@ -324,10 +324,19 @@ impl Editor {
     }
 
     /// Moves the start of the selected zone to `to_mm`, keeping both neighbours at least `MIN_ZONE_MM` long. Inside a
-    /// gesture it is shown as it goes and recorded as one revision at the end.
+    /// gesture it is shown as it goes and recorded as one revision at the end. The pick is the zone's span after it.
     pub fn move_boundary(&mut self, to_mm: i32) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame(true)?;
         let z = self.zone;
+        self.move_boundary_of(z, to_mm)?;
+        // The pick is the zone's span, which has moved with its start.
+        self.follow_zone(z);
+        Ok(())
+    }
+
+    /// Moves the start of zone `z` to `to_mm`, as `move_boundary` does, leaving the pick (clamped once recorded) and
+    /// the selected piece alone: what the plan's boundary drag moves.
+    pub fn move_boundary_of(&mut self, z: usize, to_mm: i32) -> Result<(), ZoneRefusal> {
+        let frame = self.structure_frame(true)?;
         let content = &self.states[self.cursor].content;
         if z == 0 || z >= content.zones.len() {
             return Err(ZoneRefusal::NoBoundary);
@@ -357,8 +366,6 @@ impl Editor {
         } else {
             self.edit_content(label, set);
         }
-        // The pick is the zone's span, which has moved with its start.
-        self.follow_zone(z);
         Ok(())
     }
 

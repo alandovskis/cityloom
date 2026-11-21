@@ -74,6 +74,50 @@ pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Op
     Some(if alt { (ZoneAction::Nudge(d * if shift { 10_000 } else { 1_000 }), true) } else { (ZoneAction::Select(d), true) })
 }
 
+/// What a key does on the plan's point. Distances are millimetres along the plan, rightward positive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlanKey {
+    /// Move the point along.
+    Move(i32),
+    /// Move the point to the plan's left end, or its right end (`true`).
+    To(bool),
+    /// Move the point along, picking from where the extension started to it.
+    Extend(i32),
+    /// The same to the left end, or the right end (`true`).
+    ExtendTo(bool),
+    /// Pick the run at the point.
+    PickRun,
+    /// Pick the whole street.
+    PickWhole,
+    /// Move the boundary at the pick's left end (else at its right end) along, as Alt with an arrow moved a zone's
+    /// start on the zone strip.
+    NudgeBoundary(i32),
+}
+
+/// What a key does on the plan's point: the arrows go a metre, Page Up and Page Down ten, Home and End to the ends;
+/// with Shift each of them extends the pick instead. Enter picks the run at the point, Escape the whole street. Alt
+/// with an arrow moves the boundary at the pick's end, a metre, ten with Shift.
+pub fn on_plan(key: &str, shift: bool, alt: bool) -> Option<PlanKey> {
+    let step = match key {
+        "ArrowLeft" => -1_000,
+        "ArrowRight" => 1_000,
+        "PageUp" if !alt => -10_000,
+        "PageDown" if !alt => 10_000,
+        "Home" | "End" if !alt => {
+            let last = key == "End";
+            return Some(if shift { PlanKey::ExtendTo(last) } else { PlanKey::To(last) });
+        }
+        "Enter" if !alt => return Some(PlanKey::PickRun),
+        "Escape" if !alt => return Some(PlanKey::PickWhole),
+        _ => return None,
+    };
+    Some(match (alt, shift) {
+        (true, _) => PlanKey::NudgeBoundary(if shift { step * 10 } else { step }),
+        (false, true) => PlanKey::Extend(step),
+        (false, false) => PlanKey::Move(step),
+    })
+}
+
 /// Where the arrow, Home and End keys take the focus in a list of `len` items, given the item that has it (if
 /// any): down and up wrap round, with nothing focused down goes to the first and up to the last. `None` for any
 /// other key and for an empty list.
@@ -232,6 +276,40 @@ mod tests {
     fn alt_home_and_alt_end_are_not_the_strips() {
         assert_eq!(on_strip("Home", false, true, false, false), None);
         assert_eq!(on_strip("End", true, true, false, false), None);
+    }
+
+    #[test]
+    fn on_plan_keys() {
+        let table = [
+            ("ArrowRight", false, false, Some(PlanKey::Move(1_000))),
+            ("ArrowLeft", false, false, Some(PlanKey::Move(-1_000))),
+            ("PageDown", false, false, Some(PlanKey::Move(10_000))),
+            ("PageUp", false, false, Some(PlanKey::Move(-10_000))),
+            ("Home", false, false, Some(PlanKey::To(false))),
+            ("End", false, false, Some(PlanKey::To(true))),
+            ("ArrowRight", true, false, Some(PlanKey::Extend(1_000))),
+            ("ArrowLeft", true, false, Some(PlanKey::Extend(-1_000))),
+            ("PageDown", true, false, Some(PlanKey::Extend(10_000))),
+            ("PageUp", true, false, Some(PlanKey::Extend(-10_000))),
+            ("Home", true, false, Some(PlanKey::ExtendTo(false))),
+            ("End", true, false, Some(PlanKey::ExtendTo(true))),
+            ("Enter", false, false, Some(PlanKey::PickRun)),
+            ("Escape", false, false, Some(PlanKey::PickWhole)),
+            ("ArrowLeft", false, true, Some(PlanKey::NudgeBoundary(-1_000))),
+            ("ArrowRight", false, true, Some(PlanKey::NudgeBoundary(1_000))),
+            ("ArrowLeft", true, true, Some(PlanKey::NudgeBoundary(-10_000))),
+            ("ArrowRight", true, true, Some(PlanKey::NudgeBoundary(10_000))),
+            ("Home", false, true, None),
+            ("PageDown", false, true, None),
+            ("Enter", false, true, None),
+            ("ArrowUp", false, false, None),
+            ("Tab", false, false, None),
+            ("a", false, false, None),
+            ("Delete", false, false, None),
+        ];
+        for (key, shift, alt, want) in table {
+            assert_eq!(on_plan(key, shift, alt), want, "{key} shift {shift} alt {alt}");
+        }
     }
 
     #[test]

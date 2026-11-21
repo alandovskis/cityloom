@@ -353,6 +353,26 @@ pick-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le
 pick-refused-too-short = Un tronçon doit mesurer au moins { $min }.
 pick-refused-outside = Cette position est hors de la rue.
 pick-refused-dragging = Terminez le glissement avant de choisir un autre tronçon.
+pick-refused-no-boundary = Aucune limite entre tronçons aux extrémités du tronçon choisi.
+# Ce qui est dit du tronçon choisi sur le plan (src/street/vm/text.rs, picked_said); positions depuis l’extrémité gauche du plan.
+stretch-picked = De { $from } à { $to }, { $length } de long.
+stretch-picked-differs = De { $from } à { $to }, { $length } de long : { $what }.
+stretch-whole = Toute la rue, { $length } de long.
+# Ce qui distingue un tronçon choisi de celui d’à côté, énuméré dans $what ci-dessus.
+stretch-what-added = { $kind } en plus { $side }
+stretch-what-dropped = sans { $kind } { $side }
+stretch-what-width = { $kind } de { $width } { $side }
+stretch-what-speed = une limite de { $kmh }{" "}km/h
+stretch-what-no-speed = aucune limite de vitesse
+stretch-what-pair = { $a } et { $b }
+stretch-what-more = { $a }, { $b }
+# Dit après une modification du tronçon choisi qui n’a pas pu se faire là où l’élément modifié manquait.
+edit-missed = Aucun changement de { $from } à { $to } : ce tronçon est sans { $kind }.
+# Le nom du plan pour un lecteur d’écran, et la ligne sous le plan qui nomme le tronçon choisi.
+st-plan-label = La rue de sa première extrémité à sa dernière, { $length } de long
+st-stretch = De { $from } à { $to } · { $length } de long
+# Où se trouve le point du plan au clavier, dit tant qu’il se déplace seul (src/street/vm/text.rs, point_said).
+st-point = À { $at }
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
@@ -361,18 +381,12 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
         [own] sa propre coupe
        *[base] la coupe de base
     }, { $n } sur { $total }
-zone-cut-off = Coupée par le bord de la carte
+# Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
+plan-cut = Coupée par le bord de la carte
 
 # La liste des éléments (src/street/view/piece_list.rs).
 st-pieces-heading = Éléments de la rue
 st-pieces-label = Éléments, de gauche à droite
-
-# La bande des zones (src/street/view/strip.rs).
-st-zones-heading = Zones le long de la rue
-st-zones-strip-label = Zones de la rue, du début à la fin
-st-zones-from = Origine des mesures : { $end }
-st-zones-end-first = la première extrémité
-st-zones-end-second = la seconde extrémité
 
 # The commands beside the zone strip (src/street/view/zone_tools.rs).
 zone-bad-number = Ce n’est pas un nombre.

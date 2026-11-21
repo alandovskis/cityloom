@@ -276,23 +276,21 @@ mod tests {
     }
 
     #[test]
-    fn the_zone_strip_text_selection_and_boundaries_are_measured_in_both_themes() {
+    fn the_rows_text_selection_and_edges_are_measured_in_both_themes() {
         let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let (ink, sel, edge) = (pick(&token(editor, "zone-ink"), i), pick(&token(editor, "zone-sel"), i), pick(&token(editor, "zone-edge"), i));
-            let (fill, own, panel) = (pick(&token(editor, "zone-fill"), i), pick(&token(editor, "zone-fill-own"), i), pick(&token(app, "panel"), i));
-            for (name, ground) in [("zone-fill", &fill), ("zone-fill-own", &own)] {
-                assert!(contrast(&ink, ground) >= 4.5, "zone-ink on {name} {theme}: {:.2}", contrast(&ink, ground));
-            }
+            let (fill, panel) = (pick(&token(editor, "zone-fill"), i), pick(&token(app, "panel"), i));
+            assert!(contrast(&ink, &fill) >= 4.5, "zone-ink on zone-fill {theme}: {:.2}", contrast(&ink, &fill));
             for (what, c) in [("zone-sel", &sel), ("zone-edge", &edge)] {
-                for (name, ground) in [("zone-fill", &fill), ("zone-fill-own", &own), ("panel", &panel)] {
+                for (name, ground) in [("zone-fill", &fill), ("panel", &panel)] {
                     assert!(contrast(c, ground) >= 3.0, "{what} against {name} {theme}: {:.2}", contrast(c, ground));
                 }
             }
         }
         // Forced colours: the system's own colours, the chosen cell in Highlight and the edges in CanvasText.
-        let at = editor.find("@media (forced-colors: active) {\n  .zone-cell").expect("forced-colours rules for the zone strip");
+        let at = editor.find("@media (forced-colors: active) {\n  .curb-cell").expect("forced-colours rules for the rows");
         let block = &editor[at..at + editor[at..].find("\n}\n").unwrap()];
         assert!(block.contains("outline-color: Highlight;") && block.contains("CanvasText"), "{block}");
         assert!(editor.contains("outline: 3px solid var(--zone-sel);"));
@@ -618,5 +616,64 @@ mod tests {
         assert!(rule(home, ".project-rename input").contains("border: 1.5px solid var(--field-line);"));
         assert!(rule(home, ".btn.danger").contains("border-color: var(--map-bad);"));
         assert!(rule(home, ".project-create-go").contains("color: var(--accent-ink);"));
+    }
+
+    /// The plan's two-tone lines, `(line, casing)`, each pair 3:1 to itself and, by one of its two tones, against
+    /// every material a band is drawn in and the panel the things beside the bands lie on, in both themes (the
+    /// tones, like the materials, are one colour in either theme). The contrast of a mark is carried by these edge
+    /// strokes, a light line on a wider dark casing, never by the translucent fills inside them, which only tint.
+    fn two_tones_hold_on_the_plan(line: &str, casing: &str) {
+        let (app, editor) = (include_str!("../../../../web/app.css"), include_str!("../../../../web/editor.css"));
+        let (line, casing) = (token(editor, line).0.unwrap(), token(editor, casing).0.unwrap());
+        assert!(contrast(&line, &casing) >= 3.0, "line against casing: {:.2}", contrast(&line, &casing));
+        let (panel_light, panel_dark) = token(app, "panel");
+        let mut grounds: Vec<(String, String)> =
+            crate::shared::catalogue::MATERIALS.iter().map(|m| (m.id.to_string(), token(app, &format!("mat-{}", m.id)).0.unwrap())).collect();
+        grounds.push(("panel light".to_string(), panel_light.unwrap()));
+        grounds.push(("panel dark".to_string(), panel_dark.unwrap()));
+        for (name, ground) in grounds {
+            let best = contrast(&line, &ground).max(contrast(&casing, &ground));
+            assert!(best >= 3.0, "{name}: {best:.2}");
+        }
+    }
+
+    /// `rule` declares each of `declarations`.
+    fn declares(css: &str, selector: &str, declarations: &[&str]) {
+        let body = rule(css, selector);
+        for d in declarations {
+            assert!(body.contains(d), "{selector} declares {d}");
+        }
+    }
+
+    #[test]
+    fn plan_pick_edge_has_3_to_1_on_every_band_material() {
+        two_tones_hold_on_the_plan("plan-pick-edge", "plan-pick-casing");
+        let editor = include_str!("../../../../web/editor.css");
+        // The pick and the chosen thing: the light edge drawn over a casing twice its width, so the casing shows on
+        // both sides of it; a handle is the casing edged in the light tone.
+        declares(editor, ".plan-pick-casing", &["stroke: var(--plan-pick-casing);", "stroke-width: 4;"]);
+        declares(editor, ".plan-pick", &["stroke: var(--plan-pick-edge);", "stroke-width: 2;", "fill: var(--plan-pick-edge);"]);
+        declares(editor, ".plan-handle", &["fill: var(--plan-pick-casing);", "stroke: var(--plan-pick-edge);"]);
+        declares(editor, ".plan-chosen .plan-thing-casing", &["stroke: var(--plan-pick-casing);", "stroke-width: 4;"]);
+        declares(editor, ".plan-chosen .plan-thing-mark", &["stroke: var(--plan-pick-edge);", "stroke-width: 2;"]);
+        assert!(!editor.contains("--plan-pick:"), "the tint is the edge's colour, not a token of its own");
+    }
+
+    #[test]
+    fn the_plans_marks_have_3_to_1_on_every_band_material() {
+        two_tones_hold_on_the_plan("plan-mark", "plan-mark-casing");
+        let editor = include_str!("../../../../web/editor.css");
+        // Every mark (a boundary, a cut end, a taper, a thing) is the light line over the dark casing, twice as wide.
+        declares(
+            editor,
+            ".plan-boundary-casing,\n.plan-cut-casing,\n.plan-taper-casing,\n.plan-thing-casing",
+            &["stroke: var(--plan-mark-casing);", "stroke-width: 4;"],
+        );
+        declares(editor, ".plan-boundary-line,\n.plan-cut-line", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        declares(editor, ".plan-taper", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        declares(editor, ".plan-thing-mark", &["stroke: var(--plan-mark);", "stroke-width: 2;"]);
+        // No kind of thing has an edge of its own that the pair above does not measure.
+        assert_eq!(editor.matches("\n.plan-thing-mark {").count(), 1);
+        assert!(!editor.contains(".plan-thing["), "no thing is drawn in colours of its own");
     }
 }
