@@ -38,6 +38,15 @@ pub const PROJECT_PAGES: [&str; 5] = ["map.html", "street.html", "intersection.h
 /// (#221) is to open a design with it.
 pub const VIEW: &str = "view=1";
 
+/// The project the query string `search` (with or without its `?`) names: `Some("")` for a bare or empty `project`
+/// (named, but none), None where it names none. The one reading of `project=` for every page.
+pub fn named_project(search: &str) -> Option<&str> {
+    search.trim_start_matches('?').split('&').find_map(|pair| match pair.split_once('=') {
+        Some(("project", id)) => Some(id),
+        _ => (pair == "project").then_some(""),
+    })
+}
+
 /// Whether the page whose query string is `search` (with or without its `?`) opens its project read-only.
 pub fn viewing(search: &str) -> bool {
     search.trim_start_matches('?').split('&').any(|pair| pair == VIEW)
@@ -60,7 +69,7 @@ pub fn link_in(href: &str, project: Option<&str>, read_only: bool) -> String {
         return href.to_string();
     }
     let mut pairs: Vec<String> = query.unwrap_or_default().split('&').filter(|p| !p.is_empty()).map(str::to_string).collect();
-    let named = pairs.iter().any(|pair| pair == "project" || pair.starts_with("project="));
+    let named = named_project(query.unwrap_or_default()).is_some();
     let viewed = pairs.iter().any(|pair| pair == VIEW);
     if named && (viewed || !read_only) {
         return href.to_string();
@@ -125,6 +134,16 @@ mod tests {
         assert!(!valid("Has Upper"));
         assert!(!valid("under_score"));
         assert!(!valid(&"a".repeat(17)));
+    }
+
+    #[test]
+    fn the_project_a_query_names_is_read_one_way_for_every_page() {
+        assert_eq!(named_project("project=p1&view=1"), Some("p1"));
+        assert_eq!(named_project("?street=7&project=p-abc"), Some("p-abc"));
+        assert_eq!(named_project("project"), Some(""), "named, but none: a page then opens none in its place");
+        assert_eq!(named_project("project="), Some(""));
+        assert_eq!(named_project("projects=p1&view=1"), None);
+        assert_eq!(named_project(""), None);
     }
 
     #[test]
