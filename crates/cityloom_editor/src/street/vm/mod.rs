@@ -30,8 +30,8 @@ use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, Pick, StopKind, Street, StripCell, Subject, Template, TreeSize, Use,
-    View, ZoneEnd, ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, Pick, StopKind, Street, StripCell, Subject, Template, TreeSize, Use, View,
+    ZoneEnd, ZoneRefusal,
 };
 use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::impact::{Cause, Impact, Input};

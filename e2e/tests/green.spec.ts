@@ -1,6 +1,15 @@
 import type { Page } from "@playwright/test";
 
-import { addFromMenu as addItem, expect, live, menuItem, placesOnMap, streetLength, test, EDITS_VERSION } from "./fixtures";
+import {
+  addFromMenu as addItem,
+  expect,
+  live,
+  menuItem,
+  placesOnMap,
+  streetLength,
+  test,
+  EDITS_VERSION,
+} from "./fixtures";
 
 // Street trees and green infrastructure: the tools, the Green row, the checks, the 2.5D and the saved document.
 
