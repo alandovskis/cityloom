@@ -1961,6 +1961,28 @@ fn the_plan_shows_the_ends_and_a_notice_when_the_zones_were_drawn_elsewhere() {
     assert!(h.contains("The changes along this street were drawn when it was 40.0 m long; here it is 20.0 m."), "{h}");
 }
 
+/// A street with no end to measure from (both cut by the map's edge) is drawn schematic, with no positions: the plan
+/// names neither end by a length ("0.0 m" twice), leaves no empty line under it, and its name says both ends are cut.
+#[test]
+fn a_plan_with_no_end_to_measure_from_names_no_positions_and_says_its_ends_are_cut() {
+    for (locale, name) in
+        [(Locale::En, "The street, both its ends cut by the edge of the map"), (Locale::FrCa, "La rue, ses deux extrémités coupées par le bord de la carte")]
+    {
+        let s = zoned_street(&[0, 10_000, 30_000], None, locale);
+        let h = plan_html(&s);
+        assert!(!h.contains("plan-ends"), "no end labels: {h}");
+        assert!(!h.contains("0.0 m") && !h.contains("0,0"), "no position anywhere: {h}");
+        assert!(!h.contains("id=\"plan-picked\""), "no empty line under the plan: {h}");
+        assert!(plan_tag(&h, "plan").contains(&format!("aria-label=\"{name}\"")), "{h}");
+        let svg = &h[h.find("<svg class=\"plan\"").expect("the drawing")..];
+        assert_eq!(svg.matches("class=\"plan-cut\"").count(), 2, "both ends drawn cut");
+        assert!(!svg[..svg.find('>').unwrap()].contains("data-length-mm"), "schematic: no length");
+    }
+    // With an end to measure from, the ends and the line are there.
+    let h = plan_html(&zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En));
+    assert!(h.contains("plan-ends") && h.contains("id=\"plan-picked\""), "{h}");
+}
+
 #[test]
 fn a_plan_with_no_length_leaves_the_point_with_no_words_rather_than_empty_ones() {
     let s = zoned_street(&[0, 10_000, 30_000], None, Locale::En);

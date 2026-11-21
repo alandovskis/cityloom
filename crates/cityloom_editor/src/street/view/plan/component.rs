@@ -61,6 +61,7 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
     let layout = move |at_mm: i32| plan_layout(&w.view().plan, width.get(), at_mm);
     let label = move || say(&w.i18n(), w.units(), &plan_label(&w.view().plan));
     let length = move || w.view().plan.length_mm.unwrap_or(0);
+    let measured = move || w.view().plan.length_mm.is_some();
     let length_text = move |mm: i32| {
         let i18n = w.i18n();
         w.units().length_in(mm, i18n.locale())
@@ -181,10 +182,14 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
 
     view! {
         <div class="plan-section">
-            <p class="plan-ends" aria-hidden="true">
-                <span>{move || length_text(0)}</span>
-                <span>{move || length_text(length())}</span>
-            </p>
+            // A street with no end to measure from is drawn schematic: no positions at its ends, nor a picked stretch
+            // to name under it.
+            <Show when=measured>
+                <p class="plan-ends" aria-hidden="true">
+                    <span>{move || length_text(0)}</span>
+                    <span>{move || length_text(length())}</span>
+                </p>
+            </Show>
             <div id="plan" class="plan-box" role="group" aria-label=label node_ref=boxed>
                 <div
                     class="plan-canvas"
@@ -215,7 +220,9 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
                     ></div>
                 </div>
             </div>
-            <p id="plan-picked" class="plan-picked">{picked}</p>
+            <Show when=measured>
+                <p id="plan-picked" class="plan-picked">{picked}</p>
+            </Show>
             <p class="plan-notice" role="status">{notice}</p>
         </div>
     }

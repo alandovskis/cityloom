@@ -29,6 +29,7 @@ Every strip/list on the page (pieces, curb, stops, green, calming) is a WAI-ARIA
 
 - The plan's drawing is `aria-hidden`; the group's label says it instead (`text::plan_label`: `st-plan-label`, `-cut-left`/`-cut-right`/`-cut-both` for the ends the map's edge cuts, `PlanView.cut`, and `st-plan-label-no-anchor` with no length).
 - `#zones-slot` (after `#fit`) holds the plan (`view/plan/`, `#plan`): the whole street from above, first end on the left, its runs, boundaries and things along it; a press picks a run, a drag picks a stretch, the pick's handles move its ends. A boundary drag (snapped, kept 5 m from its neighbours) is one undoable edit. Every position it shows or reads counts from its left end (`PlanAxis`).
+- A street with no end to measure from (`PlanView.length_mm` `None`) is drawn schematic: the component shows no `.plan-ends` lengths and no `#plan-picked` line (no positions), and `#plan`'s label is `st-plan-label-no-anchor` (both ends cut).
 - `StreetVm` zone API: the boundary drag the plan starts and ends (`begin_boundary_drag`, `end_boundary_drag`); `PlanKey::NudgeBoundary` moves a boundary (`nudge_pick_boundary`). Each announces result or refusal. Checks, width table, shares are the shown run's. Labels `svg-iso-label-stretch`, `svg-iso-label-joint`.
 - e2e opens the street from `e2e/fixtures/open-ends.osm(.pbf)` (both ends real nodes): the Plateau tile's streets cut at the box have no anchor.
 
