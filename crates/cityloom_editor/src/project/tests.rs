@@ -1828,6 +1828,32 @@ mod page {
         assert_eq!(names(&vm), Vec::<String>::new());
     }
 
+    /// While a project's links are deleted, every row's Rename and Delete say they wait too (they would do nothing).
+    #[test]
+    fn while_its_links_are_deleted_every_row_s_rename_and_delete_wait() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.create("Verdun");
+        let ids = [id_of(&vm, "Plateau"), id_of(&vm, "Verdun")];
+        let out = markup(vm.clone());
+        for id in &ids {
+            for what in ["rename", "delete"] {
+                let button = crate::shared::testing::button_tag(&out, &format!("project-{what}-{id}"));
+                assert!(button.contains(r#"aria-disabled="false""#), "{button}");
+            }
+        }
+        vm.ask_delete(&ids[0]);
+        vm.confirm_delete();
+        let out = markup(vm.clone());
+        for id in &ids {
+            for what in ["rename", "delete"] {
+                let button = crate::shared::testing::button_tag(&out, &format!("project-{what}-{id}"));
+                assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "{button}");
+            }
+        }
+        links.answer(Ok(()));
+    }
+
     #[test]
     fn while_its_links_are_deleted_the_question_s_buttons_wait_and_keep_focus() {
         let (vm, _, _links) = page_with_links(1);

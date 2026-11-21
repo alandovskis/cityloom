@@ -229,10 +229,12 @@ body.home .site-foot {
 }
 /* The question's buttons while a project's share links are deleted on the server (#221): they wait without leaving
    the tab order (`aria-disabled`), so focus stays on them, and look as a disabled button does (`app.css`). */
-.confirm .btn[aria-disabled="true"] {
+.confirm .btn[aria-disabled="true"],
+.project-buttons .btn[aria-disabled="true"] {
   opacity: 0.6;
   cursor: default;
 }
-.confirm .btn[aria-disabled="true"]:hover {
+.confirm .btn[aria-disabled="true"]:hover,
+.project-buttons .btn[aria-disabled="true"]:hover {
   background: var(--panel);
 }

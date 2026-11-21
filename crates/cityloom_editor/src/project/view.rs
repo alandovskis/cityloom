@@ -207,6 +207,7 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                     type="button"
                     class="btn"
                     id=part("rename", &row.id)
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
                     aria-label=move || vm.with_value(|v| v.named("project-rename-named", &rename_label))
                     on:click=move |_| vm.with_value(|v| v.start_rename(&rename_id))
                 >
@@ -216,6 +217,7 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                     type="button"
                     class="btn"
                     id=part("delete", &row.id)
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
                     aria-label=move || vm.with_value(|v| v.named("project-delete-named", &delete_label))
                     on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_id))
                 >
