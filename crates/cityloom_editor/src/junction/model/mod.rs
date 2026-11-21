@@ -6,6 +6,7 @@
 pub mod beyond;
 pub mod calls;
 pub mod compare;
+pub mod control;
 pub mod curbside;
 pub mod geometry;
 pub mod read_model;
