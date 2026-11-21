@@ -645,7 +645,7 @@ fn a_project_s_links_that_still_work_are_deleted_on_the_server_one_after_the_oth
     assert_eq!(links.listed("p1"), 3, "a link expired a day and more ago is not asked about: no clock is that wrong");
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
-    links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    links.end("p1", Box::new(|_| {}), Box::new(move |r| *g.borrow_mut() = Some(r)));
     // Every link listed is asked, whatever this device's clock says: the server decides whether it has expired.
     assert_eq!(t.share.calls(), [ShareCall::Delete("old".into())]);
     assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Expired))), "one the server has let expire counts as done");
@@ -658,7 +658,7 @@ fn a_project_s_links_that_still_work_are_deleted_on_the_server_one_after_the_oth
     assert!(kept_links(&t).is_empty());
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
-    links.end("p2", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    links.end("p2", Box::new(|_| {}), Box::new(move |r| *g.borrow_mut() = Some(r)));
     assert_eq!(*got.borrow(), Some(Ok(())), "none to delete");
 }
 
@@ -673,7 +673,7 @@ fn a_link_that_could_not_be_deleted_stops_the_rest_and_says_why() {
         let (t, links) = project_links();
         let got = Rc::new(std::cell::RefCell::new(None));
         let g = got.clone();
-        links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+        links.end("p1", Box::new(|_| {}), Box::new(move |r| *g.borrow_mut() = Some(r)));
         assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
         assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
         assert!(t.share.answer(ShareReply::Deleted(Err(failure))));
@@ -693,7 +693,7 @@ fn a_link_refused_by_the_rate_limit_is_asked_again_after_a_growing_wait() {
     let (t, links) = project_links();
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
-    links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    links.end("p1", Box::new(|_| {}), Box::new(move |r| *g.borrow_mut() = Some(r)));
     assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
     assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))));
     assert!(t.share.calls().is_empty(), "it waits");
@@ -715,6 +715,21 @@ fn a_link_refused_by_the_rate_limit_is_asked_again_after_a_growing_wait() {
     let said = got.borrow_mut().take().expect("it gave up").unwrap_err();
     assert_eq!(en(&said), "The server that keeps shared designs cannot answer now. Try again later.");
     assert_eq!(kept_links(&t), ["two"]);
+}
+
+/// Each step of ending a project's links is told: a link ended, or a wait the server asked for.
+#[test]
+fn each_step_of_ending_a_project_s_links_is_told() {
+    use crate::project::model::{Ending, ProjectLinks};
+    let (t, links) = project_links();
+    let steps = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let s = steps.clone();
+    links.end("p1", Box::new(move |step| s.borrow_mut().push(step)), Box::new(|_| {}));
+    assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))));
+    t.scheduler.advance(1000);
+    assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+    assert_eq!(*steps.borrow(), [Ending::Going, Ending::Waiting, Ending::Going]);
 }
 
 // ---- the views ----
