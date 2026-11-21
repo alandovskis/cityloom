@@ -128,13 +128,20 @@ impl Impact {
 ///
 /// A check that passes now and did not before, or that is gone and was failing, is newly passing; one that fails
 /// now and did not before, or is new and fails, is newly failing. A check that appears already passing, or goes
-/// away already passing, is neither. A use is listed only when its width changed.
+/// away already passing, is neither. A use is listed only when its width changed; one side lacking it is 0 mm there.
 pub fn diff(cause: Cause, before: &Input, after: &Input) -> Impact {
-    let uses = after
-        .uses
-        .iter()
-        .filter_map(|&(mode, after_mm)| {
-            let before_mm = before.uses.iter().find(|(m, _)| *m == mode).map_or(0, |(_, mm)| *mm);
+    // A use one side lacks has no width there: it is 0 mm on that side.
+    let width = |input: &Input, mode: Mode| input.uses.iter().find(|(m, _)| *m == mode).map_or(0, |(_, mm)| *mm);
+    let modes = after.uses.iter().chain(&before.uses).map(|(mode, _)| *mode);
+    let mut listed = Vec::new();
+    let uses = modes
+        .filter(|mode| {
+            let first = !listed.contains(mode);
+            listed.push(*mode);
+            first
+        })
+        .filter_map(|mode| {
+            let (before_mm, after_mm) = (width(before, mode), width(after, mode));
             (before_mm != after_mm).then_some(UseChange { mode, before_mm, after_mm })
         })
         .collect();
@@ -205,6 +212,20 @@ mod tests {
         let before = input(e);
         assert!(f(e), "the edit was refused");
         diff(Cause::Edit, &before, &input(e))
+    }
+
+    fn bare(uses: Vec<(Mode, i32)>) -> Input {
+        Input { class: StreetClass::Local, name: Said::new("street-name"), uses, checks: vec![], last: None }
+    }
+
+    #[test]
+    fn a_use_b_lacks_is_listed_as_dropping_to_zero() {
+        let before = bare(vec![(Mode::Vehicle, 2_400)]);
+        let after = bare(vec![]);
+        let i = diff(Cause::Edit, &before, &after);
+        assert_eq!(i.uses, vec![UseChange { mode: Mode::Vehicle, before_mm: 2_400, after_mm: 0 }]);
+        let back = diff(Cause::Edit, &after, &before);
+        assert_eq!(back.uses, vec![UseChange { mode: Mode::Vehicle, before_mm: 0, after_mm: 2_400 }]);
     }
 
     fn said(list: &[Said]) -> Vec<String> {
