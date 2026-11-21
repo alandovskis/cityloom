@@ -1,0 +1,16 @@
+Avenue Laurier Ouest (street.html?street=1): its first piece narrowed, milestone "Base" saved, then the street made into two stretches (20 and 30 km/h) and compared with Base.
+
+Comparison (English):
+Since Base
+1 place differs from Base.
+Changed Avenue Laurier Ouest
+changes along the street
+other details
+Close the comparison
+
+The changes (French):
+Modifié Avenue Laurier Ouest
+changements le long de la rue
+autres détails
+
+Timeline page (English), every text and screen-reader attribute: 1033 characters scanned; uses of "zone" other than school/loading/buffer zone: 0

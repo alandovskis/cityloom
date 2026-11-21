@@ -1,0 +1,6 @@
+Street 40.402 m, two stretches. Boundary line x1 493; Changes tab: 1 step(s).
+Drag the boundary 60 px right: x1 552.2; Changes tab: 2 step(s).
+Undo once: x1 493; Changes tab: 1 step(s).
+Drag the boundary past the street's right end: the last stretch is now "From 35.4 m to 40.40 m · 5.00 m long" (the street is 40.402 m long).
+Undo: the first stretch is "From 0.0 m to 20.0 m · 20.0 m long".
+Pick 5 m to 15 m (From 5.0 m to 15.0 m · 10.0 m long), then drag its right handle to about 30 m: "From 5.0 m to 30.0 m · 25.0 m long"; boundaries on the plan: 1.

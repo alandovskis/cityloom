@@ -1,0 +1,19 @@
+Avenue Laurier Ouest. Picked 10 m to 25 m and narrowed the sidewalk (three runs).
+
+Path before: "Street Sidewalk", #plan-picked "From 10.0 m to 25.0 m · 15.0 m long". Clicking the path's Street step: #plan-picked "The whole street, 40.40 m long.", #live "The whole street, 40.40 m long.".
+
+Whole street picked, first piece chosen: the piece level reads:
+Sidewalk 1.5 m wide · 1 of 8 from the left Move left Move right Remove Width m Allowed 1.20 to 8.00 m Varies along the stretch Surface What it is paved with. Concrete Brick pavers Asphalt Permeable paving Curb The raised edge, if it has one. Granite Concrete Asphalt Planted Bus-friendly curb Bike-friendly curb None (flush)
+
+Picked the 10–25 m run again and set its speed limit to 20 km/h: #live "Speed limit 20 km/h from 10.0 m to 25.0 m. 0.1 m left to use."
+Alt+ArrowRight with that run picked: #live "Move a change along the street to 11.0 m. 0.1 m left to use."
+
+Changes tab:
+Your changes
+Step 3
+Move a change along the street to 11.0 m
+Step 2
+Speed limit 20 km/h from 10.0 m to 25.0 m
+Step 1
+Resize sidewalk
+Street today

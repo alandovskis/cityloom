@@ -1,0 +1,10 @@
+Avenue Henri-Julien (street.html?street=108), anchored at its last end, 90.744 m.
+
+Speed limit 50 km/h, the whole street picked, School street template applied:
+  #live "The school zone runs from 15.3 m to 75.3 m. The speed limit there is 30 km/h. A raised table is at 41.8 m."
+  #plan-picked "From 15.3 m to 75.3 m · 60.0 m long"
+
+Raised tables row's cells:
+  Free, 0.0 m to 41.8 m, 41.8 m long, 1 of 3
+  Raised table, 41.8 m to 48.8 m, 7.0 m long, 2 of 3
+  Free, 48.8 m to 90.7 m, 41.9 m long, 3 of 3

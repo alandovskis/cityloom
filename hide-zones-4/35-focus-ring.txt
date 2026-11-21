@@ -1,0 +1,2 @@
+Home (left end): point 32.0–56.0 px, outline 2px solid offset -2px → ring 32.0–56.0 px; #plan (overflow auto) 32.0–1028.0 px; ring inside: true
+End (right end): point 1004.0–1028.0 px, outline 2px solid offset -2px → ring 1004.0–1028.0 px; #plan (overflow auto) 32.0–1028.0 px; ring inside: true

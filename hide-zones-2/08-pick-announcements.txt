@@ -1,0 +1,16 @@
+The live region (#live, aria-live=polite) after each step, on street.html?street=1:
+
+Drag on the plan from 10 m to 25 m:
+  #plan-picked: From 10.0 m to 25.0 m · 15.0 m long
+  #live: From 10.0 m to 25.0 m, 15.0 m long.
+
+Narrow the first piece with the - key:
+  #live: Resize sidewalk. 0.1 m left to use.
+
+Click on the plan at 17 m:
+  #plan-picked: From 10.0 m to 25.0 m · 15.0 m long
+  #live: From 10.0 m to 25.0 m, 15.0 m long: sidewalk on the left 1.4 m wide.
+
+Click on the plan at 3 m:
+  #plan-picked: From 0.0 m to 10.0 m · 10.0 m long
+  #live: From 0.0 m to 10.0 m, 10.0 m long: sidewalk on the left 1.5 m wide.

@@ -1,0 +1,9 @@
+Rue Saint-Viateur Est (street.html?street=7), 90.773 m.
+
+Speed limit 50 km/h; picked 5 m to 75 m: #plan-picked "From 5.0 m to 75.0 m · 70.0 m long"
+
+School street template applied: #live "The school zone runs from 10.0 m to 70.0 m. The speed limit there is 30 km/h. A raised table is at 36.5 m."; #plan-picked "From 10.0 m to 70.0 m · 60.0 m long"; boundaries 2
+
+Undo: #plan-picked "From 5.0 m to 75.0 m · 70.0 m long"; boundaries 0; #live "Undone. Every metre of the street is used. From 5.0 m to 75.0 m, 70.0 m long."
+
+Redo: #plan-picked "From 10.0 m to 70.0 m · 60.0 m long"; boundaries 2

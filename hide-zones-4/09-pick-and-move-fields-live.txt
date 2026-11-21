@@ -1,0 +1,5 @@
+Avenue Laurier Ouest (street.html?street=1), 40.4 m.
+Step 5. Typed From 6, To 12, Enter (no pointer drag): #plan-picked "From 6.0 m to 12.0 m · 6.0 m long"; #live "From 6.0 m to 12.0 m, 6.0 m long."; From/To fields "6.0" / "12.0"
+Step 6. Typed 8 in To, Enter: #live "A stretch must be at least 5.0 m long."; #plan-picked "From 6.0 m to 12.0 m · 6.0 m long"; To field "8"
+Step 7. Made two stretches, clicked the boundary: #live "The change at 20.0 m; type where it goes."; #boundary-to field "20.0"; #plan-picked "The whole street, 40.4 m long."
+Step 8. Typed 23 in #boundary-to, Enter: #live "Move a change along the street to 23.0 m. Every metre of the street is used."; boundary line x1 481.2 -> 553.3; #boundary-to field "23.0"

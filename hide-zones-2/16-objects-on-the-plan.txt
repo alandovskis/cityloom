@@ -1,0 +1,11 @@
+Street street.html?street=13 (Rue Saint-Dominique, 81.296 m), added through the page:
+  - curbside use (bike parking, 4 m) from the curbside tools
+  - raised table from the Add a piece menu
+  - transit stop (curb extension) from the Add a piece menu
+  - tree from the Add a piece menu, at 30 m on a sidewalk
+
+Things the plan draws (#plan [data-thing]), with their titles:
+  - curb-left-0 (class "plan-thing plan-chosen"): Bike parking
+  - stop-right-0 (class "plan-thing plan-chosen"): Curb extension
+  - calming-0 (class "plan-thing plan-chosen"): Raised table
+  - green-0 (class "plan-thing plan-chosen"): Tree at 30.0 m, on sidewalk

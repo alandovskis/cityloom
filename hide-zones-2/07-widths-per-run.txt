@@ -1,0 +1,11 @@
+Pieces and widths of each run, picked one at a time (pickRunAt).
+
+Before widening the second piece with the whole street picked:
+run at 3 m (From 0.0 m to 10.0 m · 10.0 m long): Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+run at 17 m (From 10.0 m to 25.0 m · 15.0 m long): Sidewalk 1.4 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+run at 38 m (From 25.0 m to 40.40 m · 15.40 m long): Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+
+After:
+run at 3 m (From 0.0 m to 10.0 m · 10.0 m long): Sidewalk 1.5 m | Buffer 0.25 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+run at 17 m (From 10.0 m to 25.0 m · 15.0 m long): Sidewalk 1.4 m | Buffer 0.25 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+run at 38 m (From 25.0 m to 40.40 m · 15.40 m long): Sidewalk 1.5 m | Buffer 0.25 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m

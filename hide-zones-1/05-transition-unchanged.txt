@@ -1,0 +1,35 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::transition
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 24 tests
+test street::model::transition::tests::a_lane_added_at_50_tapers_15_to_1 ... ok
+test street::model::transition::tests::a_dropped_lane_beside_parking_cannot_merge ... ok
+test street::model::transition::tests::a_lane_ending_in_its_direction_on_the_far_side_fails ... ok
+test street::model::transition::tests::a_lane_ending_beside_parking_still_fails ... ok
+test street::model::transition::tests::a_lane_opening_at_the_curb_needs_no_merge ... ok
+test street::model::transition::tests::a_lane_shift_at_70_uses_0_62_ws ... ok
+test street::model::transition::tests::a_lane_shift_below_70_uses_ws2_over_155 ... ok
+test street::model::transition::tests::a_piece_moved_across_two_others_is_the_only_one_unmatched ... ok
+test street::model::transition::tests::a_piece_moved_across_two_travel_lanes_does_not_drop_a_lane ... ok
+test street::model::transition::tests::a_pocket_gets_the_same_length_at_either_end_of_a_street ... ok
+test street::model::transition::tests::a_two_way_piece_takes_the_longer_merge_length ... ok
+test street::model::transition::tests::a_pocket_beyond_a_bike_lane_needs_no_merge ... ok
+test street::model::transition::tests::a_dropped_lane_merges_into_its_neighbour ... ok
+test street::model::transition::tests::a_bike_lane_shift_is_one_to_five ... ok
+test street::model::transition::tests::crossing_pieces_are_unmatched ... ok
+test street::model::transition::tests::anchoring_at_the_last_end_gives_the_same_result ... ok
+test street::model::transition::tests::identical_sections_have_no_transition ... ok
+test street::model::transition::tests::fresh_uids_match_by_kind_in_order ... ok
+test street::model::transition::tests::no_speed_uses_fifty ... ok
+test street::model::transition::tests::sidewalks_and_medians_do_not_taper ... ok
+test street::model::transition::tests::ratios_step_up_with_speed ... ok
+test street::model::transition::tests::the_longest_piece_sets_the_length ... ok
+test street::model::transition::tests::two_lanes_opening_together_need_no_merge ... ok
+test street::model::transition::tests::the_first_lane_of_a_direction_needs_no_merge ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 3451 filtered out; finished in 0.00s
+

@@ -1,0 +1,5 @@
+Picked 20 m to the end, chose the first piece and narrowed it (-): boundaries 1; #plan-picked "From 20.0 m to 40.4 m · 20.4 m long"; piece list selected: "Sidewalk 1.4 m"; details: "Sidewalk 1.4 m wide · 1 of 8 from the left Move left Move ri"
+
+Picked the run at 25 m, keys back in the drawing: piece list selected: "Sidewalk 1.4 m"; details: "Sidewalk 1.4 m wide · 1 of 8 from the left Move left Move ri"
+
+Widened it back (+): the run joins its neighbour, boundaries 0; #plan-picked "From 20.0 m to 40.4 m · 20.4 m long"; #live "Resize sidewalk. Every metre of the street is used."; piece list selected: "Sidewalk 1.5 m"; details: "Sidewalk 1.5 m wide · 1 of 8 from the left Move left Move ri"

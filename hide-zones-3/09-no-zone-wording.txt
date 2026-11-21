@@ -1,0 +1,20 @@
+Street opened (street.html?street=1), whole street picked:
+6535 characters scanned; uses of "zone" other than school/loading/buffer zone (zone scolaire, de livraison, de chargement, tampon): 0
+
+After narrowing the sidewalk from 10 m to 25 m (Changes and Checks tabs opened):
+7916 characters scanned; uses of "zone" other than school/loading/buffer zone (zone scolaire, de livraison, de chargement, tampon): 0
+
+The same page in French:
+9503 characters scanned; uses of "zone" other than school/loading/buffer zone (zone scolaire, de livraison, de chargement, tampon): 0
+
+2.5D drawing's label (English):
+Avenue Laurier Ouest in 2.5D, along a 40 m stretch centred on 25.0 m, where the section changes abruptly: the stretch from 10.0 m to 25.0 m is in front and the one from 25.0 m to 40.40 m beyond. The stretch from 10.0 m to 25.0 m has 8 segments. A transition of 1 m leads into the stretch from 10.0 m to 25.0 m.
+
+2.5D drawing's label (French):
+Avenue Laurier Ouest en 2,5D, sur un tronçon de 40 m centré sur 25,0 m, là où la coupe change brusquement : le tronçon de 10,0 m à 25,0 m est au premier plan et celui de 25,0 m à 40,40 m, au-delà. Le tronçon de 10,0 m à 25,0 m compte 8 éléments. Une transition de 1 m mène au tronçon de 10,0 m à 25,0 m.
+
+Changes tab (English):
+Your changes
+Step 1
+Resize sidewalk
+Street today

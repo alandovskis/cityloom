@@ -1,0 +1,5 @@
+A street of the open-ends fixture tile (one road, cut by the area's edge at both ends), street.html?street=1, 0 m (#street-name: Open Road):
+  .plan-cut marks: 2
+  - data-end="left" title "Cut by the edge of the map"
+  - data-end="right" title "Cut by the edge of the map"
+  #plan aria-label: null

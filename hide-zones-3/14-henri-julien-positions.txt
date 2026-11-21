@@ -1,0 +1,53 @@
+Avenue Henri-Julien (street.html?street=108), anchored at its last end (data-from-end="last"), 90.744 m.
+
+Picked 6 m to the street's right end (Shift+End): #plan-picked "From 6.04 m to 90.74 m · 84.7 m long"
+
+Added a driving lane from the Add a piece menu: #live "Add driving lane. 3.3 m too wide. Make a piece narrower or remove one."
+
+Checks tab, the "Room for the transition" row(s):
+  Room for the transition where the street changes at 6.04 m : fails The transition needs 49.5 m but the stretch from 0.0 m to 6.04 m is 6.04 m long. Source: named, figures not checked
+
+Undid it; picked 0 m to 10 m with the keyboard: #plan-picked "From 0.0 m to 10.04 m · 10.04 m long"
+
+Added a driving lane there: #live "Add driving lane. 3.3 m too wide. Make a piece narrower or remove one."
+
+Picked the run at 15 m: #plan-picked "From 10.04 m to 90.74 m · 80.7 m long"
+
+Alt+ArrowRight: #live "Move a change along the street to 11.04 m. Every metre of the street is used."; #plan-picked "From 11.04 m to 90.74 m · 79.7 m long"
+
+Then Alt+ArrowLeft nine times:
+  Alt+ArrowLeft 1: #live "Move a change along the street to 10.04 m. Every metre of the street is used."; #plan-picked "From 10.04 m to 90.74 m · 80.7 m long"
+  Alt+ArrowLeft 2: #live "Move a change along the street to 9.04 m. Every metre of the street is used."; #plan-picked "From 9.04 m to 90.74 m · 81.7 m long"
+  Alt+ArrowLeft 3: #live "Move a change along the street to 8.04 m. Every metre of the street is used."; #plan-picked "From 8.04 m to 90.74 m · 82.7 m long"
+  Alt+ArrowLeft 4: #live "Move a change along the street to 7.04 m. Every metre of the street is used."; #plan-picked "From 7.04 m to 90.74 m · 83.7 m long"
+  Alt+ArrowLeft 5: #live "Move a change along the street to 6.04 m. Every metre of the street is used."; #plan-picked "From 6.04 m to 90.74 m · 84.7 m long"
+  Alt+ArrowLeft 6: #live "Move a change along the street to 5.04 m. Every metre of the street is used."; #plan-picked "From 5.04 m to 90.74 m · 85.7 m long"
+  Alt+ArrowLeft 7: #live "A stretch must be at least 5.0 m long."; #plan-picked "From 5.04 m to 90.74 m · 85.7 m long"
+  Alt+ArrowLeft 8: #live "A stretch must be at least 5.0 m long."; #plan-picked "From 5.04 m to 90.74 m · 85.7 m long"
+  Alt+ArrowLeft 9: #live "A stretch must be at least 5.0 m long."; #plan-picked "From 5.04 m to 90.74 m · 85.7 m long"
+
+Changes tab:
+Your changes
+Step 8
+Move a change along the street to 5.04 m
+Step 7
+Move a change along the street to 6.04 m
+Step 6
+Move a change along the street to 7.04 m
+Step 5
+Move a change along the street to 8.04 m
+Step 4
+Move a change along the street to 9.04 m
+Step 3
+Move a change along the street to 10.04 m
+Step 2
+Move a change along the street to 11.04 m
+Step 1
+Add driving lane
+Street today
+
+Undid everything, set the street to 50 km/h, picked the whole street and applied the School street template: #live
+  "The school zone runs from 20.34 m to 80.34 m. The speed limit there is 30 km/h. A raised table is at 46.84 m."
+  #plan-picked "From 20.34 m to 80.34 m · 60.0 m long"
+
+Raised tables row's cells: "Free, 0.0 m to 36.9 m, 36.9 m long, 1 of 3", "Raised table, 36.9 m to 43.9 m, 7.0 m long, 2 of 3", "Free, 43.9 m to 90.7 m, 46.8 m long, 3 of 3"

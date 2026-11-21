@@ -1,0 +1,7 @@
+Streets opened in the map's order: 115. Shortest seen: street.html?street=115 1.144 m, street.html?street=82 8.347 m, street.html?street=94 9.288 m, street.html?street=34 9.502 m, street.html?street=27 10.741 m.
+street.html?street=115 (Rue Clark) is 1.144 m long.
+At first: #plan-picked "The whole street, 1.1 m long."
+Home, ArrowRight: point At 1.0 m
+Home, Shift+End: #plan-picked "The whole street, 1.1 m long."; #live "The whole street, 1.1 m long."
+A Shift+ArrowRight pick inside it first: #plan-picked "The whole street, 1.1 m long."; #live "The whole street, 1.1 m long."
+A drag from the left end to the right end: #plan-picked "The whole street, 1.1 m long."; #live "The whole street, 1.1 m long."

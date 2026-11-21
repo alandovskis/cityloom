@@ -1,0 +1,14 @@
+street.html?street=1: three stretches made (20, 30, 20 km/h), then the saved record (cityloom-edits@first, street w4889437~n29794113~n3584133910) edited in the page's storage:
+  zones before: [{"from_mm":0,"speed_kmh":20},{"from_mm":13000},{"from_mm":26000,"speed_kmh":20}]
+  zones after:  [{"from_mm":0,"speed_kmh":20},{"from_mm":13000},{"from_mm":26000}]
+  (the second and third now look the same: a boundary between them that the plan does not show)
+
+Reloaded: boundaries drawn 1, runs 2
+
+Run at 1 m: #plan-picked "From 0.0 m to 13.0 m · 13.0 m long"; .plan-boundary groups 1, .plan-boundary-line elements 1, their x1: 312.8
+
+After the drag: boundaries drawn 1, lines at x1 769.9
+
+Dragged the drawn boundary rightwards to about 32 m, past the hidden one: run at 1 m "From 0.0 m to 32.0 m · 32.0 m long"; #live "From 0.0 m to 32.0 m, 32.0 m long: a speed limit of 20 km/h."
+
+Saved zones now: [{"from_mm":0,"speed_kmh":20},{"from_mm":32000}]

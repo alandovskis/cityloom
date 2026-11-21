@@ -1,0 +1,15 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::matching
+   Compiling cityloom_editor v0.97.0 (/Users/alex/src/cityloom/hide-zones/crates/cityloom_editor)
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 26s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 3 tests
+test street::model::matching::tests::counterpart_falls_back_to_kind_left_to_right ... ok
+test street::model::matching::tests::counterpart_leaves_a_piece_with_no_kind_in_b_unmatched ... ok
+test street::model::matching::tests::counterpart_matches_by_uid_first ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3472 filtered out; finished in 0.00s
+

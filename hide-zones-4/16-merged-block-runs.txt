@@ -1,0 +1,9 @@
+Streets opened in the map's order until one opened, unedited, with a boundary on its plan: 48 opened.
+Rue Bernard Ouest (street.html?street=48): 2 runs, 1 boundaries, nothing edited (#tb-changes: 0).
+Each run, clicked on the plan, with its pieces:
+run 1: From 0.0 m to 3.5 m · 3.5 m long — Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Sidewalk 1.6 m
+run 2: From 3.5 m to 38.4 m · 34.9 m long — Sidewalk 1.6 m | Driving lane 3.0 m | Driving lane 3.0 m | Sidewalk 1.6 m
+
+Edits kept in the browser: none
+
+The fixture tile the page was served (e2e/fixtures/generated/plateau.json, imported by just e2e-fixtures at be1c6b3e) holds four roads named Rue Bernard Ouest: network.roads[69] with 2 zones from the import, and roads[70], [71] and [122] with 1 each.

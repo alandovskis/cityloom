@@ -1,0 +1,9 @@
+Street street.html?street=108, anchored at its last end (#plan svg data-from-end="last"), 90.744 m long.
+Plan ends, left to right: 0.0 m 90.7 m
+Picked with the keyboard from 0 m to 10 m on the plan, then the first piece narrowed.
+
+#plan-picked: From 0.0 m to 10.04 m · 10.04 m long
+Street level: Avenue Henri-Julien Local street · 9.2 m wide · 90.7 m long From 0.0 m to 10.04 m · 10.04 m long Speed limit Same as the street: 30 km/h Not set 10 km/h 20 km/h 30 km/h 40 km/h 50 km/h 60 km/h 70 km/h 80 km/h 90 km/h 100 km/h 110 km/h 120 km/h For the stretch from 0.0 m to 10.04 m. Standards Standard Built-in standards The checks use the built-in standards. Manage profiles Choose a piece, or pick a stretch on the plan, to change it.
+
+2.5D drawing's label:
+Avenue Henri-Julien in 2.5D, along a 40 m stretch centred on 10.0 m, where the section changes abruptly: the stretch from 0.0 m to 10.04 m is in front and the one from 10.04 m to 90.74 m beyond. The stretch from 0.0 m to 10.04 m has 4 segments. A transition of 1 m leads into the stretch from 10.04 m to 90.74 m.

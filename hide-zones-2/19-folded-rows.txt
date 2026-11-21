@@ -1,0 +1,3 @@
+Rows under the plan (.plan-rows), on the Plateau's first street:
+  not focused: display block, position absolute, box 1×1 px; listboxes inside: 3
+  a listbox inside focused: display contents; focused: stop-strip-left; listboxes: stop-strip-left: 922×40 px, "Stops, left"; stop-strip-right: 914×40 px, "Stops, right"; calming-strip: 672×40 px, "Raised tables, crossings, chicanes and modal filters along the street"

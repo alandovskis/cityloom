@@ -1,0 +1,12 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::tests::a_measure_on_a_stretch_makes_it_one_run_with_one_set_of_uids
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 1 test
+test street::model::tests::a_measure_on_a_stretch_makes_it_one_run_with_one_set_of_uids ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3474 filtered out; finished in 0.00s
+

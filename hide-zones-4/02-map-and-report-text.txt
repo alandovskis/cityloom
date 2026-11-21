@@ -1,0 +1,11 @@
+Street "Avenue Laurier Ouest" made into two stretches (makeStretches: 20 and 30 km/h), then the map opened.
+
+Map: the "zone-ticks" source holds 5 feature(s) (querySourceFeatures), read before the screenshot of step 1.
+Map: the street's search rows' small print: Traffic signal, 4 streets | Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest · 12.3 m | through the city · 12.3 m | Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Boulevard Saint-Laurent · 9.2 m | the end of Boulevard Saint-Laurent to Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est · 15.2 m | Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to the end of Avenue Laurier Est · 10.9 m
+Map page, every text and screen-reader attribute: 3130 characters scanned; uses of "zone" other than school/loading/buffer zone: 0
+
+Report PDF (Share > report, read back with pdf.js): 17 pages; the street's place page is page 3:
+Avenue Laurier Ouest, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest This street changes along its length. The figures show it at its first end. Speed limit: 30 km/h before, 20 km/h after. Before After Width by mode, before and after Mode Before After Walking 3.0 m (24 %) 3.0 m (24 %) Biking 3.0 m (24 %) 3.0 m (24 %) Transit 0.0 m (0 %) 0.0 m (0 %) Cars and trucks 6.0 m (49 %) 6.0 m (49 %) Greenery 0.0 m (0 %) 0.0 m (0 %) Before is the layout as imported from OpenStreetMap; After is the layout as changed. All 4 checks pass: Pass.
+
+Every "zone" in the whole report (real-world terms such as zoning rules are expected):
+  none

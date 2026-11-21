@@ -1,0 +1,26 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::replay
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.02s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 15 tests
+test street::model::replay::tests::a_change_keeps_the_fields_the_edit_did_not_touch ... ok
+test street::model::replay::tests::a_moved_piece_the_target_lacks_is_a_miss ... ok
+test street::model::replay::tests::a_change_to_a_piece_the_target_lacks_leaves_the_target_as_it_was ... ok
+test street::model::replay::tests::an_unchanged_piece_the_target_lacks_is_not_a_miss ... ok
+test street::model::replay::tests::an_added_last_piece_whose_left_neighbour_the_target_lacks_goes_at_the_right_end ... ok
+test street::model::replay::tests::a_change_reaches_a_piece_matched_by_kind_when_uids_differ ... ok
+test street::model::replay::tests::an_added_piece_lands_beside_the_same_neighbour_with_the_same_uid ... ok
+test street::model::replay::tests::a_moved_piece_moves_beside_the_same_neighbour ... ok
+test street::model::replay::tests::an_added_piece_whose_neighbours_the_target_lacks_goes_beside_the_nearest_piece_it_has ... ok
+test street::model::replay::tests::an_added_piece_with_no_left_neighbour_goes_before_its_right_one ... ok
+test street::model::replay::tests::a_width_change_reaches_the_same_piece_and_nothing_else ... ok
+test street::model::replay::tests::a_removed_piece_is_removed_where_it_has_a_counterpart ... ok
+test street::model::replay::tests::pieces_added_side_by_side_keep_their_order ... ok
+test street::model::replay::tests::a_kind_change_leaves_no_surface_or_curb_the_new_kind_does_not_take ... ok
+test street::model::replay::tests::a_kind_change_reaches_a_piece_matched_by_kind ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 3460 filtered out; finished in 0.00s
+

@@ -1,0 +1,26 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::school
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 15 tests
+test street::model::school::tests::a_street_with_no_speed_is_given_the_school_speed_in_its_zone ... ok
+test street::model::school::tests::a_street_too_short_to_set_a_zone_apart_makes_the_whole_street_the_school_zone ... ok
+test street::model::school::tests::a_table_the_street_refuses_is_skipped_with_its_own_reason ... ok
+test street::model::school::tests::a_zone_too_short_for_a_table_says_so_and_keeps_the_rest ... ok
+test street::model::school::tests::the_school_template_on_a_short_stretch_makes_the_stretch_itself_the_school_zone ... ok
+test street::model::school::tests::a_long_street_gets_a_school_zone_in_its_middle_with_a_lower_speed_and_a_table ... ok
+test street::model::school::tests::the_school_template_on_a_long_stretch_makes_its_60_m_stretch_in_the_middle_and_leaves_the_rest ... ok
+test street::model::school::tests::a_speed_already_at_or_under_the_school_limit_is_left_alone ... ok
+test street::model::school::tests::it_is_one_revision_that_undo_takes_back_whole ... ok
+test street::model::school::tests::the_other_templates_have_no_report ... ok
+test street::model::school::tests::the_school_zone_is_made_in_the_selected_zone_only ... ok
+test street::model::school::tests::a_street_with_no_anchored_end_skips_the_zone_and_the_table_but_still_applies_the_rest ... ok
+test street::model::school::tests::the_school_template_is_still_one_undo ... ok
+test street::model::school::tests::a_whole_street_sidewalk_change_after_the_school_template_reaches_the_school_stretch ... ok
+test street::model::school::tests::what_it_made_is_ordinary_and_editable ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 3460 filtered out; finished in 0.03s
+

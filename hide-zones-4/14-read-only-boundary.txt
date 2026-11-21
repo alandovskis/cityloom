@@ -1,0 +1,9 @@
+Street street.html?street=1 made into two stretches, then opened with project=first&view=1 (read-only).
+
+Plan point's aria-keyshortcuts, editable: Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight
+Plan point's aria-keyshortcuts, read-only: Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape
+
+Drag 5 m -> 15 m on the plan: picked "From 5.0 m to 15.0 m · 10.0 m long" (step 12).
+Pointer drag starting on the boundary line, 40 px right: boundary line x1 481.2 -> 481.2; picked after: From 5.0 m to 15.0 m · 10.0 m long
+Click on the boundary line: Move to field (#boundary-to) present: 0; the click picks the run under the pointer instead ("From 0.0 m to 20.0 m · 20.0 m long", as #plan-picked read when this file was written)
+Alt+ArrowRight on the plan's point: live says "This design is open read-only: nothing can be changed."; boundary line x1 now 481.2

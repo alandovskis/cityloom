@@ -1,0 +1,28 @@
+$ git rev-parse --short HEAD
+3acc5c3f
+(after just docs-build: the text of the built intro page, website/build/index.html and website/build/fr-CA/index.html, from website/docs/intro.md and its fr-CA translation)
+
+== English: the built intro page, website/build/index.html (6536 characters of text)
+Sentences naming a stretch (stretch / tronçon):
+  - a press on it picks the part between two changes, a drag picks a stretch of 5 m or more, and the pick's handles move its ends;
+  - an edit then applies to the picked stretch, and dragging a boundary moves where the street changes.
+  - The Details panel shows what was chosen last (the street, a piece, or a stretch along the street) under the path to it, Street › Driving lane, whose steps go back up.
+  - each lays ordinary pieces out in the picked stretch, fitted to the street's width, as one change you can undo and keep editing;
+  - a stretch of the street (or the picked stretch as a whole when it is too short to set one apart) with a speed limit of 30 km/h and a raised table at its middle;
+  - A picked stretch can have a speed limit of its own, set at the street level of the Details panel, or follow the street's.
+Every use of "zone":
+  - led, with its reason. The School street also makes a school zone, as far as each part fits: a stretch of the street (or the
+
+== French (fr-CA): the built intro page, website/build/fr-CA/index.html (7798 characters of text)
+Sentences naming a stretch (stretch / tronçon):
+  - un appui y choisit la partie entre deux changements, un glissement choisit un tronçon d’au moins 5 m, et les poignées du choix en déplacent les extrémités;
+  - une modification s’applique alors au tronçon choisi, et glisser une limite déplace l’endroit où la rue change.
+  - Le panneau Détails montre ce qui a été choisi en dernier (la rue, un élément ou un tronçon le long de la rue) sous le chemin qui y mène, Rue › Voie de circulation, dont les étapes permettent de remonter.
+  - chacun dispose des éléments ordinaires dans le tronçon choisi, ajustés à la largeur de la rue, en une seule modification annulable que l’on peut ensuite continuer à modifier;
+  - un tronçon de la rue (ou le tronçon choisi tout entier lorsqu’il est trop court pour en isoler un) avec une limite de vitesse de 30 km/h et un plateau surélevé en son milieu;
+  - Un tronçon choisi peut avoir sa propre limite de vitesse, réglée au niveau de la rue dans le panneau Détails, ou suivre celle de la rue.
+Every use of "zone":
+  - du réseau avec son compte, et des lignes vers les règles de zone, les rues sélectionnées et les modifications, chacune un ni
+  - veau à elle : les règles de zone sont l’endroit où l’on trace une zone sur la carte et lui d
+  - , désactivé, avec sa raison. La rue scolaire crée aussi une zone scolaire, dans la mesure où chaque partie convient : un tro
+

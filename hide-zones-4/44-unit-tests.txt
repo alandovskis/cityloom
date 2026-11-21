@@ -1,0 +1,410 @@
+$ git rev-parse --short HEAD
+be1c6b3e
+$ cargo test -p cityloom_editor --lib zone_guard
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling cfg-if v1.0.5
+   Compiling memchr v2.8.3
+   Compiling version_check v0.9.5
+   Compiling stable_deref_trait v1.2.1
+   Compiling rustversion v1.0.23
+   Compiling pin-project-lite v0.2.17
+   Compiling semver v1.0.28
+   Compiling serde_core v1.0.229
+   Compiling wasm-bindgen-shared v0.2.130
+   Compiling thiserror v2.0.21
+   Compiling bumpalo v3.20.3
+   Compiling futures-core v0.3.34
+   Compiling serde v1.0.229
+   Compiling futures-sink v0.3.34
+   Compiling slab v0.4.12
+   Compiling rustc_version v0.4.1
+   Compiling futures-channel v0.3.34
+   Compiling futures-io v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling libc v0.2.191
+   Compiling unicode-segmentation v1.13.3
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.3
+   Compiling smallvec v1.16.5
+   Compiling typenum v1.20.1
+   Compiling itoa v1.0.18
+   Compiling rustc-hash v2.1.3
+   Compiling or_poisoned v0.1.0
+   Compiling zmij v1.0.23
+   Compiling writeable v0.6.4
+   Compiling utf_types v1.0.0
+   Compiling convert_case v0.11.0
+   Compiling litemap v0.8.3
+   Compiling proc-macro2-diagnostics v0.11.0
+   Compiling indexmap v2.14.2
+   Compiling generic-array v0.14.9
+   Compiling icu_properties_data v2.4.0
+   Compiling utf8_iter v1.1.0
+   Compiling either v1.19.0
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling serde_json v1.0.154
+   Compiling paste v1.0.15
+   Compiling icu_normalizer_data v2.4.0
+   Compiling parking v2.2.1
+   Compiling hybrid-array v0.4.15
+   Compiling wasm-bindgen v0.2.130
+   Compiling event-listener v5.4.2
+   Compiling slotmap v1.1.1
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling proc-macro-utils v0.10.0
+   Compiling throw_error v0.3.1
+   Compiling unicode-xid v0.2.6
+   Compiling konst_macro_rules v0.2.19
+   Compiling autocfg v1.5.1
+   Compiling const_format_proc_macros v0.2.37
+   Compiling crypto-common v0.2.2
+   Compiling konst v0.2.20
+   Compiling event-listener-strategy v0.5.4
+   Compiling server_fn_macro v0.8.12
+   Compiling num-traits v0.2.19
+   Compiling reactive_graph v0.2.16
+   Compiling send_wrapper v0.6.0
+   Compiling rstml v0.13.1
+   Compiling crossbeam-utils v0.8.23
+   Compiling libm v0.2.16
+   Compiling async-lock v3.5.0
+   Compiling const_format v0.2.37
+   Compiling block-padding v0.4.2
+   Compiling itertools v0.14.0
+   Compiling percent-encoding v2.3.2
+   Compiling camino v1.2.6
+   Compiling anyhow v1.0.104
+   Compiling crossbeam-epoch v0.9.21
+   Compiling crc32fast v1.5.4
+   Compiling arrayvec v0.7.8
+   Compiling xxhash-rust v0.8.19
+   Compiling log v0.4.35
+   Compiling thiserror v1.0.69
+   Compiling guardian v1.3.0
+   Compiling polycool v0.4.0
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
+   Compiling inout v0.2.5
+   Compiling manyhow-macros v0.14.1
+   Compiling tachys v0.2.19
+   Compiling winnow v1.0.5
+   Compiling prettyplease v0.3.0
+   Compiling unicode-properties v0.1.5
+   Compiling same-file v1.0.6
+   Compiling simd-adler32 v0.3.10
+   Compiling html-escape v0.2.15
+   Compiling getrandom v0.4.3
+   Compiling adler2 v2.0.1
+   Compiling bytes v1.12.1
+   Compiling bitflags v2.13.2
+   Compiling crossbeam-deque v0.8.8
+   Compiling base64 v0.22.1
+   Compiling miniz_oxide v0.9.1
+   Compiling walkdir v2.5.0
+   Compiling core_maths v0.1.1
+   Compiling cipher v0.5.2
+   Compiling digest v0.10.7
+   Compiling http v1.5.0
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling synstructure v0.14.0
+   Compiling wasm-bindgen-macro-support v0.2.130
+   Compiling manyhow v0.14.1
+   Compiling kurbo v0.13.1
+   Compiling form_urlencoded v1.2.2
+   Compiling either_of v0.1.9
+   Compiling block-buffer v0.12.1
+   Compiling cpufeatures v0.2.17
+   Compiling server_fn v0.8.13
+   Compiling aho-corasick v1.1.5
+   Compiling const_str_slice_concat v0.1.0
+   Compiling collection_literals v1.0.3
+   Compiling toml_datetime v1.1.3+spec-1.1.0
+   Compiling serde_spanned v1.1.3
+   Compiling next_tuple v0.1.0
+   Compiling erased v0.1.2
+   Compiling rand_core v0.10.1
+   Compiling rayon-core v1.13.0
+   Compiling regex-syntax v0.8.11
+   Compiling interpolator v0.5.0
+   Compiling const-oid v0.10.2
+   Compiling drain_filter_polyfill v0.1.3
+   Compiling toml v1.2.1+spec-1.1.0
+   Compiling thiserror-impl v1.0.69
+   Compiling reactive_stores_macro v0.4.4
+   Compiling pin-project-internal v1.1.13
+   Compiling typed-builder-macro v0.23.2
+   Compiling digest v0.11.3
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling displaydoc v0.2.7
+   Compiling serde_derive v1.0.229
+   Compiling zerovec-derive v0.11.7
+   Compiling thiserror-impl v2.0.21
+   Compiling futures-macro v0.3.34
+   Compiling bytemuck_derive v1.12.1
+   Compiling derive-where v1.7.0
+   Compiling tinystr v0.8.5
+   Compiling quote-use-macros v0.9.0
+   Compiling zerofrom v0.1.8
+   Compiling pin-project v1.1.13
+   Compiling futures-util v0.3.34
+   Compiling async-trait v0.1.92
+   Compiling yoke v0.8.4
+   Compiling unic-langid-impl v0.9.6
+   Compiling regex-automata v0.4.18
+   Compiling server_fn_macro_default v0.8.6
+   Compiling quote-use v0.9.0
+   Compiling bytemuck v1.25.2
+   Compiling attribute-derive-macro v0.11.0
+   Compiling unic-langid-macros-impl v0.9.6
+   Compiling zerovec v0.11.9
+   Compiling zerotrie v0.2.5
+   Compiling font-types v0.11.3
+   Compiling flate2 v1.1.11
+   Compiling sha2 v0.10.9
+   Compiling ttf-parser v0.25.1
+   Compiling read-fonts v0.39.2
+   Compiling cpufeatures v0.3.1
+   Compiling encoding_rs v0.8.44
+   Compiling convert_case v0.6.0
+   Compiling leptos_macro v0.8.20
+   Compiling unicode-script v0.5.9
+   Compiling tinyvec v1.13.3
+   Compiling potential_utf v0.1.6
+   Compiling arrayref v0.3.9
+   Compiling inventory v0.3.25
+   Compiling ryu v1.0.23
+   Compiling icu_collections v2.4.0
+   Compiling icu_locale_core v2.4.0
+   Compiling core-foundation-sys v0.8.7
+   Compiling unicode-ccc v0.4.0
+   Compiling alloc-no-stdlib v2.0.4
+   Compiling const-str v1.1.0
+   Compiling unic-langid-macros v0.9.6
+   Compiling oco_ref v0.2.1
+   Compiling serde_qs v0.15.0
+   Compiling unicode-bidi-mirroring v0.4.0
+   Compiling pathdiff v0.2.3
+   Compiling base16 v0.2.1
+   Compiling strict-num v0.1.1
+   Compiling config v0.15.27
+   Compiling unic-langid v0.9.6
+   Compiling futures-executor v0.3.34
+   Compiling wasm-bindgen-macro v0.2.130
+   Compiling tiny-skia-path v0.12.0
+   Compiling alloc-stdlib v0.2.4
+   Compiling icu_provider v2.4.0
+   Compiling wasm_split_macros v0.2.2
+   Compiling iana-time-zone v0.1.65
+   Compiling rustybuzz v0.20.1
+   Compiling futures v0.3.34
+   Compiling leptos_hot_reload v0.8.7
+   Compiling icu_properties v2.4.0
+   Compiling icu_normalizer v2.4.0
+   Compiling codee v0.3.5
+   Compiling pdf-writer v0.15.0
+   Compiling regex v1.13.1
+   Compiling unicode-normalization v0.1.26
+   Compiling attribute-derive v0.11.0
+   Compiling uuid v1.29.1
+   Compiling typed-builder v0.23.2
+   Compiling chacha20 v0.10.2
+   Compiling float-cmp v0.9.0
+   Compiling convert_case_extras v0.2.0
+   Compiling type-map v0.5.1
+   Compiling leptos v0.8.23
+   Compiling idna_adapter v1.2.2
+   Compiling scopeguard v1.2.0
+   Compiling async-once-cell v0.5.4
+   Compiling idna v1.1.0
+   Compiling xmp-writer v0.3.3
+   Compiling js-sys v0.3.107
+   Compiling unicode-bidi v0.3.18
+   Compiling multiversion_no_op v1.0.0
+   Compiling cpubits v0.1.1
+   Compiling siphasher v1.0.4
+   Compiling simdutf8 v0.1.5
+   Compiling wasm_split_helpers v0.2.3
+   Compiling url v2.5.8
+   Compiling aes v0.9.4
+   Compiling intl-memoizer v0.5.3
+   Compiling stringprep v0.1.5
+   Compiling rand v0.10.3
+   Compiling leptos_config v0.8.10
+   Compiling rayon v1.12.0
+   Compiling chrono v0.4.45
+   Compiling brotli-decompressor v5.0.3
+   Compiling intl_pluralrules v7.0.2
+   Compiling fluent-langneg v0.13.1
+   Compiling cityloom_report v0.1.0 (/Users/alex/src/cityloom/hide-zones/crates/cityloom_report)
+   Compiling sha2 v0.11.1
+   Compiling fluent-syntax v0.12.0
+   Compiling md-5 v0.11.0
+   Compiling ecb v0.2.1
+   Compiling cbc v0.2.1
+   Compiling nom v8.0.0
+   Compiling self_cell v1.3.0
+   Compiling rangemap v1.8.0
+   Compiling weezl v0.2.1
+   Compiling cityloom_model v0.1.0 (/Users/alex/src/cityloom/hide-zones/crates/cityloom_model)
+   Compiling fluent-bundle v0.16.0
+   Compiling write-fonts v0.48.1
+   Compiling skrifa v0.42.1
+   Compiling lopdf v0.47.0
+   Compiling wasm-bindgen-futures v0.4.80
+   Compiling web-sys v0.3.107
+   Compiling hydration_context v0.3.2
+   Compiling any_spawner v0.3.0
+   Compiling subsetter v0.2.6
+   Compiling krilla v0.8.2
+   Compiling reactive_stores v0.4.4
+   Compiling cityloom_report_pdf v0.1.0 (/Users/alex/src/cityloom/hide-zones/crates/cityloom_report_pdf)
+   Compiling gloo-utils v0.2.0
+   Compiling gloo-net v0.6.0
+   Compiling wasm-streams v0.5.0
+   Compiling leptos_dom v0.8.8
+   Compiling leptos_server v0.8.8
+   Compiling cityloom_editor v0.100.0 (/Users/alex/src/cityloom/hide-zones/crates/cityloom_editor)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 43s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 2 tests
+test zone_guard::every_area_message_is_a_message ... ok
+test zone_guard::no_message_anywhere_says_zone_except_school_and_loading_zones ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3550 filtered out; finished in 0.10s
+$ cargo test -p cityloom_editor --lib an_arm_with_a_beyond_says_where_its_end_stretch_ends
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test junction::vm::text::tests::an_arm_with_a_beyond_says_where_its_end_stretch_ends_and_which_stretch_follows_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.04s
+$ cargo test -p cityloom_editor --lib a_street_that_changes_along_its_length
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 3 tests
+test map::vm::tests::a_street_that_changes_along_its_length_says_its_programme_and_no_count_of_stretches ... ok
+test map::vm::tests::a_street_that_changes_along_its_length_is_worded_as_one_that_does_not ... ok
+test map::view::tests::report::a_street_that_changes_along_its_length_says_it_is_drawn_at_its_first_end ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3549 filtered out; finished in 0.20s
+$ cargo test -p cityloom_editor --lib the_beyond_names_the_stretch_across
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::beyond::tests::the_beyond_names_the_stretch_across_from_the_junctions_centre ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib a_merged_block_shows_its_pieces_as_runs
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test city::import::tests::a_merged_block_shows_its_pieces_as_runs_takes_an_edit_on_each_and_is_kept_stamped ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib a_width_transition_leads_into_the_run_nearer_the_anchored_end
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::view::iso::tests::a_width_transition_leads_into_the_run_nearer_the_anchored_end_whichever_end_that_is ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.02s
+$ cargo test -p cityloom_editor --lib on_a_street_shorter_than_the_shortest_stretch
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::vm::plan::pick_tests::on_a_street_shorter_than_the_shortest_stretch_its_full_length_picks_the_whole_street ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.01s
+$ cargo test -p cityloom_editor --lib after_a_join_the_selected_piece
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::pick::tests::after_a_join_the_selected_piece_is_its_counterpart_in_the_run_shown ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib undoing_the_school_template_gives_back
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::school::tests::undoing_the_school_template_gives_back_the_pick_it_was_made_in_and_redoing_it_the_school_stretch ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib the_keyboard_point_
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 2 tests
+test street::vm::plan::pick_tests::the_keyboard_point_follows_a_pick_made_with_the_pointer ... ok
+test street::vm::tests::a_sync_reload_keeps_the_keyboard_point_on_the_city_s_street ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3550 filtered out; finished in 0.14s
+$ cargo test -p cityloom_editor --lib the_point_s_focus_ring
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::view::tests::the_point_s_focus_ring_is_seen_whole_at_either_end_of_the_plan ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib no_end_to_measure_from_names_no_positions
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 3 tests
+test street::model::zones::tests::a_street_with_no_end_to_measure_from_names_no_positions ... ok
+test street::vm::plan::pick_tests::an_edit_that_missed_part_of_a_street_with_no_end_to_measure_from_names_no_positions ... ok
+test street::view::tests::a_plan_with_no_end_to_measure_from_names_no_positions_and_says_its_ends_are_cut ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3549 filtered out; finished in 0.03s
+$ cargo test -p cityloom_editor --lib the_plan_s_label_says_which_of_its_ends
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::vm::text::tests::the_plan_s_label_says_which_of_its_ends_the_edge_of_the_map_cuts ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.06s
+$ cargo test -p cityloom_editor --lib hidden_boundary
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::pick::tests::a_boundary_moved_inside_a_run_with_a_hidden_boundary_joins_it_rather_than_stopping_at_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib the_2_5d_names_the_run_it_shows
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::pick::tests::the_2_5d_names_the_run_it_shows_and_the_run_across_its_joint_not_their_zones ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib a_change_of_kind_with_no_length_starts_where_typed
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::vm::green_tests::on_a_street_anchored_at_its_last_end_a_change_of_kind_with_no_length_starts_where_typed ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.01s
+$ cargo test -p cityloom_editor --lib measured_from_its_last_end
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 5 tests
+test street::view::green_strip::tests::on_a_street_measured_from_its_last_end_a_cell_lies_where_the_plan_draws_it ... ok
+test street::view::curb_strip::tests::on_a_street_measured_from_its_last_end_a_use_follows_the_pointer_along_the_plan ... ok
+test city::import::tests::a_zoned_road_whose_first_end_is_cut_is_measured_from_its_last_end ... ok
+test street::model::school::tests::on_a_street_of_odd_length_measured_from_its_last_end_the_table_is_reported_where_the_plan_draws_it ... ok
+test street::vm::text::tests::places_along_a_street_measured_from_its_last_end_are_said_to_a_tenth ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 3547 filtered out; finished in 0.05s
+$ cargo test -p cityloom_editor --lib anchored_at_its_last_end_the
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 5 tests
+test street::model::school::tests::on_a_street_anchored_at_its_last_end_the_report_counts_from_the_plan_s_left_end ... ok
+test street::vm::calming_tests::on_a_street_anchored_at_its_last_end_the_raised_elements_run_left_to_right_as_the_plan_does ... ok
+test street::vm::green_tests::on_a_street_anchored_at_its_last_end_the_green_row_runs_left_to_right_as_the_plan_does ... ok
+test street::view::tests::on_a_street_anchored_at_its_last_end_the_unfolded_row_runs_as_the_plan_does ... ok
+test street::vm::curb_tests::on_a_street_anchored_at_its_last_end_the_row_runs_left_to_right_as_the_plan_does ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 3547 filtered out; finished in 0.01s
+$ cargo test -p cityloom_editor --lib the_table_is_reported_where_the_plan_draws_it
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::model::school::tests::on_a_street_of_odd_length_measured_from_its_last_end_the_table_is_reported_where_the_plan_draws_it ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib shorter_than_the_grid
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 2 tests
+test street::model::curb::tests::a_gap_shorter_than_the_grid_is_no_cell_from_either_end ... ok
+test street::model::calming::tests::a_free_stretch_shorter_than_the_grid_is_no_cell_of_the_row ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3550 filtered out; finished in 0.00s
+$ cargo test -p cityloom_editor --lib a_plan_with_no_end_to_measure_from
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-4f05a0ab51094daa)
+running 1 test
+test street::view::tests::a_plan_with_no_end_to_measure_from_names_no_positions_and_says_its_ends_are_cut ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3551 filtered out; finished in 0.03s

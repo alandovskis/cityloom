@@ -1,0 +1,8 @@
+intersection.html?junction=64, after Rue Saint-Viateur Ouest's second half lost its first piece on the street page.
+
+Checks row: Approaches : passes Every end stretch reaches past its stop line and its transition fits Source: placeholder, no source
+
+The first arm, as announced:
+Rue Saint-Viateur Ouest (north-east), 35 degrees. Its end stretch reaches 20.0 m from the centre, then a transition of 9.3 m into the stretch from 20.0 m to 41.1 m.
+
+Junction page, every text and screen-reader attribute: 11755 characters scanned; uses of "zone" other than school/loading/buffer zone: 0

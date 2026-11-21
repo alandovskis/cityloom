@@ -1,0 +1,25 @@
+Avenue Henri-Julien (street.html?street=108), anchored at its last end, 90.744 m.
+
+Added a raised table from the Add a piece menu at the row's first free stretch: #live "Add a raised table at 0.0 m. Every metre of the street is used."
+
+Chose it in the row: "Raised table, 0.0 m to 7.0 m, 7.0 m long, 1 of 2"; plan: calming-0 at x 45 px
+
+Alt+ArrowRight ×20: #live "Move the raised table to 20.0 m. Every metre of the street is used."; selected "Raised table, 20.0 m to 27.0 m, 7.0 m long, 2 of 3"; plan: calming-1 at x 259 px
+
+Added a second raised table at the row's first free stretch: #live "Add a raised table at 0.0 m. Every metre of the street is used."
+
+The row's cells, in DOM order:
+  Raised table, 0.0 m to 7.0 m, 7.0 m long, 1 of 4
+  Free, 7.0 m to 20.0 m, 13.0 m long, 2 of 4
+  Raised table, 20.0 m to 27.0 m, 7.0 m long, 3 of 4
+  Free, 27.0 m to 90.7 m, 63.7 m long, 4 of 4
+
+The tables on the plan, left to right: calming-0 at x 45 px, calming-2 at x 259 px
+
+Home in the row: selected "Raised table, 0.0 m to 7.0 m, 7.0 m long, 1 of 4"
+
+End: selected "Free, 27.0 m to 90.7 m, 63.7 m long, 4 of 4"
+
+Home, ArrowRight: selected "Free, 7.0 m to 20.0 m, 13.0 m long, 2 of 4"
+
+ArrowRight ×2 more: selected "Free, 27.0 m to 90.7 m, 63.7 m long, 4 of 4"

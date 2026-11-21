@@ -1,0 +1,10 @@
+Elements with a tabindex inside #plan: 1 (plan-point)
+Tab pressed 2 time(s) from the 2.5D drawing (#wrap): #plan-point focused = true
+Point at first: role=slider aria-valuenow=0 aria-valuetext="The whole street, 40.40 m long."
+Home, PageDown: role=slider aria-valuenow=10 aria-valuetext="At 10.0 m"
+Shift+ArrowRight ×8: role=slider aria-valuenow=18 aria-valuetext="From 10.0 m to 18.0 m, 8.0 m long."; #plan-picked: From 10.0 m to 18.0 m · 8.0 m long; #live: From 10.0 m to 18.0 m, 8.0 m long.
+Escape: #plan-picked: The whole street, 40.40 m long.
+Two stretches made (speed limits 20 and 30 km/h); Enter with the point at 3 m: #plan-picked: From 0.0 m to 20.0 m · 20.0 m long
+Enter with the point at 23 m: #plan-picked: From 20.0 m to 40.40 m · 20.40 m long
+Alt+ArrowRight (moves the boundary at the pick's left end): boundary line x1 493 -> 517.7; #plan-picked: From 21.0 m to 40.40 m · 19.40 m long; #live: Move the start of Zone 2 to 21.0 m. Every metre of the street is used.
+Alt+ArrowLeft: boundary line x1 now 493; #plan-picked: From 20.0 m to 40.40 m · 20.40 m long

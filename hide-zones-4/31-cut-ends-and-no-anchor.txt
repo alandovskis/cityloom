@@ -1,0 +1,9 @@
+The one road of the open-ends fixture tile, street.html?street=1 (Open Road), cut by the area's edge at both ends.
+#plan role=group, aria-label "The street, both its ends cut by the edge of the map"
+aria-hidden on the drawing: .plan-svg null, svg true
+.plan-ends elements: 0; #plan-picked elements: 0
+Point: aria-valuetext "null"
+Narrowed the first piece: #live "Resize sidewalk. 0.1 m left to use."
+Changes tab: Your changes Step 1 Resize sidewalk Street today
+Enter on the point (pick a run): #live "Both ends of this street are cut by the edge of the map, so it can only be changed along its whole length."
+Street level: Open Road Local street · 9.2 m wide Speed limit Not set 10 km/h 20 km/h 30 km/h 40 km/h 50 km/h 60 km/h 70 km/h 80 km/h 90 km/h 100 km/h 110 km/h 120 km/h Standards Standard Built-in standards The che

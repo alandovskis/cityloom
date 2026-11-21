@@ -1,0 +1,5 @@
+Point moved to the right end with End: aria-valuenow 40.402
+Drag 10 m -> 25 m: #plan-picked "From 10.0 m to 25.0 m · 15.0 m long"; point aria-valuenow 10, aria-valuetext "From 10.0 m to 25.0 m, 15.0 m long."
+Shift+PageDown: #plan-picked "From 10.0 m to 20.0 m · 10.0 m long"; aria-valuetext "From 10.0 m to 20.0 m, 10.0 m long."
+Typed From 6, To 12, Enter: #plan-picked "From 6.0 m to 12.0 m · 6.0 m long"; point aria-valuenow 6
+Focus the point, Shift+PageDown: #plan-picked "From 6.0 m to 16.0 m · 10.0 m long"

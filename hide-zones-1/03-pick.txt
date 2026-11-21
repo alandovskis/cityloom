@@ -1,0 +1,43 @@
+$ git rev-parse --short HEAD
+e9c954a4
+$ cargo test -p cityloom_editor --lib street::model::pick
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/lib.rs (target/debug/deps/cityloom_editor-515034b77c47190e)
+
+running 32 tests
+test street::model::pick::tests::a_street_with_no_frame_can_only_be_picked_whole ... ok
+test street::model::pick::tests::a_new_editor_picks_the_whole_street ... ok
+test street::model::pick::tests::a_pick_clamped_shorter_than_5_m_is_the_whole_street ... ok
+test street::model::pick::tests::a_saved_street_with_identical_neighbouring_zones_opens_unchanged ... ok
+test street::model::pick::tests::a_stretch_as_long_as_the_street_is_the_whole_street ... ok
+test street::model::pick::tests::an_edit_in_a_stretch_splits_at_its_ends_and_changes_only_inside ... ok
+test street::model::pick::tests::a_stretch_shorter_than_5_m_is_refused_and_the_pick_stays ... ok
+test street::model::pick::tests::a_stretch_snaps_to_100_mm_and_to_a_boundary_or_end_within_5_m ... ok
+test street::model::pick::tests::a_drag_back_to_where_it_started_leaves_the_shown_zone_the_picked_one ... ok
+test street::model::pick::tests::a_drag_in_a_picked_stretch_splits_once_and_is_one_revision ... ok
+test street::model::pick::tests::an_edit_back_to_the_neighbours_section_joins_the_stretch_back ... ok
+test street::model::pick::tests::an_edit_on_a_street_anchored_at_its_last_end_is_made_on_the_zone_shown_at_the_left ... ok
+test street::model::pick::tests::an_edit_touching_identical_neighbours_joins_them ... ok
+test street::model::pick::tests::a_whole_street_edit_reaches_the_same_piece_in_every_run_and_leaves_a_piece_only_one_run_has ... ok
+test street::model::pick::tests::a_change_to_a_piece_one_run_lacks_reports_that_run_as_missed ... ok
+test street::model::pick::tests::choosing_a_zone_does_nothing_while_a_drag_is_under_way ... ok
+test street::model::pick::tests::cancelling_that_drag_leaves_no_boundary ... ok
+test street::model::pick::tests::an_edit_never_leaves_a_stretch_shorter_than_5_m ... ok
+test street::model::pick::tests::an_elsewhere_street_picks_only_whole_runs ... ok
+test street::model::pick::tests::cut_off_zones_are_in_no_run_and_cannot_be_picked ... ok
+test street::model::pick::tests::left_and_anchored_positions_convert_both_ways_for_either_end ... ok
+test street::model::pick::tests::an_elsewhere_street_edits_every_zone_of_the_picked_run_without_splitting_or_joining ... ok
+test street::model::pick::tests::every_zone_in_the_pick_can_be_made_pedestrian_or_given_one_section ... ok
+test street::model::pick::tests::the_shown_zone_is_the_one_at_the_picks_left_end_on_a_street_anchored_at_its_last_end ... ok
+test street::model::pick::tests::nothing_is_picked_while_a_drag_is_under_way ... ok
+test street::model::pick::tests::picking_alone_never_splits ... ok
+test street::model::pick::tests::undo_after_split_and_join_restores_the_zones_exactly_and_clamps_the_pick ... ok
+test street::model::pick::tests::moving_a_boundary_keeps_the_zone_and_its_pick_together ... ok
+test street::model::pick::tests::the_pick_survives_undo_clamped_to_the_street ... ok
+test street::model::pick::tests::cut_off_zones_are_never_edited ... ok
+test street::model::pick::tests::picking_a_run_takes_identical_neighbouring_zones_together ... ok
+test street::model::pick::tests::the_speed_of_a_stretch_is_set_for_it_and_whole_street_speed_clears_the_zones_own ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 3443 filtered out; finished in 0.01s
+
