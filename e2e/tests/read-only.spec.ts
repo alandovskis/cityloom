@@ -113,7 +113,9 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
-  test("a junction's signal plan and its pedestrian calls can be read, and the calls not changed", async ({ page }) => {
+  test("a junction's signal plan and its pedestrian calls can be read, and the calls and their detection not changed", async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     // A signal with a crossing on call, made where the project can be edited, then kept by leaving for the map.
     const href = await openJunction(page);
@@ -123,6 +125,8 @@ test.describe("a design opened read-only", () => {
     const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
     await box.click();
     await expect(page.locator(`#call-rate-${uid}`)).toBeVisible();
+    await page.locator(`#call-detect-${uid}-passive`).check();
+    await expect(page.locator(`#call-detect-${uid}-passive`)).toBeChecked();
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -136,6 +140,12 @@ test.describe("a design opened read-only", () => {
     expect(await boxes.count()).toBeGreaterThan(0);
     for (const b of await boxes.all()) await expect(b).toBeDisabled();
     await expect(page.locator(`#call-rate-${uid}`)).toBeDisabled();
+    // The detection is shown, and cannot be changed.
+    await expect(page.locator(`#call-detect-${uid}-passive`)).toBeChecked();
+    await expect(page.locator(`#call-detect-help-${uid}`)).toContainText(
+      "one who leaves after waiting 30 s cancels it",
+    );
+    for (const r of await page.locator(`#call-detect-${uid} input[type=radio]`).all()) await expect(r).toBeDisabled();
     await expect(page.locator("#calls-totals")).toBeVisible();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);

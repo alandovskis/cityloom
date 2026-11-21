@@ -619,9 +619,9 @@ jn-rev-call-rate =
     }
 jn-calls-heading = Pedestrian calls
 jn-calls-intro = A crossing on call is walked only when someone pushes the button. One on recall is walked every time its phases run, and calls cannot change its service.
-jn-calls-bounds = Placeholder figures: walk { $walk } s, then clearance at { $speed } m/s, rounded up to the second; a green is extended by at most { $max } s; the calls are spread over one hour.
+jn-calls-bounds = Placeholder figures: walk { $walk } s, then clearance at { $speed } m/s, rounded up to the second; a green is extended by at most { $max } s; with passive detection a pedestrian leaves after waiting { $limit } s; the calls are spread over one hour.
 jn-calls-group = Crossing of { $street }
-jn-calls-on-call = On call (push button)
+jn-calls-on-call = On call
 jn-calls-rate = Calls an hour
 jn-calls-rate-range = { $min } to { $max } calls an hour (placeholder bound)
 jn-calls-recall = On recall: walked every time its phases run; calls cannot change its service.

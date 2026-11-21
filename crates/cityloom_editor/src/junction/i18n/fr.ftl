@@ -619,9 +619,9 @@ jn-rev-call-rate =
     }
 jn-calls-heading = Appels piétons
 jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton appuie sur le bouton. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
-jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; les appels sont répartis sur une heure.
+jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; avec la détection passive, un piéton part après { $limit } s d’attente; les appels sont répartis sur une heure.
 jn-calls-group = Passage de { $street }
-jn-calls-on-call = Sur appel (bouton-poussoir)
+jn-calls-on-call = Sur appel
 jn-calls-rate = Appels par heure
 jn-calls-rate-range = De { $min } à { $max } appels par heure (borne provisoire)
 jn-calls-recall = En rappel : ouvert chaque fois que ses phases passent; les appels ne changent rien à son service.

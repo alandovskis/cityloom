@@ -232,7 +232,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
     const crossing = page.locator(".call-crossing").first();
     const name = (await crossing.locator(".call-name").innerText()).trim();
     await expect(page.getByRole("group", { name: `Crossing of ${name}` })).toHaveCount(1);
-    const box = crossing.getByRole("checkbox", { name: "On call (push button)" });
+    const box = crossing.getByRole("checkbox", { name: "On call", exact: true });
     await expect(box).toHaveAccessibleDescription(/^On recall: walked every time its phases run/);
     // Space puts it on call; its rate is a labelled field, and the description says what a call needs of the green.
     await box.focus();
@@ -243,6 +243,24 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
     await expect(box).toHaveAccessibleDescription(/^On call: walk 7 s \+ clearance \d+ s = \d+ s of green\.$/);
     await expect(crossing.getByRole("textbox", { name: "Calls an hour" })).toHaveAccessibleDescription(
       "0 to 60 calls an hour (placeholder bound)",
+    );
+    // Its detection is a radio group named by its heading and described by what the chosen detection does; the arrow
+    // keys choose passive detection, and the focus stays on the radio.
+    const detection = crossing.getByRole("radiogroup", { name: "Detection" });
+    await expect(detection).toHaveAccessibleDescription(
+      /^A pedestrian pushes the button to call the walk; the call stays placed/,
+    );
+    const push = detection.getByRole("radio", { name: "Push button" });
+    const passive = detection.getByRole("radio", { name: "Passive detection" });
+    await expect(push).toBeChecked();
+    await push.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(passive).toBeChecked();
+    await expect(passive).toBeFocused();
+    await expect(live(page)).toContainText(": passive detection.");
+    await expect(live(page)).toContainText(/Passive detection: \d+ calls? cancelled, \d+ walks? skipped\./);
+    await expect(detection).toHaveAccessibleDescription(
+      /one who leaves after waiting 30 s cancels it, and a walk with nobody left waiting is skipped\. Walk and clearance are never shortened\.$/,
     );
     await page.locator("#calls-rows summary").click();
     await expect(page.locator("#calls-rows tbody tr").first()).toBeVisible();

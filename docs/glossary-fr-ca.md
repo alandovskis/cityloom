@@ -307,6 +307,11 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Continuous sidewalk | Trottoir continu | To confirm, see below. |
 | Junction inspector | Bike box | Sas cyclable | To confirm, see below. |
 | Junction inspector | Protected corner | Coin protégé | To confirm, see below. |
+| Junction inspector | On call / On recall (a crossing of a signal, #60) | Sur appel / En rappel |  |
+| Junction inspector | Push button (a crossing's detection) | Bouton-poussoir |  |
+| Junction inspector | Passive detection (kerbside radar, infrared or video, CLM-17) | Détection passive |  |
+| Junction inspector | Cancelled (a call whose pedestrian left before the walk) | Annulé (appel) | `Annulés` in the totals; `Annulé : parti après 30 s d’attente` in each call's row. |
+| Junction inspector | Walk (the pedestrian signal) / Walks skipped | Marche / Marches omises | As the plan's bounds, `marche de 7 s`. |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |

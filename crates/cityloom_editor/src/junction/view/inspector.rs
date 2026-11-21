@@ -8,7 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
-use crate::junction::model::calls::{CLEARANCE_MM_PER_S, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WALK_S};
+use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
 use crate::junction::model::read_model::{CallRowView, CrossingView, JView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::{
@@ -1716,9 +1716,10 @@ fn signal_overview(w: Watch) -> impl IntoView {
     }
 }
 
-/// Pedestrian calls (#60), in the plan's level: each crossing on call (walked only when someone pushes the button,
-/// with its calls an hour) or on recall (walked every time its phases run, which calls cannot change), the placeholder
-/// figures that bound the service, the calls of the hour added up by crossing, the findings, and every call in a fold.
+/// Pedestrian calls (#60), in the plan's level: each crossing on call (walked only when someone calls it, with its calls
+/// an hour and how it detects them, a push button or passive detection, CLM-17) or on recall (walked every time its
+/// phases run, which calls cannot change), the placeholder figures that bound the service, the calls of the hour added
+/// up by crossing, the findings, and every call in a fold.
 /// A crossing no phase walks says so, and a box put on call there is refused with that reason. It decides nothing:
 /// the modes, rows, totals and findings all come from the view.
 fn calls_section(w: Watch) -> impl IntoView {
@@ -1728,7 +1729,8 @@ fn calls_section(w: Watch) -> impl IntoView {
     let crossing = move |uid: u32| calls.with(|c| c.crossings.iter().find(|c| c.uid == uid).cloned());
     let bounds = move || {
         let speed = Units::Metres.fixed_in(CLEARANCE_MM_PER_S as i32, 1, w.i18n().locale());
-        tr(w, "jn-calls-bounds", Args::new().num("walk", i64::from(WALK_S)).str("speed", speed).num("max", i64::from(MAX_EXTENSION_S)))
+        let args = Args::new().num("walk", i64::from(WALK_S)).str("speed", speed).num("max", i64::from(MAX_EXTENSION_S));
+        tr(w, "jn-calls-bounds", args.num("limit", i64::from(WAIT_LIMIT_S)))
     };
     let item = move |uid: u32| {
         let street = move || crossing(uid).map(|c| w.say(&c.label)).unwrap_or_default();
@@ -1780,6 +1782,44 @@ fn calls_section(w: Watch) -> impl IntoView {
                 }
             })
         };
+        // How the crossing detects people, while it is on call: a radio group named by its heading and described by what
+        // the chosen detection does. Made again only when the crossing goes on or off call, so a radio keeps the focus.
+        let on_call = Memo::new(move |_| crossing(uid).is_some_and(|c| c.on_call));
+        let detection = move || crossing(uid).map_or(Detection::PushButton, |c| c.detection);
+        let detect = move || {
+            on_call.get().then(|| {
+                let (group, head, help) = (format!("call-detect-{uid}"), format!("call-detect-h-{uid}"), format!("call-detect-help-{uid}"));
+                let help_text = move || match detection() {
+                    Detection::PushButton => w.tr("jn-calls-detection-push-button-help"),
+                    Detection::Passive => tr(w, "jn-calls-detection-passive-help", Args::new().num("limit", i64::from(WAIT_LIMIT_S))),
+                };
+                let radio = move |choice: Detection, id: &'static str, key: &'static str| {
+                    let chosen = move || detection() == choice;
+                    view! {
+                        <label class="phase-move">
+                            <input type="radio" name=format!("call-detect-{uid}") id=format!("call-detect-{uid}-{id}") checked=chosen prop:checked=chosen
+                                on:change=move |ev| {
+                                    let input = event_target::<HtmlInputElement>(&ev);
+                                    // Refused (no phase walks it, say): the radios show the detection the model kept.
+                                    if !w.set_detection(uid, choice) {
+                                        input.set_checked(chosen());
+                                    }
+                                } />
+                            <span>{words(w, key)}</span>
+                        </label>
+                    }
+                };
+                let (named_by, described_by) = (head.clone(), help.clone());
+                view! {
+                    <div class="call-detect" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="call-detect-h" id=head>{words(w, "jn-calls-detection")}</span>
+                        {radio(Detection::PushButton, "push-button", "jn-calls-detection-push-button")}
+                        {radio(Detection::Passive, "passive", "jn-calls-detection-passive")}
+                        <p class="insp-range" id=help>{help_text}</p>
+                    </div>
+                }
+            })
+        };
         let focus = box_id.clone();
         // The item stays a list item; the group that names the crossing is inside it.
         view! {
@@ -1798,6 +1838,7 @@ fn calls_section(w: Watch) -> impl IntoView {
                         <span>{words(w, "jn-calls-on-call")}</span>
                     </label>
                     {rate}
+                    {detect}
                     <p class="insp-range" id=status_id>{status}</p>
                 </div>
             </li>
@@ -1822,9 +1863,11 @@ fn calls_section(w: Watch) -> impl IntoView {
                 <td>{t.calls}</td>
                 <td>{t.served}</td>
                 <td>{t.delayed}</td>
+                <td>{t.cancelled}</td>
                 // Calls the crossing could not serve are a problem, marked as the checks mark one.
                 <td class=(t.not_served > 0).then_some("bad")>{t.not_served}</td>
                 <td>{t.extended}</td>
+                <td>{t.walks_skipped}</td>
                 <td>{longest}</td>
             </tr>
         }
@@ -1842,8 +1885,10 @@ fn calls_section(w: Watch) -> impl IntoView {
                                 <th scope="col">{words(w, "jn-calls-col-calls")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-served")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-delayed")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-cancelled")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-not-served")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-extended")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-skipped")}</th>
                                 <th scope="col">{words(w, "jn-calls-col-longest")}</th>
                             </tr>
                         </thead>
