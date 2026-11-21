@@ -1,0 +1,182 @@
+/* The comparison page: two designs of one place, side by side from 900 px and one under the other below. Its colours
+   are the home page's (the same tokens, so the pairs `shared/contrast.rs` measures are the ones used here). */
+
+.compare-page {
+  position: relative;
+  z-index: 5;
+  padding: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 24px;
+}
+@media (max-width: 899px) {
+  .compare-page {
+    padding-top: 16px;
+  }
+}
+/* The cleared-edits notice stands in the page's flow, under the floating bar and lined up with the card; the room the
+   page keeps for the bar moves above it, so it covers nothing. */
+@media (min-width: 900px) {
+  .shell-notice {
+    width: min(1280px, calc(100% - 2 * clamp(16px, 5vw, 80px)));
+    margin: calc(var(--pad) + var(--bar-h) + 32px) clamp(16px, 5vw, 80px) 0;
+  }
+  div:has(> .shell-notice) + .compare-page {
+    padding-top: 16px;
+  }
+}
+#compare-slot {
+  width: min(1280px, 100%);
+  padding: 36px 40px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+@media (max-width: 520px) {
+  #compare-slot {
+    padding: 24px 12px;
+  }
+}
+#compare-slot h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+#compare-slot h1:focus {
+  outline: none;
+}
+#compare-slot h1:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+#compare-slot h2 {
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+#compare-slot h3 {
+  margin-top: 14px;
+  font-size: 16px;
+  font-weight: 700;
+}
+#compare-back {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The two menus, side by side where they fit and one under the other where they do not. */
+.compare-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 20px;
+}
+.compare-pick {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 6px;
+  min-width: 0;
+}
+.compare-pick label {
+  font-weight: 600;
+}
+.compare-pick select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+}
+.compare-pick select:focus-visible {
+  border-color: var(--accent);
+}
+.compare-refusal {
+  margin-top: 10px;
+  color: var(--warn);
+  font-weight: 600;
+}
+.compare-refusal:empty {
+  display: none;
+}
+
+/* One column, then two from 900 px; `minmax(0, 1fr)` lets a column be narrower than its drawing. */
+.compare-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+}
+@media (min-width: 900px) {
+  .compare-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.compare-col {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+.compare-col figure {
+  margin: 0;
+  max-width: 100%;
+}
+.compare-col figure svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+#compare-summary {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+#compare-summary ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.compare-headline {
+  margin-top: 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.compare-also {
+  margin-top: 14px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+#compare-summary li {
+  overflow-wrap: anywhere;
+}
+
+/* The page scrolls when its card is long: the version ends it instead of floating over the card. */
+.site-foot {
+  position: relative;
+  height: auto;
+  padding: 0 clamp(16px, 5vw, 80px) 16px;
+  left: 0;
+}
+
+/* The bar of a page with no search: brand, pages, account (as the home page's, whose rules these are). */
+.bar {
+  grid-template-columns: auto 1fr auto;
+}
+.bar .surfaces {
+  justify-self: start;
+}
+@media (max-width: 899px) {
+  .bar {
+    grid-template-columns: 1fr auto;
+  }
+  .bar .surfaces {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

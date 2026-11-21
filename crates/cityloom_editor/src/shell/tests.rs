@@ -266,6 +266,7 @@ fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
         ("account", include_str!("../../../../web/account.html")),
+        ("compare", include_str!("../../../../web/compare.html")),
     ];
     let block_of = |html: &str| {
         let start = html.find(r#"<div id="boot-failed""#).expect("the page has a boot-failed block");
@@ -316,6 +317,7 @@ fn every_page_s_bar_links_the_projects_and_about_and_never_a_map() {
         ("intersection", include_str!("../../../../web/intersection.html"), None),
         ("account", include_str!("../../../../web/account.html"), None),
         ("credits", include_str!("../../../../web/credits.html"), None),
+        ("compare", include_str!("../../../../web/compare.html"), None),
     ];
     let link = |href: &str, key: &str, text: &str, current: bool| {
         let current = if current { r#" aria-current="page""# } else { "" };
@@ -349,6 +351,34 @@ fn every_page_s_bar_links_the_projects_and_about_and_never_a_map() {
     assert_eq!(words(&fr), ["Pages", "Projets", "À propos"]);
 }
 
+/// The comparison page (`web/compare.html`): the skip link first in the body, to the comparison's heading, the slot both
+/// halves mount into, the live region, the stylesheets in the order that lets `compare.css` win, and every word of the
+/// markup in both languages.
+#[test]
+fn the_comparison_page_has_its_skip_link_slot_live_region_and_words_in_both_languages() {
+    let html = include_str!("../../../../web/compare.html");
+    let body = &html[html.find("<body").unwrap()..];
+    let body = &body[body.find('>').unwrap() + 1..];
+    let skip = r##"<a class="skip-link" href="#compare-h" data-i18n="cmp-skip">Skip to the comparison</a>"##;
+    assert!(body.contains(skip), "the skip link goes to the comparison's heading");
+    assert!(body.find(skip).unwrap() < body.find("<header").unwrap(), "the skip link comes before the bar");
+    assert!(html.contains(r#"<main class="compare-page">"#) && html.contains(r#"<div id="compare-slot"></div>"#));
+    assert!(html.contains(r#"<output id="live" class="sr-only" aria-live="polite"></output>"#));
+    assert!(html.contains("<title>CityLoom comparison</title>"));
+    let at = |sheet: &str| html.find(&format!(r#"href="v/{{{{build}}}}/{sheet}""#)).unwrap_or_else(|| panic!("{sheet}"));
+    assert!(at("app.css") < at("editor.css") && at("editor.css") < at("compare.css"), "app, then the drawing's, then the page's own");
+    assert!(html.contains(r#"src="v/{{build}}/compare.js""#));
+    assert!(html.contains(r#"<svg id="defs""#), "the hatches the drawings are filled with are defined in the page");
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    for (key, shown) in i18n_keys(html) {
+        let (e, f) = (en.tr_now(&key, &Args::new()), fr.tr_now(&key, &Args::new()));
+        assert!(e != key && f != key, "{key} is a message in both languages");
+        if key == "cmp-skip" {
+            assert_eq!((shown.as_str(), e.as_str(), f.as_str()), ("Skip to the comparison", "Skip to the comparison", "Passer à la comparaison"));
+        }
+    }
+}
+
 #[test]
 fn the_pages_that_read_the_city_preload_the_tile_index() {
     for (name, html) in [
@@ -356,6 +386,7 @@ fn the_pages_that_read_the_city_preload_the_tile_index() {
         ("map", include_str!("../../../../web/map.html")),
         ("street", include_str!("../../../../web/street.html")),
         ("intersection", include_str!("../../../../web/intersection.html")),
+        ("compare", include_str!("../../../../web/compare.html")),
     ] {
         assert!(html.contains(r#"<link rel="preload" as="fetch" crossorigin href="data/metro/index.json">"#), "{name}.html");
     }

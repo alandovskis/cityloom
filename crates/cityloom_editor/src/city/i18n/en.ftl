@@ -77,6 +77,7 @@ cmp-differs =
 cmp-also = Also differs in: { $list }
 cmp-back-street = Back to the street
 cmp-back-junction = Back to the junction
+cmp-skip = Skip to the comparison
 cmp-h-space = Space
 cmp-h-lanes = Lanes
 cmp-h-pieces = Pieces

@@ -77,6 +77,7 @@ cmp-differs =
 cmp-also = Diffère aussi par : { $list }
 cmp-back-street = Retour à la rue
 cmp-back-junction = Retour à la jonction
+cmp-skip = Passer à la comparaison
 cmp-h-space = Espace
 cmp-h-lanes = Voies
 cmp-h-pieces = Éléments

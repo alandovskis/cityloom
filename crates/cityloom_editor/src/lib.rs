@@ -143,6 +143,52 @@ pub fn mount_timeline() -> Option<TimelinePage> {
     Some(TimelinePage { i18n, project })
 }
 
+/// The comparison page as its script sees it: two designs of one place of the project it is opened in, side by side.
+#[wasm_bindgen]
+pub struct ComparePage {
+    i18n: std::rc::Rc<shared::i18n::I18n>,
+    project: Option<String>,
+}
+
+#[wasm_bindgen]
+impl ComparePage {
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page, in its project. The
+    /// shell says by itself that the page is read-only when its address asks (`view=1`).
+    pub fn mount_shell(&self) {
+        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", shell::NotesAtStart::Open);
+    }
+}
+
+/// Draws the comparison of two designs of the street (`?street=<edge>`) or the junction (`?junction=<node>`) the page
+/// is opened for, in the project it is opened in. Read-only: the project is only peeked at (`project::context::peek`),
+/// nothing is remembered or written. The page is put together here, where slices may meet: the project slice says which
+/// project, the street or junction slice draws its half. Where the project is not here the page goes to the list, and
+/// where the place is not one of the city's, to the project's map; there is nothing to draw in either case.
+#[wasm_bindgen]
+pub fn mount_compare() -> Option<ComparePage> {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let root = shared::platform::browser_ports();
+    let Some(ports) = project::context::peek(root.clone()) else {
+        root.navigator.replace(project::context::MISSING_HREF);
+        return None;
+    };
+    let search = ports.page.path().split_once('?').map(|(_, search)| search.to_string()).unwrap_or_default();
+    let place =
+        |name: &str| search.split('&').find_map(|pair| pair.strip_prefix(name)?.strip_prefix('=')).and_then(|v| v.parse::<u32>().ok()).filter(|&n| n != 0);
+    let i18n = i18n_browser(&ports);
+    let mounted = match (place("street"), place("junction")) {
+        (Some(edge), _) => street::mount_compare_street(ports.clone(), i18n.clone(), edge),
+        (None, Some(node)) => junction::mount_compare_junction(ports.clone(), i18n.clone(), node),
+        (None, None) => false,
+    };
+    if !mounted {
+        ports.navigator.replace(&shared::project_id::link_for("map.html", &*ports.storage));
+        return None;
+    }
+    Some(ComparePage { i18n, project: ports.storage.project() })
+}
+
 /// The share page as its script sees it (#221): the links of the project it is opened in, or a link being opened.
 #[wasm_bindgen]
 pub struct SharePage {
