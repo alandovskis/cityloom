@@ -880,6 +880,187 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(live(page)).toContainText("rétabli à la suggestion");
   });
 
+  test("a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French", async ({
+    page,
+  }) => {
+    const section = page.locator("#signal-calls");
+    await expect(section).toContainText("Pedestrian calls");
+    await expect(page.locator("#calls-bounds")).toHaveText(
+      "Placeholder figures: walk 7 s, then clearance at 1.0 m/s, rounded up to the second; a green is extended by at most 15 s; the calls are spread over one hour.",
+    );
+    const boxes = section.locator(".call-crossing input[type=checkbox]");
+    expect(await boxes.count()).toBeGreaterThanOrEqual(2);
+    // Every crossing is on recall to begin with, and says that calls cannot change its service.
+    await expect(section.getByText(/^On recall: walked every time its phases run/)).toHaveCount(await boxes.count());
+    await expect(page.locator("#calls-none")).toBeVisible();
+    const uid = async (n: number) => (await boxes.nth(n).getAttribute("id"))!.replace("call-on-", "");
+    const [first, second] = [await uid(0), await uid(1)];
+
+    // Take the first crossing out of every phase: no phase walks it, so on call is refused and says why.
+    const walks = page.locator(`#inspector input[id^="sig-walks-"][id$="-${first}"]`);
+    for (let i = 0; i < (await walks.count()); i++) {
+      if (await walks.nth(i).isChecked()) {
+        await walks.nth(i).uncheck();
+        await expect(walks.nth(i)).not.toBeChecked();
+      }
+    }
+    await expect(page.locator(`#call-status-${first}`)).toHaveText(
+      "No phase walks this crossing, so it cannot be on call.",
+    );
+    await page.locator(`#call-on-${first}`).click();
+    await expect(live(page)).toHaveText(
+      "No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first.",
+    );
+    await expect(page.locator(`#call-on-${first}`)).not.toBeChecked();
+
+    // A crossing a phase walks goes on call, with 12 calls an hour until a rate is typed.
+    await page.locator(`#call-on-${second}`).click();
+    await expect(page.locator(`#call-on-${second}`)).toBeChecked();
+    await expect(live(page)).toContainText(/on call\. .* 12 calls in the hour; served \d+, delayed \d+/);
+    const rate = page.locator(`#call-rate-${second}`);
+    await expect(rate).toHaveValue("12");
+    await expect(page.locator(`#call-status-${second}`)).toHaveText(
+      /^On call: walk 7 s \+ clearance \d+ s = \d+ s of green\.$/,
+    );
+    await rate.fill("30");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("30");
+    await expect(live(page)).toContainText("30 calls an hour");
+    await rate.fill("61");
+    await rate.press("Enter");
+    await expect(live(page)).toHaveText("That many calls an hour is outside the placeholder bound shown.");
+    await expect(rate).toHaveValue("30");
+
+    // The totals: one row for the crossing on call, its calls served or delayed, adding up to 30.
+    const totals = page.locator("#calls-totals tbody tr");
+    await expect(totals).toHaveCount(1);
+    const cells = (await totals.first().locator("td").allInnerTexts()).map((t) => t.trim());
+    expect(cells[0]).toBe("30");
+    expect(Number(cells[1]) + Number(cells[2])).toBe(30);
+    expect(cells[3]).toBe("0");
+    await expect(totals.first().locator("td").last()).toHaveText(/^\d+ s$/);
+    // Every call, one row each, in a fold.
+    const rows = page.locator("#calls-rows");
+    await expect(rows.locator("summary")).toHaveText("Every call, one row each (30)");
+    await rows.locator("summary").click();
+    await expect(rows.locator("tbody tr")).toHaveCount(30);
+    await expect(rows.locator("tbody tr").first().locator("td").first()).toHaveText(/^\d+ min \d+ s$/);
+    await expect(rows.locator("tbody tr").first().locator("td").last()).toHaveText(/^(Served after|Delayed) \d+ s/);
+    await expect(page.locator("#calls-findings")).toHaveCount(0);
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await expect(section).toContainText("Appels piétons");
+    await expect(page.locator("#calls-bounds")).toContainText("Valeurs provisoires");
+    await expect(page.locator("#calls-bounds")).toContainText("1,0 m/s");
+    await expect(page.locator(`#call-status-${first}`)).toHaveText(
+      "Aucune phase n’ouvre ce passage\u00a0: il ne peut pas être sur appel.",
+    );
+    await expect(page.locator("#calls-totals caption")).toHaveText("Appels en une heure, par passage");
+    await expect(rows.locator("summary")).toHaveText("Chaque appel, une ligne par appel (30)");
+    await expect(section).not.toContainText("On recall");
+  });
+
+  test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
+    page,
+  }) => {
+    const first = page.locator(".call-crossing input[type=checkbox]").first();
+    const uid = (await first.getAttribute("id"))!.replace("call-on-", "");
+    await first.click();
+    await expect(first).toBeChecked();
+    const listed = page
+      .locator(`#call-on-${uid}`)
+      .locator("xpath=ancestor::div[contains(@class,'call-crossing')]")
+      .locator(".call-name");
+    const was = (await listed.innerText()).trim();
+    // Turn its street a step at a time until its compass point changes: a step that small leaves the phases, and so the
+    // numbers, as they were, and only the name changes.
+    const bearing = page.locator('#inspector input[aria-labelledby="i-h-bearing"]');
+    const toStreet = async () => {
+      await page.locator("#jn-path-up-0").click(); // the plan's path: back to the Junction level
+      await page.locator(`#jn-go-${uid}`).click();
+      if (!(await bearing.isVisible())) await page.locator("#jn-fold-position summary").click();
+    };
+    const totalsBefore = await page.locator("#calls-totals tbody td").allInnerTexts();
+    turning: for (const way of ["clockwise", "anticlockwise"]) {
+      for (let step = 0; step < 12; step++) {
+        await toStreet();
+        const at = await bearing.inputValue();
+        await page.getByRole("button", { name: new RegExp(`^Turn ${way} by`) }).click();
+        if ((await bearing.inputValue()) === at) break; // too close to a neighbour that way
+        await page.locator("#wrap").focus();
+        await page.keyboard.press("Escape");
+        await openPlan(page);
+        if ((await listed.innerText()).trim() !== was) break turning;
+      }
+    }
+    const name = (await listed.innerText()).trim();
+    expect(name).not.toBe(was);
+    // The case that matters: the same numbers, a new name.
+    expect(await page.locator("#calls-totals tbody td").allInnerTexts()).toEqual(totalsBefore);
+    await expect(page.locator("#calls-totals tbody th")).toHaveText([name]);
+    await page.locator("#calls-rows summary").click();
+    const rows = page.locator("#calls-rows tbody th");
+    expect(new Set((await rows.allInnerTexts()).map((t) => t.trim()))).toEqual(new Set([name]));
+    // Undo and redo with the plan open: the rows keep their numbers, and follow the name back and forth.
+    for (const [button, now] of [
+      ["#undo", was],
+      ["#redo", name],
+    ]) {
+      await page.locator(button).click();
+      await expect(listed).toHaveText(now);
+      await expect(page.locator("#calls-totals tbody th")).toHaveText([now]);
+      await expect.poll(async () => [...new Set((await rows.allInnerTexts()).map((t) => t.trim()))]).toEqual([now]);
+    }
+  });
+
+  test("a crossing too long for any phase's green, even extended by 15 s, is a finding", async ({ page }) => {
+    // The fourth junction of the Plateau has a crossing that takes 14 s to clear: walk 7 s + 14 s = 21 s, more than
+    // the shortest green (5 s) and the most it can be extended (15 s).
+    await openJunction(page, 3);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await openPlan(page);
+    // Every crossing on call (one no phase walks is refused, and stays on recall).
+    for (const box of await page.locator(".call-crossing input[type=checkbox]").all()) await box.click();
+    const crossing = page.locator(".call-crossing").filter({ hasText: "clearance 14 s" });
+    await expect(crossing).toHaveCount(1);
+    await expect(page.locator("#calls-findings")).toHaveCount(0);
+    // Every phase's green at its least.
+    const phases = await page.locator("#inspector .signal-list > li").count();
+    for (let i = 0; i < phases; i++) {
+      await page.locator("#inspector .signal-list > li > button").nth(i).click();
+      const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');
+      await green.fill("5");
+      await green.press("Enter");
+      await expect(green).toHaveValue("5");
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("Escape");
+      await openPlan(page);
+    }
+    const name = (await crossing.locator(".call-name").innerText()).trim();
+    await expect(page.locator("#calls-findings")).toHaveText(
+      `The crossing of ${name} cannot be served safely: its walk and clearance need 21 s of green, and no phase that walks it can give more than 20 s.`,
+    );
+    // Its totals count its calls and mark them not served, with no wait to report.
+    const row = page.locator("#calls-totals tbody tr").filter({ hasText: name });
+    await expect(page.locator("#calls-totals thead th")).toHaveText([
+      "Crossing",
+      "Calls",
+      "Served",
+      "Delayed",
+      "Not served",
+      "Green extended",
+      "Longest wait",
+    ]);
+    await expect(row.locator("td")).toHaveText(["12", "0", "0", "12", "0", "–none served"]);
+    await expect(row.locator("td").last().locator("[aria-hidden=true]")).toHaveText("–");
+    await expect(row.locator("td").nth(3)).toHaveClass("bad");
+    await page.locator("#calls-rows summary").click();
+    await expect(page.locator("#calls-rows tbody tr").filter({ hasText: name }).first()).toContainText("Not served");
+  });
+
   test("the timing is French in French", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();

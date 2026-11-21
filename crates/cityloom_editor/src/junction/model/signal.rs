@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::model::{Arm, LEFT, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::junction::model::{Arm, LEFT, MAX_ARMS, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
 use crate::shared::catalogue::{REGIONS, Side};
 
 /// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
@@ -147,14 +147,23 @@ fn once<T: Copy + Eq + std::hash::Hash>(items: impl Iterator<Item = T>) -> Vec<T
     items.filter(|i| seen.insert(*i)).collect()
 }
 
-/// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), and a phase that serves
-/// nothing any more dropped. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
+/// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), a phase that serves
+/// nothing any more dropped, and no more phases than an edit can make. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
 /// list them), so what is stored, said and shown always match. None when nothing is left.
 fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
+    // No more phases than an edit can make (`Junction::add_phase`): a stored plan may come from anywhere.
+    let phases: Vec<StoredPhase> = surviving(s, plan, region).into_iter().take(MAX_PHASES).collect();
+    (!phases.is_empty()).then_some(SignalPlan { phases })
+}
+
+/// The most phases a plan has, as an edit makes them and as a stored plan is read.
+pub const MAX_PHASES: usize = MAX_ARMS * 2;
+
+/// The phases of a stored plan that still serve something, each without what no longer exists, before any is cut.
+fn surviving(s: &State, plan: &SignalPlan, region: usize) -> Vec<StoredPhase> {
     let has = |uid: u32| s.arms.iter().any(|a| a.uid == uid);
     let (crossings, bikes) = (walk_arms(s), ride_arms(s, region));
-    let phases: Vec<StoredPhase> = plan
-        .phases
+    plan.phases
         .iter()
         .map(|p| StoredPhase {
             moves: once(
@@ -165,8 +174,16 @@ fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
             arm: p.arm,
         })
         .filter(|p| !p.moves.is_empty() || p.arm.is_some_and(has))
-        .collect();
-    (!phases.is_empty()).then_some(SignalPlan { phases })
+        .collect()
+}
+
+/// How many phases of the stored plan of `s`, which still serve something, lie past `MAX_PHASES` and are left out as
+/// it is read. 0 off a signal and without a plan of the person's own.
+pub fn phases_beyond(s: &State, region: usize) -> usize {
+    match s.signal_plan.as_ref().filter(|_| s.control == SIGNAL) {
+        Some(plan) => surviving(s, plan, region).len().saturating_sub(MAX_PHASES),
+        None => 0,
+    }
 }
 
 /// Keeps the stored plan true to the junction after an edit: gone unless the control is a signal, and without what no

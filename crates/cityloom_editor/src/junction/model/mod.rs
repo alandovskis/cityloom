@@ -4,6 +4,7 @@
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
 pub mod beyond;
+pub mod calls;
 pub mod curbside;
 pub mod geometry;
 pub mod read_model;
@@ -313,6 +314,11 @@ pub struct Arm {
     /// the junction's control is a signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<Timing>,
+    /// The arm's crossing is on call (#60): walked only when a pedestrian has pushed the button, at this many calls an
+    /// hour (the scenario `calls::summary` serves). None: on recall, walked every time its phases run, as before. Saved
+    /// only once set, so a junction with no crossing on call is written as it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calls: Option<u32>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -506,6 +512,7 @@ impl Arm {
             rule: 0,
             filter: false,
             timing: None,
+            calls: None,
             walked: false,
         }
     }
@@ -757,6 +764,11 @@ pub fn arm_name(a: &Arm) -> Said {
 }
 
 /// Something said about one arm.
+/// `change`, followed by how many crossings it took off call (`jn-rev-calls-lost`).
+fn calls_lost_label(change: Said, n: usize) -> Said {
+    Said::new("jn-rev-calls-lost").with("change", Arg::Said(Box::new(change))).with("n", Arg::Num(n as i64))
+}
+
 fn about(key: &'static str, a: &Arm) -> Said {
     Said::new(key).with("arm", Arg::Said(Box::new(arm_name(a))))
 }
@@ -826,10 +838,14 @@ pub enum Refusal {
     NoBikeLane,
     ScrambleWalks,
     MovementAlready,
+    CallNotWalked,
+    CallAlready,
+    NotOnCall,
+    CallRateOutOfRange,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 33] = [
+    pub const ALL: [Refusal; 37] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -863,6 +879,10 @@ impl Refusal {
         Refusal::NoBikeLane,
         Refusal::ScrambleWalks,
         Refusal::MovementAlready,
+        Refusal::CallNotWalked,
+        Refusal::CallAlready,
+        Refusal::NotOnCall,
+        Refusal::CallRateOutOfRange,
     ];
 
     /// The message that says why.
@@ -901,6 +921,10 @@ impl Refusal {
             Refusal::NoBikeLane => "jn-refusal-no-bike-lane",
             Refusal::ScrambleWalks => "jn-refusal-scramble-walks",
             Refusal::MovementAlready => "jn-refusal-movement-already",
+            Refusal::CallNotWalked => "jn-refusal-call-not-walked",
+            Refusal::CallAlready => "jn-refusal-call-already",
+            Refusal::NotOnCall => "jn-refusal-not-on-call",
+            Refusal::CallRateOutOfRange => "jn-refusal-call-rate-out-of-range",
         }
     }
 }
@@ -920,6 +944,10 @@ pub struct Junction {
     refusal: Option<Refusal>,
     /// The arm a `TurboArmSkewed` or `TurboEntryTooNarrow` refusal names; None for any other.
     refusal_arm: Option<Said>,
+    /// How many crossings were taken off call as the junction opened (it is not a signal); 0 once it is edited.
+    calls_dropped: usize,
+    /// How many phases of its stored plan were left out as it opened (past `signal::MAX_PHASES`); 0 once it is edited.
+    phases_cut: usize,
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -933,6 +961,7 @@ impl Junction {
     /// eased (small corners, no offsets, no roundabout) before it is given up
     /// for `today`. None when not even `today` can be drawn.
     pub fn from_city(name: Said, today: &State, now: &State, region: usize) -> Option<Junction> {
+        let (kept_today, kept_now) = (today, now);
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
@@ -950,11 +979,25 @@ impl Junction {
             selected: Target::None,
             refusal: None,
             refusal_arm: None,
+            calls_dropped: 0,
+            phases_cut: 0,
         };
         let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
             j.states.push(State { label: earlier(), ..now });
             j.cursor = 1;
+        }
+        // Crossings kept on call off a signal (a record from before calls went with the timing, or a sync) are taken off
+        // as it opens. The junction's level says so until its first edit (which writes the record without them); opening
+        // is no edit, so no step is added to undo. A state of changes it opens on says it too, as an edit's would.
+        // Only for that reason: a `now` that cannot be drawn opens on `today`, whose calls are its own.
+        let off_signal = j.current().control != SIGNAL;
+        let lost = if off_signal { kept_now.arms.iter().filter(|a| a.calls.is_some() && j.arm(a.uid).is_none_or(|b| b.calls.is_none())).count() } else { 0 };
+        j.calls_dropped = lost;
+        // A stored plan longer than an edit can make (a record not written here) is read cut: said until the first edit.
+        j.phases_cut = signal::phases_beyond(if j.cursor == 1 { kept_now } else { kept_today }, region);
+        if lost > 0 && j.cursor == 1 {
+            j.states[1].label = calls_lost_label(earlier(), lost);
         }
         Some(j)
     }
@@ -987,6 +1030,16 @@ impl Junction {
 
     pub fn name(&self) -> &Said {
         &self.name
+    }
+
+    /// How many crossings were taken off call as the junction opened, until its first edit.
+    pub fn calls_dropped(&self) -> usize {
+        self.calls_dropped
+    }
+
+    /// How many phases of its stored plan were left out as it opened, until its first edit.
+    pub fn phases_cut(&self) -> usize {
+        self.phases_cut
     }
 
     pub fn is_linked(&self) -> bool {
@@ -1104,6 +1157,8 @@ impl Junction {
         }
         self.refusal = None;
         self.refusal_arm = None;
+        self.calls_dropped = 0;
+        self.phases_cut = 0;
         next.label = label;
         self.states.truncate(self.cursor + 1);
         self.states.push(next);
@@ -1460,7 +1515,7 @@ impl Junction {
         }
         let Some(plan) = self.signal_plan_to_edit() else { return false };
         let Some(phase) = signal::phase_for(self.current(), self.region, uid) else { return self.refuse(Refusal::PhaseServesNothing) };
-        if plan.phases.len() >= MAX_ARMS * 2 {
+        if plan.phases.len() >= signal::MAX_PHASES {
             return self.refuse(Refusal::TooManyPhases);
         }
         let mut kept = plan.to_stored();
@@ -1567,6 +1622,50 @@ impl Junction {
             s.signal_plan = Some(kept);
             true
         })
+    }
+
+    /// Puts the crossing of arm `uid` on call (`on`), walked only when someone pushes the button, at
+    /// `calls::DEFAULT_CALLS_PER_HOUR` calls an hour until a rate is set; or back on recall, walked every time its
+    /// phases run. On call needs a signal and a phase of its plan that walks the crossing (`calls::refusal`); recall is
+    /// always allowed, so a crossing an edit has left unwalked can be taken off call. Refused when it is that already.
+    pub fn set_on_call(&mut self, uid: u32, on: bool) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.calls.is_some() == on {
+            return self.refuse(Refusal::CallAlready);
+        }
+        if on && let Some(why) = calls::refusal(self.current(), self.region, uid) {
+            return self.refuse(why);
+        }
+        self.arm_edit(
+            uid,
+            |a| about(if on { "jn-rev-call-on" } else { "jn-rev-call-off" }, a),
+            |a| {
+                a.calls = on.then_some(calls::DEFAULT_CALLS_PER_HOUR);
+                true
+            },
+        )
+    }
+
+    /// Sets how many times an hour the crossing of arm `uid`, on call, is called: 0 to `calls::MAX_CALLS_PER_HOUR`. A
+    /// crossing on recall has no rate. A rate it has already is not an edit.
+    pub fn set_call_rate(&mut self, uid: u32, rate: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = arm.calls else { return self.refuse(Refusal::NotOnCall) };
+        let Ok(rate) = u32::try_from(rate) else { return self.refuse(Refusal::CallRateOutOfRange) };
+        if rate > calls::MAX_CALLS_PER_HOUR {
+            return self.refuse(Refusal::CallRateOutOfRange);
+        }
+        if rate == now {
+            return true;
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-call-rate", a).with("rate", Arg::Num(i64::from(rate))),
+            |a| {
+                a.calls = Some(rate);
+                true
+            },
+        )
     }
 
     /// Gives the junction the suggested plan again, in place of the one the person edited.
@@ -1823,7 +1922,11 @@ impl Junction {
             (false, true, true) => "jn-rev-control-protected-timing",
             (true, true, true) => "jn-rev-control-all",
         };
-        self.edit_why(why, Said::new(key).with("control", Arg::MsgLower(control_key(control))), |s| {
+        // Crossings on call go with the signal, and the revision says so as it says the timing did.
+        let calls_lost = self.current().arms.iter().zip(&after.arms).filter(|(a, b)| a.calls.is_some() && b.calls.is_none()).count();
+        let label = Said::new(key).with("control", Arg::MsgLower(control_key(control)));
+        let label = if calls_lost > 0 { calls_lost_label(label, calls_lost) } else { label };
+        self.edit_why(why, label, |s| {
             s.control = control;
             true
         })
@@ -2037,11 +2140,20 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     for (a, stands) in s.arms.iter_mut().zip(stands) {
         a.protected = a.protected && stands;
     }
-    // Timing belongs to a signal, and an early green to a transit lane.
+    // Timing and pedestrian calls belong to a signal, and an early green to a transit lane. A document can hold any
+    // number (a sync, a hand): each is brought within its range here, on load as after an edit, so no reader sees one
+    // past it.
     let signal = s.control == SIGNAL;
+    for t in s.arms.iter_mut().filter_map(|a| a.timing.as_mut()) {
+        for f in TimingField::ALL {
+            let (lo, hi) = f.range();
+            f.put(t, f.get(t).clamp(lo as u32, hi as u32));
+        }
+    }
     for a in &mut s.arms {
         if !signal {
             a.timing = None;
+            a.calls = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
@@ -2353,7 +2465,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 33);
+        assert_eq!(Refusal::ALL.len(), 37);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

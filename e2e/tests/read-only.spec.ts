@@ -113,6 +113,35 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
+  test("a junction's signal plan and its pedestrian calls can be read, and the calls not changed", async ({ page }) => {
+    test.setTimeout(120_000);
+    // A signal with a crossing on call, made where the project can be edited, then kept by leaving for the map.
+    const href = await openJunction(page);
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const box = page.locator(".call-crossing input[type=checkbox]").first();
+    const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
+    await box.click();
+    await expect(page.locator(`#call-rate-${uid}`)).toBeVisible();
+    await page.goto("/map.html");
+    await mapReady(page);
+    const before = await kept(page);
+    // Read-only: the plan and its calls are there to read; every box and rate field is disabled.
+    await page.goto(`/${href}&${VIEW}`);
+    await saysReadOnly(page, "Read-only", "This design is open read-only: you can look at it, but not change it.");
+    await page.locator("#jn-go-plan").click();
+    await expect(page.locator("#signal-calls")).toBeVisible();
+    await expect(page.locator(`#call-on-${uid}`)).toBeChecked();
+    const boxes = page.locator("#signal-calls .call-crossing input[type=checkbox]");
+    expect(await boxes.count()).toBeGreaterThan(0);
+    for (const b of await boxes.all()) await expect(b).toBeDisabled();
+    await expect(page.locator(`#call-rate-${uid}`)).toBeDisabled();
+    await expect(page.locator("#calls-totals")).toBeVisible();
+    await page.goto(`/map.html?${VIEW}`);
+    await mapReady(page);
+    expect(await kept(page)).toEqual(before);
+  });
+
   test("the map can be searched and its places opened, read-only, and offers no area to declare", async ({ page }) => {
     await editStreet(page);
     const before = await kept(page);

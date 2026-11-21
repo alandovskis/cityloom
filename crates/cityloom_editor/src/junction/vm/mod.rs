@@ -45,6 +45,17 @@ pub struct JunctionVm {
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
 type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 
+/// What an edit's announcement compares with afterwards, taken before it: what met in the plan and the calls' findings.
+struct Before {
+    meetings: Vec<Meeting>,
+    /// What each finding was about (`calls::Finding::about`), not its words: a renamed street is no new finding.
+    findings: Vec<(u8, u32)>,
+    /// The crossings kept on call while the signal was suspended.
+    kept: usize,
+    /// The crossings taken off call as the junction opened (until its first edit): a sync says only more of them.
+    dropped: usize,
+}
+
 /// Whether an edit says which phases it took off their ready-made pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PatternNote {
@@ -192,7 +203,7 @@ impl JunctionVm {
             return R::default();
         }
         let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
-        let meeting = self.meetings();
+        let meeting = self.before();
         let r = self.edit(f);
         if r.into() {
             let lost = self.lost_since(before);
@@ -268,7 +279,7 @@ impl JunctionVm {
             self.say_refusal();
             return false;
         };
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
         if done {
             let lost: Vec<usize> = match pattern() {
@@ -277,6 +288,41 @@ impl JunctionVm {
             };
             self.say_edit_with(&lost, &meeting);
         } else {
+            self.say_refusal();
+        }
+        done
+    }
+
+    /// The person puts the crossing of street `uid` on call (`on`), or back on recall. Announced by what was done and
+    /// how the plan then serves the crossing's calls; a refusal is said with its reason (no phase walks it, say).
+    pub fn set_on_call(&self, uid: u32, on: bool) -> bool {
+        self.call_edit(uid, |j| j.set_on_call(uid, on))
+    }
+
+    /// The person sets how many times an hour the crossing of street `uid`, on call, is called. Announced as
+    /// `set_on_call` is.
+    pub fn set_call_rate(&self, uid: u32, rate: i32) -> bool {
+        self.call_edit(uid, |j| j.set_call_rate(uid, rate))
+    }
+
+    /// An edit of a crossing's calls: the edit's text, the crossing's calls added up and any calls finding that arose,
+    /// or the refusal. It changes no phase, so nothing about the plan's conflicts or patterns is said. A rate the crossing
+    /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, and only an
+    /// edit that added one is announced, or the last revision, some earlier edit, would be read out.
+    fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
+        if self.refuse_read_only() {
+            return false;
+        }
+        // Only the findings are compared: a crossing's calls move no phase, so nothing about meetings can change.
+        let (findings, edits) = (self.findings(), self.read(|j| j.revisions().count()));
+        let done = self.edit(f);
+        // A rate it had already is no edit: nothing was done, so nothing is said (the last edit is some other one).
+        if done && self.read(|j| j.revisions().count()) != edits {
+            let v = self.view_now();
+            let edit = text::edit_text(&v, &self.i18n, self.units_now());
+            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&findings)));
+        } else if !done {
             self.say_refusal();
         }
         done
@@ -313,7 +359,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.undo());
         if done {
             self.say_with_meetings(self.i18n.tr_now("jn-undone", &Args::new()), &meeting);
@@ -325,7 +371,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.redo());
         if done {
             self.say_edit_with(&[], &meeting);
@@ -337,7 +383,7 @@ impl JunctionVm {
         if self.refuse_read_only() {
             return false;
         }
-        let meeting = self.meetings();
+        let meeting = self.before();
         let done = self.edit(|j| j.reset());
         if done {
             self.say_with_meetings(self.i18n.tr_now("jn-started-over", &Args::new()), &meeting);
@@ -377,8 +423,16 @@ impl JunctionVm {
         fresh.select(self.core.read(|j| j.selected));
         let own = binding.record();
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        let before = self.before();
         self.core.edit(|j| *j = fresh);
-        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+        // The sync's sentence, then what it did to the calls, as an edit's announcement says it: crossings it took off
+        // call (the junction is not a signal), a finding that arose, crossings kept on call as the signal is suspended.
+        let synced = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
+        // Until its first edit the record still holds the calls, so each sync opens the junction without them again:
+        // said only when this one took more off than were off before it.
+        let dropped = self.view_now().calls_dropped;
+        let dropped = (dropped > before.dropped).then(|| self.i18n.tr_now("jn-calls-dropped", &Args::new().num("n", dropped as i64)));
+        self.say_parts(std::iter::once(synced).chain(dropped).chain(self.findings_note(&before.findings)).chain(self.kept_note(&before)));
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -396,20 +450,55 @@ impl JunctionVm {
 
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
     /// phase (from 0) the edit took off its ready-made pattern.
-    fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
+    fn say_edit_with(&self, lost: &[usize], meeting: &Before) {
         if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.say_parts(std::iter::once(t).chain(self.notes(meeting, lost)));
         }
     }
 
     /// Says `text`, then the sentence for the movements that meet now and did not before.
-    fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
-        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)));
+    fn say_with_meetings(&self, text: String, meeting: &Before) {
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)).chain(self.findings_note(&meeting.findings)).chain(self.kept_note(meeting)));
     }
 
-    /// The sentences that follow an edit's text: the movements that now meet, then the phases off their pattern.
-    fn notes(&self, meeting: &[Meeting], lost: &[usize]) -> Vec<String> {
-        self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)).collect()
+    /// The sentences that follow an edit's text: the movements that now meet, the crossings on call it left unserved,
+    /// then the phases off their pattern.
+    fn notes(&self, meeting: &Before, lost: &[usize]) -> Vec<String> {
+        self.meeting_note(meeting).into_iter().chain(self.findings_note(&meeting.findings)).chain(self.kept_note(meeting)).chain(self.lost_note(lost)).collect()
+    }
+
+    /// What an edit is compared against afterwards: the movements that met and the calls' findings before it.
+    fn before(&self) -> Before {
+        Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
+    }
+
+    /// What the findings of the pedestrian calls are about now, each its kind and street.
+    fn findings(&self) -> Vec<(u8, u32)> {
+        self.view_now().signal.as_ref().map(|s| s.calls.found.iter().map(|f| f.about()).collect()).unwrap_or_default()
+    }
+
+    /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
+    /// else. None otherwise.
+    fn kept_note(&self, before: &Before) -> Option<String> {
+        let n = self.view_now().calls_kept;
+        (n > 0 && before.kept == 0).then(|| self.i18n.tr_now("jn-calls-kept", &Args::new().num("n", n as i64)))
+    }
+
+    /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
+    /// already (the same kind at the same street, `calls::Finding::about`, whatever its words now) is not said again.
+    /// Every announcement of a change says it: an edit of the calls or of the signal, an undo, a redo, a reset and a
+    /// change of region. None when none arose.
+    fn findings_note(&self, before: &[(u8, u32)]) -> Option<String> {
+        let v = self.view_now();
+        let calls = &v.signal.as_ref()?.calls;
+        let new: Vec<String> = calls
+            .found
+            .iter()
+            .zip(&calls.findings)
+            .filter(|(f, _)| !before.contains(&f.about()))
+            .map(|(_, said)| say_now(&self.i18n, self.units_now(), said))
+            .collect();
+        (!new.is_empty()).then(|| new.join(" "))
     }
 
     /// Announces the parts as one text.
@@ -424,9 +513,9 @@ impl JunctionVm {
 
     /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
     /// phases (and the first of them) when there are several. None when none arose (one that was there already is not said again).
-    fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
+    fn meeting_note(&self, before: &Before) -> Option<String> {
         let v = self.view_now();
-        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
+        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.meetings.iter().any(|(_, u, b)| u == uid && b == c)).collect();
         let (first, rest) = new.split_first()?;
         let first_said = say_now(&self.i18n, self.units_now(), &crate::junction::model::read_model::conflict_said(first.0, &first.2, &v.arms));
         if rest.is_empty() {
@@ -504,7 +593,7 @@ impl crate::shell::Target for JunctionVm {
             return false;
         }
         let before = self.pattern_state();
-        let meeting = self.meetings();
+        let meeting = self.before();
         let changed = self.edit(|j| j.set_region(region));
         if changed {
             let notes = self.notes(&meeting, &self.lost_since(before));
@@ -630,6 +719,92 @@ mod tests {
     }
 
     #[test]
+    fn a_sync_that_leaves_a_crossing_on_call_unwalked_says_so_after_the_update() {
+        use crate::junction::model::SIGNAL;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        // Another device makes it a signal, puts a crossing on call and walks it in no phase.
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let _ = j.set_control(SIGNAL);
+        let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(j.set_on_call(arm, true));
+        let plan = crate::junction::model::signal::plan(j.current(), 0).unwrap();
+        for i in (0..plan.phases.len()).filter(|&i| plan.phases[i].walks.contains(&arm)) {
+            assert!(j.set_phase_walk(i, arm, false));
+        }
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Updated from another device. The crossing of "), "{t:?}");
+        assert!(t[0].ends_with("is on call, but no phase walks it, so its calls are not served. Walk it in a phase, or put it back on recall."), "{t:?}");
+    }
+
+    /// The junction of `city_rig`'s record as another device writes it: a signal, its first crossing put on call.
+    fn on_call_record(binding: &CityBinding) -> (u32, State) {
+        use crate::junction::model::SIGNAL;
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let _ = j.set_control(SIGNAL);
+        let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(j.set_on_call(arm, true));
+        (node, j.snapshot())
+    }
+
+    #[test]
+    fn a_sync_that_opens_the_junction_off_a_signal_says_the_calls_it_took_off_once() {
+        use crate::junction::model::PRIORITY;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        // The record holds a crossing on call on a junction that is no signal (an older build's, say).
+        let (node, mut state) = on_call_record(&binding);
+        state.control = PRIORITY;
+        assert!(binding.store.write_junction(node, state.clone()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.said.take(), ["Updated from another device. 1 crossing was taken off call as the junction opened: it is not run by a signal."]);
+        // Another change comes, the record still holding the call: the sync took nothing off this time.
+        state.arms[1].corner_mm += 1_000;
+        assert!(binding.store.write_junction(node, state));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+    }
+
+    #[test]
+    fn a_sync_that_suspends_the_signal_says_its_crossings_stay_on_call() {
+        use crate::shared::catalogue::StreetClass;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let (node, state) = on_call_record(&binding);
+        assert!(binding.store.write_junction(node, state));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        r.said.take();
+        // Every street but the one on call is made a walkway elsewhere: one street of traffic, the signal suspended.
+        let opened = binding.store.open().junction_editor(node, 0).unwrap();
+        let on_call = opened.current().arms.iter().find(|a| a.calls.is_some()).unwrap().uid;
+        for a in opened.current().arms.iter().filter(|a| a.uid != on_call) {
+            let mut walkway = a.section.clone().unwrap();
+            walkway.class = StreetClass::Pedestrian;
+            assert!(binding.store.write_street(a.edge, walkway));
+        }
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        let t = r.said.take();
+        assert!(r.vm.view_now().calls_kept == 1, "suspended, the call kept");
+        assert_eq!(t, ["Updated from another device. 1 crossing stays on call for when the signal runs again."]);
+    }
+
+    #[test]
     fn a_refusal_for_an_arm_off_square_names_the_arm_in_a_second_sentence() {
         use crate::junction::model::ROUNDABOUT;
         let r = rig(0);
@@ -713,6 +888,194 @@ mod tests {
         assert!(!r.vm.apply(|j| j.set_corner(n, 99_000)));
         assert_eq!(r.said.take(), vec!["That change does not fit."]);
         assert_eq!(r.vm.version().get_untracked(), 2, "a refused edit still asks the views to look again");
+    }
+
+    #[test]
+    fn a_crossing_put_on_call_is_announced_with_how_its_calls_are_served_and_a_refusal_says_why_in_both_languages() {
+        let r = rig(0);
+        let (n, e) = r.vm.read(|j| {
+            let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+            (at(0), at(90))
+        });
+        assert!(r.vm.set_on_call(e, true));
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Crossing of Sample Street 1 (east) on call."), "{t:?}");
+        assert!(t[0].contains("Crossing of Sample Street 1 (east): 12 calls in the hour; served "), "{t:?}");
+        assert!(r.vm.set_call_rate(e, 1));
+        assert!(r.said.take()[0].contains(": 1 call in the hour;"));
+        assert!(!r.vm.set_call_rate(e, 61));
+        assert_eq!(r.said.take(), vec!["That many calls an hour is outside the placeholder bound shown."]);
+        // A plan with no phase that walks the north street's crossing: on call is refused, and says why.
+        let only_east = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: e, to: n }],
+                walks: vec![],
+                rides: vec![],
+                arm: None,
+            }],
+        };
+        r.vm.edit(|j| j.set_plan_for_test(only_east.clone()));
+        assert!(!r.vm.set_on_call(n, true));
+        assert_eq!(r.said.take(), vec!["No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first."]);
+        // The east crossing, left on call with no walk, is a finding of the plan.
+        let findings = r.vm.view_now().signal.as_ref().unwrap().calls.findings.clone();
+        assert_eq!(findings.iter().map(|f| f.key).collect::<Vec<_>>(), vec!["jn-calls-finding-unwalked"]);
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.set_on_call(e, true));
+        let t = said.take();
+        assert!(t[0].starts_with("Passage de Sample Street 1 (est) sur appel."), "{t:?}");
+        assert!(t[0].contains("12\u{a0}appels dans l’heure") || t[0].contains("12 appels dans l’heure"), "{t:?}");
+        fr.edit(|j| j.set_plan_for_test(only_east));
+        assert!(!fr.set_on_call(n, true));
+        assert_eq!(said.take(), vec!["Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel\u{a0}: ouvrez-le d’abord dans une phase."]);
+    }
+
+    #[test]
+    fn a_control_change_that_takes_crossings_off_call_counts_them_in_both_languages() {
+        use crate::junction::model::PRIORITY;
+        for (locale, one, two) in [
+            (crate::shared::i18n::Locale::En, "; 1 crossing no longer on call", "; 2 crossings no longer on call"),
+            (crate::shared::i18n::Locale::FrCa, "; 1 passage qui n’est plus sur appel", "; 2 passages qui ne sont plus sur appel"),
+        ] {
+            for (count, words) in [(1, one), (2, two)] {
+                let (ports, said, _, _) = test_ports_with_time();
+                let vm = JunctionVm::new(ports, crate::i18n_for(locale), Junction::new(0), None);
+                let (e, w) = vm.read(|j| {
+                    let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+                    (at(90), at(270))
+                });
+                for &u in &[e, w][..count] {
+                    assert!(vm.set_on_call(u, true));
+                }
+                said.take();
+                assert!(vm.apply(|j| j.set_control(PRIORITY)));
+                let t = said.take();
+                assert!(t[0].contains(words), "{t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_change_that_suspends_the_signal_says_its_crossings_stay_on_call() {
+        let (suspended, today) = crate::junction::view::tests::suspended_with_a_call();
+        // Today the junction is suspended; now its streets carry traffic again. Undo goes back to today.
+        let mut now = Junction::new(0).current().clone();
+        for (a, b) in now.arms.iter_mut().zip(&today.arms) {
+            a.edge = b.edge;
+            a.calls = b.calls;
+        }
+        let j = Junction::from_city(crate::street::model::named_said("Test"), &today, &now, 0).unwrap();
+        drop(suspended);
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+        assert_eq!(vm.view_now().calls_kept, 0);
+        assert!(vm.undo());
+        let t = said.take();
+        assert!(t[0].contains("1 crossing stays on call for when the signal runs again."), "{t:?}");
+    }
+
+    #[test]
+    fn a_crossing_whose_calls_are_not_served_is_said_to_have_none_served_not_a_wait_of_0_s() {
+        use crate::junction::model::{TimingField, junction_of};
+        for (locale, words, not) in [
+            (crate::shared::i18n::Locale::En, "not served 12; no call was served.", "longest wait"),
+            (crate::shared::i18n::Locale::FrCa, "non servis 12; aucun appel n’a été servi.", "attente la plus longue"),
+        ] {
+            // Five lanes of 3.5 m and 5 s greens: no phase can fit the walk and clearance.
+            let mut j = junction_of(&[
+                ("sidewalk", 2000),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("travel", 3500),
+                ("sidewalk", 2000),
+            ]);
+            for u in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+                assert!(j.set_timing(u, TimingField::Green, 5));
+            }
+            let (ports, said, _, _) = test_ports_with_time();
+            let vm = JunctionVm::new(ports, crate::i18n_for(locale), j, None);
+            let e = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+            assert!(vm.set_on_call(e, true));
+            let t = said.take();
+            assert!(t[0].contains(words) && !t[0].contains(not), "{t:?}");
+        }
+    }
+
+    #[test]
+    fn a_finding_already_there_is_not_said_again_when_an_edit_renames_its_street() {
+        use crate::junction::model::{TimingField, junction_of};
+        // Five lanes of 3.5 m and 5 s greens: the north crossing on call cannot be served, a finding from the start.
+        let mut j =
+            junction_of(&[("sidewalk", 2000), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("travel", 3500), ("sidewalk", 2000)]);
+        for u in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_timing(u, TimingField::Green, 5));
+        }
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+        let n = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid);
+        assert!(vm.set_on_call(n, true));
+        assert!(said.take()[0].contains("cannot be served safely"), "said when it arises");
+        // Turned into the north-east: the street's name changes, the finding does not.
+        assert!(vm.apply(|j| j.set_bearing(n, 30)));
+        let t = said.take();
+        assert!(t[0].contains("(north-east)") || t[0].contains("bearing"), "{t:?}");
+        assert!(!t[0].contains("cannot be served"), "the same finding, not said again: {t:?}");
+    }
+
+    #[test]
+    fn no_calls_an_hour_are_said_as_none_in_french_never_as_one() {
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        let e = fr.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+        assert!(fr.set_on_call(e, true));
+        said.take();
+        assert!(fr.set_call_rate(e, 0));
+        let t = said.take();
+        // French counts 0 with the singular: "0 appel", which [one] must say with the number, not "1 appel".
+        assert!(t[0].contains("0\u{a0}appel dans l’heure") || t[0].contains(" 0 appel dans l’heure"), "{t:?}");
+        assert!(!t[0].contains("1 appel"), "{t:?}");
+    }
+
+    #[test]
+    fn a_rate_typed_again_unchanged_says_nothing_rather_than_an_earlier_edit() {
+        let r = rig(0);
+        let e = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+        assert!(r.vm.set_on_call(e, true));
+        r.said.take();
+        assert!(r.vm.set_call_rate(e, 12), "the rate it has: not refused");
+        assert!(r.said.take().is_empty(), "no revision was added, so nothing is said");
+    }
+
+    #[test]
+    fn a_signal_edit_that_leaves_a_crossing_on_call_unwalked_says_so_in_both_languages() {
+        for (locale, words) in [
+            (crate::shared::i18n::Locale::En, "The crossing of Sample Street 1 (east) is on call, but no phase walks it"),
+            (crate::shared::i18n::Locale::FrCa, "Le passage de Sample Street 1 (est) est sur appel, mais aucune phase ne l’ouvre"),
+        ] {
+            let (ports, said, _, _) = test_ports_with_time();
+            let vm = JunctionVm::new(ports, crate::i18n_for(locale), Junction::new(0), None);
+            let e = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid);
+            assert!(vm.set_on_call(e, true));
+            let walking: Vec<usize> = vm.read(|j| {
+                let plan = crate::junction::model::signal::plan(j.current(), j.region).unwrap();
+                (0..plan.phases.len()).filter(|&i| plan.phases[i].walks.contains(&e)).collect()
+            });
+            let (last, rest) = walking.split_last().unwrap();
+            for &i in rest {
+                assert!(vm.toggle_phase_walk(i, e));
+            }
+            said.take();
+            assert!(vm.toggle_phase_walk(*last, e));
+            let t = said.take();
+            assert!(t[0].contains(words), "{t:?}");
+            // Walked again: no finding, so nothing of it is said.
+            assert!(vm.toggle_phase_walk(*last, e) && !said.take()[0].contains(words));
+        }
     }
 
     #[test]
@@ -927,6 +1290,22 @@ mod read_only_tests {
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(r.vm.read(|j| j.snapshot()), junction);
+        assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
+    }
+
+    #[test]
+    fn a_calls_edit_is_refused_and_said_once_and_changes_nothing() {
+        let r = rig();
+        let before = stored(&r.storage);
+        let junction = r.vm.read(|j| j.snapshot());
+        let arm = r.vm.view_now().arms.iter().find(|a| a.crossing.is_some()).unwrap().uid;
+        assert!(!r.vm.set_on_call(arm, true), "on call is refused");
+        assert_eq!(r.said.take(), [REFUSED], "said once, the read-only sentence and no other reason");
+        assert!(!r.vm.set_call_rate(arm, 20), "a rate is refused");
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert_eq!(r.vm.read(|j| j.snapshot()), junction, "nothing changed");
+        r.vm.flush();
+        r.time.advance(1_000);
         assert_eq!(stored(&r.storage), before, "nothing written, nothing marked for the sync");
     }
 
