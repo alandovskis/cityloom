@@ -863,3 +863,5 @@ cmp-piece-width = { $kind }: { $a } → { $b }
 cmp-lanes = { $direction }: { $a } → { $b }
 cmp-stretches-differ = The stretches along the street are not the same in the two designs.
 cmp-other-piece-details = piece details or order
+# The name of the plan of a street with no length.
+cmp-plan-label = Plan of the street

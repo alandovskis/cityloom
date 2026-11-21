@@ -3186,3 +3186,23 @@ fn shown_read_only_the_scenarios_menu_is_offered_and_the_name_and_actions_are_lo
     }
     assert!(!scenarios_drawn(&city_street()).contains("read-only-controls"), "a page that can edit locks nothing");
 }
+
+// ---- the comparison page's street half ---------------------------------------------------
+
+#[test]
+fn compare_draws_a_plan_and_an_iso_for_each_design_and_the_summary() {
+    use crate::street::vm::compare::StreetCompareVm;
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(ports.storage.clone());
+    let edge = store.open().view(0).edges[0].uid;
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(edge) };
+    let vm = StreetCompareVm::new(ports, crate::i18n_for(Locale::En), binding).unwrap();
+    let h = html(move || view! { <view::compare::StreetCompare vm=vm/> }.into_any());
+    assert_eq!(count(&h, "class=\"compare-plan\""), 2, "{h}");
+    assert_eq!(count(&h, "class=\"compare-iso\""), 2, "{h}");
+    assert_eq!(count(&h, "role=\"img\""), 4, "{h}");
+    assert_eq!(count(&h, "<svg"), 4, "{h}");
+    assert!(!h.contains("aria-label=\"\""), "{h}");
+    assert_eq!(count(&h, "aria-label=\""), 4, "{h}");
+    assert!(h.contains("What differs in B"), "{h}");
+}
