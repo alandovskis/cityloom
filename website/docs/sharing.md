@@ -31,7 +31,7 @@ read-only: everything can be looked at, nothing can be changed. The copy is not 
 sent to the server with your work, and is replaced if you open the same link again. A browser keeps at most ten such
 copies, the oldest going first.
 
-To change a shared design, choose **Edit a copy** in the top bar, beside **Read-only**. It needs no account: the
+To change a shared design, choose **Edit a copy** in the notice under the top bar. It needs no account: the
 design becomes a new project of your own, with the same name, area, edits and area rules, listed on the home page and
 synced with your work like any other project, and the page offers **Open your copy**. Your project is independent:
 what you change in it never reaches the shared design, its creator or anyone else who opens the link, and opening the

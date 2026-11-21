@@ -32,8 +32,7 @@ partagée, la vérifie, la conserve dans ce navigateur comme une copie à part e
 n’apparaît pas parmi vos projets, n’est jamais envoyée au serveur avec votre travail et est remplacée si vous rouvrez le
 même lien. Un navigateur conserve au plus dix de ces copies; la plus ancienne part en premier.
 
-Pour modifier un aménagement partagé, choisissez **Modifier une copie** dans la barre du haut, à côté de **Lecture
-seule**. Aucun compte n’est nécessaire : l’aménagement devient un nouveau projet à vous, avec le même nom, la même
+Pour modifier un aménagement partagé, choisissez **Modifier une copie** dans l’avis sous la barre du haut. Aucun compte n’est nécessaire : l’aménagement devient un nouveau projet à vous, avec le même nom, la même
 zone, les mêmes modifications et les mêmes règles de zone, affiché sur la page d’accueil et synchronisé avec votre
 travail comme tout autre projet, et la page propose **Ouvrir votre copie**. Votre projet est indépendant : ce que vous y
 changez n’atteint jamais l’aménagement partagé, la personne qui l’a créé ni quiconque ouvre le lien, et rouvrir le lien
