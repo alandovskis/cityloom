@@ -352,7 +352,9 @@ pub enum ShareFailure {
     Newer,
     /// No answer at all: the network is down, or the request never left.
     Network,
-    /// 429, 5xx, or an answer that cannot be read: the server cannot help now.
+    /// 429: too many requests from this address at once (the rate limit); the same one a little later will do.
+    Busy,
+    /// 5xx, or an answer that cannot be read: the server cannot help now.
     Unavailable,
     /// Any other refusal.
     Refused,
@@ -372,7 +374,8 @@ pub fn share_failure(status: u16, body: &str) -> ShareFailure {
         410 => ShareFailure::Expired,
         413 => ShareFailure::TooLarge,
         422 => ShareFailure::Newer,
-        429 | 500..=599 => ShareFailure::Unavailable,
+        429 => ShareFailure::Busy,
+        500..=599 => ShareFailure::Unavailable,
         _ => ShareFailure::Refused,
     }
 }
@@ -1367,11 +1370,12 @@ pub struct TestPorts {
     pub work: Rc<FakeWorkSync>,
     pub files: Rc<FakeArchiveFiles>,
     pub share: Rc<FakeShare>,
+    pub scheduler: Rc<ManualScheduler>,
 }
 
 /// The same, with the account, the navigator and the page too.
 pub fn test_ports_full() -> TestPorts {
-    let (mut ports, announcer, storage, _) = test_ports_with_time();
+    let (mut ports, announcer, storage, scheduler) = test_ports_with_time();
     let (account, navigator, page) = (Rc::new(FakeAccount::default()), Rc::new(RecordingNavigator::default()), Rc::new(FakePage::default()));
     ports.account = account.clone();
     ports.navigator = navigator.clone();
@@ -1382,7 +1386,7 @@ pub fn test_ports_full() -> TestPorts {
     ports.files = files.clone();
     let share = Rc::new(FakeShare::default());
     ports.share = share.clone();
-    TestPorts { ports, account, navigator, page, announcer, storage, work, files, share }
+    TestPorts { ports, account, navigator, page, announcer, storage, work, files, share, scheduler }
 }
 
 /// The same, with the PDF writer and the downloads too.
@@ -1707,12 +1711,14 @@ mod map_tests {
         assert_eq!(share_failure(404, r#"{"error":"not-found"}"#), ShareFailure::NotFound);
         assert_eq!(share_failure(409, r#"{"error":"full","limit":50}"#), ShareFailure::Full);
         assert_eq!(share_failure(409, r#"{"error":"too-many-today","limit":100}"#), ShareFailure::TooManyToday);
+        assert_eq!(share_failure(429, ""), ShareFailure::Busy, "the rate limit: try again a little later");
+        assert_eq!(share_failure(503, ""), ShareFailure::Unavailable);
         assert_eq!(share_failure(410, r#"{"error":"expired"}"#), ShareFailure::Expired);
         assert_eq!(share_failure(410, r#"{"error":"deleted"}"#), ShareFailure::Deleted);
         assert_eq!(share_failure(410, "not json"), ShareFailure::Expired);
         assert_eq!(share_failure(413, r#"{"error":"too-large","limit":"share"}"#), ShareFailure::TooLarge);
         assert_eq!(share_failure(422, r#"{"error":"newer"}"#), ShareFailure::Newer);
-        for unavailable in [429, 500, 502, 503] {
+        for unavailable in [500, 502, 503] {
             assert_eq!(share_failure(unavailable, ""), ShareFailure::Unavailable, "{unavailable}");
         }
         assert_eq!(share_failure(400, ""), ShareFailure::Refused);

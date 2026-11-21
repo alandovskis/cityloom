@@ -201,6 +201,7 @@ fn the_server_s_refusals_become_the_slice_s_errors() {
         (ShareFailure::NotYours, ShareError::NotYours),
         (ShareFailure::Full, ShareError::Full),
         (ShareFailure::TooManyToday, ShareError::TooManyToday),
+        (ShareFailure::Busy, ShareError::Unavailable),
         (ShareFailure::TooLarge, ShareError::TooLarge),
         (ShareFailure::Newer, ShareError::Newer),
         (ShareFailure::Network, ShareError::Network),
@@ -659,6 +660,38 @@ fn a_link_that_could_not_be_deleted_stops_the_rest_and_says_why() {
         assert_eq!(kept_links(&t), ["two"], "{failure:?}: those deleted are forgotten, the other kept");
     }
     assert!(fr(&crate::shared::said::Said::new("share-error-end-signed-out")).starts_with("Connectez-vous avec le compte qui les a créés"));
+}
+
+/// The server answers a burst of requests from one address with 429 (its rate limit): a project with many links has
+/// each refused one asked again after a wait that doubles, and gives up only after `MAX_TRIES`.
+#[test]
+fn a_link_refused_by_the_rate_limit_is_asked_again_after_a_growing_wait() {
+    use crate::project::model::ProjectLinks;
+    let (t, links) = project_links();
+    let got = Rc::new(std::cell::RefCell::new(None));
+    let g = got.clone();
+    links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))));
+    assert!(t.share.calls().is_empty(), "it waits");
+    t.scheduler.advance(999);
+    assert!(t.share.calls().is_empty());
+    t.scheduler.advance(1);
+    assert_eq!(t.share.calls(), [ShareCall::Delete("one".into())], "a second later, the same link again");
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))));
+    t.scheduler.advance(1999);
+    assert!(t.share.calls().is_empty(), "then two seconds");
+    t.scheduler.advance(1);
+    assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+    assert_eq!(t.share.calls(), [ShareCall::Delete("two".into())], "the next at once");
+    for n in 0..super::links::MAX_TRIES {
+        assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Busy))), "{n}");
+        assert!(got.borrow().is_none() || n + 1 == super::links::MAX_TRIES);
+        t.scheduler.advance(120_000);
+    }
+    let said = got.borrow_mut().take().expect("it gave up").unwrap_err();
+    assert_eq!(en(&said), "The server that keeps shared designs cannot answer now. Try again later.");
+    assert_eq!(kept_links(&t), ["two"]);
 }
 
 // ---- the views ----
