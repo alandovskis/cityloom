@@ -666,7 +666,29 @@ fn fork_html(vm: std::rc::Rc<crate::shell::vm::ShellVm>) -> String {
     })
 }
 
-/// The top bar of a copy offers the fork as a button (keyboard reachable, described by what it does); once forked, a
+/// A copy's pages say, in a notice of their own (the top bar has no room for it), that the design was shared and how to
+/// change it, and hold the fork there; not a live region: what it does is announced when it is done.
+#[test]
+fn a_copy_s_pages_hold_the_fork_in_a_notice_of_its_own() {
+    let notice = |locale: Locale| {
+        let (vm, _, _, _) = shell_of_a_copy(locale);
+        let html = crate::shared::testing::html(move || {
+            use leptos::prelude::IntoAny;
+            leptos::view! { <crate::shell::view::ForkNotice vm=vm/> }.into_any()
+        });
+        crate::sync::hub::reset();
+        html
+    };
+    let en = notice(Locale::En);
+    assert!(en.contains(r#"class="shell-notice fork-notice""#), "{en}");
+    assert!(en.contains("This design was shared with you. To change it, make a copy of your own."), "{en}");
+    assert!(en.contains(r#"id="fork-btn""#), "{en}");
+    assert!(!en.contains("role="), "no live region: {en}");
+    let fr = notice(Locale::FrCa);
+    assert!(fr.contains("Cet aménagement a été partagé avec vous. Pour le modifier, faites-en une copie à vous."), "{fr}");
+}
+
+/// The notice of a copy offers the fork as a button (keyboard reachable, described by what it does); once forked, a
 /// link to the new project in its place; a failure is shown beside the button.
 #[test]
 fn the_fork_is_a_described_button_then_a_link_to_the_new_project() {

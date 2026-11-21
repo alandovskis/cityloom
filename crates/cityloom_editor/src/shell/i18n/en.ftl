@@ -9,6 +9,7 @@ read-only-tag = Read-only
 read-only-note = This design is open read-only: you can look at it, but not change it.
 read-only-refused = This design is open read-only: nothing can be changed.
 # Making a copy of a shared design one of the person's projects, to edit (#223).
+shell-fork-intro = This design was shared with you. To change it, make a copy of your own.
 shell-fork = Edit a copy
 shell-fork-hint = Adds a copy of this design to your projects, where you can change it. The shared design stays as it is.
 shell-forked = A copy of { $name } is now one of your projects. Open it to make changes.

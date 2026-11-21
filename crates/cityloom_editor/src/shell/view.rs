@@ -131,14 +131,7 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         slot.set_class_name("read-only-slot");
         let _ = end.insert_before(&slot, end.first_child().as_ref());
         let i18n = vm.i18n();
-        let forkable = vm.can_fork().then(|| vm.clone());
-        leptos::mount::mount_to(slot.unchecked_into(), move || {
-            view! {
-                <ReadOnlyTag i18n=i18n/>
-                {forkable.map(|vm| view! { <ForkAction vm=vm/> })}
-            }
-        })
-        .forget();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ReadOnlyTag i18n=i18n/> }).forget();
     }
     // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
     // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
@@ -154,9 +147,10 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
     bind_sync(&vm);
-    // The notice that earlier edits were cleared goes where a screen reader meets it first: at the top of an editor's
-    // column (street, intersection), above its title, so it pushes the title down instead of covering it; elsewhere
-    // before the page's `main`.
+    // The notice that earlier edits were cleared, or on a copy of a shared design the one that offers to fork it (a page
+    // shown read-only clears nothing), goes where a screen reader meets it first: at the top of an editor's column
+    // (street, intersection), above its title, so it pushes the title down instead of covering it; elsewhere before the
+    // page's `main`. The top bar has no room for the fork beside its read-only tag at most widths.
     if let Ok(slot) = document().create_element("div") {
         let placed = if let Some(column) = document().query_selector(".stage-main").ok().flatten() {
             column.prepend_with_node_1(&slot).is_ok()
@@ -167,7 +161,11 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         };
         if placed {
             let notice = vm.clone();
-            leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+            if vm.can_fork() {
+                leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ForkNotice vm=notice/> }).forget();
+            } else {
+                leptos::mount::mount_to(slot.unchecked_into(), move || view! { <EditsClearedNotice vm=notice/> }).forget();
+            }
         }
     }
     // The effects live as long as the page.
@@ -238,7 +236,20 @@ pub fn ReadOnlyTag(i18n: Rc<I18n>) -> impl IntoView {
     }
 }
 
-/// Beside the read-only tag of a copy of a shared design (#223): a button that makes it one of the person's projects
+/// What the pages of a copy of a shared design say under the top bar (#223): that the design was shared and how to
+/// change it, and the fork (`ForkAction`). Not a live region: the fork's outcome is announced when it happens.
+#[component]
+pub fn ForkNotice(vm: Rc<ShellVm>) -> impl IntoView {
+    let i18n = StoredValue::new_local(vm.i18n());
+    view! {
+        <div class="shell-notice fork-notice">
+            <p>{move || i18n.with_value(|i| i.tr("shell-fork-intro", &Args::new()))}</p>
+            <ForkAction vm=vm/>
+        </div>
+    }
+}
+
+/// In the notice of a copy of a shared design (#223): a button that makes it one of the person's projects
 /// (`ShellVm::fork`), described by what it does; once made, a link to the same page of the new project, opened to edit,
 /// which takes the focus (the result is announced too); a failure shown beside the button, which stays to try again.
 #[component]
@@ -257,7 +268,7 @@ pub fn ForkAction(vm: Rc<ShellVm>) -> impl IntoView {
         {move || match vm.with_value(|v| v.forked()) {
             Some(href) => {
                 view! {
-                    <a class="btn fork-open" id="fork-open" href=href>
+                    <a class="fork-open" id="fork-open" href=href>
                         {say("shell-fork-open")}
                     </a>
                 }
@@ -265,7 +276,7 @@ pub fn ForkAction(vm: Rc<ShellVm>) -> impl IntoView {
             }
             None => {
                 view! {
-                    <button type="button" id="fork-btn" class="btn fork-btn" aria-describedby="fork-hint" on:click=move |_| vm.with_value(|v| v.fork())>
+                    <button type="button" id="fork-btn" aria-describedby="fork-hint" on:click=move |_| vm.with_value(|v| v.fork())>
                         <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
                             <rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/>
                             <path d="M10.5 3.5v-1h-8v8h1"/>

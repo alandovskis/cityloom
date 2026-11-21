@@ -9,6 +9,7 @@ read-only-tag = Lecture seule
 read-only-note = Cet aménagement est ouvert en lecture seule : vous pouvez le consulter, mais pas le modifier.
 read-only-refused = Cet aménagement est ouvert en lecture seule : rien ne peut y être modifié.
 # Making a copy of a shared design one of the person's projects, to edit (#223).
+shell-fork-intro = Cet aménagement a été partagé avec vous. Pour le modifier, faites-en une copie à vous.
 shell-fork = Modifier une copie
 shell-fork-hint = Ajoute une copie de cet aménagement à vos projets, où vous pourrez la modifier. L’aménagement partagé reste tel quel.
 shell-forked = Une copie de { $name } fait maintenant partie de vos projets. Ouvrez-la pour la modifier.

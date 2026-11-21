@@ -308,7 +308,7 @@ impl ShellVm {
     /// Whether the page offers to fork its project: it is a copy of a shared design (a project of the person's own
     /// shown with `view=1` is theirs already) not forked from this page yet.
     pub fn can_fork(&self) -> bool {
-        self.forked.get().is_none() && self.target.project().is_some_and(|id| crate::project::copies::is_copy(&*self.ports.storage, &id))
+        self.forked.get_untracked().is_none() && self.target.project().is_some_and(|id| crate::project::copies::is_copy(&*self.ports.storage, &id))
     }
 
     /// Makes the copy one of the person's projects, to edit (`project::copies::fork`), and says so; the page then
