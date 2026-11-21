@@ -59,7 +59,8 @@ refusé la copie.
 - **Suppression** : vous pouvez supprimer un lien à tout moment depuis la page de partage de l’appareil où vous l’avez
   créé. Supprimer un projet sur la page d’accueil supprime d’abord les liens qui en ont été créés sur cet appareil (vous
   devez être connecté avec le compte qui les a créés); si l’un d’eux ne peut pas l’être, la page dit pourquoi et
-  propose de supprimer le projet quand même, ses liens fonctionnant alors jusqu’à leur expiration. Un projet supprimé sur un autre appareil laisse fonctionner les liens qui en ont été créés sur
+  propose de supprimer le projet quand même, ses liens fonctionnant alors, et comptant parmi les 50 liens qu’un compte peut
+  avoir, jusqu’à leur expiration : ils ne sont plus listés nulle part. Un projet supprimé sur un autre appareil laisse fonctionner les liens qui en ont été créés sur
   celui-ci jusqu’à leur expiration. Supprimer votre compte supprime d’un coup tous les liens que vous avez créés; ces liens indiquent alors qu’aucun
   aménagement partagé ne les a.
 - **Sur l’appareil de la personne qui l’ouvre** : la copie est conservée dans l’espace de stockage de ce navigateur

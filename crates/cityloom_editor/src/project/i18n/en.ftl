@@ -46,7 +46,7 @@ project-delete-confirm-links = { $count ->
 # Its share links could not be deleted on the server, so the project was kept; $reason says why, as a sentence.
 project-delete-links-failed = { $name } was not deleted: its share links could not be deleted first. { $reason }
 # The reason the project was kept ($failed, project-delete-links-failed), and what can still be done.
-project-delete-anyway-offer = { $failed } You can delete it anyway: its share links then keep working until they expire.
+project-delete-anyway-offer = { $failed } You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire.
 project-delete-anyway = Delete anyway
 # While a project's share links are deleted on the server, before the project (#221); Cancel and Escape wait meanwhile.
 project-delete-ending = Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.
