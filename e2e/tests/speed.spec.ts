@@ -187,11 +187,17 @@ test.describe("a zone's speed limit", () => {
     await page.locator("#zone-1").click();
     await expect(speed(page)).toHaveValue(chosen);
 
-    // Choosing a zone shows its commands; the speed limit is the street level's, for the selected zone.
+    // Following the street again, the zone looks like its neighbour, and neighbours alike join: one zone is left, so
+    // there is no "Same as the street" to choose and the select shows the street's own speed limit.
+    const streetValue = /(\d+) km\/h/.exec(own ?? "")?.[1] ?? "";
+    const zones = page.locator('#zone-strip [role="option"]');
     await showStreetLevel(page);
     await speed(page).selectOption("street");
-    await expect(speed(page)).toHaveValue("street");
+    await expect(zones).toHaveCount(1);
+    await expect(speed(page)).toHaveValue(streetValue);
+    // Undo takes back the edit and its join, then the speed limit.
     await page.locator("#undo").click();
+    await expect(zones).toHaveCount(2);
     await expect(speed(page)).toHaveValue(chosen);
     await page.locator("#undo").click();
     await expect(speed(page)).toHaveValue("street");
