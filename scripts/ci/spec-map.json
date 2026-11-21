@@ -11,7 +11,7 @@
     "sync": ["sync"],
     "share": ["share"],
     "archive": ["archive", "design-archive"],
-    "cross": ["a11y", "editors", "focus-touch", "footer", "language", "read-only", "scenarios", "shell"],
+    "cross": ["a11y", "compare", "editors", "focus-touch", "footer", "language", "read-only", "scenarios", "shell"],
     "static": ["delivery", "serve"]
   },
   "rules": [
