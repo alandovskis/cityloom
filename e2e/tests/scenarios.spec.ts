@@ -220,6 +220,27 @@ test.describe("a street's scenarios", () => {
   });
 });
 
+test("at 1440 by 900, in a wide typeface, the scenarios share the head's rows and the junction's status chip stays in view", async ({
+  page,
+}) => {
+  // Verdana where it is installed; elsewhere the default sans of the system, as wide as the Linux one the browsers
+  // run with in CI, which set the scenarios on a row of their own and pushed the status chip under the window
+  const wide = "body, button, select, input { font-family: Verdana, sans-serif !important; }";
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openStreet(page);
+  await page.addStyleTag({ content: wide });
+  await expect(pick(page)).toBeVisible();
+  const [title, slot] = await Promise.all([
+    page.locator(".title-card").boundingBox(),
+    page.locator("#scenario-slot").boundingBox(),
+  ]);
+  expect(slot!.x, "the street's scenarios beside its title card").toBeGreaterThan(title!.x + title!.width - 1);
+  await openJunction(page);
+  await page.addStyleTag({ content: wide });
+  await expect(pick(page)).toBeVisible();
+  await expect(page.locator("#fit"), "the junction's status chip wholly in view").toBeInViewport({ ratio: 1 });
+});
+
 test("at 280 px a 60-character name with no spaces wraps, so the page does not scroll sideways, on both pages", async ({
   page,
 }) => {

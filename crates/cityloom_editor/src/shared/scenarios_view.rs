@@ -76,8 +76,10 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
     };
     view! {
         <section class="scenarios" aria-labelledby="scenario-h">
-            <h2 id="scenario-h" class="scenario-h">{tr("scenario-heading")}</h2>
+            // the heading shares the menu's row: the panel stays short, so the head of the page does not push the drawing's
+            // status down
             <div class="scenario-row">
+                <h2 id="scenario-h" class="scenario-h">{tr("scenario-heading")}</h2>
                 <label for="scenario-pick">{tr("scenario-pick")}</label>
                 <select node_ref=picker id="scenario-pick" aria-describedby="scenario-mode" prop:value=move || shown().map(|id| id.to_string()).unwrap_or_default() on:change=switch>
                     <option value="" prop:selected=baseline_shown>{tr("scenario-baseline")}</option>
