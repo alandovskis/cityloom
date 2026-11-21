@@ -52,8 +52,11 @@ pub fn clean_name(name: &str) -> Result<String, Refused> {
 /// whoever made them can still end them: once the project is gone, its list of links is gone with it. The share slice
 /// keeps them; the composition root (`lib.rs`) hands them to the home page, so the project slice uses no other slice.
 pub trait ProjectLinks {
-    /// How many links made on this device of project `id` still work.
+    /// How many links made on this device of project `id` still work by this device's clock: what the question says.
     fn live(&self, id: &str) -> usize;
+    /// How many links made on this device of project `id` are listed, expired here or not: any of them is sent to the
+    /// server before the project goes, since this device's clock may be wrong.
+    fn listed(&self, id: &str) -> usize;
     /// Deletes them on the server, one after the other; `done` hears `Ok` once none is left, or why one could not be
     /// deleted (data: a `Said`), the rest then left as they are.
     fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>);
@@ -64,6 +67,9 @@ pub struct NoLinks;
 
 impl ProjectLinks for NoLinks {
     fn live(&self, _: &str) -> usize {
+        0
+    }
+    fn listed(&self, _: &str) -> usize {
         0
     }
     fn end(&self, _: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
