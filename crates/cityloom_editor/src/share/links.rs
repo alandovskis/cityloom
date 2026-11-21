@@ -78,13 +78,14 @@ impl ProjectLinks for ProjectShares {
     }
 
     fn listed(&self, id: &str) -> usize {
-        store_of(&self.ports, id).list().len()
+        store_of(&self.ports, id).worth_asking().len()
     }
 
     /// Asks for every link listed, not only those this device's clock thinks still work: the server decides, and one it
-    /// has let expire (or deleted, or never had) counts as done.
+    /// has let expire (or deleted, or never had) counts as done. Only one expired more than `CLOCK_SKEW_MS` ago is left
+    /// out: no clock is that wrong.
     fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), Said>)>) {
-        let tokens = store_of(&self.ports, id).list().into_iter().map(|m| m.token).collect();
+        let tokens = store_of(&self.ports, id).worth_asking().into_iter().map(|m| m.token).collect();
         end_from(self.ports.clone(), id.to_string(), tokens, 0, done);
     }
 }

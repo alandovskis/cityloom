@@ -619,7 +619,10 @@ fn project_links() -> (TestPorts, super::links::ProjectShares) {
     let t = test_ports_full();
     t.storage.set_now(1_800_000_000_000); // 2027-01-15T08:00:00Z
     let store = super::store::ShareStore::new(Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), "p1")));
-    for (token, expires_at) in [("old", "2026-12-01T00:00:00.000Z"), ("one", "2027-04-15T08:00:00.000Z"), ("two", "2027-04-16T08:00:00.000Z")] {
+    // "stale" expired well past any clock's error, "old" an hour ago by this device's clock.
+    for (token, expires_at) in
+        [("stale", "2026-12-01T00:00:00.000Z"), ("old", "2027-01-15T07:00:00.000Z"), ("one", "2027-04-15T08:00:00.000Z"), ("two", "2027-04-16T08:00:00.000Z")]
+    {
         store.add(super::store::Made { token: token.into(), created_at: "2026-09-01T00:00:00.000Z".into(), expires_at: expires_at.into() });
     }
     let links = super::links::ProjectShares::new(t.ports.clone());
@@ -639,6 +642,7 @@ fn a_project_s_links_that_still_work_are_deleted_on_the_server_one_after_the_oth
     use crate::project::model::ProjectLinks;
     let (t, links) = project_links();
     assert_eq!((links.live("p1"), links.live("p2")), (2, 0), "the question counts the links that still work here");
+    assert_eq!(links.listed("p1"), 3, "a link expired a day and more ago is not asked about: no clock is that wrong");
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
     links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
