@@ -7,6 +7,7 @@ pub mod bind;
 pub mod catalogue;
 pub mod check_fold;
 pub mod compare;
+pub mod compare_view;
 #[cfg(test)]
 pub mod contrast;
 pub mod core;
