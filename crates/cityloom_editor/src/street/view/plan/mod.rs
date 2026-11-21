@@ -11,10 +11,12 @@
 //! view-model's.
 
 mod component;
+mod fields;
 mod hit;
 mod scale;
 
 pub use component::Plan;
+pub use fields::PickFields;
 pub use hit::{COARSE_TARGET_PX, Hit, TARGET_PX, hit, plan_mm};
 pub use scale::{MIN_PX_PER_M, mm_per_px, x_px};
 
@@ -47,7 +49,7 @@ pub fn plan_svg(p: &PlanView, width_px: f64, i18n: &I18n, units: Units) -> Strin
     let at = Along::of(p, width_px);
     let width = at.width;
     let mut out = format!(
-        "<svg class=\"plan\" xmlns=\"http://www.w3.org/2000/svg\"{}{} width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">",
+        "<svg class=\"plan\" xmlns=\"http://www.w3.org/2000/svg\"{}{} width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\" aria-hidden=\"true\">",
         p.length_mm.map_or(String::new(), |l| format!(" data-length-mm=\"{l}\"")),
         p.from_end.map_or("", |end| match end {
             ZoneEnd::First => " data-from-end=\"first\"",

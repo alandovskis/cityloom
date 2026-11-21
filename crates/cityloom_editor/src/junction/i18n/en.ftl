@@ -144,7 +144,7 @@ jn-check-corner-room-bad = Corner after { $arms } eats the sidewalk
 jn-check-transit = Transit measures work
 jn-check-transit-ok = Each measure has what it needs
 jn-check-approach = Approaches
-jn-check-approach-ok = Every end zone reaches past its stop line and its transition fits
+jn-check-approach-ok = Every end stretch reaches past its stop line and its transition fits
 jn-check-approach-bad = { $problems }
 jn-check-stop-clear = Bus stops clear of the junction
 jn-check-stop-clear-ok = Every bus stop stands clear of the junction.
@@ -166,7 +166,7 @@ jn-stop-inside = The { $kind } on { $arm } reaches into the junction.
 jn-stop-turn-only = The { $kind } on { $arm } is in lane { $n }, which only turns { $turn }: a bus going on has to change lanes in front of traffic.
 jn-stop-shared-turn = The { $kind } on { $arm } is in lane { $n }, shared with { $turn } turns: turning cars queue behind the stopped bus.
 jn-problem-stop-twice = { $arm }: the street already has a stop here; keep the { $measure } or the street’s stop, not both.
-jn-approach-short = The end zone of { $arm } ends { $reach } from the centre, short of the { $need } its stop line and arrows need.
+jn-approach-short = The end stretch of { $arm } ends { $reach } from the centre, short of the { $need } its stop line and arrows need.
 jn-approach-room = The transition on { $arm } needs { $need } but has { $room }.
 jn-approach-drop = A lane on { $arm } ends with no lane beside it to merge into.
 jn-problem-offset-parking = { $arm }: an offset queue jump needs parking beside the curb to sit beside
@@ -208,16 +208,15 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
 }
+# `stretch` is the stretch across the end stretch's boundary, a stretch-mid ("from 20 m to 100 m") measured from the junction's centre, so it starts where the end stretch reaches (src/street/model/beyond.rs).
 jn-sel-arm-approach = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
-}. Its end zone reaches { $reach } from the centre, then a transition of { $length } into { $zone }.
+}. Its end stretch reaches { $reach } from the centre, then a transition of { $length } into the stretch { $stretch }.
 jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
-}. Its end zone reaches { $reach } from the centre, then { $zone }.
-# The zone across an end zone's boundary, by its number from the street's anchored end (src/street/model/beyond.rs).
-zone-unnamed-mid = Zone { $n }
+}. Its end stretch reaches { $reach } from the centre, then the stretch { $stretch }.
 jn-side-left = on the left as seen from the centre
 jn-side-right = on the right as seen from the centre
 jn-sel-arm-stop = { $kind } { $side }, { $at } from the centre, in lane { $n } of { $of }, which goes { $uses }.

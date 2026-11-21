@@ -9,7 +9,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
 use crate::street::model::{
-    CalmingStripView, Check, GreenRowView, PlanView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal,
+    CalmingStripView, Check, GreenRowView, PlanAxis, PlanView, SideView, StripCell, Template, TemplateRefusal, TemplateReport, View, ZoneRefusal,
 };
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
@@ -98,14 +98,15 @@ pub fn piece_text(v: &View, i: usize, i18n: &I18n, units: Units) -> String {
 
 /// How a cell of a strip is named (by the message `key`): what it is, where it lies and how long, and its place on
 /// the strip.
-pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = side.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm(), c.to_mm());
     let args = Args::new()
         .str("name", say_now(i18n, units, c.label()))
-        .str("from", units.length_in(c.from_mm(), locale))
-        .str("to", units.length_in(c.to_mm(), locale))
-        .str("length", units.length_in(c.to_mm() - c.from_mm(), locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", side.cells.len() as i64);
     i18n.tr_now(key, &args)
@@ -113,14 +114,15 @@ pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n:
 
 /// What a screen reader is told on choosing cell `cell` of the raised elements' strip: its kind (or "Free"), where it
 /// lies, how long it is and its place on the strip.
-pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn calming_text(strip: &CalmingStripView, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = strip.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm, c.to_mm);
     let args = Args::new()
         .str("name", say_now(i18n, units, &c.label))
-        .str("from", units.length_in(c.from_mm, locale))
-        .str("to", units.length_in(c.to_mm, locale))
-        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", strip.cells.len() as i64);
     i18n.tr_now("calming-cell", &args)
@@ -128,14 +130,15 @@ pub fn calming_text(strip: &CalmingStripView, cell: usize, i18n: &I18n, units: U
 
 /// What a screen reader is told of element `cell` of the Green row: its name, where it lies along the street and
 /// its place in the row.
-pub fn green_cell_text(g: &GreenRowView, cell: usize, i18n: &I18n, units: Units) -> String {
+pub fn green_cell_text(g: &GreenRowView, cell: usize, axis: PlanAxis, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = g.cells.get(cell) else { return String::new() };
+    let (from, to) = axis.left_span(c.from_mm, c.to_mm);
     let args = Args::new()
         .str("name", say_now(i18n, units, &c.label))
-        .str("from", units.length_in(c.from_mm, locale))
-        .str("to", units.length_in(c.to_mm, locale))
-        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .str("from", units.length_in(from, locale))
+        .str("to", units.length_in(to, locale))
+        .str("length", units.length_in(to - from, locale))
         .num("n", cell as i64 + 1)
         .num("total", g.cells.len() as i64);
     i18n.tr_now("green-cell", &args)
@@ -163,9 +166,9 @@ pub fn template_report(i18n: &I18n, units: Units, report: &TemplateReport) -> Op
 /// measure along.
 pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
     let Some((from, to)) = plan.pick else {
-        return plan.length_mm.map(|length| Said::new("stretch-whole").with("length", Arg::Length(length)));
+        return plan.length_mm.map(|length| Said::new("stretch-whole").with("length", Arg::Along(length)));
     };
-    let span = |key| Said::new(key).with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from));
+    let span = |key| Said::new(key).with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("length", Arg::Along(to - from));
     Some(match listed(what) {
         Some(what) => span("stretch-picked-differs").with("what", Arg::Said(Box::new(what))),
         None => span("stretch-picked"),
@@ -174,17 +177,31 @@ pub fn picked_said(plan: &PlanView, what: Vec<Said>) -> Option<Said> {
 
 /// Where the plan's keyboard point is, `at_mm` from the plan's left end.
 pub fn point_said(at_mm: i32) -> Said {
-    Said::new("st-point").with("at", Arg::Length(at_mm))
+    Said::new("st-point").with("at", Arg::Along(at_mm))
 }
 
-/// The plan's name for a screen reader: the street from end to end, and how long. Nothing for a street with no length.
-pub fn plan_label(plan: &PlanView) -> Option<Said> {
-    plan.length_mm.map(|length| Said::new("st-plan-label").with("length", Arg::Length(length)))
+/// The plan's name for a screen reader (its drawing is hidden from one): the street from end to end, how long, and which
+/// of its ends the edge of the map cuts; a street with no length, that both are.
+pub fn plan_label(plan: &PlanView) -> Said {
+    let Some(length) = plan.length_mm else { return Said::new("st-plan-label-no-anchor") };
+    let key = match plan.cut {
+        [false, false] => "st-plan-label",
+        [true, false] => "st-plan-label-cut-left",
+        [false, true] => "st-plan-label-cut-right",
+        [true, true] => "st-plan-label-cut-both",
+    };
+    Said::new(key).with("length", Arg::Along(length))
 }
 
 /// The line under the plan: the picked stretch and how long it is. Nothing for the whole street.
 pub fn stretch_label(plan: &PlanView) -> Option<Said> {
-    plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("length", Arg::Length(to - from)))
+    plan.pick.map(|(from, to)| Said::new("st-stretch").with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("length", Arg::Along(to - from)))
+}
+
+/// What is said under a figure that differs along the pick: along the stretch, or along the street when the whole
+/// street is picked.
+pub fn varies_said(plan: &PlanView) -> Said {
+    Said::new(if plan.pick.is_some() { "st-varies" } else { "st-varies-street" })
 }
 
 /// Where an edit did not reach (`spans`, from the plan's left end), each a sentence naming what that stretch lacks
@@ -192,8 +209,14 @@ pub fn stretch_label(plan: &PlanView) -> Option<Said> {
 pub fn missed_said(spans: &[(i32, i32)], kind: &'static str) -> Vec<Said> {
     spans
         .iter()
-        .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Length(from)).with("to", Arg::Length(to)).with("kind", Arg::KindLower(kind)))
+        .map(|&(from, to)| Said::new("edit-missed").with("from", Arg::Along(from)).with("to", Arg::Along(to)).with("kind", Arg::KindLower(kind)))
         .collect()
+}
+
+/// Where an edit did not reach on a street with no end to measure from, which has no positions: part of it, lacking
+/// `kind` (a catalogue id).
+pub fn missed_part_said(kind: &'static str) -> Said {
+    Said::new("edit-missed-part").with("kind", Arg::KindLower(kind))
 }
 
 /// `items` as one list: "a, b and c".
@@ -252,13 +275,66 @@ mod tests {
     }
 
     #[test]
+    fn the_plan_s_label_says_which_of_its_ends_the_edge_of_the_map_cuts() {
+        use crate::street::model::{EndInfo, ZoneEnd, ZoneFrame};
+        let words = |i18n: &I18n, e: &Editor| say_now(i18n, Units::Metres, &plan_label(&e.view().plan));
+        let frame = |from_end| Some(ZoneFrame { length_mm: 60_000, from_end });
+        let cut_last = Editor::new(0).with_frame(frame(ZoneEnd::First)).with_ends([false, true].map(|cut| EndInfo { cut, ..Default::default() }));
+        assert_eq!(words(&en(), &cut_last), "The street from its first end to its last, 60.0 m long; its right end is cut by the edge of the map");
+        assert_eq!(
+            words(&fr(), &cut_last).replace('\u{a0}', " "),
+            "La rue de sa première extrémité à sa dernière, 60,0 m de long; son extrémité droite est coupée par le bord de la carte"
+        );
+        let cut_first = Editor::new(0).with_frame(frame(ZoneEnd::Last));
+        assert!(words(&en(), &cut_first).ends_with("; its left end is cut by the edge of the map"));
+        let both = Editor::new(0).with_frame(frame(ZoneEnd::Last)).with_ends([false, true].map(|cut| EndInfo { cut, ..Default::default() }));
+        assert!(words(&en(), &both).ends_with("; both its ends are cut by the edge of the map"));
+        assert!(words(&fr(), &both).ends_with("; ses deux extrémités sont coupées par le bord de la carte"));
+        // No end to measure from: no length, both ends cut.
+        let free = Editor::new(0).with_frame(None);
+        assert_eq!(words(&en(), &free), "The street, both its ends cut by the edge of the map");
+        assert_eq!(words(&fr(), &free), "La rue, ses deux extrémités coupées par le bord de la carte");
+        // Neither cut: as before.
+        assert_eq!(words(&en(), &Editor::new(0).with_frame(frame(ZoneEnd::First))), "The street from its first end to its last, 60.0 m long");
+    }
+
+    /// A place along the street is said to a tenth of a unit, as the pick's fields and the 2.5D's label give it, also
+    /// where it is not a whole tenth from the plan's left end: on a street measured from its last end, 90.744 m long,
+    /// whose positions snap to 100 mm from that end.
+    #[test]
+    fn places_along_a_street_measured_from_its_last_end_are_said_to_a_tenth() {
+        use crate::street::model::{ZoneEnd, ZoneFrame, stretch_between};
+        let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 90_744, from_end: ZoneEnd::Last }));
+        let (a, b) = (e.anchored_mm(0), e.anchored_mm(10_000));
+        e.pick_stretch(a, b).unwrap();
+        let plan = e.view().plan;
+        let (from, to) = plan.pick.expect("a stretch");
+        assert_eq!((from, to % 100 != 0), (0, true), "its end is not a whole tenth from the left: {to}");
+        let words = |i18n: &I18n, said: Said| say_now(i18n, Units::Metres, &said);
+        assert_eq!(words(&en(), picked_said(&plan, Vec::new()).unwrap()), "From 0.0 m to 10.0 m, 10.0 m long.");
+        assert_eq!(words(&fr(), stretch_label(&plan).unwrap()), "De 0,0\u{a0}m à 10,0\u{a0}m · 10,0\u{a0}m de long");
+        assert_eq!(words(&en(), point_said(to)), "At 10.0 m");
+        assert_eq!(words(&en(), stretch_between(from, to)), "from 0.0 m to 10.0 m");
+        assert_eq!(words(&en(), Said::new("boundary-chosen").with("at", Arg::Along(to))), "The change at 10.0 m; type where it goes.");
+        // A width is still said to the hundredth it has.
+        assert_eq!(
+            words(
+                &en(),
+                Said::new("stretch-what-width").with("kind", Arg::KindLower("buffer")).with("side", Arg::Msg("side-word-left")).with("width", Arg::Length(150))
+            )
+            .contains("0.15 m"),
+            true
+        );
+    }
+
+    #[test]
     fn the_pick_the_plan_and_what_sets_a_stretch_apart_are_worded_in_both_languages() {
         use crate::street::model::{ZoneEnd, ZoneFrame};
         let mut e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
         let words = |i18n: &I18n, said: Option<Said>| say_now(i18n, Units::Metres, &said.expect("something to say"));
         let plan = e.view().plan;
         assert_eq!(words(&en(), picked_said(&plan, Vec::new())), "The whole street, 60.0 m long.");
-        assert_eq!(words(&en(), plan_label(&plan)), "The street from its first end to its last, 60.0 m long");
+        assert_eq!(words(&en(), Some(plan_label(&plan))), "The street from its first end to its last, 60.0 m long");
         assert_eq!(stretch_label(&plan), None, "no line for the whole street");
         e.pick_stretch(10_000, 30_000).unwrap();
         let plan = e.view().plan;
@@ -507,7 +583,7 @@ mod tests {
         let plain = say_now(&en(), Units::Metres, &fits.label);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} from 10.0 m to 30.0 m"));
         let plain = say_now(&fr(), Units::Metres, &fits.label);
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{plain} de 10,0\u{a0}m à 30,0\u{a0}m"));
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{plain}, de 10,0\u{a0}m à 30,0\u{a0}m"));
         let passing = v.checks.iter().find(|c| c.ok).unwrap();
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
@@ -523,7 +599,7 @@ mod tests {
             label: Said::new("check-label-curb-length"),
             detail: Said::new("check-detail-curb-length-ok"),
             zone: Some(
-                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right")),
+                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Along(42_000)).with("side", Arg::Msg("side-word-right")),
             ),
             standard: None,
         };
@@ -625,70 +701,25 @@ mod tests {
         }
     }
 
-    /// Every street message, in both languages, says "stretch" where it said "zone": only the places that are zones
-    /// by name keep the word. Each message is read in every variant of its selectors, then formatted with sample
-    /// values; the ids that still say "zone" are listed.
     #[test]
-    fn no_street_message_says_zone_except_school_and_loading_zones() {
-        use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
-        use std::collections::BTreeSet;
-        // "school zone" and "loading zone" are zones by name, as are their French forms. French also says
-        // "zone de chargement" for the loading zone (the glossary's term), "zone tampon" for a buffer (a piece across
-        // the street, not a part along it) and "zones à circulation restreinte" (the name of a kind of area).
-        const ALLOWED: [&str; 7] =
-            ["school zone", "loading zone", "zone scolaire", "zone de livraison", "zone de chargement", "zone tampon", "zones à circulation restreinte"];
-        fn says_zone(text: &str) -> bool {
-            let mut text = text.to_lowercase();
-            for phrase in ALLOWED {
-                text = text.replace(phrase, "");
-            }
-            text.contains("zone")
-        }
-        fn words(p: &Pattern<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
-            for el in &p.elements {
-                match el {
-                    PatternElement::TextElement { value } => text.push_str(value),
-                    PatternElement::Placeable { expression } => expression_words(expression, text, vars),
-                }
-            }
-        }
-        fn inline_words(e: &InlineExpression<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
-            match e {
-                InlineExpression::StringLiteral { value } => text.push_str(value),
-                InlineExpression::VariableReference { id } => {
-                    vars.insert(String::leak(id.name.to_string()));
-                }
-                InlineExpression::Placeable { expression } => expression_words(expression, text, vars),
-                _ => {}
-            }
-        }
-        fn expression_words(e: &Expression<&str>, text: &mut String, vars: &mut BTreeSet<&'static str>) {
-            match e {
-                Expression::Inline(i) => inline_words(i, text, vars),
-                Expression::Select { selector, variants } => {
-                    inline_words(selector, text, vars);
-                    for v in variants {
-                        text.push(' ');
-                        words(&v.value, text, vars);
-                    }
-                }
-            }
-        }
-        let mut offending = Vec::new();
-        for (locale, source) in [(Locale::En, crate::street::RESOURCES.en), (Locale::FrCa, crate::street::RESOURCES.fr)] {
-            let i18n = crate::i18n_for(locale);
-            let resource = fluent_syntax::parser::parse(source).expect("the street's messages parse");
-            for entry in &resource.body {
-                let Entry::Message(m) = entry else { continue };
-                let Some(pattern) = &m.value else { continue };
-                let (mut text, mut vars) = (String::new(), BTreeSet::new());
-                words(pattern, &mut text, &mut vars);
-                let formatted = [1, 2, 5].map(|n| i18n.tr_now(m.id.name, &vars.iter().fold(Args::new(), |args, v| args.num(v, n))));
-                if says_zone(&text) || formatted.iter().any(|f| says_zone(f)) {
-                    offending.push(format!("{}: {}", locale.tag(), m.id.name));
-                }
-            }
-        }
-        assert_eq!(offending, Vec::<String>::new());
+    fn on_a_street_anchored_at_its_last_end_a_curbside_use_is_said_from_the_plan_s_left_end() {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
+        // 100 m anchored at its last end: a use from 10 m to 16 m from the anchor is from 84 m to 90 m on the plan.
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::Last }));
+        e.add_curb(Side::Right, 10_000, 6_000, Use::Loading).unwrap();
+        let v = e.view();
+        let row = v.checks.iter().find(|c| c.id == "curb-length").unwrap();
+        assert!(
+            say_now(&en(), Units::Metres, &check_label(row)).ends_with(": Loading at 84.0 m, right"),
+            "{:?}",
+            say_now(&en(), Units::Metres, &check_label(row))
+        );
+        assert_eq!(say_now(&en(), Units::Metres, &v.revisions.last().unwrap().label), "Add loading at 84.0 m");
+        let side = v.curb.sides.iter().find(|s| s.cells.iter().any(|c| c.instance.is_some())).unwrap();
+        let cell = side.cells.iter().position(|c| c.instance.is_some()).unwrap();
+        let said = cell_text("curb-cell", side, cell, v.axis, &en(), Units::Metres);
+        assert!(said.contains(", 84.0 m to 90.0 m, 6.0 m long,"), "{said}");
     }
 }

@@ -2562,7 +2562,7 @@ pub(crate) fn junction_with_a_beyond(configure: impl Fn(&mut State), tweak: impl
     let mut beyond = Beyond {
         boundary_mm: 20_000,
         next,
-        zone: crate::shared::said::Said::new("zone-unnamed-mid").with("n", crate::shared::said::Arg::Num(2)),
+        stretch: crate::street::model::stretch_between(20_000, 100_000),
         taper: Some(BeyondTaper {
             from_mm: 20_000,
             to_mm: 30_000,
@@ -2633,7 +2633,7 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
         a.beyond = Some(Beyond {
             boundary_mm: 20_000,
             next: a.section.clone().unwrap().segments,
-            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            stretch: crate::street::model::stretch_between(20_000, 100_000),
             taper: None,
         });
     }
@@ -2649,7 +2649,7 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
         a.beyond = Some(Beyond {
             boundary_mm: 20_000,
             next: a.section.clone().unwrap().segments,
-            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            stretch: crate::street::model::stretch_between(20_000, 100_000),
             taper: None,
         });
     }
@@ -2723,7 +2723,7 @@ fn a_beyond_past_the_drawn_arm_is_neither_judged_nor_described() {
         assert!(a.beyond.is_empty() && a.beyond_marks.is_empty(), "nothing is drawn");
         assert!(a.beyond_problems.is_empty(), "boundary {boundary}, taper from {from}");
         assert!(approach(&j).ok);
-        assert_eq!((a.beyond_zone, a.beyond_reach_mm, a.beyond_taper_mm), (None, 0, 0), "the arm sentence has nothing to say");
+        assert_eq!((a.beyond_stretch, a.beyond_reach_mm, a.beyond_taper_mm), (None, 0, 0), "the arm sentence has nothing to say");
     }
 }
 
@@ -2783,7 +2783,7 @@ fn a_beyond_ignored_for_a_turbo_or_a_pedestrian_arm_cannot_fail() {
         a.beyond = Some(Beyond {
             boundary_mm: 2_000,
             next: a.section.clone().unwrap().segments,
-            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            stretch: crate::street::model::stretch_between(20_000, 100_000),
             taper: None,
         });
     };
@@ -2896,7 +2896,7 @@ fn whole_arms_fingerprint() -> u64 {
 
 #[test]
 fn an_arm_without_stops_draws_as_before() {
-    let (got, pinned) = (whole_arms_fingerprint(), 8_823_566_077_873_241_793);
+    let (got, pinned) = (whole_arms_fingerprint(), 2_679_133_416_939_640_467);
     assert_eq!(
         got, pinned,
         "an arm with no stops no longer serialises as it did before the stops were drawn; if that is on purpose, replace the pinned number with {got}"

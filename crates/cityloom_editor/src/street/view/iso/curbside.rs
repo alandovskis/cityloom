@@ -352,6 +352,8 @@ mod tests {
         e.add_curb(Side::Right, 12_000, 6_000, Use::Patio).unwrap();
         e.add_curb(Side::Right, 24_000, 6_000, Use::Patio).unwrap();
         e.split_zone(Some(20_000)).unwrap();
+        // A run of its own, so a boundary the 2.5D draws across.
+        assert!(e.set_speed(Some(30)));
         assert!(e.select_zone(0));
         assert!(e.view().zones.joint.is_some());
         // The patio of zone 1 is drawn; the one beyond the boundary, in zone 2's half, is not.

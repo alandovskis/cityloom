@@ -60,7 +60,8 @@ pub struct PlanBoundary {
     /// The transition's taper, `(from, to)`, at its true length on the side of the run that holds it; it may reach
     /// past that run (a failing transition) or past the street's end.
     pub taper: Option<(i32, i32)>,
-    /// The boundary may be dragged: the street has an end to measure from and its changes were drawn on this road.
+    /// The boundary may be dragged: the street has an end to measure from, its changes were drawn on this road, and it
+    /// is not shown read-only (`Editor::with_fixed_boundaries`).
     pub movable: bool,
 }
 
@@ -136,7 +137,7 @@ impl Editor {
             .collect();
         plan_runs.sort_by_key(|r| r.from_mm);
         let transitions = self.transitions();
-        let movable = self.structure_frame(true).is_ok();
+        let movable = !self.fixed_boundaries && self.structure_frame(true).is_ok();
         let mut boundaries: Vec<PlanBoundary> = runs
             .windows(2)
             .map(|pair| {
@@ -196,12 +197,6 @@ impl Editor {
             elsewhere: self.elsewhere().is_some(),
             from_end: Some(frame.from_end),
         }
-    }
-
-    /// The anchored span between `a_mm` and `b_mm`, from the plan's left end, smaller end first.
-    fn left_span(&self, a_mm: i32, b_mm: i32) -> (i32, i32) {
-        let (a, b) = (self.left_mm(a_mm), self.left_mm(b_mm));
-        (a.min(b), a.max(b))
     }
 }
 
@@ -270,10 +265,8 @@ mod tests {
         let bands: Vec<PlanBand> = base.iter().map(|s| PlanBand { uid: s.uid, kind: s.kind, material: s.material, width_mm: s.width_mm }).collect();
         assert_eq!(p.runs[0].bands, bands, "the section's pieces, in order, top to bottom");
         assert_eq!(last_width(&p.runs[1]), base.last().unwrap().width_mm + 100);
-        // A run passes as its zone does on the zone strip: the widened one is wider than the street's room.
-        let zones = e.view().zones.zones;
+        // A run passes when its section does: the widened one is wider than the street's room.
         assert_eq!(p.runs.iter().map(|r| r.ok).collect::<Vec<_>>(), [true, false, true]);
-        assert_eq!(p.runs.iter().map(|r| zones[r.zone].ok).collect::<Vec<_>>(), [true, false, true]);
         assert_eq!(marks(&p), [(20_000, 1), (40_000, 2)]);
         assert!(p.boundaries.iter().all(|b| b.movable && b.taper.is_none()), "a wider sidewalk needs no taper");
         assert!(!p.elsewhere);
@@ -283,6 +276,13 @@ mod tests {
         assert!(elsewhere.elsewhere);
         assert_eq!(spans(&elsewhere), [(0, 20_000, 0), (20_000, 40_000, 1), (40_000, 58_000, 2)], "drawn at the loaded length");
         assert!(elsewhere.boundaries.iter().all(|b| !b.movable));
+
+        // Shown read-only: drawn the same, here and not elsewhere, with every boundary fixed.
+        let fixed = editor(&street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First), frame(LEN, ZoneEnd::First)).with_fixed_boundaries(true);
+        let fixed = plan(&fixed);
+        assert!(!fixed.elsewhere);
+        assert_eq!(marks(&fixed), [(20_000, 1), (40_000, 2)]);
+        assert!(fixed.boundaries.iter().all(|b| !b.movable));
     }
 
     #[test]

@@ -1,13 +1,13 @@
 //! What lies beyond a street's end zone, for the junction: the first boundary met going out from the junction, the
-//! zone across it, and the taper that boundary needs. Derived, never saved. Pure, no browser types.
+//! stretch across it, and the taper that boundary needs. Derived, never saved. Pure, no browser types.
 //!
 //! Distances are along the arm from the junction's centre, which is the street's end (the mouth is not subtracted:
 //! `junction::model::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
 
 use super::StreetExt;
-use super::{Host, LENGTH_TOLERANCE_MM, Segment, Street, ZoneEnd, ZoneFrame, total, transition};
+use super::{Host, LENGTH_TOLERANCE_MM, PlanAxis, Segment, Street, ZoneEnd, ZoneFrame, stretch_between, total, transition};
 use crate::shared::catalogue::is_roadway;
-use crate::shared::said::{Arg, Said};
+use crate::shared::said::Said;
 use cityloom_model::street::same_pieces;
 
 /// The first boundary met going out from an arm's end, and what is across it.
@@ -17,9 +17,10 @@ pub struct Beyond {
     pub boundary_mm: i32,
     /// The zone across the boundary as the arm sees it: looking out from the junction.
     pub next: Vec<Segment>,
-    /// What the zone across is called, as it stands in the middle of a sentence: its number counting from the
-    /// anchored end (`zone-unnamed-mid`, a junction message). A saved name is never said.
-    pub zone: Said,
+    /// The stretch across, as it stands in the middle of a sentence: where it lies measured from the junction's centre
+    /// (the arm's own end, as `boundary_mm`), so it starts at the boundary (`stretch_between`). A saved name is never
+    /// said.
+    pub stretch: Said,
     /// The taper the boundary needs, when the two sections need one (otherwise the boundary is a jog).
     pub taper: Option<BeyondTaper>,
 }
@@ -115,7 +116,12 @@ pub(super) fn beyond(street: &Street, first_end: bool, frame: Option<ZoneFrame>)
     if !first_end {
         across = across.reversed();
     }
-    Some(Beyond { boundary_mm, next: across.segments, zone: Said::new("zone-unnamed-mid").with("n", Arg::Num(neighbour as i64 + 1)), taper })
+    let span = |z: usize| street.zones.get(z).map_or(frame.length_mm, |g| g.from_mm).min(frame.length_mm);
+    let (from_mm, to_mm) = PlanAxis { from_end: street.from_end, length_mm: frame.length_mm }.left_span(span(neighbour), span(neighbour + 1));
+    // The junction has no plan: the arm measures from its own end, the junction's centre, so the stretch starts where
+    // the end stretch reaches.
+    let (from_mm, to_mm) = if first_end { (from_mm, to_mm) } else { (frame.length_mm - to_mm, frame.length_mm - from_mm) };
+    Some(Beyond { boundary_mm, next: across.segments, stretch: stretch_between(from_mm, to_mm), taper })
 }
 
 type Row = (usize, Option<(i32, i32)>, Option<(i32, i32)>);
@@ -138,7 +144,7 @@ fn anchor(changes: &[Row], at: usize, side: fn(&Row) -> Option<(i32, i32)>) -> O
 mod tests {
     use super::*;
     use crate::shared::catalogue::{Side, kind_index};
-    use crate::street::model::{Speed, zoned};
+    use crate::street::model::{Speed, stretch_between, zoned};
     use ZoneEnd::{First, Last};
 
     const LEN: i32 = 100_000;
@@ -188,13 +194,15 @@ mod tests {
     }
 
     #[test]
-    fn the_beyond_names_the_zone_across() {
+    fn the_beyond_names_the_stretch_across_from_the_junctions_centre() {
         let mut s = with_extra_lane(20_000, 0, 1);
-        let zone = |s: &Street, first_end| s.beyond(first_end, frame(First)).unwrap().zone;
-        assert_eq!(zone(&s, true), Said::new("zone-unnamed-mid").with("n", Arg::Num(2)));
-        assert_eq!(zone(&s, false), Said::new("zone-unnamed-mid").with("n", Arg::Num(1)));
+        let stretch = |s: &Street, first_end| s.beyond(first_end, frame(First)).unwrap().stretch;
+        assert_eq!(stretch(&s, true), stretch_between(20_000, LEN), "from the first end, the stretch beyond the end stretch");
+        // From the last end the end stretch reaches 80 m; the first stretch lies beyond it, to the street's far end.
+        assert_eq!(s.beyond(false, frame(First)).unwrap().boundary_mm, 80_000);
+        assert_eq!(stretch(&s, false), stretch_between(80_000, LEN), "from the last end, the first stretch, from the reach");
         s.zones[1].name = Some("Market".into());
-        assert_eq!(zone(&s, true), Said::new("zone-unnamed-mid").with("n", Arg::Num(2)), "a saved name is never said");
+        assert_eq!(stretch(&s, true), stretch_between(20_000, LEN), "a saved name is never said");
     }
 
     #[test]
@@ -268,6 +276,9 @@ mod tests {
         let last = s.beyond(false, frame(Last)).unwrap();
         assert_eq!(last.boundary_mm, 20_000);
         assert_eq!(last.next, s.reversed().segments, "the other zone is the base, seen from the last end");
+        // Named from the junction's centre, the arm's own end: each starts where its end stretch reaches.
+        assert_eq!(first.stretch, stretch_between(first.boundary_mm, LEN));
+        assert_eq!(last.stretch, stretch_between(20_000, LEN));
     }
 
     #[test]

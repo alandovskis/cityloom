@@ -7,6 +7,7 @@ use leptos::prelude::*;
 
 use crate::shared::catalogue::Side;
 use crate::shared::said::{Said, say, say_now};
+use crate::shared::units::parse_length_mm;
 use crate::street::model::StripCell;
 use crate::street::model::{Editor, MIN_ZONE_MM, Pick, PickRefusal, PlanThing, ZoneEnd, snap};
 use crate::street::vm::keys::PlanKey;
@@ -95,6 +96,15 @@ pub fn boundary_kept(others: &[i32], own_mm: i32, length_mm: i32, to_mm: i32) ->
     snap(to_mm.clamp(low, high)).clamp(low, high)
 }
 
+/// What was typed in the pick's From and To fields and not picked yet: each field shows its draft while it has one,
+/// else the pick's end. A commit picks between the two (a draft, else the pick's end); refused, both drafts stay as
+/// typed so that the other field can put it right. They go once a pick is made, by these fields or any other way.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PickDrafts {
+    from: Option<String>,
+    to: Option<String>,
+}
+
 /// The picking commands: positions here count from the plan's left end (the street's first end) and are converted with
 /// `Editor::anchored_mm` at the editor's edge.
 impl StreetVm {
@@ -128,13 +138,83 @@ impl StreetVm {
         self.pick_between(a_mm, b_mm)
     }
 
+    /// What the pick's From and To fields show: each its draft as typed while it has one, else the pick's end from the
+    /// plan's left end as a number in the page's units (the whole street: 0 and its length). `None` for a street with no
+    /// end to measure from, which has no positions. Watched.
+    pub fn pick_ends_shown(&self) -> Option<(String, String)> {
+        let plan = &self.view().plan;
+        let length = plan.length_mm?;
+        let (from, to) = plan.pick.unwrap_or((0, length));
+        let (units, locale) = (self.units(), self.i18n.locale());
+        let drafts = self.pick_drafts.get();
+        Some((drafts.from.unwrap_or_else(|| units.number_in(from, locale)), drafts.to.unwrap_or_else(|| units.number_in(to, locale))))
+    }
+
+    /// `typed` in the pick's From field (Enter, or leaving it changed): kept as its draft, then the stretch is picked
+    /// (`commit_pick_drafts`). A pointer's way to pick part of a run without dragging.
+    pub fn type_pick_from(&self, typed: &str) -> bool {
+        self.pick_drafts.update(|d| d.from = Some(typed.to_string()));
+        self.commit_pick_drafts()
+    }
+
+    /// The same for the pick's To field.
+    pub fn type_pick_to(&self, typed: &str) -> bool {
+        self.pick_drafts.update(|d| d.to = Some(typed.to_string()));
+        self.commit_pick_drafts()
+    }
+
+    /// Picks from the From draft (else the pick's left end) to the To draft (else its right end), never swapping them,
+    /// and says what was picked or why not. Refused (a draft that is not a number, From not before To, or the pick's own
+    /// refusals), the drafts stay as typed; picked, they go.
+    fn commit_pick_drafts(&self) -> bool {
+        let plan = self.view_now().plan.clone();
+        let Some(length) = plan.length_mm else { return false };
+        let (from, to) = plan.pick.unwrap_or((0, length));
+        let drafts = self.pick_drafts.get_untracked();
+        let units = self.units_now();
+        let end = |draft: &Option<String>, now: i32| draft.as_ref().map_or(Some(now), |typed| parse_length_mm(typed, units));
+        let (Some(a), Some(b)) = (end(&drafts.from, from), end(&drafts.to, to)) else {
+            self.say_bad_number();
+            return false;
+        };
+        if a >= b {
+            self.ports.announcer.say(&say_now(&self.i18n, units, &Said::new("pick-refused-order")));
+            return false;
+        }
+        self.pointer_picked(self.pick_stretch(a, b))
+    }
+
+    /// Lets go of what was typed in the pick's fields: the pick changed another way.
+    pub(super) fn clear_pick_drafts(&self) {
+        if self.pick_drafts.with_untracked(|d| *d != PickDrafts::default()) {
+            self.pick_drafts.set(PickDrafts::default());
+        }
+    }
+
     /// Picks the run at `at_mm` (from the plan's left end), saying what was picked or why not.
-    pub fn pick_run_at(&self, at_mm: i32) {
+    pub fn pick_run_at(&self, at_mm: i32) -> bool {
         self.extend_from.set(None);
         self.pick_with(None, |e| {
             let at = e.anchored_mm(at_mm);
             e.pick_run_at(at)
-        });
+        })
+    }
+
+    /// After a pick made with the pointer (or typed): when it was taken, the keyboard's point goes to its left end, so
+    /// that the keys go on from the stretch picked. Gives back `picked`.
+    fn pointer_picked(&self, picked: bool) -> bool {
+        if picked {
+            self.point.set(self.view_now().plan.pick.map_or(0, |(from, _)| from));
+        }
+        picked
+    }
+
+    /// Keeps the keyboard's point on the street, which a sync may have made shorter.
+    pub(super) fn clamp_point(&self) {
+        let length = self.view_now().plan.length_mm.unwrap_or(0);
+        if self.point.get_untracked() > length {
+            self.point.set(length);
+        }
     }
 
     /// A press on `side`'s empty lane at `at_mm` (from the plan's left end). Inside the pick (a stretch, or the whole
@@ -150,7 +230,7 @@ impl StreetVm {
                 let at = e.anchored_mm(at_mm);
                 e.pick_run_at(at)
             });
-            if !picked {
+            if !self.pointer_picked(picked) {
                 return;
             }
         }
@@ -185,6 +265,14 @@ impl StreetVm {
         });
     }
 
+    /// The keys the plan's point answers to beyond a slider's own (`keys::on_plan`), as `aria-keyshortcuts` names them:
+    /// shown read-only, only those that pick, since the Alt+arrows that move a boundary are always refused there.
+    pub fn plan_shortcuts(&self) -> &'static str {
+        const PICK: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape";
+        const ALL: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight";
+        if self.read_only() { PICK } else { ALL }
+    }
+
     /// What a key on the plan's point does (`keys::on_plan`).
     pub fn plan_key(&self, k: PlanKey) {
         let length = self.view_now().plan.length_mm.unwrap_or(0);
@@ -196,14 +284,22 @@ impl StreetVm {
             PlanKey::To(last) => self.move_point(end(last)),
             PlanKey::Extend(d) => self.extend_pick(along(d)),
             PlanKey::ExtendTo(last) => self.extend_pick(end(last)),
-            PlanKey::PickRun => self.pick_run_at(point),
-            PlanKey::PickWhole => self.pick_whole(),
+            PlanKey::PickRun => {
+                self.pick_run_at(point);
+            }
+            PlanKey::PickWhole => {
+                self.clear_boundary();
+                self.pick_whole();
+            }
             PlanKey::NudgeBoundary(d) => self.nudge_pick_boundary(d),
         }
     }
 
     /// A press on the plan: a thing pressed is chosen at once, as on its row. The view keeps the gesture.
     pub fn plan_press(&self, p: PlanPress, x_px: f64) -> PlanGesture {
+        if !matches!(p, PlanPress::Boundary { .. }) {
+            self.clear_boundary();
+        }
         if let PlanPress::Thing { thing, .. } = p {
             match thing {
                 PlanThing::Curb { side, cell } => self.select_cell::<CurbRow>(side, cell),
@@ -222,31 +318,34 @@ impl StreetVm {
             PlanGesture::Pending(p, _) if moved(g, x_px) => self.plan_begin(p),
             g => g,
         };
-        self.plan_step(&g, at_mm);
-        g
+        self.plan_step(g, at_mm)
     }
 
-    /// The pointer was let go at `at_mm`: a press that did not move is a click (on the street, it picks the run there),
-    /// a drag ends (picking from where it started, or keeping what it moved as one edit).
+    /// The pointer was let go at `at_mm`: a press that did not move is a click (on the street, it picks the run there;
+    /// on a boundary, it chooses it to be moved by typing), a drag ends (picking from where it started, or keeping what
+    /// it moved as one edit).
     pub fn plan_release(&self, g: PlanGesture, at_mm: i32) {
         match g {
-            PlanGesture::Pending(PlanPress::Street { at_mm: pressed }, _) => self.pick_run_at(pressed),
+            PlanGesture::Pending(PlanPress::Street { at_mm: pressed }, _) => {
+                self.pointer_picked(self.pick_run_at(pressed));
+            }
+            PlanGesture::Pending(PlanPress::Boundary { zone }, _) => self.choose_boundary(zone),
             PlanGesture::Pending(PlanPress::Lane { side, at_mm: pressed }, _) => self.pick_lane(side, pressed),
             PlanGesture::Pending(..) | PlanGesture::Refused => {}
             PlanGesture::Picking { anchor_mm } => {
-                self.pick_stretch(anchor_mm, at_mm);
+                self.pointer_picked(self.pick_stretch(anchor_mm, at_mm));
             }
             PlanGesture::Handle { fixed_mm } => {
-                self.pick_stretch(fixed_mm, at_mm);
+                self.pointer_picked(self.pick_stretch(fixed_mm, at_mm));
             }
-            PlanGesture::Boundary { zone, at_mm: was, pick } => {
-                self.plan_step(&g, at_mm);
+            PlanGesture::Boundary { at_mm: was, pick, .. } => {
+                let PlanGesture::Boundary { zone, .. } = self.plan_step(g, at_mm) else { return };
                 self.end_boundary_drag(true);
                 let now = self.boundary_at(zone).unwrap_or(was);
                 self.repick(pick_after_move(pick, was, now));
             }
             PlanGesture::Thing { thing, .. } => {
-                self.plan_step(&g, at_mm);
+                self.plan_step(g, at_mm);
                 self.end_thing_drag(thing, true);
             }
         }
@@ -278,6 +377,8 @@ impl StreetVm {
                     return PlanGesture::Refused;
                 }
                 let Some(at_mm) = self.boundary_at(zone) else { return PlanGesture::Refused };
+                // A boundary chosen to be typed is let go: a drag moves this one, and the boundaries may shift under it.
+                self.clear_boundary();
                 let pick = self.view_now().plan.pick;
                 if !self.begin_boundary_drag() {
                     return PlanGesture::Refused;
@@ -308,15 +409,18 @@ impl StreetVm {
     }
 
     /// One step of a drag of a boundary or a thing, the pointer at `at_mm` from the plan's left end: shown, not said.
-    fn plan_step(&self, g: &PlanGesture, at_mm: i32) {
+    /// Gives back the gesture, a boundary's by the zone it starts after the step (a step that joins a boundary hidden
+    /// inside a run changes it).
+    fn plan_step(&self, g: PlanGesture, at_mm: i32) -> PlanGesture {
         let at = self.read(|e| e.anchored_mm(at_mm));
-        match *g {
-            PlanGesture::Boundary { zone, .. } => {
+        match g {
+            PlanGesture::Boundary { zone, at_mm: was, pick } => {
                 let plan = &self.view_now().plan;
-                let Some(own) = self.boundary_at(zone) else { return };
+                let Some(own) = self.boundary_at(zone) else { return g };
                 let others: Vec<i32> = plan.boundaries.iter().filter(|b| b.zone != zone).map(|b| b.at_mm).collect();
                 let to = boundary_kept(&others, own, plan.length_mm.unwrap_or(0), at_mm);
-                self.quiet(|e| e.move_boundary_of(zone, e.anchored_mm(to)).is_ok());
+                let zone = self.quiet(|e| e.move_boundary_of(zone, e.anchored_mm(to)).ok()).unwrap_or(zone);
+                return PlanGesture::Boundary { zone, at_mm: was, pick };
             }
             PlanGesture::Thing { thing, from_mm, grab_mm } => {
                 let to = from_mm + at - grab_mm;
@@ -329,6 +433,7 @@ impl StreetVm {
             }
             _ => {}
         }
+        g
     }
 
     fn end_thing_drag(&self, thing: PlanThing, keep: bool) {
@@ -352,12 +457,15 @@ impl StreetVm {
     }
 
     /// Moves the keyboard point to `to_mm`, picking from where the extension started once that is at least
-    /// `MIN_ZONE_MM` away (until then nothing is picked or said: the keys are on their way).
+    /// `MIN_ZONE_MM` away or reaches from end to end (until then nothing is picked or said: the keys are on their way).
     fn extend_pick(&self, to_mm: i32) {
         let from = self.extend_from.get().unwrap_or_else(|| self.point.get_untracked());
         self.extend_from.set(Some(from));
         self.point.set(to_mm);
-        if (to_mm - from).abs() < MIN_ZONE_MM || !self.pick_between(from, to_mm) {
+        let length = self.view_now().plan.length_mm.unwrap_or(0);
+        // End to end is the whole street, even on a street shorter than the shortest stretch.
+        let whole = from.min(to_mm) <= 0 && from.max(to_mm) >= length;
+        if ((to_mm - from).abs() < MIN_ZONE_MM && !whole) || !self.pick_between(from, to_mm) {
             self.point_alone.set(true);
         }
     }
@@ -402,6 +510,7 @@ impl StreetVm {
         let Some(picked) = picked else { return false };
         match picked {
             Ok(_) => {
+                self.clear_pick_drafts();
                 self.point_alone.set(false);
                 if let Some(said) = self.pick_text() {
                     self.ports.announcer.say(&said);
@@ -424,6 +533,8 @@ impl StreetVm {
     /// `said`, and after it the pick in words when it is no longer `before` (a move through the history or a reload
     /// clamped it to the street).
     pub(super) fn with_pick_note(&self, said: String, before: Pick) -> String {
+        // The history or a sync moved the street from under what was typed in the pick's fields.
+        self.clear_pick_drafts();
         if self.read(|e| e.pick()) == before {
             return said;
         }
@@ -434,8 +545,11 @@ impl StreetVm {
     }
 
     /// Moves the boundary at the pick's left end (else at its right end) by `delta_mm` along the plan, the pick's end
-    /// following it; says why when there is none or it cannot move.
+    /// following it; says why when there is none, it cannot move or the street is shown read-only.
     fn nudge_pick_boundary(&self, delta_mm: i32) {
+        if self.refuse_read_only() {
+            return;
+        }
         let plan = self.view_now().plan.clone();
         let (left, right) = plan.pick.unwrap_or((0, plan.length_mm.unwrap_or(0)));
         let boundary = plan.boundaries.iter().find(|b| b.at_mm == left).or_else(|| plan.boundaries.iter().find(|b| b.at_mm == right));
@@ -443,18 +557,86 @@ impl StreetVm {
             self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &Said::new("pick-refused-no-boundary")));
             return;
         };
+        self.move_boundary_to(zone, was, was + delta_mm);
+    }
+
+    /// Moves the boundary that starts zone `zone`, now at `was_mm`, to `to_mm` (both from the plan's left end) as one
+    /// edit, said; an end of the pick that was on it follows it. False, with the reason said, when it cannot go there.
+    fn move_boundary_to(&self, zone: usize, was_mm: i32, to_mm: i32) -> bool {
+        let pick = self.view_now().plan.pick;
+        // The zone the boundary starts once moved: a boundary hidden inside a run beside it is joined on the way.
+        let starts = std::cell::Cell::new(zone);
         let moved = self.zone_edit(|e| {
-            let to = e.anchored_mm(was + delta_mm);
-            e.move_boundary_of(zone, to)
+            let to = e.anchored_mm(to_mm);
+            e.move_boundary_of(zone, to).map(|z| starts.set(z))
         });
         if moved {
-            let now = self.boundary_at(zone).unwrap_or(was);
-            self.repick(pick_after_move(plan.pick, was, now));
+            let now = self.boundary_at(starts.get()).unwrap_or(was_mm);
+            if self.boundary.get_untracked() == Some((zone, was_mm)) {
+                self.boundary.set(Some((starts.get(), now)));
+            }
+            self.repick(pick_after_move(pick, was_mm, now));
+        }
+        moved
+    }
+
+    /// Where the boundary a click chose lies on the plan, from its left end; `None` when none is chosen (or it is no
+    /// longer where it was chosen, which an edit of the street or a move through the history may do, or can no longer
+    /// move). Watched.
+    pub fn chosen_boundary(&self) -> Option<i32> {
+        let (zone, at_mm) = self.boundary.get()?;
+        self.view().plan.boundaries.iter().any(|b| (b.zone, b.at_mm) == (zone, at_mm) && b.movable).then_some(at_mm)
+    }
+
+    /// What the chosen boundary's Move to field shows: where it is, as a number in the page's units. Watched.
+    pub fn boundary_to_shown(&self) -> Option<String> {
+        let at = self.chosen_boundary()?;
+        Some(self.units().number_in(at, self.i18n.locale()))
+    }
+
+    /// Chooses the boundary that starts zone `zone`, to be moved by typing where it goes, and says so; the details
+    /// panel's Street level shows its field. Nothing is picked. A boundary that cannot move says why, and so does a
+    /// street shown read-only, whose plan offers no boundary to press.
+    fn choose_boundary(&self, zone: usize) {
+        if self.refuse_read_only() {
+            return;
+        }
+        if let Some(refusal) = self.read(|e| e.structure_blocked()) {
+            self.ports.announcer.say(&text::zone_refused(&self.i18n, self.units_now(), refusal));
+            return;
+        }
+        let Some(at_mm) = self.boundary_at(zone) else { return };
+        self.boundary.set(Some((zone, at_mm)));
+        self.ask(crate::street::vm::level::Level::Street);
+        let said = Said::new("boundary-chosen").with("at", crate::shared::said::Arg::Along(at_mm));
+        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &said));
+    }
+
+    /// Moves the chosen boundary to where `typed` says (from the plan's left end, in the page's units): Enter in its
+    /// Move to field. It stays chosen. False, with the reason said, when the street is shown read-only, none is chosen,
+    /// `typed` is not a number or the boundary cannot go there.
+    pub fn move_chosen_boundary(&self, typed: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
+        let (Some((zone, _)), Some(was)) = (self.boundary.get_untracked(), untrack(|| self.chosen_boundary())) else { return false };
+        let Some(to) = parse_length_mm(typed, self.units_now()) else {
+            self.say_bad_number();
+            return false;
+        };
+        self.move_boundary_to(zone, was, to)
+    }
+
+    /// Lets go of the chosen boundary (Escape in its field, a press elsewhere on the plan).
+    pub fn clear_boundary(&self) {
+        if self.boundary.get_untracked().is_some() {
+            self.boundary.set(None);
         }
     }
 
     /// Picks `pick` (from the plan's left end; `None` the whole street) again, quietly, keeping the selected piece.
     fn repick(&self, pick: Option<(i32, i32)>) {
+        self.clear_pick_drafts();
         let selected = self.view_now().selected;
         self.edit(|e| {
             match pick {
@@ -745,6 +927,23 @@ mod pick_tests {
     }
 
     #[test]
+    fn on_a_street_shorter_than_the_shortest_stretch_its_full_length_picks_the_whole_street() {
+        // 4 m long: no stretch of it can be picked, but its whole length is the whole street.
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&sample(), &sample(), 0).with_frame(Some(ZoneFrame { length_mm: 4_000, from_end: ZoneEnd::First }));
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said };
+        drag(&r, PlanPress::Street { at_mm: 0 }, 0, 4_000);
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."], "a drag over its full length");
+        r.vm.plan_key(PlanKey::To(false));
+        r.vm.plan_key(PlanKey::ExtendTo(true));
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."], "Shift+End from its left end");
+        assert_eq!(r.vm.picked(), None);
+        // Its ends are within the shortest stretch of anywhere on it: a drag over part of it snaps to them.
+        drag(&r, PlanPress::Street { at_mm: 1_000 }, 1_000, 3_000);
+        assert_eq!(r.said.take(), ["The whole street, 4.0 m long."]);
+    }
+
+    #[test]
     fn a_too_short_pick_says_why_and_keeps_the_pick() {
         let r = rig_of(&sample(), ZoneEnd::First);
         assert!(r.vm.pick_stretch(20_000, 40_000));
@@ -923,6 +1122,112 @@ mod pick_tests {
         }
     }
 
+    /// What the pick's From and To fields show.
+    fn fields(r: &Rig) -> Option<(String, String)> {
+        r.vm.pick_ends_shown()
+    }
+
+    fn shown(from: &str, to: &str) -> Option<(String, String)> {
+        Some((from.to_string(), to.to_string()))
+    }
+
+    #[test]
+    fn the_pick_s_ends_typed_in_its_fields_pick_a_stretch_from_the_plan_s_left_end() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = rig_of(&sample(), from_end);
+            assert_eq!(fields(&r), shown("0.0", "60.0"), "{from_end:?}: the whole street, 0 to its length");
+            // Each field picks with the other end as it is: From 10 picks 10 m to the street's end.
+            assert!(r.vm.type_pick_from("10"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, LEN)), "{from_end:?}");
+            assert!(r.vm.type_pick_to("30,5"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, 30_500)), "{from_end:?}");
+            assert_eq!(r.said.take().last().map(String::as_str), Some("From 10.0 m to 30.5 m, 20.5 m long."), "{from_end:?}");
+            assert_eq!(fields(&r), shown("10.0", "30.5"), "{from_end:?}");
+            // A unit word typed after the number.
+            assert!(r.vm.type_pick_to("40 m"), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((10_000, 40_000)), "{from_end:?}");
+            r.said.take();
+            assert!(!r.vm.type_pick_to("70"));
+            assert_eq!(r.said.take(), ["That position is outside the street."]);
+            assert!(!r.vm.type_pick_to("forty"));
+            assert_eq!(r.said.take(), ["That is not a number."]);
+            assert_eq!(r.vm.picked(), Some((10_000, 40_000)), "{from_end:?}: refused, the pick stays");
+            assert_eq!(fields(&r), shown("10.0", "forty"), "{from_end:?}: what was typed stays, to be put right");
+            // The full length is the whole street.
+            assert!(r.vm.type_pick_to("60"));
+            assert!(r.vm.type_pick_from("0"));
+            assert_eq!((r.vm.picked(), fields(&r)), (None, shown("0.0", "60.0")));
+        }
+        let r = rig_in(&sample(), ZoneEnd::First, Locale::FrCa);
+        assert!(r.vm.type_pick_from("10,5"));
+        assert!(r.vm.type_pick_to("20"));
+        assert_eq!(fields(&r), shown("10,5", "20,0"));
+        // A street with no anchor has no positions to type.
+        let (ports, _, _, _) = test_ports_with_time();
+        let free = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&sample(), &sample(), 0).with_frame(None), None);
+        assert_eq!(free.pick_ends_shown(), None);
+    }
+
+    #[test]
+    fn a_from_typed_past_the_pick_s_end_waits_for_its_to_and_is_never_swapped() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        assert!(r.vm.pick_stretch(10_000, 20_000));
+        r.said.take();
+        // From 30 against To 20: not swapped into 20 to 30, but refused, said, and kept as typed.
+        assert!(!r.vm.type_pick_from("30"));
+        assert_eq!(r.said.take(), ["From must come before To."]);
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((10_000, 20_000)), shown("30", "20.0")));
+        // Then To 40: from the typed From, 30 m to 40 m.
+        assert!(r.vm.type_pick_to("40"));
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((30_000, 40_000)), shown("30.0", "40.0")));
+        let fr = rig_in(&sample(), ZoneEnd::First, Locale::FrCa);
+        assert!(fr.vm.pick_stretch(10_000, 20_000));
+        fr.said.take();
+        assert!(!fr.vm.type_pick_from("30"));
+        assert_eq!(fr.said.take(), ["\u{ab}\u{a0}De\u{a0}\u{bb} doit venir avant \u{ab}\u{a0}À\u{a0}\u{bb}."]);
+    }
+
+    #[test]
+    fn a_refused_from_keeps_what_was_typed_until_the_to_makes_a_stretch_of_it() {
+        let r = rig_of(&sample(), ZoneEnd::First);
+        assert!(r.vm.pick_stretch(10_000, 30_000));
+        r.said.take();
+        // 28 m to 30 m is under the shortest stretch: refused, said, and From keeps 28 rather than going back to 10.
+        assert!(!r.vm.type_pick_from("28"));
+        assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."]);
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((10_000, 30_000)), shown("28", "30.0")));
+        assert!(r.vm.type_pick_to("60"));
+        assert_eq!((r.vm.picked(), fields(&r)), (Some((28_000, LEN)), shown("28.0", "60.0")));
+    }
+
+    #[test]
+    fn what_was_typed_in_the_pick_s_fields_goes_when_the_pick_changes_another_way() {
+        let typed = |r: &Rig| {
+            assert!(r.vm.pick_stretch(10_000, 30_000));
+            assert!(!r.vm.type_pick_from("28"));
+            assert_eq!(fields(r), shown("28", "30.0"));
+        };
+        let r = three_runs(ZoneEnd::First);
+        typed(&r);
+        drag(&r, PlanPress::Street { at_mm: 40_000 }, 40_000, 50_000);
+        assert_eq!(fields(&r), shown("40.0", "50.0"), "a drag");
+        typed(&r);
+        r.vm.plan_key(PlanKey::To(false));
+        assert_eq!(fields(&r), shown("28", "30.0"), "moving the point alone picks nothing");
+        r.vm.plan_key(PlanKey::Extend(10_000));
+        assert_eq!(fields(&r), shown("0.0", "10.0"), "the keys");
+        typed(&r);
+        r.vm.show_level(Level::Street);
+        assert_eq!(fields(&r), shown("0.0", "60.0"), "the Street step of the path");
+        typed(&r);
+        let uid = r.vm.view_now().segments[0].uid;
+        assert!(r.vm.apply(|e| e.set_width(uid, 4_000)));
+        assert!(r.vm.pick_stretch(12_000, 50_000));
+        assert!(!r.vm.type_pick_from("49"));
+        assert!(r.vm.undo());
+        assert_eq!(fields(&r), shown("10.0", "50.0"), "an undo");
+    }
+
     #[test]
     fn the_street_step_of_the_path_picks_the_whole_street() {
         let r = rig_of(&sample(), ZoneEnd::First);
@@ -951,6 +1256,27 @@ mod pick_tests {
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(said[0].starts_with("Redone."), "{said:?}");
         assert!(said[0].ends_with(" From 10.0 m to 50.0 m, 40.0 m long."), "{said:?}");
+    }
+
+    #[test]
+    fn an_edit_that_missed_part_of_a_street_with_no_end_to_measure_from_names_no_positions() {
+        // Both ends cut: no frame. The middle zone of the saved record has no parking on its first side.
+        let mut s = zoned(sample(), &[0, 20_000, 40_000], LEN);
+        let mut middle = s.segments.clone();
+        middle.remove(1);
+        s.zones[1].segments = Some(middle);
+        let (ports, said, _, _) = test_ports_with_time();
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&s, &s, 0).with_frame(None), None), said };
+        let parking = r.vm.view_now().segments[1].uid;
+        assert!(r.vm.apply(|e| e.set_width(parking, 2_600)));
+        let said = r.said.take();
+        assert!(said[0].ends_with(" Not changed along part of the street: that part has no parking."), "{said:?}");
+        assert!(!said[0].contains("from"), "no positions: {said:?}");
+        let (ports, said, _, _) = test_ports_with_time();
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::FrCa), Editor::from_street(&s, &s, 0).with_frame(None), None), said };
+        assert!(r.vm.apply(|e| e.set_width(parking, 2_600)));
+        let said = r.said.take();
+        assert!(said[0].ends_with(" Aucun changement sur une partie de la rue\u{a0}: cette partie est sans stationnement."), "{said:?}");
     }
 
     #[test]
@@ -1000,6 +1326,114 @@ mod pick_tests {
     }
 
     #[test]
+    fn a_click_on_a_boundary_chooses_it_and_typing_where_it_goes_moves_it_without_a_drag() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = three_runs(from_end);
+            // The boundary at 20 m on the plan starts the second zone from the first end, the third from the last.
+            let zone = if from_end == ZoneEnd::First { 1 } else { 2 };
+            r.vm.pick_run_at(30_000);
+            let uid = r.vm.view_now().segments[0].uid;
+            r.vm.select(Some(uid));
+            assert_eq!(r.vm.level(), Level::Piece);
+            let revisions = r.vm.view_now().revisions.len();
+            r.said.take();
+            let g = r.vm.plan_press(PlanPress::Boundary { zone }, 200.0);
+            r.vm.plan_release(g, 20_000);
+            assert_eq!(r.vm.chosen_boundary(), Some(20_000), "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((20_000, 40_000)), "{from_end:?}: choosing it does not pick");
+            assert_eq!(r.vm.level(), Level::Street, "{from_end:?}: its field is on the Street level");
+            assert_eq!(r.said.take(), ["The change at 20.0 m; type where it goes."], "{from_end:?}");
+            assert_eq!(r.vm.boundary_to_shown(), Some("20.0".to_string()), "{from_end:?}");
+            // Typed, from the plan's left end: one undoable edit, said, and the pick's end on it follows.
+            assert!(r.vm.move_chosen_boundary("25"), "{from_end:?}");
+            assert_eq!(boundaries(&r), [25_000, 40_000], "{from_end:?}");
+            assert_eq!(r.vm.picked(), Some((25_000, 40_000)), "{from_end:?}");
+            assert_eq!(r.vm.view_now().revisions.len(), revisions + 1, "{from_end:?}");
+            let said = r.said.take();
+            assert!(said.len() == 1 && said[0].contains("Move a change along the street to 25.0 m"), "{from_end:?}: {said:?}");
+            assert_eq!((r.vm.chosen_boundary(), r.vm.boundary_to_shown()), (Some(25_000), Some("25.0".to_string())), "{from_end:?}: still chosen");
+            // Kept 5 m from its neighbours: refused and said, as a drag or a key would be.
+            assert!(!r.vm.move_chosen_boundary("38"), "{from_end:?}");
+            assert_eq!(r.said.take(), ["A stretch must be at least 5.0 m long."], "{from_end:?}");
+            assert!(!r.vm.move_chosen_boundary("there"), "{from_end:?}");
+            assert_eq!(r.said.take(), ["That is not a number."], "{from_end:?}");
+            assert_eq!(boundaries(&r), [25_000, 40_000], "{from_end:?}");
+            // A press elsewhere on the plan lets it go.
+            let g = r.vm.plan_press(PlanPress::Street { at_mm: 50_000 }, 500.0);
+            assert_eq!(r.vm.chosen_boundary(), None, "{from_end:?}");
+            r.vm.plan_cancel(g);
+            // So does Escape (the field's), and the whole street picked with the point's.
+            let g = r.vm.plan_press(PlanPress::Boundary { zone }, 250.0);
+            r.vm.plan_release(g, 25_000);
+            assert_eq!(r.vm.chosen_boundary(), Some(25_000), "{from_end:?}");
+            r.vm.clear_boundary();
+            assert_eq!((r.vm.chosen_boundary(), r.vm.boundary_to_shown()), (None, None), "{from_end:?}");
+            let g = r.vm.plan_press(PlanPress::Boundary { zone }, 250.0);
+            r.vm.plan_release(g, 25_000);
+            r.vm.plan_key(PlanKey::PickWhole);
+            assert_eq!(r.vm.chosen_boundary(), None, "{from_end:?}");
+        }
+    }
+
+    #[test]
+    fn a_drag_of_another_boundary_lets_go_of_the_one_chosen() {
+        let r = three_runs(ZoneEnd::First);
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert_eq!(r.vm.chosen_boundary(), Some(20_000));
+        drag(&r, PlanPress::Boundary { zone: 2 }, 40_000, 45_000);
+        assert_eq!(boundaries(&r), [20_000, 45_000]);
+        assert_eq!(r.vm.chosen_boundary(), None, "the field is not left up for the other boundary");
+    }
+
+    #[test]
+    fn a_boundary_drawn_on_another_road_is_not_chosen_and_the_reason_is_said() {
+        // Drawn on 60 m, loaded on 70 m: elsewhere.
+        let s = street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First);
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN + 10_000, from_end: ZoneEnd::First }));
+        let r = Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said };
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert_eq!(r.vm.chosen_boundary(), None);
+        assert_eq!(
+            r.said.take(),
+            ["The changes along this street were drawn on a road of another length or from its other end, so they cannot be moved here."]
+        );
+    }
+
+    #[test]
+    fn a_boundary_dragged_over_one_hidden_inside_a_run_goes_where_the_plan_lets_it() {
+        // A saved street whose zones from 20 m and from 30 m look the same: one run from 20 m to 40 m.
+        let s = street(&[0, 20_000, 30_000, 40_000], &[0, 100, 100, 0], ZoneEnd::First);
+        let r = rig_of(&s, ZoneEnd::First);
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 3 }, 400.0);
+        let g = r.vm.plan_move(&g, 350.0, 35_000);
+        let g = r.vm.plan_move(&g, 280.0, 28_000);
+        assert_eq!(boundaries(&r), [20_000, 28_000], "past the hidden boundary at 30 m, as it goes");
+        let g = r.vm.plan_move(&g, 100.0, 10_000);
+        assert_eq!(boundaries(&r), [20_000, 25_000], "kept 5 m from the boundary the plan shows");
+        r.vm.plan_release(g, 10_000);
+        assert_eq!(boundaries(&r), [20_000, 25_000]);
+        assert_eq!(r.vm.read(|e| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>()), [0, 20_000, 25_000]);
+        // Undone, the saved zones come back as they were.
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.read(|e| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>()), [0, 20_000, 30_000, 40_000]);
+        // Alt with an arrow, and a typed move, pass it too, the pick's end following.
+        r.vm.pick_run_at(30_000);
+        r.vm.plan_key(PlanKey::NudgeBoundary(14_000));
+        assert_eq!((boundaries(&r), r.vm.picked()), (vec![34_000, 40_000], Some((34_000, 40_000))));
+        assert!(r.vm.undo());
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert!(r.vm.move_chosen_boundary("33"));
+        assert_eq!((boundaries(&r), r.vm.chosen_boundary()), (vec![33_000, 40_000], Some(33_000)), "still chosen, by the zone it now starts");
+        assert!(r.vm.move_chosen_boundary("21"));
+        assert_eq!(boundaries(&r), [21_000, 40_000]);
+    }
+
+    #[test]
     fn a_boundary_dragged_past_its_neighbour_stops_the_shortest_stretch_from_it() {
         for from_end in [ZoneEnd::First, ZoneEnd::Last] {
             // Boundaries at 20 m and 40 m on the plan, whichever end is anchored.
@@ -1043,6 +1477,34 @@ mod pick_tests {
     }
 
     #[test]
+    fn the_keyboard_point_follows_a_pick_made_with_the_pointer() {
+        for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+            let r = three_runs(from_end);
+            r.vm.plan_key(PlanKey::To(true));
+            assert_eq!(r.vm.plan_point(), LEN);
+            drag(&r, PlanPress::Street { at_mm: 25_000 }, 25_000, 12_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((12_000, 25_000)), 12_000), "{from_end:?}: a drag");
+            let g = r.vm.plan_press(PlanPress::Street { at_mm: 50_000 }, 500.0);
+            r.vm.plan_release(g, 50_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((40_000, LEN)), 40_000), "{from_end:?}: a click");
+            drag(&r, PlanPress::Handle { left: true }, 40_000, 45_000);
+            assert_eq!(r.vm.plan_point(), 45_000, "{from_end:?}: a handle");
+            assert!(r.vm.type_pick_from("30"));
+            assert_eq!(r.vm.plan_point(), 30_000, "{from_end:?}: typed ends");
+            let g = r.vm.plan_press(PlanPress::Lane { side: Side::Left, at_mm: 10_000 }, 100.0);
+            r.vm.plan_release(g, 10_000);
+            assert_eq!((r.vm.picked(), r.vm.plan_point()), (Some((0, 20_000)), 0), "{from_end:?}: a press on a lane");
+            // The keys go on from there.
+            r.vm.plan_key(PlanKey::Extend(10_000));
+            assert_eq!(r.vm.picked(), Some((0, 10_000)), "{from_end:?}");
+            // A refused pick leaves the point where it is.
+            r.vm.plan_key(PlanKey::Move(5_000));
+            drag(&r, PlanPress::Street { at_mm: 30_000 }, 30_000, 32_000);
+            assert_eq!(r.vm.plan_point(), 15_000, "{from_end:?}");
+        }
+    }
+
+    #[test]
     fn a_keyboard_extension_says_nothing_until_it_is_long_enough_to_pick() {
         let r = rig_of(&sample(), ZoneEnd::First);
         r.vm.plan_key(PlanKey::Move(10_000));
@@ -1066,5 +1528,84 @@ mod pick_tests {
             let stop = objects(&r).into_iter().find(|o| matches!(o.0, PlanThing::Stop { .. })).unwrap();
             assert_eq!((stop.1, stop.2), (0, stop_mm), "{from_end:?}: as a stretch picked from the left end would");
         }
+    }
+
+    /// Three runs as `three_runs` has them, anchored at the first end, on a page that shows its project read-only
+    /// (#222), and the storage it reads.
+    fn read_only_three_runs() -> (Rig, Rc<crate::shared::ports::MemoryStorage>) {
+        use crate::shared::ports::{Ports, Storage};
+        let street = street(&[0, 20_000, 40_000], &[0, 100, 0], ZoneEnd::First);
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        let (ports, said, storage, _) = test_ports_with_time();
+        let view: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(storage.clone(), "p1").only_to_read());
+        let editor = Editor::from_street(&street, &street, region).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        let vm = StreetVm::new(Ports { storage: view, ..ports }, crate::i18n_for(Locale::En), editor, None);
+        assert!(vm.read_only());
+        (Rig { vm, said }, storage)
+    }
+
+    #[test]
+    fn the_boundaries_of_a_street_that_may_be_edited_can_move() {
+        let r = three_runs(ZoneEnd::First);
+        assert!(r.vm.view_now().plan.boundaries.iter().all(|b| b.movable));
+    }
+
+    /// Shown read-only, a stretch is still picked, by the plan, its point and the pick's fields: picking chooses, it
+    /// does not edit. No boundary moves: a click on one picks the run there, as a click on the street does, and chooses
+    /// nothing to move; a drag from one picks a stretch; Alt+arrow and a typed Move to are refused and said. The street,
+    /// its history and the storage are as they were.
+    #[test]
+    fn a_street_shown_read_only_picks_stretches_and_moves_no_boundary() {
+        use crate::shared::ports::Storage;
+        const REFUSED: &str = "This design is open read-only: nothing can be changed.";
+        let (r, storage) = read_only_three_runs();
+        let stored = || {
+            let mut keys = storage.keys();
+            keys.sort();
+            keys.into_iter().map(|k| (k.clone(), storage.recall(&k))).collect::<Vec<_>>()
+        };
+        let (street, revisions, kept) = (r.vm.read(|e| e.snapshot()), r.vm.view_now().revisions.len(), stored());
+        let refused = |said: Vec<String>| said.iter().any(|s| s == REFUSED);
+
+        r.vm.plan_key(PlanKey::PickRun);
+        assert_eq!(r.vm.picked(), Some((0, 20_000)), "the point's run");
+        assert!(r.vm.pick_stretch(25_000, 35_000));
+        assert_eq!(r.vm.picked(), Some((25_000, 35_000)));
+        assert!(r.vm.type_pick_from("26"));
+        assert!(r.vm.type_pick_to("33"));
+        assert_eq!(r.vm.picked(), Some((26_000, 33_000)), "the fields pick");
+        assert!(!refused(r.said.take()), "picking is never refused");
+
+        // No boundary may move, so none is a target of the pointer (the hit layer passes over it) and a press near one
+        // is a press on the street where the pointer is. Nothing says the boundaries were drawn on another road.
+        let v = r.vm.view_now();
+        assert!(v.plan.boundaries.iter().all(|b| !b.movable), "no boundary can be moved: {:?}", v.plan.boundaries);
+        assert!(!v.plan.elsewhere && v.zones.elsewhere.is_none(), "and none is said to be elsewhere");
+        let g = r.vm.plan_press(PlanPress::Street { at_mm: 19_500 }, 195.0);
+        r.vm.plan_release(g, 19_500);
+        assert_eq!(r.vm.picked(), Some((0, 20_000)), "a click just left of a boundary picks the run on its left");
+        drag(&r, PlanPress::Street { at_mm: 14_000 }, 14_000, 33_000);
+        assert_eq!(r.vm.picked(), Some((14_000, 33_000)), "a drag picks from the pointer's press to where it is let go");
+        assert_eq!(boundaries(&r), [20_000, 40_000], "and moves no boundary");
+        assert!(!refused(r.said.take()));
+
+        // A boundary pressed all the same (the plan offers none) is not chosen to be typed, and is not dragged.
+        let g = r.vm.plan_press(PlanPress::Boundary { zone: 1 }, 200.0);
+        r.vm.plan_release(g, 20_000);
+        assert_eq!(r.vm.chosen_boundary(), None, "nothing is chosen to be moved");
+        assert_eq!(r.said.take(), [REFUSED], "a click on it");
+        drag(&r, PlanPress::Boundary { zone: 1 }, 20_000, 30_000);
+        assert_eq!(r.said.take(), [REFUSED], "a drag of it");
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+
+        r.vm.plan_key(PlanKey::NudgeBoundary(-1_000));
+        assert_eq!(r.said.take(), [REFUSED], "Alt+arrow");
+        assert!(!r.vm.move_chosen_boundary("25"));
+        assert_eq!(r.said.take(), [REFUSED], "a typed Move to");
+
+        assert_eq!(boundaries(&r), [20_000, 40_000]);
+        assert_eq!(r.vm.read(|e| e.snapshot()), street, "the street is as it was");
+        assert_eq!(r.vm.view_now().revisions.len(), revisions, "and its history");
+        assert_eq!(stored(), kept, "nothing written, nothing marked for the sync");
     }
 }

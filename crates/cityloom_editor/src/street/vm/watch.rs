@@ -319,10 +319,16 @@ impl SheetWatch {
         self.vm.with_value(|v| v.remove_green())
     }
 
-    /// The pieces a new element starting at `at_mm` can stand on, drawing again when the street is edited.
-    pub fn hosts_at(&self, at_mm: i32) -> Vec<(usize, crate::shared::said::Said)> {
+    /// The pieces an element `length_mm` long starting at `at_mm` on the plan can stand on, drawing again when the
+    /// street is edited.
+    pub fn hosts_at(&self, at_mm: i32, length_mm: i32) -> Vec<(usize, crate::shared::said::Said)> {
         let _ = self.view();
-        self.vm.with_value(|v| v.hosts_at(at_mm))
+        self.vm.with_value(|v| v.hosts_at(at_mm, length_mm))
+    }
+
+    /// Where element `c` of the Green row starts on the plan, from its left end.
+    pub fn green_left_start(&self, c: &crate::street::model::GreenCell) -> i32 {
+        self.vm.with_value(|v| v.green_left_start(c))
     }
 
     pub fn say_bad_number(&self) {

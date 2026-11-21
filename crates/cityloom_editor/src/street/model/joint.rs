@@ -22,9 +22,9 @@ pub struct Joint {
     pub at_mm: i32,
     /// The same from the plan's left end, the street's first end: where the page says it is.
     pub left_mm: i32,
-    /// The neighbour's index.
+    /// The first zone of the neighbouring run.
     pub zone: usize,
-    /// The neighbour as the stretch of the plan it covers: "from 49 m to 82 m".
+    /// The neighbouring run as the stretch of the plan it covers: "from 49 m to 82 m".
     pub label: Said,
     /// The transition at this boundary, when the two sections need one; the 2.5D draws it.
     #[serde(skip)]
@@ -59,22 +59,27 @@ pub fn near_boundary(zones: &[(i32, i32)], selected: usize, from_end: ZoneEnd) -
 }
 
 impl Editor {
+    /// The run across the boundary nearest the run shown, as the plan shows them: a boundary a saved street keeps between
+    /// zones that look the same, inside a run, is not one.
     pub(super) fn joint(&self) -> Option<Joint> {
         let content = &self.states[self.cursor].content;
-        if content.zones.len() < 2 {
+        let runs = self.runs();
+        if runs.len() < 2 {
             return None;
         }
-        let length_mm = self.street_length_mm().unwrap_or(0);
-        let spans: Vec<(i32, i32)> = (0..content.zones.len()).map(|z| content.span(z, length_mm)).collect();
-        let (zone, far) = near_boundary(&spans, self.zone, content.from_end)?;
-        let at_mm = if zone > self.zone { spans[self.zone].1 } else { spans[self.zone].0 };
+        let spans: Vec<(i32, i32)> = runs.iter().map(|r| (r.from_mm, r.to_mm)).collect();
+        let shown = runs.iter().position(|r| r.zones.contains(&self.zone))?;
+        let (across, far) = near_boundary(&spans, shown, content.from_end)?;
+        let at_mm = if across > shown { spans[shown].1 } else { spans[shown].0 };
+        let zone = runs[across].zones.start;
         let segments = self.seg_views(content.section(zone));
-        let boundary = zone.min(self.zone);
+        // The zone before the boundary, which the transitions are kept by.
+        let boundary = runs[across.min(shown)].zones.end - 1;
         let taper = self.transitions().into_iter().find(|(b, _)| *b == boundary).map(|(_, t)| {
             let host = if t.host == Host::Near { boundary } else { boundary + 1 };
             let changes =
                 if host == boundary { t.changes } else { t.changes.into_iter().map(|c| Change { kind: c.kind, before: c.after, after: c.before }).collect() };
-            Taper { host_is_selected: host == self.zone, length_mm: t.length_mm, changes }
+            Taper { host_is_selected: runs[shown].zones.contains(&host), length_mm: t.length_mm, changes }
         });
         Some(Joint {
             total_mm: segments.iter().map(|s| s.width_mm).sum(),
@@ -83,7 +88,7 @@ impl Editor {
             at_mm,
             left_mm: self.left_mm(at_mm),
             zone,
-            label: self.stretch_said(zone),
+            label: self.stretch_of(runs[across].from_mm, runs[across].to_mm),
             taper,
         })
     }
@@ -155,7 +160,8 @@ mod tests {
 
     #[test]
     fn the_view_carries_the_neighbours_section_and_labels() {
-        let mut e = two_zones(true);
+        // An end to measure from, so the stretches are named by position.
+        let mut e = two_zones(true).with_frame(Some(crate::street::model::ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
         assert!(e.select_zone(1));
         let j = e.view().zones.joint.expect("zone 2's start is near");
         assert_eq!((j.zone, j.far, j.at_mm), (0, false, 50_000));

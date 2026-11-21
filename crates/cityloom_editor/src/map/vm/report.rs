@@ -234,7 +234,7 @@ fn street_page(city: &City, uid: u32, zones: usize, name: String, region: usize,
     let (before, after) = (before.view(), after.view());
     let locale = i18n.locale_now();
     if zones > 1 {
-        page.push(Block::Paragraph { text: tr("map-report-place-zones", &Args::new().num("zones", zones as i64)) });
+        page.push(Block::Paragraph { text: tr("map-report-place-zones", &Args::new()) });
     }
     let length = |mm: i32| units.length_fine_in(mm, locale);
     let mut lines = Vec::new();

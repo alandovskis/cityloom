@@ -325,7 +325,7 @@ rev-speed = Speed limit { $kmh } km/h
 rev-speed-not-set = Speed limit not set
 rev-stretch-speed = Speed limit { $kmh } km/h { $stretch }
 rev-stretch-speed-not-set = Speed limit not set { $stretch }
-rev-stretch-speed-street = Speed limit back to the street's { $stretch }
+rev-stretch-speed-street = Speed limit { $stretch } back to the street's
 street-now-pedestrian = { $street } is now a pedestrian street.
 street-traffic-again = { $street } carries traffic again.
 check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
@@ -339,11 +339,15 @@ boundary-refused-elsewhere = The changes along this street were drawn on a road 
 zone-refused-dragging = Finish the drag before changing the street.
 # A stretch named in the middle of a sentence, its ends from the plan's left end ("Room for the transition from 49 m to 82 m").
 stretch-mid = from { $from } to { $to }
+# A stretch named on a street with no end to measure from, which has no positions.
+stretch-mid-whole = along the whole street
+stretch-mid-part = along part of the street
 pick-refused-no-anchor = Both ends of this street are cut by the edge of the map, so it can only be changed along its whole length.
 pick-refused-too-short = A stretch must be at least { $min } long.
 pick-refused-outside = That position is outside the street.
 pick-refused-dragging = Finish the drag before picking another stretch.
 pick-refused-no-boundary = No stretch boundary at either end of the pick.
+pick-refused-order = From must come before To.
 # What is said of the stretch picked on the plan (src/street/vm/text.rs, picked_said); positions from the plan's left end.
 stretch-picked = From { $from } to { $to }, { $length } long.
 stretch-picked-differs = From { $from } to { $to }, { $length } long: { $what }.
@@ -358,13 +362,28 @@ stretch-what-pair = { $a } and { $b }
 stretch-what-more = { $a }, { $b }
 # Said after an edit that changed the picked stretch except where it lacked the piece changed.
 edit-missed = Not changed from { $from } to { $to }: that stretch has no { $kind }.
+edit-missed-part = Not changed along part of the street: that part has no { $kind }.
 # The plan's name for a screen reader, and the line under it naming the picked stretch.
 st-plan-label = The street from its first end to its last, { $length } long
+# The same with the ends the edge of the map cuts (the plan draws them as a zigzag), and with no end to measure from.
+st-plan-label-cut-left = The street from its first end to its last, { $length } long; its left end is cut by the edge of the map
+st-plan-label-cut-right = The street from its first end to its last, { $length } long; its right end is cut by the edge of the map
+st-plan-label-cut-both = The street from its first end to its last, { $length } long; both its ends are cut by the edge of the map
+st-plan-label-no-anchor = The street, both its ends cut by the edge of the map
 st-stretch = From { $from } to { $to } · { $length } long
 # Where the plan's keyboard point is, said while it moves on its own (src/street/vm/text.rs, point_said).
 st-point = At { $at }
 # The name of the plan's keyboard point, a slider (src/street/view/plan/component.rs).
 st-plan-point-label = Point along the street
+# The picked stretch's ends as fields on the details panel's Street level (src/street/view/plan/fields.rs), from the
+# plan's left end.
+st-pick-fields = Picked stretch
+st-pick-from = From ({ $unit })
+st-pick-to = To ({ $unit })
+# A boundary chosen with a click on the plan, to be moved by typing where it goes (src/street/vm/plan.rs); `at` from the
+# plan's left end. The field's label (src/street/view/plan/fields.rs).
+boundary-chosen = The change at { $at }; type where it goes.
+st-boundary-to = Move the change to ({ $unit })
 stretches-elsewhere = The changes along this street were drawn when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
 check-stop-in = { $check }: { $instance }
@@ -397,6 +416,7 @@ st-street-sub-free =
 st-speed-stretch-hint = For the stretch from { $from } to { $to }.
 # Under a figure that differs between the runs of the pick: the one shown is the shown run's.
 st-varies = Varies along the stretch
+st-varies-street = Varies along the street
 st-path-label = What the details are of
 st-path-street = Street
 st-path-gap = Free stretch
@@ -431,6 +451,7 @@ svg-iso-stops = { $count ->
        *[other] { $count } transit stops are shown ({ $kinds }).
     }
 check-boundary = where the street changes at { $at }
+check-boundary-somewhere = where the street changes
 check-label-transition-room = Room for the transition
 check-label-lane-drop = Lane drops
 check-detail-transition-room = The transition needs { $need } but the stretch { $stretch } is { $room } long.

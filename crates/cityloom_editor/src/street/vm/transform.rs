@@ -45,7 +45,7 @@ pub struct TransformChoices {
     /// One entry per Atlas family with a choice, in order of first appearance: the code's letter, lowercased
     /// ('a'..='f'), and its codes in the Notes table's order.
     pub transit: Vec<(char, Vec<&'static str>)>,
-    /// Every street template, with the reason one cannot be applied to the selected zone.
+    /// Every street template, with the reason one cannot be applied to the pick.
     pub templates: Vec<TemplateView>,
 }
 
@@ -120,9 +120,9 @@ impl StreetVm {
         }
     }
 
-    /// What `choice` would do, found by running the very edit Apply runs on a copy of the editor (which keeps the
-    /// selected zone, the region, the time shown, the zone frame and the ends). The street is not touched, nothing is
-    /// said, and nothing is watched.
+    /// What `choice` would do, found by running the very edit Apply runs on a copy of the editor (which keeps the pick,
+    /// the region, the time shown, the zone frame and the ends, so the change is made on the pick as Apply makes it).
+    /// The street is not touched, nothing is said, and nothing is watched.
     pub fn preview(&self, choice: Choice) -> Preview {
         let mut e = self.core.read(|e| e.clone());
         e.select(None);
@@ -479,6 +479,36 @@ mod tests {
         let Outcome::Changed { after, .. } = preview.outcome else { panic!("the sample can be made pedestrian") };
         assert_eq!(after.selected, None);
         assert_eq!(r.vm.view_now().selected, Some(uid), "the page's selection stays");
+    }
+
+    /// The dialog previews and applies each choice on the person's pick, as the edit does: a stretch picked inside one
+    /// run becomes a run of its own, and the rest of that run keeps its pieces, in the preview's After as on the street.
+    #[test]
+    fn a_choice_previews_and_applies_to_the_picked_stretch_alone() {
+        let kinds = |run: &crate::street::model::PlanRun| run.bands.iter().map(|b| b.kind).collect::<Vec<_>>();
+        let spans = |v: &View| v.plan.runs.iter().map(|r| (r.from_mm, r.to_mm)).collect::<Vec<_>>();
+        let choices = rig_of(&street(&PARKED), Some(LENGTH), Locale::En).vm.transform_choices();
+        let mut tried = Vec::new();
+        for group in choices.groups() {
+            for choice in choices.in_group(group) {
+                let r = rig_of(&street(&PARKED), Some(LENGTH), Locale::En);
+                let parked = kinds(&r.vm.view_now().plan.runs[0]);
+                assert_eq!(spans(&r.vm.view_now()), [(0, LENGTH)], "one run to begin with");
+                assert!(r.vm.pick_stretch(20_000, 40_000));
+                let preview = r.vm.preview(choice);
+                assert_eq!(preview.before.plan.pick, Some((20_000, 40_000)), "{choice:?}: the preview starts from the pick");
+                let Outcome::Changed { after, .. } = &preview.outcome else { continue };
+                assert_eq!(spans(after), [(0, 20_000), (20_000, 40_000), (40_000, LENGTH)], "{choice:?}: the pick alone changes");
+                assert_eq!(kinds(&after.plan.runs[0]), parked, "{choice:?}: the run left of the pick keeps its pieces");
+                assert_eq!(kinds(&after.plan.runs[2]), parked, "{choice:?}: the run right of the pick keeps its pieces");
+                assert_eq!(after.plan.pick, Some((20_000, 40_000)), "{choice:?}");
+                assert_preview_matches_apply(&r, choice);
+                tried.push(group);
+            }
+        }
+        for group in [Group::Pedestrian, Group::Transit, Group::Templates] {
+            assert!(tried.contains(&group), "a {group:?} choice was tried on the pick: {tried:?}");
+        }
     }
 
     #[test]

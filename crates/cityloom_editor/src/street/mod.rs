@@ -95,6 +95,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("calming-slot", view! { <view::calming_strip::CalmingStrip vm=vm.clone()/> }.into_any());
     mount("green-slot", view! { <view::green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("street-head-slot", view! { <view::page::StreetSummary vm=vm.clone()/> }.into_any());
+    // Picking a stretch chooses, so its fields stay usable on a page shown read-only.
+    mount("pick-slot", view! { <view::plan::PickFields vm=vm.clone()/> }.into_any());
     mount("speed-slot", locked(read_only, view! { <view::speed_view::SpeedLimit vm=vm.clone()/> }));
     mount("curb-tools-slot", locked(read_only, view! { <view::curb_tools::CurbTools vm=vm.clone()/> }));
     mount("stop-tools-slot", locked(read_only, view! { <view::stop_tools::StopTools vm=vm.clone()/> }));

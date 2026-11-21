@@ -52,7 +52,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |
-| Street page | Stretch (a part of a street along its length: a start and an end, named by where it lies from the plan’s left end) | tronçon | `Un tronçon doit mesurer au moins 5 m`, `choisir un autre tronçon`, `le tronçon de 49 m à 82 m` (`stretch-mid`: `de 49 m à 82 m`), `Varie le long du tronçon`. The street page says no `zone` of a street any more (only `zone scolaire`, `zone de chargement`, `zone tampon`); the 2.5D’s `tronçon de 40 m` is the same word for the same thing. |
+| Street page | Stretch (a part of a street along its length: a start and an end, named by where it lies from the plan’s left end) | tronçon | `Un tronçon doit mesurer au moins 5 m`, `choisir un autre tronçon`, `le tronçon de 49 m à 82 m` (`stretch-mid`: `de 49 m à 82 m`), `Varie le long du tronçon`. The street page says no `zone` of a street any more (only `zone scolaire`, `zone de chargement`, `zone tampon` and the area name `zones à circulation restreinte`); the 2.5D’s `tronçon de 40 m` is the same word for the same thing. |
 | Street page | Boundary (where the street changes along its length) | limite; changement le long de la rue | The plan’s boundary is a `limite` (`Aucune limite entre tronçons…`); moved, it is a change along the street: `Changement le long de la rue déplacé à 52 m`. A check names it `là où la rue change, à 49 m`. To confirm, see below. |
 | Street page | 2.5D boundary label (the two stretches that meet in the drawing) | au premier plan … au-delà | `sur un tronçon de 40 m centré sur 50 m, là où la coupe change brusquement : le tronçon de 0 m à 50 m est au premier plan et celui de 50 m à 100 m, au-delà` (`svg-iso-label-joint`). To confirm, see below. |
 | Street page | Curbside (the lane at the edge of the street and what stands along it) | bord de rue | `Usages du bord de rue`, `Bord de rue, à droite`. |
@@ -250,9 +250,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | allowed / not allowed (a turn) | permis / interdit |  |
 | Junction | add / remove (at the end of a history label) | ajout / retrait | Nouns, as on the street page. |
 | Junction | approach measure | mesure d’approche |  |
-| Junction | end zone (the street's zone at the junction, drawn to its boundary) | zone d’extrémité | `Chaque zone d’extrémité dépasse sa ligne d’arrêt`. |
-| Junction | Approaches (the check on the end zones and their transitions) | Approches | `jn-check-approach`. Not the inspector’s `À l’approche` (the transit measures’ list, `mesure d’approche`): that one is about where on the street a measure stands, this check is about whether the end zone holds the stop line, the arrows and the transition. |
-| Junction | next zone (the zone across the end zone's boundary, in the arm's sentence) | zone suivante | `Zone suivante : Zone 2`. |
+| Junction | end stretch (the street's stretch at the junction, drawn to its boundary) | tronçon d’extrémité | `Chaque tronçon d’extrémité dépasse sa ligne d’arrêt`; masculine: `Son tronçon d’extrémité va jusqu’à 20 m du centre`. |
+| Junction | Approaches (the check on the end stretches and their transitions) | Approches | `jn-check-approach`. Not the inspector’s `À l’approche` (the transit measures’ list, `mesure d’approche`): that one is about where on the street a measure stands, this check is about whether the end stretch holds the stop line, the arrows and the transition. |
+| Junction | next stretch (the stretch across the end stretch's boundary, in the arm's sentence, named by where it lies measured from the junction's centre, so it starts where the end stretch reaches) | tronçon suivant | `Tronçon suivant : de 20 m à 100 m`. |
 | Junction | turn management | gestion des virages |  |
 | Junction | dead end | cul-de-sac |  |
 | Junction | Right-in/right-out | Entrée et sortie à droite seulement | As the Atlas name `L3`; shortened to `Entrée et sortie à droite` where it says why a turn is blocked. |
@@ -430,5 +430,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Modal filter (street element) | `Filtre modal` | The term used in Québec and France for a barrier that stops motor traffic and lets people on foot and bikes through; to confirm |
 | build-out (of a chicane) | `avancée` | `saillie`, `avancée de trottoir` (a curb extension; to confirm) |
 | ramp (of a raised table) | `rampe` | `pente` (the slope, not the thing) |
-| boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is the app's lengthways zone) |
+| boarding area (of a stop) | `aire d’embarquement` | `zone d’embarquement` (`zone` is kept for the map's areas, `règles de zone`) |
 | Timeline page | Milestone | `jalon` | `point de repère`, `version enregistrée`, `instantané` (a snapshot, but it reads as a photo) |

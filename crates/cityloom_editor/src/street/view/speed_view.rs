@@ -9,6 +9,7 @@ use leptos::web_sys::HtmlSelectElement;
 
 use crate::shared::i18n::Args;
 use crate::shared::said::{Arg, Said, say};
+use crate::street::vm::text::varies_said;
 use crate::street::vm::watch::SheetWatch;
 use crate::street::vm::{SpeedOption, StreetVm};
 
@@ -67,10 +68,10 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
                 let (v, units) = w.now();
                 let i18n = w.i18n();
                 let stretch = v.plan.pick.map(|(from, to)| {
-                    let hint = Said::new("st-speed-stretch-hint").with("from", Arg::Length(from)).with("to", Arg::Length(to));
+                    let hint = Said::new("st-speed-stretch-hint").with("from", Arg::Along(from)).with("to", Arg::Along(to));
                     view! { <p class="zone-hint">{say(&i18n, units, &hint)}</p> }
                 });
-                let varies = v.speed_varies.then(|| view! { <p class="zone-hint">{i18n.tr("st-varies", &Args::new())}</p> });
+                let varies = v.speed_varies.then(|| view! { <p class="zone-hint">{say(&i18n, units, &varies_said(&v.plan))}</p> });
                 (stretch, varies)
             }}
             </div>

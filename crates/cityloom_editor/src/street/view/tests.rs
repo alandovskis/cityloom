@@ -1880,10 +1880,34 @@ fn the_plan_mounts_in_place_of_the_zone_strip() {
     assert!(group.contains("role=\"group\""), "{group}");
     assert!(group.contains("aria-label=\"The street from its first end to its last, 40.0 m long\""), "{group}");
     assert!(h.contains("<svg class=\"plan\"") && h.contains("data-length-mm=\"40000\""), "the plan's drawing: {h}");
+    // The drawing is said by the group's label (with its cut ends) and the point, so a screen reader skips it.
+    let svg = &h[h.find("<svg class=\"plan\"").unwrap()..];
+    assert!(svg[..svg.find('>').unwrap()].contains("aria-hidden=\"true\""), "{svg}");
     // The page mounts it where the zone strip was.
     let page = include_str!("../mod.rs");
     assert!(page.contains("mount(\"zones-slot\", view! { <view::plan::Plan vm=vm.clone()/> }"), "{page}");
     assert!(!page.contains("ZoneStrip"));
+}
+
+/// The point's `aria-keyshortcuts` name only keys that do something: on a street shown read-only the Alt+arrows that
+/// move a boundary are always refused, so they are not named; picking keys are.
+#[test]
+fn the_plan_point_names_the_boundary_keys_only_where_a_boundary_may_move() {
+    let keys = |s: &Rc<StreetVm>| {
+        let h = plan_html(s);
+        let point = plan_tag(&h, "plan-point");
+        let at = point.find("aria-keyshortcuts=\"").expect("the point names its keys") + "aria-keyshortcuts=\"".len();
+        point[at..at + point[at..].find('"').unwrap()].split(' ').map(str::to_string).collect::<Vec<_>>()
+    };
+    let editable = keys(&zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En));
+    for k in ["Alt+ArrowLeft", "Alt+ArrowRight", "Shift+Alt+ArrowLeft", "Shift+Alt+ArrowRight", "Shift+ArrowRight", "Enter", "Escape"] {
+        assert!(editable.iter().any(|e| e == k), "{k} in {editable:?}");
+    }
+    let read_only = keys(&read_only_street());
+    assert!(read_only.iter().all(|k| !k.contains("Alt+")), "no boundary key read-only: {read_only:?}");
+    for k in ["Shift+ArrowLeft", "Shift+ArrowRight", "Shift+PageUp", "Shift+PageDown", "Shift+Home", "Shift+End", "Enter", "Escape"] {
+        assert!(read_only.iter().any(|e| e == k), "{k} still picks read-only: {read_only:?}");
+    }
 }
 
 #[test]
@@ -1937,6 +1961,28 @@ fn the_plan_shows_the_ends_and_a_notice_when_the_zones_were_drawn_elsewhere() {
     assert!(h.contains("The changes along this street were drawn when it was 40.0 m long; here it is 20.0 m."), "{h}");
 }
 
+/// A street with no end to measure from (both cut by the map's edge) is drawn schematic, with no positions: the plan
+/// names neither end by a length ("0.0 m" twice), leaves no empty line under it, and its name says both ends are cut.
+#[test]
+fn a_plan_with_no_end_to_measure_from_names_no_positions_and_says_its_ends_are_cut() {
+    for (locale, name) in
+        [(Locale::En, "The street, both its ends cut by the edge of the map"), (Locale::FrCa, "La rue, ses deux extrémités coupées par le bord de la carte")]
+    {
+        let s = zoned_street(&[0, 10_000, 30_000], None, locale);
+        let h = plan_html(&s);
+        assert!(!h.contains("plan-ends"), "no end labels: {h}");
+        assert!(!h.contains("0.0 m") && !h.contains("0,0"), "no position anywhere: {h}");
+        assert!(!h.contains("id=\"plan-picked\""), "no empty line under the plan: {h}");
+        assert!(plan_tag(&h, "plan").contains(&format!("aria-label=\"{name}\"")), "{h}");
+        let svg = &h[h.find("<svg class=\"plan\"").expect("the drawing")..];
+        assert_eq!(svg.matches("class=\"plan-cut\"").count(), 2, "both ends drawn cut");
+        assert!(!svg[..svg.find('>').unwrap()].contains("data-length-mm"), "schematic: no length");
+    }
+    // With an end to measure from, the ends and the line are there.
+    let h = plan_html(&zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En));
+    assert!(h.contains("plan-ends") && h.contains("id=\"plan-picked\""), "{h}");
+}
+
 #[test]
 fn a_plan_with_no_length_leaves_the_point_with_no_words_rather_than_empty_ones() {
     let s = zoned_street(&[0, 10_000, 30_000], None, Locale::En);
@@ -1944,6 +1990,59 @@ fn a_plan_with_no_length_leaves_the_point_with_no_words_rather_than_empty_ones()
     let point = plan_tag(&h, "plan-point");
     assert!(!point.contains("aria-valuetext"), "{point}");
     assert!(point.contains("aria-label=\"Point along the street\""), "{point}");
+}
+
+#[test]
+fn the_picked_stretch_s_ends_are_fields_on_the_street_level_in_the_page_s_language() {
+    let html = |s: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::plan::PickFields vm=s.clone()/> });
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    let h = html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Picked stretch\""), "{h}");
+    assert!(plan_tag(&h, "pick-from").contains("value=\"0.0\"") && plan_tag(&h, "pick-to").contains("value=\"40.0\""), "the whole street: {h}");
+    assert!(h.contains("for=\"pick-from\">From (m)</label>") && h.contains("for=\"pick-to\">To (m)</label>"), "{h}");
+    assert!(plan_tag(&h, "pick-from").contains("inputmode=\"decimal\""), "{h}");
+    assert!(s.pick_stretch(10_000, 25_500));
+    let h = html(&s);
+    assert!(plan_tag(&h, "pick-from").contains("value=\"10.0\"") && plan_tag(&h, "pick-to").contains("value=\"25.5\""), "{h}");
+    let fr = zoned_street(&[0], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 25_500));
+    let h = html(&fr);
+    assert!(h.contains("aria-label=\"Tronçon choisi\"") && h.contains(">De (m)</label>") && h.contains(">À (m)</label>"), "{h}");
+    assert!(plan_tag(&h, "pick-to").contains("value=\"25,5\""), "{h}");
+    // No end to measure from: no positions to type.
+    assert!(!html(&zoned_street(&[0], None, Locale::En)).contains("pick-from"));
+    // The details panel's Street level holds them, under the street's head.
+    let page = include_str!("../../../../../web/street.html");
+    let head = page.find("<div id=\"street-head-slot\"").expect("the head's slot");
+    let slot = page.find("<div id=\"pick-slot\"").expect("the fields' slot");
+    assert!(page.find("id=\"p-street\"").unwrap() < head && head < slot && slot < page.find("<div id=\"speed-slot\"").unwrap());
+    assert!(include_str!("../mod.rs").contains("mount(\"pick-slot\", view! { <view::plan::PickFields vm=vm.clone()/> }"));
+}
+
+#[test]
+fn a_boundary_chosen_on_the_plan_has_a_move_to_field_on_the_street_level() {
+    use crate::street::vm::plan::PlanPress;
+    let html = |s: &Rc<StreetVm>| street_html(|| view! { <crate::street::view::plan::PickFields vm=s.clone()/> });
+    // Two runs: an edit of a stretch from 10 m to the end makes a boundary at 10 m.
+    let s = zoned_street(&[0], Some(40_000), Locale::En);
+    assert!(s.pick_stretch(10_000, 40_000));
+    let uid = s.view_now().segments[0].uid;
+    assert!(s.apply(|e| e.set_width(uid, 2_500)));
+    assert!(!html(&s).contains("boundary-to"), "nothing chosen, no field");
+    let zone = s.view_now().plan.boundaries[0].zone;
+    let g = s.plan_press(PlanPress::Boundary { zone }, 100.0);
+    s.plan_release(g, 10_000);
+    let h = html(&s);
+    assert!(plan_tag(&h, "boundary-to").contains("value=\"10.0\""), "{h}");
+    assert!(h.contains("for=\"boundary-to\">Move the change to (m)</label>"), "{h}");
+    let fr = zoned_street(&[0], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 40_000));
+    let uid = fr.view_now().segments[0].uid;
+    assert!(fr.apply(|e| e.set_width(uid, 2_500)));
+    let g = fr.plan_press(PlanPress::Boundary { zone }, 100.0);
+    fr.plan_release(g, 10_000);
+    let h = html(&fr);
+    assert!(h.contains(">Déplacer le changement à (m)</label>") && plan_tag(&h, "boundary-to").contains("value=\"10,0\""), "{h}");
 }
 
 #[test]
@@ -1994,6 +2093,23 @@ fn the_plan_scrolls_inside_itself_and_keeps_its_point_in_sight() {
     assert!(focused.contains("var(--plan-pick-edge)") && focused.contains("var(--plan-pick-casing)"), "{focused}");
 }
 
+#[test]
+fn the_point_s_focus_ring_is_seen_whole_at_either_end_of_the_plan() {
+    let editor = include_str!("../../../../../web/editor.css");
+    let rule = |sel: &str| {
+        let i = editor.find(&format!("\n{sel} {{")).unwrap_or_else(|| panic!("{sel}"));
+        &editor[i..i + editor[i..].find('}').unwrap()]
+    };
+    // The point is 24 px wide about its line, so at the plan's ends half of it lies past the drawing: the box that
+    // clips the plan's scroll keeps that much room on each side.
+    assert!(rule("#plan-point").contains("width: 24px;") && rule("#plan-point").contains("margin-left: -12px;"));
+    assert!(rule(".plan-box").contains("padding: 4px 12px;"), "{}", rule(".plan-box"));
+    // The plan is fitted to the box less that room, so it still fits without a scroll.
+    let component = include_str!("plan/component.rs");
+    assert!(component.contains("const POINT_ROOM_PX: f64 = 12.0;"), "the room, as the CSS has it");
+    assert!(component.contains("el.client_width()) - 2.0 * POINT_ROOM_PX"), "the plan is fitted inside it");
+}
+
 // ---- the street level of the details panel ------------------------------------------
 
 #[test]
@@ -2034,6 +2150,14 @@ fn with_a_stretch_picked_the_speed_limit_says_whose_it_is_and_whether_it_varies(
     assert!(s.pick_stretch(0, 20_000));
     let h = speed(&s);
     assert!(h.contains(">For the stretch from 0.0 m to 20.0 m.<") && h.contains(">Varies along the stretch<"), "{h}");
+    // The whole street picked: it is the street whose limit varies.
+    s.pick_whole();
+    let h = speed(&s);
+    assert!(h.contains(">Varies along the street<") && !h.contains("For the stretch"), "{h}");
+    let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
+    assert!(fr.pick_stretch(10_000, 30_000) && fr.set_speed(Some(30)));
+    fr.pick_whole();
+    assert!(speed(&fr).contains(">Varie le long de la rue<"), "{}", speed(&fr));
     let fr = zoned_street(&[0, 20_000], Some(40_000), Locale::FrCa);
     assert!(fr.pick_stretch(10_000, 30_000));
     let h = speed(&fr).replace('\u{a0}', " ");
@@ -2049,11 +2173,13 @@ fn a_piece_whose_width_varies_along_the_pick_says_so_under_its_width() {
     assert!(s.edit(|e| e.set_width(uid, width + 100)));
     s.select(Some(uid));
     let inspector = || street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(!inspector().contains(r#"id="i-width-varies""#), "one run picked: one width");
+    let one = inspector();
+    assert!(!one.contains(r#"id="i-width-varies""#), "one run picked: one width: {one}");
+    assert!(one.contains(r#"aria-describedby="i-width-range""#), "described by what is there: {one}");
     s.pick_whole();
     s.select(Some(uid));
     let h = inspector();
-    assert!(h.contains(r#"<p id="i-width-varies" class="insp-range">Varies along the stretch</p>"#), "{h}");
+    assert!(h.contains(r#"<p id="i-width-varies" class="insp-range">Varies along the street</p>"#), "the whole street is picked: {h}");
     assert!(h.contains(r#"aria-describedby="i-width-range i-width-varies""#), "{h}");
 }
 
@@ -2196,6 +2322,30 @@ fn the_curb_strip_is_a_listbox_with_one_tab_stop() {
     assert!(h.contains("aria-label=\"Free, 0.0 m to 40.0 m, 40.0 m long, 1 of 1\""), "{h}");
     // 6 m is long enough for parking (5.5 m): no cell says it fails
     assert!(!h.contains("Fails a check"), "{h}");
+}
+
+#[test]
+fn on_a_street_anchored_at_its_last_end_the_unfolded_row_runs_as_the_plan_does() {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{Instance, PlanThing, Street, Use, ZoneEnd, ZoneFrame};
+    // Parking at anchored 0 to 6 m on 40 m: 34 m to 40 m from the plan's left end.
+    let street = Street {
+        from_end: ZoneEnd::Last,
+        length_mm: Some(40_000),
+        curb: vec![Instance { side: Side::Right, from_mm: 0, length_mm: 6_000, use_: Use::Parking }],
+        ..Street::sample(0, Side::Right)
+    };
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::Last }));
+    let s = StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None);
+    let parking = s.view_now().plan.objects.iter().find(|o| matches!(o.thing, PlanThing::Curb { side: Side::Right, .. })).map(|o| (o.from_mm, o.to_mm));
+    assert_eq!(parking, Some((34_000, 40_000)), "the plan draws it at its right end");
+    let h = curb_html(&s);
+    let at = |needle: &str| h.find(needle).unwrap_or_else(|| panic!("{needle} in {h}"));
+    let free = at("aria-label=\"Free, 0.0 m to 34.0 m, 34.0 m long, 1 of 2\"");
+    let use_ = at("aria-label=\"Parking, 34.0 m to 40.0 m, 6.0 m long, 2 of 2\"");
+    assert!(free < use_, "the free stretch first, on the left, as on the plan: {h}");
+    assert!(at("id=\"curb-right-0\"") < free && free < at("id=\"curb-right-1\""), "{h}");
 }
 
 #[test]

@@ -778,6 +778,39 @@ test.describe("changing part of a street", () => {
     await expect(live(page)).toHaveText(/^The whole street, [\d.]+ m long\./);
   });
 
+  test("a stretch is picked by typing its ends in the details panel, with no drag", async ({ page }) => {
+    const from = page.locator("#pick-from");
+    const to = page.locator("#pick-to");
+    await expect(from).toHaveValue("0.0");
+    await from.click();
+    await from.fill("6");
+    await to.click();
+    await to.fill("12");
+    await page.keyboard.press("Enter");
+    await expect(picked(page)).toHaveText("From 6.0 m to 12.0 m · 6.0 m long");
+    await expect(live(page)).toHaveText("From 6.0 m to 12.0 m, 6.0 m long.");
+    await expect(from).toHaveValue("6.0");
+    // (The fixture street is about 40.4 m long, so every end here stays more than 5 m from its ends.)
+    // Moved past its own end, one field at a time: From 30 waits, as typed, for To; nothing is swapped.
+    await from.click();
+    await from.fill("18");
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText("From must come before To.");
+    await expect(from).toHaveValue("18");
+    await expect(picked(page)).toHaveText("From 6.0 m to 12.0 m · 6.0 m long");
+    await to.click();
+    await to.fill("25");
+    await page.keyboard.press("Enter");
+    await expect(picked(page)).toHaveText("From 18.0 m to 25.0 m · 7.0 m long");
+    await expect(from).toHaveValue("18.0");
+    // A stretch too short is refused, said, and what was typed stays to be put right.
+    await to.fill("20");
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText("A stretch must be at least 5.0 m long.");
+    await expect(to).toHaveValue("20");
+    await expect(picked(page)).toHaveText("From 18.0 m to 25.0 m · 7.0 m long");
+  });
+
   test("Shift and the arrows pick a stretch from the keyboard, and the point says where it is on the way", async ({
     page,
   }) => {
@@ -807,6 +840,23 @@ test.describe("changing part of a street", () => {
     await page.keyboard.press("+");
     await expect(planBoundaries(page)).toHaveCount(0);
     await expect(page.locator("#plan .plan-run")).toHaveCount(1);
+  });
+
+  test("the Transform dialog previews and applies its choice to the picked stretch alone", async ({ page }) => {
+    await pickStretch(page, 10, 25);
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-tab-ped").click();
+    await page.locator("#transform-dialog .ped-item").first().hover();
+    await expect(page.locator("#transform-preview figcaption", { hasText: "After" })).toBeVisible();
+    await expect(planBoundaries(page), "nothing changes until Apply").toHaveCount(0);
+    await page.locator("#transform-dialog .ped-item").first().click();
+    await page.locator("#transform-apply").click();
+    await expect(page.locator("#transform-dialog")).toBeHidden();
+    await expect(planBoundaries(page), "the stretch alone changed").toHaveCount(2);
+    await expect(page.locator("#plan .plan-run")).toHaveCount(3);
+    await expect(picked(page)).toHaveText("From 10.0 m to 25.0 m · 15.0 m long");
+    await page.locator("#undo").click();
+    await expect(planBoundaries(page)).toHaveCount(0);
   });
 
   test("a reload keeps the stretches", async ({ page }) => {
@@ -858,6 +908,28 @@ test.describe("changing part of a street", () => {
     await page.locator("#undo").click();
     await expect(line).toHaveAttribute("x1", before!);
     await expect(planBoundaries(page)).toHaveCount(1);
+  });
+
+  test("a boundary clicked on the plan is moved by typing where it goes, with no drag", async ({ page }) => {
+    await makeStretches(page, 2);
+    const line = page.locator("#plan .plan-boundary-line");
+    const before = await line.getAttribute("x1");
+    const box = (await line.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(live(page)).toHaveText(/^The change at [\d.]+ m; type where it goes\.$/);
+    await expect(picked(page)).toHaveText(/^The whole street/);
+    const field = page.locator("#boundary-to");
+    const at = Number(await field.inputValue());
+    await field.click();
+    await field.fill(String(at + 3));
+    await page.keyboard.press("Enter");
+    await expect(line).not.toHaveAttribute("x1", before!);
+    await expect(live(page)).toHaveText(new RegExp(`Move a change along the street to ${at + 3}\\.0 m`));
+    await expect(field).toHaveValue(`${at + 3}.0`);
+    await page.keyboard.press("Escape");
+    await expect(field).toHaveCount(0);
+    await page.locator("#undo").click();
+    await expect(line).toHaveAttribute("x1", before!);
   });
 
   test("Escape cancels a drag", async ({ page }) => {
@@ -921,13 +993,13 @@ test.describe("changing part of a street", () => {
     // The shown stretch is the street's second half, from the boundary the label is centred on.
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on ([\d.]+ m), where the section changes abruptly: .* The stretch from \1 to [\d.]+ m has /,
+      /centred on ([\d.]+ m), where the section changes abruptly: the stretch from 0\.0 m to \1 is in front and the one from \1 to [\d.]+ m beyond\. The stretch from \1 to [\d.]+ m has /,
     );
     const second = await drawing.innerHTML();
     await pickRunAt(page, 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /where the section changes abruptly: .* The stretch from 0\.0 m to [\d.]+ m has /,
+      /where the section changes abruptly: the stretch from 0\.0 m to ([\d.]+ m) is in front .* The stretch from 0\.0 m to \1 has /,
     );
     await expect(drawing.locator(".iso-section")).toHaveCount(2);
     const first = await drawing.innerHTML();
@@ -935,7 +1007,7 @@ test.describe("changing part of a street", () => {
     await pickRunAt(page, Math.floor((await streetLength(page)) / 2) + 1);
     await expect(drawing).toHaveAttribute(
       "aria-label",
-      /centred on ([\d.]+ m), .* The stretch from \1 to [\d.]+ m has /,
+      /centred on ([\d.]+ m), where the section changes abruptly: the stretch from 0\.0 m to \1 is in front and the one from \1 to [\d.]+ m beyond\. The stretch from \1 to [\d.]+ m has /,
     );
     expect(await drawing.innerHTML(), "the second run's own pieces again").not.toBe(first);
   });
@@ -963,7 +1035,7 @@ test.describe("changing part of a street", () => {
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li", { hasText: "Room for the transition" });
     await expect(row).toBeVisible();
-    await expect(row).toContainText(/needs .* but the stretch from [\d.]+ m to [\d.]+ m is/);
+    await expect(row).toContainText(/needs .* but the stretch from 0\.0 m to [\d.]+ m is/);
   });
 
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {

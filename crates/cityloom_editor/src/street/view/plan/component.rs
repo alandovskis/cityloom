@@ -17,8 +17,10 @@ use crate::street::vm::plan::{PlanGesture, PlanPress};
 use crate::street::vm::text::{picked_said, plan_label, stretch_label};
 use crate::street::vm::watch::SheetWatch;
 
-/// The keys the point answers to beyond a slider's own (`keys::on_plan`), as `aria-keyshortcuts` names them.
-const SHORTCUTS: &str = "Shift+ArrowLeft Shift+ArrowRight Shift+PageUp Shift+PageDown Shift+Home Shift+End Enter Escape Alt+ArrowLeft Alt+ArrowRight Shift+Alt+ArrowLeft Shift+Alt+ArrowRight";
+/// The room the plan's box keeps either side of the plan (its CSS padding): half the point's 24 px, so that the point's
+/// focus ring is seen whole at either end of the street.
+#[cfg(target_arch = "wasm32")]
+const POINT_ROOM_PX: f64 = 12.0;
 
 /// What the pointer is over when nothing is pressed, for its cursor.
 fn hover_of(p: PlanPress) -> &'static str {
@@ -57,8 +59,9 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         plan_svg(&v.plan, width.get(), &w.i18n(), units)
     });
     let layout = move |at_mm: i32| plan_layout(&w.view().plan, width.get(), at_mm);
-    let label = move || plan_label(&w.view().plan).map(|said| say(&w.i18n(), w.units(), &said));
+    let label = move || say(&w.i18n(), w.units(), &plan_label(&w.view().plan));
     let length = move || w.view().plan.length_mm.unwrap_or(0);
+    let measured = move || w.view().plan.length_mm.is_some();
     let length_text = move |mm: i32| {
         let i18n = w.i18n();
         w.units().length_in(mm, i18n.locale())
@@ -165,7 +168,8 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
         });
         // The point is kept in sight inside the plan's own scroll (never the page's).
         Effect::new(move |_| {
-            let x = layout(vm.with_value(|vm| vm.plan_point())).1;
+            // Where the point is in the box's scroll, past the room the box keeps before the plan.
+            let x = layout(vm.with_value(|vm| vm.plan_point())).1 + POINT_ROOM_PX;
             if let Some(b) = boxed.get() {
                 let (left, shown) = (f64::from(b.scroll_left()), f64::from(b.client_width()));
                 let by = crate::street::view::scroll::scroll_into_view_px(x - 12.0, x + 12.0, left, left + shown);
@@ -178,10 +182,14 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
 
     view! {
         <div class="plan-section">
-            <p class="plan-ends" aria-hidden="true">
-                <span>{move || length_text(0)}</span>
-                <span>{move || length_text(length())}</span>
-            </p>
+            // A street with no end to measure from is drawn schematic: no positions at its ends, nor a picked stretch
+            // to name under it.
+            <Show when=measured>
+                <p class="plan-ends" aria-hidden="true">
+                    <span>{move || length_text(0)}</span>
+                    <span>{move || length_text(length())}</span>
+                </p>
+            </Show>
             <div id="plan" class="plan-box" role="group" aria-label=label node_ref=boxed>
                 <div
                     class="plan-canvas"
@@ -206,13 +214,15 @@ pub fn Plan(vm: Rc<StreetVm>) -> impl IntoView {
                         aria-valuemax=move || metres(length())
                         aria-valuenow=move || metres(vm.with_value(|vm| vm.plan_point()))
                         aria-valuetext=move || Some(vm.with_value(|vm| vm.plan_point_text())).filter(|t| !t.is_empty())
-                        aria-keyshortcuts=SHORTCUTS
+                        aria-keyshortcuts=vm.with_value(|vm| vm.plan_shortcuts())
                         style:left=move || format!("{}px", layout(vm.with_value(|vm| vm.plan_point())).1)
                         on:keydown=on_key
                     ></div>
                 </div>
             </div>
-            <p id="plan-picked" class="plan-picked">{picked}</p>
+            <Show when=measured>
+                <p id="plan-picked" class="plan-picked">{picked}</p>
+            </Show>
             <p class="plan-notice" role="status">{notice}</p>
         </div>
     }
@@ -237,7 +247,8 @@ fn watch_width(el: leptos::web_sys::Element, width: RwSignal<f64>) {
     let update = {
         let el = el.clone();
         move || {
-            let now = f64::from(el.client_width());
+            // The plan is fitted inside the room the box keeps either side of it.
+            let now = f64::from(el.client_width()) - 2.0 * POINT_ROOM_PX;
             if now > 0.0 && (width.get_untracked() - now).abs() >= 0.5 {
                 width.set(now);
             }

@@ -249,4 +249,46 @@ mod tests {
         let p = PlanView { objects: vec![table], ..plan() };
         assert!(matches!(press(&p, 200.0, MID), PlanPress::Thing { .. }));
     }
+
+    /// A street of a project shown read-only (#222), anchored at its first end, with runs meeting at 20 m and 40 m.
+    fn read_only_vm() -> std::rc::Rc<crate::street::vm::StreetVm> {
+        use crate::shared::catalogue::REGIONS;
+        use crate::shared::ports::{Ports, Storage, test_ports_with_time};
+        use crate::street::model::{Editor, Street, StreetExt, ZoneFrame, zoned};
+        let base = Street::sample(0, Side::Right);
+        let mut street = zoned(base.clone(), &[0, 20_000, 40_000], LEN);
+        let mut wider = base.segments.clone();
+        wider.last_mut().expect("the sample has pieces").width_mm += 100;
+        street.zones[1].segments = Some(wider);
+        let street = street.settled();
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).expect("a right-hand region");
+        let (ports, _, storage, _) = test_ports_with_time();
+        let view: std::rc::Rc<dyn Storage> = std::rc::Rc::new(crate::shared::scoped::ScopedStorage::new(storage, "p1").only_to_read());
+        let editor = Editor::from_street(&street, &street, region).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        crate::street::vm::StreetVm::new(Ports { storage: view, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), editor, None)
+    }
+
+    /// Shown read-only no boundary may move, so the plan offers none to the pointer: a press a few pixels left of one is
+    /// on the street where the pointer is, taken with no offset, so a click picks the run on the left and a drag from
+    /// there keeps its ends under the pointer.
+    #[test]
+    fn on_a_street_shown_read_only_a_press_beside_a_boundary_is_on_the_street_under_the_pointer() {
+        let vm = read_only_vm();
+        let plan = vm.view_now().plan.clone();
+        assert_eq!(plan.boundaries.iter().map(|b| b.at_mm).collect::<Vec<_>>(), [20_000, 40_000]);
+        for target in [TARGET_PX, COARSE_TARGET_PX] {
+            let h = hit(&plan, WIDTH, 196.0, MID, target);
+            assert_eq!(h, Hit { press: PlanPress::Street { at_mm: 19_600 }, grab_px: 0.0 }, "{target} px targets");
+        }
+        let g = vm.plan_press(PlanPress::Street { at_mm: 19_600 }, 196.0);
+        vm.plan_release(g, 19_600);
+        assert_eq!(vm.picked(), Some((0, 20_000)), "the click picks the run left of the boundary");
+        let press = hit(&plan, WIDTH, 140.0, MID, TARGET_PX);
+        assert_eq!(press, Hit { press: PlanPress::Street { at_mm: 14_000 }, grab_px: 0.0 });
+        let g = vm.plan_press(press.press, 140.0);
+        let to = plan_mm(&plan, WIDTH, 330.0 - press.grab_px);
+        let g = vm.plan_move(&g, 330.0, to);
+        vm.plan_release(g, to);
+        assert_eq!(vm.picked(), Some((14_000, 33_000)), "both ends are where the pointer was");
+    }
 }

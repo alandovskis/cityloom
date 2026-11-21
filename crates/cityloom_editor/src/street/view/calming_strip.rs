@@ -10,7 +10,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::HtmlElement;
 
 use crate::shared::i18n::Args;
-use crate::street::model::StripCell;
+use crate::street::model::{StripCell, ZoneEnd};
 use crate::street::view::curb_strip::{DragSpan, basis_by_length, drag_span, dragged_from_mm};
 use crate::street::vm::keys::{ZoneAction, on_strip};
 use crate::street::vm::plan::is_boundary_drag;
@@ -42,7 +42,8 @@ fn cell(w: SheetWatch, i: usize, on_down: impl Fn(leptos::ev::PointerEvent, usiz
             aria-selected=move || (w.view().calming_strip.selected == Some(i)).to_string()
             aria-label=move || {
                 let _ = w.i18n().locale();
-                calming_text(&w.view().calming_strip, i, &w.i18n(), w.units())
+                let v = w.view();
+                calming_text(&v.calming_strip, i, v.axis, &w.i18n(), w.units())
             }
             aria-description=move || state().is_some_and(|c| !c.1).then(|| w.i18n().tr("calming-cell-failing", &Args::new()))
             title=name
@@ -82,7 +83,10 @@ pub fn CalmingStrip(vm: Rc<crate::street::vm::StreetVm>) -> impl IntoView {
         w.select_calming(i);
         let Some(strip) = document().get_element_by_id(CalmingRow::STRIP_ID) else { return };
         let width = f64::from(strip.scroll_width());
-        let span = drag_span(&w.view_now().calming_strip.cells, i, width);
+        let span = {
+            let v = w.view_now();
+            drag_span(&v.calming_strip.cells, i, width, v.axis.from_end == ZoneEnd::Last)
+        };
         let Some(span) = span else { return };
         press.set_value(Some(Press { start_x: f64::from(ev.client_x()), span, active: false }));
         // The strip, not the cell, holds the pointer: the cells come and go as the stretches around the element change.

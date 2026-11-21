@@ -11,7 +11,7 @@ use leptos::web_sys::HtmlElement;
 
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
-use crate::street::model::{SNAP_MM, StripCell, snap};
+use crate::street::model::{SNAP_MM, StripCell, ZoneEnd, snap};
 use crate::street::vm::keys::{ZoneAction, on_strip};
 use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::row::{CurbRow, Row, StopRow, cell_id, strip_id};
@@ -56,7 +56,8 @@ pub fn basis_by_length(lengths: &[i32]) -> Vec<f64> {
 pub struct DragSpan {
     /// Where the thing starts.
     pub from_mm: i32,
-    /// How many millimetres of street a pixel of the whole strip stands for.
+    /// How many millimetres along the street a pixel rightward on the strip moves the thing's start: negative on a street
+    /// measured from its last end, whose positions grow leftward on the plan.
     pub mm_per_px: f64,
     /// The lowest and the highest start it may take without meeting another thing or an end of the street.
     pub low_mm: i32,
@@ -66,24 +67,28 @@ pub struct DragSpan {
 /// The span of the thing in cell `cell` when the whole strip is `strip_px` wide. The scale is the strip's (the street's
 /// length over its width), not its own cell's, which the minimum width of a short cell would skew. `None` for a
 /// gap, a cell that is not there or a strip with no width. It may move into the gap before it and the gap after it, never over a neighbouring thing.
-pub fn drag_span<C: StripCell>(cells: &[C], cell: usize, strip_px: f64) -> Option<DragSpan> {
+/// The cells are in the plan's order (`mirrored`: from the street's last end, so their positions fall left to right).
+pub fn drag_span<C: StripCell>(cells: &[C], cell: usize, strip_px: f64, mirrored: bool) -> Option<DragSpan> {
     let c = cells.get(cell).filter(|c| c.instance().is_some())?;
     let length = c.to_mm() - c.from_mm();
-    let street_mm = cells.last().map_or(0, |l| l.to_mm()) - cells.first().map_or(0, |f| f.from_mm());
+    let street_mm = cells.iter().map(StripCell::to_mm).max().unwrap_or(0) - cells.iter().map(StripCell::from_mm).min().unwrap_or(0);
     if strip_px <= 0.0 || length <= 0 || street_mm <= 0 {
         return None;
     }
-    let low_mm = match cell.checked_sub(1).and_then(|p| cells.get(p)) {
+    // The cells before and after it along the street, whichever side of it the plan draws them.
+    let (before, after) = if mirrored { (Some(cell + 1), cell.checked_sub(1)) } else { (cell.checked_sub(1), Some(cell + 1)) };
+    let low_mm = match before.and_then(|p| cells.get(p)) {
         Some(p) if p.instance().is_none() => p.from_mm(),
         _ => c.from_mm(),
     };
-    let reach = match cells.get(cell + 1) {
+    let reach = match after.and_then(|n| cells.get(n)) {
         Some(n) if n.instance().is_none() => n.to_mm(),
         _ => c.to_mm(),
     };
     // The highest start is the last multiple of the grid at which it still fits.
     let high_mm = (reach - length).div_euclid(SNAP_MM) * SNAP_MM;
-    Some(DragSpan { from_mm: c.from_mm(), mm_per_px: f64::from(street_mm) / strip_px, low_mm, high_mm: high_mm.max(c.from_mm()) })
+    let mm_per_px = f64::from(street_mm) / strip_px;
+    Some(DragSpan { from_mm: c.from_mm(), mm_per_px: if mirrored { -mm_per_px } else { mm_per_px }, low_mm, high_mm: high_mm.max(c.from_mm()) })
 }
 
 /// Where the thing starts when the pointer is `dx_px` from where it was pressed: snapped, and kept within the span.
@@ -138,7 +143,7 @@ fn strip_cell<R: Row>(w: SheetWatch, side: Side, i: usize, on_down: impl Fn(lept
             aria-label=move || {
                 let _ = w.i18n().locale();
                 let v = w.view();
-                R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| cell_text(R::CELL_KEY, s, i, &w.i18n(), w.units())).unwrap_or_default()
+                R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| cell_text(R::CELL_KEY, s, i, v.axis, &w.i18n(), w.units())).unwrap_or_default()
             }
             aria-description=move || cell().is_some_and(|c| !c.1).then(|| w.i18n().tr("curb-cell-failing", &Args::new()))
             title=name
@@ -189,7 +194,7 @@ fn strip<R: Row>(w: SheetWatch, side: Side) -> impl IntoView {
         let width = f64::from(strip.scroll_width());
         let span = {
             let v = w.view_now();
-            R::strips(&v).sides.iter().find(|s| s.side == side).and_then(|s| drag_span(&s.cells, i, width))
+            R::strips(&v).sides.iter().find(|s| s.side == side).and_then(|s| drag_span(&s.cells, i, width, v.axis.from_end == ZoneEnd::Last))
         };
         let Some(span) = span else { return };
         press.set_value(Some(Press { start_x: f64::from(ev.client_x()), span, active: false }));
@@ -325,21 +330,34 @@ mod tests {
 
     #[test]
     fn a_use_can_move_into_the_gaps_beside_it_and_no_further() {
-        let s = drag_span(&cells(), 1, 600.0).unwrap();
+        let s = drag_span(&cells(), 1, 600.0, false).unwrap();
         assert_eq!((s.low_mm, s.high_mm), (0, 44_000), "from the start of the gap before to where it still fits in the gap after");
         assert!((s.mm_per_px - 100.0).abs() < 1e-9);
-        let end = drag_span(&cells(), 3, 600.0).unwrap();
+        let end = drag_span(&cells(), 3, 600.0, false).unwrap();
         assert_eq!((end.low_mm, end.high_mm), (16_000, 50_000), "it cannot move past the end");
-        assert_eq!(drag_span(&cells(), 0, 600.0), None, "a gap is not dragged");
-        assert_eq!(drag_span(&cells(), 9, 600.0), None);
-        assert_eq!(drag_span(&cells(), 1, 0.0), None, "a strip with no width");
+        assert_eq!(drag_span(&cells(), 0, 600.0, false), None, "a gap is not dragged");
+        assert_eq!(drag_span(&cells(), 9, 600.0, false), None);
+        assert_eq!(drag_span(&cells(), 1, 0.0, false), None, "a strip with no width");
+    }
+
+    #[test]
+    fn on_a_street_measured_from_its_last_end_a_use_follows_the_pointer_along_the_plan() {
+        // The cells of `cells()` in the plan's order, from the street's last end.
+        let mut c = cells();
+        c.reverse();
+        let s = drag_span(&c, 2, 600.0, true).unwrap();
+        assert_eq!((s.low_mm, s.high_mm), (0, 44_000), "the same room as along the street");
+        assert!((s.mm_per_px + 100.0).abs() < 1e-9, "{s:?}");
+        assert_eq!(dragged_from_mm(10.0, &s), 9_000, "rightward on the plan is toward the anchored end");
+        let end = drag_span(&c, 0, 600.0, true).unwrap();
+        assert_eq!((end.low_mm, end.high_mm), (16_000, 50_000));
     }
 
     #[test]
     fn the_scale_is_the_strips_whatever_the_width_of_a_short_cell() {
         // A 2 m use on a 60 m street, in a strip of 600 px: 100 mm a pixel, though its own cell is held at 24 px.
         let c = vec![cell(None, 0, 10_000), cell(Some(0), 10_000, 12_000), cell(None, 12_000, 60_000)];
-        let s = drag_span(&c, 1, 600.0).unwrap();
+        let s = drag_span(&c, 1, 600.0, false).unwrap();
         assert!((s.mm_per_px - 100.0).abs() < 1e-9, "{s:?}");
         assert_eq!(dragged_from_mm(10.0, &s), 11_000);
     }
@@ -347,14 +365,14 @@ mod tests {
     #[test]
     fn a_use_beside_another_cannot_move_toward_it() {
         let c = vec![cell(Some(0), 0, 6_000), cell(Some(1), 6_000, 12_000), cell(None, 12_000, 20_000)];
-        let s = drag_span(&c, 1, 200.0).unwrap();
+        let s = drag_span(&c, 1, 200.0, false).unwrap();
         assert_eq!((s.low_mm, s.high_mm), (6_000, 14_000));
     }
 
     #[test]
     fn the_high_end_is_on_the_grid_when_the_street_is_not() {
         let c = vec![cell(Some(0), 0, 6_000), cell(None, 6_000, 20_050)];
-        assert_eq!(drag_span(&c, 0, 200.0).unwrap().high_mm, 14_000);
+        assert_eq!(drag_span(&c, 0, 200.0, false).unwrap().high_mm, 14_000);
     }
 
     #[test]
@@ -392,15 +410,15 @@ mod tests {
             stop_cell(Some(1), 40_000, 49_000),
             stop_cell(None, 49_000, 60_000),
         ];
-        let first = drag_span(&cells, 1, 600.0).unwrap();
+        let first = drag_span(&cells, 1, 600.0, false).unwrap();
         assert_eq!((first.low_mm, first.high_mm), (0, 31_000), "from the start of the street to where it still fits before the next stop");
-        let second = drag_span(&cells, 3, 600.0).unwrap();
+        let second = drag_span(&cells, 3, 600.0, false).unwrap();
         assert_eq!((second.low_mm, second.high_mm), (19_000, 51_000));
         assert_eq!(dragged_from_mm(10_000.0, &first), 31_000, "the pointer far past the next stop stops at it");
         assert_eq!(dragged_from_mm(-10_000.0, &second), 19_000);
-        assert_eq!(drag_span(&cells, 2, 600.0), None, "a gap is not dragged");
+        assert_eq!(drag_span(&cells, 2, 600.0, false), None, "a gap is not dragged");
         let touching = vec![stop_cell(Some(0), 0, 9_000), stop_cell(Some(1), 9_000, 18_000), stop_cell(None, 18_000, 30_000)];
-        let s = drag_span(&touching, 1, 300.0).unwrap();
+        let s = drag_span(&touching, 1, 300.0, false).unwrap();
         assert_eq!((s.low_mm, s.high_mm), (9_000, 21_000), "it cannot move toward a stop it touches");
     }
 

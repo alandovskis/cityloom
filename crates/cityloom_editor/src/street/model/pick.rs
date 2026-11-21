@@ -6,6 +6,8 @@
 
 use std::ops::Range;
 
+use serde::Serialize;
+
 use super::matching::{counterpart, match_pieces};
 use super::zones::MIN_ZONE_MM;
 use super::{Arg, Content, Editor, Said, Segment, Speed, Zone, ZoneEnd, ZoneFrame, snap};
@@ -38,6 +40,30 @@ pub enum PickRefusal {
     OutsideStreet,
     /// A drag is under way: its edits belong to the stretch it started on.
     Dragging,
+}
+
+/// How a street's anchored positions turn into positions from the plan's left end (the street's first end): the end
+/// they are measured from and the length they lie along. Every position the person sees or types counts from the left.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct PlanAxis {
+    pub from_end: ZoneEnd,
+    pub length_mm: i32,
+}
+
+impl PlanAxis {
+    /// Where anchored position `anchored_mm` lies from the left end; the same turns a left position back.
+    pub fn left_mm(self, anchored_mm: i32) -> i32 {
+        match self.from_end {
+            ZoneEnd::First => anchored_mm,
+            ZoneEnd::Last => self.length_mm - anchored_mm,
+        }
+    }
+
+    /// The span between two anchored positions, from the left end, smaller end first.
+    pub fn left_span(self, a_mm: i32, b_mm: i32) -> (i32, i32) {
+        let (a, b) = (self.left_mm(a_mm), self.left_mm(b_mm));
+        (a.min(b), a.max(b))
+    }
 }
 
 impl PickRefusal {
@@ -83,7 +109,8 @@ impl Editor {
             (first.map_or(0, |r| r.from_mm), last.map_or(length, |r| r.to_mm))
         } else {
             let (lo, hi) = self.snap_to_runs(lo, hi, length);
-            if hi - lo < MIN_ZONE_MM {
+            // End to end is the whole street, even on a street shorter than the shortest stretch.
+            if hi - lo < MIN_ZONE_MM && !(lo <= 0 && hi >= length) {
                 return Err(PickRefusal::TooShort);
             }
             (lo, hi)
@@ -132,12 +159,25 @@ impl Editor {
         }
     }
 
+    /// How this street's anchored positions turn into positions from the plan's left end.
+    pub fn axis(&self) -> PlanAxis {
+        PlanAxis { from_end: self.anchor_end(), length_mm: self.pick_length_mm() }
+    }
+
     /// Where an anchored position lies from the plan's left end, the street's first end.
     pub fn left_mm(&self, anchored_mm: i32) -> i32 {
-        match self.anchor_end() {
-            ZoneEnd::First => anchored_mm,
-            ZoneEnd::Last => self.pick_length_mm() - anchored_mm,
-        }
+        self.axis().left_mm(anchored_mm)
+    }
+
+    /// The anchored span between `a_mm` and `b_mm`, from the plan's left end, smaller end first.
+    pub(super) fn left_span(&self, a_mm: i32, b_mm: i32) -> (i32, i32) {
+        self.axis().left_span(a_mm, b_mm)
+    }
+
+    /// Where a thing `length_mm` long starting at anchored `from_mm` starts on the plan, from its left end: what
+    /// every label and announcement gives as its place.
+    pub(super) fn left_start(&self, from_mm: i32, length_mm: i32) -> i32 {
+        self.left_span(from_mm, from_mm + length_mm).0
     }
 
     /// The picked stretch as the page names it ("from 49 m to 82 m"); `None` for the whole street.
@@ -218,7 +258,9 @@ impl Editor {
         what
     }
 
-    /// Picks the span of zone `z` and shows it, keeping the chosen piece: what the zone strip's commands do.
+    /// Picks the span of zone `z` and shows it, keeping the chosen piece: what the zone strip's commands did, which tests
+    /// still use (`select_zone`, `split_zone`, `move_boundary`).
+    #[cfg(test)]
     pub(super) fn follow_zone(&mut self, z: usize) {
         let length = self.pick_length_mm();
         let (from_mm, to_mm) = self.states[self.cursor].content.span(z, length);
@@ -283,6 +325,7 @@ impl Editor {
             self.missed = spans;
             return true;
         }
+        let edited = next.section(shown).to_vec();
         if self.elsewhere().is_none() {
             next.join_alike(range);
         }
@@ -291,8 +334,25 @@ impl Editor {
             return false;
         }
         self.push(label, next);
+        self.follow_selected(&edited);
         self.missed = spans;
         true
+    }
+
+    /// After an edit that may have joined the shown run into its neighbour: the selected piece, when the section shown
+    /// no longer has it, is its counterpart there (`counterpart`, from `edited`, the section it was chosen in as the
+    /// edit left it), else nothing is selected. A joined run keeps the earlier zone's uids, so a piece chosen in the
+    /// later one is found again by kind. A piece the edit removed is left to the edit.
+    pub(super) fn follow_selected(&mut self, edited: &[Segment]) {
+        let Some(uid) = self.selected else { return };
+        let shown = self.current();
+        if shown.iter().any(|s| s.uid == uid) {
+            return;
+        }
+        // A piece the edit itself took away is the edit's to let go of.
+        let Some(i) = edited.iter().position(|s| s.uid == uid) else { return };
+        let found = counterpart(edited, shown).get(i).copied().flatten().map(|j| shown[j].uid);
+        self.selected = found;
     }
 
     /// The content an edit over the pick starts from, split at the pick's ends when the zones can be rearranged, and
@@ -548,6 +608,70 @@ mod tests {
     }
 
     #[test]
+    fn after_a_join_the_selected_piece_is_its_counterpart_in_the_run_shown() {
+        // Two zones: 0 to 20 m on the base section, 20 m to the end with new uids (as a template gives) and its first
+        // piece 100 mm wider.
+        let base = sample();
+        let mut s = zoned(base.clone(), &[0, 20_000], LEN);
+        let mut own = base.segments.clone();
+        own.iter_mut().for_each(|p| p.uid += 1_000);
+        own[0].width_mm += 100;
+        s.zones[1].segments = Some(own.clone());
+        let mut e = editor(&s.settled(), frame(LEN, ZoneEnd::First));
+        e.pick_run_at(30_000).unwrap();
+        let (later, earlier) = (own[0].uid, base.segments[0].uid);
+        e.select(Some(later));
+        assert_eq!(e.view().selected, Some(later));
+        // Narrowed back, the later run is like the earlier and joins it, which keeps the earlier uids.
+        assert!(e.set_width(later, base.segments[0].width_mm));
+        assert_eq!(e.snapshot().zones.len(), 0, "joined");
+        assert_eq!(e.view().selected, Some(earlier), "the same piece, by its counterpart");
+    }
+
+    /// A saved street of four zones whose middle two look the same: runs 0 to 20 m, 20 m to 40 m (a boundary at 30 m
+    /// hidden inside it) and 40 m to the end.
+    fn hidden_boundary() -> Editor {
+        editor(&street(&[0, 20_000, 30_000, 40_000], &[0, 100, 100, 0], ZoneEnd::First), frame(LEN, ZoneEnd::First))
+    }
+
+    #[test]
+    fn a_boundary_moved_inside_a_run_with_a_hidden_boundary_joins_it_rather_than_stopping_at_it() {
+        let starts = |e: &Editor| e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>();
+        let mut e = hidden_boundary();
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000], "opened as saved");
+        // The boundary at 20 m (zone 1) may go to 35 m, 5 m short of the next one the plan shows, as `boundary_kept`
+        // allows: the hidden one at 30 m is joined, not a wall.
+        assert_eq!(e.move_boundary_of(1, 33_000), Ok(1));
+        assert_eq!(starts(&e), [0, 33_000, 40_000]);
+        assert!(e.undo());
+        // The boundary at 40 m (zone 3) to 25 m: the zone it starts is now the third.
+        assert_eq!(e.move_boundary_of(3, 25_000), Ok(2));
+        assert_eq!(starts(&e), [0, 20_000, 25_000]);
+        assert!(e.undo());
+        // The 5 m rule is the plan's: from the boundaries it shows.
+        assert_eq!(e.move_boundary_of(1, 36_000), Err(ZoneRefusal::TooShort));
+        assert_eq!(e.move_boundary_of(3, 24_000), Err(ZoneRefusal::TooShort));
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000]);
+        // Inside a drag the join is undone with it.
+        e.begin_gesture();
+        assert_eq!(e.move_boundary_of(1, 33_000), Ok(1));
+        e.cancel_gesture();
+        assert_eq!(starts(&e), [0, 20_000, 30_000, 40_000]);
+    }
+
+    #[test]
+    fn the_2_5d_names_the_run_it_shows_and_the_run_across_its_joint_not_their_zones() {
+        let mut e = hidden_boundary();
+        e.pick_run_at(25_000).unwrap();
+        assert_eq!(e.pick(), stretch(20_000, 40_000));
+        let v = e.view();
+        let from_to = super::super::zones::stretch_between;
+        assert_eq!(v.zones.zones[v.zones.selected].label, from_to(20_000, 40_000), "the run shown");
+        let joint = v.zones.joint.expect("a run across a boundary near");
+        assert_eq!((joint.left_mm, joint.label), (40_000, from_to(40_000, LEN)), "the next run, across the boundary the plan shows");
+    }
+
+    #[test]
     fn a_new_editor_picks_the_whole_street() {
         let plain = editor(&sample(), frame(LEN, ZoneEnd::First));
         assert_eq!(plain.pick(), Pick::Whole);
@@ -782,15 +906,15 @@ mod tests {
         e.select(Some(uid));
         let revisions = e.states.len();
         e.begin_gesture();
-        assert_eq!(e.move_boundary_of(2, 38_000), Ok(()));
-        assert_eq!(e.move_boundary_of(2, 37_000), Ok(()));
+        assert_eq!(e.move_boundary_of(2, 38_000), Ok(2));
+        assert_eq!(e.move_boundary_of(2, 37_000), Ok(2));
         assert_eq!((e.pick(), e.zone(), e.view().selected), (stretch(10_000, 30_000), 0, Some(uid)), "nothing follows while it lasts");
         assert!(e.end_gesture());
         assert_eq!(e.states.len(), revisions + 1);
         assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
         assert_eq!((e.pick(), e.view().selected), (stretch(10_000, 30_000), Some(uid)));
         e.begin_gesture();
-        assert_eq!(e.move_boundary_of(2, 45_000), Ok(()));
+        assert_eq!(e.move_boundary_of(2, 45_000), Ok(2));
         e.cancel_gesture();
         assert_eq!(e.snapshot().zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), [0, 20_000, 37_000]);
         assert_eq!(e.move_boundary_of(0, 5_000), Err(ZoneRefusal::NoBoundary));

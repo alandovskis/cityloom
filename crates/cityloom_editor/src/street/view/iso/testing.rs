@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::shared::catalogue::{DIRECTIONS, kind_index};
 use crate::shared::i18n::{I18n, Locale};
-use crate::street::model::{Editor, View, ZoneEnd, two_zones};
+use crate::street::model::{Editor, View, ZoneEnd, ZoneFrame, two_zones};
 
 use super::iso_svg;
 
@@ -140,7 +140,8 @@ pub fn marked() -> Editor {
 
 /// The street of `two_zones` with zone `selected` (0 or 1) shown: a view that carries the neighbouring zone.
 pub fn joined(second_own: bool, selected: usize) -> View {
-    let mut e = two_zones(second_own);
+    // An end to measure from, so the stretches are named by position.
+    let mut e = two_zones(second_own).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
     assert!(e.select_zone(selected));
     e.view()
 }
@@ -150,7 +151,7 @@ pub fn joined_from_last(second_own: bool, selected: usize) -> View {
     let e = two_zones(second_own);
     let mut s = e.snapshot();
     s.from_end = ZoneEnd::Last;
-    let mut e = Editor::from_street(&s, &s, 0);
+    let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::Last }));
     assert!(e.select_zone(selected));
     e.view()
 }

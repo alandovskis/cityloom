@@ -23,7 +23,7 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
+pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned, zoned_apart};
 pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod beyond;
 mod joint;
@@ -34,7 +34,7 @@ mod zone_speed;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod matching;
 mod pick;
-pub use pick::{Pick, PickRefusal, Run};
+pub use pick::{Pick, PickRefusal, PlanAxis, Run};
 mod plan;
 pub use plan::{PlanBand, PlanBoundary, PlanObject, PlanRun, PlanThing, PlanView};
 mod replay;
@@ -366,6 +366,9 @@ struct State {
     calming_move: Option<(Side, i32, i32)>,
     /// The same for the trees and green infrastructure (see `State.stop_move`).
     green_move: Option<((i32, i32), (i32, i32))>,
+    /// The pick an edit that picks a stretch of its own (the School template) was made in, and the one it left, so
+    /// that undo gives the person's pick back and redo the edit's; `None` for an edit that leaves the pick alone.
+    pick_move: Option<(Pick, Pick)>,
 }
 
 pub use crate::standards::model::SPEED_CHOICES;
@@ -399,6 +402,9 @@ pub struct Editor {
     frame: Option<ZoneFrame>,
     /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
     ends: [EndInfo; 2],
+    /// The street is shown where nothing may be changed (a design opened read-only): the plan's boundaries are fixed. A
+    /// setting, not part of the history.
+    fixed_boundaries: bool,
     selected: Option<u32>,
     gesture: Option<Content>,
     /// The cell of a curbside strip the person chose, and the move of a use that the next revision records (see
@@ -526,6 +532,7 @@ impl Editor {
                 stop_move: None,
                 calming_move: None,
                 green_move: None,
+                pick_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -536,6 +543,7 @@ impl Editor {
             missed: Vec::new(),
             frame: None,
             ends: [EndInfo::default(); 2],
+            fixed_boundaries: false,
             selected: None,
             gesture: None,
             curb_choice: Choice::default(),
@@ -586,7 +594,9 @@ impl Editor {
     }
 
     /// Chooses the zone the edits act on, picking its span. Refused when there is no such zone, or it lies beyond the
-    /// loaded end, or while a drag is under way. The selected piece is cleared when the zone changes.
+    /// loaded end, or while a drag is under way. The selected piece is cleared when the zone changes. Tests choose a
+    /// zone with it; the page picks a stretch on the plan.
+    #[cfg(test)]
     pub fn select_zone(&mut self, zone: usize) -> bool {
         // A drag's edits belong to the stretch it started on: nothing is chosen while one is under way.
         if self.gesture.is_some() || zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
@@ -607,6 +617,13 @@ impl Editor {
         if self.zone != before {
             self.selected = None;
         }
+        self
+    }
+
+    /// Shows the plan's boundaries fixed (`PlanBoundary::movable` false) when `fixed`: the street is shown where nothing
+    /// may be changed. A setting, outside the history; it refuses nothing itself.
+    pub fn with_fixed_boundaries(mut self, fixed: bool) -> Editor {
+        self.fixed_boundaries = fixed;
         self
     }
 
@@ -695,7 +712,7 @@ impl Editor {
         let row_mm = self.row_mm();
         let (curb_move, stop_move, green_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved(), self.green_choice.take_moved());
         let calming_move = self.calming_choice.take_moved();
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move });
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move, calming_move, pick_move: None });
         // Settling can leave fewer zones than there were: the shown one is found again from the pick.
         self.clamp_pick();
     }
@@ -739,6 +756,7 @@ impl Editor {
             return false;
         };
         let mut now = self.states[self.cursor].content.clone();
+        let edited = now.section(self.zone.min(now.zone_count() - 1)).to_vec();
         // The zones the drag's edits acted on join their identical neighbours, as any edit's do.
         if let Some((_, range)) = self.gesture_pick.take()
             && self.elsewhere().is_none()
@@ -766,6 +784,7 @@ impl Editor {
             return false;
         };
         self.push(label, now);
+        self.follow_selected(&edited);
         true
     }
 
@@ -1277,6 +1296,9 @@ impl Editor {
         self.stop_choice.undo(self.states[self.cursor].stop_move);
         self.calming_choice.undo(self.states[self.cursor].calming_move);
         self.green_choice.undo(self.states[self.cursor].green_move);
+        if let Some((before, _)) = self.states[self.cursor].pick_move {
+            self.pick = before;
+        }
         self.cursor -= 1;
         self.reselect();
         true
@@ -1292,6 +1314,9 @@ impl Editor {
         self.stop_choice.redo(self.states[self.cursor].stop_move);
         self.calming_choice.redo(self.states[self.cursor].calming_move);
         self.green_choice.redo(self.states[self.cursor].green_move);
+        if let Some((_, after)) = self.states[self.cursor].pick_move {
+            self.pick = after;
+        }
         self.reselect();
         true
     }
@@ -1352,7 +1377,7 @@ impl Editor {
         if first.content == self.states[self.cursor].content && first.row_mm == self.row_mm() {
             return false;
         }
-        self.push_state(State { label: Said::new("rev-reset"), ..first });
+        self.push_state(State { label: Said::new("rev-reset"), pick_move: None, ..first });
         self.missed.clear();
         self.clamp_pick();
         self.selected = None;
@@ -1437,6 +1462,7 @@ impl Editor {
             },
             street_speed_kmh: self.states[self.cursor].content.speed.kmh(),
             speed_varies: self.speeds_vary(),
+            axis: self.axis(),
             speed_follows: {
                 let content = &self.states[self.cursor].content;
                 content.zones.len() > 1 && content.zones.get(self.zone).is_some_and(|z| z.speed.is_undecided())
@@ -1550,7 +1576,9 @@ impl Editor {
             let before = out.len();
             for (b, host, why) in &failing {
                 let at = self.left_mm(content.zones[*b + 1].from_mm);
-                let boundary = || Said::new("check-boundary").with("at", Arg::Length(at));
+                // A street with no end to measure from has no positions.
+                let boundary =
+                    || if self.frame.is_none() { Said::new("check-boundary-somewhere") } else { Said::new("check-boundary").with("at", Arg::Along(at)) };
                 match (id, why) {
                     ("transition-room", Failing::Room { need_mm, room_mm }) => {
                         let detail = Said::new("check-detail-transition-room")
@@ -1847,6 +1875,8 @@ pub struct View {
     pub speed_follows: bool,
     /// The picked runs have different speed limits: the one shown is the shown run's.
     pub speed_varies: bool,
+    /// How the strips' anchored positions turn into positions from the plan's left end, which is how they are said.
+    pub axis: PlanAxis,
     /// The street's own speed limit, which a zone with none of its own follows.
     pub street_speed_kmh: Option<u16>,
     /// The side of the road traffic keeps, for the 2.5D sign.
@@ -3098,11 +3128,11 @@ mod tests {
     }
 
     /// An editor on the sample street divided into three zones, all on the base section; the zoning is one
-    /// earlier revision.
+    /// earlier revision. Its ends are an end to measure from (a frame), so its stretches are named by position.
     fn zoned_editor() -> Editor {
         let today = sample_street();
         let now = zoned(today.clone(), &[0, 20_000, 40_000], 60_000);
-        Editor::from_street(&today, &now, 0)
+        Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
     }
 
     #[test]
@@ -3384,22 +3414,19 @@ mod tests {
     #[test]
     fn the_view_lists_zones_with_the_stretch_they_cover_range_and_whether_each_has_its_own_section() {
         let today = sample_street();
-        let mut now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut now = zoned_apart(today.clone(), &[0, 20_000, 45_000], 60_000);
         now.zones[1].name = Some("Market".into());
-        let mut e = Editor::from_street(&today, &now, 0);
+        let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
         let z = e.view().zones;
         assert_eq!((z.length_mm, z.from_end, z.selected), (60_000, ZoneEnd::First, 0));
-        assert_eq!(
-            z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm, g.own, g.cut_off)).collect::<Vec<_>>(),
-            vec![(0, 0, 20_000, false, false), (1, 20_000, 45_000, false, false), (2, 45_000, 60_000, false, false)]
-        );
+        assert_eq!(z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm)).collect::<Vec<_>>(), vec![(0, 0, 20_000), (1, 20_000, 45_000), (2, 45_000, 60_000)]);
         assert_eq!(z.zones[2].label, stretch_between(45_000, 60_000));
         assert!(e.select_zone(1));
         let g = e.snapshot().segments[0].clone();
         assert!(e.set_width(g.uid, g.width_mm + 100));
         let z = e.view().zones;
         assert_eq!(z.selected, 1);
-        assert_eq!(z.zones.iter().map(|g| g.own).collect::<Vec<_>>(), vec![false, true, false]);
+        assert_eq!(e.snapshot().zones.iter().map(|g| g.segments.is_some()).collect::<Vec<_>>(), vec![false, true, false]);
         assert_eq!(z.zones[1].label, stretch_between(20_000, 45_000), "a saved name is never said");
     }
 
@@ -3427,7 +3454,7 @@ mod tests {
         let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First }));
         let z = e.view().zones;
         assert_eq!(z.elsewhere, Some(Elsewhere { drawn_mm: 60_000, loaded_mm: 40_000 }));
-        assert_eq!(z.zones.iter().map(|g| g.cut_off).collect::<Vec<_>>(), vec![false, false, true]);
+        assert_eq!((0..3).map(|g| e.is_cut_off(g)).collect::<Vec<_>>(), vec![false, false, true]);
         assert!(!e.select_zone(2));
         assert_eq!(e.zone(), 0);
         let s = e.snapshot();
@@ -3458,7 +3485,7 @@ mod tests {
         let frame = ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last };
         let e = zoned_editor().with_frame(Some(frame));
         assert_eq!(e.frame(), Some(frame));
-        assert_eq!(zoned_editor().frame(), None);
+        assert_eq!(zoned_editor().with_frame(None).frame(), None);
     }
 
     fn with_speed(speed: Speed) -> Editor {

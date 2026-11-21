@@ -42,6 +42,10 @@ pub enum Arg {
     Clock(i32),
     /// A length in millimetres, written in the units shown.
     Length(i32),
+    /// A place along the street, or how long a stretch of it is, in millimetres: written in the units shown to a tenth,
+    /// as the plan's fields and the 2.5D give it, also where it is not a whole tenth from the end it is said from (a
+    /// street measured from its other end). `Length` keeps a hundredth for widths.
+    Along(i32),
     /// Another message, by key, said in its place.
     Msg(&'static str),
     /// Another message, by key, said in the middle of a sentence (in lower case).
@@ -98,6 +102,7 @@ fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> Stri
             Arg::Measure(code) => args.str(arg_name, name(name_key(code))),
             Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
             Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
+            Arg::Along(mm) => args.str(arg_name, units.length_in(*mm, locale)),
             Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
             Arg::MsgLower(key) => args.str(arg_name, tr(key, &Args::new()).to_lowercase()),
             Arg::Said(inner) => args.str(arg_name, put_into_words(i18n, units, inner, watched)),

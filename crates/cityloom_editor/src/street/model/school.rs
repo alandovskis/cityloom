@@ -39,6 +39,7 @@ impl Editor {
     /// is left as it was.
     pub(super) fn apply_school(&mut self, arranged: Vec<Segment>, next_uid: u32, label: Said) -> TemplateReport {
         let start = self.cursor;
+        let picked = self.pick;
         let mut report = TemplateReport::default();
 
         // The stretch.
@@ -49,8 +50,8 @@ impl Editor {
                 if to - from >= SCHOOL_ZONE_MM + 2 * MIN_ZONE_MM
                     && let Ok(Pick::Stretch { from_mm, to_mm }) = self.pick_stretch(a, a + SCHOOL_ZONE_MM)
                 {
-                    let (a, b) = (self.left_mm(from_mm), self.left_mm(to_mm));
-                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a.min(b))).with("to", Arg::Length(a.max(b))));
+                    let (a, b) = self.left_span(from_mm, to_mm);
+                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Along(a)).with("to", Arg::Along(b)));
                 } else {
                     let room = Said::new("template-school-room").with("length", Arg::Length(SCHOOL_ZONE_MM)).with("min", Arg::Length(MIN_ZONE_MM));
                     report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(room))));
@@ -83,8 +84,8 @@ impl Editor {
         match self.school_table() {
             Ok(at) => {
                 // Where the table starts on the plan, from its left end, as every position the page shows.
-                let at = self.left_mm(at).min(self.left_mm(at + DEFAULT_TABLE_MM));
-                report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Length(at)))
+                let at = self.left_start(at, DEFAULT_TABLE_MM);
+                report.applied.push(Said::new("template-school-applied-table").with("at", Arg::Along(at)))
             }
             Err(reason) => report.skipped.push(Said::new("template-school-skipped-table").with("reason", Arg::Said(Box::new(reason)))),
         }
@@ -93,6 +94,10 @@ impl Editor {
         self.next_uid = self.next_uid.max(next_uid);
         self.selected = None;
         self.squash_since(start, label);
+        // Undone, the person's pick comes back, not the school stretch the template picked.
+        if self.cursor > start {
+            self.states[self.cursor].pick_move = Some((picked, self.pick));
+        }
         report
     }
 
@@ -171,7 +176,7 @@ mod tests {
         e.pick_stretch(20_000, 120_000).unwrap();
         let report = e.apply_template(Template::School).unwrap();
         assert_eq!(keys(&report.applied), ["template-school-applied-zone", "template-school-applied-speed", "template-school-applied-table"]);
-        assert_eq!((report.applied[0].args[0].1.clone(), report.applied[0].args[1].1.clone()), (Arg::Length(40_000), Arg::Length(100_000)));
+        assert_eq!((report.applied[0].args[0].1.clone(), report.applied[0].args[1].1.clone()), (Arg::Along(40_000), Arg::Along(100_000)));
         assert_eq!(starts(&e), [0, 40_000, 100_000]);
         let s = e.snapshot();
         let sections = s.sections();
@@ -252,7 +257,25 @@ mod tests {
         assert!(e.undo());
         let s = e.snapshot();
         assert_eq!((s.segments, s.zones, s.speed, s.calming), (before.segments, before.zones, before.speed, before.calming));
-        assert_eq!(e.pick(), stretch(40_000, 100_000), "the pick is kept, clamped to the street");
+        assert_eq!(e.pick(), stretch(20_000, 120_000), "the pick the template was made in");
+    }
+
+    #[test]
+    fn undoing_the_school_template_gives_back_the_pick_it_was_made_in_and_redoing_it_the_school_stretch() {
+        let mut e = two_runs();
+        e.pick_stretch(20_000, 120_000).unwrap();
+        e.apply_template(Template::School).unwrap();
+        assert_eq!(e.pick(), stretch(40_000, 100_000), "the school stretch is picked");
+        assert!(e.undo());
+        assert_eq!(e.pick(), stretch(20_000, 120_000), "the person's pick, not the school stretch");
+        assert!(e.redo());
+        assert_eq!(e.pick(), stretch(40_000, 100_000));
+        // A later edit's undo leaves the pick alone, as any undo does.
+        e.pick_stretch(10_000, 30_000).unwrap();
+        let uid = e.current()[0].uid;
+        assert!(e.set_width(uid, 4_000));
+        assert!(e.undo());
+        assert_eq!(e.pick(), stretch(10_000, 30_000));
     }
 
     #[test]
@@ -283,9 +306,23 @@ mod tests {
         // The school stretch is 25 m to 85 m from the anchor, so 35 m to 95 m on the plan; its table, 7 m long, starts
         // 51.5 m from the anchor and 61.5 m from the left (120 - 51.5 - 7).
         assert_eq!(e.pick(), stretch(25_000, 85_000));
-        assert_eq!(report.applied[0].args, vec![("from", Arg::Length(35_000)), ("to", Arg::Length(95_000))]);
+        assert_eq!(report.applied[0].args, vec![("from", Arg::Along(35_000)), ("to", Arg::Along(95_000))]);
         assert_eq!(e.snapshot().calming[0].from_mm, 51_500);
-        assert_eq!(report.applied[2].args, vec![("at", Arg::Length(61_500))]);
+        assert_eq!(report.applied[2].args, vec![("at", Arg::Along(61_500))]);
+    }
+
+    /// Avenue Henri-Julien: 90.744 m, measured from its last end, picked whole. The report puts the table where the
+    /// plan and the raised elements' row do, from the plan's left end (36.9 m), not from the anchored end (46.8 m).
+    #[test]
+    fn on_a_street_of_odd_length_measured_from_its_last_end_the_table_is_reported_where_the_plan_draws_it() {
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 90_744, from_end: ZoneEnd::Last }));
+        let report = e.apply_template(Template::School).unwrap();
+        let at = report.applied.iter().find(|r| r.key == "template-school-applied-table").expect("a table").args[0].1.clone();
+        let drawn = e.view().plan.objects.iter().find(|o| matches!(o.thing, super::super::PlanThing::Calming { .. })).map(|o| o.from_mm).expect("drawn");
+        assert_eq!(at, Arg::Along(drawn), "the report and the plan agree");
+        let anchored = e.snapshot().calming[0].from_mm;
+        assert_eq!(drawn, 90_744 - anchored - DEFAULT_TABLE_MM, "counted from the left end, not the anchored one ({anchored})");
     }
 
     #[test]

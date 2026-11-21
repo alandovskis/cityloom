@@ -120,10 +120,10 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
         "lane" => i18n.tr_now("jn-sel-lane", &args.num("n", s.lane as i64 + 1).num("count", arm.map_or(0, |a| a.lanes.len()) as i64)),
         "arm" => {
             let args = args.num("degrees", arm.map_or(0, |a| a.bearing).into());
-            let base = match arm.filter(|a| a.beyond_zone.is_some()) {
+            let base = match arm.filter(|a| a.beyond_stretch.is_some()) {
                 Some(a) => {
-                    let zone = a.beyond_zone.as_ref().map_or_else(String::new, |z| say_now(i18n, units, z));
-                    let args = args.str("reach", units.length_in(a.beyond_reach_mm, locale)).str("zone", zone);
+                    let stretch = a.beyond_stretch.as_ref().map_or_else(String::new, |z| say_now(i18n, units, z));
+                    let args = args.str("reach", units.length_in(a.beyond_reach_mm, locale)).str("stretch", stretch);
                     if a.beyond_taper_mm > 0 {
                         i18n.tr_now("jn-sel-arm-approach", &args.str("length", units.length_in(a.beyond_taper_mm, locale)))
                     } else {
@@ -321,25 +321,53 @@ mod tests {
     }
 
     #[test]
-    fn an_arm_with_a_beyond_says_where_its_end_zone_ends_in_both_languages() {
+    fn an_arm_with_a_beyond_says_where_its_end_stretch_ends_and_which_stretch_follows_in_both_languages() {
         let (j, uid) = crate::junction::view::tests::junction_with_a_pocket(|_| {});
         let mut j = j;
         j.select(Target::Arm(uid));
         assert_eq!(
             selection_text(&j.view(), &en(), Units::Metres).unwrap(),
-            "Sample Avenue 2 (north), 0 degrees. Its end zone reaches 20.0 m from the centre, then a transition of 10.0 m into Zone 2."
+            "Sample Avenue 2 (north), 0 degrees. Its end stretch reaches 20.0 m from the centre, then a transition of 10.0 m into the stretch from 20.0 m to 100.0 m."
         );
         assert_eq!(
             selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
-            "Sample Avenue 2 (nord), 0 degré. Sa zone d’extrémité va jusqu’à 20,0\u{a0}m du centre, puis une transition de 10,0\u{a0}m. Zone suivante\u{a0}: zone 2."
+            "Sample Avenue 2 (nord), 0 degré. Son tronçon d’extrémité va jusqu’à 20,0\u{a0}m du centre, puis une transition de 10,0\u{a0}m. Tronçon suivant\u{a0}: de 20,0\u{a0}m à 100,0\u{a0}m."
         );
-        // with no taper the zone across simply follows
+        // with no taper the stretch across simply follows
         let (mut j, uid) = crate::junction::view::tests::junction_with_a_beyond(|_| {}, |b| b.taper = None);
         j.select(Target::Arm(uid));
         assert_eq!(
             selection_text(&j.view(), &en(), Units::Metres).unwrap(),
-            "Sample Avenue 2 (north), 0 degrees. Its end zone reaches 20.0 m from the centre, then Zone 2."
+            "Sample Avenue 2 (north), 0 degrees. Its end stretch reaches 20.0 m from the centre, then the stretch from 20.0 m to 100.0 m."
         );
+    }
+
+    #[test]
+    fn an_arm_at_the_streets_last_end_names_the_next_stretch_from_where_its_end_stretch_reaches() {
+        use crate::shared::catalogue::{Side, kind_index};
+        use crate::street::model::{Street, StreetExt, ZoneEnd, ZoneFrame, zoned};
+        // A 100 m street that changes 75 m from its first end, off the roadway (a jog): the arm at its last end has an
+        // end stretch reaching 25 m, then the first stretch, to the street's far end 100 m away.
+        const LEN: i32 = 100_000;
+        let mut street = zoned(Street::sample(0, Side::Right), &[0, 75_000], LEN);
+        let mut own = street.segments.clone();
+        own[0].kind = kind_index("planting").unwrap();
+        street.zones[0].segments = Some(own);
+        let real = street.beyond(false, Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First })).expect("the sections differ");
+        assert_eq!((real.boundary_mm, real.taper.is_none()), (25_000, true));
+        let (mut j, uid) = crate::junction::view::tests::junction_with_a_beyond(
+            |_| {},
+            |b| {
+                b.boundary_mm = real.boundary_mm;
+                b.stretch = real.stretch.clone();
+                b.taper = None;
+            },
+        );
+        j.select(Target::Arm(uid));
+        let said = selection_text(&j.view(), &en(), Units::Metres).unwrap();
+        let reach = Units::Metres.length(real.boundary_mm);
+        let end = Units::Metres.length(LEN);
+        assert!(said.ends_with(&format!("Its end stretch reaches {reach} from the centre, then the stretch from {reach} to {end}.")), "{said}");
     }
 
     #[test]

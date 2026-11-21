@@ -325,7 +325,7 @@ rev-speed = Limite de vitesse : { $kmh }{" "}km/h
 rev-speed-not-set = Limite de vitesse non indiquée
 rev-stretch-speed = Limite de vitesse de { $kmh }{" "}km/h { $stretch }
 rev-stretch-speed-not-set = Limite de vitesse non indiquée { $stretch }
-rev-stretch-speed-street = Retour à la limite de vitesse de la rue { $stretch }
+rev-stretch-speed-street = Retour à la limite de vitesse de la rue, { $stretch }
 street-now-pedestrian = { $street } est maintenant une rue piétonne.
 street-traffic-again = { $street } accueille de nouveau la circulation.
 check-access-ped-ok = Les trottoirs offrent un passage continu de { $amount } ou plus
@@ -339,11 +339,15 @@ boundary-refused-elsewhere = Les changements le long de cette rue ont été trac
 zone-refused-dragging = Terminez le glissement avant de modifier la rue.
 # Un tronçon nommé au milieu d’une phrase, ses extrémités depuis l’extrémité gauche du plan (« Place pour la transition de 49 m à 82 m »).
 stretch-mid = de { $from } à { $to }
+# Un tronçon nommé sur une rue sans extrémité d’où mesurer, qui n’a pas de positions.
+stretch-mid-whole = sur toute la rue
+stretch-mid-part = sur une partie de la rue
 pick-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut la modifier que sur toute sa longueur.
 pick-refused-too-short = Un tronçon doit mesurer au moins { $min }.
 pick-refused-outside = Cette position est hors de la rue.
 pick-refused-dragging = Terminez le glissement avant de choisir un autre tronçon.
 pick-refused-no-boundary = Aucune limite entre tronçons aux extrémités du tronçon choisi.
+pick-refused-order = « De » doit venir avant « À ».
 # Ce qui est dit du tronçon choisi sur le plan (src/street/vm/text.rs, picked_said); positions depuis l’extrémité gauche du plan.
 stretch-picked = De { $from } à { $to }, { $length } de long.
 stretch-picked-differs = De { $from } à { $to }, { $length } de long : { $what }.
@@ -358,17 +362,32 @@ stretch-what-pair = { $a } et { $b }
 stretch-what-more = { $a }, { $b }
 # Dit après une modification du tronçon choisi qui n’a pas pu se faire là où l’élément modifié manquait.
 edit-missed = Aucun changement de { $from } à { $to } : ce tronçon est sans { $kind }.
+edit-missed-part = Aucun changement sur une partie de la rue : cette partie est sans { $kind }.
 # Le nom du plan pour un lecteur d’écran, et la ligne sous le plan qui nomme le tronçon choisi.
 st-plan-label = La rue de sa première extrémité à sa dernière, { $length } de long
+# La même avec les extrémités que coupe le bord de la carte (le plan les dessine en zigzag), et sans extrémité d’où mesurer.
+st-plan-label-cut-left = La rue de sa première extrémité à sa dernière, { $length } de long; son extrémité gauche est coupée par le bord de la carte
+st-plan-label-cut-right = La rue de sa première extrémité à sa dernière, { $length } de long; son extrémité droite est coupée par le bord de la carte
+st-plan-label-cut-both = La rue de sa première extrémité à sa dernière, { $length } de long; ses deux extrémités sont coupées par le bord de la carte
+st-plan-label-no-anchor = La rue, ses deux extrémités coupées par le bord de la carte
 st-stretch = De { $from } à { $to } · { $length } de long
 # Où se trouve le point du plan au clavier, dit tant qu’il se déplace seul (src/street/vm/text.rs, point_said).
 st-point = À { $at }
 # Le nom du point du plan au clavier, un curseur (src/street/view/plan/component.rs).
 st-plan-point-label = Point le long de la rue
+# Les extrémités du tronçon choisi, en champs, au niveau Rue du panneau des détails (src/street/view/plan/fields.rs),
+# depuis l’extrémité gauche du plan.
+st-pick-fields = Tronçon choisi
+st-pick-from = De ({ $unit })
+st-pick-to = À ({ $unit })
+# Une limite choisie d’un clic sur le plan, à déplacer en saisissant où elle va (src/street/vm/plan.rs) ; `at` depuis
+# l’extrémité gauche du plan. L’étiquette du champ (src/street/view/plan/fields.rs).
+boundary-chosen = Le changement à { $at }; saisissez où le déplacer.
+st-boundary-to = Déplacer le changement à ({ $unit })
 stretches-elsewhere = Les changements le long de cette rue ont été tracés lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
 check-stop-in = { $check } : { $instance }
-check-stretch-in = { $check } { $stretch }
+check-stretch-in = { $check }, { $stretch }
 # Le plan (src/street/view/plan/) : la marque d’une extrémité de la rue coupée par le bord de la carte.
 plan-cut = Coupée par le bord de la carte
 
@@ -397,6 +416,7 @@ st-street-sub-free =
 st-speed-stretch-hint = Pour le tronçon de { $from } à { $to }.
 # Sous une valeur qui diffère d’une partie du tronçon choisi à l’autre : celle montrée est celle de la partie montrée.
 st-varies = Varie le long du tronçon
+st-varies-street = Varie le long de la rue
 st-path-label = Ce que montrent les détails
 st-path-street = Rue
 st-path-gap = Tronçon libre
@@ -431,6 +451,7 @@ svg-iso-stops = { $count ->
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
     }
 check-boundary = là où la rue change, à { $at }
+check-boundary-somewhere = là où la rue change
 check-label-transition-room = Place pour la transition
 check-label-lane-drop = Fins de voie
 check-detail-transition-room = La transition demande { $need }, mais le tronçon { $stretch } mesure { $room }.
