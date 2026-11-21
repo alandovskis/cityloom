@@ -677,6 +677,28 @@ jn-calls-said-no-wait =
        *[other] { $calls } calls
     } in the hour; served { $served }, delayed { $delayed }, green extended { $extended }, not served { $not_served }; no call was served.
 
+## Passive pedestrian detection (src/junction/model/calls.rs, CLM-17): kerbside detection places a call and cancels it when the pedestrian leaves
+jn-refusal-detection-not-walked = No phase of the plan walks this crossing, so passive detection cannot serve it: walk it in a phase first.
+jn-refusal-detection-needs-call = Only a crossing on call detects pedestrians: put it on call first.
+jn-rev-call-passive = Crossing of { $arm }: passive detection
+jn-rev-call-push-button = Crossing of { $arm }: push button
+jn-calls-detection = Detection
+jn-calls-detection-push-button = Push button
+jn-calls-detection-passive = Passive detection
+jn-calls-detection-push-button-help = A pedestrian pushes the button to call the walk; the call stays placed after they leave, so the walk is given even to an empty crossing.
+jn-calls-detection-passive-help = Radar, infrared or video at the curb places the call while a pedestrian waits; one who leaves after waiting { $limit } s cancels it, and a walk with nobody left waiting is skipped. Walk and clearance are never shortened.
+jn-calls-col-cancelled = Cancelled
+jn-calls-col-skipped = Walks skipped
+jn-calls-outcome-cancelled = Cancelled: left after waiting { $wait } s
+jn-calls-said-passive =
+    Passive detection: { $cancelled ->
+        [one] 1 call cancelled
+       *[other] { $cancelled } calls cancelled
+    }, { $skipped ->
+        [one] 1 walk skipped
+       *[other] { $skipped } walks skipped
+    }.
+
 ## Warnings: movements of a phase that meet (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = cars from the { $from } side going { $turn }
 jn-conflict-vehicles = Phase { $n }: { $a } cross { $b }.

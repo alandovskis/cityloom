@@ -677,6 +677,28 @@ jn-calls-said-no-wait =
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; aucun appel n’a été servi.
 
+## Détection passive des piétons (src/junction/model/calls.rs, CLM-17) : la détection en bordure de trottoir place l’appel et l’annule quand le piéton part
+jn-refusal-detection-not-walked = Aucune phase du plan n’ouvre ce passage, la détection passive ne peut donc pas le servir : ouvrez-le d’abord dans une phase.
+jn-refusal-detection-needs-call = Seul un passage sur appel détecte les piétons : mettez-le d’abord sur appel.
+jn-rev-call-passive = Passage de { $arm } : détection passive
+jn-rev-call-push-button = Passage de { $arm } : bouton-poussoir
+jn-calls-detection = Détection
+jn-calls-detection-push-button = Bouton-poussoir
+jn-calls-detection-passive = Détection passive
+jn-calls-detection-push-button-help = Le piéton appuie sur le bouton pour appeler la marche; l’appel reste placé après son départ, et la marche est donc donnée même à un passage vide.
+jn-calls-detection-passive-help = Un radar, un capteur infrarouge ou une caméra en bordure de trottoir place l’appel pendant qu’un piéton attend; celui qui part après { $limit } s d’attente l’annule, et une marche que plus personne n’attend est omise. La marche et le dégagement ne sont jamais raccourcis.
+jn-calls-col-cancelled = Annulés
+jn-calls-col-skipped = Marches omises
+jn-calls-outcome-cancelled = Annulé : parti après { $wait } s d’attente
+jn-calls-said-passive =
+    Détection passive : { $cancelled ->
+        [one] { $cancelled } appel annulé
+       *[other] { $cancelled } appels annulés
+    }, { $skipped ->
+        [one] { $skipped } marche omise
+       *[other] { $skipped } marches omises
+    }.
+
 ## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
 jn-conflict-vehicles = Phase { $n } : { $a } croisent { $b }.

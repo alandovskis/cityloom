@@ -762,6 +762,8 @@ pub struct CallCrossingView {
     pub label: Said,
     pub on_call: bool,
     pub rate: u32,
+    /// How it detects people while on call (CLM-17): a push button, or passive kerbside detection.
+    pub detection: calls::Detection,
     pub walked: bool,
     pub totals: Option<calls::Totals>,
 }
@@ -789,6 +791,7 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
             label: name(a.uid),
             on_call: a.calls.is_some(),
             rate: calls::rate_of(a).unwrap_or(0),
+            detection: calls::detection_of(a),
             walked: a.crossing.is_some() && calls::walked(plan, a.uid),
             totals: summary.totals.iter().find(|t| t.arm == a.uid).copied(),
         })
@@ -822,6 +825,7 @@ fn outcome_said(c: &calls::Call) -> Said {
     let extended = Arg::Num(i64::from(c.extended_s));
     match (c.outcome, c.extended_s > 0) {
         (calls::Outcome::NotServed, _) => Said::new("jn-calls-outcome-not-served"),
+        (calls::Outcome::Cancelled, _) => Said::new("jn-calls-outcome-cancelled").with("wait", wait),
         (calls::Outcome::Served, false) => Said::new("jn-calls-outcome-served").with("wait", wait),
         (calls::Outcome::Served, true) => Said::new("jn-calls-outcome-served-extended").with("wait", wait).with("extended", extended),
         (calls::Outcome::Delayed, false) => Said::new("jn-calls-outcome-delayed").with("wait", wait),
