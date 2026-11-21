@@ -18,6 +18,7 @@ mod network_read;
 pub use network_read::{ArmRead, EndRead, NetworkRead, NodeRead, StreetRead};
 
 use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart, is_stale_record};
+use super::scenario::Scenarios;
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
@@ -286,6 +287,24 @@ pub struct City {
     took_streets: BTreeMap<u32, String>,
     /// The same for the junctions.
     took_junctions: BTreeMap<u32, String>,
+    /// The scenarios of each street (by uid) that took a record keeping some, as the record keeps them.
+    street_scenarios: BTreeMap<u32, Scenarios<Street>>,
+    /// The same for the junctions, each scenario's arms with `edge` 0 as in the record.
+    junction_scenarios: BTreeMap<u32, Scenarios<State>>,
+}
+
+/// A street as a record keeps it: its speed left undecided where it is the road's (`today`'s), so that the record
+/// follows the import. The one rule for the baseline and its scenarios.
+fn recorded_street(today: &Street, street: Street) -> Street {
+    let speed = if street.speed == today.speed { Speed::Undecided } else { street.speed };
+    Street { speed, ..street }
+}
+
+/// A street a record keeps, read as the road `today` has it: where it came from and its name are the road's (not
+/// something an edit changes), and an undecided speed the road's. The one rule for the baseline and its scenarios.
+fn read_street(today: &Street, kept: &Street) -> Street {
+    let speed = if kept.speed.is_undecided() { today.speed } else { kept.speed };
+    Street { source: today.source.clone(), name: today.name.clone(), speed, ..kept.clone() }
 }
 
 /// The keys, each kept only where no other place has it: a key two places share would bring back one place's
@@ -766,6 +785,8 @@ impl City {
             junction_keys,
             took_streets: BTreeMap::new(),
             took_junctions: BTreeMap::new(),
+            street_scenarios: BTreeMap::new(),
+            junction_scenarios: BTreeMap::new(),
         }
     }
 
@@ -793,16 +814,13 @@ impl City {
             let Some(ri) = taken else { continue };
             let uid = e as u32 + 1;
             let street = &records[ri].1.street;
-            // the class is not compared: an edit changes it (a street made pedestrian); the room it has is not
-            let fits = self.has_room_of(uid, street.row_mm);
-            if fits && street.is_sound() {
-                // where a street came from and what it is called are not something an edit changes; a record
-                // that has not decided its speed takes the road's
-                let today = &self.today_streets[&uid];
-                let (source, name) = (today.source.clone(), today.name.clone());
-                let speed = if street.speed.is_undecided() { today.speed } else { street.speed };
-                self.streets.insert(uid, Street { source, name, speed, ..street.clone() });
+            if self.takes_street(uid, street) {
+                let street = read_street(&self.today_streets[&uid], street);
+                self.streets.insert(uid, street);
                 self.took_streets.insert(uid, records[ri].0.clone());
+                if !records[ri].1.scenarios.is_empty() {
+                    self.street_scenarios.insert(uid, records[ri].1.scenarios.clone());
+                }
             }
         }
     }
@@ -825,9 +843,12 @@ impl City {
             });
             if on_streets && self.layout.junction_fits(&state, n) {
                 let uid = node_uid(n);
-                let source = self.layout.nodes[n].source.clone();
-                self.edited_junctions.insert(uid, State { source, label: junction::earlier(), ..state });
+                let state = self.read_state(n, state);
+                self.edited_junctions.insert(uid, state);
                 self.took_junctions.insert(uid, records[ri].0.clone());
+                if !record.scenarios.is_empty() {
+                    self.junction_scenarios.insert(uid, record.scenarios.clone());
+                }
             }
         }
     }
@@ -860,12 +881,18 @@ impl City {
         let e = self.edge_index(edge)?;
         let key = self.street_keys[e].clone()?;
         let ids = self.layout.street_ids(e, None);
-        let mut street = self.streets.get(&edge)?.clone();
-        // the speed is kept only when the designer changed it from the road's; otherwise the record follows the import
-        if self.today_streets.get(&edge).is_some_and(|today| today.speed == street.speed) {
-            street.speed = Speed::Undecided;
-        }
-        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street, scenarios: Default::default(), import: None }))
+        let street = recorded_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?.clone());
+        Some((
+            key,
+            StreetRecord {
+                ways: ids.ways,
+                nodes: ids.nodes,
+                leaving: ids.leaving,
+                street,
+                scenarios: self.street_scenarios.get(&edge).cloned().unwrap_or_default(),
+                import: None,
+            },
+        ))
     }
 
     /// The junction at `uid` as first laid out, made now if it was not yet. None for a node that is no junction.
@@ -911,7 +938,37 @@ impl City {
             arm_streets.insert(arm.uid, street);
             arm.edge = 0;
         }
-        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets, scenarios: Default::default(), import: None }))
+        let scenarios = self.junction_scenarios.get(&node).cloned().unwrap_or_default();
+        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets, scenarios, import: None }))
+    }
+
+    /// The scenarios of street `edge`, as its record keeps them (none where it keeps none).
+    pub fn street_scenarios(&self, edge: u32) -> Option<&Scenarios<Street>> {
+        self.street_scenarios.get(&edge)
+    }
+
+    /// The same for the junction at `node` (each arm's `edge` 0, as the record keeps it).
+    pub fn junction_scenarios(&self, node: u32) -> Option<&Scenarios<State>> {
+        self.junction_scenarios.get(&node)
+    }
+
+    /// `street` as scenario design of street `edge` is kept: None where the street could not take it as its own
+    /// state (`keep_street`); its speed, as the record's, left undecided where it is the road's.
+    pub fn street_design(&self, edge: u32, street: Street) -> Option<Street> {
+        self.takes_street(edge, &street).then(|| recorded_street(&self.today_streets[&edge], street))
+    }
+
+    /// `state` as scenario design of the junction at `node` is kept: None where the junction could not take it as its
+    /// own (`keep_junction`) or an arm is not one of the junction's as it now stands (the record names the streets
+    /// of those arms only); each arm's `edge` 0.
+    pub fn junction_design(&self, node: u32, mut state: State) -> Option<State> {
+        let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
+        let arms: Vec<u32> = self.junction(node)?.arms.iter().map(|a| a.uid).collect();
+        if !self.layout.junction_fits(&state, n) || state.arms.iter().any(|a| !arms.contains(&a.uid)) {
+            return None;
+        }
+        state.arms.iter_mut().for_each(|a| a.edge = 0);
+        Some(state)
     }
 
     /// The key of the record street `edge` took its edit from when the city was loaded, if it took one. When the
@@ -1003,6 +1060,16 @@ impl City {
         self.street_editor_of(edge, region, false)
     }
 
+    /// The street editor on one street of the city with scenario `scenario`'s design (`None`: the baseline, as
+    /// `street_editor`). None where the street has no such scenario.
+    pub fn street_editor_in(&self, edge: u32, region: usize, scenario: Option<u32>) -> Option<Editor> {
+        let Some(id) = scenario else { return self.street_editor(edge, region) };
+        let design = &self.street_scenarios.get(&edge)?.get(id)?.design;
+        // read as the baseline is (`read_street`), and drawn on the streets as they now stand
+        let street = read_street(self.today_streets.get(&edge)?, design);
+        self.street_editor_on(edge, region, &street, false)
+    }
+
     /// The street editor on one street as it was imported: its view is the "before" of `street_editor`'s.
     pub fn street_editor_today(&self, edge: u32, region: usize) -> Option<Editor> {
         self.street_editor_of(edge, region, true)
@@ -1010,9 +1077,22 @@ impl City {
 
     fn street_editor_of(&self, edge: u32, region: usize, today: bool) -> Option<Editor> {
         let streets = if today { &self.today_streets } else { &self.streets };
+        self.street_editor_on(edge, region, streets.get(&edge)?, today)
+    }
+
+    /// The street editor on `street` at `edge`: its "before" the street as imported, in the street's frame, with what
+    /// the junctions at its ends say, read from the city as imported (`today`) or as edited.
+    fn street_editor_on(&self, edge: u32, region: usize, street: &Street, today: bool) -> Option<Editor> {
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
-        let editor = Editor::from_street(self.today_streets.get(&edge)?, streets.get(&edge)?, region);
+        let editor = Editor::from_street(self.today_streets.get(&edge)?, street, region);
         Some(editor.with_frame(frame).with_ends(self.street_end_infos_of(edge, region, today)))
+    }
+
+    /// Whether street `edge` takes `street` as its state, as a record's or the editor's: it has the room the street
+    /// was made for (the class is not compared: an edit changes it, a street made pedestrian, say) and it is sound.
+    /// The one rule for the baseline and its scenarios, kept, loaded or written.
+    fn takes_street(&self, edge: u32, street: &Street) -> bool {
+        self.has_room_of(edge, street.row_mm) && street.is_sound()
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -1024,8 +1104,8 @@ impl City {
 
     /// Keeps what the street editor has made of a street.
     pub fn keep_street(&mut self, edge: u32, street: Street) -> bool {
-        let ok = self.has_room_of(edge, street.row_mm);
-        if ok && street.is_sound() {
+        let ok = self.takes_street(edge, &street);
+        if ok {
             // a street taken by the width it had keeps it, so that its pieces and its width agree; it is found by it
             // at every import (`legacy_rows_mm`), and Start over gives it the width it has now
             self.streets.insert(edge, street);
@@ -1071,12 +1151,36 @@ impl City {
         Junction::from_city(self.layout.node_name(n), &today, &now, region)
     }
 
+    /// The junction editor on one junction of the city with scenario `scenario`'s design (`None`: the baseline, as
+    /// `junction_editor`), reading the streets as they now stand. None where the junction has no such scenario, an
+    /// arm of it is not one of the junction's or it cannot be drawn.
+    pub fn junction_editor_in(&self, node: u32, region: usize, scenario: Option<u32>) -> Option<Junction> {
+        let Some(id) = scenario else { return self.junction_editor(node, region) };
+        let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
+        let baseline = self.junction(node)?;
+        let mut state = self.junction_scenarios.get(&node)?.get(id)?.design.clone();
+        // each arm stands on the street its uid's arm does now
+        for arm in &mut state.arms {
+            arm.edge = baseline.arms.iter().find(|a| a.uid == arm.uid)?.edge;
+        }
+        let state = self.read_state(n, state);
+        let today = self.with_streets(n, self.today_junction(node)?, region);
+        let now = self.with_streets(n, &state, region);
+        Junction::from_city(self.layout.node_name(n), &today, &now, region)
+    }
+
     /// The junction editor on one junction as it was imported, reading the streets as imported: its view is the
     /// "before" of `junction_editor`'s. None when it cannot be drawn.
     pub fn junction_editor_today(&self, node: u32, region: usize) -> Option<Junction> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let today = self.with_streets_of(&self.today_streets, n, self.today_junction(node)?, region);
         Junction::from_city(self.layout.node_name(n), &today, &today, region)
+    }
+
+    /// A junction's state as a record keeps it, read as the junction at `node` (index) has it: made from that node's
+    /// OpenStreetMap nodes, its step "Earlier changes". The one rule for the baseline and its scenarios.
+    fn read_state(&self, node: usize, state: State) -> State {
+        State { source: self.layout.nodes[node].source.clone(), label: junction::earlier(), ..state }
     }
 
     /// Keeps what the junction editor has made of a junction.
@@ -3028,8 +3132,8 @@ mod tests {
         bad.zones[1].from_mm = length + 1_000; // beyond the length it was drawn against
         let today = city.today_streets[&2].clone();
         assert!(!bad.is_sound());
-        assert!(city.keep_street(2, bad.clone()), "the room still matches");
-        assert_eq!(city.streets[&2], today, "but it is not kept");
+        assert!(!city.keep_street(2, bad.clone()), "the room still matches, but it is not kept, and that is what is said");
+        assert_eq!(city.streets[&2], today);
         let mut edits = Edits::new();
         let (key, mut record) = city.street_record(2).unwrap();
         record.import = Some(cityloom_model::IMPORTER_VERSION);

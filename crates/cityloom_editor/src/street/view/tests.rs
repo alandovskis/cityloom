@@ -3239,3 +3239,112 @@ fn the_street_page_leaves_a_slot_for_its_notes_and_writes_none_of_the_tray_itsel
     }
     assert!(page.contains(r#"href="v/{{build}}/tray.css""#), "the tray's own stylesheet");
 }
+
+// ---- the street's scenarios ---------------------------------------------------------------
+
+/// A street of the sample city, bound to it, so that it keeps scenarios.
+fn city_street() -> Rc<StreetVm> {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(ports.storage.clone());
+    let edge = store.open().view(0).edges[0].uid;
+    let street = store.open().street_editor(edge, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(edge) };
+    StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding))
+}
+
+fn scenarios_drawn(s: &Rc<StreetVm>) -> String {
+    let s = s.clone();
+    html(move || view! { <page::Scenarios vm=s/> }.into_any())
+}
+
+#[test]
+fn the_scenarios_are_a_labelled_menu_with_the_baseline_first_and_the_actions_under_a_disclosure() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    let s = city_street();
+    assert!(s.create_scenario("Wider bike lane") && s.switch_scenario(None));
+    let h = scenarios_drawn(&s);
+    assert!(
+        h.contains(r#"<section aria-labelledby="scenario-h" class="scenarios">"#) && h.contains(r#"<h2 id="scenario-h" class="scenario-h">Scenarios</h2>"#),
+        "{h}"
+    );
+    assert!(
+        h.contains(r#"<label for="scenario-pick">Design shown</label>"#) && h.contains(r#"<select id="scenario-pick" aria-describedby="scenario-mode""#),
+        "{h}"
+    );
+    let baseline = h.find(r#"<option value="">Baseline (what the map shows)</option>"#).expect("the baseline is offered");
+    assert!(h.find(">Wider bike lane</option>").unwrap() > baseline, "the baseline first: {h}");
+    assert!(h.contains("Baseline: edits change the design the map shows."), "{h}");
+    assert!(h.contains("<details class=\"scenario-manage\"><summary>Manage scenarios</summary>"), "{h}");
+    assert!(h.contains(r#"<label for="scenario-name">Scenario name</label>"#) && h.contains(r#"aria-describedby="scenario-refusal""#), "{h}");
+    assert!(!button_tag(&h, "scenario-new").contains("disabled"));
+    for id in ["scenario-duplicate", "scenario-rename", "scenario-delete"] {
+        assert!(button_tag(&h, id).contains("disabled"), "the baseline cannot be {id}: {h}");
+    }
+}
+
+#[test]
+fn in_a_scenario_the_section_says_where_edits_go_and_a_delete_asks_to_be_confirmed() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    let s = city_street();
+    assert!(s.create_scenario("Wider bike lane"));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains("Scenario “Wider bike lane”: edits change this scenario only."), "{h}");
+    for id in ["scenario-duplicate", "scenario-rename", "scenario-delete"] {
+        assert!(!button_tag(&h, id).contains("disabled"), "{id}: {h}");
+    }
+    // both labels are always there, one hidden, so that the button keeps the width of the longer and nothing moves
+    let labels = |h: &str| (h.contains(r#"<span class="swap-on">Delete</span>"#), h.contains(r#"<span class="swap-off">Confirm delete</span>"#));
+    assert_eq!(labels(&h), (true, true), "{h}");
+    assert!(!s.delete_scenario());
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(r#"<span class="swap-off">Delete</span>"#) && h.contains(r#"<span class="swap-on">Confirm delete</span>"#), "{h}");
+}
+
+#[test]
+fn a_refused_name_is_said_under_the_field_it_describes_in_the_language_of_the_page() {
+    use crate::shared::scenarios::ScenarioHost;
+    let owner = Owner::new();
+    owner.set();
+    let s = city_street();
+    assert!(!s.create_scenario("  "));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(r#"aria-invalid="true""#), "{h}");
+    assert!(h.contains(r#"<p id="scenario-refusal" class="scenario-refusal">Give the scenario a name.</p>"#), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = scenarios_drawn(&s);
+    assert!(h.contains("Donnez un nom au scénario.") && h.contains(">Scénarios</h2>") && h.contains("Gérer les scénarios"), "{h}");
+}
+
+#[test]
+fn a_street_outside_the_city_draws_no_scenarios() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, _) = street_watch();
+    assert!(!scenarios_drawn(&s).contains("scenario"));
+}
+
+#[test]
+fn shown_read_only_the_scenarios_menu_is_offered_and_the_name_and_actions_are_locked() {
+    use crate::shared::ports::Storage;
+    let owner = Owner::new();
+    owner.set();
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let store = crate::city::store::CityStore::sample(storage.clone());
+    let edge = store.open().view(0).edges[0].uid;
+    let street = store.open().street_editor(edge, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(edge) };
+    let s = StreetVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(Locale::En), street, Some(binding));
+    let h = scenarios_drawn(&s);
+    let picker = h.find(r#"<select id="scenario-pick""#).expect("the menu of designs is offered");
+    let locked = h.find(r#"<fieldset disabled class="read-only-controls""#).expect("the editing controls are locked");
+    assert!(picker < locked, "the menu stays outside: {h}");
+    for id in ["scenario-name", "scenario-new", "scenario-duplicate", "scenario-rename", "scenario-delete"] {
+        assert!(h.find(&format!(r#"id="{id}""#)).unwrap() > locked, "{id} is inside the locked fieldset: {h}");
+    }
+    assert!(!scenarios_drawn(&city_street()).contains("read-only-controls"), "a page that can edit locks nothing");
+}

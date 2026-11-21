@@ -276,6 +276,13 @@ pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
+/// The place's scenarios: which design is shown, and the actions on them (`shared::scenarios_view`).
+#[component]
+pub fn Scenarios(vm: Rc<StreetVm>) -> impl IntoView {
+    let host: Rc<dyn crate::shared::scenarios::ScenarioHost> = vm;
+    view! { <crate::shared::scenarios_view::ScenarioPanel host=host/> }
+}
+
 #[component]
 pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);

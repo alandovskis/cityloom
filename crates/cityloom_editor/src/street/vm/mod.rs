@@ -17,7 +17,7 @@ use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
-use crate::city::binding::{CityBinding, Place};
+use crate::city::binding::{CityBinding, Place, ScenarioPage, scenario_actions};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::catalogue::Side;
@@ -27,6 +27,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::{Arg, Said, say_now};
+use crate::shared::scenarios::{ScenarioHost, ScenarioState};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
@@ -102,6 +103,13 @@ pub struct StreetVm {
     /// What the last change did, waiting for the edits to settle, and the timer that shows it.
     impact_pending: RefCell<Option<Impact>>,
     impact_timer: Cell<Option<u32>>,
+    /// The street's scenarios and which design is shown (the baseline when the page opens).
+    scenarios: ScenarioState,
+    /// Whether the street keeps scenarios: it is a street of the city with a key of its own.
+    offers_scenarios: bool,
+    /// The design shown as last opened or kept: a write of the same design changes nothing (choosing a piece asks the
+    /// keeper to write too), so where it finds the scenario gone no change was lost.
+    kept_design: RefCell<Street>,
     me: Weak<StreetVm>,
 }
 
@@ -132,6 +140,11 @@ impl StreetVm {
     /// is written back to it; otherwise it is a sandbox.
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
+        let offers_scenarios = binding.as_ref().is_some_and(|b| b.record().is_some());
+        let scenarios = ScenarioState::default();
+        if let Some(b) = &binding {
+            scenarios.list(b.scenarios());
+        }
         let goal = crate::shared::goals::GoalChoice::new(ports.storage.clone());
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
@@ -147,6 +160,7 @@ impl StreetVm {
                 )
             });
             StreetVm {
+                kept_design: RefCell::new(street.snapshot()),
                 core: Core::new(street),
                 ports,
                 i18n,
@@ -169,6 +183,8 @@ impl StreetVm {
                 impact: ArcRwSignal::new(None),
                 impact_pending: RefCell::new(None),
                 impact_timer: Cell::new(None),
+                scenarios,
+                offers_scenarios,
                 me: me.clone(),
             }
         })
@@ -1526,7 +1542,9 @@ impl StreetVm {
     /// differs from it).
     fn on_synced(&self, changes: &[Change]) {
         let Some(binding) = &self.binding else { return };
-        let Place::Street(edge) = binding.place else { return };
+        if !matches!(binding.place, Place::Street(_)) {
+            return;
+        }
         // Only news of this very street is about it.
         let Some(own) = binding.record() else { return };
         if !changes.iter().any(|c| c.id == own) {
@@ -1535,22 +1553,49 @@ impl StreetVm {
         // What the person made in the last moments is later than anything pulled: it is written (and marked, to be
         // sent on the next run) before the editor is compared with the city.
         self.flush();
-        let Some(mut fresh) = binding.store.open().street_editor(edge, binding.store.region()) else { return };
+        scenario_actions::refresh(self);
+        // The scenario shown, as the city now keeps it; the baseline where it is gone (deleted elsewhere).
+        let shown = self.scenarios.active_now();
+        let Some(fresh) = self.open_design(shown) else {
+            if shown.is_some() {
+                // the scenario shown was deleted elsewhere: the baseline, said as that rather than as an update
+                scenario_actions::gone(self, false);
+            }
+            return;
+        };
         if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
             return;
         }
-        // The pick stays, clamped to the city's street (the frame came with the editor), and so do the stretches chosen
-        // on the strips, which the details panel may be showing; the piece is chosen after the pick, which shows its
-        // zone.
-        let pick = self.core.read(|e| e.pick());
-        self.core.read(|e| fresh.keep_choices(e));
-        fresh.select(self.view_now().selected);
-        self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
-        self.core.edit(|e| *e = fresh);
-        self.forget_impact();
+        let pick = self.core.read(|e| e.pick());
+        self.replace_street(fresh, true);
         let said = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
         self.ports.announcer.say(&self.with_pick_note(said, pick));
+    }
+
+    /// Design `id` (None: the baseline) as the city keeps it now, its history begun there: undo goes back to it and no
+    /// further (not to the street as imported, which Start over still gives, as one step undo takes back). What both a
+    /// switch and a sync reload show.
+    fn open_design(&self, id: Option<u32>) -> Option<Editor> {
+        let mut fresh = self.binding.as_ref()?.street_editor(id)?;
+        fresh.begin_history();
+        Some(fresh)
+    }
+
+    /// Shows `fresh` in place of the street being edited, with its own history; with `keep_choices`, what is chosen
+    /// stays chosen where it is still there.
+    fn replace_street(&self, mut fresh: Editor, keep_choices: bool) {
+        if keep_choices {
+            // The pick stays, clamped to the new street (the frame came with the editor), and so do the stretches
+            // chosen on the strips, which the details panel may be showing; the piece is chosen after the pick, which
+            // shows its zone.
+            self.core.read(|e| fresh.keep_choices(e));
+            fresh.select(self.view_now().selected);
+        }
+        self.merge.set(None);
+        *self.kept_design.borrow_mut() = fresh.snapshot();
+        self.core.edit(|e| *e = fresh);
+        self.forget_impact();
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -1563,7 +1608,13 @@ impl StreetVm {
     /// Writes the street as it now is back to its place in the city.
     fn keep_now(&self) -> bool {
         let Some(binding) = &self.binding else { return true };
-        binding.keep_street(self.core.read(|e| e.snapshot()))
+        let street = self.core.read(|e| e.snapshot());
+        let changed = *self.kept_design.borrow() != street;
+        let kept = binding.keep_street_in(street.clone(), self.scenarios.active_now());
+        if kept.is_ok() {
+            *self.kept_design.borrow_mut() = street;
+        }
+        scenario_actions::kept(self, kept, changed)
     }
 
     /// How the street stands before an edit: the class, which an edit may change, and what the impact summary
@@ -1656,6 +1707,64 @@ impl StreetVm {
         if let Some(t) = text::selection_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&t);
         }
+    }
+}
+
+impl ScenarioHost for StreetVm {
+    fn i18n(&self) -> Rc<I18n> {
+        self.i18n.clone()
+    }
+
+    fn scenario_state(&self) -> &ScenarioState {
+        &self.scenarios
+    }
+
+    fn scenarios_offered(&self) -> bool {
+        self.offers_scenarios
+    }
+
+    fn read_only(&self) -> bool {
+        StreetVm::read_only(self)
+    }
+
+    fn switch_scenario(&self, id: Option<u32>) -> bool {
+        scenario_actions::switch(self, id)
+    }
+
+    fn create_scenario(&self, name: &str) -> bool {
+        scenario_actions::create(self, name)
+    }
+
+    fn duplicate_scenario(&self, name: &str) -> bool {
+        scenario_actions::duplicate(self, name)
+    }
+
+    fn rename_scenario(&self, name: &str) -> bool {
+        scenario_actions::rename(self, name)
+    }
+
+    fn delete_scenario(&self) -> bool {
+        scenario_actions::delete(self)
+    }
+}
+
+impl ScenarioPage for StreetVm {
+    fn binding(&self) -> Option<&CityBinding> {
+        self.binding.as_ref().filter(|_| self.offers_scenarios)
+    }
+
+    fn flush(&self) {
+        StreetVm::flush(self);
+    }
+
+    fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool {
+        let Some(fresh) = self.open_design(id) else { return false };
+        self.replace_street(fresh, keep_choices);
+        true
+    }
+
+    fn tell(&self, said: &Said) {
+        self.ports.announcer.say(&text::scenario_text(said, &self.i18n, self.units_now()));
     }
 }
 
@@ -1761,6 +1870,338 @@ mod tests {
         let street = store.open().street_editor(edge, 0).unwrap();
         let binding = CityBinding { store, place: Place::Street(edge) };
         (Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    /// The width of the rig's first piece, as the editor holds it.
+    fn width(r: &Rig) -> i32 {
+        r.vm.view_now().segments[0].width_mm
+    }
+
+    /// The width of the first piece of design `scenario` as the city keeps it.
+    fn kept_width(binding: &CityBinding, scenario: Option<u32>) -> i32 {
+        binding.street_editor(scenario).unwrap().snapshot().segments[0].width_mm
+    }
+
+    fn last_said(r: &Rig) -> String {
+        r.said.take().pop().unwrap_or_default()
+    }
+
+    #[test]
+    fn two_named_scenarios_are_made_and_switching_between_them_and_the_baseline_loses_nothing() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.scenarios_offered());
+        assert_eq!(r.vm.scenario_state().active_now(), None, "the page opens on the baseline");
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        assert_eq!(last_said(&r), "Scenario “Wider bike lane” made from the baseline. Now editing it.");
+        let wider = r.vm.scenario_state().active_now().unwrap();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        assert!(r.vm.create_scenario("  Parking kept "));
+        let parking = r.vm.scenario_state().active_now().unwrap();
+        assert_eq!(width(&r), baseline, "a new scenario starts as the baseline, whatever was shown");
+        let names: Vec<String> = r.vm.scenario_state().items().into_iter().map(|i| i.name).collect();
+        assert_eq!(names, ["Wider bike lane", "Parking kept"]);
+        assert!(r.vm.switch_scenario(Some(wider)));
+        assert_eq!(last_said(&r), "Now showing scenario “Wider bike lane”.");
+        assert_eq!(width(&r), baseline + 200, "the edit made in it, written when it was left");
+        assert!(r.vm.switch_scenario(None));
+        assert_eq!(last_said(&r), "Now showing the baseline.");
+        assert_eq!(width(&r), baseline);
+        assert!(r.vm.switch_scenario(Some(parking)));
+        assert_eq!(width(&r), baseline);
+        r.vm.flush();
+        assert_eq!((kept_width(&binding, None), kept_width(&binding, Some(wider)), kept_width(&binding, Some(parking))), (baseline, baseline + 200, baseline));
+        assert_eq!(binding.store.open().view(0).edited, 0, "the map reads the baseline");
+    }
+
+    #[test]
+    fn an_edit_in_a_scenario_changes_only_it_and_can_be_undone_and_redone() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, -100)), "an edit of the baseline");
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 300)));
+        r.vm.flush();
+        assert_eq!((kept_width(&binding, Some(id)), kept_width(&binding, None)), (baseline + 300, baseline), "only the scenario changed");
+        assert!(r.vm.undo());
+        r.vm.flush();
+        assert_eq!(kept_width(&binding, Some(id)), baseline, "undone in the scenario");
+        assert!(r.vm.redo());
+        r.time.advance(1_000);
+        assert_eq!(kept_width(&binding, Some(id)), baseline + 300, "redone, and kept by the keeper as any edit is");
+        assert_eq!(kept_width(&binding, None), baseline);
+    }
+
+    #[test]
+    fn right_after_a_switch_undo_has_nothing_to_undo_and_start_over_touches_only_the_design_shown() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, -100)), "an edit of the baseline");
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let wider = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 300)));
+        assert!(r.vm.create_scenario("Parking kept"));
+        let parking = r.vm.scenario_state().active_now().unwrap();
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        // this page, and a page opened again on the same street (a reload), each switching to a scenario
+        let (ports, _, _, _) = test_ports_with_time();
+        let again = StreetVm::new(ports, crate::i18n_for(Locale::En), binding.street_editor(None).unwrap(), Some(binding.clone()));
+        for vm in [&r.vm, &again] {
+            assert!(vm.switch_scenario(Some(wider)));
+            assert!(!vm.view_now().can_undo, "nothing was done in it since it was shown");
+            assert!(!vm.undo());
+            assert_eq!(vm.view_now().segments[0].width_mm, baseline + 300);
+            vm.flush();
+        }
+        assert_eq!(
+            (kept_width(&binding, None), kept_width(&binding, Some(wider)), kept_width(&binding, Some(parking))),
+            (baseline, baseline + 300, baseline + 100)
+        );
+        // Start over gives the street as imported, in the scenario shown only, as a step undo takes back
+        assert!(r.vm.reset());
+        r.vm.flush();
+        let imported = binding.store.open().street_editor_today(binding_edge(&binding), 0).unwrap().snapshot().segments[0].width_mm;
+        assert_eq!((kept_width(&binding, None), kept_width(&binding, Some(wider)), kept_width(&binding, Some(parking))), (baseline, imported, baseline + 100));
+        assert!(r.vm.undo());
+        r.vm.flush();
+        assert_eq!(kept_width(&binding, Some(wider)), baseline + 300);
+        assert!(!r.vm.undo());
+    }
+
+    fn binding_edge(binding: &CityBinding) -> u32 {
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        edge
+    }
+
+    #[test]
+    fn a_scenario_is_duplicated_renamed_and_deleted_once_the_delete_is_confirmed() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(!r.vm.duplicate_scenario("Copy") && !r.vm.rename_scenario("Copy") && !r.vm.delete_scenario(), "the baseline is none of these");
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        let edited = width(&r);
+        assert!(r.vm.duplicate_scenario("Parking kept"));
+        assert_eq!(last_said(&r), "Scenario “Wider bike lane” duplicated as “Parking kept”. Now editing the copy.");
+        assert_eq!(width(&r), edited, "the copy has the edit just made");
+        assert!(r.vm.rename_scenario("Parking kept, wider"));
+        assert_eq!(last_said(&r), "Scenario “Parking kept” renamed “Parking kept, wider”.");
+        assert!(!r.vm.delete_scenario(), "the first press asks");
+        assert!(r.vm.scenario_state().asking_delete_now());
+        assert_eq!(last_said(&r), "Delete scenario “Parking kept, wider”? Press Confirm delete to delete it.");
+        assert!(r.vm.delete_scenario());
+        assert_eq!(last_said(&r), "Scenario “Parking kept, wider” deleted. Now showing the baseline.");
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(binding.scenarios().len(), 1);
+        assert!(r.vm.switch_scenario(Some(binding.scenarios()[0].0)));
+        assert!(!r.vm.delete_scenario());
+        assert!(r.vm.switch_scenario(None));
+        assert!(!r.vm.scenario_state().asking_delete_now(), "anything else done withdraws the question");
+    }
+
+    #[test]
+    fn each_refusal_is_announced_and_kept_for_the_name_field_in_the_language_of_the_page() {
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, _) = city_rig();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        r.said.take();
+        let state = r.vm.scenario_state();
+        assert!(!r.vm.create_scenario("   "));
+        assert_eq!(last_said(&r), "Give the scenario a name.");
+        assert_eq!(state.refusal().map(|s| s.key), Some("scenario-name-empty"));
+        assert!(!r.vm.create_scenario(&"x".repeat(61)));
+        assert_eq!(last_said(&r), "A scenario name can be at most 60 characters long.");
+        r.vm.i18n().set(Locale::FrCa);
+        assert!(!r.vm.create_scenario("wider BIKE lane"));
+        assert_eq!(last_said(&r), "Un autre scénario s’appelle déjà «\u{a0}wider BIKE lane\u{a0}».");
+        for i in 1..8 {
+            assert!(r.vm.create_scenario(&format!("S{i}")));
+        }
+        assert!(!r.vm.create_scenario("One more"));
+        assert_eq!(last_said(&r), "Un lieu garde au plus 8 scénarios. Supprimez-en un pour en créer un autre.");
+        assert!(!r.vm.switch_scenario(Some(99)));
+        assert_eq!(last_said(&r), "Ce scénario n’existe plus.");
+        assert!(r.vm.switch_scenario(None));
+        assert_eq!(state.refusal(), None, "an action done clears the refusal");
+    }
+
+    #[test]
+    fn a_street_outside_the_city_offers_no_scenarios() {
+        use crate::shared::scenarios::ScenarioHost;
+        let r = rig(0);
+        assert!(!r.vm.scenarios_offered());
+        assert!(!r.vm.create_scenario("Wider bike lane") && !r.vm.switch_scenario(None));
+    }
+
+    #[test]
+    fn a_sync_reloads_the_scenario_shown_and_falls_back_to_the_baseline_when_it_is_gone() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::sync::hub;
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let baseline = width(&r);
+        // another tab edits the scenario
+        let mut s = binding.street_editor(Some(id)).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert_eq!(binding.keep_street_in(s, Some(id)), Ok(()));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(width(&r), baseline - 100, "the scenario shown, as the other tab left it");
+        assert!(!r.vm.view_now().can_undo && !r.vm.undo(), "its history starts at the design reloaded, not at the import");
+        assert_eq!(width(&r), baseline - 100);
+        // (a refused undo still asks the keeper to write: that write is done before the other tab acts)
+        r.vm.flush();
+        // and then deletes it
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
+        assert!(r.vm.scenario_state().items().is_empty());
+        assert_eq!(width(&r), baseline);
+        assert!(!r.vm.view_now().can_undo, "the baseline shown starts a history of its own");
+        hub::reset();
+    }
+
+    #[test]
+    fn an_edit_of_a_scenario_deleted_elsewhere_shows_the_baseline_says_so_and_leaves_the_storage_warning_for_real_failures() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        let baseline = width(&r);
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        // another tab deletes it, and this one goes on editing it
+        binding.act(Action::Delete(id)).unwrap();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(
+            r.said.take(),
+            ["That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline."]
+        );
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert!(r.vm.scenario_state().items().is_empty());
+        assert_eq!((width(&r), kept_width(&binding, None)), (baseline, baseline), "the edit did not reach the baseline");
+        assert!(!r.vm.view_now().can_undo, "the baseline shown starts a history of its own");
+        // a storage that really fails is still said
+        r.storage.refuse(crate::city::edits::EDITS_KEY);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        r.time.advance(1_000);
+        assert_eq!(r.said.take().last().map(String::as_str), Some("This browser is not keeping your changes, so other pages will not see them."));
+    }
+
+    const GONE_EDIT: &str = "That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.";
+
+    #[test]
+    fn an_action_whose_flush_finds_the_scenario_gone_stops_there_with_the_baseline_shown() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let actions: [(&str, fn(&StreetVm) -> bool); 5] = [
+            ("switch", |vm| vm.switch_scenario(None)),
+            ("create", |vm| vm.create_scenario("Parking kept")),
+            ("duplicate", |vm| vm.duplicate_scenario("Copy")),
+            ("rename", |vm| vm.rename_scenario("Renamed")),
+            ("delete", |vm| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            let (r, binding) = city_rig();
+            let baseline = width(&r);
+            assert!(r.vm.create_scenario("Wider bike lane"));
+            let id = r.vm.scenario_state().active_now().unwrap();
+            let uid = first(&r.vm);
+            // an edit waits in the keeper while another tab deletes the scenario
+            assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+            binding.act(Action::Delete(id)).unwrap();
+            r.said.take();
+            assert!(!action(&r.vm), "{what}: it stops once the flush found the scenario gone");
+            assert_eq!(r.said.take(), [GONE_EDIT], "{what}: only the lost edit is said");
+            assert_eq!(r.vm.scenario_state().refusal(), None, "{what}: no refusal is left under the field");
+            assert_eq!(r.vm.scenario_state().active_now(), None, "{what}");
+            assert!(binding.scenarios().is_empty(), "{what}: nothing was made");
+            assert_eq!((width(&r), kept_width(&binding, None)), (baseline, baseline), "{what}: the baseline is unchanged");
+        }
+    }
+
+    #[test]
+    fn a_scenario_deleted_elsewhere_while_only_a_piece_was_chosen_in_it_says_no_change_was_lost() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        // choosing a piece and a refused undo ask the keeper to write, though nothing changed
+        r.vm.select(Some(first(&r.vm)));
+        assert!(!r.vm.undo());
+        binding.act(Action::Delete(id)).unwrap();
+        r.said.take();
+        r.time.advance(1_000);
+        assert_eq!(r.said.take(), ["That scenario is no longer here: it was deleted elsewhere. Now showing the baseline."]);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+    }
+
+    #[test]
+    fn the_baseline_shown_for_a_scenario_deleted_elsewhere_keeps_the_piece_chosen() {
+        use crate::city::scenario::Action;
+        use crate::shared::scenarios::ScenarioHost;
+        let (r, binding) = city_rig();
+        assert!(r.vm.create_scenario("Wider bike lane"));
+        let id = r.vm.scenario_state().active_now().unwrap();
+        let uid = r.vm.view_now().segments[1].uid;
+        r.vm.select(Some(uid));
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 200)));
+        binding.act(Action::Delete(id)).unwrap();
+        r.time.advance(1_000);
+        assert_eq!(r.vm.scenario_state().active_now(), None);
+        assert_eq!(r.vm.view_now().selected, Some(uid), "the piece is still chosen in the baseline, which has it");
+        assert_eq!(r.vm.level(), Level::Piece, "and the details panel still shows it");
+    }
+
+    #[test]
+    fn shown_read_only_the_scenarios_can_be_looked_at_and_no_action_on_them_is_taken() {
+        use crate::shared::ports::{Storage, test_ports};
+        use crate::shared::scenarios::ScenarioHost;
+        use crate::shared::scoped::ScopedStorage;
+        let (ports, said, root) = test_ports();
+        // a scenario made on a page that could edit, then the project opened read-only
+        let writable: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1"));
+        let edge = CityStore::sample(writable.clone()).open().view(0).edges[0].uid;
+        let id = CityStore::sample(writable).change_street_scenarios(edge, |s, base| s.create("Wider bike lane", base.clone())).unwrap();
+        let storage: Rc<dyn Storage> = Rc::new(ScopedStorage::new(root.clone(), "p1").only_to_read());
+        let store = CityStore::sample(storage.clone());
+        let street = store.open().street_editor(edge, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        let vm = StreetVm::new(Ports { storage, ..ports }, crate::i18n_for(Locale::En), street, Some(binding.clone()));
+        assert!(vm.scenarios_offered());
+        assert!(vm.switch_scenario(Some(id)), "looking at a scenario is choosing, which goes on");
+        said.take();
+        let refused = "This design is open read-only: nothing can be changed.";
+        let actions: [(&str, &dyn Fn() -> bool); 5] = [
+            ("create", &|| vm.create_scenario("Parking kept")),
+            ("duplicate", &|| vm.duplicate_scenario("Copy")),
+            ("rename", &|| vm.rename_scenario("Renamed")),
+            ("delete", &|| vm.delete_scenario()),
+            ("delete again", &|| vm.delete_scenario()),
+        ];
+        for (what, action) in actions {
+            assert!(!action(), "{what}");
+            assert_eq!(said.take(), [refused], "{what}: refused as every edit is, not as a storage failure");
+        }
+        assert_eq!(vm.scenario_state().refusal(), None);
+        assert_eq!(binding.scenarios(), [(id, "Wider bike lane".to_string())], "nothing changed");
     }
 
     /// Another device's edit of the rig's street, applied to the city.
