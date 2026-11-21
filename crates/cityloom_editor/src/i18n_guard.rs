@@ -82,6 +82,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/view/transform.rs", include_str!("street/view/transform.rs")),
     ("src/street/model/compare.rs", include_str!("street/model/compare.rs")),
     ("src/junction/model/compare.rs", include_str!("junction/model/compare.rs")),
+    ("src/junction/vm/compare.rs", include_str!("junction/vm/compare.rs")),
+    ("src/junction/view/compare.rs", include_str!("junction/view/compare.rs")),
     ("src/street/model/pieces.rs", include_str!("street/model/pieces.rs")),
     ("src/street/view/mod.rs", include_str!("street/view/mod.rs")),
     ("src/street/model/measures.rs", include_str!("street/model/measures.rs")),

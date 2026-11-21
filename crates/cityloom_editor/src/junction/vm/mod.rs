@@ -2,6 +2,7 @@
 //! it changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
+pub mod compare;
 pub mod keys;
 pub mod text;
 pub mod watch;

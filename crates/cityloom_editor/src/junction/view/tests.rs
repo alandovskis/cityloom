@@ -3856,3 +3856,22 @@ fn the_junction_s_scenarios_are_a_labelled_menu_and_a_name_field_with_its_refusa
     assert!(!button_tag(&h, "scenario-delete").contains("disabled"));
     assert!(!scenarios_drawn(&shared(0)).contains("scenario"), "a sample junction keeps none");
 }
+
+// ---- the comparison page's junction half --------------------------------------------------
+
+#[test]
+fn compare_draws_an_iso_for_each_design_and_the_summary() {
+    use crate::junction::vm::compare::JunctionCompareVm;
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(ports.storage.clone());
+    let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Junction(node) };
+    let vm = JunctionCompareVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), binding).unwrap();
+    let h = html(move || view! { <crate::junction::view::compare::JunctionCompare vm=vm/> }.into_any());
+    assert_eq!(count(&h, "class=\"compare-iso\""), 2, "{h}");
+    assert_eq!(count(&h, "role=\"img\""), 2, "{h}");
+    assert_eq!(count(&h, "<svg"), 2, "{h}");
+    assert!(!h.contains("aria-label=\"\""), "{h}");
+    assert_eq!(count(&h, "aria-label=\""), 2, "{h}");
+    assert!(h.contains("What differs in B"), "{h}");
+}

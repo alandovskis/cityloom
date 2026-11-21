@@ -154,3 +154,18 @@ pub fn open_junction_in(ports: Ports, node: u32) -> Option<Editor> {
     vm.watch_sync();
     Some(Editor(vm))
 }
+
+/// The junction comparison page's junction half (`junction/view/compare.rs`), mounted into `#compare-slot`: the
+/// designs of junction `node` of the city of the page's project, side by side and read-only. `ports` are already
+/// scoped to the project (`project::context::peek`); nothing is written. False when the junction cannot be opened
+/// (not a junction of the city, or not drawable with its streets as they now are), and nothing is mounted. The
+/// caller (`lib.rs::mount_compare`) runs `any_spawner::Executor::init_wasm_bindgen()` first, as every `mount_*` must.
+/// No standards profile is activated: the junction page never does.
+pub fn mount_compare_junction(ports: Ports, i18n: Rc<crate::shared::i18n::I18n>, node: u32) -> bool {
+    let binding = CityBinding { store: CityStore::current(ports.storage.clone()), place: Place::Junction(node) };
+    let Some(vm) = vm::compare::JunctionCompareVm::new(ports, i18n, binding) else { return false };
+    let Some(slot) = leptos::prelude::document().get_element_by_id("compare-slot") else { return false };
+    let slot: HtmlElement = slot.unchecked_into();
+    leptos::mount::mount_to(slot, move || view! { <view::compare::JunctionCompare vm=vm/> }).forget();
+    true
+}
