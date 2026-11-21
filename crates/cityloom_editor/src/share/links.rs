@@ -27,7 +27,7 @@ fn store_of(ports: &Ports, id: &str) -> ShareStore {
     ShareStore::new(Rc::new(ScopedStorage::new(ports.storage.clone(), id)))
 }
 
-/// The tokens of project `id`'s links that still work.
+/// The tokens of project `id`'s links that still work by this device's clock: what the question counts.
 fn live(ports: &Ports, id: &str) -> Vec<String> {
     let now = stamp(ports.storage.now_ms());
     store_of(ports, id).list().into_iter().filter(|m| m.expires_at > now).map(|m| m.token).collect()
@@ -67,7 +67,10 @@ impl ProjectLinks for ProjectShares {
         live(&self.ports, id).len()
     }
 
+    /// Asks for every link listed, not only those this device's clock thinks still work: the server decides, and one it
+    /// has let expire (or deleted, or never had) counts as done.
     fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), Said>)>) {
-        end_from(self.ports.clone(), id.to_string(), live(&self.ports, id), done);
+        let tokens = store_of(&self.ports, id).list().into_iter().map(|m| m.token).collect();
+        end_from(self.ports.clone(), id.to_string(), tokens, done);
     }
 }

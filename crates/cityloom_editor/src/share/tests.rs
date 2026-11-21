@@ -618,17 +618,20 @@ fn kept_links(t: &TestPorts) -> Vec<String> {
 fn a_project_s_links_that_still_work_are_deleted_on_the_server_one_after_the_other() {
     use crate::project::model::ProjectLinks;
     let (t, links) = project_links();
-    assert_eq!((links.live("p1"), links.live("p2")), (2, 0), "an expired link needs no deleting");
+    assert_eq!((links.live("p1"), links.live("p2")), (2, 0), "the question counts the links that still work here");
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
     links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
+    // Every link listed is asked, whatever this device's clock says: the server decides whether it has expired.
+    assert_eq!(t.share.calls(), [ShareCall::Delete("old".into())]);
+    assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Expired))), "one the server has let expire counts as done");
     assert_eq!(t.share.calls(), [ShareCall::Delete("one".into())]);
     assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
     assert_eq!(t.share.calls(), [ShareCall::Delete("two".into())], "then the next");
     assert!(got.borrow().is_none());
     assert!(t.share.answer(ShareReply::Deleted(Err(ShareFailure::Deleted))), "one the server has deleted already counts as done");
     assert_eq!(*got.borrow(), Some(Ok(())));
-    assert_eq!(kept_links(&t), ["old"]);
+    assert!(kept_links(&t).is_empty());
     let got = Rc::new(std::cell::RefCell::new(None));
     let g = got.clone();
     links.end("p2", Box::new(move |r| *g.borrow_mut() = Some(r)));
@@ -648,11 +651,12 @@ fn a_link_that_could_not_be_deleted_stops_the_rest_and_says_why() {
         let g = got.clone();
         links.end("p1", Box::new(move |r| *g.borrow_mut() = Some(r)));
         assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
+        assert!(t.share.answer(ShareReply::Deleted(Ok(()))));
         assert!(t.share.answer(ShareReply::Deleted(Err(failure))));
         let said = got.borrow_mut().take().unwrap().unwrap_err();
         assert_eq!(en(&said), english, "{failure:?}");
         assert!(t.share.calls().is_empty());
-        assert_eq!(kept_links(&t), ["old", "two"], "{failure:?}: the one deleted is forgotten, the other kept");
+        assert_eq!(kept_links(&t), ["two"], "{failure:?}: those deleted are forgotten, the other kept");
     }
     assert!(fr(&crate::shared::said::Said::new("share-error-end-signed-out")).starts_with("Connectez-vous avec le compte qui les a créés"));
 }
