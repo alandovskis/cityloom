@@ -49,7 +49,7 @@ project-delete-confirm-links = { $count ->
 # Ses liens de partage n’ont pas pu être supprimés sur le serveur, donc le projet a été conservé; $reason dit pourquoi, en une phrase.
 project-delete-links-failed = { $name } n’a pas été supprimé : ses liens de partage n’ont pas pu être supprimés d’abord. { $reason }
 # La raison pour laquelle le projet a été conservé ($failed, project-delete-links-failed), et ce qui peut encore être fait.
-project-delete-anyway-offer = { $failed } Vous pouvez le supprimer quand même : ses liens de partage fonctionneront alors jusqu’à leur expiration.
+project-delete-anyway-offer = { $failed } Vous pouvez le supprimer quand même : ses liens de partage fonctionneront alors, et compteront dans la limite de liens actifs de votre compte, jusqu’à leur expiration.
 project-delete-anyway = Supprimer quand même
 # Pendant que les liens de partage d’un projet sont supprimés sur le serveur, avant le projet (#221); Annuler et Échap attendent.
 project-delete-ending = Suppression de ses liens de partage sur le serveur… Le projet est supprimé une fois qu’ils le sont; d’ici là, cette action ne peut pas être annulée.

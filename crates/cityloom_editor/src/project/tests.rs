@@ -1666,7 +1666,7 @@ mod page {
         links.answer(Err(crate::shared::said::Said::new("share-error-network")));
         assert_eq!(names(&vm), ["Plateau"], "kept, links and all");
         assert_eq!(vm.deleting().map(|r| r.id), Some(id.clone()), "the question stays, to try again or cancel");
-        let words = "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again. You can delete it anyway: its share links then keep working until they expire.";
+        let words = "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again. You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire.";
         assert_eq!(t.announcer.take(), [words]);
         assert_eq!(vm.delete_error().as_deref(), Some(words));
         assert!(!vm.ending());
@@ -1722,7 +1722,7 @@ mod page {
             vm.confirm_delete();
             links.answer(Err(crate::shared::said::Said::new(reason)));
             assert!(vm.can_delete_anyway());
-            assert!(vm.delete_error().unwrap().ends_with("You can delete it anyway: its share links then keep working until they expire."));
+            assert!(vm.delete_error().unwrap().ends_with("You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire."));
             let out = markup(vm.clone());
             let anyway = crate::shared::testing::button_tag(&out, "project-delete-anyway");
             assert!(anyway.contains(r#"class="btn danger""#), "{anyway}");
