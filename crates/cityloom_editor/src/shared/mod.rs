@@ -6,6 +6,7 @@ pub mod atlas;
 pub mod bind;
 pub mod catalogue;
 pub mod check_fold;
+pub mod compare;
 #[cfg(test)]
 pub mod contrast;
 pub mod core;
