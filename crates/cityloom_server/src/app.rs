@@ -29,6 +29,7 @@ const LIMITER_CLEANUP: std::time::Duration = std::time::Duration::from_secs(60);
 pub struct Account {
     pub repo: Arc<dyn Repo>,
     pub work: Arc<dyn crate::work::WorkRepo>,
+    pub shares: Arc<dyn crate::share::ShareRepo>,
     pub http: Arc<dyn HttpClient>,
     pub clock: Arc<dyn Clock>,
     pub providers: Providers,
@@ -38,6 +39,8 @@ pub struct Account {
     pub base_url: url::Url,
     pub rate: RateLimit,
     pub work_rate: RateLimit,
+    /// `/api/share`'s own limit: reading a link needs no account, so it is counted apart from the rest.
+    pub share_rate: RateLimit,
     /// False until the migrations have run once; `require_ready` answers 503 on `/auth/*` and `/api/*` meanwhile.
     pub ready: Arc<AtomicBool>,
     #[cfg(feature = "test-provider")]
@@ -112,9 +115,18 @@ pub async fn require_origin(State(a): State<Arc<Account>>, req: Request, next: N
     }
 }
 
-/// Method, path without the query, status: never anything from a query, a header or a body.
+/// The path as the log may say it. A shared design's link secret rides in a header (`api::share`), which is never
+/// logged; one put in a path all the same (`/api/share/<token>`, which no route takes) is never written down either.
+pub fn loggable_path(path: &str) -> String {
+    match path.strip_prefix("/api/share/") {
+        Some(rest) if !rest.is_empty() => "/api/share/{token}".to_string(),
+        _ => path.to_string(),
+    }
+}
+
+/// Method, path without the query (and without a share's token), status: never anything from a query, a header or a body.
 async fn log_requests(req: Request, next: Next) -> Response {
-    let (method, path) = (req.method().clone(), req.uri().path().to_string());
+    let (method, path) = (req.method().clone(), loggable_path(req.uri().path()));
     let res = next.run(req).await;
     tracing::info!(%method, %path, status = res.status().as_u16(), "request");
     res
@@ -211,6 +223,15 @@ mod tests {
 
     fn ip(text: &str) -> Option<IpAddr> {
         Some(text.parse().unwrap())
+    }
+
+    #[test]
+    fn a_share_token_never_reaches_the_log() {
+        assert_eq!(loggable_path("/api/share/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcde"), "/api/share/{token}");
+        assert_eq!(loggable_path("/api/share/x/y"), "/api/share/{token}");
+        assert_eq!(loggable_path("/api/share"), "/api/share");
+        assert_eq!(loggable_path("/api/work"), "/api/work");
+        assert_eq!(loggable_path("/share.html"), "/share.html");
     }
 
     #[test]

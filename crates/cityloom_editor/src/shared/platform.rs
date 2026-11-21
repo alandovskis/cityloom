@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 // `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
 use crate::shared::ports::{
     Account, AccountError, Announcer, Answer, ArchiveFiles, Downloads, Fetched, Fetcher, Me, Navigator, Page, PdfWriter, Picked, Ports, ProviderInfo,
-    Scheduler, Storage, WorkAnswer, WorkAsk, WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
+    Scheduler, ShareAnswer, ShareApi, ShareFailure, ShareMade, Storage, WorkAnswer, WorkAsk, WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
 };
 use crate::shared::{live, store};
 
@@ -432,6 +432,69 @@ impl WorkSync for BrowserWork {
     }
 }
 
+struct BrowserShare;
+
+/// A request to `/api/share`: the body's text, or why not. A link's token rides in the `Share-Token` header, never in
+/// the path, which proxies and edge logs may keep. No answer at all (the network) is status 0.
+#[cfg(target_arch = "wasm32")]
+async fn share_api(method: &str, json: Option<&str>, token: Option<&str>) -> Result<String, ShareFailure> {
+    use crate::shared::ports::share_failure;
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    let init = web_sys::RequestInit::new();
+    init.set_method(method);
+    let headers = web_sys::Headers::new().map_err(|_| ShareFailure::Unavailable)?;
+    if let Some(json) = json {
+        init.set_body(&wasm_bindgen::JsValue::from_str(json));
+        headers.set("content-type", "application/json").map_err(|_| ShareFailure::Unavailable)?;
+    }
+    if let Some(token) = token {
+        headers.set("share-token", token).map_err(|_| ShareFailure::Unavailable)?;
+    }
+    init.set_headers(&headers);
+    let request = web_sys::Request::new_with_str_and_init("/api/share", &init).map_err(|_| ShareFailure::Unavailable)?;
+    let window = web_sys::window().ok_or(ShareFailure::Unavailable)?;
+    // A fetch that rejects never had an answer: the network, not the server.
+    let response: web_sys::Response =
+        JsFuture::from(window.fetch_with_request(&request)).await.map_err(|_| share_failure(0, ""))?.dyn_into().map_err(|_| ShareFailure::Unavailable)?;
+    let status = response.status();
+    let text = match response.text() {
+        Ok(promise) => JsFuture::from(promise).await.ok().and_then(|t| t.as_string()).unwrap_or_default(),
+        Err(_) => String::new(),
+    };
+    if response.ok() { Ok(text) } else { Err(share_failure(status, &text)) }
+}
+
+/// Runs the request and tells `done`; natively (no network) the answer is at once `Network`.
+fn ask_share<T: 'static>(method: &'static str, json: Option<String>, token: Option<String>, read: fn(&str) -> Result<T, ShareFailure>, done: ShareAnswer<T>) {
+    let token = token.map(|token| token_header(&token));
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move { done(share_api(method, json.as_deref(), token.as_deref()).await.and_then(|body| read(&body))) });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (method, json, token, read);
+        done(Err(ShareFailure::Network));
+    }
+}
+
+/// A token as its header carries it: only the characters a token has (base64url) pass, so no other text, and no other
+/// header, can ride with it.
+fn token_header(token: &str) -> String {
+    token.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect()
+}
+
+impl ShareApi for BrowserShare {
+    fn create(&self, body: String, done: ShareAnswer<ShareMade>) {
+        ask_share("POST", Some(body), None, ShareMade::parse, done);
+    }
+    fn open(&self, token: &str, done: ShareAnswer<String>) {
+        ask_share("GET", None, Some(token.to_string()), |body| Ok(body.to_string()), done);
+    }
+    fn delete(&self, token: &str, done: ShareAnswer<()>) {
+        ask_share("DELETE", None, Some(token.to_string()), |_| Ok(()), done);
+    }
+}
+
 struct BrowserPage;
 
 impl Page for BrowserPage {
@@ -481,6 +544,49 @@ impl Page for BrowserPage {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = tag;
+    }
+
+    fn hash(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let hash = leptos::prelude::window().location().hash().unwrap_or_default();
+            hash.strip_prefix('#').unwrap_or(&hash).to_string()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
+    }
+
+    fn origin(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            leptos::prelude::window().location().origin().unwrap_or_default()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        String::new()
+    }
+
+    fn copy_text(&self, text: &str, done: Box<dyn FnOnce(bool)>) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // `navigator.clipboard.writeText`, reached by name: it needs no web-sys feature, and a browser without it
+            // (or a page not allowed it) answers no.
+            let navigator: wasm_bindgen::JsValue = leptos::prelude::window().navigator().into();
+            let clipboard = js_sys::Reflect::get(&navigator, &"clipboard".into()).ok().filter(|c| !c.is_undefined() && !c.is_null());
+            let write = clipboard.as_ref().and_then(|c| js_sys::Reflect::get(c, &"writeText".into()).ok()).and_then(|f| f.dyn_into::<js_sys::Function>().ok());
+            let promise = match (clipboard, write) {
+                (Some(clipboard), Some(write)) => write.call1(&clipboard, &text.into()).ok().and_then(|p| p.dyn_into::<js_sys::Promise>().ok()),
+                _ => None,
+            };
+            match promise {
+                Some(promise) => wasm_bindgen_futures::spawn_local(async move { done(wasm_bindgen_futures::JsFuture::from(promise).await.is_ok()) }),
+                None => done(false),
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = text;
+            done(false);
+        }
     }
 }
 
@@ -607,6 +713,7 @@ pub fn browser_ports() -> Ports {
         account: Rc::new(BrowserAccount),
         work: Rc::new(BrowserWork),
         files: Rc::new(BrowserFiles),
+        share: Rc::new(BrowserShare),
     }
 }
 
@@ -638,6 +745,18 @@ mod tests {
         assert_eq!(*got.borrow(), Some(Err(AccountError::Unavailable)));
         assert_eq!(ports.page.path(), "/");
         assert_eq!(ports.page.take_fragment(), None);
+    }
+
+    #[test]
+    fn natively_the_browser_share_says_no_network_and_a_token_reaches_only_its_own_header() {
+        let ports = browser_ports();
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        ports.share.open("tok", Box::new(move |r| *g.borrow_mut() = Some(r)));
+        assert_eq!(*got.borrow(), Some(Err(ShareFailure::Network)));
+        assert_eq!(token_header("AbC-_9"), "AbC-_9");
+        assert_eq!(token_header("../me?x=1#y\r\nX: 1"), "mex1yX1", "only a token's characters: no other header, no other text");
+        assert_eq!((ports.page.hash(), ports.page.origin()), (String::new(), String::new()));
     }
 
     #[test]

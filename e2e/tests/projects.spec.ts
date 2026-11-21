@@ -284,6 +284,8 @@ test.describe("the list of projects", () => {
     await page.keyboard.press("Tab");
     await expect(page.getByRole("link", { name: "Timeline of First project" })).toBeFocused();
     await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Share First project" })).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(page.getByRole("button", { name: "Rename First project" })).toBeFocused();
   });
 

@@ -1262,6 +1262,68 @@ mod context {
     fn the_design_keys_a_page_only_to_read_refuses_name_the_projects_list() {
         use crate::shared::scoped::DESIGN_KEYS;
         assert!(DESIGN_KEYS.contains(&crate::project::store::PROJECTS_KEY) && DESIGN_KEYS.contains(&crate::project::store::DAMAGED_KEY));
+        assert!(DESIGN_KEYS.contains(&crate::project::copies::COPIES_KEY));
+    }
+
+    /// A copy of a shared design opens on every page, and only to read, whether or not its address says `view=1`.
+    #[test]
+    fn a_copy_of_a_shared_design_opens_only_to_read_whatever_the_address_says() {
+        use crate::project::context::peek;
+        let t = two_projects();
+        let id = crate::project::copies::keep(
+            &t.ports.storage,
+            "tok",
+            "Shared",
+            &crate::place::area::default_area().to_query(),
+            &[(crate::city::edits::EDITS_KEY, "{\"version\":5}")],
+        )
+        .unwrap();
+        for path in [format!("/map.html?project={id}&view=1"), format!("/street.html?street=7&project={id}")] {
+            *t.page.path.borrow_mut() = path.clone();
+            let page = open_page(t.ports.clone()).expect("the copy opens");
+            let look = peek(t.ports.clone()).expect("the copy opens");
+            for ports in [&page, &look] {
+                assert!(ports.storage.read_only(), "{path}");
+                assert_eq!(ports.storage.recall(crate::city::edits::EDITS_KEY).as_deref(), Some("{\"version\":5}"));
+                assert!(!ports.storage.remember(crate::city::edits::EDITS_KEY, "{}"));
+                assert!(!crate::sync::model::mark(&*ports.storage, Kind::Street, "w1", false));
+            }
+        }
+        assert_eq!(crate::project::context::area_of(&*open_page(t.ports.clone()).unwrap().storage), Some(crate::place::area::default_area()));
+        assert_eq!(ProjectStore::new(t.ports.storage.clone()).last_opened(), None, "a copy is not remembered as the person's project opened last");
+        *t.page.path.borrow_mut() = "/map.html?project=p1".into();
+        assert!(!open_page(t.ports.clone()).unwrap().storage.read_only(), "the person's own projects are written as ever");
+    }
+
+    /// One question says whether a page shows its project only to read, for the storage the page gets and for the shell's
+    /// top bar alike: its address says so, or the project is a copy of a shared design.
+    #[test]
+    fn a_page_is_read_only_where_its_address_says_so_or_its_project_is_a_copy() {
+        use crate::project::context::read_only;
+        let t = two_projects();
+        let id = crate::project::copies::keep(&t.ports.storage, "tok", "Shared", &crate::place::area::default_area().to_query(), &[]).unwrap();
+        let root = &*t.ports.storage;
+        assert!(read_only(root, Some(&id), "project=s1") && read_only(root, Some(&id), ""));
+        assert!(read_only(root, Some("p1"), "project=p1&view=1") && read_only(root, None, "view=1"));
+        assert!(!read_only(root, Some("p1"), "project=p1") && !read_only(root, None, ""));
+    }
+
+    /// The person's list knows only their projects: a copy's id is no project to remember, open or remove; only the
+    /// pages' own lookup (`context::find`) knows it.
+    #[test]
+    fn only_the_pages_lookup_knows_a_copy_and_the_list_s_own_calls_do_not() {
+        let t = two_projects();
+        let id = crate::project::copies::keep(&t.ports.storage, "tok", "Shared", &crate::place::area::default_area().to_query(), &[]).unwrap();
+        let store = ProjectStore::new(t.ports.storage.clone());
+        assert!(crate::project::store::find(&*t.ports.storage, &id).is_none() && store.get(&id).is_none());
+        assert_eq!(crate::project::context::find(&*t.ports.storage, &id).map(|p| p.name).as_deref(), Some("Shared"));
+        assert_eq!(crate::project::context::find(&*t.ports.storage, "p1").map(|p| p.id).as_deref(), Some("p1"));
+        assert!(!store.open(&id), "a copy is not remembered as the project opened last");
+        t.storage.remember(LAST_KEY, &id);
+        assert_eq!(store.last_opened(), None);
+        assert!(store.remove_raw(&id), "nothing listed to remove");
+        assert_eq!(crate::project::copies::list(&*t.ports.storage).len(), 1, "the copy is not the list's to remove");
+        assert_eq!(store.list().iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["first", "p1"]);
     }
 
     #[test]
@@ -1508,6 +1570,303 @@ mod page {
         assert!(!vm.confirm_delete(), "nothing is asked any more");
     }
 
+    /// A project's share links made on this device, as the share slice would end them (#221): `live` of them, each
+    /// ending answered when a test says.
+    #[derive(Default)]
+    struct Links {
+        live: std::cell::Cell<usize>,
+        /// Listed, but past their expiry by this device's clock.
+        expired_here: std::cell::Cell<usize>,
+        /// Ends them before `end` returns.
+        at_once: std::cell::Cell<bool>,
+        progress: std::cell::RefCell<Option<Box<dyn Fn(crate::project::model::Ending)>>>,
+        asked: std::cell::RefCell<Vec<(String, Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>)>>,
+    }
+
+    impl crate::project::model::ProjectLinks for Links {
+        fn live(&self, _: &str) -> usize {
+            self.live.get()
+        }
+        fn listed(&self, _: &str) -> usize {
+            self.live.get() + self.expired_here.get()
+        }
+        fn end(&self, id: &str, progress: Box<dyn Fn(crate::project::model::Ending)>, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+            if self.at_once.get() {
+                return done(Ok(()));
+            }
+            *self.progress.borrow_mut() = Some(progress);
+            self.asked.borrow_mut().push((id.to_string(), done));
+        }
+    }
+
+    impl Links {
+        fn step(&self, step: crate::project::model::Ending) {
+            (self.progress.borrow().as_ref().expect("ending"))(step);
+        }
+
+        fn answer(&self, answer: Result<(), crate::shared::said::Said>) {
+            let (_, done) = self.asked.borrow_mut().remove(0);
+            done(answer);
+        }
+    }
+
+    fn page_with_links(live: usize) -> (Rc<ProjectsVm>, TestPorts, Rc<Links>) {
+        let t = test_ports_full();
+        let links = Rc::new(Links::default());
+        links.live.set(live);
+        (ProjectsVm::new_with(t.ports.clone(), crate::i18n_for(Locale::En), links.clone()), t, links)
+    }
+
+    /// The links made of a project stop working with it, so that their maker can still end them: they are deleted on the
+    /// server before the project is, and the question says so first.
+    #[test]
+    fn a_project_with_share_links_has_them_deleted_on_the_server_before_it_goes() {
+        let (vm, t, links) = page_with_links(2);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.ask_delete(&id);
+        assert_eq!(
+            vm.delete_question().as_deref(),
+            Some("Delete Plateau and everything in it? Its 2 share links made on this device stop working too. This cannot be undone.")
+        );
+        assert!(!vm.confirm_delete(), "not deleted yet: its links first");
+        assert_eq!(links.asked.borrow().iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), [id.clone()]);
+        assert!(vm.ending() && names(&vm) == ["Plateau"]);
+        assert!(!vm.confirm_delete(), "asked once only");
+        vm.cancel_delete();
+        assert!(vm.deleting().is_some(), "the question stays while its links are deleted");
+        assert_eq!(links.asked.borrow().len(), 1);
+        links.answer(Ok(()));
+        assert!(!vm.ending());
+        assert_eq!(names(&vm), Vec::<String>::new());
+        assert_eq!(vm.deleting(), None);
+        assert_eq!(t.announcer.take().last().map(String::as_str), Some("Project Plateau deleted."));
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Verdun");
+        vm.ask_delete(&id_of(&vm, "Verdun"));
+        assert_eq!(
+            vm.delete_question().as_deref(),
+            Some("Delete Verdun and everything in it? Its share link made on this device stops working too. This cannot be undone.")
+        );
+        let (vm, _, links0) = page_with_links(0);
+        vm.create("Rosemont");
+        vm.ask_delete(&id_of(&vm, "Rosemont"));
+        assert!(vm.confirm_delete(), "no link: deleted at once");
+        assert!(links0.asked.borrow().is_empty() && links.asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_project_whose_share_links_could_not_be_deleted_is_kept_and_says_why() {
+        let (vm, t, links) = page_with_links(1);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        vm.ask_delete(&id);
+        vm.confirm_delete();
+        t.announcer.take();
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        assert_eq!(names(&vm), ["Plateau"], "kept, links and all");
+        assert_eq!(vm.deleting().map(|r| r.id), Some(id.clone()), "the question stays, to try again or cancel");
+        let words = "Plateau was not deleted: its share links could not be deleted first. The server could not be reached. Check your connection and try again. You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire.";
+        assert_eq!(t.announcer.take(), [words]);
+        assert_eq!(vm.delete_error().as_deref(), Some(words));
+        assert!(!vm.ending());
+        vm.confirm_delete();
+        assert_eq!(links.asked.borrow().len(), 1, "tried again");
+        assert_eq!(vm.delete_error(), None, "the reason goes while it tries again");
+        vm.cancel_delete();
+        assert!(vm.deleting().is_some());
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        vm.cancel_delete();
+        assert_eq!((vm.deleting(), vm.delete_error()), (None, None));
+    }
+
+    /// A link this device's clock says has expired may still work on the server (the clock may be wrong): it is sent
+    /// to the server before the project goes all the same, though the question does not count it.
+    #[test]
+    fn a_link_expired_by_this_device_s_clock_is_still_sent_before_the_project_goes() {
+        let t = test_ports_full();
+        t.storage.set_now(1_800_000_000_000); // 2027-01-15T08:00:00Z
+        let links = Rc::new(crate::share::links::ProjectShares::new(t.ports.clone()));
+        let vm = ProjectsVm::new_with(t.ports.clone(), crate::i18n_for(Locale::En), links);
+        vm.create("Plateau");
+        let id = id_of(&vm, "Plateau");
+        let store = crate::share::store::ShareStore::new(Rc::new(crate::shared::scoped::ScopedStorage::new(t.ports.storage.clone(), &id)));
+        store.add(crate::share::store::Made {
+            token: "late".into(),
+            created_at: "2026-10-17T08:00:00.000Z".into(),
+            expires_at: "2027-01-15T07:00:00.000Z".into(),
+        });
+        vm.ask_delete(&id);
+        assert_eq!(vm.delete_question().as_deref(), Some("Delete Plateau and everything in it? This cannot be undone."), "none still works by this clock");
+        assert!(!vm.confirm_delete());
+        assert_eq!(t.share.calls(), [crate::shared::ports::ShareCall::Delete("late".into())], "sent all the same");
+        assert_eq!(names(&vm), ["Plateau"]);
+        assert!(t.share.answer(crate::shared::ports::ShareReply::Deleted(Ok(()))));
+        assert_eq!(names(&vm), Vec::<String>::new());
+    }
+
+    /// A project whose links cannot be ended from here (the account that made them was deleted, so every request is
+    /// signed out; or another account is signed in) can still be deleted: the question then offers to delete it anyway,
+    /// saying that its links keep working until they expire.
+    #[test]
+    fn a_project_whose_links_cannot_be_ended_from_here_can_be_deleted_anyway() {
+        for reason in ["share-error-end-signed-out", "share-error-not-yours"] {
+            let (vm, t, links) = page_with_links(1);
+            vm.create("Plateau");
+            let id = id_of(&vm, "Plateau");
+            vm.ask_delete(&id);
+            assert!(!vm.delete_anyway(), "{reason}: offered only once its links could not be ended");
+            assert!(!vm.can_delete_anyway());
+            let out = markup(vm.clone());
+            assert!(!out.contains(r#"id="project-delete-anyway""#), "{out}");
+            vm.confirm_delete();
+            links.answer(Err(crate::shared::said::Said::new(reason)));
+            assert!(vm.can_delete_anyway());
+            assert!(vm.delete_error().unwrap().ends_with("You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire."));
+            let out = markup(vm.clone());
+            let anyway = crate::shared::testing::button_tag(&out, "project-delete-anyway");
+            assert!(anyway.contains(r#"class="btn danger""#), "{anyway}");
+            assert!(out.contains("Delete anyway"), "{out}");
+            t.announcer.take();
+            assert!(vm.delete_anyway(), "{reason}");
+            assert_eq!(names(&vm), Vec::<String>::new(), "{reason}");
+            assert_eq!(vm.deleting(), None);
+            assert_eq!(t.announcer.take(), ["Project Plateau deleted."]);
+            assert!(!vm.can_delete_anyway());
+        }
+    }
+
+    /// While its links are deleted, nothing else touches the question or the rename form: renaming, another question,
+    /// cancelling all wait, so the question and its reason stay where they are.
+    #[test]
+    fn while_its_links_are_deleted_renaming_and_other_questions_wait() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.create("Verdun");
+        let (plateau, verdun) = (id_of(&vm, "Plateau"), id_of(&vm, "Verdun"));
+        vm.ask_delete(&plateau);
+        vm.confirm_delete();
+        vm.start_rename(&plateau);
+        vm.start_rename(&verdun);
+        assert_eq!(vm.renaming(), None, "no rename form while it waits");
+        assert!(!vm.rename(&verdun, "Other"));
+        assert_eq!(names(&vm).len(), 2);
+        vm.ask_delete(&verdun);
+        vm.cancel_delete();
+        assert_eq!(vm.deleting().map(|r| r.id), Some(plateau.clone()), "the question stays on its project");
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        assert!(vm.delete_error().is_some());
+        vm.start_rename(&verdun);
+        assert_eq!(vm.renaming().as_deref(), Some(verdun.as_str()), "once it is over, renaming is back");
+    }
+
+    /// The question's count of links follows what is left of them after some were deleted and one could not be.
+    #[test]
+    fn the_question_counts_the_links_left_after_some_could_not_be_deleted() {
+        let (vm, _, links) = page_with_links(2);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"));
+        vm.confirm_delete();
+        links.live.set(1);
+        // The count is the page's (a signal the view tracks), counted when asked and again when the deleting stops.
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"), "kept while they are deleted");
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        let question = vm.delete_question().unwrap();
+        assert!(question.contains("Its share link made on this device stops"), "{question}");
+    }
+
+    /// A long run of links shows how many are left after each, and says when the server asked to wait.
+    #[test]
+    fn while_its_links_are_deleted_the_question_follows_each_step() {
+        use crate::project::model::Ending;
+        let (vm, _, links) = page_with_links(3);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        vm.confirm_delete();
+        links.live.set(2);
+        links.step(Ending::Going);
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"), "{:?}", vm.delete_question());
+        links.step(Ending::Waiting);
+        let waiting = "The server asked to wait a moment: its share links are asked for again shortly… The project is deleted once they are; until then this cannot be cancelled.";
+        assert_eq!(vm.ending_status().as_deref(), Some(waiting));
+        links.live.set(1);
+        links.step(Ending::Going);
+        assert!(vm.ending_status().unwrap().starts_with("Deleting its share links on the server…"));
+        assert!(vm.delete_question().unwrap().contains("Its share link made on this device stops"));
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert!(fr.tr_now("project-delete-waiting", &Args::new()).starts_with("Le serveur a demandé d’attendre un instant"));
+    }
+
+    /// While its links are deleted the question says so, which is also why Cancel and Escape wait.
+    #[test]
+    fn while_its_links_are_deleted_the_question_says_so() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert_eq!(vm.ending_status(), None);
+        vm.confirm_delete();
+        let words = "Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.";
+        assert_eq!(vm.ending_status().as_deref(), Some(words));
+        let out = markup(vm.clone());
+        let status = out.split(r#"<p id="project-delete-status" role="status">"#).nth(1).expect("the status line");
+        assert!(status.starts_with(words), "{status}");
+        links.answer(Ok(()));
+        assert_eq!(vm.ending_status(), None);
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert!(fr.tr_now("project-delete-ending", &Args::new()).starts_with("Suppression de ses liens de partage sur le serveur…"));
+    }
+
+    /// Links that end before `end` returns leave the project deleted when `confirm_delete` returns, and it says so.
+    #[test]
+    fn a_project_whose_links_end_at_once_is_said_deleted_by_confirm() {
+        let (vm, _, links) = page_with_links(1);
+        links.at_once.set(true);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert!(vm.confirm_delete());
+        assert_eq!(names(&vm), Vec::<String>::new());
+    }
+
+    /// While a project's links are deleted, every row's Rename and Delete say they wait too (they would do nothing).
+    #[test]
+    fn while_its_links_are_deleted_every_row_s_rename_and_delete_wait() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.create("Verdun");
+        let ids = [id_of(&vm, "Plateau"), id_of(&vm, "Verdun")];
+        let out = markup(vm.clone());
+        for id in &ids {
+            for what in ["rename", "delete"] {
+                let button = crate::shared::testing::button_tag(&out, &format!("project-{what}-{id}"));
+                assert!(button.contains(r#"aria-disabled="false""#), "{button}");
+            }
+        }
+        vm.ask_delete(&ids[0]);
+        vm.confirm_delete();
+        let out = markup(vm.clone());
+        for id in &ids {
+            for what in ["rename", "delete"] {
+                let button = crate::shared::testing::button_tag(&out, &format!("project-{what}-{id}"));
+                assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "{button}");
+            }
+        }
+        links.answer(Ok(()));
+    }
+
+    #[test]
+    fn while_its_links_are_deleted_the_question_s_buttons_wait_and_keep_focus() {
+        let (vm, _, _links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        vm.confirm_delete();
+        let out = markup(vm);
+        for id in ["project-delete-safe", "project-delete-yes"] {
+            let button = crate::shared::testing::button_tag(&out, id);
+            assert!(button.contains(r#"aria-disabled="true""#) && !button.contains(" disabled"), "{button}");
+        }
+    }
+
     #[test]
     fn the_rows_are_newest_change_first() {
         let (vm, t) = page();
@@ -1628,6 +1987,9 @@ mod page {
         // Its timeline is one link away, named for the project.
         assert!(out.contains(&format!(r#"id="project-timeline-{id}""#)) && out.contains(&format!(r#"href="timeline.html?project={id}""#)), "{out}");
         assert!(out.contains(r#"aria-label="Timeline of Plateau""#), "{out}");
+        // And its share link's page (#221).
+        assert!(out.contains(&format!(r#"id="project-share-{id}""#)) && out.contains(&format!(r#"href="share.html?project={id}""#)), "{out}");
+        assert!(out.contains(r#"aria-label="Share Plateau""#), "{out}");
         assert!(out.contains(r#"aria-label="Rename Plateau""#) && out.contains(r#"aria-label="Delete Plateau""#));
         assert!(out.contains("Verdun &lt;b&gt;"), "a name is text, not markup");
         assert!(!out.contains("project-empty"));

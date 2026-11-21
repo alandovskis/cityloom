@@ -1,6 +1,7 @@
 //! The person's projects: named containers, each tied to an area. The home page is their list.
 
 pub mod context;
+pub mod copies;
 pub mod migrate;
 pub mod model;
 pub mod store;
@@ -28,10 +29,11 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 
 /// Draws the list of projects into `#projects-slot` in the words of `i18n`, after moving the work kept from before
 /// projects into the first project, and keeps it current when another tab changes the list. `ports` are the page's
-/// root ports: the home page is in no project. The home page's entry point (`lib.rs`) calls this before anything of
-/// the page reads a project, since the move decides which one that is.
-pub fn mount_list(ports: Ports, i18n: Rc<I18n>) -> Rc<vm::ProjectsVm> {
-    let projects = vm::ProjectsVm::new(ports, i18n);
+/// root ports: the home page is in no project. `links` are the projects' share links (#221), which a project's deletion
+/// ends first. The home page's entry point (`lib.rs`) calls this before anything of the page reads a project, since the
+/// move decides which one that is.
+pub fn mount_list(ports: Ports, i18n: Rc<I18n>, links: Rc<dyn model::ProjectLinks>) -> Rc<vm::ProjectsVm> {
+    let projects = vm::ProjectsVm::new_with(ports, i18n, links);
     let slot_id = "projects-slot";
     let slot = leptos::prelude::document().get_element_by_id(slot_id).unwrap_or_else(|| panic!("the page has no #{slot_id}"));
     let list = projects.clone();
