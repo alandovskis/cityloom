@@ -737,3 +737,22 @@ cmp-jn-bike-box-removed = { $street } : le sas cyclable est retiré
 cmp-jn-phases = Phases des feux : { $a } → { $b }
 cmp-jn-cycle = Cycle des feux : { $a } s → { $b } s
 cmp-other-arm-details = les détails des rues à la jonction
+
+## Actionnement par les véhicules (src/junction/model/actuation.rs, CLM-12) : la phase d’une rue à la demande est appelée et prolongée par les véhicules détectés à son approche
+jn-refusal-actuation-no-phase = Aucune phase du plan n’est propre à cette rue, elle ne peut donc pas être à la demande : donnez-lui d’abord une phase.
+jn-refusal-actuation-already = La rue est déjà réglée ainsi.
+jn-refusal-not-actuated = Seule une rue à la demande a un vert minimal, un intervalle de passage, un vert maximal et un nombre de véhicules par heure : mettez-la d’abord à la demande.
+jn-refusal-actuation-out-of-range = Cette valeur dépasse la borne provisoire indiquée.
+jn-refusal-min-above-max = Le vert minimal ne peut pas être plus long que le vert maximal.
+jn-rev-actuated-on = { $arm } : à la demande
+jn-rev-actuated-off = { $arm } remise en rappel
+jn-rev-actuation = { $arm } : { $field } { $value } s
+jn-rev-actuation-vehicles =
+    { $arm } : { $value ->
+        [one] { $value } véhicule par heure
+       *[other] { $value } véhicules par heure
+    }
+jn-act-min-green = Vert minimal
+jn-act-gap = Intervalle de passage
+jn-act-max-green = Vert maximal
+jn-act-vehicles = Véhicules par heure

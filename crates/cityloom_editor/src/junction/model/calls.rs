@@ -29,7 +29,7 @@ pub const MAX_CALLS_PER_HOUR: u32 = 60;
 /// The calls an hour a crossing is given when it is put on call. Placeholder.
 pub const DEFAULT_CALLS_PER_HOUR: u32 = 12;
 /// The span the calls are spread over.
-pub const HOUR_S: u32 = 3_600;
+pub use crate::junction::model::control::HOUR_S;
 /// How long a pedestrian waits at a crossing with passive detection before leaving, if the walk has not started, in
 /// seconds; one figure for the whole junction. Placeholder.
 pub const WAIT_LIMIT_S: u32 = 30;
@@ -70,27 +70,12 @@ pub fn need_s(distance_mm: i32) -> u32 {
     WALK_S + clearance_s(distance_mm)
 }
 
-/// One step of SplitMix64: a small fixed generator, so the calls are the same on every machine and in every build.
-fn splitmix(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// The seconds into the hour at which the crossing of street `uid` is called, `rate` times an hour: the hour is cut
 /// into `rate` equal slots and each slot gets one call at a point the generator, seeded from the street and the rate,
 /// picks. In order, each second at most once. A rate past `MAX_CALLS_PER_HOUR` is read as that.
 pub fn arrivals(uid: u32, rate: u32) -> Vec<u32> {
     let rate = rate.min(MAX_CALLS_PER_HOUR);
-    let mut seed = (u64::from(uid) << 32) | u64::from(rate);
-    (0..rate)
-        .map(|k| {
-            let (lo, hi) = (k * HOUR_S / rate, (k + 1) * HOUR_S / rate);
-            lo + (splitmix(&mut seed) % u64::from(hi - lo)) as u32
-        })
-        .collect()
+    control::spread((u64::from(uid) << 32) | u64::from(rate), rate)
 }
 
 /// Whether some phase of `plan` walks the crossing of street `uid`.
@@ -209,11 +194,17 @@ fn on_call(s: &State) -> Vec<(&Arm, u32)> {
     arms.into_iter().filter_map(|a| rate_of(a).map(|r| (a, r))).collect()
 }
 
-/// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call. `distances` is each
-/// crossing's length by street uid (`read_model::crossing_distances`). A crossing no phase walks is a finding and is
-/// left out; one no phase can serve (`serve`) is a finding and its calls are not served.
+/// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call, with the vehicles of its
+/// actuated streets (`control::hour`). `distances` is each crossing's length by street uid
+/// (`read_model::crossing_distances`). A crossing no phase walks is a finding and is left out; one no phase can serve
+/// (`serve`) is a finding and its calls are not served.
 pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
-    let mut out = Summary::default();
+    control::hour(s, plan, distances).calls
+}
+
+/// The calls of the hour at the crossings of `s` on call, one `Asked` a crossing, with `out` given a row of totals for
+/// each and a finding for each no phase walks (left out).
+pub(crate) fn asked(s: &State, plan: &Plan, distances: &[(u32, i32)], out: &mut Summary) -> Vec<Asked> {
     let distance = |uid: u32| distances.iter().find(|(u, _)| *u == uid).map(|(_, d)| *d);
     let mut asked: Vec<Asked> = Vec::new();
     for (arm, rate) in on_call(s) {
@@ -226,14 +217,28 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
         let passive = detection_of(arm) == Detection::Passive;
         asked.push(Asked { arm: arm.uid, need_s: need, at_s: arrivals(arm.uid, rate), passive });
     }
-    for a in &asked {
-        let walking = || plan.phases.iter().filter(|p| p.walks.contains(&a.arm));
-        if !walking().any(|p| p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s) {
-            let most_s = walking().map(|p| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
-            out.findings.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
+    asked
+}
+
+/// A finding for each crossing that no phase walking it can serve by `rules`: a fixed phase needs its green lengthened
+/// by at most `MAX_EXTENSION_S` to fit the walk and clearance; an actuated phase holds its green for them.
+pub(crate) fn cannot_serve(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for a in asked {
+        let walking = || plan.phases.iter().zip(rules).filter(|(p, _)| p.walks.contains(&a.arm));
+        let fits = |p: &crate::junction::model::signal::Phase, rule: &control::Rule| {
+            matches!(rule, control::Rule::Actuated { .. }) || p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s
+        };
+        if !walking().any(|(p, rule)| fits(p, rule)) {
+            let most_s = walking().map(|(p, _)| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
+            out.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
         }
     }
-    let run = serve(plan, &asked);
+    out
+}
+
+/// `out`'s totals added up from what the run did to every call.
+pub(crate) fn tally(out: &mut Summary, asked: &[Asked], run: Run) {
     out.calls = run.calls;
     for t in &mut out.totals {
         for c in out.calls.iter().filter(|c| c.arm == t.arm) {
@@ -251,16 +256,15 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
         }
         t.walks_skipped = asked.iter().zip(&run.skipped).filter(|(a, _)| a.arm == t.arm).map(|(_, n)| n).sum();
     }
-    out
 }
 
 /// The calls made at one crossing: its street, what a call needs of the green (`need_s`), when each was made, and
 /// whether the crossing has passive detection (a pedestrian who leaves cancels their call).
 pub(crate) struct Asked {
-    arm: u32,
-    need_s: u32,
-    at_s: Vec<u32>,
-    passive: bool,
+    pub(crate) arm: u32,
+    pub(crate) need_s: u32,
+    pub(crate) at_s: Vec<u32>,
+    pub(crate) passive: bool,
 }
 
 /// What `serve` gives: every call, and the walks each crossing skipped (by its place in the `asked` it was given).
@@ -286,7 +290,9 @@ pub(crate) struct Run {
 ///
 /// The run is the controller's (`control::run`), with every phase fixed: a phase takes at least a second, the clock
 /// counts in u64, and the run stops a cycle at its longest (each phase extended by at most `MAX_EXTENSION_S`,
-/// `stop_at`) past the last call, whatever is still waiting then not served.
+/// `stop_at`) past the last call, whatever is still waiting then not served. The hour runs the calls with the vehicles
+/// through `control::hour`; this runs them alone on a fixed plan, as the tests pin them.
+#[cfg(test)]
 fn serve(plan: &Plan, asked: &[Asked]) -> Run {
     serve_turns(plan, asked, MAX_TURNS)
 }
@@ -307,6 +313,7 @@ fn stop_at(plan: &Plan, last: u64) -> u64 {
 }
 
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
+#[cfg(test)]
 fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Run {
     let rules = control::fixed(plan);
     let mut walks = Walks::new(plan, &rules, asked);

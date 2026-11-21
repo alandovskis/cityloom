@@ -737,3 +737,22 @@ cmp-jn-bike-box-removed = { $street }: the bike box is removed
 cmp-jn-phases = Signal phases: { $a } → { $b }
 cmp-jn-cycle = Signal cycle: { $a } s → { $b } s
 cmp-other-arm-details = details of the streets at the junction
+
+## Vehicle actuation (src/junction/model/actuation.rs, CLM-12): an actuated street's phase is called and extended by the vehicles detected on its approach
+jn-refusal-actuation-no-phase = No phase of the plan is this street's own, so it cannot be actuated: give it a phase first.
+jn-refusal-actuation-already = The street is set that way already.
+jn-refusal-not-actuated = Only an actuated street has a minimum green, a gap, a maximum green and vehicles an hour: make it actuated first.
+jn-refusal-actuation-out-of-range = That value is outside the placeholder bound shown.
+jn-refusal-min-above-max = The minimum green cannot be longer than the maximum green.
+jn-rev-actuated-on = { $arm }: actuated
+jn-rev-actuated-off = { $arm } back on recall
+jn-rev-actuation = { $arm }: { $field } { $value } s
+jn-rev-actuation-vehicles =
+    { $arm }: { $value ->
+        [one] 1 vehicle an hour
+       *[other] { $value } vehicles an hour
+    }
+jn-act-min-green = Minimum green
+jn-act-gap = Gap
+jn-act-max-green = Maximum green
+jn-act-vehicles = Vehicles an hour

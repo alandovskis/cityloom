@@ -11,6 +11,59 @@
 //! given the whole of it.
 
 use crate::junction::model::signal::Plan;
+use crate::junction::model::{State, actuation, calls};
+
+/// The span the demands are spread over: one hour.
+pub const HOUR_S: u32 = 3_600;
+
+/// One step of SplitMix64: a small fixed generator, so the arrivals are the same on every machine and in every build.
+fn splitmix(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = *state;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+/// `rate` arrivals spread over the hour (the seeded generator of #60): the hour is cut into `rate` equal slots and each
+/// slot gets one arrival at a point the generator, seeded with `seed`, picks. In order, each second at most once, so
+/// `rate` is at most `HOUR_S`. Each demand seeds it on a stream of its own.
+pub fn spread(mut seed: u64, rate: u32) -> Vec<u32> {
+    let rate = rate.min(HOUR_S);
+    (0..rate)
+        .map(|k| {
+            let (lo, hi) = (k * HOUR_S / rate, (k + 1) * HOUR_S / rate);
+            lo + (splitmix(&mut seed) % u64::from(hi - lo)) as u32
+        })
+        .collect()
+}
+
+/// The hour of a signal: how its plan serves the pedestrian calls and the actuated streets' vehicles together.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Hour {
+    pub calls: calls::Summary,
+    pub actuation: actuation::Summary,
+}
+
+/// Runs `plan` on `s` over an hour: the phases by their rules (`actuation::rules`), the pedestrian calls at the crossings
+/// on call and the vehicles of the actuated streets as its demands. `distances` is each crossing's length by street uid
+/// (`read_model::crossing_distances`). With no street actuated every phase is fixed and the calls are served as #60 and
+/// CLM-17 serve them.
+pub fn hour(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Hour {
+    let rules = actuation::rules(s, plan, distances);
+    let mut out = Hour::default();
+    let asked = calls::asked(s, plan, distances, &mut out.calls);
+    out.calls.findings.extend(calls::cannot_serve(plan, &rules, &asked));
+    let (approaches, found) = actuation::approaches(s, plan, &rules, distances);
+    out.actuation.findings = found;
+    let mut walks = calls::Walks::new(plan, &rules, &asked);
+    let mut vehicles = actuation::Vehicles::new(plan, &approaches);
+    let turns = run(plan, &rules, &mut [&mut walks, &mut vehicles], calls::MAX_TURNS);
+    calls::tally(&mut out.calls, &asked, walks.finish());
+    out.actuation.approaches = vehicles.finish();
+    out.actuation.phases = actuation::phase_totals(plan, &rules, &turns);
+    out
+}
 
 /// What bounds an actuated phase's green, in seconds: the least it runs, how long a gap with no arrival ends it, and
 /// the most it runs for the vehicles alone (a walk being served still holds it longer).
@@ -58,9 +111,10 @@ impl Turn {
 pub trait Demand {
     /// Whether someone waiting at `at` calls phase `phase` (an actuated phase no demand calls is skipped).
     fn calls(&self, phase: usize, at: u64) -> bool;
-    /// The green, from `green_start`, that this demand's arrivals keep actuated phase `phase` in within `bounds` (a gap
-    /// with no arrival ends it), never past the maximum; 0 when it extends none.
-    fn extend(&self, _phase: usize, _green_start: u64, _bounds: Bounds) -> u32 {
+    /// The green, from `green_start`, that this demand's arrivals keep actuated phase `phase` in within `bounds`, the
+    /// green running at least `floor_s` whatever comes: once that is done a gap with no arrival ends it, and arrivals
+    /// never hold it past the maximum. 0 when it extends none.
+    fn extend(&self, _phase: usize, _green_start: u64, _bounds: Bounds, _floor_s: u32) -> u32 {
         0
     }
     /// The least green phase `phase`, starting at `start`, must give for what this demand is served in it: never
@@ -95,8 +149,8 @@ pub fn fixed(plan: &Plan) -> Vec<Rule> {
 /// Each turn: an actuated phase that no demand calls is skipped, taking no time; when every phase in a row of the plan's
 /// length is skipped, nothing is waiting, and the controller rests (all red) until the next arrival. A phase that runs
 /// is given the green its rule gives (a fixed phase its timing's; an actuated one its floor, extended by the demands up
-/// to its maximum), lengthened to the longest any demand holds it for; its early green, yellow and all-red are its
-/// timing's. A phase takes at least a second, and the clock counts in u64 (a settled timing is within its range, but
+/// to its maximum), lengthened to the longest any demand holds it for (an actuated phase's arrivals still extending it
+/// past that hold, within the maximum); its early green, yellow and all-red are its timing's. A phase takes at least a second, and the clock counts in u64 (a settled timing is within its range, but
 /// the run holds any), so time moves on. Every turn, run or skipped, is told to every demand and returned.
 pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: usize) -> Vec<Turn> {
     let n = plan.phases.len();
@@ -131,11 +185,18 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
         }
         idle = 0;
         let green_start = start + lead;
-        let base_s = match rules[k] {
-            Rule::Fixed => phase.timing.green_s,
-            Rule::Actuated { bounds, floor_s } => demands.iter().map(|d| d.extend(k, green_start, bounds)).max().unwrap_or(0).max(floor_s),
+        let hold = demands.iter().map(|d| d.hold(k, start)).max().unwrap_or(0);
+        // The green the phase's rule gives (`base_s`), and the green once every hold is given in full: a fixed phase's
+        // timing, lengthened to the longest hold; an actuated phase's floor, extended by the arrivals, and when a hold is
+        // longer, that hold extended by the arrivals still coming within a gap of its end.
+        let (base_s, green_s) = match rules[k] {
+            Rule::Fixed => (phase.timing.green_s, phase.timing.green_s.max(hold)),
+            Rule::Actuated { bounds, floor_s } => {
+                let extended = |floor: u32| demands.iter().map(|d| d.extend(k, green_start, bounds, floor)).max().unwrap_or(0).max(floor);
+                let base = extended(floor_s);
+                (base, if hold > base { extended(hold) } else { base })
+            }
         };
-        let green_s = demands.iter().map(|d| d.hold(k, start)).max().unwrap_or(0).max(base_s);
         // The phase's length with this green in place of the timing's: the early green, yellow and all-red kept.
         let length = u64::from(phase.length_s).saturating_sub(u64::from(phase.timing.green_s)) + u64::from(green_s);
         let end = start + length.max(1);
