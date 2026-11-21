@@ -55,7 +55,15 @@ async fn create(State(a): State<Arc<Account>>, jar: CookieJar, request: Request)
             let out = serde_json::json!({ "token": created.token.text(), "expires_at": crate::work::stamp(created.expires_at) });
             (StatusCode::CREATED, json(jar, &out)).into_response()
         }
-        Err(e) => share_error(e),
+        Err(e) => {
+            // The two 409s, told apart in the log: never a token, only the account and the bound it met.
+            match e {
+                ShareError::TooMany => tracing::warn!(user = %user, limit = share::MAX_SHARES_PER_DAY, "an account made as many shares as it may in a day"),
+                ShareError::Full => tracing::info!(user = %user, limit = share::MAX_LIVE_SHARES, "an account holds as many live shares as it may"),
+                _ => {}
+            }
+            share_error(e)
+        }
     }
 }
 
