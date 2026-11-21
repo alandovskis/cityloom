@@ -799,3 +799,16 @@ jn-act-said-no-wait =
         [one] { $vehicles } véhicule
        *[other] { $vehicles } véhicules
     } dans l’heure; servis { $served }, non servis { $not_served }; aucun véhicule n’a été servi. Son vert : donné { $greens }, omis { $skipped }, prolongé { $extended } de { $extended_s } s en tout, terminé tôt { $early }.
+
+## Détection des vélos (src/junction/model/bicycles.rs, CLM-13) : un mouvement vélo sur détection est servi quand un cycliste est détecté, avec un vert minimal et un dégagement pour les vélos
+jn-refusal-bike-not-ridden = Aucune phase du plan ne fait passer les vélos de cette rue, ils ne peuvent donc pas être sur détection : faites-les d’abord passer dans une phase.
+jn-refusal-bike-detection-already = Le mouvement vélo est déjà réglé ainsi.
+jn-refusal-not-on-bike-detection = Seul un mouvement vélo sur détection a un nombre de cyclistes par heure : mettez-le d’abord sur détection.
+jn-refusal-cyclists-out-of-range = Ce nombre de cyclistes par heure dépasse la borne provisoire indiquée.
+jn-rev-bike-detection-on = Vélos de { $arm } : sur détection
+jn-rev-bike-detection-off = Vélos de { $arm } remis en rappel
+jn-rev-cyclists =
+    Vélos de { $arm } : { $rate ->
+        [one] { $rate } cycliste par heure
+       *[other] { $rate } cyclistes par heure
+    }

@@ -126,6 +126,24 @@ pub fn junction_of(pieces: &[(&str, i32)]) -> Junction {
     Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")
 }
 
+/// A four-way on a signal, in a city, whose every street is a sidewalk, a bike lane, two travel lanes in, a bike lane and
+/// a sidewalk, each street's traffic going straight on: north's phase runs north's and south's bike movements, east's
+/// runs east's and west's (CLM-13).
+pub fn junction_biked() -> Junction {
+    let j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+    let mut state = j.current().clone();
+    let across = |s: &State, uid: u32| {
+        let bearing = s.arms.iter().find(|a| a.uid == uid).unwrap().bearing;
+        s.arms.iter().find(|a| a.bearing == (bearing + 180) % 360).unwrap().uid
+    };
+    let opposite: Vec<u32> = state.arms.iter().map(|a| across(&state, a.uid)).collect();
+    for (a, to) in state.arms.iter_mut().zip(opposite) {
+        a.lanes = vec![Lane { to: vec![to] }];
+    }
+    state.control = SIGNAL;
+    Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")
+}
+
 /// A four-way, in a city, whose every arm reads a street of a sidewalk, `leave` travel lanes out, `enter` travel lanes in
 /// and a sidewalk, each lane 3.5 m (`junction_of` makes every travel lane come in, so a four-way of it has no movement).
 /// `region` is an index into `REGIONS`; a left-hand one gets left-hand pieces, so a turbo can stand on it.

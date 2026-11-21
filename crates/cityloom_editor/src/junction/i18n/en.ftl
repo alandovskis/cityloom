@@ -799,3 +799,16 @@ jn-act-said-no-wait =
         [one] 1 vehicle
        *[other] { $vehicles } vehicles
     } in the hour; served { $served }, not served { $not_served }; no vehicle was served. Its green: given { $greens }, skipped { $skipped }, extended { $extended } by { $extended_s } s in all, ended early { $early }.
+
+## Bicycle detection (src/junction/model/bicycles.rs, CLM-13): a bike movement on detection is served when a cyclist is detected, with a bicycle minimum green and clearance
+jn-refusal-bike-not-ridden = No phase of the plan runs this street's bike movement, so it cannot be on detection: let its bikes go in a phase first.
+jn-refusal-bike-detection-already = The bike movement is set that way already.
+jn-refusal-not-on-bike-detection = Only a bike movement on detection has cyclists an hour: put it on detection first.
+jn-refusal-cyclists-out-of-range = That many cyclists an hour is outside the placeholder bound shown.
+jn-rev-bike-detection-on = Bikes from { $arm }: on detection
+jn-rev-bike-detection-off = Bikes from { $arm } back on recall
+jn-rev-cyclists =
+    Bikes from { $arm }: { $rate ->
+        [one] 1 cyclist an hour
+       *[other] { $rate } cyclists an hour
+    }

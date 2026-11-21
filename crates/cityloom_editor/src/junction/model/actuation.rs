@@ -692,7 +692,7 @@ mod tests {
         let e = at(&s, 90);
         arm_mut(&mut s, e).calls = Some(12);
         let plan = signal::plan(&s, 0).unwrap();
-        let h = control::hour(&s, &plan, &[(e, 9_000)]);
+        let h = control::hour(&s, &plan, &[(e, 9_000)], &[]);
         assert_eq!(h.actuation, Summary::default());
         assert!(rules(&s, &plan, &[(e, 9_000)]).iter().all(|r| *r == Rule::Fixed));
         assert_eq!(h.calls.calls.len(), 12);
@@ -705,12 +705,12 @@ mod tests {
         arm_mut(&mut s, n).actuation = Some(Actuation { max_green_s: 10, ..Actuation::default() });
         let plan = signal::plan(&s, 0).unwrap();
         // North's phase walks east's crossing, 12 m: 19 s, past its 10 s maximum.
-        let h = control::hour(&s, &plan, &[(e, 12_000)]);
+        let h = control::hour(&s, &plan, &[(e, 12_000)], &[]);
         assert!(h.actuation.findings.contains(&Finding::WalkPastMax { arm: n, crossing: e, need_s: 19, max_s: 10 }), "{:?}", h.actuation.findings);
         // A plan with no phase of north's own: kept actuated, and a finding.
         s.signal_plan = Some(SignalPlan { phases: vec![StoredPhase { moves: vec![Move { from: so, to: n }], walks: vec![], rides: vec![], arm: None }] });
         let plan = signal::plan(&s, 0).unwrap();
-        let h = control::hour(&s, &plan, &[]);
+        let h = control::hour(&s, &plan, &[], &[]);
         assert_eq!(h.actuation.findings, vec![Finding::NoPhase { arm: n }]);
         assert!(h.actuation.approaches.is_empty() && h.actuation.phases.is_empty());
     }
@@ -725,8 +725,8 @@ mod tests {
         arm_mut(&mut s, e).calls = Some(3);
         let plan = signal::plan(&s, 0).unwrap();
         let distances = [(n, 9_000), (e, 9_000), (so, 9_000), (w, 9_000)];
-        let h = control::hour(&s, &plan, &distances);
-        assert_eq!(h, control::hour(&s, &plan, &distances), "deterministic");
+        let h = control::hour(&s, &plan, &distances, &[]);
+        assert_eq!(h, control::hour(&s, &plan, &distances, &[]), "deterministic");
         let phase = |phase: usize, arm: u32| PhaseTotals { phase, arm, min_green_s: 7, gap_s: 3, max_green_s: 45, floor_s: 16, ..PhaseTotals::default() };
         // North's floor is the 16 s walk across west's crossing (on recall); it was called every turn, and 13 of its
         // greens ran past the floor. East's lone vehicles each called a green of their own, and its phase was skipped

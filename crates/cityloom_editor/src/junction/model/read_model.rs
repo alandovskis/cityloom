@@ -243,6 +243,25 @@ pub fn crossing_distances(arms: &[ArmView]) -> Vec<(u32, i32)> {
     arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (a.uid, c.distance_mm))).collect()
 }
 
+/// How far each street's cyclists ride to clear the junction, by street uid, in the order of the arms: from their
+/// street's mouth to the mouth of the farthest street its traffic goes to (of every other street when it sends none), as
+/// the junction is drawn. The read model has no path of a bike movement of its own, and a cyclist has cleared the
+/// junction once past the far street's mouth: the one source of the lengths the bicycle calls' clearance is worked out
+/// from (CLM-13).
+pub fn ride_lengths(s: &State, arms: &[ArmView]) -> Vec<(u32, i32)> {
+    let mouth = |uid: u32| arms.iter().find(|a| a.uid == uid).map(|a| a.mouth_at);
+    s.arms
+        .iter()
+        .filter_map(|a| {
+            let from = mouth(a.uid)?;
+            let sent: Vec<u32> = a.lanes.iter().flat_map(|l| l.to.iter().copied()).filter(|&to| to != a.uid).collect();
+            let to: Vec<u32> = if sent.is_empty() { s.arms.iter().map(|b| b.uid).filter(|&b| b != a.uid).collect() } else { sent };
+            let far = to.into_iter().filter_map(mouth).map(|p| dist(from, p)).fold(0.0, f64::max);
+            Some((a.uid, far.round() as i32))
+        })
+        .collect()
+}
+
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
 /// curbs meet behind the junction, a fillet longer than its arm, a roundabout
 /// that will not fit its arms in the largest ring.
@@ -997,7 +1016,7 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         })
         .collect();
     // One hour of the controller gives both the calls and the actuation.
-    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms));
+    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms), &ride_lengths(s, arms));
     let calls = calls_view(s, &plan, arms, hour.calls);
     let actuation = actuation_view(s, &plan, arms, hour.actuation);
     Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation })

@@ -5,6 +5,7 @@
 
 pub mod actuation;
 pub mod beyond;
+pub mod bicycles;
 pub mod calls;
 pub mod compare;
 pub mod control;
@@ -32,7 +33,7 @@ use crate::street::model::{Beyond, Editor, EndStop, EndUse, Street, View, named_
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_two_way, junction_with_walkways, suspended_turbo};
+pub use fixtures::{JUNCTION_SAMPLES, junction_biked, junction_of, junction_two_way, junction_with_walkways, suspended_turbo};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -333,6 +334,12 @@ pub struct Arm {
     /// Read it through `actuation::actuation_of`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actuation: Option<actuation::Actuation>,
+    /// The street's bike movement is on detection (CLM-13): served only when a cyclist is detected on its approach, with
+    /// a bicycle minimum green and clearance, at this many cyclists an hour (the scenario `control::hour` runs). None: on
+    /// recall, run with every phase that lets it go, as before. Saved only once set, so a junction with no movement on
+    /// detection is written as it was. Read it through `bicycles::rate_of`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cyclists: Option<u32>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -529,6 +536,7 @@ impl Arm {
             calls: None,
             detection: calls::Detection::PushButton,
             actuation: None,
+            cyclists: None,
             walked: false,
         }
     }
@@ -865,10 +873,14 @@ pub enum Refusal {
     NotActuated,
     ActuationOutOfRange,
     MinAboveMax,
+    BikeNotRidden,
+    BikeDetectionAlready,
+    NotOnBikeDetection,
+    CyclistsOutOfRange,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 44] = [
+    pub const ALL: [Refusal; 48] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -913,6 +925,10 @@ impl Refusal {
         Refusal::NotActuated,
         Refusal::ActuationOutOfRange,
         Refusal::MinAboveMax,
+        Refusal::BikeNotRidden,
+        Refusal::BikeDetectionAlready,
+        Refusal::NotOnBikeDetection,
+        Refusal::CyclistsOutOfRange,
     ];
 
     /// The message that says why.
@@ -962,6 +978,10 @@ impl Refusal {
             Refusal::NotActuated => "jn-refusal-not-actuated",
             Refusal::ActuationOutOfRange => "jn-refusal-actuation-out-of-range",
             Refusal::MinAboveMax => "jn-refusal-min-above-max",
+            Refusal::BikeNotRidden => "jn-refusal-bike-not-ridden",
+            Refusal::BikeDetectionAlready => "jn-refusal-bike-detection-already",
+            Refusal::NotOnBikeDetection => "jn-refusal-not-on-bike-detection",
+            Refusal::CyclistsOutOfRange => "jn-refusal-cyclists-out-of-range",
         }
     }
 }
@@ -1812,6 +1832,50 @@ impl Junction {
         })
     }
 
+    /// Puts the bike movement of arm `uid` on detection (`on`, CLM-13), served only when a cyclist is detected on its
+    /// approach, at `bicycles::DEFAULT_CYCLISTS_PER_HOUR` cyclists an hour until a rate is set; or back on recall, run
+    /// with every phase that lets it go. On detection needs a signal and a phase of its plan that runs the movement
+    /// (`bicycles::refusal`); recall is always allowed, so a movement an edit has left unrun can be put back. Refused
+    /// when it is that already.
+    pub fn set_bike_detection(&mut self, uid: u32, on: bool) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.cyclists.is_some() == on {
+            return self.refuse(Refusal::BikeDetectionAlready);
+        }
+        if on && let Some(why) = bicycles::refusal(self.current(), self.region, uid) {
+            return self.refuse(why);
+        }
+        self.arm_edit(
+            uid,
+            |a| about(if on { "jn-rev-bike-detection-on" } else { "jn-rev-bike-detection-off" }, a),
+            |a| {
+                a.cyclists = on.then_some(bicycles::DEFAULT_CYCLISTS_PER_HOUR);
+                true
+            },
+        )
+    }
+
+    /// Sets how many cyclists an hour are detected on the approach of arm `uid`, its bike movement on detection: 0 to
+    /// `bicycles::MAX_CYCLISTS_PER_HOUR`. A movement on recall has no rate. A rate it has already is not an edit.
+    pub fn set_cyclists(&mut self, uid: u32, rate: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = arm.cyclists else { return self.refuse(Refusal::NotOnBikeDetection) };
+        let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= bicycles::MAX_CYCLISTS_PER_HOUR) else {
+            return self.refuse(Refusal::CyclistsOutOfRange);
+        };
+        if rate == now {
+            return true;
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-cyclists", a).with("rate", Arg::Num(i64::from(rate))),
+            |a| {
+                a.cyclists = Some(rate);
+                true
+            },
+        )
+    }
+
     /// Gives the junction the suggested plan again, in place of the one the person edited.
     pub fn restore_suggestion(&mut self) -> bool {
         if self.signal_plan_to_edit().is_none() {
@@ -2055,9 +2119,10 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        // An actuated street's settings are signal timing too, and go with it.
+        // An actuated street's settings and a bike movement's detection are signal timing too, and go with it.
         let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
-            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none());
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none())
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none());
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
@@ -2301,6 +2366,7 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
             a.timing = None;
             a.calls = None;
             a.actuation = None;
+            a.cyclists = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
@@ -2617,7 +2683,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 44);
+        assert_eq!(Refusal::ALL.len(), 48);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
