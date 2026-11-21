@@ -1575,6 +1575,8 @@ mod page {
     #[derive(Default)]
     struct Links {
         live: std::cell::Cell<usize>,
+        /// Ends them before `end` returns.
+        at_once: std::cell::Cell<bool>,
         asked: std::cell::RefCell<Vec<(String, Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>)>>,
     }
 
@@ -1583,6 +1585,9 @@ mod page {
             self.live.get()
         }
         fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+            if self.at_once.get() {
+                return done(Ok(()));
+            }
             self.asked.borrow_mut().push((id.to_string(), done));
         }
     }
@@ -1693,6 +1698,76 @@ mod page {
             assert_eq!(t.announcer.take(), ["Project Plateau deleted."]);
             assert!(!vm.can_delete_anyway());
         }
+    }
+
+    /// While its links are deleted, nothing else touches the question or the rename form: renaming, another question,
+    /// cancelling all wait, so the question and its reason stay where they are.
+    #[test]
+    fn while_its_links_are_deleted_renaming_and_other_questions_wait() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.create("Verdun");
+        let (plateau, verdun) = (id_of(&vm, "Plateau"), id_of(&vm, "Verdun"));
+        vm.ask_delete(&plateau);
+        vm.confirm_delete();
+        vm.start_rename(&plateau);
+        vm.start_rename(&verdun);
+        assert_eq!(vm.renaming(), None, "no rename form while it waits");
+        assert!(!vm.rename(&verdun, "Other"));
+        assert_eq!(names(&vm).len(), 2);
+        vm.ask_delete(&verdun);
+        vm.cancel_delete();
+        assert_eq!(vm.deleting().map(|r| r.id), Some(plateau.clone()), "the question stays on its project");
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        assert!(vm.delete_error().is_some());
+        vm.start_rename(&verdun);
+        assert_eq!(vm.renaming().as_deref(), Some(verdun.as_str()), "once it is over, renaming is back");
+    }
+
+    /// The question's count of links follows what is left of them after some were deleted and one could not be.
+    #[test]
+    fn the_question_counts_the_links_left_after_some_could_not_be_deleted() {
+        let (vm, _, links) = page_with_links(2);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"));
+        vm.confirm_delete();
+        links.live.set(1);
+        // The count is the page's (a signal the view tracks), counted when asked and again when the deleting stops.
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"), "kept while they are deleted");
+        links.answer(Err(crate::shared::said::Said::new("share-error-network")));
+        let question = vm.delete_question().unwrap();
+        assert!(question.contains("Its share link made on this device stops"), "{question}");
+    }
+
+    /// While its links are deleted the question says so, which is also why Cancel and Escape wait.
+    #[test]
+    fn while_its_links_are_deleted_the_question_says_so() {
+        let (vm, _, links) = page_with_links(1);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert_eq!(vm.ending_status(), None);
+        vm.confirm_delete();
+        let words = "Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.";
+        assert_eq!(vm.ending_status().as_deref(), Some(words));
+        let out = markup(vm.clone());
+        let status = out.split(r#"<p id="project-delete-status" role="status">"#).nth(1).expect("the status line");
+        assert!(status.starts_with(words), "{status}");
+        links.answer(Ok(()));
+        assert_eq!(vm.ending_status(), None);
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert!(fr.tr_now("project-delete-ending", &Args::new()).starts_with("Suppression de ses liens de partage sur le serveur…"));
+    }
+
+    /// Links that end before `end` returns leave the project deleted when `confirm_delete` returns, and it says so.
+    #[test]
+    fn a_project_whose_links_end_at_once_is_said_deleted_by_confirm() {
+        let (vm, _, links) = page_with_links(1);
+        links.at_once.set(true);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        assert!(vm.confirm_delete());
+        assert_eq!(names(&vm), Vec::<String>::new());
     }
 
     #[test]

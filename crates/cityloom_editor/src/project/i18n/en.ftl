@@ -48,6 +48,8 @@ project-delete-links-failed = { $name } was not deleted: its share links could n
 # The reason the project was kept ($failed, project-delete-links-failed), and what can still be done.
 project-delete-anyway-offer = { $failed } You can delete it anyway: its share links then keep working until they expire.
 project-delete-anyway = Delete anyway
+# While a project's share links are deleted on the server, before the project (#221); Cancel and Escape wait meanwhile.
+project-delete-ending = Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.
 project-gone = That project is no longer here.
 project-first-name = First project
 # A project whose places came before its record, until its record or a rename names it.
