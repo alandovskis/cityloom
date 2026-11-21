@@ -60,6 +60,8 @@ fn delete_question(vm: Vm) -> impl IntoView {
                     type="button"
                     id="sharing-delete-yes"
                     class="btn danger"
+                    // Waits while another request is on its way (saying yes then keeps the question open).
+                    aria-disabled=move || if vm.with_value(|v| v.busy()) { "true" } else { "false" }
                     on:click=move |_| {
                         vm.with_value(|v| v.confirm_delete());
                     }
