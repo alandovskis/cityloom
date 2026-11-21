@@ -538,6 +538,25 @@ fn focus_stays_on_the_button_used_when_making_or_deleting_a_link_fails() {
     assert_eq!(vm.focus_request(), (count + 1, Focus::DeleteButton(TOKEN.into())));
 }
 
+/// A link made while the question before deleting another is open keeps that question open: saying yes waits until
+/// the first request is answered, rather than closing the question and deleting nothing.
+#[test]
+fn saying_yes_while_a_link_is_being_made_keeps_the_question_open() {
+    let (vm, t) = sharing(Locale::En);
+    signed_in(&vm, &t, true);
+    vm.create();
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    vm.ask_delete(TOKEN);
+    vm.create();
+    assert!(vm.busy());
+    assert!(!vm.confirm_delete());
+    assert_eq!(vm.deleting().as_deref(), Some(TOKEN), "still asked");
+    assert!(matches!(t.share.calls().as_slice(), [ShareCall::Create(_)]), "nothing deleted");
+    t.share.answer(ShareReply::Made(Ok(ShareMade { token: "other".into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+    assert!(vm.confirm_delete());
+    assert_eq!(t.share.calls(), [ShareCall::Delete(TOKEN.into())]);
+}
+
 #[test]
 fn a_link_the_server_no_longer_has_is_forgotten_when_deleted() {
     for gone in [ShareFailure::NotFound, ShareFailure::Expired, ShareFailure::Deleted] {

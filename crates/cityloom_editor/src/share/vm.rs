@@ -312,8 +312,12 @@ impl ShareVm {
         }
     }
 
-    /// Deletes the link the question is about. False where nothing was asked.
+    /// Deletes the link the question is about. False where nothing was asked, or another request is on its way: the
+    /// question then stays open, to be answered again once it is back.
     pub fn confirm_delete(self: &Rc<Self>) -> bool {
+        if self.busy.get_untracked() {
+            return false;
+        }
         let Some(token) = self.deleting.get_untracked() else { return false };
         self.deleting.set(None);
         // The question goes with its buttons: focus waits on the row's Delete button.
