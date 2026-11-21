@@ -138,7 +138,8 @@ impl From<ShareFailure> for ShareError {
             ShareFailure::TooLarge => ShareError::TooLarge,
             ShareFailure::Newer => ShareError::Newer,
             ShareFailure::Network => ShareError::Network,
-            ShareFailure::Unavailable => ShareError::Unavailable,
+            // The rate limit, said as the server not answering now (making or deleting one link meets it rarely).
+            ShareFailure::Unavailable | ShareFailure::Busy => ShareError::Unavailable,
             ShareFailure::Refused => ShareError::Refused,
         }
     }
