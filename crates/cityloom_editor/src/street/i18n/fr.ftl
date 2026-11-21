@@ -862,3 +862,4 @@ cmp-piece-kind = { $from } devient { $to }
 cmp-piece-width = { $kind } : { $a } → { $b }
 cmp-lanes = { $direction } : { $a } → { $b }
 cmp-stretches-differ = Les tronçons de la rue ne sont pas les mêmes dans les deux conceptions.
+cmp-other-piece-details = les détails ou l’ordre des éléments

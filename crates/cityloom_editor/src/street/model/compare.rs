@@ -8,7 +8,7 @@ use super::{Segment, Street};
 use crate::shared::catalogue::{DIRECTIONS, DirectionRule, KINDS};
 use crate::shared::said::{Arg, Said};
 
-/// The pieces of one base section that run one way and must (a driving lane), counted for one direction, in two designs.
+/// How many pieces of the base section run one way and must (driving lanes) in one direction, in each of two designs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LaneCount {
     /// An index into `DIRECTIONS`.
@@ -68,6 +68,9 @@ impl PieceChange {
 pub enum Other {
     Speed,
     Stretches,
+    /// Something of the base pieces other than their kinds and widths (surface, curb, direction of a piece that
+    /// need not have one, times of day), or their order.
+    PieceDetails,
     Curbside,
     Stops,
     Calming,
@@ -80,6 +83,7 @@ impl Other {
         match self {
             Other::Speed => "cmp-other-speed",
             Other::Stretches => "cmp-other-stretches",
+            Other::PieceDetails => "cmp-other-piece-details",
             Other::Curbside => "cmp-other-curbside",
             Other::Stops => "cmp-other-stops",
             Other::Calming => "cmp-other-calming",
@@ -125,7 +129,22 @@ fn without_uids(section: &[Segment]) -> Vec<Segment> {
     section.iter().map(|p| Segment { uid: 0, ..p.clone() }).collect()
 }
 
-/// A list whose order carries no meaning, in an order that is the same for the same contents.
+/// Whether the base sections differ in more than what `pieces` lists: a field other than kind and width of a piece
+/// both have (a driving lane's direction is `lanes`'), or the order of the pieces both have.
+fn piece_details_differ(a: &Street, b: &Street) -> bool {
+    let shared =
+        |from: &Street, other: &Street| from.segments.iter().filter(|p| other.segments.iter().any(|q| q.uid == p.uid)).map(|p| p.uid).collect::<Vec<_>>();
+    b.segments.iter().any(|now| {
+        a.segments.iter().find(|p| p.uid == now.uid).is_some_and(|was| {
+            let driving = |p: &Segment| KINDS[p.kind].direction == DirectionRule::Required;
+            let direction = if driving(was) || driving(now) { now.direction } else { was.direction };
+            Segment { kind: now.kind, width_mm: now.width_mm, direction, ..was.clone() } != *now
+        })
+    }) || shared(a, b) != shared(b, a)
+}
+
+/// A list whose order carries no meaning, in an order that is the same for the same contents. It sorts by the
+/// derived `Debug` text, so it relies on every field being in the derived `Debug`.
 fn unordered<T: Clone + std::fmt::Debug>(list: &[T]) -> Vec<T> {
     let mut sorted = list.to_vec();
     sorted.sort_by_cached_key(|x| format!("{x:?}"));
@@ -135,10 +154,12 @@ fn unordered<T: Clone + std::fmt::Debug>(list: &[T]) -> Vec<T> {
 /// The things beyond the base section that differ between the two designs, in the order of `Other`.
 pub fn others(a: &Street, b: &Street) -> Vec<Other> {
     let speeds = |s: &Street| (s.speed, s.zones.iter().map(|z| z.speed).collect::<Vec<_>>());
+    // A zone's saved `name` is left out: the page never shows it (a stretch is named by where it lies).
     let stretches = |s: &Street| s.zones.iter().map(|z| (z.from_mm, z.segments.as_deref().map(without_uids))).collect::<Vec<_>>();
     [
         (Other::Speed, speeds(a) != speeds(b)),
         (Other::Stretches, stretches(a) != stretches(b)),
+        (Other::PieceDetails, piece_details_differ(a, b)),
         (Other::Curbside, unordered(&a.curb) != unordered(&b.curb)),
         (Other::Stops, unordered(&a.stops) != unordered(&b.stops)),
         (Other::Calming, unordered(&a.calming) != unordered(&b.calming)),
@@ -250,6 +271,35 @@ mod tests {
         b.stops[0].from_mm = 8_000;
         b.green = vec![Green { kind: GreenKind::Tree, from_mm: 2_000, length_mm: 500, offset_mm: 1_000, width_mm: 800, size: Some(TreeSize::M) }];
         assert_eq!(others(&a, &b), vec![Other::Stops, Other::Green]);
+    }
+
+    #[test]
+    fn a_curb_or_surface_change_alone_is_a_piece_detail() {
+        let a = sample();
+        let mut b = a.clone();
+        let p = b.segments.iter_mut().find(|p| KINDS[p.kind].materials.len() > 1).unwrap();
+        p.material = KINDS[p.kind].materials[1];
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
+        assert_eq!(pieces(&a, &b), (false, vec![]));
+    }
+
+    #[test]
+    fn a_direction_on_a_piece_that_need_not_have_one_is_a_piece_detail() {
+        let mut a = sample();
+        let bike = kind_index("bike").unwrap();
+        a.segments[1].kind = bike;
+        a.segments[1].direction = None;
+        let mut b = a.clone();
+        b.segments[1].direction = Some(1);
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
+    }
+
+    #[test]
+    fn swapped_pieces_are_a_piece_detail() {
+        let a = sample();
+        let mut b = a.clone();
+        b.segments.swap(0, 1);
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
     }
 
     #[test]

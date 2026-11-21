@@ -862,3 +862,4 @@ cmp-piece-kind = { $from } becomes { $to }
 cmp-piece-width = { $kind }: { $a } → { $b }
 cmp-lanes = { $direction }: { $a } → { $b }
 cmp-stretches-differ = The stretches along the street are not the same in the two designs.
+cmp-other-piece-details = piece details or order
