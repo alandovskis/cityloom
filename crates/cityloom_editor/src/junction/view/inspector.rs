@@ -9,8 +9,9 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
+use crate::junction::model::bicycles;
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
-use crate::junction::model::read_model::{CallRowView, CrossingView, JView};
+use crate::junction::model::read_model::{CallRowView, CrossingView, JView, RideRowView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
@@ -1713,6 +1714,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 </section>
                 {calls_section(w)}
                 {actuation_section(w)}
+                {bikes_section(w)}
             }
         })
     }
@@ -2165,6 +2167,235 @@ fn actuation_section(w: Watch) -> impl IntoView {
                     {phases_table}
                     {approaches_table}
                     {findings}
+                </section>
+            }
+        })
+    }
+}
+
+/// Bicycle detection (CLM-13), in the plan's level after vehicle actuation: each bike movement the plan runs on recall
+/// (with every phase that lets it go) or on detection (served when a cyclist is detected), named by the streets it goes
+/// from and to; while on detection its trigger and bound (minimum green + clearance, the longest extension), its
+/// cyclists an hour, and what its calls did over the hour; then the placeholder figures, the movements' calls added up,
+/// the findings and every call. A movement no phase runs says so, and on detection there is refused with that reason.
+/// It decides nothing: the modes, rates, totals and findings all come from the view.
+fn bikes_section(w: Watch) -> impl IntoView {
+    // Everything below reads the bicycle calls through this memo, so an edit that leaves them as they were redraws none
+    // of it.
+    let bikes = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.bicycles.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| bikes.with(|b| b.movements.iter().map(|m| m.uid).collect::<Vec<u32>>()));
+    let movement = move |uid: u32| bikes.with(|b| b.movements.iter().find(|m| m.uid == uid).cloned());
+    // A movement is named by its streets, looked up by its uid, never copied in: an undo that renames a street keeps
+    // every name right.
+    let name_of = move |uid: u32| {
+        movement(uid)
+            .map(|m| {
+                let street = w.say(&m.label);
+                match &m.to {
+                    Some(to) => tr(w, "jn-bikes-group-to", Args::new().str("street", street).str("to", w.say(to))),
+                    None => tr(w, "jn-bikes-group", Args::new().str("street", street)),
+                }
+            })
+            .unwrap_or_default()
+    };
+    let bounds = move || {
+        let speed = Units::Metres.fixed_in(bicycles::SPEED_MM_PER_S as i32, 1, w.i18n().locale());
+        let args = Args::new().num("rate", i64::from(bicycles::DEFAULT_CYCLISTS_PER_HOUR)).num("min", i64::from(bicycles::MIN_GREEN_S));
+        tr(w, "jn-bikes-bounds", args.str("speed", speed).num("max", i64::from(bicycles::MAX_EXTENSION_S)))
+    };
+    let item = move |uid: u32| {
+        // Made again only when the movement goes on or off detection, so a radio or the field keeps the focus.
+        let on = Memo::new(move |_| movement(uid).is_some_and(|m| m.on_detection));
+        let (status_id, rate_id, range_id) = (format!("bike-status-{uid}"), format!("bike-rate-{uid}"), format!("bike-range-{uid}"));
+        let status = move || match movement(uid) {
+            Some(m) if !m.ridden => w.tr("jn-bikes-not-ridden"),
+            Some(m) if m.on_detection => {
+                let length = w.units().length_in(m.length_mm, w.i18n().locale());
+                let args = Args::new().num("min", i64::from(bicycles::MIN_GREEN_S)).num("clearance", i64::from(m.clearance_s)).str("length", length);
+                tr(w, "jn-bikes-trigger", args.num("need", i64::from(m.need_s)).num("max", i64::from(bicycles::MAX_EXTENSION_S)))
+            }
+            Some(_) => w.tr("jn-bikes-recall"),
+            None => String::new(),
+        };
+        let effect = move || {
+            let totals = movement(uid).filter(|m| m.on_detection).and_then(|m| m.totals);
+            totals.map(|t| {
+                let args = Args::new()
+                    .num("calls", i64::from(t.calls))
+                    .num("served", i64::from(t.served))
+                    .num("delayed", i64::from(t.delayed))
+                    .num("extended", i64::from(t.extended))
+                    .num("extended_s", i64::from(t.extended_s))
+                    .num("not_served", i64::from(t.not_served));
+                view! { <p class="insp-range" id=format!("bike-effect-{uid}")>{tr(w, "jn-bikes-effect", args)}</p> }
+            })
+        };
+        let rate_value = move || movement(uid).map(|m| m.rate.to_string()).unwrap_or_default();
+        let set_rate = move |v: f64| {
+            // A typed number is rounded to a whole cyclist; one that is not finite or is out of range is refused by the model.
+            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+                w.set_cyclists(uid, v.round() as i32);
+            }
+        };
+        let rate = move || {
+            let (field, hint) = (rate_id.clone(), range_id.clone());
+            on.get().then(|| {
+                view! {
+                    <span class="call-rate">
+                        <label for=field.clone()>{words(w, "jn-bikes-rate")}</label>
+                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
+                            value=rate_value prop:value=rate_value
+                            on:keydown=move |ev| {
+                                if let Some(dir) = step_key(&ev.key()) {
+                                    ev.prevent_default();
+                                    let now = movement(uid).map_or(0, |m| m.rate as i32);
+                                    w.set_cyclists(uid, now.saturating_add(dir));
+                                }
+                            }
+                            on:change=move |ev| {
+                                let input = event_target::<HtmlInputElement>(&ev);
+                                commit_typed(&input.value(), &set_rate);
+                                // What the field holds is the model's rate, whether it took the edit or refused it.
+                                input.set_value(&rate_value());
+                            } />
+                        <span class="insp-range" id=hint>
+                            {move || tr(w, "jn-bikes-rate-range", Args::new().num("min", 0).num("max", i64::from(bicycles::MAX_CYCLISTS_PER_HOUR)))}
+                        </span>
+                    </span>
+                }
+            })
+        };
+        let (group, head) = (format!("bike-mode-{uid}"), format!("bike-mode-h-{uid}"));
+        let radio = move |detection: bool, id: &'static str, key: &'static str| {
+            let chosen = move || on.get() == detection;
+            view! {
+                <label class="phase-move">
+                    <input type="radio" name=format!("bike-mode-{uid}") id=format!("bike-mode-{uid}-{id}") checked=chosen prop:checked=chosen
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            // Refused (no phase runs it, say): the radios show the mode the model kept.
+                            if !w.set_bike_detection(uid, detection) {
+                                input.set_checked(chosen());
+                            }
+                        } />
+                    <span>{words(w, key)}</span>
+                </label>
+            }
+        };
+        let (named_by, described_by) = (head.clone(), status_id.clone());
+        view! {
+            <li>
+                <div class="bike-movement" role="group" aria-label=move || name_of(uid)>
+                    <span class="bike-name">{move || name_of(uid)}</span>
+                    <div class="bike-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="bike-mode-h" id=head>{words(w, "jn-bikes-mode")}</span>
+                        {radio(false, "recall", "jn-bikes-mode-recall")}
+                        {radio(true, "detection", "jn-bikes-mode-detection")}
+                    </div>
+                    <p class="insp-range" id=status_id>{status}</p>
+                    {rate}
+                    {effect}
+                </div>
+            </li>
+        }
+    };
+    // One row a movement, keyed by its totals: a row is made again only when its numbers change.
+    let totals = move || bikes.with(|b| b.movements.iter().filter_map(|m| m.totals).collect::<Vec<_>>());
+    let has_totals = Memo::new(move |_| bikes.with(|b| b.movements.iter().any(|m| m.totals.is_some())));
+    let wait = move |s: Option<u32>| match s {
+        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
+        None => {
+            view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-bikes-no-wait-said")}</span> }.into_any()
+        }
+    };
+    let total_row = move |t: bicycles::Totals| {
+        let extended = move || tr(w, "jn-bikes-extended-cell", Args::new().num("count", i64::from(t.extended)).num("seconds", i64::from(t.extended_s)));
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(t.arm)}</th>
+                <td>{t.calls}</td>
+                <td>{t.served}</td>
+                <td>{t.delayed}</td>
+                <td>{extended}</td>
+                <td>{move || wait(t.longest_wait_s)}</td>
+            </tr>
+        }
+    };
+    let totals_table = move || {
+        has_totals.get().then(|| {
+            view! {
+                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
+                <div class="calls-table" role="region" tabindex="0" aria-labelledby="bikes-totals-caption">
+                    <table class="nt" id="bikes-totals">
+                        <caption id="bikes-totals-caption">{words(w, "jn-bikes-totals-caption")}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{words(w, "jn-bikes-col-movement")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-calls")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-served")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-delayed")}</th>
+                                <th scope="col">{words(w, "jn-bikes-col-extended")}</th>
+                                <th scope="col">{words(w, "jn-calls-col-longest")}</th>
+                            </tr>
+                        </thead>
+                        <tbody><For each=totals key=|t| *t children=total_row/></tbody>
+                    </table>
+                </div>
+            }
+        })
+    };
+    let findings = move || {
+        let found = bikes.with(|b| b.findings.clone());
+        (!found.is_empty()).then(|| {
+            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
+            view! {
+                <h4 class="phase-moves-h" id="bikes-findings-h">{words(w, "jn-calls-findings")}</h4>
+                <ul class="calls-findings" id="bikes-findings" aria-labelledby="bikes-findings-h">{items}</ul>
+            }
+        })
+    };
+    // Every call, keyed by the call itself: a row is made again only when what happened to it changes.
+    let n_rows = Memo::new(move |_| bikes.with(|b| b.rows.len()));
+    let rows = move || bikes.with(|b| b.rows.clone());
+    let ride_row = move |r: RideRowView| {
+        view! { <tr><th scope="row">{move || name_of(r.ride.arm)}</th><td>{move || w.say(&r.at)}</td><td>{move || w.say(&r.outcome)}</td></tr> }
+    };
+    let every_call = move || {
+        (n_rows.get() > 0).then(|| {
+            view! {
+                <details class="jn-fold" id="bikes-rows">
+                    <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
+                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="bikes-rows-caption">
+                        <table class="nt">
+                            <caption id="bikes-rows-caption">{words(w, "jn-bikes-rows-caption")}</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">{words(w, "jn-bikes-col-movement")}</th>
+                                    <th scope="col">{words(w, "jn-calls-col-at")}</th>
+                                    <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
+                                </tr>
+                            </thead>
+                            <tbody><For each=rows key=|r| r.ride children=ride_row/></tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        })
+    };
+    let none_on = Memo::new(move |_| bikes.with(|b| !b.movements.iter().any(|m| m.on_detection)));
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
+                    <h3 class="note-h" id="i-h-bikes">{words(w, "jn-bikes-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-bikes-intro")}</p>
+                    <p class="insp-range" id="bikes-bounds">{bounds}</p>
+                    // The modes and the rate fields edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="bike-movements"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+                    {move || none_on.get().then(|| view! { <p class="insp-range" id="bikes-none">{words(w, "jn-bikes-none")}</p> })}
+                    {totals_table}
+                    {findings}
+                    {every_call}
                 </section>
             }
         })

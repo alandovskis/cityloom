@@ -812,3 +812,40 @@ jn-rev-cyclists =
         [one] { $rate } cycliste par heure
        *[other] { $rate } cyclistes par heure
     }
+jn-bikes-heading = Détection des vélos
+jn-bikes-intro = Un mouvement vélo sur détection ne passe que lorsqu’un cycliste est détecté à l’approche de sa rue, et la phase qui sert l’appel donne au cycliste un vert minimal et un dégagement pour traverser. Un mouvement vélo en rappel passe avec chaque phase qui le laisse passer, et les cyclistes ne changent rien à son service.
+jn-bikes-bounds = Valeurs provisoires : un mouvement vélo mis sur détection a { $rate } cyclistes par heure, répartis sur une heure. Chaque appel demande un vert minimal de { $min } s, puis un dégagement à { $speed } m/s sur le trajet à travers l’intersection, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s. Quand un appel piéton demande plus dans la même phase, le plus long est retenu : aucun des deux dégagements n’est raccourci, ni le jaune et le rouge intégral. Un cycliste appelle une phase à la demande, et un appel servi retient son vert au-delà de son maximum.
+jn-bikes-group = Vélos de { $street }
+jn-bikes-group-to = Vélos de { $street } vers { $to }
+jn-bikes-mode = Vélos
+jn-bikes-mode-recall = En rappel
+jn-bikes-mode-detection = Sur détection
+jn-bikes-recall = En rappel : passe avec chaque phase qui le laisse passer; les cyclistes ne changent rien à son service.
+jn-bikes-trigger = Sur détection : un cycliste détecté à l’approche appelle le mouvement, et la prochaine phase qui le fait passer sert l’appel. Chaque appel demande un vert minimal de { $min } s + un dégagement de { $clearance } s sur { $length } = { $need } s de vert; le vert d’une phase est prolongé d’au plus { $max } s pour lui.
+jn-bikes-not-ridden = Aucune phase ne fait passer les vélos de cette rue : ils ne peuvent pas être sur détection.
+jn-bikes-rate = Cyclistes par heure
+jn-bikes-rate-range = De { $min } à { $max } cyclistes par heure (borne provisoire)
+jn-bikes-effect =
+    Dans l’heure, { $calls ->
+        [one] { $calls } appel
+       *[other] { $calls } appels
+    } : servis { $served }, retardés { $delayed }, vert prolongé { $extended } fois de { $extended_s } s en tout, non servis { $not_served }.
+jn-bikes-none = Aucun mouvement vélo n’est sur détection : chacun passe avec chaque phase qui le laisse passer.
+jn-bikes-totals-caption = Appels des cyclistes en une heure, par mouvement vélo
+jn-bikes-col-movement = Mouvement vélo
+jn-bikes-col-extended = Prolongés
+jn-bikes-extended-cell = { $count } ({ $seconds } s)
+jn-bikes-no-wait-said = aucun cycliste servi
+jn-bikes-rows-caption = Chaque appel de cycliste de l’heure, dans l’ordre où il a été fait
+jn-bikes-finding-cannot = Les vélos de { $arm } ne peuvent pas être servis en sécurité : leur vert minimal et leur dégagement demandent { $need } s de vert, et aucune phase qui les fait passer ne peut donner plus de { $most } s.
+jn-bikes-finding-not-ridden = Les vélos de { $arm } sont sur détection, mais aucune phase ne les fait passer : leurs appels ne sont pas servis. Faites-les passer dans une phase ou remettez-les en rappel.
+jn-bikes-said =
+    Vélos de { $arm } : { $calls ->
+        [one] { $calls } appel
+       *[other] { $calls } appels
+    } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended } de { $extended_s } s en tout, non servis { $not_served }; attente la plus longue { $wait } s.
+jn-bikes-said-no-wait =
+    Vélos de { $arm } : { $calls ->
+        [one] { $calls } appel
+       *[other] { $calls } appels
+    } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended } de { $extended_s } s en tout, non servis { $not_served }; aucun appel n’a été servi.

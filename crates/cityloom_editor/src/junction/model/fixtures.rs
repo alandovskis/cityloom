@@ -138,7 +138,7 @@ pub fn junction_biked() -> Junction {
     };
     let opposite: Vec<u32> = state.arms.iter().map(|a| across(&state, a.uid)).collect();
     for (a, to) in state.arms.iter_mut().zip(opposite) {
-        a.lanes = vec![Lane { to: vec![to] }];
+        a.lanes = vec![Lane { to: vec![to] }, Lane { to: vec![to] }];
     }
     state.control = SIGNAL;
     Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")

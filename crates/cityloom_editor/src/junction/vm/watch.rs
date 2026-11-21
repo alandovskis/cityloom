@@ -136,6 +136,16 @@ impl Watch {
         self.vm.with_value(|v| v.set_actuation(uid, field, value))
     }
 
+    /// Puts street `uid`'s bike movement on detection or back on recall as the person does. Whether it was done.
+    pub fn set_bike_detection(&self, uid: u32, on: bool) -> bool {
+        self.vm.with_value(|v| v.set_bike_detection(uid, on))
+    }
+
+    /// Sets the cyclists an hour of street `uid`'s bike movement on detection as the person does. Whether it was done.
+    pub fn set_cyclists(&self, uid: u32, rate: i32) -> bool {
+        self.vm.with_value(|v| v.set_cyclists(uid, rate))
+    }
+
     /// Gives the crossing of street `uid`, on call, its detection as the person does. Whether it was done.
     pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
         self.vm.with_value(|v| v.set_detection(uid, detection))

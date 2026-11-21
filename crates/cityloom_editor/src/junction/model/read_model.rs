@@ -15,7 +15,7 @@ use crate::junction::model::{
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
-use crate::junction::model::{actuation, calls};
+use crate::junction::model::{actuation, bicycles, calls};
 use crate::street::model::{StopKindExt, UseExt};
 
 use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
@@ -760,6 +760,51 @@ pub struct SignalView {
     pub calls: CallsView,
     /// Vehicle actuation (CLM-12): which streets are actuated, and how their phases ran over the same hour.
     pub actuation: ActuationView,
+    /// Bicycle detection (CLM-13): which bike movements are on detection, and how the plan served their cyclists over the
+    /// same hour.
+    pub bicycles: BicyclesView,
+}
+
+/// The bicycle detection of a signal: every bike movement the plan runs (or left on detection without a phase) with its
+/// mode, one row per cyclist's call of the hour, and the findings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct BicyclesView {
+    /// In the order of the bearings.
+    pub movements: Vec<BikeMovementView>,
+    /// Every call of the hour, in the order made.
+    pub rows: Vec<RideRowView>,
+    /// What the person should act on, each a sentence naming the street.
+    pub findings: Vec<Said>,
+    /// The same findings as the model has them, in the same order.
+    pub found: Vec<bicycles::Finding>,
+}
+
+/// One street's bike movement as detection sees it: on recall or on detection (with its cyclists an hour), the streets
+/// its cyclists go to, whether some phase runs it (else it cannot go on detection), what a call needs of the green
+/// (`need_s` = the bicycle minimum green + `clearance_s`, over `length_mm`) and, while on detection and run, its calls
+/// added up.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BikeMovementView {
+    pub uid: u32,
+    /// The street the cyclists come from, and the streets they go to (None when its traffic goes nowhere).
+    pub label: Said,
+    pub to: Option<Said>,
+    pub on_detection: bool,
+    pub rate: u32,
+    pub ridden: bool,
+    pub length_mm: i32,
+    pub clearance_s: u32,
+    pub need_s: u32,
+    pub totals: Option<bicycles::Totals>,
+}
+
+/// One cyclist's call: when it came and what happened, in words; its street's name is the movement's, by `ride.arm`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct RideRowView {
+    /// The call itself (a row's identity).
+    pub ride: bicycles::Ride,
+    pub at: Said,
+    pub outcome: Said,
 }
 
 /// The vehicle actuation of a signal: every street that has a phase of its own (or is actuated without one) with its
@@ -894,6 +939,66 @@ fn actuation_view(s: &State, plan: &signal::Plan, arms: &[ArmView], summary: act
     ActuationView { streets, phases: summary.phases, approaches: summary.approaches, findings, found: summary.findings }
 }
 
+/// The bicycle detection of `plan` on `s` in words, from the hour's `summary`: `arms` names the streets, `lengths` is how
+/// far each street's cyclists ride to clear the junction (`ride_lengths`).
+fn bicycles_view(s: &State, plan: &signal::Plan, arms: &[ArmView], lengths: &[(u32, i32)], summary: bicycles::Summary) -> BicyclesView {
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.cyclists.is_some() || bicycles::ridden(plan, a.uid)).collect();
+    listed.sort_by_key(|a| a.bearing);
+    let movements = listed
+        .into_iter()
+        .map(|a| {
+            let length_mm = lengths.iter().find(|(u, _)| *u == a.uid).map_or(0, |(_, l)| *l);
+            let mut to: Vec<u32> = a.lanes.iter().flat_map(|l| l.to.iter().copied()).filter(|&t| t != a.uid).collect();
+            to.sort_by_key(|&t| s.arms.iter().find(|b| b.uid == t).map_or(0, |b| b.bearing));
+            to.dedup();
+            BikeMovementView {
+                uid: a.uid,
+                label: name(a.uid),
+                to: list(to.into_iter().map(name).collect()),
+                on_detection: a.cyclists.is_some(),
+                rate: bicycles::rate_of(a).unwrap_or(0),
+                ridden: bicycles::ridden(plan, a.uid),
+                length_mm,
+                clearance_s: bicycles::clearance_s(length_mm),
+                need_s: bicycles::need_s(length_mm),
+                totals: summary.totals.iter().find(|t| t.arm == a.uid).copied(),
+            }
+        })
+        .collect();
+    let rows = summary
+        .rides
+        .iter()
+        .map(|r| RideRowView {
+            ride: *r,
+            at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(r.at_s / 60))).with("seconds", Arg::Num(i64::from(r.at_s % 60))),
+            outcome: ride_outcome_said(r),
+        })
+        .collect();
+    let findings = summary
+        .findings
+        .iter()
+        .map(|f| match *f {
+            bicycles::Finding::CannotServe { arm, need_s, most_s } => Said::new("jn-bikes-finding-cannot")
+                .with("arm", Arg::Said(Box::new(name(arm))))
+                .with("need", Arg::Num(i64::from(need_s)))
+                .with("most", Arg::Num(i64::from(most_s))),
+            bicycles::Finding::NotRidden { arm } => Said::new("jn-bikes-finding-not-ridden").with("arm", Arg::Said(Box::new(name(arm)))),
+        })
+        .collect();
+    BicyclesView { movements, rows, findings, found: summary.findings }
+}
+
+/// What happened to a cyclist's call, in the pedestrian calls' few words.
+fn ride_outcome_said(r: &bicycles::Ride) -> Said {
+    let outcome = match r.outcome {
+        bicycles::Outcome::Served => calls::Outcome::Served,
+        bicycles::Outcome::Delayed => calls::Outcome::Delayed,
+        bicycles::Outcome::NotServed => calls::Outcome::NotServed,
+    };
+    outcome_said(&calls::Call { arm: r.arm, at_s: r.at_s, outcome, wait_s: r.wait_s, extended_s: r.extended_s })
+}
+
 /// What happened to a call, in a few words.
 fn outcome_said(c: &calls::Call) -> Said {
     let wait = Arg::Num(i64::from(c.wait_s));
@@ -1015,11 +1120,13 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    // One hour of the controller gives both the calls and the actuation.
-    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms), &ride_lengths(s, arms));
+    // One hour of the controller gives the calls, the actuation and the bicycle calls.
+    let lengths = ride_lengths(s, arms);
+    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms), &lengths);
     let calls = calls_view(s, &plan, arms, hour.calls);
     let actuation = actuation_view(s, &plan, arms, hour.actuation);
-    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation })
+    let bicycles = bicycles_view(s, &plan, arms, &lengths, hour.bicycles);
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation, bicycles })
 }
 
 /// The movements that take part in the conflicts, each once.
