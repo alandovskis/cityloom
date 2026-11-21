@@ -158,8 +158,7 @@ pub fn opens_a_link(hash: &str, search: &str) -> bool {
     if valid_token(hash) {
         return true;
     }
-    let names_project = search.trim_start_matches('?').split('&').any(|pair| pair == "project" || pair.starts_with("project="));
-    !hash.is_empty() && !crate::shared::ports::is_account_fragment(hash) && !names_project
+    !hash.is_empty() && !crate::shared::ports::is_account_fragment(hash) && crate::shared::project_id::named_project(search).is_none()
 }
 
 /// The link that opens the share behind `token`, on the site at `origin`. The token rides in the fragment, which the

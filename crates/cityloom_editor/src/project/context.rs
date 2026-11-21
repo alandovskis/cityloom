@@ -35,11 +35,7 @@ pub fn find(storage: &dyn Storage, id: &str) -> Option<Project> {
 /// not listed is `Missing`: the page does not open another project in its place. Takes the root storage.
 pub fn resolve(storage: &Rc<dyn Storage>, search: &str) -> Resolved {
     let store = ProjectStore::new(storage.clone());
-    let named = search.trim_start_matches('?').split('&').find_map(|pair| match pair.split_once('=') {
-        Some(("project", id)) => Some(id),
-        _ => (pair == "project").then_some(""),
-    });
-    let id = match named {
+    let id = match crate::shared::project_id::named_project(search) {
         Some(id) => find(&**storage, id).map(|p| p.id),
         None => store.last_opened(),
     };
