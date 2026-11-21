@@ -38,7 +38,7 @@ fn project_storage() -> (Rc<MemoryStorage>, Rc<dyn Storage>) {
 
 fn share_text() -> String {
     let (_, storage) = project_storage();
-    compose(&storage, "Plateau", &default_area().to_query(), "0.96.0", "2027-01-15T08:00:00.000Z").unwrap()
+    compose(&storage, "Plateau", &default_area().to_query(), "0.97.0", "2027-01-15T08:00:00.000Z").unwrap()
 }
 
 fn with(change: &dyn Fn(&mut Value)) -> String {
@@ -69,7 +69,7 @@ fn a_share_holds_the_project_as_it_is_and_reads_back_whole() {
 #[test]
 fn a_project_with_no_work_shares_its_area_alone_and_unknown_fields_are_ignored() {
     let empty: Rc<dyn Storage> = Rc::new(MemoryStorage::default());
-    let text = compose(&empty, "Empty", &default_area().to_query(), "0.96.0", "x").unwrap();
+    let text = compose(&empty, "Empty", &default_area().to_query(), "0.97.0", "x").unwrap();
     let v: Value = serde_json::from_str(&text).unwrap();
     assert!(v.get("edits").is_none() && v.get("restrictions").is_none());
     assert!(parse_and_validate(&text).unwrap().documents().is_empty());
@@ -327,7 +327,7 @@ fn sharing(locale: Locale) -> (Rc<ShareVm>, TestPorts) {
     t.storage.remember(EDITS_KEY, &edits().to_string());
     t.storage.remember(RESTRICTIONS_KEY, &rules().to_string());
     t.storage.set_now(1_800_000_000_000); // 2027-01-15T08:00:00Z
-    let context = Context { project_name: "Plateau".into(), project_area: default_area().to_query(), app_version: "0.96.0".into() };
+    let context = Context { project_name: "Plateau".into(), project_area: default_area().to_query(), app_version: "0.97.0".into() };
     (ShareVm::new(t.ports.clone(), crate::i18n_for(locale), context), t)
 }
 

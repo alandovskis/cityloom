@@ -5,7 +5,7 @@
 //! **The format** (`format_version` 1):
 //!
 //! ```json
-//! { "kind": "cityloom-share", "format_version": 1, "app_version": "0.96.0", "created_at": "2027-01-15T08:00:00.000Z",
+//! { "kind": "cityloom-share", "format_version": 1, "app_version": "0.97.0", "created_at": "2027-01-15T08:00:00.000Z",
 //!   "project": { "name": "Plateau", "area": "area=45.5230,-73.5810&name=Plateau" },
 //!   "edits": { …the project's `cityloom-edits` document… },
 //!   "restrictions": { …the project's `cityloom-restrictions` document (its area rules)… } }
