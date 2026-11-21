@@ -374,6 +374,34 @@ class Pipelines(unittest.TestCase):
         self.assertIn("version", self.jobs("presubmit.yml"))
         self.assertNotIn("version", self.jobs("postsubmit.yml"))
 
+    def test_the_ui_tier_is_sharded_and_the_shards_add_up(self):
+        # The UI tier is the longest job, so a pull request splits it over runners: the matrix lists each shard once and
+        # every run is told the total, or a shard of the tier would be left out (or run twice).
+        ui = self.jobs("presubmit.yml")["ui"]
+        matrix = re.search(r"shard: \[([^\]]*)\]", ui)
+        self.assertIsNotNone(matrix, "the ui job has no shard matrix")
+        shards = [int(n) for n in matrix.group(1).split(",")]
+        self.assertEqual(shards, list(range(1, len(shards) + 1)))
+        self.assertIn(f"--shard=${{{{ matrix.shard }}}}/{len(shards)}", ui)
+        # A narrowed pull request can have fewer specs than shards; a shard with none must not fail.
+        self.assertIn("--pass-with-no-tests", ui)
+
+    def test_every_shard_keeps_its_own_report(self):
+        ui = self.jobs("presubmit.yml")["ui"]
+        self.assertIn("playwright-report-ui-${{ matrix.shard }}", ui)
+
+    def test_the_wasm_check_runs_beside_the_host_tests(self):
+        # `just test` (the local recipe) is both; in CI they are two jobs, so neither waits for the other.
+        jobs = self.jobs("presubmit.yml")
+        self.assertIn("just test-host", jobs["test"])
+        self.assertNotIn("just test-wasm", jobs["test"])
+        self.assertIn("just test-wasm", jobs["wasm"])
+        self.assertNotIn("just test-host", jobs["wasm"])
+
+    def test_the_test_builds_carry_no_debug_info(self):
+        # Debug info is most of the time the linker spends on the test binaries, and a CI log never shows it.
+        self.assertIn('CARGO_PROFILE_TEST_DEBUG: "0"', self.text("presubmit.yml"))
+
     def test_only_a_pull_request_is_cancelled_by_a_newer_push(self):
         self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
         self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))
