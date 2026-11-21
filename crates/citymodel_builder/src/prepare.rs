@@ -12,7 +12,7 @@ use crate::tiles::{self, TilesJob};
 
 const ARCHIVE_NAME: &str = "montreal.citymodel";
 pub use crate::progress::megabytes;
-pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf";
+pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec/quebec-latest.osm.pbf";
 
 /// What the command was asked, as the command line says it.
 pub struct PrepareArgs {
