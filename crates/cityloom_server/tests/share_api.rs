@@ -24,7 +24,7 @@ async fn signed_in(app: &TestApp, sub: &str) -> Browser {
 
 fn design() -> Value {
     json!({
-        "kind": "cityloom-share", "format_version": 1, "app_version": "0.96.0", "created_at": "2027-01-15T08:00:00.000Z",
+        "kind": "cityloom-share", "format_version": 1, "app_version": "0.97.0", "created_at": "2027-01-15T08:00:00.000Z",
         "project": {"name": "Plateau", "area": "area=45.5230,-73.5810&name=Plateau"},
         "edits": {"version": 6, "streets": {"w1~n2~n3": {"street": {"name": "Rue Rachel"}}}, "junctions": {}},
         "restrictions": {"version": 1, "restrictions": {"r1": {"name": "Car-free"}}},
