@@ -12,11 +12,44 @@ use leptos::web_sys::HtmlElement;
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
 use crate::street::model::{SNAP_MM, StripCell, snap};
-use crate::street::view::strip::{basis_by_length, is_boundary_drag};
 use crate::street::vm::keys::{ZoneAction, on_strip};
+use crate::street::vm::plan::is_boundary_drag;
 use crate::street::vm::row::{CurbRow, Row, StopRow, cell_id, strip_id};
 use crate::street::vm::text::cell_text;
 use crate::street::vm::watch::SheetWatch;
+
+/// No cell is narrower than this share of its row, so a short thing on a long street is still a target.
+const MIN_SHARE: f64 = 0.06;
+
+/// The flex-grow of each cell of a row, from their lengths, as shares that add up to 1: in proportion to its length,
+/// but never under `MIN_SHARE` (the cells that would be are pinned at it and the rest share what is left by length).
+/// When the cells are too many for the floor to hold, every cell gets an equal share. The target size in pixels is not
+/// decided here: it is the view's CSS `min-width` on each cell (the row scrolls when they do not fit).
+pub fn basis_by_length(lengths: &[i32]) -> Vec<f64> {
+    let n = lengths.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let equal = 1.0 / n as f64;
+    if n as f64 * MIN_SHARE >= 1.0 {
+        return vec![equal; n];
+    }
+    let len: Vec<f64> = lengths.iter().map(|l| f64::from((*l).max(0))).collect();
+    let mut pinned = vec![false; n];
+    loop {
+        let free: Vec<usize> = (0..n).filter(|&i| !pinned[i]).collect();
+        let left = 1.0 - (n - free.len()) as f64 * MIN_SHARE;
+        let sum: f64 = free.iter().map(|&i| len[i]).sum();
+        let share = |i: usize| if sum > 0.0 { left * len[i] / sum } else { left / free.len() as f64 };
+        let short: Vec<usize> = free.iter().copied().filter(|&i| share(i) < MIN_SHARE).collect();
+        if short.is_empty() {
+            return (0..n).map(|i| if pinned[i] { MIN_SHARE } else { share(i) }).collect();
+        }
+        for i in short {
+            pinned[i] = true;
+        }
+    }
+}
 
 /// What a drag of one thing works from, as measured when the press began.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -189,7 +222,7 @@ fn strip<R: Row>(w: SheetWatch, side: Side) -> impl IntoView {
         let doc = document();
         if let (Some(cell), Some(strip)) = (doc.get_element_by_id(&cell_id), doc.get_element_by_id(&strip_id::<R>(side))) {
             let (c, s) = (cell.get_bounding_client_rect(), strip.get_bounding_client_rect());
-            let by = crate::street::view::strip::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
+            let by = crate::street::view::scroll::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
             if by != 0.0 {
                 strip.set_scroll_left(strip.scroll_left() + by.round() as i32);
             }
@@ -371,10 +404,40 @@ mod tests {
         assert_eq!((s.low_mm, s.high_mm), (9_000, 21_000), "it cannot move toward a stop it touches");
     }
 
+    /// Each cell's share of its row, normalised.
+    fn shares(lengths: &[i32]) -> Vec<f64> {
+        let b = basis_by_length(lengths);
+        let sum: f64 = b.iter().sum();
+        b.iter().map(|x| x / sum).collect()
+    }
+
     #[test]
-    fn the_basis_by_length_is_the_zone_strips_rule() {
-        let b = basis_by_length(&[5_000, 2_000_000]);
-        assert!(b[0] >= 0.06 - 1e-9 && b[1] > b[0]);
+    fn a_short_cell_beside_a_long_one_keeps_at_least_the_floor_share() {
+        let s = shares(&[5_000, 2_000_000]);
+        assert!(s[0] >= MIN_SHARE - 1e-9, "{s:?}");
+        assert!(s[1] > s[0]);
+        let even = shares(&[30_000, 30_000]);
+        assert!((even[0] - even[1]).abs() < 1e-12);
         assert!(basis_by_length(&[]).is_empty());
+    }
+
+    #[test]
+    fn ten_short_cells_and_a_long_one_each_keep_the_floor_share() {
+        let mut l = vec![5_000; 10];
+        l.push(2_000_000);
+        let s = shares(&l);
+        assert!(s.iter().all(|x| *x >= MIN_SHARE - 1e-9), "{s:?}");
+        assert!((s.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(s[10] > s[0]);
+    }
+
+    #[test]
+    fn cells_too_many_for_the_floor_get_equal_shares() {
+        let s = shares(&[5_000; 40]);
+        assert!(s.iter().all(|x| (x - 1.0 / 40.0).abs() < 1e-12), "{s:?}");
+        let mut l = vec![5_000; 17];
+        l[1] = 2_000_000;
+        let s = shares(&l);
+        assert!(s.iter().all(|x| (x - 1.0 / 17.0).abs() < 1e-12), "{s:?}");
     }
 }

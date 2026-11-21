@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
-import { addFromMenu as addItem, expect, placesOnMap, streetLengthM, test, EDITS_VERSION } from "./fixtures";
+import { chooseCell, addFromMenu as addItem, expect, placesOnMap, streetLength, test, EDITS_VERSION } from "./fixtures";
 
-// Raised tables and crossings: the strip under the zones, its tools, the checks, the 2.5D and the saved document.
+// Raised tables and crossings: the strip under the plan, its tools, the checks, the 2.5D and the saved document.
 
 /** Opens the first street of the city that has a raised-tables strip (a street with a real end to measure from) and is
  *  at least `minM` metres long. With `stops`, it must also have a transit stop row and a curbside strip. */
@@ -11,14 +11,14 @@ async function openCalmingStreet(page: Page, minM: number, stops = false) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     if ((await page.locator("#calming-strip").count()) === 0) continue;
     if (
       stops &&
       ((await page.locator("#stop-strip-right").count()) === 0 || (await page.locator(".curb-strip").count()) === 0)
     )
       continue;
-    if ((await streetLengthM(page)) >= minM) return;
+    if ((await streetLength(page)) >= minM) return;
   }
   throw new Error(`no street of ${minM} m or more with a raised-tables strip${stops ? " and a stops row" : ""}`);
 }
@@ -31,9 +31,9 @@ const KINDS = ["Raised table", "Raised crossing", "Chicane", "Modal filter"];
 /** Chooses the free stretch `cell` and adds an element of `kind` (the Kind select's value) there from the Add a
  *  piece menu, at the kind's default length. */
 async function addFromMenu(page: Page, cell: number, kind = "0") {
-  await page.locator("#calming-" + cell).click();
+  await chooseCell(page, page.locator("#calming-" + cell));
   await addItem(page, KINDS[Number(kind)]);
-  await page.locator("#calming-" + cell).click();
+  await chooseCell(page, page.locator("#calming-" + cell));
 }
 
 /** The same, then gives the element `metres`. */
@@ -70,7 +70,7 @@ test.describe("raised tables and crossings", () => {
     // Kept: the document is written as EDITS_VERSION whatever it holds: every street record carries the importer stamp, and the table is there after a reload.
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Raised table.*8\.0 m long/);
 
     // Undo takes it away.
@@ -86,7 +86,7 @@ test.describe("raised tables and crossings", () => {
     await addElement(page, 0, 8, "1");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Raised crossing/);
     await expect(page.locator("#drawing .iso-table .iso-zebra").first()).toBeAttached();
-    await page.locator("#calming-0").click();
+    await chooseCell(page, page.locator("#calming-0"));
     await page.locator("#calming-kind").selectOption("0");
     await page.locator("#calming-length").fill("8");
     await page.locator("#calming-length").press("Enter");
@@ -113,7 +113,7 @@ test.describe("raised tables and crossings", () => {
     await openCalmingStreet(page, 20);
     await addElement(page, 0, 8);
     const strip = page.locator("#calming-strip");
-    await cells(page).nth(0).click();
+    await chooseCell(page, cells(page).nth(0));
     const name = async () => (await cells(page).nth(0).getAttribute("aria-label")) ?? "";
     const first = await name();
     await strip.press("Alt+ArrowRight");
@@ -125,9 +125,9 @@ test.describe("raised tables and crossings", () => {
   test("a table over a transit stop fails its check, and moving it clear passes", async ({ page }) => {
     await openCalmingStreet(page, 40, true);
     // A stop at the start of the right side, then a table at the start of the street.
-    await page.locator("#stop-right-0").click();
+    await chooseCell(page, page.locator("#stop-right-0"));
     await addItem(page, "Curb extension");
-    await page.locator("#stop-right-0").click();
+    await chooseCell(page, page.locator("#stop-right-0"));
     await page.locator("#stop-length").fill("12");
     await page.locator("#stop-length").press("Enter");
     await addElement(page, 0, 8);
@@ -143,7 +143,7 @@ test.describe("raised tables and crossings", () => {
     await addElement(page, 0, 8);
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr"));
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await page.locator("#add-btn").click();
     await expect(page.locator("#add-topic-calming")).toHaveText("Apaisement de la circulation");
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Plateau surélevé/);
@@ -170,7 +170,7 @@ test.describe("raised tables and crossings", () => {
     await expect(page.locator("#checks li").filter({ hasText: "Chicanes clear of bus and bike lanes" })).toHaveCount(1);
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Chicane/);
 
     // Undo takes it away.
@@ -211,7 +211,7 @@ test.describe("raised tables and crossings", () => {
     ).toHaveCount(1);
     await expect.poll(() => editsVersion(page)).toBe(EDITS_VERSION);
     await page.reload();
-    await expect(page.locator("#zone-0")).toBeVisible();
+    await expect(page.locator("#plan svg")).toBeVisible();
     await expect(cells(page).nth(0)).toHaveAttribute("aria-label", /Modal filter/);
 
     await page.locator("#undo").click();

@@ -6,6 +6,7 @@ pub mod add_menu;
 pub mod impact;
 pub mod keys;
 pub mod level;
+pub mod plan;
 pub mod row;
 pub mod text;
 pub mod transform;
@@ -20,7 +21,7 @@ use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::catalogue::Side;
-use crate::shared::catalogue::StreetClass;
+use crate::shared::catalogue::{KINDS, StreetClass};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -29,8 +30,8 @@ use crate::shared::said::{Arg, Said, say_now};
 use crate::shared::units::Units;
 use crate::street::model::CalmingKindExt;
 use crate::street::model::{
-    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, StopKind, Street, StripCell, Subject, Template, TreeSize, Use, View,
-    ZoneRefusal,
+    CalmingKind, CalmingRefusal, CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, Pick, StopKind, Street, StripCell, Subject, Template, TreeSize, Use, View,
+    ZoneEnd, ZoneRefusal,
 };
 use crate::street::vm::add_menu::{Entry, Item, Topic};
 use crate::street::vm::impact::{Cause, Impact, Input};
@@ -87,6 +88,12 @@ pub struct StreetVm {
     stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
     /// The level of the details panel the person reached last (see `level`).
     asked: ArcRwSignal<Level>,
+    /// The plan's keyboard point, from the plan's left end: outside the history, like the pick.
+    point: ArcRwSignal<i32>,
+    /// Where the keyboard's extension of the pick started (Shift with a key), until another key moves the point.
+    extend_from: Cell<Option<i32>>,
+    /// Whether the keyboard point has moved on its own since the stretch was last picked: its words are then where it is.
+    point_alone: ArcRwSignal<bool>,
     goal: crate::shared::goals::GoalChoice,
     /// Whether the Checks tab shows its passing checks.
     passes: crate::shared::check_fold::PassFold,
@@ -101,10 +108,11 @@ pub struct StreetVm {
 /// How long after the last change the summary of it is shown, in milliseconds.
 const IMPACT_DELAY_MS: u32 = 600;
 
-/// The street before an edit: its class, and what the summary of the edit is compared with.
+/// The street before an edit: its class, what the summary of the edit is compared with, and the pick.
 struct Before {
     class: StreetClass,
     input: Input,
+    pick: Pick,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -153,6 +161,9 @@ impl StreetVm {
                 stop_shelter_pick: ArcRwSignal::new(None),
                 stop_name_pick: ArcRwSignal::new(None),
                 asked: ArcRwSignal::new(Level::Street),
+                point: ArcRwSignal::new(0),
+                extend_from: Cell::new(None),
+                point_alone: ArcRwSignal::new(false),
                 goal,
                 passes: Default::default(),
                 impact: ArcRwSignal::new(None),
@@ -361,9 +372,13 @@ impl StreetVm {
             .collect()
     }
 
-    /// Shows a level of the details panel, from its path; what is chosen stays chosen.
+    /// Shows a level of the details panel, from its path; what is chosen stays chosen. The Street step also picks the
+    /// whole street.
     pub fn show_level(&self, level: Level) {
         self.ask(level);
+        if level == Level::Street {
+            self.pick_whole();
+        }
     }
 
     fn ask(&self, level: Level) {
@@ -424,7 +439,8 @@ impl StreetVm {
         let done = self.edit(|e| e.undo());
         if done {
             let said = text::undone_text(&self.view_now(), &self.i18n, self.units_now());
-            self.ports.announcer.say(&self.with_class_note(said, &before));
+            let said = self.with_class_note(said, &before);
+            self.ports.announcer.say(&self.with_pick_note(said, before.pick));
             self.record(Cause::Undo, &before);
         }
         done
@@ -438,7 +454,8 @@ impl StreetVm {
         let done = self.edit(|e| e.redo());
         if done {
             let said = text::redone_text(&self.view_now(), &self.i18n, self.units_now());
-            self.ports.announcer.say(&self.with_class_note(said, &before));
+            let said = self.with_class_note(said, &before);
+            self.ports.announcer.say(&self.with_pick_note(said, before.pick));
             self.record(Cause::Redo, &before);
         }
         done
@@ -451,7 +468,8 @@ impl StreetVm {
         let before = self.before();
         let done = self.edit(|e| e.reset());
         if done {
-            self.ports.announcer.say(&self.with_class_note(text::started_over(&self.i18n), &before));
+            let said = self.with_class_note(text::started_over(&self.i18n), &before);
+            self.ports.announcer.say(&self.with_pick_note(said, before.pick));
             self.record(Cause::StartOver, &before);
         }
         done
@@ -711,6 +729,28 @@ impl StreetVm {
         })
     }
 
+    /// Where a thing `length_mm` long added in the chosen free stretch of a row starts, `gap_from_mm` being where that
+    /// stretch starts (`start_of_pick_in`).
+    fn start_in_gap<R: Row>(&self, gap_from_mm: i32, length_mm: i32) -> i32 {
+        let v = self.view_now();
+        let gap_to_mm = R::strips(&v).sides.iter().find_map(|s| s.cells.get(s.selected?)).map_or(gap_from_mm, |c| c.to_mm());
+        self.start_of_pick_in((gap_from_mm, gap_to_mm), length_mm)
+    }
+
+    /// Where a thing `length_mm` long added in the free stretch `gap` (anchored) starts on the plan's left: at the
+    /// start of the picked stretch (its left end) when that lies in the free stretch, else at the free stretch's own
+    /// left end. Anchored at the last end, a thing starting at a left end runs from `length_mm` before it.
+    fn start_of_pick_in(&self, gap: (i32, i32), length_mm: i32) -> i32 {
+        let (pick, end) = self.read(|e| (e.pick(), e.anchor_end()));
+        let (gap_left, pick_left) = match (end, pick) {
+            (ZoneEnd::First, Pick::Stretch { from_mm, .. }) => (gap.0, Some(from_mm)),
+            (ZoneEnd::Last, Pick::Stretch { to_mm, .. }) => (gap.1 - length_mm, Some(to_mm - length_mm)),
+            (ZoneEnd::First, Pick::Whole) => (gap.0, None),
+            (ZoneEnd::Last, Pick::Whole) => (gap.1 - length_mm, None),
+        };
+        pick_left.filter(|&start| gap.0 <= start && start < gap.1).unwrap_or(gap_left)
+    }
+
     /// Chooses cell `cell` of `side`'s strip, announcing it. A cell that is not there is left alone.
     pub fn select_cell<R: Row>(&self, side: Side, cell: usize) {
         // The drag moves the chosen thing: choosing another would move that one instead.
@@ -812,14 +852,17 @@ impl StreetVm {
         self.select_cell_edge::<CurbRow>(side, last);
     }
 
-    /// Adds a use of `length_mm` at the start of the chosen gap. False, with the reason said, when no gap is chosen or
+    /// Adds a use of `length_mm` at the start of the chosen gap, or of the pick where that lies in the gap. False, with the reason said, when no gap is chosen or
     /// it was refused.
     pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
         if self.refuse_read_only() {
             return false;
         }
         match self.chosen::<CurbRow>() {
-            Some((side, None, from_mm)) => self.added(Level::Curb, self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_))),
+            Some((side, None, from_mm)) => {
+                let from_mm = self.start_in_gap::<CurbRow>(from_mm, length_mm);
+                self.added(Level::Curb, self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_)))
+            }
             _ => {
                 self.say_now_key(CurbRow::CHOOSE_GAP_KEY);
                 false
@@ -977,7 +1020,8 @@ impl StreetVm {
         }
     }
 
-    /// Adds an element of `kind` and `length_mm` at the start of the chosen free stretch. False, with the reason
+    /// Adds an element of `kind` and `length_mm` at the start of the chosen free stretch, or of the pick where that lies
+    /// in it. False, with the reason
     /// said, when no free stretch is chosen or it was refused. A chicane starts on the side picked.
     pub fn add_calming(&self, kind: CalmingKind, length_mm: i32) -> bool {
         if self.refuse_read_only() {
@@ -985,6 +1029,9 @@ impl StreetVm {
         }
         match self.calming_chosen() {
             Some((None, from_mm)) => {
+                let v = self.view_now();
+                let to_mm = v.calming_strip.selected.and_then(|n| v.calming_strip.cells.get(n)).map_or(from_mm, |c| c.to_mm);
+                let from_mm = self.start_of_pick_in((from_mm, to_mm), length_mm);
                 let first = Some(self.calming_first_pick.get_untracked());
                 self.added(Level::Calming, self.calming_edit(|e| e.add_calming_first(kind, from_mm, length_mm, first).map(|_| ())))
             }
@@ -1141,7 +1188,8 @@ impl StreetVm {
         }
     }
 
-    /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap, with the shelter ticked for that gap.
+    /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap (or of the pick, where that lies in the gap),
+    /// with the shelter ticked for that gap.
     /// False, with the reason said, when no gap is chosen or it was refused.
     pub fn add_stop(&self, kind: StopKind, length_mm: i32) -> bool {
         if self.refuse_read_only() {
@@ -1151,7 +1199,8 @@ impl StreetVm {
             Some((side, None, from_mm)) => {
                 let shelter = self.stop_shelter_pick.get_untracked().is_some_and(|p| (p.0, p.1) == (side, from_mm) && p.2);
                 let name = self.stop_name_pick.get_untracked().filter(|p| (p.0, p.1) == (side, from_mm)).map(|p| p.2);
-                let added = self.row_edit(Subject::Stop, |e| e.add_stop_named(side, from_mm, length_mm, kind, shelter, name.as_deref()));
+                let at = self.start_in_gap::<StopRow>(from_mm, length_mm);
+                let added = self.row_edit(Subject::Stop, |e| e.add_stop_named(side, at, length_mm, kind, shelter, name.as_deref()));
                 if added {
                     self.stop_shelter_pick.set(None);
                     self.stop_name_pick.set(None);
@@ -1490,18 +1539,18 @@ impl StreetVm {
         if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
             return;
         }
-        // The zone stays selected if it is still there (the frame came with the editor); the piece is chosen after
-        // it, since choosing another zone clears the piece.
-        let zone = self.core.read(|e| e.zone());
-        fresh.select_zone(zone);
-        fresh.select(self.view_now().selected);
-        // So are the stretches chosen on the strips, which the details panel may be showing.
+        // The pick stays, clamped to the city's street (the frame came with the editor), and so do the stretches chosen
+        // on the strips, which the details panel may be showing; the piece is chosen after the pick, which shows its
+        // zone.
+        let pick = self.core.read(|e| e.pick());
         self.core.read(|e| fresh.keep_choices(e));
+        fresh.select(self.view_now().selected);
         self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
         self.forget_impact();
-        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+        let said = self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new());
+        self.ports.announcer.say(&self.with_pick_note(said, pick));
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -1520,7 +1569,7 @@ impl StreetVm {
     /// How the street stands before an edit: the class, which an edit may change, and what the impact summary
     /// compares against.
     fn before(&self) -> Before {
-        Before { class: self.view_now().class, input: self.impact_input() }
+        Before { class: self.view_now().class, input: self.impact_input(), pick: self.read(|e| e.pick()) }
     }
 
     /// The street as the summary of an edit reads it, now.
@@ -1536,9 +1585,26 @@ impl StreetVm {
         }
     }
 
+    /// `said`, and after it where the edit did not reach (`Editor::missed`), naming the piece each stretch lacks.
+    fn with_missed(&self, said: String) -> String {
+        let mut spans: Vec<(i32, i32, usize)> =
+            self.read(|e| e.missed().into_iter().map(|(a, b, kind)| (e.left_mm(a).min(e.left_mm(b)), e.left_mm(a).max(e.left_mm(b)), kind)).collect());
+        if spans.is_empty() {
+            return said;
+        }
+        spans.sort_unstable();
+        let notes: Vec<String> = spans
+            .iter()
+            .flat_map(|&(from, to, kind)| text::missed_said(&[(from, to)], KINDS[kind].id))
+            .map(|m| say_now(&self.i18n, self.units_now(), &m))
+            .collect();
+        format!("{said} {}", notes.join(" "))
+    }
+
     fn say_edit(&self, before: &Before) {
         if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            self.ports.announcer.say(&self.with_class_note(t, before));
+            let said = self.with_class_note(t, before);
+            self.ports.announcer.say(&self.with_missed(said));
             self.record(Cause::Edit, before);
         }
     }
@@ -2446,6 +2512,8 @@ mod tests {
         assert_eq!(o[0].label, "Same as the street: 50 km/h");
         assert_eq!(o.iter().filter(|x| x.selected).count(), 1);
         r.said.take();
+        r.vm.select_zone(0);
+        r.said.take();
         assert!(r.vm.set_speed(Some(30)));
         assert!(r.said.take()[0].starts_with("Speed limit 30 km/h: Zone 1"));
         let o = r.vm.speed_options();
@@ -2453,7 +2521,8 @@ mod tests {
         assert_eq!(o.iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(30)));
         assert!(r.vm.follow_street_speed());
         assert!(r.said.take()[0].starts_with("Speed limit back to the street's: Zone 1"));
-        assert!(r.vm.speed_options()[0].selected);
+        // Alike again, the two zones joined: the street's own speed is shown.
+        assert_eq!(r.vm.speed_options().iter().find(|x| x.selected).map(|x| x.kmh), Some(Some(50)));
         assert!(!r.vm.follow_street_speed());
         // a street of one zone has no such choice
         assert!(speed_rig(crate::street::model::Speed::Kmh(50)).vm.speed_options().iter().all(|x| !x.street));
@@ -2683,6 +2752,45 @@ mod tests {
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.read(|e| e.zone()), 1);
         assert_eq!(r.vm.view_now().selected, Some(uid));
+    }
+
+    #[test]
+    fn a_sync_reload_keeps_the_pick_clamped_to_the_city_s_street_and_says_when_it_moved() {
+        use crate::street::model::{MIN_ZONE_MM, Speed, Zone};
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        let frame = r.vm.read(|e| e.frame()).expect("the city's street has an end to measure from");
+        let length = frame.length_mm;
+        let (from, to) = (length / 4 / 1_000 * 1_000, length * 3 / 4 / 1_000 * 1_000);
+        assert!(to - from > 3 * MIN_ZONE_MM, "a street long enough for this test: {length}");
+        assert!(r.vm.pick_stretch(from, to));
+        r.vm.flush();
+        r.said.take();
+        // another device changed a width: the pick stays as it was
+        remote_edit(&binding);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.picked(), Some((from, to)));
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+        // another device made the street change 2 m inside the pick: the pick's start snaps to that boundary
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        let at = r.vm.read(|e| e.anchored_mm(from + 2_000));
+        let mut own = s.segments.clone();
+        own.last_mut().unwrap().width_mm += 100;
+        s.zones = vec![
+            Zone { from_mm: 0, segments: None, name: None, speed: Speed::Undecided },
+            Zone { from_mm: at, segments: Some(own), name: None, speed: Speed::Undecided },
+        ];
+        s.from_end = frame.from_end;
+        s.length_mm = Some(length);
+        assert!(binding.store.write_street(edge, s));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.picked(), Some((from + 2_000, to)));
+        let m = |mm: i32| format!("{:.1} m", f64::from(mm) / 1_000.0);
+        assert_eq!(r.said.take(), [format!("Updated from another device. From {} to {}, {} long.", m(from + 2_000), m(to), m(to - from - 2_000))]);
     }
 }
 

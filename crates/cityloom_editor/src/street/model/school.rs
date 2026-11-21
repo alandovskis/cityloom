@@ -1,20 +1,22 @@
 //! What the School street template does besides laying out its pieces (#148): it makes a school zone, a stretch
 //! of the street with a lower speed limit and a raised table, from what the editor already has. Nothing here is
-//! new geometry: the zone is an ordinary zone (`split_zone`), its speed an ordinary zone speed (`set_speed`), the
-//! table an ordinary raised element (`add_calming`, with every one of its checks), each inspectable and editable
-//! afterwards. A part that does not fit is skipped, with the reason said, and the others still apply.
+//! new geometry: the stretch is an ordinary pick (`pick_stretch`) laid out as any edit over the pick is
+//! (`edit_uniform`, which splits at its ends), its speed an ordinary speed of the pick (`set_speed`), the table an
+//! ordinary raised element (`add_calming`, with every one of its checks), each inspectable and editable afterwards.
+//! A part that does not fit is skipped, with the reason said, and the others still apply.
 //!
 //! Every figure is a placeholder, UNVERIFIED: the speed and the length of a school zone are CityLoom's own.
 
 use super::CalmingKind as Kind;
 use super::calming::DEFAULT_TABLE_MM;
 use super::zones::MIN_ZONE_MM;
-use super::{Arg, Editor, Said, Segment, snap};
+use super::{Arg, Editor, Pick, Said, Segment, Speed, snap};
+use cityloom_model::street::speed_in;
 
 /// The speed limit of a school zone, in kilometres an hour.
 pub const SCHOOL_KMH: u16 = 30;
 
-/// How long the school zone is when the zone it is made in is long enough to set it apart, in millimetres.
+/// How long the school zone is when the pick it is made in is long enough to set it apart, in millimetres.
 pub const SCHOOL_ZONE_MM: i32 = 60_000;
 
 /// What applying a template did, part by part, as `Said` sentences: what was applied, and what was skipped and why.
@@ -26,12 +28,15 @@ pub struct TemplateReport {
 }
 
 impl Editor {
-    /// Lays `arranged` out in the school zone as one revision labelled `label`, and reports what was done.
+    /// Lays `arranged` out in the school stretch as one revision labelled `label`, and reports what was done.
     ///
-    /// The school zone is a stretch of `SCHOOL_ZONE_MM` in the middle of the selected zone when that zone has room
-    /// for it and for `MIN_ZONE_MM` either side; else the selected zone as it is (the whole street when it has one
-    /// zone, or when no zone can be made). It gets the pieces, a speed limit of `SCHOOL_KMH` unless it is lower
-    /// already, and a raised table in its middle.
+    /// The school stretch is the middle `SCHOOL_ZONE_MM` of the pick (the whole street when it is picked whole) when
+    /// the pick has room for it and for `MIN_ZONE_MM` either side, and becomes the pick; else it is the pick itself.
+    /// It is picked as any stretch is (`pick_stretch`), so an end that a boundary between runs lies under `MIN_ZONE_MM`
+    /// from snaps to it, leaving no sliver: the stretch can then be from 50.2 m to 69.8 m long. It gets the pieces,
+    /// with one set of uids, across any boundaries inside it, a speed limit of `SCHOOL_KMH` in each part of it above
+    /// that or with none (a part at or under it keeps its own), and a raised table in its middle. The rest of the pick
+    /// is left as it was.
     pub(super) fn apply_school(&mut self, arranged: Vec<Segment>, next_uid: u32, label: Said) -> TemplateReport {
         let start = self.cursor;
         let mut report = TemplateReport::default();
@@ -39,13 +44,12 @@ impl Editor {
         // The stretch.
         match self.structure_frame(false) {
             Ok(frame) => {
-                let z = self.zone;
-                let (from, to) = self.states[self.cursor].content.span(z, frame.length_mm);
+                let (from, to) = self.pick_span(frame.length_mm);
                 let a = snap(from + (to - from - SCHOOL_ZONE_MM) / 2);
-                let b = a + SCHOOL_ZONE_MM;
-                if a - from >= MIN_ZONE_MM && to - b >= MIN_ZONE_MM && self.split_zone(Some(a)).is_ok() && self.split_zone(Some(b)).is_ok() {
-                    self.select_zone(z + 1);
-                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(a)).with("to", Arg::Length(b)));
+                if to - from >= SCHOOL_ZONE_MM + 2 * MIN_ZONE_MM
+                    && let Ok(Pick::Stretch { from_mm, to_mm }) = self.pick_stretch(a, a + SCHOOL_ZONE_MM)
+                {
+                    report.applied.push(Said::new("template-school-applied-zone").with("from", Arg::Length(from_mm)).with("to", Arg::Length(to_mm)));
                 } else {
                     let room = Said::new("template-school-room").with("length", Arg::Length(SCHOOL_ZONE_MM)).with("min", Arg::Length(MIN_ZONE_MM));
                     report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(room))));
@@ -54,24 +58,24 @@ impl Editor {
             Err(refusal) => report.skipped.push(Said::new("template-school-skipped-zone").with("reason", Arg::Said(Box::new(refusal.said())))),
         }
 
-        // The pieces, in the school zone.
-        self.edit(label.clone(), |segs| {
-            *segs = arranged;
-            true
-        });
+        // The pieces, in the school stretch.
+        self.edit_uniform(label.clone(), arranged);
 
-        // The speed limit of the school zone.
-        let z = self.zone;
+        // The speed limit of the school stretch, part by part: a part at or under the school limit keeps its own.
         let content = &self.states[self.cursor].content;
-        let current = if content.zones.len() > 1 { cityloom_model::street::speed_in(content.speed, &content.zones, z) } else { content.speed };
-        match current.kmh().filter(|&n| n <= SCHOOL_KMH) {
-            Some(n) => report
+        let above = |kmh: Option<u16>| kmh.is_none_or(|n| n > SCHOOL_KMH);
+        let speeds: Vec<Option<u16>> = self.zones_in_pick().map(|z| speed_in(content.speed, &content.zones, z).kmh()).collect();
+        if speeds.iter().all(|&k| above(k)) {
+            self.set_speed(Some(SCHOOL_KMH));
+            report.applied.push(Said::new("template-school-applied-speed").with("kmh", Arg::Num(i64::from(SCHOOL_KMH))));
+        } else if speeds.iter().any(|&k| above(k)) {
+            self.lower_to_school_speed(label.clone());
+            report.applied.push(Said::new("template-school-applied-speed").with("kmh", Arg::Num(i64::from(SCHOOL_KMH))));
+        } else {
+            let highest = speeds.into_iter().flatten().max().unwrap_or(SCHOOL_KMH);
+            report
                 .skipped
-                .push(Said::new("template-school-skipped-speed").with("kmh", Arg::Num(i64::from(n))).with("limit", Arg::Num(i64::from(SCHOOL_KMH)))),
-            None => {
-                self.set_speed(Some(SCHOOL_KMH));
-                report.applied.push(Said::new("template-school-applied-speed").with("kmh", Arg::Num(i64::from(SCHOOL_KMH))));
-            }
+                .push(Said::new("template-school-skipped-speed").with("kmh", Arg::Num(i64::from(highest))).with("limit", Arg::Num(i64::from(SCHOOL_KMH))));
         }
 
         // A raised table in the middle of it, by the table's own rules.
@@ -87,15 +91,36 @@ impl Editor {
         report
     }
 
-    /// Adds a raised table in the middle of the selected zone, as `add_calming` would, and says where it is.
+    /// Gives `SCHOOL_KMH` to each zone in the pick whose speed (its own, else the street's) is above it or not set,
+    /// as one edit (`over_pick`); the zones at or under it keep theirs. Only for a pick of several zones.
+    fn lower_to_school_speed(&mut self, label: Said) -> bool {
+        self.over_pick(label, |c, range, _, _| {
+            for z in range {
+                if speed_in(c.speed, &c.zones, z).kmh().is_none_or(|n| n > SCHOOL_KMH) {
+                    c.zones[z].speed = Speed::Kmh(SCHOOL_KMH);
+                }
+            }
+            Vec::new()
+        })
+    }
+
+    /// Adds a raised table in the middle of the pick (the school stretch), as `add_calming` would, and says where it is.
     fn school_table(&mut self) -> Result<i32, Said> {
         let frame = self.frame.ok_or(super::calming::CalmingRefusal::NoAnchor.said())?;
-        let (from, to) = self.states[self.cursor].content.span(self.zone, frame.length_mm);
+        let (from, to) = self.pick_span(frame.length_mm);
         if to - from < DEFAULT_TABLE_MM {
             return Err(Said::new("template-school-table-room").with("length", Arg::Length(DEFAULT_TABLE_MM)));
         }
         let at = snap(from + (to - from - DEFAULT_TABLE_MM) / 2);
         self.add_calming(Kind::Table, at, DEFAULT_TABLE_MM).map(|_| at).map_err(|r| r.said())
+    }
+
+    /// The pick's span in anchored millimetres along a street `length_mm` long: all of it when picked whole.
+    fn pick_span(&self, length_mm: i32) -> (i32, i32) {
+        match self.pick() {
+            Pick::Whole => (0, length_mm),
+            Pick::Stretch { from_mm, to_mm } => (from_mm, to_mm),
+        }
     }
 }
 
@@ -113,6 +138,116 @@ mod tests {
 
     fn keys(said: &[Said]) -> Vec<&'static str> {
         said.iter().map(|s| s.key).collect()
+    }
+
+    fn starts(e: &Editor) -> Vec<i32> {
+        e.snapshot().zones.iter().map(|z| z.from_mm).collect()
+    }
+
+    fn stretch(from_mm: i32, to_mm: i32) -> Pick {
+        Pick::Stretch { from_mm, to_mm }
+    }
+
+    /// A 200 m street at 50 km/h in two runs: the base to 70 m, then a section of its own (a wider first piece).
+    fn two_runs() -> Editor {
+        let mut s = crate::street::model::zoned(Street::sample(0, Side::Right), &[0, 70_000], 200_000);
+        s.speed = Speed::Kmh(50);
+        let mut own = s.segments.clone();
+        own[0].width_mm += 100;
+        s.zones[1].segments = Some(own);
+        Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 200_000, from_end: ZoneEnd::First }))
+    }
+
+    #[test]
+    fn the_school_template_on_a_long_stretch_makes_its_60_m_stretch_in_the_middle_and_leaves_the_rest() {
+        let mut e = two_runs();
+        let was = e.snapshot();
+        // A 100 m pick across the boundary at 70 m: the school stretch is 40 m to 100 m, across it.
+        e.pick_stretch(20_000, 120_000).unwrap();
+        let report = e.apply_template(Template::School).unwrap();
+        assert_eq!(keys(&report.applied), ["template-school-applied-zone", "template-school-applied-speed", "template-school-applied-table"]);
+        assert_eq!((report.applied[0].args[0].1.clone(), report.applied[0].args[1].1.clone()), (Arg::Length(40_000), Arg::Length(100_000)));
+        assert_eq!(starts(&e), [0, 40_000, 100_000]);
+        let s = e.snapshot();
+        let sections = s.sections();
+        assert_eq!((sections[0], sections[2]), (was.sections()[0], was.sections()[1]), "the rest of the pick is as it was");
+        assert!(!cityloom_model::street::same_pieces(sections[1], was.sections()[0]), "the school stretch has the template's pieces");
+        assert_eq!(s.zones.iter().map(|z| z.speed).collect::<Vec<_>>(), [Speed::Undecided, Speed::Kmh(30), Speed::Undecided]);
+        assert_eq!(s.speed, Speed::Kmh(50));
+        assert_eq!(s.calming.len(), 1);
+        assert_eq!((s.calming[0].from_mm, s.calming[0].length_mm), (66_500, DEFAULT_TABLE_MM), "the table is in the stretch's middle");
+        assert_eq!((e.pick(), e.zone()), (stretch(40_000, 100_000), 1), "the school stretch is picked");
+    }
+
+    #[test]
+    fn the_school_template_on_a_short_stretch_makes_the_stretch_itself_the_school_zone() {
+        let mut e = editor(200_000, Speed::Kmh(50));
+        // 60 m: no 5 m to spare on each side of a 60 m school stretch.
+        e.pick_stretch(50_000, 110_000).unwrap();
+        let report = e.apply_template(Template::School).unwrap();
+        assert_eq!(keys(&report.skipped), ["template-school-skipped-zone"]);
+        assert_eq!(keys(&report.applied), ["template-school-applied-speed", "template-school-applied-table"]);
+        assert_eq!(starts(&e), [0, 50_000, 110_000]);
+        let s = e.snapshot();
+        assert!(s.zones[0].segments.is_none() && s.zones[2].segments.is_none());
+        assert!(s.zones[1].segments.is_some());
+        assert_eq!(s.zones.iter().map(|z| z.speed).collect::<Vec<_>>(), [Speed::Undecided, Speed::Kmh(30), Speed::Undecided]);
+        assert_eq!(s.calming[0].from_mm, 76_500);
+        assert_eq!(e.pick(), stretch(50_000, 110_000));
+    }
+
+    #[test]
+    fn a_whole_street_sidewalk_change_after_the_school_template_reaches_the_school_stretch() {
+        let mut e = editor(100_000, Speed::Kmh(50));
+        e.apply_template(Template::School).unwrap();
+        assert_eq!(starts(&e), [0, 20_000, 80_000]);
+        e.pick_whole();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        let first_sidewalk = |section: &[Segment]| section.iter().find(|g| g.kind == sidewalk).map(|g| (g.uid, g.width_mm));
+        let (uid, _) = first_sidewalk(e.current()).unwrap();
+        let school_uid = first_sidewalk(e.snapshot().sections()[1]).unwrap().0;
+        assert_ne!(uid, school_uid, "the school stretch has fresh uids");
+        assert!(e.set_width(uid, 3_000));
+        let s = e.snapshot();
+        assert_eq!(s.sections().iter().map(|g| first_sidewalk(g).unwrap().1).collect::<Vec<_>>(), [3_000, 3_000, 3_000]);
+        assert!(e.missed().is_empty());
+    }
+
+    #[test]
+    fn the_school_template_lowers_only_the_parts_of_its_stretch_above_the_school_limit() {
+        // Two runs on a 200 m street at 50 km/h: 20 km/h to 70 m, the street's 50 km/h after it.
+        let mut s = crate::street::model::zoned(Street::sample(0, Side::Right), &[0, 70_000], 200_000);
+        s.speed = Speed::Kmh(50);
+        s.zones[0].speed = Speed::Kmh(20);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 200_000, from_end: ZoneEnd::First }));
+        let before = e.snapshot();
+        // The school stretch, 40 m to 100 m, lies over both.
+        e.pick_stretch(20_000, 120_000).unwrap();
+        let report = e.apply_template(Template::School).unwrap();
+        assert!(keys(&report.applied).contains(&"template-school-applied-speed"), "{:?}", report);
+        assert_eq!(starts(&e), [0, 40_000, 70_000, 100_000]);
+        let after = e.snapshot();
+        let speeds: Vec<Speed> = (0..after.zones.len()).map(|z| after.zone_speed(z)).collect();
+        assert_eq!(speeds, [Speed::Kmh(20), Speed::Kmh(20), Speed::Kmh(30), Speed::Kmh(50)], "the 20 km/h part is never raised");
+        assert_eq!(e.view().revisions.len(), 1);
+        assert!(e.undo());
+        let s = e.snapshot();
+        assert_eq!((s.segments, s.zones, s.speed, s.calming), (before.segments, before.zones, before.speed, before.calming));
+    }
+
+    #[test]
+    fn the_school_template_is_still_one_undo() {
+        let mut e = two_runs();
+        let before = e.snapshot();
+        e.pick_stretch(20_000, 120_000).unwrap();
+        e.apply_template(Template::School).unwrap();
+        let v = e.view();
+        assert_eq!(v.revisions.len(), 1);
+        assert_eq!(v.revisions[0].label.key, "rev-template");
+        assert!(e.undo());
+        let s = e.snapshot();
+        assert_eq!((s.segments, s.zones, s.speed, s.calming), (before.segments, before.zones, before.speed, before.calming));
+        assert_eq!(e.pick(), stretch(40_000, 100_000), "the pick is kept, clamped to the street");
     }
 
     #[test]

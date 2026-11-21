@@ -102,7 +102,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
         if open {
             focus_later("zone-keep-this");
         } else if was_open == Some(true) {
-            focus_later("zone-strip");
+            focus_later("plan-point");
         }
         open
     });
@@ -131,7 +131,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                 aria-describedby=move || no_neighbour(next).then_some(why_id)
                 on:click=move |_| {
                     if !no_neighbour(next) && w.begin_merge(next) && w.pending_merge().is_none() {
-                        focus_later("zone-strip");
+                        focus_later("plan-point");
                     }
                 }
             >

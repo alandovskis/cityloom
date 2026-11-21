@@ -25,6 +25,8 @@ pub struct EndInfo {
     /// The end's node is a junction (whatever the street has on it), so its corner must be kept clear of sight
     /// obstructions.
     pub junction: bool,
+    /// The end is cut by the edge of the area: the street goes on past it, beyond what was loaded.
+    pub cut: bool,
 }
 
 /// What the editor knows of a curbside use besides what it is: its shortest length and the message that names it.

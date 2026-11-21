@@ -275,7 +275,7 @@ impl Editor {
             c.length_mm = Some(frame.length_mm);
             true
         });
-        self.zone = z + 1;
+        self.follow_zone(z + 1);
         self.selected = None;
         Ok(())
     }
@@ -318,16 +318,25 @@ impl Editor {
             c.length_mm = Some(frame.length_mm);
             true
         });
-        self.zone = lo;
+        self.follow_zone(lo);
         self.selected = None;
         Ok(())
     }
 
     /// Moves the start of the selected zone to `to_mm`, keeping both neighbours at least `MIN_ZONE_MM` long. Inside a
-    /// gesture it is shown as it goes and recorded as one revision at the end.
+    /// gesture it is shown as it goes and recorded as one revision at the end. The pick is the zone's span after it.
     pub fn move_boundary(&mut self, to_mm: i32) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame(true)?;
         let z = self.zone;
+        self.move_boundary_of(z, to_mm)?;
+        // The pick is the zone's span, which has moved with its start.
+        self.follow_zone(z);
+        Ok(())
+    }
+
+    /// Moves the start of zone `z` to `to_mm`, as `move_boundary` does, leaving the pick (clamped once recorded) and
+    /// the selected piece alone: what the plan's boundary drag moves.
+    pub fn move_boundary_of(&mut self, z: usize, to_mm: i32) -> Result<(), ZoneRefusal> {
+        let frame = self.structure_frame(true)?;
         let content = &self.states[self.cursor].content;
         if z == 0 || z >= content.zones.len() {
             return Err(ZoneRefusal::NoBoundary);
@@ -1061,7 +1070,9 @@ mod tests {
         assert!(e.select_zone(1));
         make_own(&mut e);
         assert!(e.select_zone(2));
-        make_own(&mut e);
+        // Widened by another width than zone 1, so that the two are not alike and do not join.
+        let (uid, w) = (e.snapshot().segments[0].uid, e.snapshot().segments[0].width_mm);
+        assert!(e.set_width(uid, w + 200));
         let before = e.snapshot();
         assert!(before.segments.iter().any(|s| s.direction.is_some()));
         let revs = revisions(&e);

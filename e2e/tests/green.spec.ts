@@ -6,7 +6,7 @@ import {
   live,
   menuItem,
   placesOnMap,
-  streetLengthM,
+  streetLength,
   test,
   EDITS_VERSION,
 } from "./fixtures";
@@ -48,8 +48,8 @@ async function openGreenStreet(page: Page, minM: number) {
   const streets = (await placesOnMap(page)).streets;
   for (const href of streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < minM) continue;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await streetLength(page)) < minM) continue;
     if (await treeGreyed(page)) continue;
     // The hosts are listed with the settings of a chosen element: add a tree to see them, and take it back.
     await addFromMenu(page, "Tree");
@@ -87,8 +87,8 @@ async function openStreetWithAJunctionAtItsStart(page: Page) {
   await page.goto("/map.html");
   for (const href of (await placesOnMap(page)).streets) {
     await page.goto("/" + href);
-    await expect(page.locator("#zone-0")).toBeVisible();
-    if ((await streetLengthM(page)) < 30 || (await treeGreyed(page))) continue;
+    await expect(page.locator("#plan svg")).toBeVisible();
+    if ((await streetLength(page)) < 30 || (await treeGreyed(page))) continue;
     await addFromMenu(page, "Tree");
     const hosts = await page.locator("#green-host option").allTextContents();
     if (!hosts.some((h) => /^Sidewalk/.test(h))) {

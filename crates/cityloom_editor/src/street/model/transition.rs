@@ -3,6 +3,7 @@
 //!
 //! Every taper constant below is unverified (TAC GDG ch. 8–9, MTQ Tome I ch. 8 not checked).
 
+use super::matching::match_pieces;
 use super::{Segment, ZoneEnd};
 use crate::shared::catalogue::{KINDS, is_roadway};
 
@@ -210,73 +211,6 @@ pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>, fro
     });
 
     Some(Transition { length_mm: length as i32, host, changes, merges })
-}
-
-/// Pair the pieces of two sections: by uid first, then the rest by kind in left-to-right order. A uid that
-/// names another kind on the other side does not match. Pairs whose order differs between the sides (the strips
-/// would cross) are split into a dropped and an added entry, as few of them as it takes. The entries run in section order.
-pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usize>, Option<usize>)> {
-    let mut to_far: Vec<Option<usize>> = vec![None; near.len()];
-    let mut taken = vec![false; far.len()];
-    for (i, n) in near.iter().enumerate() {
-        if let Some(j) = far.iter().position(|f| f.uid == n.uid && f.kind == n.kind) {
-            to_far[i] = Some(j);
-            taken[j] = true;
-        }
-    }
-    for (i, n) in near.iter().enumerate() {
-        if to_far[i].is_none()
-            && let Some(j) = (0..far.len()).find(|&j| !taken[j] && far[j].kind == n.kind)
-        {
-            to_far[i] = Some(j);
-            taken[j] = true;
-        }
-    }
-    // The strips of matched pieces must not cross: keep the longest run whose far places rise with the near ones (the
-    // longest increasing subsequence), so a piece moved across several others is the only one split. The first of
-    // equal runs is kept.
-    let matched: Vec<(usize, usize)> = to_far.iter().enumerate().filter_map(|(i, j)| j.map(|j| (i, j))).collect();
-    let mut run = vec![1usize; matched.len()];
-    let mut back: Vec<Option<usize>> = vec![None; matched.len()];
-    for k in 0..matched.len() {
-        for p in 0..k {
-            if matched[p].1 < matched[k].1 && run[p] + 1 > run[k] {
-                run[k] = run[p] + 1;
-                back[k] = Some(p);
-            }
-        }
-    }
-    let mut keep = vec![false; matched.len()];
-    let mut at = (0..matched.len()).rev().max_by_key(|&k| run[k]);
-    while let Some(k) = at {
-        keep[k] = true;
-        at = back[k];
-    }
-    for (&(i, j), &kept) in matched.iter().zip(&keep) {
-        if !kept {
-            to_far[i] = None;
-            taken[j] = false;
-        }
-    }
-    let mut out = Vec::new();
-    let mut j = 0;
-    for (i, m) in to_far.iter().enumerate() {
-        match m {
-            Some(m) => {
-                while j < *m {
-                    if !taken[j] {
-                        out.push((None, Some(j)));
-                    }
-                    j += 1;
-                }
-                out.push((Some(i), Some(*m)));
-                j = m + 1;
-            }
-            None => out.push((Some(i), None)),
-        }
-    }
-    out.extend((j..far.len()).filter(|&j| !taken[j]).map(|j| (None, Some(j))));
-    out
 }
 
 #[cfg(test)]
