@@ -199,10 +199,18 @@ impl ProjectStore {
     /// it that the project's map opens on (`Metro::start`), as an area query, the form every build reads; the
     /// metropolitan area is the one that holds it (`place::area::metro_of`), and nothing changes it later.
     pub fn create_in(&self, name: &str, metro: &Metro) -> Result<Project, Refused> {
+        self.create_at(name, &metro.start().to_query())
+    }
+
+    /// Keeps a new project whose map opens on `area` (an area query, kept as it is), and marks it for the sync.
+    /// `Unusable` where `area` cannot be read: no page could open the project.
+    pub fn create_at(&self, name: &str, area: &str) -> Result<Project, Refused> {
         let name = clean_name(name)?;
+        if Area::from_query(area).is_none() {
+            return Err(Refused::Unusable);
+        }
         let created = self.write(|projects| {
-            let project =
-                Project { id: self.fresh_id(projects), name, area: metro.start().to_query(), created_at: stamp(self.storage.now_ms()), placeholder: false };
+            let project = Project { id: self.fresh_id(projects), name, area: area.to_string(), created_at: stamp(self.storage.now_ms()), placeholder: false };
             projects.push(project.clone());
             Ok(project)
         })?;

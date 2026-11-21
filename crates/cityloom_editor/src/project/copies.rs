@@ -154,6 +154,31 @@ pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, docu
     Err(Refused::Unusable)
 }
 
+/// The documents a fork takes from its copy: the design as it was shared (`share::model`'s two documents).
+const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restriction::store::RESTRICTIONS_KEY];
+
+/// Makes the copy `id` of a shared design one of the person's projects, to edit (#223): a new project, listed, with
+/// the copy's name and area and a copy of its design, marked for the sync with each of its places as the person's own
+/// work. The copy stays as it was shared, still a copy (its link opens it again, and replaces it, never the fork).
+/// `Unknown` where `id` is not a copy; `Unusable` where the browser cannot keep the project or its design, and then
+/// nothing of it is left listed. Takes the root storage.
+pub fn fork(storage: &Rc<dyn Storage>, id: &str) -> Result<Project, Refused> {
+    let copy = list(&**storage).into_iter().find(|c| c.id == id).ok_or(Refused::Unknown)?;
+    let shared = ScopedStorage::new(storage.clone(), id);
+    let documents: Vec<(&str, String)> =
+        FORKED_KEYS.iter().filter_map(|key| shared.recall(key).filter(|text| !text.is_empty()).map(|text| (*key, text))).collect();
+    let store = ProjectStore::new(storage.clone());
+    let project = store.create_at(&copy.name, &copy.area)?;
+    let forked = ScopedStorage::new(storage.clone(), &project.id);
+    if !documents.iter().all(|(key, text)| forked.remember(key, text)) {
+        store.delete(&project.id);
+        return Err(Refused::Unusable);
+    }
+    let records = crate::project::store::records(storage, &project.id);
+    crate::sync::model::mark_all(&forked, &records, false);
+    Ok(project)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +289,93 @@ mod tests {
         assert_eq!(keep(&storage, "tok-a", "A", "q", &[(EDITS, "e")]), Err(Refused::Unusable));
         assert_eq!(memory.recall("cityloom-edits@s1").as_deref(), Some(""));
         assert_eq!(keep(&storage, "tok-a", "A", "q", &[("cityloom-sync", "{}")]), Err(Refused::Unusable), "only a project's documents");
+    }
+
+    /// An edits document holding one street, as an editor writes it.
+    fn edits_with_street(key: &str) -> String {
+        let mut draft = crate::city::edits::Draft::new();
+        assert!(draft.put_raw(crate::city::edits::STREETS, key, json!({ "v": 1 })));
+        draft.to_json()
+    }
+
+    fn pending(storage: &dyn Storage) -> Vec<String> {
+        crate::sync::model::open(storage).map(|doc| doc.records.into_iter().filter(|(_, e)| e.pending).map(|(name, _)| name).collect()).unwrap_or_default()
+    }
+
+    #[test]
+    fn forking_a_copy_makes_one_of_the_persons_projects_holding_the_same_design() {
+        let (memory, storage) = root();
+        let edits = edits_with_street("w1~n2~n3");
+        let area = "area=45.5,-73.5&name=Plateau";
+        let copy = keep(&storage, "tok-a", "Plateau", area, &[(EDITS, &edits), (RULES, "{\"version\":1}")]).unwrap();
+        memory.with_randomness(true);
+        let forked = fork(&storage, &copy).expect("forked");
+        assert_ne!(forked.id, copy);
+        assert!(forked.id.starts_with("p-"), "an id of the person's own: {}", forked.id);
+        assert_eq!((forked.name.as_str(), forked.area.as_str(), forked.placeholder), ("Plateau", area, false));
+        let listed = ProjectStore::new(storage.clone()).list();
+        assert_eq!(listed, [forked.clone()], "listed among the person's projects");
+        assert!(!is_copy(&*storage, &forked.id), "not a copy: a page opens it to edit");
+        assert!(!crate::project::context::read_only(&*storage, Some(&forked.id), &format!("project={}", forked.id)));
+        assert_eq!(memory.recall(&format!("cityloom-edits@{}", forked.id)), Some(edits.clone()));
+        assert_eq!(memory.recall(&format!("cityloom-restrictions@{}", forked.id)).as_deref(), Some("{\"version\":1}"));
+        // The fork is the person's work: the sync sends the project and its places.
+        let marked = pending(&*storage);
+        assert!(marked.contains(&format!("project/{}", forked.id)), "{marked:?}");
+        assert!(marked.contains(&format!("street/{}:w1~n2~n3", forked.id)), "{marked:?}");
+        // The copy stays as it was shared, still a copy.
+        assert!(is_copy(&*storage, &copy));
+        assert_eq!(memory.recall(&format!("cityloom-edits@{copy}")), Some(edits));
+        assert!(marked.iter().all(|name| !name.contains(&copy)), "nothing of the copy is sent: {marked:?}");
+    }
+
+    #[test]
+    fn editing_a_fork_leaves_the_shared_copy_as_it_was() {
+        let (memory, storage) = root();
+        let edits = edits_with_street("w1~n2~n3");
+        let copy = keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[(EDITS, &edits)]).unwrap();
+        let forked = fork(&storage, &copy).unwrap();
+        let scoped = ScopedStorage::new(storage.clone(), &forked.id);
+        assert!(scoped.remember(EDITS, &edits_with_street("w9~n8~n7")));
+        assert_eq!(memory.recall(&format!("cityloom-edits@{copy}")), Some(edits), "the copy keeps the shared design");
+        // Opening the same link again replaces the copy, never the fork.
+        keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[(EDITS, "{}")]).unwrap();
+        assert_eq!(memory.recall(&format!("cityloom-edits@{}", forked.id)), Some(edits_with_street("w9~n8~n7")));
+    }
+
+    #[test]
+    fn forking_twice_makes_two_projects() {
+        let (_, storage) = root();
+        let copy = keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[]).unwrap();
+        let one = fork(&storage, &copy).unwrap();
+        let two = fork(&storage, &copy).unwrap();
+        assert_ne!(one.id, two.id);
+        assert_eq!(ProjectStore::new(storage.clone()).list().len(), 2);
+    }
+
+    #[test]
+    fn only_a_copy_can_be_forked() {
+        let (_, storage) = root();
+        let mine = ProjectStore::new(storage.clone()).create("Mine").unwrap();
+        assert_eq!(fork(&storage, &mine.id), Err(Refused::Unknown), "a project of the person's is not a copy");
+        assert_eq!(fork(&storage, "s9"), Err(Refused::Unknown));
+        assert_eq!(ProjectStore::new(storage.clone()).list().len(), 1);
+    }
+
+    #[test]
+    fn a_fork_the_browser_cannot_keep_leaves_no_project() {
+        let (memory, storage) = root();
+        let copy = keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[(EDITS, &edits_with_street("w1~n2~n3"))]).unwrap();
+        // The new project's id is `p1` (no randomness): its edits cannot be written.
+        memory.refuse("cityloom-edits@p1");
+        assert_eq!(fork(&storage, &copy), Err(Refused::Unusable));
+        assert!(ProjectStore::new(storage.clone()).list().is_empty(), "nothing listed");
+        assert!(pending(&*storage).iter().all(|name| !name.starts_with("street/")), "none of its places is sent");
+        assert!(is_copy(&*storage, &copy), "the copy is still there");
+        // A list of projects the browser cannot write keeps no fork either.
+        memory.refuse_nothing();
+        memory.refuse(crate::project::store::PROJECTS_KEY);
+        assert_eq!(fork(&storage, &copy), Err(Refused::Unusable));
     }
 
     #[test]

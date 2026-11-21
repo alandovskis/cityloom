@@ -43,6 +43,15 @@ fn a_project_is_made_in_the_metropolitan_area_chosen_and_keeps_where_its_map_ope
 }
 
 #[test]
+fn a_project_made_at_an_area_keeps_it_as_given_and_refuses_one_no_page_could_open() {
+    let (s, _) = store();
+    let p = s.create_at("Plateau", "area=45.5,-73.5&name=Plateau").unwrap();
+    assert_eq!(p.area, "area=45.5,-73.5&name=Plateau");
+    assert_eq!(s.create_at("Nowhere", "not an area"), Err(Refused::Unusable));
+    assert_eq!(s.list(), vec![p], "nothing kept for the refused one");
+}
+
+#[test]
 fn ids_are_random_where_storage_has_randomness_and_numbered_where_it_has_none() {
     let (s, storage) = store();
     let a = s.create("A").unwrap();
