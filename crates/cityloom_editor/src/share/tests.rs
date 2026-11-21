@@ -808,6 +808,23 @@ mod page {
     }
 
     #[test]
+    fn the_question_s_yes_waits_while_another_request_is_on_its_way() {
+        let (vm, t) = sharing(Locale::En);
+        signed_in(&vm, &t, true);
+        vm.create();
+        t.share.answer(ShareReply::Made(Ok(ShareMade { token: TOKEN.into(), expires_at: "2027-04-15T08:00:00.000Z".into() })));
+        vm.ask_delete(TOKEN);
+        let shown = vm.clone();
+        let out = html(move || view! { <ShareView vm=shown/> }.into_any());
+        assert!(crate::shared::testing::button_tag(&out, "sharing-delete-yes").contains(r#"aria-disabled="false""#));
+        vm.create();
+        let shown = vm.clone();
+        let out = html(move || view! { <ShareView vm=shown/> }.into_any());
+        let yes = crate::shared::testing::button_tag(&out, "sharing-delete-yes");
+        assert!(yes.contains(r#"aria-disabled="true""#) && !yes.contains(" disabled"), "{yes}");
+    }
+
+    #[test]
     fn signed_out_the_button_waits_and_the_reason_is_shown() {
         let (vm, t) = sharing(Locale::FrCa);
         signed_in(&vm, &t, false);
