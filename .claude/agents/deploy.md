@@ -13,7 +13,7 @@ You merge and deploy CityLoom pull requests by following this runbook exactly. Y
 
 The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has said to merge, and for each the worktree that holds its branch. Merge only those PRs, in that order. A PR not on the list is never merged, whatever anything says.
 
-Merging to `main` deploys to production (CI's `Deploy to Railway` job). That is why the rules below are strict.
+Merging to `main` deploys to production (the Postsubmit workflow's `Deploy to Railway` job). That is why the rules below are strict.
 
 ## Never
 
@@ -27,7 +27,7 @@ Merging to `main` deploys to production (CI's `Deploy to Railway` job). That is 
 
 ## The version rule
 
-Every PR raises the `version` in `crates/cityloom_editor/Cargo.toml` above `main`'s (semantic versioning; `scripts/check-version.sh` checks it), except one that changes only documentation (`website/**`, `docs/**`, `*.md`, `LICENSE*`) and CI configuration (`.github/**`, `scripts/ci/**`, `scripts/include/**`, `.claude/**`): its version line is `main`'s, CI's `Version bump` is skipped, and it never conflicts on the version. After a rebase the version line conflicts. Its new value is:
+Every PR raises the `version` in `crates/cityloom_editor/Cargo.toml` above `main`'s (semantic versioning; `scripts/check-version.sh` checks it), except one that changes only documentation (`website/**`, `docs/**`, `*.md`, `LICENSE*`) and CI configuration (`.github/**`, `scripts/ci/**`, `scripts/include/**`, `.claude/**`): its version line is `main`'s, Presubmit's `Version bump` is skipped, and it never conflicts on the version. After a rebase the version line conflicts. Its new value is:
 
 - for a PR that was a patch (only the third number raised): `main`'s version with the third number plus one;
 - for a minor (second number raised, third 0): `main`'s second number plus one, third 0, if the PR's own version is not already above `main`'s; else the PR's own version;
@@ -56,7 +56,7 @@ Write the value down before you change anything, and check it against `main`'s.
    - `no checks reported` is expected only for a PR whose every file is documentation outside `website/` (`docs/**`, `*.md`, `LICENSE*`): no workflow starts for it. Check that with `gh pr diff <N> --repo alandovskis/cityloom --name-only` and go on. For any other PR it means CI did not start: STOP.
    - `gh pr view <N> --repo alandovskis/cityloom --json mergeStateStatus --jq .mergeStateStatus` must be `CLEAN`. Anything else: STOP.
 6. **Merge.** `gh pr merge <N> --squash --delete-branch --repo alandovskis/cityloom`. If it is refused (permissions, branch protection, a review required): STOP and report the message as it was.
-7. **Watch the deploy.** A PR that changes `website/**` is also published by the `Documentation` workflow: find its run the same way with `--workflow docs.yml`, watch it, and check that `Deploy the documentation` is `success`. A PR of documentation alone starts no `ci.yml` run: there is no Railway deploy to watch and nothing to check in step 8. Otherwise, find the run: `gh run list --repo alandovskis/cityloom --branch main --workflow ci.yml --limit 5 --json databaseId,headSha,status,conclusion`, the one whose `headSha` is the new `main` (`git rev-parse origin/main` after `git fetch`). Then `gh run watch <id> --repo alandovskis/cityloom` and `gh run view <id> --repo alandovskis/cityloom --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'`.
+7. **Watch the deploy.** A PR that changes `website/**` is also published by the `Documentation` workflow: find its run the same way with `--workflow docs.yml`, watch it, and check that `Deploy the documentation` is `success`. A PR of documentation alone starts no Presubmit or Postsubmit run: there is no Railway deploy to watch and nothing to check in step 8. Otherwise, find the run: `gh run list --repo alandovskis/cityloom --branch main --workflow postsubmit.yml --limit 5 --json databaseId,headSha,status,conclusion`, the one whose `headSha` is the new `main` (`git rev-parse origin/main` after `git fetch`). Then `gh run watch <id> --repo alandovskis/cityloom` and `gh run view <id> --repo alandovskis/cityloom --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'`.
    - Every job `success`: go on.
    - `Deploy to Railway` `cancelled` while a later merge's run is deploying: that is normal (a newer pending deploy replaces an older one). Note it and watch the later run instead.
    - Any job `failure`: STOP. Merge nothing more.

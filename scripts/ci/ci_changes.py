@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Decides what CI runs for a change (`.github/workflows/ci.yml`'s `changes` job).
+"""Decides what CI runs for a change (`.github/workflows/presubmit.yml`'s `changes` job).
 
     scripts/ci/ci_changes.py --event pull_request --base <sha> [--head HEAD]
 
 Reads the files the change touches (git diff base..head) and the rules in scripts/ci/spec-map.json, prints what it
 decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
-    unit       true unless every file is documentation: the unit tests run in full (ci.yml does not start for a change
-               to documentation alone, so in CI this is always true)
+    unit       true unless every file is documentation: the unit tests run in full (presubmit.yml does not start for a
+               change to documentation alone, so in CI this is always true)
     version    true unless every file is documentation or CI configuration (CI_CONFIGURATION): the version must be raised
     browser    true when some browser tier runs (the shared build of the wasm and the server)
     ui         true when the UI tier runs (e2e/tiers.json: no database, no archive)
@@ -16,8 +16,8 @@ decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
     e2e        true when the E2E tier runs (`just e2e-archive`: the unpacked archive and the delivery specs)
     e2e_specs  its Playwright arguments
 
-Only a pull request is narrowed. A push to main and a manual run run every spec (a push of documentation alone does not start ci.yml),
-and so does anything doubtful: no files, a base that is not there, a file no rule names. A version bump alone
+Only a pull request is narrowed. postsubmit.yml, which checks main, runs every spec and does not call this. Anything
+doubtful runs every spec too: no files, a base that is not there, a file no rule names. A version bump alone
 (the version in the editor's Cargo.toml and its line of Cargo.lock) is not a change to those files.
 
 Standard library only; scripts/include/tests/test_ci_changes.py tests it.

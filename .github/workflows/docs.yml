@@ -1,10 +1,10 @@
 name: Documentation
 
 # The documentation site (website/) on its own: checked and built for every change to it, and published to GitHub
-# Pages (https://alandovskis.github.io/cityloom/) from main. ci.yml does not start for a change to documentation alone,
-# and its `CI` check does not cover the build: a broken build shows only in this workflow's Documentation check, on the
+# Pages (https://alandovskis.github.io/cityloom/) from main. presubmit.yml and postsubmit.yml do not start for a change to
+# documentation alone, and the `CI` check does not cover the build: a broken build shows only in this workflow's Documentation check, on the
 # pull requests that change website/. The build reads nothing outside website/ (the same command as `just docs-build`,
-# without just); the formatting check uses e2e/'s Prettier and the root's rules, whose own changes ci.yml's Format job
+# without just); the formatting check uses e2e/'s Prettier and the root's rules, whose own changes the Format job of presubmit.yml and postsubmit.yml
 # checks against website/ too. No check is required on main, so a path filter is safe.
 on:
   push:

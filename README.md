@@ -42,7 +42,7 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: formatting, the unit tests (with warnings denied), and the browser tests, each through `just`. A final `CI` job passes only if all of them did, so that is the one check to require in branch protection. A failed browser run keeps its Playwright report and traces as an artifact. Actions are pinned to a commit, and Dependabot proposes weekly updates for them, the Cargo dependencies and the browser tests' npm packages.
+`.github/workflows/presubmit.yml` runs on pull requests and `.github/workflows/postsubmit.yml` on pushes to `main`: formatting, the unit tests (with warnings denied), and the browser tests, each through `just`. Presubmit runs only the browser specs a change can affect and checks the version bump; its final `CI` job passes only if all of its jobs did, so that is the one check to require in branch protection. Postsubmit runs every spec and then deploys. A failed browser run keeps its Playwright report and traces as an artifact. Actions are pinned to a commit, and Dependabot proposes weekly updates for them, the Cargo dependencies and the browser tests' npm packages.
 
 ## The Montréal data
 

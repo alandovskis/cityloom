@@ -64,9 +64,10 @@ just format        # rustfmt and Prettier
 just format-check  # the same, without changing anything
 ```
 
-CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
-it. A workflow of its own, `.github/workflows/docs.yml`, checks and builds this documentation (what `just docs-build` runs) when a change
-touches `website/`, and publishes it to GitHub Pages from main. CI does not start for a change to documentation alone. CI's `test` and integration jobs run a Postgres service; the UI
+CI is two workflows. `.github/workflows/presubmit.yml` checks every pull request and `.github/workflows/postsubmit.yml` checks `main` in full once the
+pull request is merged, then deploys it. Both run `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
+them. A workflow of its own, `.github/workflows/docs.yml`, checks and builds this documentation (what `just docs-build` runs) when a change
+touches `website/`, and publishes it to GitHub Pages from main. Neither starts for a change to documentation alone. Their `test` and integration jobs run a Postgres service; the UI
 and E2E browser jobs need none. Every pull request raises the version in `crates/cityloom_editor/Cargo.toml`, except one
 made only of documentation and CI configuration (`CI_CONFIGURATION` in `scripts/ci/ci_changes.py`: `.github/`,
 `scripts/ci/`, `scripts/include/` and `.claude/`).
