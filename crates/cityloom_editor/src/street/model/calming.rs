@@ -777,6 +777,23 @@ mod tests {
         e.view().revisions.iter().map(|r| r.label.key).collect()
     }
 
+    /// Avenue Henri-Julien: 90.744 m, measured from its last end. A table added at the plan's left end snaps to the
+    /// 100 mm grid counted from the anchored end, so it ends 44 mm short of that end. That sliver holds nothing (every
+    /// place is on the grid), so the row lists no free cell for it: no "0.0 m to 0.0 m" ahead of the table, and the
+    /// table is the row's first cell.
+    #[test]
+    fn a_free_stretch_shorter_than_the_grid_is_no_cell_of_the_row() {
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 90_744, from_end: ZoneEnd::Last }));
+        let at = e.anchored_mm(0).min(e.anchored_mm(7_000));
+        e.add_calming(Kind::Table, at, 7_000).unwrap();
+        assert_eq!(e.snapshot().calming[0].to_mm(), 90_700, "the table ends on the grid, 44 mm short of the anchored end's far side");
+        let cells = e.view().calming_strip.cells;
+        assert!(cells.iter().all(|c| c.to_mm - c.from_mm >= super::super::SNAP_MM), "{:?}", cells.iter().map(|c| (c.from_mm, c.to_mm)).collect::<Vec<_>>());
+        assert_eq!(cells[0].kind, Some(Kind::Table), "the table comes first on the plan's left");
+        assert_eq!(cells.len(), 2, "the table and the free stretch after it");
+    }
+
     #[test]
     fn add_snaps_to_100_mm_and_keeps_the_list_ordered() {
         let mut e = editor();

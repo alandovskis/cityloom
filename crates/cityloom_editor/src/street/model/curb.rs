@@ -175,7 +175,9 @@ impl StripCell for CurbCell {
 
 /// The cells of one side along `length_mm`: `items` (an index into the list and where it starts and ends, in
 /// order, not overlapping) with a gap before each, between them and after the last. They come in the plan's order, from
-/// its left end: on a street measured from its last end (`from_end`), the other way round from their positions.
+/// its left end: on a street measured from its last end (`from_end`), the other way round from their positions. A gap
+/// shorter than the 100 mm grid holds nothing (every place is on the grid) and is no cell: on a street whose length is
+/// not a whole 100 mm, the sliver past the last thing on the grid.
 pub(super) fn strip_cells<C>(
     length_mm: i32,
     from_end: ZoneEnd,
@@ -186,13 +188,13 @@ pub(super) fn strip_cells<C>(
     let mut cells = Vec::new();
     let mut at = 0;
     for (k, from, to) in items {
-        if from > at {
+        if from - at >= super::SNAP_MM {
             cells.push(gap(at, from));
         }
         cells.push(item(k));
         at = at.max(to);
     }
-    if at < length_mm {
+    if length_mm - at >= super::SNAP_MM {
         cells.push(gap(at, length_mm));
     }
     if from_end == ZoneEnd::Last {
@@ -665,6 +667,18 @@ impl Editor {
 mod tests {
     use super::super::Piece;
     use super::*;
+
+    /// The curbside uses', the stops' and the raised elements' rows share these cells: a gap under the 100 mm grid, as
+    /// past the last thing on a street whose length is not a whole 100 mm, is none, from either end.
+    #[test]
+    fn a_gap_shorter_than_the_grid_is_no_cell_from_either_end() {
+        let cells =
+            |from_end| strip_cells(90_744, from_end, [(0, 0, 10_000), (1, 83_700, 90_700)].into_iter(), |a, b| ("gap", a, b), |k| ("item", k as i32, 0));
+        assert_eq!(cells(ZoneEnd::First), [("item", 0, 0), ("gap", 10_000, 83_700), ("item", 1, 0)]);
+        assert_eq!(cells(ZoneEnd::Last), [("item", 1, 0), ("gap", 10_000, 83_700), ("item", 0, 0)]);
+        let wide = strip_cells(90_744, ZoneEnd::First, [(0, 0, 90_600)].into_iter(), |a, b| (a, b), |_| (0, 0));
+        assert_eq!(wide, [(0, 0), (90_600, 90_744)], "144 mm still holds a place on the grid");
+    }
     use crate::shared::catalogue::kind_index;
     use crate::street::model::Street;
     use crate::street::model::StreetExt;
