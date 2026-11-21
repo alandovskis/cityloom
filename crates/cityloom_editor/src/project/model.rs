@@ -57,9 +57,19 @@ pub trait ProjectLinks {
     /// How many links made on this device of project `id` are listed, expired here or not: any of them is sent to the
     /// server before the project goes, since this device's clock may be wrong.
     fn listed(&self, id: &str) -> usize;
-    /// Deletes them on the server, one after the other; `done` hears `Ok` once none is left, or why one could not be
-    /// deleted (data: a `Said`), the rest then left as they are.
-    fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>);
+    /// Deletes them on the server, one after the other; `progress` hears each step (a link ended, or a wait the
+    /// server asked for), `done` hears `Ok` once none is left, or why one could not be deleted (data: a `Said`), the
+    /// rest then left as they are.
+    fn end(&self, id: &str, progress: Box<dyn Fn(Ending)>, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>);
+}
+
+/// A step of ending a project's links.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ending {
+    /// A link was ended; the next is on its way.
+    Going,
+    /// The server asked to wait (its rate limit): the same link is asked again shortly.
+    Waiting,
 }
 
 /// No links: a page that makes none (and the tests that need none).
@@ -72,7 +82,7 @@ impl ProjectLinks for NoLinks {
     fn listed(&self, _: &str) -> usize {
         0
     }
-    fn end(&self, _: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+    fn end(&self, _: &str, _: Box<dyn Fn(Ending)>, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
         done(Ok(()));
     }
 }

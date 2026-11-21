@@ -7,7 +7,7 @@ use leptos::prelude::*;
 
 use crate::place::area::{Area, Metro, default_metro, metro, metro_of, metros};
 use crate::project::migrate::move_legacy_work;
-use crate::project::model::{NoLinks, Project, ProjectLinks};
+use crate::project::model::{Ending, NoLinks, Project, ProjectLinks};
 use crate::project::store::{ProjectStore, last_changed};
 use crate::project::text::{changed_text, refused_key};
 use crate::shared::i18n::{Args, I18n};
@@ -73,6 +73,8 @@ pub struct ProjectsVm {
     links: Rc<dyn ProjectLinks>,
     /// Its links are being deleted on the server: the question waits.
     ending: ArcRwSignal<bool>,
+    /// The server asked to wait before the next try (its rate limit).
+    waiting: ArcRwSignal<bool>,
     /// How many of its links still work, as the question says: counted when it is asked and when the deleting stops.
     links_left: ArcRwSignal<usize>,
     /// Why its links could not be deleted, so the project was kept: the project's name and the reason.
@@ -115,6 +117,7 @@ impl ProjectsVm {
             deleting: ArcRwSignal::new(None),
             links,
             ending: ArcRwSignal::new(false),
+            waiting: ArcRwSignal::new(false),
             links_left: ArcRwSignal::new(0),
             delete_error: ArcRwSignal::new(None),
             me: me.clone(),
@@ -378,7 +381,7 @@ impl ProjectsVm {
     /// What the question says while the project's share links are deleted on the server (tracked): also why Cancel
     /// and Escape wait.
     pub fn ending_status(&self) -> Option<String> {
-        self.ending.get().then(|| self.word("project-delete-ending"))
+        self.ending.get().then(|| self.word(if self.waiting.get() { "project-delete-waiting" } else { "project-delete-ending" }))
     }
 
     /// Why the project was kept: its share links could not be deleted first (tracked).
@@ -420,11 +423,21 @@ impl ProjectsVm {
         self.ending.set(true);
         let deleted = Rc::new(std::cell::Cell::new(false));
         let (me, kept, told) = (self.me.clone(), id.clone(), deleted.clone());
+        self.waiting.set(false);
+        let (step_me, step_id) = (self.me.clone(), id.clone());
+        let progress = Box::new(move |step: Ending| {
+            if let Some(vm) = step_me.upgrade() {
+                vm.waiting.set(step == Ending::Waiting);
+                vm.links_left.set(vm.links.live(&step_id));
+            }
+        });
         self.links.end(
             &id,
+            progress,
             Box::new(move |answer| {
                 let Some(vm) = me.upgrade() else { return };
                 vm.ending.set(false);
+                vm.waiting.set(false);
                 match answer {
                     Ok(()) => told.set(vm.delete_now(&kept)),
                     Err(reason) => {

@@ -1579,6 +1579,7 @@ mod page {
         expired_here: std::cell::Cell<usize>,
         /// Ends them before `end` returns.
         at_once: std::cell::Cell<bool>,
+        progress: std::cell::RefCell<Option<Box<dyn Fn(crate::project::model::Ending)>>>,
         asked: std::cell::RefCell<Vec<(String, Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>)>>,
     }
 
@@ -1589,15 +1590,20 @@ mod page {
         fn listed(&self, _: &str) -> usize {
             self.live.get() + self.expired_here.get()
         }
-        fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
+        fn end(&self, id: &str, progress: Box<dyn Fn(crate::project::model::Ending)>, done: Box<dyn FnOnce(Result<(), crate::shared::said::Said>)>) {
             if self.at_once.get() {
                 return done(Ok(()));
             }
+            *self.progress.borrow_mut() = Some(progress);
             self.asked.borrow_mut().push((id.to_string(), done));
         }
     }
 
     impl Links {
+        fn step(&self, step: crate::project::model::Ending) {
+            (self.progress.borrow().as_ref().expect("ending"))(step);
+        }
+
         fn answer(&self, answer: Result<(), crate::shared::said::Said>) {
             let (_, done) = self.asked.borrow_mut().remove(0);
             done(answer);
@@ -1768,6 +1774,28 @@ mod page {
         links.answer(Err(crate::shared::said::Said::new("share-error-network")));
         let question = vm.delete_question().unwrap();
         assert!(question.contains("Its share link made on this device stops"), "{question}");
+    }
+
+    /// A long run of links shows how many are left after each, and says when the server asked to wait.
+    #[test]
+    fn while_its_links_are_deleted_the_question_follows_each_step() {
+        use crate::project::model::Ending;
+        let (vm, _, links) = page_with_links(3);
+        vm.create("Plateau");
+        vm.ask_delete(&id_of(&vm, "Plateau"));
+        vm.confirm_delete();
+        links.live.set(2);
+        links.step(Ending::Going);
+        assert!(vm.delete_question().unwrap().contains("Its 2 share links"), "{:?}", vm.delete_question());
+        links.step(Ending::Waiting);
+        let waiting = "The server asked to wait a moment: its share links are asked for again shortly… The project is deleted once they are; until then this cannot be cancelled.";
+        assert_eq!(vm.ending_status().as_deref(), Some(waiting));
+        links.live.set(1);
+        links.step(Ending::Going);
+        assert!(vm.ending_status().unwrap().starts_with("Deleting its share links on the server…"));
+        assert!(vm.delete_question().unwrap().contains("Its share link made on this device stops"));
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert!(fr.tr_now("project-delete-waiting", &Args::new()).starts_with("Le serveur a demandé d’attendre un instant"));
     }
 
     /// While its links are deleted the question says so, which is also why Cancel and Escape wait.

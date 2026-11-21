@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use crate::project::model::ProjectLinks;
+use crate::project::model::{Ending, ProjectLinks};
 use crate::share::model::ShareError;
 use crate::share::store::ShareStore;
 use crate::shared::ports::{Ports, ShareFailure};
@@ -47,25 +47,34 @@ fn why(failure: ShareFailure) -> Said {
     }
 }
 
-/// Deletes `tokens` of project `id` one after the other from the first, forgetting each the server no longer has. One
-/// refused by the rate limit is asked again after a wait that doubles (`MAX_TRIES` in all); any other failure, or the
-/// last of those, stops it. `tried` is how many times the first has been asked already.
-fn end_from(ports: Ports, id: String, mut tokens: Vec<String>, tried: u32, done: Box<dyn FnOnce(Result<(), Said>)>) {
+/// A run of ending a project's links: the ports, the project, and who hears each step.
+struct Run {
+    ports: Ports,
+    id: String,
+    progress: Rc<dyn Fn(Ending)>,
+}
+
+/// Deletes `tokens` of the run's project one after the other from the first, forgetting each the server no longer has.
+/// One refused by the rate limit is asked again after a wait that doubles (`MAX_TRIES` in all); any other failure, or
+/// the last of those, stops it. `tried` is how many times the first has been asked already.
+fn end_from(run: Run, mut tokens: Vec<String>, tried: u32, done: Box<dyn FnOnce(Result<(), Said>)>) {
     if tokens.is_empty() {
         return done(Ok(()));
     }
-    let (token, share) = (tokens[0].clone(), ports.share.clone());
+    let (token, share) = (tokens[0].clone(), run.ports.share.clone());
     share.delete(
         &tokens[0].clone(),
         Box::new(move |answer| match answer {
             Ok(()) | Err(ShareFailure::NotFound | ShareFailure::Expired | ShareFailure::Deleted) => {
-                store_of(&ports, &id).remove(&token);
+                store_of(&run.ports, &run.id).remove(&token);
                 tokens.remove(0);
-                end_from(ports, id, tokens, 0, done);
+                (run.progress)(Ending::Going);
+                end_from(run, tokens, 0, done);
             }
             Err(ShareFailure::Busy) if tried + 1 < MAX_TRIES => {
-                let scheduler = ports.scheduler.clone();
-                scheduler.after(1000 << tried, Box::new(move || end_from(ports, id, tokens, tried + 1, done)));
+                (run.progress)(Ending::Waiting);
+                let scheduler = run.ports.scheduler.clone();
+                scheduler.after(1000 << tried, Box::new(move || end_from(run, tokens, tried + 1, done)));
             }
             Err(failure) => done(Err(why(failure))),
         }),
@@ -84,8 +93,9 @@ impl ProjectLinks for ProjectShares {
     /// Asks for every link listed, not only those this device's clock thinks still work: the server decides, and one it
     /// has let expire (or deleted, or never had) counts as done. Only one expired more than `CLOCK_SKEW_MS` ago is left
     /// out: no clock is that wrong.
-    fn end(&self, id: &str, done: Box<dyn FnOnce(Result<(), Said>)>) {
+    fn end(&self, id: &str, progress: Box<dyn Fn(Ending)>, done: Box<dyn FnOnce(Result<(), Said>)>) {
         let tokens = store_of(&self.ports, id).worth_asking().into_iter().map(|m| m.token).collect();
-        end_from(self.ports.clone(), id.to_string(), tokens, 0, done);
+        let run = Run { ports: self.ports.clone(), id: id.to_string(), progress: Rc::from(progress) };
+        end_from(run, tokens, 0, done);
     }
 }

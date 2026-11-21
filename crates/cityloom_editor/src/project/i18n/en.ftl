@@ -50,6 +50,7 @@ project-delete-anyway-offer = { $failed } You can delete it anyway: its share li
 project-delete-anyway = Delete anyway
 # While a project's share links are deleted on the server, before the project (#221); Cancel and Escape wait meanwhile.
 project-delete-ending = Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.
+project-delete-waiting = The server asked to wait a moment: its share links are asked for again shortly… The project is deleted once they are; until then this cannot be cancelled.
 project-gone = That project is no longer here.
 project-first-name = First project
 # A project whose places came before its record, until its record or a rename names it.

@@ -53,6 +53,7 @@ project-delete-anyway-offer = { $failed } Vous pouvez le supprimer quand même :
 project-delete-anyway = Supprimer quand même
 # Pendant que les liens de partage d’un projet sont supprimés sur le serveur, avant le projet (#221); Annuler et Échap attendent.
 project-delete-ending = Suppression de ses liens de partage sur le serveur… Le projet est supprimé une fois qu’ils le sont; d’ici là, cette action ne peut pas être annulée.
+project-delete-waiting = Le serveur a demandé d’attendre un instant : ses liens de partage seront redemandés sous peu… Le projet est supprimé une fois qu’ils le sont; d’ici là, cette action ne peut pas être annulée.
 project-gone = Ce projet n’est plus ici.
 project-first-name = Premier projet
 # A project whose places came before its record, until its record or a rename names it.
