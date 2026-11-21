@@ -1,7 +1,7 @@
 $ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
-90c289c92c626f4e049cf0c7e646da226c066210
-$ cd e2e && DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8317 npx playwright test --config /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221b/playwright.config.ts
-# (web/pkg and target/e2e/cityloom_server as built at this HEAD by the 'just e2e tests/share.spec.ts' run of 03-spec-after.txt; capture specs: /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221b/capture.spec.ts, capture2.spec.ts, capture3.spec.ts, capture4.spec.ts, run in that order by one worker)
+8dd6a4914d4fe67b754c72cf35e054374e8f2a5e
+$ cd e2e && DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8317 npx playwright test --config /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221c/playwright.config.ts
+# (web/pkg and target/e2e/cityloom_server as built at this HEAD by the 'just e2e tests/share.spec.ts' run of 03-spec-after.txt; capture specs: /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/cap221c/capture.spec.ts, capture2.spec.ts, capture3.spec.ts, capture4.spec.ts, run in that order by one worker)
 
 ## 1. Signed in: share a project with a street edit and an area rule
 edited street: street.html?street=1 (changes counter: 1)
@@ -13,28 +13,28 @@ heading: Share First project
 intro: A share link lets anyone who has it see this project as it is now, read-only and with no account: its streets, junctions and area rules. Changes you make later are not in it.
 intro: The server keeps each shared copy for 90 days, then deletes it, and its link then says it has expired. You can delete a link sooner here, and deleting your account deletes them all.
 announced: Share link created. It works until February 19, 2027.
-link: http://127.0.0.1:8317/share.html#eZ4Nl2Bj1e9Bxjvu4LqTbYh9-IsUrK3xrgoX5hWQZ3o  (format <origin>/share.html#<43 base64url chars>: true)
+link: http://127.0.0.1:8317/share.html#3SxVWhJKJ7OCUkND2g9yZ_rNvcos30ND4To-m4cK9gk  (format <origin>/share.html#<43 base64url chars>: true)
 expiry line: Works until February 19, 2027
 buttons: Copy link, Delete link
-  row control #sharing-link-eZ4Nl2Bj1e9Bxjvu4LqTbYh9-IsUrK3xrgoX5hWQZ3o: accessible name "Share link that works until February 19, 2027", class "share-link"
-  row control #sharing-copy-eZ4Nl2Bj1e9Bxjvu4LqTbYh9-IsUrK3xrgoX5hWQZ3o: accessible name "Copy link that works until February 19, 2027", class "btn"
-  row control #sharing-delete-eZ4Nl2Bj1e9Bxjvu4LqTbYh9-IsUrK3xrgoX5hWQZ3o: accessible name "Delete link that works until February 19, 2027", class "btn danger"
+  row control #sharing-link-3SxVWhJKJ7OCUkND2g9yZ_rNvcos30ND4To-m4cK9gk: accessible name "Share link that works until February 19, 2027", class "share-link"
+  row control #sharing-copy-3SxVWhJKJ7OCUkND2g9yZ_rNvcos30ND4To-m4cK9gk: accessible name "Copy link that works until February 19, 2027", class "btn"
+  row control #sharing-delete-3SxVWhJKJ7OCUkND2g9yZ_rNvcos30ND4To-m4cK9gk: accessible name "Delete link that works until February 19, 2027", class "btn danger"
 
 ## 2. Another browser, signed out, opens the link
 recipient's project list before: ["First project Metropolitan area Montréal Timeline Share Rename Delete"]
 recipient /api/me status: 401 (signed out)
-opened URL: http://127.0.0.1:8317/map.html?project=s-4f6752529018&view=1
+opened URL: http://127.0.0.1:8317/map.html?project=s-870a0259d851&view=1
 requests whose URL holds the token: 0 (of 18 requests the page made)
 requests carrying the token in the Share-Token header: ["GET /api/share"]
 read-only tag: Read-only This design is open read-only: you can look at it, but not change it.
-areas panel: Shared zone Car-free · 32 streets inside; 31 conflict with the rule.
+areas panel: Shared zone Car-free · 31 streets inside; 30 conflict with the rule.
 "Declare an area" control present: 0
 copy's street edits equal the creator's: true
-street URL: http://127.0.0.1:8317/street.html?street=1&project=s-4f6752529018&view=1
+street URL: http://127.0.0.1:8317/street.html?street=1&project=s-870a0259d851&view=1
 street changes counter (the shared edit): 1
 edit attempt (ArrowRight, +) announced: This design is open read-only: nothing can be changed.
 changes counter after the attempt: 1
-without view=1 (http://127.0.0.1:8317/street.html?street=1&project=s-4f6752529018): read-only tag still visible
+without view=1 (http://127.0.0.1:8317/street.html?street=1&project=s-870a0259d851): read-only tag still visible
 recipient's project list after: ["First project Metropolitan area Montréal Timeline Share Rename Delete"] (unchanged: true)
 
 ## 3. The creator deletes the link: asked first
@@ -44,7 +44,7 @@ Escape: question closed, focus back on #sharing-delete-<token>, rows 1
 [fr-CA] question: Supprimer le lien de partage qui fonctionne jusqu’au 19 février 2027? Quiconque l’a ne pourra plus ouvrir l’aménagement. Cette action est irréversible.; buttons: Annuler / Supprimer le lien
 announced: Share link deleted. Anyone who opens it is told it was deleted.
 rows left on the share page: 0
-deleted link opened: alert = The person who shared this design deleted it. Nothing was kept on this device.; URL stays http://127.0.0.1:8317/share.html#eZ4Nl2Bj1e9Bxjvu4LqTbYh9-IsUrK3xrgoX5hWQZ3o
+deleted link opened: alert = The person who shared this design deleted it. Nothing was kept on this device.; URL stays http://127.0.0.1:8317/share.html#3SxVWhJKJ7OCUkND2g9yZ_rNvcos30ND4To-m4cK9gk
 
 ## 4. Signed out on the share page
 blocked: Sign in to share this project: the server keeps shared copies for your account.
@@ -123,34 +123,34 @@ creator: street street.html?street=1 edited (ArrowRight, +); announced: ; change
 creator: junction intersection.html?junction=1, first turn before: "Boulevard Saint-Laurent (south-east) to Avenue Laurier Est (north-east): right turn, allowed" class="turn on" aria-pressed=true disabled=false; state: As imported
 creator: first turn after a click (banned): "Boulevard Saint-Laurent (south-east) to Avenue Laurier Est (north-east): right turn, not allowed" class="turn" aria-pressed=false disabled=false; state: Edited
 creator's edits at share time: streets ["w4889437~n29794113~n3584133910"], junctions ["n29794113"]
-link created: http://127.0.0.1:8317/share.html#tvZCuTmN19telWMhh4caXGnO-pR4CGlSexlvJJTCihQ
+link created: http://127.0.0.1:8317/share.html#i1MeJ1fr7qlqNt432GlirKm8L-HK7dR5vm2y8az0y1w
 
 ### 6. Snapshot: the creator edits another street after the link was made
 creator: later edit on street.html?street=2; creator's edits now: streets ["w4889437~n29794113~n3584133910","w4889437~n3584133910~n438328642"] (2)
-recipient: opened http://127.0.0.1:8317/map.html?project=s-7c1180108d64&view=1
+recipient: opened http://127.0.0.1:8317/map.html?project=s-80625ec3c5a0&view=1
 recipient's copy: streets ["w4889437~n29794113~n3584133910"] (1), junctions ["n29794113"]
 copy equals the creator's edits at share time: true; copy holds the later edit's street: false
-recipient: the later-edited street http://127.0.0.1:8317/street.html?street=2&project=s-7c1180108d64&view=1: changes counter 0, state As imported
+recipient: the later-edited street http://127.0.0.1:8317/street.html?street=2&project=s-80625ec3c5a0&view=1: changes counter 0, state As imported
 
 ### 8. The carried-over street edit, its changes shown
-recipient: http://127.0.0.1:8317/street.html?street=1&project=s-7c1180108d64&view=1: changes counter 1, state Edited
+recipient: http://127.0.0.1:8317/street.html?street=1&project=s-80625ec3c5a0&view=1: changes counter 1, state Edited
 recipient: Changes tab selected: true; its list: ["Step 1 Earlier changes","Street today"]
 
 ### 7. The junction edit carried over
-recipient: http://127.0.0.1:8317/intersection.html?junction=1&project=s-7c1180108d64&view=1: first turn: "Boulevard Saint-Laurent (south-east) to Avenue Laurier Est (north-east): right turn, not allowed" class="turn read-only" aria-pressed=false disabled=true; state Edited; changes counter 1
+recipient: http://127.0.0.1:8317/intersection.html?junction=1&project=s-80625ec3c5a0&view=1: first turn: "Boulevard Saint-Laurent (south-east) to Avenue Laurier Est (north-east): right turn, not allowed" class="turn read-only" aria-pressed=false disabled=true; state Edited; changes counter 1
 recipient: after clicking the first turn: "Boulevard Saint-Laurent (south-east) to Avenue Laurier Est (north-east): right turn, not allowed" class="turn read-only" aria-pressed=false disabled=true; announced: 
 
 ### 4. Deleted, in fr-CA
 [fr-CA] alert: La personne qui a partagé cet aménagement l’a supprimé. Rien n’a été conservé sur cet appareil.; storage keys unchanged: true
 
 ## 18c recaptured (run 3: capture3.spec.ts, same config, server and HEAD): the later-edited street in the copy, its changes shown
-creator: street.html?street=1 edited, then link created: http://127.0.0.1:8317/share.html#7955GtqE2CJl-GzRW5-1PKQJ_9GULBTEYc4ElxUCTH8
+creator: street.html?street=1 edited, then link created: http://127.0.0.1:8317/share.html#DJjaThrtYg5D4BXWSs61wNNHbJKza2lW8sy9LLn4DEU
 creator: street.html?street=2 edited after the link: changes counter 1, state Edited
-recipient: http://127.0.0.1:8317/street.html?street=2&project=s-c7478e3b37a4&view=1: Changes tab selected: true; its list: ["Street today"]; panel text: "Street today"
+recipient: http://127.0.0.1:8317/street.html?street=2&project=s-9dc82f2b4946&view=1: Changes tab selected: true; its list: ["Street today"]; panel text: "Street today"
 recipient: changes counter 0 (visible: true), state As imported (visible: true)
 
 ## 20a/20b. Deleting a project that has a share link (signed in)
-link: http://127.0.0.1:8317/share.html#rwxtfWBG7lw-2WJ9d7C-BMfRN1ng6CuXwoNaHUZI6LU
+link: http://127.0.0.1:8317/share.html#J0oyx3ZibqjVQKLeojGn7Zz2rjndUDDR1Xd9H1oI2aw
 question: Delete First project and everything in it? Its share link made on this device stops working too. This cannot be undone.
 buttons: Cancel / Delete the project; focused: #project-delete-safe
 status while ending (DELETE held 3 s by page.route): Deleting its share links on the server… The project is deleted once they are; until then this cannot be cancelled.
@@ -160,11 +160,11 @@ announced: Project First project deleted.; project rows left: 0
 the link afterwards, in another browser: alert: The person who shared this design deleted it. Nothing was kept on this device.
 
 ## 20c. Deleting a project whose link cannot be ended from here (signed out after making it)
-link: http://127.0.0.1:8317/share.html#e0Q_VYpx-ZQhTA3JwBGXTCr-aOXQ3gCasPPRswJdQR4
+link: http://127.0.0.1:8317/share.html#ESHr8WsV65550bCWq4KccGQE0a7V_YvWlytoWezEYtM
 signed out: /api/me answers 401
 question: Delete First project and everything in it? Its share link made on this device stops working too. This cannot be undone.
 reason: First project was not deleted: its share links could not be deleted first. Sign in with the account that made them to delete them, or wait until they expire. You can delete it anyway: its share links then keep working, and count toward your account's limit of links that still work, until they expire.
 status: ""
 buttons: Cancel / Delete the project / Delete anyway; project rows: 1
 pressed Delete anyway: announced: Project First project deleted.; project rows left: 0; first project's edits key present: false
-the link afterwards (not ended, as the offer says), in another browser: opens the copy: http://127.0.0.1:8317/map.html?project=s-22b96aa7f064&view=1
+the link afterwards (not ended, as the offer says), in another browser: opens the copy: http://127.0.0.1:8317/map.html?project=s-e1c9d0b52434&view=1

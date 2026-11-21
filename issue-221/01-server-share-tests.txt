@@ -1,80 +1,80 @@
 $ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
-90c289c92c626f4e049cf0c7e646da226c066210
+8dd6a4914d4fe67b754c72cf35e054374e8f2a5e
 $ export CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom   # the URL as `just db` prints it
 $ cargo test -p cityloom_server --features test-provider --test share_api --test share_db --test no_plaintext --test unavailable --test auth_flow
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s
      Running tests/auth_flow.rs (target/debug/deps/auth_flow-e6313beb98f04a7c)
 
 running 25 tests
-test a_callback_with_no_flow_cookie_fails ... ok
-test a_code_the_provider_does_not_accept_ends_in_failed_and_makes_nothing ... ok
-test a_link_started_by_an_account_deleted_before_the_callback_fails_and_makes_nothing ... ok
-test a_returning_person_signs_in_to_the_same_account_and_goes_back_where_they_were ... ok
-test a_provider_that_is_down_ends_in_failed_and_starts_no_flow ... ok
-test apples_cancel_code_is_cancelled_too ... ok
 test apple_form_post_takes_a_name_from_the_first_sign_in_only ... ok
+test a_link_started_by_an_account_deleted_before_the_callback_fails_and_makes_nothing ... ok
 test a_client_cannot_get_a_fresh_allowance_by_sending_its_own_forwarded_for ... ok
-test a_return_path_with_other_than_ascii_is_percent_encoded_in_the_location_and_never_panics ... ok
-test a_first_sign_in_makes_the_account_a_session_and_goes_to_the_account_page ... ok
-test a_token_with_a_bad_nonce_audience_expiry_or_issue_time_fails_and_one_a_little_off_is_fine ... ok
-test a_flow_cookie_that_cannot_be_used_is_cleared_and_one_of_another_provider_is_left_alone ... ok
-test a_callback_with_the_wrong_state_fails_and_makes_nothing ... ok
-test signing_out_when_the_session_cannot_be_ended_still_clears_the_cookie_and_answers_204 ... ok
+test a_code_the_provider_does_not_accept_ends_in_failed_and_makes_nothing ... ok
+test apples_cancel_code_is_cancelled_too ... ok
+test a_returning_person_signs_in_to_the_same_account_and_goes_back_where_they_were ... ok
 test an_unknown_provider_is_404_and_a_hostile_return_path_becomes_the_home_page ... ok
-test linking_needs_a_session ... ok
-test too_many_requests_to_auth_from_one_address_are_429 ... ok
-test saying_no_at_the_provider_is_cancelled_and_makes_nothing ... ok
+test a_callback_with_no_flow_cookie_fails ... ok
+test a_token_with_a_bad_nonce_audience_expiry_or_issue_time_fails_and_one_a_little_off_is_fine ... ok
+test signing_out_when_the_session_cannot_be_ended_still_clears_the_cookie_and_answers_204 ... ok
+test a_flow_cookie_that_cannot_be_used_is_cleared_and_one_of_another_provider_is_left_alone ... ok
+test a_provider_that_is_down_ends_in_failed_and_starts_no_flow ... ok
+test a_callback_with_the_wrong_state_fails_and_makes_nothing ... ok
+test a_first_sign_in_makes_the_account_a_session_and_goes_to_the_account_page ... ok
+test a_return_path_with_other_than_ascii_is_percent_encoded_in_the_location_and_never_panics ... ok
 test paths_under_auth_and_api_that_no_route_answers_are_never_the_static_files ... ok
+test too_many_requests_to_auth_from_one_address_are_429 ... ok
+test linking_needs_a_session ... ok
 test signing_out_clears_a_link_flow_begun_before ... ok
-test two_tabs_signing_in_at_once_the_first_fails_and_the_second_completes ... ok
-test signing_out_ends_the_session_and_needs_this_sites_origin ... ok
 test the_logs_say_method_path_status_provider_and_outcome_and_nothing_secret ... ok
+test saying_no_at_the_provider_is_cancelled_and_makes_nothing ... ok
 test returning_after_ten_minutes_fails_whether_or_not_the_browser_kept_the_cookie ... ok
+test signing_out_ends_the_session_and_needs_this_sites_origin ... ok
+test two_tabs_signing_in_at_once_the_first_fails_and_the_second_completes ... ok
 test linking_adds_an_identity_says_already_linked_and_refuses_a_conflict ... ok
 
-test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s
 
      Running tests/no_plaintext.rs (target/debug/deps/no_plaintext-3fd391706320caa3)
 
 running 1 test
 test no_row_holds_anything_the_person_signed_in_with ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
 
      Running tests/share_api.rs (target/debug/deps/share_api-d4d09b2018689735)
 
 running 13 tests
 test an_unknown_or_malformed_link_is_not_found ... ok
-test a_link_s_token_is_never_in_a_path ... ok
-test deleting_the_account_deletes_its_shares ... ok
-test a_change_needs_the_sites_own_origin ... ok
-test a_body_that_is_no_share_newer_or_too_large_is_refused ... ok
 test signed_out_nobody_makes_or_deletes_a_share ... ok
 test a_share_is_made_signed_in_and_read_by_anyone_with_the_link ... ok
-test after_ninety_days_the_link_says_expired ... ok
 test reading_links_has_its_own_rate_limit ... ok
 test the_creator_deletes_a_share_and_its_link_then_says_so ... ok
+test a_change_needs_the_sites_own_origin ... ok
+test a_link_s_token_is_never_in_a_path ... ok
+test after_ninety_days_the_link_says_expired ... ok
+test deleting_the_account_deletes_its_shares ... ok
+test a_body_that_is_no_share_newer_or_too_large_is_refused ... ok
 test an_account_holds_at_most_fifty_live_shares ... ok
-test an_account_makes_a_bounded_number_of_shares_a_day ... ok
 test the_log_tells_the_daily_bound_from_a_full_account ... ok
+test an_account_makes_a_bounded_number_of_shares_a_day ... ok
 
-test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.71s
 
      Running tests/share_db.rs (target/debug/deps/share_db-5fae21c22cb5514c)
 
 running 10 tests
 test the_checks_before_a_share_is_kept_have_indexes_that_skip_the_markers ... ok
-test a_body_moved_to_another_row_does_not_open ... ok
 test deleting_a_share_that_has_expired_leaves_it_expired ... ok
-test a_live_share_whose_body_is_gone_is_corrupt ... ok
-test an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_it_a_year_on ... ok
 test opening_an_expired_share_writes_only_when_a_body_is_left_to_drop ... ok
 test only_the_creator_deletes_and_the_body_goes_with_it ... ok
+test a_body_moved_to_another_row_does_not_open ... ok
 test a_share_opens_with_its_token_only_and_comes_back_exactly ... ok
+test an_expired_share_is_refused_and_its_body_dropped_and_the_purge_forgets_it_a_year_on ... ok
+test a_live_share_whose_body_is_gone_is_corrupt ... ok
 test the_cap_counts_live_shares_and_a_gone_account_makes_none ... ok
 test an_account_makes_a_bounded_number_of_shares_a_day_deleted_ones_too ... ok
 
-test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.05s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.84s
 
      Running tests/unavailable.rs (target/debug/deps/unavailable-664bffdb93808659)
 
@@ -83,16 +83,16 @@ test the_bare_auth_and_api_paths_answer_503_too_when_the_account_side_is_off ...
 test auth_and_api_answer_503_when_the_account_side_is_off_and_the_site_is_still_served ... ok
 test a_database_that_cannot_be_reached_answers_503_without_a_panic_and_the_site_is_still_served ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
 
 
 $ cargo test -p cityloom_server --features test-provider --lib -- share:: a_share_token_never_reaches_the_log the_share_routes_have_their_own_rate_limit
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
      Running unittests src/lib.rs (target/debug/deps/cityloom_server-044ec7839afd5afd)
 
 running 10 tests
-test share::tests::the_associated_data_names_the_row ... ok
 test share::tests::debug_never_shows_the_token ... ok
+test share::tests::the_associated_data_names_the_row ... ok
 test app::tests::a_share_token_never_reaches_the_log ... ok
 test share::tests::a_share_is_kept_ninety_days ... ok
 test share::tests::a_token_is_43_characters_of_base64url_and_reads_back ... ok

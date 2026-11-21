@@ -1,10 +1,10 @@
 $ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
-90c289c92c626f4e049cf0c7e646da226c066210
+8dd6a4914d4fe67b754c72cf35e054374e8f2a5e
 $ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom E2E_PORT=8318 just e2e tests/projects.spec.ts
 ./scripts/build.sh
     Finished `release` profile [optimized] target(s) in 0.17s
-web/pkg/cityloom_editor.js: 93280 B, br 12573 B, gzip 15054 B
-web/pkg/cityloom_editor_bg.wasm: 7077060 B, br 1252117 B, gzip 1891392 B
+web/pkg/cityloom_editor.js: 93766 B, br 12659 B, gzip 15120 B
+web/pkg/cityloom_editor_bg.wasm: 7068930 B, br 1254943 B, gzip 1895887 B
 web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2309 B
 web/pkg/cityloom_report_pdf_bg.wasm: 2372530 B, br 562187 B, gzip 770312 B
 web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
@@ -13,23 +13,23 @@ web/vendor/maplibre-gl.css: 71596 B, br 8326 B, gzip 10191 B
 web/vendor/maplibre-gl.mjs: 1108049 B, br 241249 B, gzip 294314 B
 14 compressed copies
 cargo build -p cityloom_server --features test-provider
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.22s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.21s
 ./scripts/pin-server.sh
 
 Running 12 tests using 7 workers
 
-  ✓   4 [ui] › tests/projects.spec.ts:223:3 › the list of projects › a name that is refused is said, also when it was sent with Enter (568ms)
-  ✓   3 [ui] › tests/projects.spec.ts:122:3 › the list of projects › the choice of metropolitan area is labelled in French too (617ms)
-  ✓   8 [ui] › tests/projects.spec.ts:232:3 › the list of projects › the rename form says which project it renames (471ms)
-  ✓   7 [ui] › tests/projects.spec.ts:205:3 › the list of projects › a page sent back from a project that is gone says so (1.1s)
-  ✓   5 [ui] › tests/projects.spec.ts:136:3 › the list of projects › renames a project and deletes one only once asked, and says so (1.2s)
-  ✓  11 [ui] › tests/projects.spec.ts:292:3 › the list of projects › every control has a name, every field a label, and each id is the page's only one (380ms)
-  ✓  10 [ui] › tests/projects.spec.ts:270:3 › the list of projects › the first stop is a skip link to the list, and the list's own controls follow its heading (414ms)
-  ✓  12 [ui] › tests/projects.spec.ts:320:3 › the list of projects › fits a phone without scrolling sideways (344ms)
-  ✓   1 [ui] › tests/projects.spec.ts:45:3 › the list of projects › starts empty, makes a project, keeps it over a reload and opens its map (1.7s)
-  ✓   2 [ui] › tests/projects.spec.ts:86:3 › the list of projects › a project is made in the metropolitan area chosen, which its row shows and nothing changes (1.7s)
-  ✓   9 [ui] › tests/projects.spec.ts:239:3 › the list of projects › is in French for a French reader, the first project too (1.1s)
-  ✓   6 [ui] › tests/projects.spec.ts:173:3 › the list of projects › makes the work kept from before projects the first project (4.0s)
+  ✓   1 [ui] › tests/projects.spec.ts:223:3 › the list of projects › a name that is refused is said, also when it was sent with Enter (542ms)
+  ✓   6 [ui] › tests/projects.spec.ts:122:3 › the list of projects › the choice of metropolitan area is labelled in French too (581ms)
+  ✓   8 [ui] › tests/projects.spec.ts:232:3 › the list of projects › the rename form says which project it renames (415ms)
+  ✓   7 [ui] › tests/projects.spec.ts:136:3 › the list of projects › renames a project and deletes one only once asked, and says so (1.2s)
+  ✓   3 [ui] › tests/projects.spec.ts:205:3 › the list of projects › a page sent back from a project that is gone says so (1.4s)
+  ✓  10 [ui] › tests/projects.spec.ts:270:3 › the list of projects › the first stop is a skip link to the list, and the list's own controls follow its heading (479ms)
+  ✓  11 [ui] › tests/projects.spec.ts:292:3 › the list of projects › every control has a name, every field a label, and each id is the page's only one (349ms)
+  ✓   2 [ui] › tests/projects.spec.ts:45:3 › the list of projects › starts empty, makes a project, keeps it over a reload and opens its map (1.7s)
+  ✓  12 [ui] › tests/projects.spec.ts:320:3 › the list of projects › fits a phone without scrolling sideways (333ms)
+  ✓   4 [ui] › tests/projects.spec.ts:86:3 › the list of projects › a project is made in the metropolitan area chosen, which its row shows and nothing changes (1.8s)
+  ✓   9 [ui] › tests/projects.spec.ts:239:3 › the list of projects › is in French for a French reader, the first project too (1.2s)
+  ✓   5 [ui] › tests/projects.spec.ts:173:3 › the list of projects › makes the work kept from before projects the first project (4.1s)
 
   12 passed (5.7s)
 exit status: 0

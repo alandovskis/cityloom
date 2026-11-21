@@ -1,10 +1,10 @@
-$ git worktree add --detach /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b 29330ad1   # origin/main, without the change
-$ cp /Users/alex/src/cityloom/main-issue-221/e2e/tests/share.spec.ts /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/   # the 7-test spec of HEAD 90c289c92c626f4e049cf0c7e646da226c066210, only
+$ git worktree add --detach /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c 7ada7212   # origin/main 7ada7212b1d760b840a315f0aa2ca4dd4308e284, without the change
+$ cp /Users/alex/src/cityloom/main-issue-221/e2e/tests/share.spec.ts /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/   # the 7-test spec of HEAD 8dd6a4914d4fe67b754c72cf35e054374e8f2a5e, only
 $ (e2e/tiers.json: "share" added to the integration tier, which playwright.config.ts requires of every spec)
 $ (node_modules, e2e/node_modules and .tools (wasm-bindgen 0.2.130, the same pin) symlinked from the issue worktree; untracked, gitignored)
-# (database cityloom_before221, made for the first before-run: the `cityloom` database holds migrations the base server does not know, and it would refuse it)
-$ cd /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b && git rev-parse HEAD && git status --short && git diff
-29330ad197a55faac3041f3446c664714ef2aabd
+$ docker exec cityloom-db psql -U postgres -c "CREATE DATABASE cityloom_before221b"   # a fresh database: `cityloom` holds the branch's share migrations, which the base server refuses
+$ cd /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c && git rev-parse HEAD && git status --short && git diff
+7ada7212b1d760b840a315f0aa2ca4dd4308e284
  M e2e/tiers.json
 ?? e2e/tests/share.spec.ts
 diff --git a/e2e/tiers.json b/e2e/tiers.json
@@ -20,7 +20,7 @@ index 1b472030..f0525b84 100644
    "e2e": ["archive", "delivery", "serve"],
    "archive_also": ["map", "street"]
  }
-$ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom_before221 E2E_PORT=8319 just e2e tests/share.spec.ts
+$ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom_before221b E2E_PORT=8319 just e2e tests/share.spec.ts
 ./scripts/build.sh
    Compiling proc-macro2 v1.0.107
    Compiling quote v1.0.47
@@ -28,57 +28,57 @@ $ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/
    Compiling memchr v2.8.3
    Compiling version_check v0.9.5
    Compiling stable_deref_trait v1.2.1
+   Compiling wasm-bindgen-shared v0.2.130
    Compiling thiserror v2.0.21
    Compiling pin-project-lite v0.2.17
    Compiling semver v1.0.28
-   Compiling wasm-bindgen-shared v0.2.130
    Compiling serde_core v1.0.229
-   Compiling futures-core v0.3.34
-   Compiling serde v1.0.229
    Compiling rustversion v1.0.23
+   Compiling serde v1.0.229
+   Compiling futures-core v0.3.34
    Compiling futures-sink v0.3.34
    Compiling cfg-if v1.0.5
-   Compiling slab v0.4.12
    Compiling bumpalo v3.20.3
    Compiling rustc_version v0.4.1
    Compiling futures-channel v0.3.34
+   Compiling slab v0.4.12
    Compiling futures-io v0.3.34
    Compiling futures-task v0.3.34
    Compiling smallvec v1.16.5
-   Compiling unicode-segmentation v1.13.3
-   Compiling rustc-hash v2.1.3
    Compiling hashbrown v0.17.1
    Compiling equivalent v1.0.3
+   Compiling rustc-hash v2.1.3
+   Compiling unicode-segmentation v1.13.3
    Compiling itoa v1.0.18
    Compiling proc-macro2-diagnostics v0.11.0
-   Compiling zmij v1.0.23
-   Compiling writeable v0.6.4
-   Compiling litemap v0.8.3
-   Compiling libc v0.2.191
    Compiling utf_types v1.0.0
+   Compiling writeable v0.6.4
+   Compiling libc v0.2.191
+   Compiling litemap v0.8.3
+   Compiling zmij v1.0.23
    Compiling generic-array v0.14.9
-   Compiling icu_normalizer_data v2.4.0
-   Compiling proc-macro-hack v0.5.20+deprecated
-   Compiling unicode-xid v0.2.6
-   Compiling convert_case v0.11.0
-   Compiling or_poisoned v0.1.0
-   Compiling utf8_iter v1.1.0
-   Compiling paste v1.0.15
-   Compiling serde_json v1.0.154
    Compiling icu_properties_data v2.4.0
+   Compiling unicode-xid v0.2.6
+   Compiling utf8_iter v1.1.0
+   Compiling icu_normalizer_data v2.4.0
+   Compiling convert_case v0.11.0
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling serde_json v1.0.154
+   Compiling or_poisoned v0.1.0
    Compiling indexmap v2.14.2
-   Compiling slotmap v1.1.1
+   Compiling paste v1.0.15
    Compiling wasm-bindgen v0.2.130
+   Compiling slotmap v1.1.1
    Compiling throw_error v0.3.1
    Compiling event-listener v5.4.2
    Compiling camino v1.2.6
    Compiling typenum v1.20.1
    Compiling konst_macro_rules v0.2.19
    Compiling rstml v0.13.1
+   Compiling anyhow v1.0.104
    Compiling syn v3.0.9
    Compiling syn v2.0.119
    Compiling proc-macro-utils v0.10.0
-   Compiling anyhow v1.0.104
    Compiling const_format_proc_macros v0.2.37
    Compiling konst v0.2.20
    Compiling event-listener-strategy v0.5.4
@@ -87,59 +87,63 @@ $ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/
    Compiling send_wrapper v0.6.0
    Compiling async-lock v3.5.0
    Compiling either v1.19.0
-   Compiling libm v0.2.16
-   Compiling xxhash-rust v0.8.19
-   Compiling const_format v0.2.37
-   Compiling percent-encoding v2.3.2
-   Compiling guardian v1.3.0
    Compiling thiserror v1.0.69
+   Compiling xxhash-rust v0.8.19
+   Compiling guardian v1.3.0
+   Compiling libm v0.2.16
+   Compiling percent-encoding v2.3.2
+   Compiling const_format v0.2.37
    Compiling itertools v0.14.0
    Compiling manyhow-macros v0.14.1
    Compiling tachys v0.2.19
-   Compiling block-buffer v0.10.4
-   Compiling crypto-common v0.1.6
-   Compiling base64 v0.22.1
-   Compiling autocfg v1.5.1
    Compiling getrandom v0.4.3
+   Compiling autocfg v1.5.1
    Compiling prettyplease v0.3.0
+   Compiling bytes v1.12.1
    Compiling winnow v1.0.5
    Compiling arrayvec v0.7.8
-   Compiling bytes v1.12.1
+   Compiling base64 v0.22.1
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
    Compiling num-traits v0.2.19
    Compiling polycool v0.4.0
    Compiling digest v0.10.7
    Compiling form_urlencoded v1.2.2
-   Compiling either_of v0.1.9
    Compiling http v1.5.0
    Compiling cpufeatures v0.2.17
-   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling either_of v0.1.9
    Compiling server_fn v0.8.13
    Compiling aho-corasick v1.1.5
+   Compiling crc32fast v1.5.4
    Compiling const_str_slice_concat v0.1.0
-   Compiling regex-syntax v0.8.11
+   Compiling serde_spanned v1.1.3
    Compiling interpolator v0.5.0
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling regex-syntax v0.8.11
    Compiling html-escape v0.2.15
+   Compiling same-file v1.0.6
    Compiling collection_literals v1.0.3
+   Compiling next_tuple v0.1.0
+   Compiling erased v0.1.2
    Compiling log v0.4.35
+   Compiling drain_filter_polyfill v0.1.3
+   Compiling toml_datetime v1.1.3+spec-1.1.0
+   Compiling walkdir v2.5.0
+   Compiling toml v1.2.1+spec-1.1.0
+   Compiling core_maths v0.1.1
    Compiling synstructure v0.14.0
    Compiling wasm-bindgen-macro-support v0.2.130
    Compiling manyhow v0.14.1
-   Compiling same-file v1.0.6
-   Compiling next_tuple v0.1.0
-   Compiling erased v0.1.2
-   Compiling toml_datetime v1.1.3+spec-1.1.0
-   Compiling drain_filter_polyfill v0.1.3
-   Compiling crc32fast v1.5.4
-   Compiling serde_spanned v1.1.3
-   Compiling walkdir v2.5.0
-   Compiling thiserror-impl v1.0.69
-   Compiling reactive_stores_macro v0.4.4
-   Compiling pin-project-internal v1.1.13
-   Compiling toml v1.2.1+spec-1.1.0
-   Compiling typed-builder-macro v0.23.2
    Compiling convert_case v0.6.0
+   Compiling sha2 v0.10.9
    Compiling regex-automata v0.4.18
-   Compiling core_maths v0.1.1
+   Compiling kurbo v0.13.1
+   Compiling reactive_stores_macro v0.4.4
+   Compiling thiserror-impl v1.0.69
+   Compiling pin-project-internal v1.1.13
+   Compiling typed-builder-macro v0.23.2
+   Compiling leptos_macro v0.8.20
+   Compiling adler2 v2.0.1
    Compiling zerofrom-derive v0.1.8
    Compiling yoke-derive v0.8.4
    Compiling displaydoc v0.2.7
@@ -150,105 +154,101 @@ $ CARGO_INCREMENTAL=0 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/
    Compiling bytemuck_derive v1.12.1
    Compiling tinystr v0.8.5
    Compiling derive-where v1.7.0
-   Compiling quote-use-macros v0.9.0
    Compiling zerofrom v0.1.8
    Compiling unic-langid-impl v0.9.6
+   Compiling quote-use-macros v0.9.0
+   Compiling yoke v0.8.4
    Compiling unic-langid-macros-impl v0.9.6
    Compiling futures-util v0.3.34
-   Compiling yoke v0.8.4
-   Compiling quote-use v0.9.0
-   Compiling pin-project v1.1.13
-   Compiling async-trait v0.1.92
    Compiling zerovec v0.11.9
    Compiling zerotrie v0.2.5
-   Compiling attribute-derive-macro v0.11.0
+   Compiling quote-use v0.9.0
    Compiling bytemuck v1.25.2
-   Compiling server_fn_macro_default v0.8.6
+   Compiling pin-project v1.1.13
+   Compiling async-trait v0.1.92
+   Compiling attribute-derive-macro v0.11.0
    Compiling font-types v0.11.3
-   Compiling sha2 v0.10.9
-   Compiling kurbo v0.13.1
+   Compiling server_fn_macro_default v0.8.6
    Compiling read-fonts v0.39.2
-   Compiling potential_utf v0.1.6
-   Compiling icu_collections v2.4.0
-   Compiling icu_locale_core v2.4.0
-   Compiling leptos_macro v0.8.20
-   Compiling adler2 v2.0.1
-   Compiling unic-langid-macros v0.9.6
-   Compiling pathdiff v0.2.3
-   Compiling unic-langid v0.9.6
    Compiling const-str v1.1.0
+   Compiling pathdiff v0.2.3
    Compiling base16 v0.2.1
    Compiling bitflags v2.13.2
    Compiling simd-adler32 v0.3.10
-   Compiling icu_provider v2.4.0
-   Compiling oco_ref v0.2.1
-   Compiling serde_qs v0.15.0
-   Compiling futures-executor v0.3.34
-   Compiling miniz_oxide v0.9.1
-   Compiling leptos_hot_reload v0.8.7
-   Compiling codee v0.3.5
-   Compiling wasm-bindgen-macro v0.2.130
-   Compiling icu_properties v2.4.0
-   Compiling futures v0.3.34
-   Compiling icu_normalizer v2.4.0
-   Compiling hydration_context v0.3.2
    Compiling wasm_split_macros v0.2.2
-   Compiling config v0.15.27
-   Compiling idna_adapter v1.2.2
+   Compiling potential_utf v0.1.6
+   Compiling miniz_oxide v0.9.1
    Compiling attribute-derive v0.11.0
-   Compiling idna v1.1.0
-   Compiling uuid v1.29.1
+   Compiling icu_locale_core v2.4.0
+   Compiling icu_collections v2.4.0
+   Compiling config v0.15.27
+   Compiling unic-langid-macros v0.9.6
+   Compiling oco_ref v0.2.1
+   Compiling unic-langid v0.9.6
+   Compiling serde_qs v0.15.0
+   Compiling codee v0.3.5
+   Compiling leptos_hot_reload v0.8.7
    Compiling regex v1.13.1
-   Compiling url v2.5.8
    Compiling typed-builder v0.23.2
+   Compiling futures-executor v0.3.34
+   Compiling icu_provider v2.4.0
+   Compiling wasm-bindgen-macro v0.2.130
+   Compiling futures v0.3.34
+   Compiling hydration_context v0.3.2
+   Compiling icu_properties v2.4.0
+   Compiling icu_normalizer v2.4.0
+   Compiling uuid v1.29.1
    Compiling ttf-parser v0.25.1
-   Compiling js-sys v0.3.107
    Compiling convert_case_extras v0.2.0
    Compiling type-map v0.5.1
    Compiling leptos v0.8.23
    Compiling async-once-cell v0.5.4
+   Compiling strict-num v0.1.1
+   Compiling unicode-bidi-mirroring v0.4.0
    Compiling unicode-script v0.5.9
    Compiling arrayref v0.3.9
    Compiling unicode-properties v0.1.5
    Compiling ryu v1.0.23
    Compiling unicode-ccc v0.4.0
-   Compiling strict-num v0.1.1
-   Compiling unicode-bidi-mirroring v0.4.0
+   Compiling idna_adapter v1.2.2
+   Compiling js-sys v0.3.107
+   Compiling idna v1.1.0
    Compiling pdf-writer v0.15.0
-   Compiling wasm_split_helpers v0.2.3
    Compiling tiny-skia-path v0.12.0
+   Compiling wasm_split_helpers v0.2.3
    Compiling intl-memoizer v0.5.3
-   Compiling float-cmp v0.9.0
+   Compiling url v2.5.8
    Compiling flate2 v1.1.11
+   Compiling float-cmp v0.9.0
    Compiling leptos_config v0.8.10
-   Compiling cityloom_report v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/cityloom_report)
-   Compiling rustybuzz v0.20.1
    Compiling intl_pluralrules v7.0.2
    Compiling fluent-langneg v0.13.1
-   Compiling write-fonts v0.48.1
-   Compiling skrifa v0.42.1
+   Compiling rustybuzz v0.20.1
+   Compiling cityloom_report v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/cityloom_report)
    Compiling fluent-syntax v0.12.0
    Compiling self_cell v1.3.0
    Compiling xmp-writer v0.3.3
    Compiling siphasher v1.0.4
    Compiling fluent-bundle v0.16.0
-   Compiling cityloom_model v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/cityloom_model)
-   Compiling subsetter v0.2.6
-   Compiling web-sys v0.3.107
+   Compiling cityloom_model v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/cityloom_model)
+   Compiling write-fonts v0.48.1
+   Compiling skrifa v0.42.1
    Compiling wasm-bindgen-futures v0.4.80
+   Compiling web-sys v0.3.107
+   Compiling subsetter v0.2.6
    Compiling any_spawner v0.3.0
    Compiling krilla v0.8.2
-   Compiling cityloom_report_pdf v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/cityloom_report_pdf)
+   Compiling cityloom_report_pdf v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/cityloom_report_pdf)
    Compiling gloo-utils v0.2.0
    Compiling gloo-net v0.6.0
    Compiling wasm-streams v0.5.0
    Compiling reactive_stores v0.4.4
    Compiling leptos_dom v0.8.8
    Compiling leptos_server v0.8.8
-   Compiling cityloom_editor v0.95.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/cityloom_editor)
-    Finished `release` profile [optimized] target(s) in 1m 09s
-web/pkg/cityloom_editor.js: 90602 B, br 12302 B, gzip 14709 B
-web/pkg/cityloom_editor_bg.wasm: 6906298 B, br 1226332 B, gzip 1852839 B
+   Compiling cityloom_editor v0.96.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/cityloom_editor)
+    Finished `release` profile [optimized] target(s) in 1m 13s
+web/pkg/cityloom_editor.js: 91092 B, br 12362 B, gzip 14773 B
+web/pkg/cityloom_editor_bg.wasm: 6922141 B, br 1231721 B, gzip 1859696 B
 web/pkg/cityloom_report_pdf.js: 8144 B, br 2062 B, gzip 2309 B
 web/pkg/cityloom_report_pdf_bg.wasm: 2372530 B, br 562187 B, gzip 770312 B
 web/vendor/maplibre-gl-shared.mjs: 0 B, br 1 B, gzip 20 B
@@ -258,8 +258,8 @@ web/vendor/maplibre-gl.mjs: 1108049 B, br 241249 B, gzip 294314 B
 14 compressed copies
 cargo build -p cityloom_server --features test-provider
    Compiling proc-macro2 v1.0.107
-   Compiling unicode-ident v1.0.27
    Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
    Compiling libc v0.2.191
    Compiling cfg-if v1.0.5
    Compiling typenum v1.20.1
@@ -269,65 +269,65 @@ cargo build -p cityloom_server --features test-provider
    Compiling rand_core v0.10.1
    Compiling serde_core v1.0.229
    Compiling cmov v0.5.4
-   Compiling pin-project-lite v0.2.17
    Compiling getrandom v0.4.3
+   Compiling pin-project-lite v0.2.17
    Compiling autocfg v1.5.1
-   Compiling futures-core v0.3.34
-   Compiling bytes v1.12.1
    Compiling once_cell v1.21.4
+   Compiling bytes v1.12.1
+   Compiling futures-core v0.3.34
    Compiling itoa v1.0.18
    Compiling shlex v2.0.1
-   Compiling memchr v2.8.3
    Compiling generic-array v0.14.9
-   Compiling stable_deref_trait v1.2.1
    Compiling base64ct v1.8.3
+   Compiling memchr v2.8.3
    Compiling find-msvc-tools v0.1.15
+   Compiling stable_deref_trait v1.2.1
    Compiling ctutils v0.4.8
    Compiling libm v0.2.16
-   Compiling const-oid v0.9.6
    Compiling num-traits v0.2.19
+   Compiling const-oid v0.9.6
    Compiling percent-encoding v2.3.2
    Compiling const-oid v0.10.2
    Compiling equivalent v1.0.3
-   Compiling utf_types v1.0.0
    Compiling writeable v0.6.4
    Compiling litemap v0.8.3
-   Compiling futures-io v0.3.34
-   Compiling log v0.4.35
+   Compiling utf_types v1.0.0
    Compiling futures-task v0.3.34
    Compiling icu_normalizer_data v2.4.0
-   Compiling futures-sink v0.3.34
-   Compiling utf8_iter v1.1.0
+   Compiling futures-io v0.3.34
+   Compiling log v0.4.35
    Compiling hashbrown v0.17.1
    Compiling icu_properties_data v2.4.0
+   Compiling futures-sink v0.3.34
    Compiling tracing-core v0.1.36
-   Compiling slab v0.4.12
+   Compiling utf8_iter v1.1.0
    Compiling zmij v1.0.23
+   Compiling slab v0.4.12
    Compiling http v1.5.0
    Compiling parking_lot_core v0.9.12
    Compiling untrusted v0.9.0
    Compiling serde_json v1.0.154
    Compiling scopeguard v1.2.0
    Compiling zerocopy v0.8.63
-   Compiling getrandom v0.2.17
-   Compiling syn v2.0.119
-   Compiling syn v3.0.9
-   Compiling jobserver v0.1.35
-   Compiling mio v1.2.4
-   Compiling socket2 v0.6.5
-   Compiling errno v0.3.14
-   Compiling cpufeatures v0.2.17
-   Compiling indexmap v2.14.2
-   Compiling rand_core v0.6.4
-   Compiling signal-hook-registry v1.4.8
-   Compiling cc v1.11.1
-   Compiling cpufeatures v0.3.1
    Compiling lock_api v0.4.14
+   Compiling indexmap v2.14.2
    Compiling futures-util v0.3.34
    Compiling pem-rfc7468 v0.7.0
-   Compiling fs_extra v1.3.0
    Compiling dunce v1.0.5
+   Compiling syn v2.0.119
+   Compiling syn v3.0.9
    Compiling pkg-config v0.3.34
+   Compiling fs_extra v1.3.0
+   Compiling getrandom v0.2.17
+   Compiling jobserver v0.1.35
+   Compiling mio v1.2.4
+   Compiling rand_core v0.6.4
+   Compiling socket2 v0.6.5
+   Compiling errno v0.3.14
+   Compiling cc v1.11.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling cpufeatures v0.2.17
+   Compiling cpufeatures v0.3.1
    Compiling cpubits v0.1.1
    Compiling http-body v1.1.0
    Compiling form_urlencoded v1.2.2
@@ -338,47 +338,46 @@ cargo build -p cityloom_server --features test-provider
    Compiling powerfmt v0.2.1
    Compiling aws-lc-rs v1.19.0
    Compiling deranged v0.5.9
-   Compiling futures-channel v0.3.34
    Compiling time-macros v0.2.32
+   Compiling futures-channel v0.3.34
    Compiling hybrid-array v0.4.15
-   Compiling httparse v1.10.1
    Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling httparse v1.10.1
    Compiling semver v1.0.28
    Compiling base64 v0.22.1
-   Compiling cmake v0.1.58
-   Compiling foldhash v0.2.0
-   Compiling rustc_version v0.4.1
    Compiling hashbrown v0.16.1
+   Compiling rustc_version v0.4.1
+   Compiling cmake v0.1.58
+   Compiling try-lock v0.2.5
    Compiling fnv v1.0.7
-   Compiling atomic-waker v1.1.2
    Compiling httpdate v1.0.3
    Compiling bitflags v2.13.2
-   Compiling try-lock v0.2.5
+   Compiling atomic-waker v1.1.2
    Compiling crossbeam-utils v0.8.23
    Compiling want v0.3.2
+   Compiling time v0.3.55
    Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling ff v0.14.0
+   Compiling zeroize v1.9.1
    Compiling ring v0.17.14
    Compiling aws-lc-sys v0.47.0
-   Compiling block-buffer v0.12.1
-   Compiling time v0.3.55
-   Compiling ff v0.14.0
+   Compiling tower-layer v0.3.3
    Compiling core-foundation-sys v0.8.7
    Compiling thiserror v2.0.21
    Compiling rustls v0.23.46
-   Compiling zeroize v1.9.1
-   Compiling tower-layer v0.3.3
    Compiling rustls-pki-types v1.15.1
    Compiling sync_wrapper v1.0.2
    Compiling digest v0.11.3
-   Compiling ipnet v2.12.2
-   Compiling parking v2.2.1
-   Compiling crc-catalog v2.5.0
    Compiling base64 v0.23.1
-   Compiling event-listener v5.4.2
-   Compiling block-buffer v0.10.4
+   Compiling parking v2.2.1
+   Compiling ipnet v2.12.2
+   Compiling crc-catalog v2.5.0
    Compiling crypto-common v0.1.6
-   Compiling synstructure v0.14.0
+   Compiling event-listener v5.4.2
    Compiling crc v3.4.0
+   Compiling block-buffer v0.10.4
    Compiling group v0.14.0
    Compiling hashlink v0.11.1
    Compiling num-integer v0.1.47
@@ -386,211 +385,212 @@ cargo build -p cityloom_server --features test-provider
    Compiling ff v0.13.1
    Compiling chacha20 v0.10.2
    Compiling tinyvec v1.13.3
-   Compiling mime v0.3.18
    Compiling base16ct v0.2.0
    Compiling base16ct v1.0.0
    Compiling getrandom v0.3.4
+   Compiling mime v0.3.18
    Compiling spin v0.9.9
-   Compiling unicode-normalization v0.1.26
-   Compiling group v0.13.0
    Compiling lazy_static v1.5.1
+   Compiling unicode-normalization v0.1.26
+   Compiling synstructure v0.14.0
+   Compiling group v0.13.0
    Compiling digest v0.10.7
    Compiling serde_path_to_error v0.1.20
    Compiling tokio v1.54.1
-   Compiling ppv-lite86 v0.2.21
    Compiling alloc-no-stdlib v3.0.0
    Compiling crc32fast v1.5.4
-   Compiling zeroize_derive v1.5.0
-   Compiling tracing-attributes v0.1.31
-   Compiling rand_chacha v0.3.1
    Compiling strsim v0.11.1
    Compiling thiserror v1.0.69
    Compiling ident_case v1.0.1
+   Compiling ppv-lite86 v0.2.21
    Compiling unicode-bidi v0.3.18
-   Compiling rand v0.8.8
    Compiling unicode-properties v0.1.5
+   Compiling darling_core v0.24.1
+   Compiling rand_chacha v0.3.1
+   Compiling crossbeam-queue v0.3.14
+   Compiling alloc-stdlib v0.3.0
+   Compiling sha2 v0.10.9
+   Compiling rand v0.8.8
+   Compiling stringprep v0.1.5
+   Compiling hmac v0.13.0
+   Compiling zeroize_derive v1.5.0
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v1.0.69
+   Compiling webpki-roots v1.0.11
    Compiling serde_derive v1.0.229
    Compiling zerofrom-derive v0.1.8
    Compiling yoke-derive v0.8.4
    Compiling zerovec-derive v0.11.7
    Compiling displaydoc v0.2.7
    Compiling tokio-macros v2.7.2
-   Compiling thiserror-impl v2.0.21
    Compiling der v0.7.10
-   Compiling der v0.8.3
    Compiling tracing v0.1.44
+   Compiling thiserror-impl v2.0.21
+   Compiling der v0.8.3
    Compiling zerofrom v0.1.8
-   Compiling crypto-bigint v0.7.10
-   Compiling inout v0.1.4
    Compiling yoke v0.8.4
-   Compiling crypto-bigint v0.5.5
-   Compiling sha2 v0.10.9
-   Compiling spki v0.7.3
-   Compiling pkcs8 v0.10.2
-   Compiling hmac v0.12.1
+   Compiling crypto-bigint v0.7.10
    Compiling zerovec v0.11.9
    Compiling zerotrie v0.2.5
-   Compiling spki v0.8.1
-   Compiling hmac v0.13.0
+   Compiling hmac v0.12.1
    Compiling signature v2.2.0
-   Compiling pkcs8 v0.11.0
-   Compiling sha2 v0.11.1
-   Compiling rustls-webpki v0.103.16
-   Compiling signature v3.0.0
-   Compiling sec1 v0.7.3
+   Compiling spki v0.7.3
    Compiling tinystr v0.8.5
    Compiling potential_utf v0.1.6
    Compiling icu_collections v2.4.0
    Compiling icu_locale_core v2.4.0
-   Compiling hkdf v0.12.4
+   Compiling pkcs8 v0.10.2
+   Compiling spki v0.8.1
+   Compiling sha2 v0.11.1
+   Compiling pkcs8 v0.11.0
+   Compiling sec1 v0.7.3
+   Compiling signature v3.0.0
    Compiling sec1 v0.8.1
-   Compiling tokio-stream v0.1.19
-   Compiling elliptic-curve v0.13.8
-   Compiling smallvec v1.16.5
-   Compiling either v1.19.0
+   Compiling hkdf v0.12.4
+   Compiling inout v0.1.4
+   Compiling crypto-bigint v0.5.5
+   Compiling universal-hash v0.5.1
    Compiling cipher v0.4.4
+   Compiling inout v0.2.5
+   Compiling icu_provider v2.4.0
+   Compiling tokio-stream v0.1.19
+   Compiling num-bigint-dig v0.8.6
+   Compiling smallvec v1.16.5
+   Compiling icu_properties v2.4.0
+   Compiling either v1.19.0
+   Compiling icu_normalizer v2.4.0
+   Compiling byteorder v1.5.0
+   Compiling parking_lot v0.12.5
+   Compiling rustls-webpki v0.103.16
+   Compiling elliptic-curve v0.13.8
+   Compiling futures-intrusive v0.5.0
    Compiling elliptic-curve v0.14.3
    Compiling primefield v0.14.0
-   Compiling inout v0.2.5
-   Compiling universal-hash v0.5.1
-   Compiling stringprep v0.1.5
-   Compiling icu_provider v2.4.0
-   Compiling parking_lot v0.12.5
-   Compiling darling_core v0.24.1
-   Compiling icu_properties v2.4.0
-   Compiling icu_normalizer v2.4.0
-   Compiling thiserror-impl v1.0.69
-   Compiling futures-intrusive v0.5.0
-   Compiling crossbeam-queue v0.3.14
-   Compiling alloc-stdlib v0.3.0
-   Compiling webpki-roots v1.0.11
-   Compiling dotenvy v0.15.7
-   Compiling opaque-debug v0.3.1
-   Compiling num-bigint-dig v0.8.6
    Compiling adler2 v2.0.1
-   Compiling uuid v1.29.1
+   Compiling dotenvy v0.15.7
    Compiling whoami v2.1.3
    Compiling hex v0.4.3
-   Compiling ryu v1.0.23
-   Compiling byteorder v1.5.0
    Compiling simd-adler32 v0.3.10
-   Compiling serde_urlencoded v0.7.1
-   Compiling atoi v2.0.0
-   Compiling tokio-util v0.7.20
+   Compiling opaque-debug v0.3.1
+   Compiling ryu v1.0.23
+   Compiling uuid v1.29.1
    Compiling miniz_oxide v0.9.1
-   Compiling idna_adapter v1.2.2
    Compiling polyval v0.6.2
-   Compiling hkdf v0.13.0
-   Compiling idna v1.1.0
-   Compiling rand v0.10.3
-   Compiling rand_core v0.9.5
-   Compiling brotli-decompressor v6.3.0
-   Compiling h2 v0.4.20
-   Compiling url v2.5.8
-   Compiling tower v0.5.3
    Compiling wnaf v0.14.1
    Compiling rfc6979 v0.6.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling idna_adapter v1.2.2
    Compiling rfc6979 v0.4.0
-   Compiling axum-core v0.5.6
-   Compiling sqlx-core v0.9.0
-   Compiling num-iter v0.1.46
    Compiling darling_macro v0.24.1
+   Compiling axum-core v0.5.6
+   Compiling atoi v2.0.0
+   Compiling idna v1.1.0
+   Compiling hkdf v0.13.0
+   Compiling rand_core v0.9.5
+   Compiling rand v0.10.3
+   Compiling brotli-decompressor v6.3.0
+   Compiling num-iter v0.1.46
    Compiling md-5 v0.11.0
+   Compiling url v2.5.8
    Compiling curve25519-dalek v4.1.3
    Compiling curve25519-dalek v5.0.0
    Compiling portable-atomic v1.15.0
    Compiling matchit v0.8.4
    Compiling unicase v2.10.0
-   Compiling darling v0.24.1
    Compiling mime_guess v2.0.5
-   Compiling flate2 v1.1.11
-   Compiling brotli v9.1.1
-   Compiling ecdsa v0.16.9
-   Compiling ecdsa v0.17.0
-   Compiling primeorder v0.14.0
    Compiling rand_chacha v0.9.0
+   Compiling darling v0.24.1
+   Compiling ecdsa v0.16.9
+   Compiling primeorder v0.14.0
+   Compiling ecdsa v0.17.0
+   Compiling tokio-util v0.7.20
    Compiling ghash v0.5.1
-   Compiling cipher v0.5.2
+   Compiling brotli v9.1.1
+   Compiling flate2 v1.1.11
    Compiling primeorder v0.13.6
    Compiling aes v0.8.4
    Compiling ctr v0.9.2
+   Compiling cipher v0.5.2
    Compiling pkcs1 v0.7.5
    Compiling universal-hash v0.6.1
+   Compiling h2 v0.4.20
+   Compiling tower v0.5.3
    Compiling aead v0.5.2
    Compiling pin-project-internal v1.1.13
    Compiling core-foundation v0.10.1
    Compiling iana-time-zone v0.1.65
    Compiling security-framework-sys v2.17.0
    Compiling cookie v0.18.2
-   Compiling hashbrown v0.14.5
-   Compiling compression-core v0.4.34
    Compiling regex-syntax v0.8.11
    Compiling heck v0.5.0
-   Compiling chrono v0.4.45
-   Compiling rsa v0.9.10
+   Compiling compression-core v0.4.34
+   Compiling hashbrown v0.14.5
    Compiling security-framework v3.7.0
+   Compiling rsa v0.9.10
+   Compiling chrono v0.4.45
    Compiling aes-gcm v0.10.3
    Compiling polyval v0.7.3
-   Compiling rand v0.9.5
-   Compiling dashmap v6.2.1
    Compiling serde_with_macros v3.24.0
    Compiling pin-project v1.1.13
-   Compiling sqlx-postgres v0.9.0
+   Compiling dashmap v6.2.1
+   Compiling rand v0.9.5
    Compiling ed25519 v3.0.0
    Compiling ed25519 v2.2.3
-   Compiling regex-automata v0.4.18
    Compiling async-trait v0.1.92
-   Compiling hyper v1.12.0
    Compiling num-bigint v0.4.8
    Compiling quanta v0.12.6
+   Compiling regex-automata v0.4.18
    Compiling ordered-float v2.10.1
-   Compiling compression-codecs v0.4.47
-   Compiling spinning_top v0.3.1
+   Compiling sqlx-core v0.9.0
    Compiling filetime v0.2.29
-   Compiling nonzero_ext v0.3.0
-   Compiling futures-timer v3.0.4
+   Compiling spinning_top v0.3.1
    Compiling nonempty v0.7.0
    Compiling web-time v1.1.0
-   Compiling tar v0.4.46
+   Compiling nonzero_ext v0.3.0
+   Compiling futures-timer v3.0.4
    Compiling forwarded-header-value v0.1.1
+   Compiling tar v0.4.46
    Compiling serde-value v0.7.0
+   Compiling ed25519-dalek v3.0.0
    Compiling ed25519-dalek v2.2.0
    Compiling governor v0.10.4
-   Compiling async-compression v0.4.52
-   Compiling serde_with v3.24.0
-   Compiling ed25519-dalek v3.0.0
    Compiling oauth2 v5.0.0
+   Compiling serde_with v3.24.0
+   Compiling tower-http v0.6.11
    Compiling ghash v0.6.0
    Compiling simple_asn1 v0.6.4
+   Compiling ctr v0.10.1
+   Compiling aes v0.9.4
+   Compiling compression-codecs v0.4.47
    Compiling p384 v0.13.1
    Compiling p256 v0.13.2
-   Compiling hyper-util v0.1.21
-   Compiling aes v0.9.4
-   Compiling ctr v0.10.1
-   Compiling matchers v0.2.0
+   Compiling async-compression v0.4.52
    Compiling p256 v0.14.0
    Compiling p384 v0.14.0
-   Compiling tower-http v0.6.11
-   Compiling aead v0.6.1
    Compiling itertools v0.14.0
    Compiling serde_plain v1.0.2
+   Compiling aead v0.6.1
    Compiling sharded-slab v0.1.7
    Compiling pem v3.0.6
    Compiling tracing-log v0.2.0
    Compiling thread_local v1.1.10
-   Compiling cityloom_server v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/cityloom_server)
+   Compiling nu-ansi-term v0.50.3
+   Compiling cityloom_server v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/cityloom_server)
    Compiling http-range-header v0.4.2
    Compiling dyn-clone v1.0.20
-   Compiling nu-ansi-term v0.50.3
+   Compiling matchers v0.2.0
    Compiling tower-http v0.7.1
    Compiling jsonwebtoken v11.1.0
    Compiling aes-gcm v0.11.1
-   Compiling citymodel_builder v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/crates/citymodel_builder)
    Compiling tracing-subscriber v0.3.23
+   Compiling citymodel_builder v0.1.0 (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/crates/citymodel_builder)
+   Compiling hyper v1.12.0
+   Compiling sqlx-postgres v0.9.0
+   Compiling hyper-util v0.1.21
+   Compiling openidconnect v4.1.0
    Compiling axum v0.8.9
    Compiling hyper-timeout v0.5.2
    Compiling sqlx-macros-core v0.9.0
-   Compiling openidconnect v4.1.0
    Compiling sqlx-macros v0.9.0
    Compiling tonic v0.14.9
    Compiling axum-extra v0.12.6
@@ -600,18 +600,18 @@ cargo build -p cityloom_server --features test-provider
    Compiling hyper-rustls v0.27.10
    Compiling reqwest v0.13.5
    Compiling sqlx v0.9.0
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.92s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 34.74s
 ./scripts/pin-server.sh
 
 Running 7 tests using 7 workers
 
-  ✘  6 [integration] › tests/share.spec.ts:177:1 › signed out, the share page says to sign in and makes no link (5.2s)
-  ✘  1 [integration] › tests/share.spec.ts:165:1 › an expired share says it has expired, in English and in French (5.2s)
-  ✘  2 [integration] › tests/share.spec.ts:131:1 › a link that is not whole is refused without asking the server (5.2s)
-  ✘  4 [integration] › tests/share.spec.ts:112:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing (5.6s)
-  ✘  5 [integration] › tests/share.spec.ts:185:1 › deleting a project deletes its share links first, so its link then says it was deleted (30.3s)
-  ✘  3 [integration] › tests/share.spec.ts:142:1 › a share its creator deleted says so (30.3s)
-  ✘  7 [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link (30.3s)
+  ✘  2 [integration] › tests/share.spec.ts:177:1 › signed out, the share page says to sign in and makes no link (5.2s)
+  ✘  5 [integration] › tests/share.spec.ts:131:1 › a link that is not whole is refused without asking the server (5.2s)
+  ✘  3 [integration] › tests/share.spec.ts:165:1 › an expired share says it has expired, in English and in French (5.2s)
+  ✘  6 [integration] › tests/share.spec.ts:112:1 › a made-up link says no shared design has it, in English and in French, and keeps nothing (5.7s)
+  ✘  7 [integration] › tests/share.spec.ts:185:1 › deleting a project deletes its share links first, so its link then says it was deleted (30.3s)
+  ✘  4 [integration] › tests/share.spec.ts:142:1 › a share its creator deleted says so (30.3s)
+  ✘  1 [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link (30.4s)
 
 
   1) [integration] › tests/share.spec.ts:58:1 › a project shared by a signed-in person opens read-only, rules and all, for anyone with the link 
@@ -630,8 +630,8 @@ Running 7 tests using 7 workers
       38 |   await expect(page).toHaveURL(/\/share\.html\?project=first$/);
       39 |   await expect(page.locator("#sharing-heading")).toHaveText("Share First project");
       40 |   await expect(page.locator("#sharing-create")).toBeEnabled();
-        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:37:46)
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:66:16
+        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:37:46)
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:66:16
 
     Error Context: test-results/share-a-project-shared-by--8fa64-ll-for-anyone-with-the-link-integration/error-context.md
 
@@ -664,7 +664,7 @@ Running 7 tests using 7 workers
       125 |     await expect(page).toHaveURL(new RegExp(`/share\\.html#${MADE_UP}$`));
       126 |     expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual(before);
       127 |   }
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:124:43
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:124:43
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -676,16 +676,16 @@ Running 7 tests using 7 workers
     +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
     + ]
 
-       at fixtures.ts:48
+       at fixtures.ts:52
 
-      46 |       });
-      47 |       await use(errors);
-    > 48 |       expect(errors).toEqual([]);
+      50 |       });
+      51 |       await use(errors);
+    > 52 |       expect(errors).toEqual([]);
          |                      ^
-      49 |     },
-      50 |     { auto: true },
-      51 |   ],
-        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/fixtures.ts:48:22)
+      53 |     },
+      54 |     { auto: true },
+      55 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/fixtures.ts:52:22)
 
     Error Context: test-results/share-a-made-up-link-says--0c848-in-French-and-keeps-nothing-integration/error-context.md
 
@@ -718,7 +718,7 @@ Running 7 tests using 7 workers
       139 |   expect(asked).toBe(false);
       140 | });
       141 |
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:138:41
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:138:41
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -730,16 +730,16 @@ Running 7 tests using 7 workers
     +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
     + ]
 
-       at fixtures.ts:48
+       at fixtures.ts:52
 
-      46 |       });
-      47 |       await use(errors);
-    > 48 |       expect(errors).toEqual([]);
+      50 |       });
+      51 |       await use(errors);
+    > 52 |       expect(errors).toEqual([]);
          |                      ^
-      49 |     },
-      50 |     { auto: true },
-      51 |   ],
-        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/fixtures.ts:48:22)
+      53 |     },
+      54 |     { auto: true },
+      55 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/fixtures.ts:52:22)
 
     Error Context: test-results/share-a-link-that-is-not-w-45293-d-without-asking-the-server-integration/error-context.md
 
@@ -767,8 +767,8 @@ Running 7 tests using 7 workers
       38 |   await expect(page).toHaveURL(/\/share\.html\?project=first$/);
       39 |   await expect(page.locator("#sharing-heading")).toHaveText("Share First project");
       40 |   await expect(page.locator("#sharing-create")).toBeEnabled();
-        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:37:46)
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:144:16
+        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:37:46)
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:144:16
 
     Error Context: test-results/share-a-share-its-creator-deleted-says-so-integration/error-context.md
 
@@ -801,7 +801,7 @@ Running 7 tests using 7 workers
       169 |     "This shared design has expired: a share link works for 90 days. Ask the person who shared it for a new link.",
       170 |   );
       171 |   await page.locator("#account-btn").click();
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:168:41
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:168:41
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -813,16 +813,16 @@ Running 7 tests using 7 workers
     +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
     + ]
 
-       at fixtures.ts:48
+       at fixtures.ts:52
 
-      46 |       });
-      47 |       await use(errors);
-    > 48 |       expect(errors).toEqual([]);
+      50 |       });
+      51 |       await use(errors);
+    > 52 |       expect(errors).toEqual([]);
          |                      ^
-      49 |     },
-      50 |     { auto: true },
-      51 |   ],
-        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/fixtures.ts:48:22)
+      53 |     },
+      54 |     { auto: true },
+      55 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/fixtures.ts:52:22)
 
     Error Context: test-results/share-an-expired-share-say-9fad1-ed-in-English-and-in-French-integration/error-context.md
 
@@ -855,7 +855,7 @@ Running 7 tests using 7 workers
       180 |     "Sign in to share this project: the server keeps shared copies for your account.",
       181 |   );
       182 |   await expect(page.locator("#sharing-create")).toBeDisabled();
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:179:50
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:179:50
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -867,16 +867,16 @@ Running 7 tests using 7 workers
     +   "Failed to load resource: the server responded with a status of 404 (Not Found)",
     + ]
 
-       at fixtures.ts:48
+       at fixtures.ts:52
 
-      46 |       });
-      47 |       await use(errors);
-    > 48 |       expect(errors).toEqual([]);
+      50 |       });
+      51 |       await use(errors);
+    > 52 |       expect(errors).toEqual([]);
          |                      ^
-      49 |     },
-      50 |     { auto: true },
-      51 |   ],
-        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/fixtures.ts:48:22)
+      53 |     },
+      54 |     { auto: true },
+      55 |   ],
+        at Object.base.extend.errors.auto (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/fixtures.ts:52:22)
 
     Error Context: test-results/share-signed-out-the-share-1667b-o-sign-in-and-makes-no-link-integration/error-context.md
 
@@ -904,8 +904,8 @@ Running 7 tests using 7 workers
       38 |   await expect(page).toHaveURL(/\/share\.html\?project=first$/);
       39 |   await expect(page.locator("#sharing-heading")).toHaveText("Share First project");
       40 |   await expect(page.locator("#sharing-create")).toBeEnabled();
-        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:37:46)
-        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221b/e2e/tests/share.spec.ts:192:16
+        at share (/private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:37:46)
+        at /private/tmp/claude-501/-Users-alex-src-cityloom-main/696d3203-3e74-4779-b07c-144ac1ab5c3c/scratchpad/before221c/e2e/tests/share.spec.ts:192:16
 
     Error Context: test-results/share-deleting-a-project-d-0d11f-nk-then-says-it-was-deleted-integration/error-context.md
 

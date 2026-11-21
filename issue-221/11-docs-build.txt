@@ -1,5 +1,5 @@
 $ cd /Users/alex/src/cityloom/main-issue-221 && git rev-parse HEAD
-90c289c92c626f4e049cf0c7e646da226c066210
+8dd6a4914d4fe67b754c72cf35e054374e8f2a5e
 $ just docs-build
 cd website && npm run build
 
@@ -10,7 +10,7 @@ cd website && npm run build
 - en
 - fr-CA
 [INFO] [en] Creating an optimized production build...
-(node:67204) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:92756) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
 [SUCCESS] Generated static files in "build".
 [INFO] [fr-CA] Creating an optimized production build...
