@@ -12,6 +12,7 @@ pub mod fake_provider;
 pub mod flow;
 pub mod providers;
 pub mod session;
+pub mod share;
 pub mod static_files;
 pub mod work;
 
@@ -27,7 +28,10 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     db::spawn_migrations(pool.clone(), ready.clone());
     let pg = std::sync::Arc::new(db::PgRepo::new(pool, masters, crypto::LookupKey::new(config.lookup_key.clone())));
     let repo: std::sync::Arc<dyn accounts::Repo> = pg.clone();
-    let work: std::sync::Arc<dyn work::WorkRepo> = pg;
+    let work: std::sync::Arc<dyn work::WorkRepo> = pg.clone();
+    let shares: std::sync::Arc<dyn share::ShareRepo> = pg;
+    // Its first pass waits for the migrations, which make the table it purges.
+    share::spawn_purge(shares.clone(), clock.clone(), ready.clone());
     // Its first pass runs before the database may be ready and then only logs a warning; the next is a day later,
     // which is acceptable because an expired row is refused on read anyway.
     session::spawn_cleanup(repo.clone(), clock.clone());
@@ -48,6 +52,7 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     Ok(std::sync::Arc::new(app::Account {
         repo,
         work,
+        shares,
         http: std::sync::Arc::new(providers::ReqwestClient::new()),
         clock,
         providers,
@@ -55,6 +60,7 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
         base_url: config.base_url.clone(),
         rate: config.rate,
         work_rate: config.work_rate,
+        share_rate: config.share_rate,
         ready,
         #[cfg(feature = "test-provider")]
         fake,

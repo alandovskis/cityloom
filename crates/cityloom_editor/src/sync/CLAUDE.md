@@ -21,6 +21,7 @@ A stale street or junction record (`city::edits::is_stale`) is not listed or rea
 
 - A `project` record's body is the list entry `{id, name, area, created_at}`; written by `ProjectStore::put_raw` (in place, or appended), removed by `ProjectStore::remove_raw` (entry, scoped keys, last-opened id), neither marking. The key names the project, whatever the body's `id`.
 - A pulled record of a project the list lacks adds a placeholder (`ProjectStore::ensure`: name `PLACEHOLDER_NAME`, default area, `created_at` now, `placeholder: true`) so its places are reachable. A placeholder is never sent (`ids` skips it, `read` gives none), so it cannot replace the project's name elsewhere; the project's record replaces it, a rename makes it the person's. Removing a record of an unlisted project writes nothing.
+- A copy of a shared design (`project::copies`, #221) is no project of the person's: `ProjectStore::list` does not hold it, so `projects`, `ids` and `read` never name it or its records, and nothing marks it.
 - `ProjectStore::delete` marks deleted the project record and every record of the project (its documents' and those the sync document knows), in one `mark_all`.
 - `mark` refuses a key whose wire key the server would refuse (a 190-character key under a 14-character project id), or one whose wire key would name another project (`p-abc:w1` in `first`, `shared::project_id::round_trips`): the edit stays on the device.
 - Numbered rules are renamed per project, the old id going as `<project>:r<n>`.

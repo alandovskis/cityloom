@@ -19,6 +19,7 @@ use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
 use cityloom_server::fake_provider::{self, FakeLogin, FakeState, LOGIN_COOKIE, parse_form_post};
 use cityloom_server::providers::{HttpClient, Providers};
+use cityloom_server::share::{Created, ShareError, ShareRepo, Token};
 use cityloom_server::work::{Ask, Pulled, Pushed, Put, WorkError, WorkRepo};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
@@ -178,7 +179,8 @@ pub async fn sign_in(b: &mut Browser, slug: &str, return_path: &str, login: &Fak
     play_provider(b, &started.location().unwrap(), login).await
 }
 
-/// The whole router over `repo` and `work`; `http: None` means the in-process fake provider.
+/// The whole router over `repo` and `work` (shares in `work`'s place where it is a `PgRepo`: `account_router_with`);
+/// `http: None` means the in-process fake provider.
 pub fn account_router(
     repo: Arc<dyn Repo>,
     work: Arc<dyn WorkRepo>,
@@ -188,6 +190,22 @@ pub fn account_router(
     rate: RateLimit,
     work_rate: RateLimit,
 ) -> Router {
+    account_router_with(repo, work, Arc::new(NoShares), http, clock, fake, rate, work_rate, RateLimit { period_secs: 1, burst: 1000 })
+}
+
+/// The same, with the shares and their rate limit too.
+#[allow(clippy::too_many_arguments)]
+pub fn account_router_with(
+    repo: Arc<dyn Repo>,
+    work: Arc<dyn WorkRepo>,
+    shares: Arc<dyn ShareRepo>,
+    http: Option<Arc<dyn HttpClient>>,
+    clock: Arc<FixedClock>,
+    fake: Arc<FakeState>,
+    rate: RateLimit,
+    work_rate: RateLimit,
+    share_rate: RateLimit,
+) -> Router {
     let mut providers = Providers::from_config_for_test(&[]);
     for spec in fake_provider::specs(ISSUER) {
         providers = providers.with(spec);
@@ -195,6 +213,7 @@ pub fn account_router(
     let account = Arc::new(Account {
         repo,
         work,
+        shares,
         http: http.unwrap_or_else(|| Arc::new(InProcess::with_state(fake.clone()))),
         clock,
         providers,
@@ -202,6 +221,7 @@ pub fn account_router(
         base_url: "http://127.0.0.1:8137".parse().unwrap(),
         rate,
         work_rate,
+        share_rate,
         ready: Arc::new(std::sync::atomic::AtomicBool::new(true)), // `#[sqlx::test]` has migrated the database already
         fake: Some(fake),
     });
@@ -222,6 +242,25 @@ impl WorkRepo for NoWork {
     }
     async fn clear(&self, _: uuid::Uuid) -> Result<(), WorkError> {
         Err(WorkError::Unavailable)
+    }
+}
+
+/// A share store that is down.
+pub struct NoShares;
+
+#[async_trait::async_trait]
+impl ShareRepo for NoShares {
+    async fn create(&self, _: uuid::Uuid, _: &Token, _: &[u8], _: time::OffsetDateTime) -> Result<Created, ShareError> {
+        Err(ShareError::Unavailable)
+    }
+    async fn open(&self, _: &Token, _: time::OffsetDateTime) -> Result<Vec<u8>, ShareError> {
+        Err(ShareError::Unavailable)
+    }
+    async fn delete(&self, _: uuid::Uuid, _: &Token, _: time::OffsetDateTime) -> Result<(), ShareError> {
+        Err(ShareError::Unavailable)
+    }
+    async fn purge(&self, _: time::OffsetDateTime) -> Result<cityloom_server::share::Purged, ShareError> {
+        Err(ShareError::Unavailable)
     }
 }
 
@@ -271,6 +310,8 @@ impl Repo for DownRepo {
     }
 }
 
+const GENEROUS: RateLimit = RateLimit { period_secs: 1, burst: 1000 };
+
 pub struct TestApp {
     pub router: Router,
     pub repo: Arc<PgRepo>,
@@ -280,20 +321,24 @@ pub struct TestApp {
 
 impl TestApp {
     pub fn new(pool: PgPool) -> TestApp {
-        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, RateLimit { period_secs: 1, burst: 1000 }, None)
+        TestApp::build(pool, GENEROUS, GENEROUS, GENEROUS, None)
     }
     pub fn with_rate(pool: PgPool, rate: RateLimit) -> TestApp {
-        TestApp::build(pool, rate, RateLimit { period_secs: 1, burst: 1000 }, None)
+        TestApp::build(pool, rate, GENEROUS, GENEROUS, None)
     }
     /// The work routes' own limit (the sign-in routes keep the generous one).
     pub fn with_work_rate(pool: PgPool, work_rate: RateLimit) -> TestApp {
-        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, work_rate, None)
+        TestApp::build(pool, GENEROUS, work_rate, GENEROUS, None)
+    }
+    /// The share routes' own limit (the others keep the generous one).
+    pub fn with_share_rate(pool: PgPool, share_rate: RateLimit) -> TestApp {
+        TestApp::build(pool, GENEROUS, GENEROUS, share_rate, None)
     }
     /// The server's calls out go to `http` instead of the fake provider (a provider that is down, say).
     pub fn with_http(pool: PgPool, http: Arc<dyn HttpClient>) -> TestApp {
-        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, RateLimit { period_secs: 1, burst: 1000 }, Some(http))
+        TestApp::build(pool, GENEROUS, GENEROUS, GENEROUS, Some(http))
     }
-    fn build(pool: PgPool, rate: RateLimit, work_rate: RateLimit, http: Option<Arc<dyn HttpClient>>) -> TestApp {
+    fn build(pool: PgPool, rate: RateLimit, work_rate: RateLimit, share_rate: RateLimit, http: Option<Arc<dyn HttpClient>>) -> TestApp {
         let clock = Arc::new(FixedClock::new(t0()));
         let fake = FakeState::new(ISSUER.into(), clock.clone());
         let repo = Arc::new(PgRepo::new(
@@ -301,7 +346,7 @@ impl TestApp {
             MasterKeys::new(&[(1, zeroize::Zeroizing::new([1; 32]))], 1).unwrap(),
             LookupKey::new(zeroize::Zeroizing::new([3; 32])),
         ));
-        let router = account_router(repo.clone(), repo.clone(), http, clock.clone(), fake.clone(), rate, work_rate);
+        let router = account_router_with(repo.clone(), repo.clone(), repo.clone(), http, clock.clone(), fake.clone(), rate, work_rate, share_rate);
         TestApp { router, repo, clock, fake }
     }
     /// The router over a repository of the test's choosing (one that is down, say).
@@ -314,4 +359,53 @@ impl TestApp {
     pub fn browser(&self) -> Browser {
         Browser::new(self.router.clone())
     }
+}
+
+/// What the log says while the running test captures it (`capture_logs`).
+pub struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl Captured {
+    pub fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+thread_local! { static LOG_SINK: std::cell::RefCell<Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>> = const { std::cell::RefCell::new(None) }; }
+
+/// Writes to the sink of the thread that logs, if it captures.
+struct Routed;
+
+impl std::io::Write for Routed {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        LOG_SINK.with(|s| {
+            if let Some(sink) = s.borrow().as_ref() {
+                sink.lock().unwrap().extend_from_slice(b);
+            }
+        });
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+struct RoutedWriters;
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RoutedWriters {
+    type Writer = Routed;
+    fn make_writer(&'a self) -> Routed {
+        Routed
+    }
+}
+
+/// Captures what the running test's thread logs from now on. One global subscriber for the whole test binary, writing
+/// to whichever sink the running test's thread holds (a `sqlx::test` runs on one thread, so that is all of its log). A
+/// per-thread subscriber (`set_default`) is not enough: tracing caches whether a call site is wanted, and a test of
+/// another thread that ran first, with no subscriber, makes it "never", so a test would randomly miss lines.
+pub fn capture_logs() -> Captured {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| tracing::subscriber::set_global_default(tracing_subscriber::fmt().with_writer(RoutedWriters).with_ansi(false).finish()).unwrap());
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    LOG_SINK.with(|s| *s.borrow_mut() = Some(sink.clone()));
+    Captured(sink)
 }

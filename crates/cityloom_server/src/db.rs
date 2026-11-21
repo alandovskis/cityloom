@@ -13,6 +13,7 @@ use crate::accounts::{IdentityInput, IdentityView, Removal, Repo, RepoError, Ses
 use crate::crypto::{self, Key, LookupKey, MasterKeys};
 
 pub mod rotate;
+mod share;
 mod work;
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {

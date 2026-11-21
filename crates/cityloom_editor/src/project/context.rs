@@ -5,6 +5,7 @@
 use std::rc::Rc;
 
 use crate::place::area::Area;
+use crate::project::model::Project;
 use crate::project::store::ProjectStore;
 use crate::shared::ports::{Ports, Storage};
 use crate::shared::scoped::ScopedStorage;
@@ -22,17 +23,20 @@ pub enum Resolved {
     Missing,
 }
 
+/// The project a page may open as `id`: one of the person's (`store::find`), or a copy of a shared design this browser
+/// keeps (`copies::find`, #221). The person's list itself (`ProjectStore`) knows only theirs. Only reads, so it takes
+/// any storage.
+pub fn find(storage: &dyn Storage, id: &str) -> Option<Project> {
+    crate::project::store::find(storage, id).or_else(|| crate::project::copies::find(storage, id))
+}
+
 /// The project of a page whose query string is `search` (with or without its `?`): the one `project=` names when it
 /// is listed; with no `project=`, the one opened last when it is still listed. A `project=` naming a project that is
 /// not listed is `Missing`: the page does not open another project in its place. Takes the root storage.
 pub fn resolve(storage: &Rc<dyn Storage>, search: &str) -> Resolved {
     let store = ProjectStore::new(storage.clone());
-    let named = search.trim_start_matches('?').split('&').find_map(|pair| match pair.split_once('=') {
-        Some(("project", id)) => Some(id),
-        _ => (pair == "project").then_some(""),
-    });
-    let id = match named {
-        Some(id) => store.get(id).map(|p| p.id),
+    let id = match crate::shared::project_id::named_project(search) {
+        Some(id) => find(&**storage, id).map(|p| p.id),
         None => store.last_opened(),
     };
     id.map_or(Resolved::Missing, Resolved::Project)
@@ -49,8 +53,16 @@ fn search_of(ports: &Ports) -> String {
 /// (`ScopedStorage::only_to_read`); the person's caches and preferences are still kept.
 fn page_storage(storage: &Rc<dyn Storage>, id: &str, search: &str) -> Rc<ScopedStorage> {
     let (root, project) = (storage.clone(), id.to_string());
-    let scoped = ScopedStorage::guarded(storage.clone(), id, move || crate::project::store::find(&*root, &project).is_some());
-    Rc::new(if crate::shared::project_id::viewing(search) { scoped.only_to_read() } else { scoped })
+    let scoped = ScopedStorage::guarded(storage.clone(), id, move || find(&*root, &project).is_some());
+    Rc::new(if read_only(&**storage, Some(id), search) { scoped.only_to_read() } else { scoped })
+}
+
+/// Whether a page whose query string is `search` shows its project `id` only to read: its address says so
+/// (`project_id::viewing`), or the project is a copy of a shared design (#221), which is only ever looked at whatever
+/// the address says: it is no one's work on this device. The one question the page's storage (`page_storage`) and the
+/// shell's top bar ask. Takes any storage.
+pub fn read_only(storage: &dyn Storage, id: Option<&str>, search: &str) -> bool {
+    crate::shared::project_id::viewing(search) || id.is_some_and(|id| crate::project::copies::is_copy(storage, id))
 }
 
 /// `enter`, keeping the project's storage so that it can be shut.
@@ -58,6 +70,8 @@ fn enter_scoped(ports: Ports) -> Option<(Ports, Rc<ScopedStorage>)> {
     let search = search_of(&ports);
     match resolve(&ports.storage, &search) {
         Resolved::Project(id) => {
+            // A copy of a shared design is not one of the person's projects (`open` refuses it): the one opened last
+            // stays theirs.
             ProjectStore::new(ports.storage.clone()).open(&id);
             let scoped = page_storage(&ports.storage, &id, &search);
             let storage: Rc<dyn Storage> = scoped.clone();
@@ -81,7 +95,7 @@ pub fn enter(ports: Ports) -> Option<Ports> {
 /// which passes its key to the root). None over the root storage, or where the project is not listed, its record is a
 /// placeholder the sync made before the real one came, or its area cannot be read: the caller then falls back.
 pub fn area_of(storage: &dyn Storage) -> Option<Area> {
-    let project = crate::project::store::find(storage, &storage.project()?)?;
+    let project = find(storage, &storage.project()?)?;
     if project.placeholder { None } else { Area::from_query(&project.area) }
 }
 
@@ -118,7 +132,7 @@ pub fn leave_when_removed(ports: &Ports, scoped: &Rc<ScopedStorage>) {
         || {},
         move |changes: &[Change]| {
             let about = changes.iter().any(|c| c.id.kind == Kind::Project && c.id.key == id);
-            if about && ProjectStore::new(storage.clone()).get(&id).is_none() {
+            if about && find(&*storage, &id).is_none() {
                 scoped.close();
                 navigator.replace(MISSING_HREF);
             }

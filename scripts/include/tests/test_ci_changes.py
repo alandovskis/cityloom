@@ -128,6 +128,13 @@ class Selection(unittest.TestCase):
                 self.assertTrue(s.integration)
                 self.assertTrue(s.e2e)
 
+    def test_the_projects_their_copies_and_the_sync_run_the_share_spec(self):
+        # The home page's row links to sharing; a shared design opens as a copy (`project/copies.rs`), which the
+        # pages' lookup and the sync keep apart from the person's projects (#221).
+        for f in ("project/vm.rs", "project/copies.rs", "project/context.rs", "project/store.rs", "sync/local.rs"):
+            with self.subTest(f):
+                self.assertIn("share", pick(f"crates/cityloom_editor/src/{f}").specs)
+
     def test_the_server_and_the_sync_run_the_integration_tier(self):
         self.assertTrue(pick("crates/cityloom_server/src/app.rs").integration)
         s = pick("crates/cityloom_editor/src/sync/vm.rs")

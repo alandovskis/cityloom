@@ -318,38 +318,7 @@ async fn a_client_cannot_get_a_fresh_allowance_by_sending_its_own_forwarded_for(
 
 #[sqlx::test]
 async fn the_logs_say_method_path_status_provider_and_outcome_and_nothing_secret(pool: PgPool) {
-    use std::cell::RefCell;
-    use std::sync::{Arc, Mutex, Once};
-    // One global subscriber for the whole test binary, writing to whichever sink the running test's thread holds
-    // (a `sqlx::test` runs on one thread, so that is all of its log). A per-thread subscriber (`set_default`) is
-    // not enough: tracing caches whether a call site is wanted, and a test of another thread that ran first, with
-    // no subscriber, makes it "never", so this test would randomly miss lines.
-    thread_local! { static SINK: RefCell<Option<Arc<Mutex<Vec<u8>>>>> = const { RefCell::new(None) }; }
-    struct Routed;
-    impl std::io::Write for Routed {
-        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
-            SINK.with(|s| {
-                if let Some(sink) = s.borrow().as_ref() {
-                    sink.lock().unwrap().extend_from_slice(b);
-                }
-            });
-            Ok(b.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-    struct RoutedWriters;
-    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for RoutedWriters {
-        type Writer = Routed;
-        fn make_writer(&'a self) -> Routed {
-            Routed
-        }
-    }
-    static INSTALL: Once = Once::new();
-    INSTALL.call_once(|| tracing::subscriber::set_global_default(tracing_subscriber::fmt().with_writer(RoutedWriters).with_ansi(false).finish()).unwrap());
-    let sink = Arc::new(Mutex::new(Vec::new()));
-    SINK.with(|s| *s.borrow_mut() = Some(sink.clone()));
+    let sink = capture_logs();
     let app = TestApp::new(pool);
     let mut b = app.browser();
     let login = FakeLogin {
@@ -361,7 +330,7 @@ async fn the_logs_say_method_path_status_provider_and_outcome_and_nothing_secret
     sign_in(&mut b, "fake", "/map.html", &login).await;
     b.get("/auth/fake/callback?code=CODE-SECRET-999&state=STATE-SECRET-999").await;
     let session = b.cookie(SESSION).cloned().unwrap_or_default();
-    let logs = String::from_utf8(sink.lock().unwrap().clone()).unwrap();
+    let logs = sink.text();
     assert!(logs.contains("/auth/fake/callback") && logs.contains("fake") && logs.contains("new"), "{logs}");
     for secret in [
         "sub-very-secret-123",

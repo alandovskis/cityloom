@@ -99,15 +99,53 @@ fn delete_question(vm: Vm) -> impl IntoView {
             }
         >
             <p id="project-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
+            // One status node for the question's life: what happens while its share links are deleted.
+            <p id="project-delete-status" role="status">
+                {move || vm.with_value(|v| v.ending_status())}
+            </p>
+            <p class="project-error" hidden=move || vm.with_value(|v| v.delete_error()).is_none()>
+                {move || vm.with_value(|v| v.delete_error())}
+            </p>
             <div class="project-buttons">
-                <button type="button" id="project-delete-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
+                // While the project's share links are deleted, both wait without leaving the tab order.
+                <button
+                    type="button"
+                    id="project-delete-safe"
+                    class="btn"
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
+                    on:click=move |_| vm.with_value(|v| v.cancel_delete())
+                >
                     {move || word(vm, "project-cancel")}
                 </button>
-                <button type="button" id="project-delete-yes" class="btn danger" on:click=move |_| {
-                    vm.with_value(|v| v.confirm_delete());
-                }>
+                <button
+                    type="button"
+                    id="project-delete-yes"
+                    class="btn danger"
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
+                    on:click=move |_| {
+                        vm.with_value(|v| v.confirm_delete());
+                    }
+                >
                     {move || word(vm, "project-delete-yes")}
                 </button>
+                // Once the project's share links could not be ended from here, it can be deleted without them.
+                {move || {
+                    vm.with_value(|v| v.can_delete_anyway())
+                        .then(|| {
+                            view! {
+                                <button
+                                    type="button"
+                                    id="project-delete-anyway"
+                                    class="btn danger"
+                                    on:click=move |_| {
+                                        vm.with_value(|v| v.delete_anyway());
+                                    }
+                                >
+                                    {move || word(vm, "project-delete-anyway")}
+                                </button>
+                            }
+                        })
+                }}
             </div>
         </div>
     }
@@ -120,6 +158,8 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
     let href = vm.with_value(|v| v.href(&row.id));
     let timeline_href = vm.with_value(|v| v.timeline_href(&row.id));
     let timeline_label = row.name.clone();
+    let share_href = vm.with_value(|v| v.share_href(&row.id));
+    let share_label = row.name.clone();
     let (open_id, rename_id, delete_id) = (row.id.clone(), row.id.clone(), row.id.clone());
     let (here_rename, here_delete) = (row.id.clone(), row.id.clone());
     let (rename_label, delete_label) = (row.name.clone(), row.name.clone());
@@ -155,10 +195,19 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                 >
                     {move || word(vm, "project-timeline")}
                 </a>
+                <a
+                    class="btn"
+                    id=part("share", &row.id)
+                    href=share_href
+                    aria-label=move || vm.with_value(|v| v.named("project-share-named", &share_label))
+                >
+                    {move || word(vm, "project-share")}
+                </a>
                 <button
                     type="button"
                     class="btn"
                     id=part("rename", &row.id)
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
                     aria-label=move || vm.with_value(|v| v.named("project-rename-named", &rename_label))
                     on:click=move |_| vm.with_value(|v| v.start_rename(&rename_id))
                 >
@@ -168,6 +217,7 @@ fn row_view(vm: Vm, row: Row) -> impl IntoView {
                     type="button"
                     class="btn"
                     id=part("delete", &row.id)
+                    aria-disabled=move || if vm.with_value(|v| v.ending()) { "true" } else { "false" }
                     aria-label=move || vm.with_value(|v| v.named("project-delete-named", &delete_label))
                     on:click=move |_| vm.with_value(|v| v.ask_delete(&delete_id))
                 >

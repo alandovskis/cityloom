@@ -271,7 +271,7 @@ pub fn parse_and_validate(text: &str) -> Result<Archive, ArchiveError> {
     Ok(Archive { format_version: version, app_version, created_at, source, area, streets, junctions, rules, stale })
 }
 
-type Records = BTreeMap<String, Value>;
+pub(crate) type Records = BTreeMap<String, Value>;
 
 /// Whether a record kept under `key` can be carried by the sync from any project the archive is imported into: a key
 /// the server takes, and one that does not start with another project's id (in the first project `p-abc:w1` would
@@ -302,7 +302,7 @@ fn fresh(mut records: Records) -> (Records, usize) {
     (records, dropped)
 }
 
-fn read_edits(value: Option<&Value>) -> Result<(Records, Records, usize), ArchiveError> {
+pub(crate) fn read_edits(value: Option<&Value>) -> Result<(Records, Records, usize), ArchiveError> {
     let Some(value) = value.filter(|v| !v.is_null()) else { return Ok((Records::new(), Records::new(), 0)) };
     let damaged = ArchiveError::Damaged(PART_EDITS);
     let Some(doc) = value.as_object() else { return Err(damaged) };
@@ -322,7 +322,7 @@ fn read_edits(value: Option<&Value>) -> Result<(Records, Records, usize), Archiv
     }
 }
 
-fn read_rules(value: Option<&Value>) -> Result<Records, ArchiveError> {
+pub(crate) fn read_rules(value: Option<&Value>) -> Result<Records, ArchiveError> {
     let Some(value) = value.filter(|v| !v.is_null()) else { return Ok(Records::new()) };
     let damaged = ArchiveError::Damaged(PART_RULES);
     let Some(doc) = value.as_object() else { return Err(damaged) };

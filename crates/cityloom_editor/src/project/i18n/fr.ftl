@@ -30,6 +30,9 @@ project-date = { $day ->
 } { $year }
 project-timeline = Chronologie
 project-timeline-named = Chronologie de { $name }
+# Le lien de la rangée du projet vers la page qui partage le projet par un lien (#221).
+project-share = Partager
+project-share-named = Partager { $name }
 project-rename = Renommer
 project-rename-named = Renommer { $name }
 project-rename-save = Enregistrer le nom
@@ -38,6 +41,19 @@ project-delete = Supprimer
 project-delete-named = Supprimer { $name }
 project-delete-confirm = Supprimer { $name } et tout ce qu’il contient? Cette action est irréversible.
 project-delete-yes = Supprimer le projet
+# Avant de supprimer un projet qui a des liens de partage créés sur cet appareil (#221) : ils sont d’abord supprimés sur le serveur.
+project-delete-confirm-links = { $count ->
+    [one] Supprimer { $name } et tout ce qu’il contient? Son lien de partage créé sur cet appareil cessera aussi de fonctionner. Cette action est irréversible.
+   *[other] Supprimer { $name } et tout ce qu’il contient? Ses { $count } liens de partage créés sur cet appareil cesseront aussi de fonctionner. Cette action est irréversible.
+}
+# Ses liens de partage n’ont pas pu être supprimés sur le serveur, donc le projet a été conservé; $reason dit pourquoi, en une phrase.
+project-delete-links-failed = { $name } n’a pas été supprimé : ses liens de partage n’ont pas pu être supprimés d’abord. { $reason }
+# La raison pour laquelle le projet a été conservé ($failed, project-delete-links-failed), et ce qui peut encore être fait.
+project-delete-anyway-offer = { $failed } Vous pouvez le supprimer quand même : ses liens de partage fonctionneront alors, et compteront dans la limite de liens actifs de votre compte, jusqu’à leur expiration.
+project-delete-anyway = Supprimer quand même
+# Pendant que les liens de partage d’un projet sont supprimés sur le serveur, avant le projet (#221); Annuler et Échap attendent.
+project-delete-ending = Suppression de ses liens de partage sur le serveur… Le projet est supprimé une fois qu’ils le sont; d’ici là, cette action ne peut pas être annulée.
+project-delete-waiting = Le serveur a demandé d’attendre un instant : ses liens de partage seront redemandés sous peu… Le projet est supprimé une fois qu’ils le sont; d’ici là, cette action ne peut pas être annulée.
 project-gone = Ce projet n’est plus ici.
 project-first-name = Premier projet
 # A project whose places came before its record, until its record or a rename names it.
