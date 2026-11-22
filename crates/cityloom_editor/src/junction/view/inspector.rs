@@ -2207,6 +2207,15 @@ fn hour_table(w: Watch, t: Table, body: impl IntoView + 'static) -> impl IntoVie
     }
 }
 
+/// A wait of the hour as a table cell: its seconds, or with none (nobody served), a dash for the eye and `said` for a
+/// screen reader.
+fn wait_cell(w: Watch, s: Option<u32>, said: &'static str) -> AnyView {
+    match s {
+        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
+        None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, said)}</span> }.into_any(),
+    }
+}
+
 /// What a rate field of the hour is: the field's id and its hint's, its label's message, and its range's message and
 /// upper bound (the lower is 0).
 struct RateField {
@@ -2391,12 +2400,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
     // One row a movement, keyed by its totals: a row is made again only when its numbers change.
     let totals = move || bikes.with(|b| b.movements.iter().filter_map(|m| m.totals).collect::<Vec<_>>());
     let has_totals = Memo::new(move |_| bikes.with(|b| b.movements.iter().any(|m| m.totals.is_some())));
-    let wait = move |s: Option<u32>| match s {
-        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
-        None => {
-            view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-bikes-no-wait-said")}</span> }.into_any()
-        }
-    };
+    let wait = move |s: Option<u32>| wait_cell(w, s, "jn-bikes-no-wait-said");
     let total_row = move |t: bicycles::Totals| {
         let extended = move || tr(w, "jn-bikes-extended-cell", Args::new().num("count", i64::from(t.extended)).num("seconds", i64::from(t.extended_s)));
         view! {
@@ -2569,11 +2573,7 @@ fn priority_section(w: Watch) -> impl IntoView {
     let totals = move || transit.with(|t| t.streets.iter().filter_map(|s| s.totals).collect::<Vec<_>>());
     let has_totals = Memo::new(move |_| transit.with(|t| t.streets.iter().any(|s| s.totals.is_some())));
     let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
-    let wait = move |s: Option<u32>| match s {
-        Some(wait) => seconds(wait).into_any(),
-        None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-transit-no-wait-said")}</span> }
-            .into_any(),
-    };
+    let wait = move |s: Option<u32>| wait_cell(w, s, "jn-transit-no-wait-said");
     let total_row = move |t: transit::Totals| {
         view! {
             <tr>
