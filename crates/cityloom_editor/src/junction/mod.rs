@@ -122,15 +122,16 @@ pub fn mount_bare_shell(node: u32) {
     if let Some(tools) = find(".tools") {
         let _ = tools.set_attribute("hidden", "");
     }
-    // The drawing's scroller goes with it, so the message sits under the title, not at the end of an empty column.
-    if let Some(el) = find(".stage-scroll") {
+    if let Some(el) = find(".plan-drawing") {
         el.remove();
     }
     if let (Some(at), Some(name)) = (find("#street"), name) {
         let i18n = i18n.clone();
         leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::StuckHeader i18n=i18n name=name/> }).forget();
     }
-    if let Some(at) = find(".stage-main") {
+    // In the drawing's place, at the top of the column's scroller: under the title, and reachable by scrolling in a
+    // short window.
+    if let Some(at) = find(".stage-scroll") {
         let i18n = i18n.clone();
         leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::Stuck i18n=i18n map=map/> }).forget();
     }

@@ -310,6 +310,8 @@ test("a junction that cannot be drawn says so, keeps its shell and follows the l
   const head = (await page.locator(".stage-head").boundingBox())!;
   const message = (await stuck.boundingBox())!;
   expect(message.y - (head.y + head.height)).toBeLessThan(40);
+  // in the column's scroller, so a short window can still scroll to its link back to the map
+  await expect(page.locator(".stage-scroll .stuck")).toHaveCount(1);
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
   expect(name).not.toBe("");
   expect(await page.title()).toContain(name);
