@@ -414,6 +414,69 @@ impl<'a> Buses<'a> {
         }
     }
 
+    /// Records the early green a phase (`uid`) gave out of its green of `before` seconds: the seconds given to the
+    /// cut's street and the delay moved, and the clearance that kept the green longer than the bus asked, if any.
+    fn record_cut(&mut self, cut: &Cut, before: u32, uid: u32) {
+        let x = cut.street;
+        let seconds = before - cut.green_s;
+        if seconds > 0 {
+            self.early[x] += seconds;
+            self.given[x] = Some(self.greens[x]);
+            self.move_delay(x, uid, seconds);
+        }
+        if cut.green_s > cut.asked_s {
+            self.record_held(self.streets[x].arm, uid, cut.green_s - cut.asked_s);
+        }
+    }
+
+    /// Adds one green of phase `uid` kept `more` seconds longer than `arm`'s bus asked to its finding.
+    fn record_held(&mut self, arm: u32, uid: u32, more: u32) {
+        match self.held.iter_mut().find(|f| matches!(f, Finding::ClearanceHeld { arm: a, phase, .. } if *a == arm && *phase == uid)) {
+            Some(Finding::ClearanceHeld { times, held_s, .. }) => {
+                *times += 1;
+                *held_s += more;
+            }
+            _ => self.held.push(Finding::ClearanceHeld { arm, phase: uid, times: 1, held_s: more }),
+        }
+    }
+
+    /// A green (phase `k`, `uid`) that runs after another street's extended one started that much later: it bears the
+    /// delay, once.
+    fn charge_shifts(&mut self, k: usize, uid: u32) {
+        for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase != k) {
+            if self.shift[x] > 0 && !self.charged[x].contains(&uid) {
+                self.charged[x].push(uid);
+                let shift = self.shift[x];
+                self.move_delay(x, uid, shift);
+            }
+        }
+    }
+
+    /// Serves street `x`'s buses that came before its phase's green (`turn`) ended, and starts counting its next green.
+    fn serve_street(&mut self, x: usize, turn: &Turn) {
+        let base_end = turn.green_end - u64::from(turn.prolonged_s);
+        while let Some(t) = self.first(x).filter(|&t| t < turn.green_end) {
+            let bus = &mut self.rows[x][self.next[x]];
+            if t >= turn.start {
+                bus.outcome = if t < base_end { Outcome::OnArrival } else { Outcome::Extended };
+                bus.extended_s = if t < base_end { 0 } else { turn.prolonged_s };
+            } else {
+                bus.wait_s = u32::try_from(turn.start - t).unwrap_or(u32::MAX);
+                bus.outcome = if self.early[x] > 0 { Outcome::EarlyGreen } else { Outcome::Delayed };
+                bus.early_s = self.early[x];
+            }
+            self.next[x] += 1;
+        }
+        if turn.prolonged_s > 0 {
+            self.given[x] = Some(self.greens[x]);
+        }
+        // The other approaches' next greens start that much later; each bears it as it runs.
+        self.shift[x] = turn.prolonged_s;
+        self.charged[x].clear();
+        self.greens[x] += 1;
+        self.early[x] = 0;
+    }
+
     /// Every bus (in the order they came), the delay moved, and the findings about greens kept for a clearance.
     pub(crate) fn finish(self) -> (Vec<Bus>, Vec<Moved>, Vec<Finding>) {
         let mut buses: Vec<(usize, Bus)> = self.rows.into_iter().enumerate().flat_map(|(x, r)| r.into_iter().map(move |b| (x, b))).collect();
@@ -457,54 +520,11 @@ impl control::Demand for Buses<'_> {
         let (k, uid) = (turn.phase, self.uids[turn.phase]);
         let before = turn.green_s() - turn.prolonged_s + turn.cut_s;
         if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s) {
-            let x = cut.street;
-            let seconds = before - cut.green_s;
-            if seconds > 0 {
-                self.early[x] += seconds;
-                self.given[x] = Some(self.greens[x]);
-                self.move_delay(x, uid, seconds);
-            }
-            if cut.green_s > cut.asked_s {
-                let (arm, more) = (self.streets[x].arm, cut.green_s - cut.asked_s);
-                match self.held.iter_mut().find(|f| matches!(f, Finding::ClearanceHeld { arm: a, phase, .. } if *a == arm && *phase == uid)) {
-                    Some(Finding::ClearanceHeld { times, held_s, .. }) => {
-                        *times += 1;
-                        *held_s += more;
-                    }
-                    _ => self.held.push(Finding::ClearanceHeld { arm, phase: uid, times: 1, held_s: more }),
-                }
-            }
+            self.record_cut(&cut, before, uid);
         }
-        // A green that runs after another street's extended one started that much later: it bears the delay, once.
-        for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase != k) {
-            if self.shift[x] > 0 && !self.charged[x].contains(&uid) {
-                self.charged[x].push(uid);
-                let shift = self.shift[x];
-                self.move_delay(x, uid, shift);
-            }
-        }
+        self.charge_shifts(k, uid);
         for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase == k) {
-            let base_end = turn.green_end - u64::from(turn.prolonged_s);
-            while let Some(t) = self.first(x).filter(|&t| t < turn.green_end) {
-                let bus = &mut self.rows[x][self.next[x]];
-                if t >= turn.start {
-                    bus.outcome = if t < base_end { Outcome::OnArrival } else { Outcome::Extended };
-                    bus.extended_s = if t < base_end { 0 } else { turn.prolonged_s };
-                } else {
-                    bus.wait_s = u32::try_from(turn.start - t).unwrap_or(u32::MAX);
-                    bus.outcome = if self.early[x] > 0 { Outcome::EarlyGreen } else { Outcome::Delayed };
-                    bus.early_s = self.early[x];
-                }
-                self.next[x] += 1;
-            }
-            if turn.prolonged_s > 0 {
-                self.given[x] = Some(self.greens[x]);
-            }
-            // The other approaches' next greens start that much later; each bears it as it runs.
-            self.shift[x] = turn.prolonged_s;
-            self.charged[x].clear();
-            self.greens[x] += 1;
-            self.early[x] = 0;
+            self.serve_street(x, turn);
         }
     }
 
