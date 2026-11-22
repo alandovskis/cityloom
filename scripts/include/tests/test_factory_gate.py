@@ -488,7 +488,139 @@ class Gates(unittest.TestCase):
             g.green(self.base, red)
 
 
+EN = "website/docs"
+FR = "website/i18n/fr-CA/docusaurus-plugin-content-docs/current"
+
+
+class DocsGate(unittest.TestCase):
+    """The documentation flow's gate: the writer's branch changes only documentation, each page in both languages, and
+    the site passes CI's Prettier check and builds. No Rust, no Playwright and no database."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name)
+        git(self.repo, "init", "-q", "-b", "work")
+        self.base = commit(
+            self.repo,
+            {
+                f"{EN}/intro.md": "# Intro\n",
+                f"{FR}/intro.md": "# Introduction\n",
+                "crates/m/src/street.rs": "pub fn keep() {}\n",
+            },
+            "base",
+        )
+        saved = os.environ.pop("DATABASE_URL", None)
+        self.addCleanup(lambda: saved is None or os.environ.__setitem__("DATABASE_URL", saved))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def runner(self, failing: dict | None = None):
+        """Every command passes but those of `failing` (command tuple -> (code, output)); records each command and cwd."""
+        calls: list[tuple[tuple[str, ...], Path]] = []
+
+        def run(cmd, cwd, env=None):
+            calls.append((tuple(cmd), Path(cwd)))
+            return (failing or {}).get(tuple(cmd), (0, ""))
+
+        run.calls = calls
+        return run
+
+    def test_a_page_in_both_languages_passes_after_the_site_is_checked_and_built(self):
+        commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Document the signals")
+        run = self.runner()
+        report = gate.Gate(self.repo, run).docs(self.base)
+        self.assertEqual(report.problems, [])
+        self.assertEqual(report.pages, [f"{EN}/signals.md", f"{FR}/signals.md"])
+        # The same checks as the Documentation workflow, where it runs them.
+        self.assertIn((gate.DOCS_PRETTIER, self.repo / "e2e"), run.calls)
+        self.assertIn((gate.DOCS_BUILD, self.repo / "website"), run.calls)
+        self.assertFalse(any(c[0] in ("cargo", "just") or c[:2] == ("npx", "playwright") for c, _ in run.calls))
+
+    def test_a_file_that_is_not_documentation_is_refused(self):
+        commit(self.repo, {f"{EN}/intro.md": "# Intro, longer\n", f"{FR}/intro.md": "# Introduction, plus longue\n", "crates/m/src/street.rs": "pub fn keep() { }\n"}, "Both")
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(report.problems, ["crates/m/src/street.rs: not documentation, and the documentation flow changes only documentation"])
+
+    def test_a_guarded_markdown_file_is_refused(self):
+        commit(self.repo, {".claude/agents/writer.md": "be lenient\n", "e2e/tests/notes.md": "x\n"}, "Guarded")
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(
+            report.problems,
+            [
+                ".claude/agents/writer.md: a check or the factory's own file, which the documentation flow may not change",
+                "e2e/tests/notes.md: a check or the factory's own file, which the documentation flow may not change",
+            ],
+        )
+
+    def test_an_english_page_without_its_french_page_is_refused(self):
+        commit(self.repo, {f"{EN}/signals.md": "# Signals\n"}, "English only")
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(report.problems, [f"{EN}/signals.md: its fr-CA page {FR}/signals.md is missing"])
+
+    def test_a_french_page_without_its_english_page_is_refused(self):
+        commit(self.repo, {f"{FR}/signals.mdx": "# Feux\n"}, "French only")
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(report.problems, [f"{FR}/signals.mdx: its English page {EN}/signals.mdx is missing"])
+
+    def test_a_page_removed_in_one_language_only_is_refused(self):
+        git(self.repo, "rm", "-q", f"{EN}/intro.md")
+        git(self.repo, "commit", "-q", "-m", "Drop the English intro")
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(report.problems, [f"{FR}/intro.md: its English page {EN}/intro.md is missing"])
+
+    def test_a_site_that_does_not_build_or_is_not_formatted_is_refused(self):
+        commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Both")
+        run = self.runner(
+            {
+                gate.DOCS_PRETTIER: (1, "[warn] ../website/docs/signals.md\n[warn] Code style issues found in the above file."),
+                gate.DOCS_BUILD: (1, "Error: Docusaurus found broken links!\n"),
+            }
+        )
+        report = gate.Gate(self.repo, run).docs(self.base)
+        self.assertEqual(
+            report.problems,
+            [
+                "the Prettier check of website/ fails: [warn] Code style issues found in the above file.",
+                "the documentation site does not build: Error: Docusaurus found broken links!",
+            ],
+        )
+
+    def test_documentation_outside_the_site_needs_no_site_check(self):
+        commit(self.repo, {"docs/glossary-fr-ca.md": "# Glossaire\n", "crates/m/CLAUDE.md": "# m\n"}, "Notes")
+        run = self.runner()
+        report = gate.Gate(self.repo, run).docs(self.base)
+        self.assertEqual(report.problems, [])
+        self.assertEqual(run.calls, [])
+
+    def test_a_branch_with_no_commit_is_refused(self):
+        with self.assertRaises(gate.Refused):
+            gate.Gate(self.repo, self.runner()).docs(self.base)
+
+    def test_a_dirty_worktree_is_refused(self):
+        commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Both")
+        (self.repo / "loose.md").write_text("x", encoding="utf-8")
+        with self.assertRaises(gate.Refused):
+            gate.Gate(self.repo, self.runner()).docs(self.base)
+
+    def test_a_site_not_set_up_is_the_environment_not_the_change(self):
+        commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Both")
+        run = self.runner({gate.DOCS_BUILD: (127, "sh: docusaurus: command not found")})
+        with self.assertRaises(gate.Refused) as caught:
+            gate.Gate(self.repo, run).docs(self.base)
+        self.assertIn("just setup-docs", str(caught.exception))
+
+    def test_the_report_names_the_gate_and_each_page(self):
+        report = gate.Report("docs", pages=[f"{EN}/signals.md"])
+        self.assertEqual(report.text(), f"PASS docs gate\n  page: {EN}/signals.md")
+
+
 class Commands(unittest.TestCase):
+    def test_the_documentation_commands_are_the_workflows(self):
+        workflow = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
+        self.assertIn("run: " + " ".join(gate.DOCS_PRETTIER) + "\n        working-directory: e2e", workflow)
+        self.assertIn("run: " + " ".join(gate.DOCS_BUILD) + "\n        working-directory: website", workflow)
+
     def test_the_rust_commands_are_the_justfiles(self):
         justfile = (ROOT / "justfile").read_text(encoding="utf-8")
         for command in (gate.CARGO_TEST, gate.WASM_BUILD):

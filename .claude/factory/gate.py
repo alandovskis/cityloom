@@ -3,6 +3,7 @@
 
     gate.py red   --repo <worktree> --base <rev>                 the test-writer's red commit is HEAD
     gate.py green --repo <worktree> --base <rev> --red <sha>     the implementer's green head is HEAD
+    gate.py docs  --repo <worktree> --base <rev>                 the writer's documentation head is HEAD
 
 The red gate passes a red commit when its new tests compile and every one of them fails, and every test that was there
 before still passes. A new test that already passes proves nothing and is refused, as is a red commit with no new test.
@@ -13,7 +14,12 @@ The green gate passes a head when every test passes, built as CI builds it (RUST
 version bump hold, and nothing the test-writer owns changed since the red commit: no test file (`is_test_file`), no
 `#[cfg(test)]` block, and nothing else of the guarded set (`is_guarded`: the checks and the factory itself).
 
-Both need DATABASE_URL (the server's tests). Exit 0 passes, 1 fails with the problems listed, 2 refuses to run (a dirty
+The docs gate is the documentation flow's, which has no red commit: it passes a head when every file the branch changes
+is documentation (the `docs` rule of scripts/ci/spec-map.json) and none is guarded, each page of the site's docs has its
+other language's page (`website/docs/` and fr-CA's), and, when the branch changes website/, the site passes the
+Documentation workflow's Prettier check and builds in both languages (a broken link fails the build).
+
+The red and green gates need DATABASE_URL (the server's tests); the docs gate does not. Exit 0 passes, 1 fails with the problems listed, 2 refuses to run (a dirty
 worktree, a red commit not in the history, no database). Standard library only;
 scripts/include/tests/test_factory_gate.py tests it.
 """
@@ -28,12 +34,13 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "ci"))
 
-from ci_changes import glob  # noqa: E402
+from ci_changes import ROOT, glob, rule_for  # noqa: E402
 
 # What `just test` runs (the justfile is the source; test_factory_gate.py checks they agree).
 CARGO_TEST = ["cargo", "test", "--workspace", "--features", "cityloom_server/test-provider"]
@@ -60,6 +67,36 @@ GUARDED = TEST_FILES + (
     "crates/cityloom_editor/src/layout_guard.rs",
     "crates/cityloom_editor/src/shared/contrast.rs",
 )
+
+# What the Documentation workflow (.github/workflows/docs.yml) runs, from e2e/ and website/ (test_factory_gate.py checks they agree).
+DOCS_PRETTIER = ("npx", "prettier", "--ignore-path", "../.prettierignore", "--check", "../website")
+DOCS_BUILD = ("npm", "run", "build")
+# A page of the site in English, and the same page in Canadian French.
+DOCS_EN = "website/docs/"
+DOCS_FR = "website/i18n/fr-CA/docusaurus-plugin-content-docs/current/"
+_SPEC_MAP = ROOT / "scripts" / "ci" / "spec-map.json"
+
+
+@lru_cache(maxsize=1)
+def _spec_map() -> dict:
+    return json.loads(_SPEC_MAP.read_text(encoding="utf-8"))
+
+
+def is_documentation(path: str) -> bool:
+    """Documentation as CI counts it: the first rule of the spec map naming the path is its `docs` rule."""
+    rule = rule_for(_spec_map(), path)
+    return bool(rule and rule.get("docs"))
+
+
+def other_language(path: str) -> Optional[Tuple[str, str]]:
+    """For a page of the site's docs, the same page in the other language and that language's name; else None."""
+    if not path.endswith((".md", ".mdx")):
+        return None
+    if path.startswith(DOCS_EN):
+        return DOCS_FR + path[len(DOCS_EN) :], "fr-CA"
+    if path.startswith(DOCS_FR):
+        return DOCS_EN + path[len(DOCS_FR) :], "English"
+    return None
 
 
 def is_test_file(path: str) -> bool:
@@ -276,10 +313,12 @@ class Report:
     gate: str
     problems: List[str] = field(default_factory=list)
     new_tests: List[str] = field(default_factory=list)
+    pages: List[str] = field(default_factory=list)
 
     def text(self) -> str:
         lines = [f"{'PASS' if not self.problems else 'FAIL'} {self.gate} gate"]
         lines += [f"  new test: {t}" for t in self.new_tests]
+        lines += [f"  page: {p}" for p in self.pages]
         lines += [f"  problem: {p}" for p in self.problems]
         return "\n".join(lines)
 
@@ -299,7 +338,7 @@ class Gate:
         if code == 127 or "with exit code 127" in out:
             raise Refused(
                 f"`{' '.join(cmd)}` could not run a tool ({_last_error(out)}): set the worktree up first "
-                "(`npm ci` at its root and in e2e/, or `just setup`)"
+                "(`npm ci` at its root and in e2e/, or `just setup`; `just setup-docs` for the documentation site)"
             )
         return code, out
 
@@ -309,8 +348,8 @@ class Gate:
     def _changed(self, a: str, b: str) -> List[str]:
         return [p for p in self.git("diff", "--name-only", f"{a}..{b}").splitlines() if p]
 
-    def _ready(self) -> None:
-        if not os.environ.get("DATABASE_URL"):
+    def _ready(self, database: bool = True) -> None:
+        if database and not os.environ.get("DATABASE_URL"):
             raise Refused("DATABASE_URL is not set: the server's tests need a Postgres (`just db`)")
         if self.git("status", "--porcelain"):
             raise Refused("the worktree has uncommitted changes: commit or remove them first")
@@ -426,6 +465,41 @@ class Gate:
             report.problems += [f"Playwright: {name} fails" for name, s in sorted(results.items()) if s in _FAILED]
         return report
 
+    def docs(self, base: str) -> Report:
+        self._ready(database=False)
+        base, head = self.git("rev-parse", base), self.git("rev-parse", "HEAD")
+        if base == head or not self._is_ancestor(base, head):
+            raise Refused(f"HEAD {head[:12]} is not a commit after the base {base[:12]}")
+        report = Report("docs")
+        changed = sorted(self._changed(base, head))
+        report.pages = changed
+
+        def exists(path: str) -> bool:
+            return (self.repo / path).is_file()
+
+        missing = set()
+        for path in changed:
+            if is_guarded(path):
+                report.problems.append(f"{path}: a check or the factory's own file, which the documentation flow may not change")
+            elif not is_documentation(path):
+                report.problems.append(f"{path}: not documentation, and the documentation flow changes only documentation")
+            pair = other_language(path)
+            if pair and exists(path) != exists(pair[0]):
+                missing.add((path, *pair) if exists(path) else (pair[0], path, "fr-CA" if path.startswith(DOCS_FR) else "English"))
+        for present, absent, language in sorted(missing):
+            report.problems.append(f"{present}: its {language} page {absent} is missing")
+
+        if any(p.startswith("website/") for p in changed):
+            checks = (
+                (DOCS_PRETTIER, "e2e", "the Prettier check of website/ fails"),
+                (DOCS_BUILD, "website", "the documentation site does not build"),
+            )
+            for cmd, folder, failure in checks:
+                code, out = self._tool(list(cmd), self.repo / folder)
+                if code != 0:
+                    report.problems.append(f"{failure}: {_last_error(out)}")
+        return report
+
     def _blocks_at(self, rev: str, path: str) -> List[str]:
         shown = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=self.repo, capture_output=True, text=True)
         return cfg_test_blocks(shown.stdout) if shown.returncode == 0 else []
@@ -439,7 +513,7 @@ def _last_error(output: str) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("gate", choices=["red", "green"])
+    parser.add_argument("gate", choices=["red", "green", "docs"])
     parser.add_argument("--repo", required=True, help="the issue's worktree")
     parser.add_argument("--base", required=True, help="where the branch started (origin/main)")
     parser.add_argument("--red", help="the red commit (green only)")
@@ -448,6 +522,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         gate = Gate(Path(args.repo))
         if args.gate == "red":
             report = gate.red(args.base)
+        elif args.gate == "docs":
+            report = gate.docs(args.base)
         else:
             if not args.red:
                 parser.error("green needs --red")
