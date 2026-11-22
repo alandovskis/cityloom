@@ -338,4 +338,210 @@ mod tests {
         assert_eq!(en(&LaneCount { direction: 0, a: 2, b: 1 }.said()), "Away from you: 2 → 1");
         assert_eq!(Other::Calming.key(), "cmp-other-calming");
     }
+
+    // A Transform measure or a template rebuilds the pieces with new uids (CLM-21): the pieces are then paired by a
+    // longest common subsequence over their kinds, left to right, and only what that leaves unpaired is added or removed.
+
+    fn kind(id: &str) -> usize {
+        kind_index(id).unwrap()
+    }
+
+    /// `s` with every piece given a uid the sample does not use (100 and on), in its order.
+    fn renumbered(s: &Street) -> Street {
+        let mut s = s.clone();
+        for (i, p) in s.segments.iter_mut().enumerate() {
+            p.uid = 100 + i as u32;
+        }
+        s
+    }
+
+    /// The first uid none of `s`'s pieces has.
+    fn past_uids(s: &Street) -> u32 {
+        s.segments.iter().map(|p| p.uid).max().unwrap_or(0) + 1
+    }
+
+    fn removed(changes: &[PieceChange]) -> Vec<PieceChange> {
+        changes.iter().copied().filter(|c| matches!(c, PieceChange::Removed { .. })).collect()
+    }
+
+    fn added_kinds(changes: &[PieceChange]) -> std::collections::BTreeSet<usize> {
+        changes
+            .iter()
+            .filter_map(|c| match *c {
+                PieceChange::Added { kind, .. } => Some(kind),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn added_or_removed_of(changes: &[PieceChange], k: usize) -> Vec<PieceChange> {
+        changes.iter().copied().filter(|c| matches!(*c, PieceChange::Added { kind, .. } | PieceChange::Removed { kind, .. } if kind == k)).collect()
+    }
+
+    fn has_kind_change(changes: &[PieceChange]) -> bool {
+        changes.iter().any(|c| matches!(c, PieceChange::Kind { .. }))
+    }
+
+    #[test]
+    fn fresh_uids_with_a_widened_piece_say_only_the_width() {
+        let a = sample();
+        let mut b = renumbered(&a);
+        b.segments[2].width_mm += 500;
+        let third = &a.segments[2];
+        assert_eq!(pieces(&a, &b).1, vec![PieceChange::Width { kind: third.kind, a_mm: third.width_mm, b_mm: third.width_mm + 500 }]);
+    }
+
+    #[test]
+    fn fresh_uids_with_an_inserted_and_a_dropped_piece_say_only_those() {
+        let a = sample();
+        let mut b = a.clone();
+        let bike = kind("bike");
+        b.segments.insert(1, Segment::new(0, bike, 1500));
+        let last_travel = b.segments.iter().rposition(|p| p.kind == kind("travel")).unwrap();
+        let gone = b.segments.remove(last_travel);
+        let b = renumbered(&b);
+        assert_eq!(
+            pieces(&a, &b).1,
+            vec![PieceChange::Added { kind: bike, width_mm: 1500 }, PieceChange::Removed { kind: gone.kind, width_mm: gone.width_mm }]
+        );
+    }
+
+    #[test]
+    fn a_measure_like_rebuild_keeps_edges_and_aligns_the_middle() {
+        let a = sample();
+        let (sidewalk, parking, travel, bike) = (kind("sidewalk"), kind("parking"), kind("travel"), kind("bike"));
+        assert_eq!(a.segments.iter().map(|p| p.kind).collect::<Vec<_>>(), [sidewalk, parking, travel, travel, parking, sidewalk]);
+        // the edge sidewalks keep their uids; the middle is laid out afresh: the first parking widened, the first
+        // travel lane now a bike lane of another width, the rest as they were
+        let middle = [
+            Segment { uid: 101, width_mm: a.segments[1].width_mm + 500, ..a.segments[1].clone() },
+            Segment::new(102, bike, 1500),
+            Segment { uid: 103, ..a.segments[3].clone() },
+            Segment { uid: 104, ..a.segments[4].clone() },
+        ];
+        let segments = std::iter::once(a.segments[0].clone()).chain(middle).chain(std::iter::once(a.segments[5].clone())).collect();
+        let b = Street { segments, ..a.clone() };
+        let changes = pieces(&a, &b).1;
+        assert_eq!(
+            changes,
+            vec![
+                PieceChange::Width { kind: parking, a_mm: a.segments[1].width_mm, b_mm: a.segments[1].width_mm + 500 },
+                PieceChange::Added { kind: bike, width_mm: 1500 },
+                PieceChange::Removed { kind: travel, width_mm: a.segments[2].width_mm },
+            ]
+        );
+        assert!(!has_kind_change(&changes), "{changes:?}");
+    }
+
+    #[test]
+    fn a_real_measure_reports_no_removed_piece_whose_kind_survives() {
+        let a = sample();
+        let mut next_uid = past_uids(&a);
+        let segments = crate::street::model::measures::arrange("B4", &a.segments, 18_000, Side::Right, false, &mut next_uid)
+            .expect("the sample street takes a centre bus lane");
+        let b = Street { segments, ..a.clone() };
+        let changes = pieces(&a, &b).1;
+        let parking = a.segments.iter().filter(|p| p.kind == kind("parking")).map(|p| PieceChange::Removed { kind: p.kind, width_mm: p.width_mm });
+        assert_eq!(removed(&changes), parking.collect::<Vec<_>>(), "{changes:?}");
+        assert_eq!(added_kinds(&changes), [kind("bus"), kind("travel")].into_iter().collect(), "{changes:?}");
+        assert_eq!(added_or_removed_of(&changes, kind("sidewalk")), vec![], "{changes:?}");
+        assert!(!has_kind_change(&changes), "{changes:?}");
+    }
+
+    #[test]
+    fn a_real_template_reports_no_removed_piece_whose_kind_survives() {
+        let a = sample();
+        let mut next_uid = past_uids(&a);
+        let segments =
+            crate::street::model::Template::Greenway.arrange(a.class, 18_000, Side::Right, &mut next_uid).expect("the sample street fits the greenway");
+        assert!(segments.iter().all(|p| p.uid >= past_uids(&a)), "every uid is fresh");
+        let b = Street { segments, ..a.clone() };
+        let changes = pieces(&a, &b).1;
+        let parking = a.segments.iter().filter(|p| p.kind == kind("parking")).map(|p| PieceChange::Removed { kind: p.kind, width_mm: p.width_mm });
+        assert_eq!(removed(&changes), parking.collect::<Vec<_>>(), "{changes:?}");
+        assert_eq!(added_or_removed_of(&changes, kind("sidewalk")), vec![], "{changes:?}");
+        assert_eq!(added_or_removed_of(&changes, kind("travel")), vec![], "{changes:?}");
+        assert!(!has_kind_change(&changes), "{changes:?}");
+    }
+
+    /// `pieces` as it was before CLM-21, pairing the pieces by uid only: what `pieces` must still give when the uids
+    /// match.
+    fn by_uid(a: &Street, b: &Street) -> (bool, Vec<PieceChange>) {
+        let mut changes = Vec::new();
+        for now in &b.segments {
+            match a.segments.iter().find(|p| p.uid == now.uid) {
+                None => changes.push(PieceChange::Added { kind: now.kind, width_mm: now.width_mm }),
+                Some(was) => {
+                    if was.kind != now.kind {
+                        changes.push(PieceChange::Kind { from: was.kind, to: now.kind });
+                    }
+                    if was.width_mm != now.width_mm {
+                        changes.push(PieceChange::Width { kind: now.kind, a_mm: was.width_mm, b_mm: now.width_mm });
+                    }
+                }
+            }
+        }
+        for was in a.segments.iter().filter(|p| !b.segments.iter().any(|n| n.uid == p.uid)) {
+            changes.push(PieceChange::Removed { kind: was.kind, width_mm: was.width_mm });
+        }
+        (starts(a) != starts(b), changes)
+    }
+
+    #[test]
+    fn unchanged_ids_give_the_same_result_as_uid_matching() {
+        let a = sample();
+        let bike = kind("bike");
+        let edit = |f: &dyn Fn(&mut Vec<Segment>)| {
+            let mut b = a.clone();
+            f(&mut b.segments);
+            b
+        };
+        // (edit, the street it makes, whether it is a piece detail, whether every piece keeps its kind and place)
+        let cases: Vec<(&str, Street, bool, bool)> = vec![
+            ("widen", edit(&|s| s[0].width_mm += 500), false, true),
+            ("change kind", edit(&|s| s[2].kind = bike), false, false),
+            ("insert with a new uid", edit(&|s| s.insert(2, Segment::new(99, bike, 1500))), false, true),
+            ("remove", edit(&|s| drop(s.remove(4))), false, true),
+            ("swap two pieces", edit(&|s| s.swap(0, 1)), true, false),
+            (
+                "kind change plus insert",
+                edit(&|s| {
+                    s[1].kind = bike;
+                    s.insert(0, Segment::new(99, bike, 1500));
+                }),
+                false,
+                false,
+            ),
+        ];
+        for (name, b, detail, in_place) in cases {
+            assert_eq!(pieces(&a, &b), by_uid(&a, &b), "{name}");
+            assert_eq!(others(&a, &b).contains(&Other::PieceDetails), detail, "{name}: {:?}", others(&a, &b));
+            // where every piece keeps its kind and its place, the same edit with fresh uids reads the same: the pairing
+            // by uid and the alignment of the kinds agree
+            if in_place {
+                assert_eq!(pieces(&a, &renumbered(&b)), by_uid(&a, &b), "{name}, renumbered");
+            }
+        }
+    }
+
+    #[test]
+    fn fresh_uids_with_the_same_details_are_no_piece_detail() {
+        let a = sample();
+        let mut b = renumbered(&a);
+        assert!(others(&a, &b).is_empty(), "{:?}", others(&a, &b));
+        let p = b.segments.iter_mut().find(|p| KINDS[p.kind].materials.len() > 1).unwrap();
+        p.material = KINDS[p.kind].materials[1];
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
+        assert_eq!(pieces(&a, &b), (false, vec![]));
+    }
+
+    #[test]
+    fn fresh_uids_with_another_curb_is_a_piece_detail() {
+        let a = sample();
+        let mut b = renumbered(&a);
+        let sidewalk = b.segments.iter_mut().find(|p| p.kind == kind("sidewalk")).unwrap();
+        let curb = sidewalk.curb.expect("a sidewalk has a curb");
+        sidewalk.curb = Some((curb + 1) % crate::shared::catalogue::CURBS.len());
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
+    }
 }
