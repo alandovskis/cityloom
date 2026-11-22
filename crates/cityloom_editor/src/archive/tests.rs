@@ -434,11 +434,12 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (20, plain.clone(), 5),
         (21, plain.clone(), 5),
         (22, plain.clone(), 5),
+        (23, plain.clone(), 5),
         (NEWEST.into(), plain.clone(), 5),
     ];
     assert_eq!(
-        NEWEST, 23,
-        "a new edits version needs a row here (18, a crossing on call, 19, passive detection, 20, an actuated street, 21, a bike movement on detection, 22, a street given transit priority, and 23, a street with pre-emption on, are a junction's: below)"
+        NEWEST, 24,
+        "a new edits version needs a row here (18, a crossing on call, 19, passive detection, 20, an actuated street, 21, a bike movement on detection, 22, a street given transit priority, 23, a street with pre-emption on, and 24, time-of-day plans, are a junction's: below)"
     );
     for (version, mut record, written) in cases {
         record["import"] = json!(11); // an unstamped record is stale and never imported
@@ -501,6 +502,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
     assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::PREEMPTION_VERSION);
+    // a junction with time-of-day plans needs version 24
+    let planned = json!({"state": {"arms": [], "plans": [{"id": 1, "name": "Night"}]}, "import": 11});
+    let doc = json!({"version": 24, "streets": {}, "junctions": {"n9": planned}});
+    let b = device();
+    let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::PLANS_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }

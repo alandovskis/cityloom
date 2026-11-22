@@ -87,7 +87,12 @@ pub const TRANSIT_VERSION: u32 = BICYCLE_VERSION + 1;
 /// on its next write, so it must treat the document as a newer one. A junction with no street given pre-emption is
 /// written as before.
 pub const PREEMPTION_VERSION: u32 = TRANSIT_VERSION + 1;
-pub const NEWEST: u32 = PREEMPTION_VERSION;
+/// What a document is written as while a junction record (its own state or a scenario's) holds time-of-day plans or a
+/// schedule (`State.plans`, `State.schedule`, CLM-16): a build that does not know them would run the default plan all
+/// week and drop them on its next write, so it must treat the document as a newer one. A junction with its default
+/// plan alone is written as before.
+pub const PLANS_VERSION: u32 = PREEMPTION_VERSION + 1;
+pub const NEWEST: u32 = PLANS_VERSION;
 /// A record made against an importer older than this (or against none, as before the stamp) is stale: it is never
 /// applied, listed or sent, put back from an archive, or restored from a milestone. A fixed cutoff, not the current
 /// importer version: raising it discards everyone's edits again, so it is a decision, not a side effect of an
@@ -193,8 +198,8 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: the first that applies of `PREEMPTION_VERSION` (a junction record holds
-    /// a street with pre-emption on), `TRANSIT_VERSION` (a junction record holds a street given transit priority), `BICYCLE_VERSION` (a junction record holds a bike movement on detection), `ACTUATION_VERSION` (a junction record holds an actuated street), `DETECTION_VERSION` (a junction record holds a crossing with passive detection), `CALLS_VERSION` (a junction record holds a crossing on call), `IMPORT_STAMP_VERSION` (a street or junction record carries an import stamp),
+    /// The version the document is written as: the first that applies of `PLANS_VERSION` (a junction record holds
+    /// time-of-day plans or a schedule), `PREEMPTION_VERSION` (a junction record holds a street with pre-emption on), `TRANSIT_VERSION` (a junction record holds a street given transit priority), `BICYCLE_VERSION` (a junction record holds a bike movement on detection), `ACTUATION_VERSION` (a junction record holds an actuated street), `DETECTION_VERSION` (a junction record holds a crossing with passive detection), `CALLS_VERSION` (a junction record holds a crossing on call), `IMPORT_STAMP_VERSION` (a street or junction record carries an import stamp),
     /// `SCENARIO_VERSION` (one keeps scenarios), `FILTER_VERSION` (a street record holds a modal filter),
     /// `CHICANE_VERSION` (a chicane), `ZONE_SPEED_VERSION` (a zone has a speed of its own), `CALMING_VERSION` (raised
     /// tables or crossings), `GREEN_VERSION` (green infrastructure), `SIGNAL_VERSION` (a junction's edited signal plan),
@@ -226,6 +231,8 @@ impl Edits {
         let transit = self.junctions.values().any(|r| given(&r.state) || r.scenarios.iter().any(|sc| given(&sc.design)));
         let preempting = |s: &State| s.arms.iter().any(|a| a.preemption.is_some());
         let preemption = self.junctions.values().any(|r| preempting(&r.state) || r.scenarios.iter().any(|sc| preempting(&sc.design)));
+        let planned = |s: &State| !s.plans.is_empty() || !s.schedule.is_empty();
+        let plans = self.junctions.values().any(|r| planned(&r.state) || r.scenarios.iter().any(|sc| planned(&sc.design)));
         written_as(
             self.version.into(),
             import,
@@ -246,6 +253,7 @@ impl Edits {
             bicycles,
             transit,
             preemption,
+            plans,
         )
     }
 
@@ -285,10 +293,11 @@ fn written_as(
     bicycles: bool,
     transit: bool,
     preemption: bool,
+    plans: bool,
 ) -> u32 {
     version_for(
         import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls, detection, actuation, bicycles, transit,
-        preemption,
+        preemption, plans,
     )
     .max(stamp_floor(held))
 }
@@ -314,8 +323,11 @@ fn version_for(
     bicycles: bool,
     transit: bool,
     preemption: bool,
+    plans: bool,
 ) -> u32 {
-    if preemption {
+    if plans {
+        PLANS_VERSION
+    } else if preemption {
         PREEMPTION_VERSION
     } else if transit {
         TRANSIT_VERSION
@@ -461,6 +473,20 @@ fn holds_bicycles(doc: &Map<String, Value>) -> bool {
         .any(|(_, r)| detected(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| detected(sc.get("design")))))
 }
 
+/// Whether any junction record holds time-of-day plans or a schedule: a `plans` list or a `schedule` object with a
+/// day that is not empty, in its state or in one of its scenarios' designs (decided on the raw JSON).
+fn holds_plans(doc: &Map<String, Value>) -> bool {
+    let planned = |state: Option<&Value>| {
+        let plans = state.and_then(|s| s.get("plans")).and_then(Value::as_array).is_some_and(|l| !l.is_empty());
+        let schedule =
+            state.and_then(|s| s.get("schedule")).and_then(Value::as_object).is_some_and(|d| d.values().any(|v| v.as_array().is_some_and(|l| !l.is_empty())));
+        plans || schedule
+    };
+    let mut junctions = doc.get(JUNCTIONS).and_then(Value::as_object).into_iter().flatten();
+    junctions
+        .any(|(_, r)| planned(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| planned(sc.get("design")))))
+}
+
 /// Whether any junction record holds a street with pre-emption on: an arm with `preemption` that is not null, in its
 /// state or in one of its scenarios' designs (decided on the raw JSON).
 fn holds_preemption(doc: &Map<String, Value>) -> bool {
@@ -532,8 +558,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan and 11 with green elements
         // and 12 with raised elements, 13 with a zone's speed, 14 with chicanes, 15 with modal filters, 16 with scenarios,
         // 17 with the import stamp, 18 with crossings on call, 19 with passive detection, 20 with actuated streets,
-        // 21 with bike movements on detection, 22 with streets given transit priority and 23 with streets with
-        // pre-emption on.
+        // 21 with bike movements on detection, 22 with streets given transit priority, 23 with streets with
+        // pre-emption on and 24 with time-of-day plans.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
@@ -558,6 +584,7 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
         holds_bicycles(&doc),
         holds_transit(&doc),
         holds_preemption(&doc),
+        holds_plans(&doc),
     );
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
@@ -666,8 +693,8 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `PREEMPTION_VERSION` while any junction record holds a street with pre-emption
-    /// on, else `TRANSIT_VERSION` while any junction record holds a street given transit priority, else `BICYCLE_VERSION` while any junction record holds a bike movement on detection, else `ACTUATION_VERSION` while any junction record holds an actuated street, else
+    /// The document as text, its version `PLANS_VERSION` while any junction record holds time-of-day plans or a
+    /// schedule, else `PREEMPTION_VERSION` while any junction record holds a street with pre-emption on, else `TRANSIT_VERSION` while any junction record holds a street given transit priority, else `BICYCLE_VERSION` while any junction record holds a bike movement on detection, else `ACTUATION_VERSION` while any junction record holds an actuated street, else
     /// `DETECTION_VERSION` while any junction record holds a crossing with passive detection, else `CALLS_VERSION` while any junction record holds a crossing on call, else
     /// `IMPORT_STAMP_VERSION` while any street or junction record carries an import stamp, else `SCENARIO_VERSION` while
     /// any keeps scenarios, else `FILTER_VERSION` while any street record holds a modal filter, else
@@ -702,6 +729,7 @@ impl Draft {
             holds_bicycles(&doc),
             holds_transit(&doc),
             holds_preemption(&doc),
+            holds_plans(&doc),
         );
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
@@ -1169,9 +1197,52 @@ mod tests {
     }
 
     #[test]
-    fn a_build_before_pre_emption_leaves_a_document_with_it_alone() {
-        assert_eq!(NEWEST, PREEMPTION_VERSION);
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, PREEMPTION_VERSION + 1);
+    fn a_document_with_a_street_with_pre_emption_is_still_read_at_version_23() {
+        assert_eq!(PREEMPTION_VERSION + 1, PLANS_VERSION, "the version after pre-emption is time-of-day plans'");
+        let older = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, PREEMPTION_VERSION);
+        assert!(matches!(parse(Some(&older)), Document::Current(_)));
+    }
+
+    #[test]
+    fn a_junction_with_time_of_day_plans_or_a_schedule_makes_its_document_version_24_and_one_with_none_is_written_as_before() {
+        use crate::junction::model::plans::{DayType, Period, TimingPlan};
+        assert_eq!(PLANS_VERSION, 24);
+        // A signal with a crossing on call and only its default plan: still 18, and no plan or schedule is written.
+        let (key, record) = signal_record(Some(12));
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record.clone());
+        let text = e.to_json();
+        assert!(!text.contains("plans") && !text.contains("schedule"), "{text}");
+        assert_eq!(e.written_version(), CALLS_VERSION);
+        let mut planned = record.clone();
+        planned.state.plans.push(TimingPlan { id: 1, name: "Night".into(), streets: Vec::new() });
+        e.junctions.insert(key.clone(), planned);
+        assert_eq!(e.written_version(), PLANS_VERSION);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.version, PLANS_VERSION);
+        assert_eq!(back.junctions[&key].state.plans[0].name, "Night");
+        // A schedule alone (the default from 07:00, say) is one too.
+        let mut scheduled = record;
+        scheduled.state.schedule.saturday.push(Period { start_min: 420, plan: 0 });
+        e.junctions.insert(key.clone(), scheduled);
+        assert_eq!(e.written_version(), PLANS_VERSION);
+        assert_eq!(DayType::ALL.len(), 3);
+        // The draft decides on the raw JSON, a junction's scenario included; an empty list or schedule is no decision.
+        let Ok(draft) = draft(Some(&e.to_json())) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":24"#), "{}", draft.to_json());
+        let in_a_scenario =
+            r#"{"version":5,"streets":{},"junctions":{"n1":{"scenarios":[{"id":1,"name":"A","design":{"arms":[],"plans":[{"id":1,"name":"Night"}]}}]}}}"#;
+        let Ok(draft) = super::draft(Some(in_a_scenario)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":24"#), "{}", draft.to_json());
+        let none = r#"{"version":5,"streets":{},"junctions":{"n1":{"state":{"arms":[{"calls":3}],"plans":[],"schedule":{}}}}}"#;
+        let Ok(draft) = super::draft(Some(none)) else { panic!("a draft") };
+        assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+    }
+
+    #[test]
+    fn a_build_before_time_of_day_plans_leaves_a_document_with_them_alone() {
+        assert_eq!(NEWEST, PLANS_VERSION);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, PLANS_VERSION + 1);
         assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
@@ -1302,7 +1373,8 @@ mod tests {
         assert_eq!(ACTUATION_VERSION, 20);
         assert_eq!(BICYCLE_VERSION, 21);
         assert_eq!(TRANSIT_VERSION, 22);
-        assert_eq!(NEWEST, PREEMPTION_VERSION);
+        assert_eq!(PREEMPTION_VERSION, 23);
+        assert_eq!(NEWEST, PLANS_VERSION);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -1532,7 +1604,7 @@ mod tests {
 
     #[test]
     fn a_document_above_newest_is_not_read() {
-        assert_eq!(NEWEST, PREEMPTION_VERSION);
+        assert_eq!(NEWEST, PLANS_VERSION);
         let text = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&text)), Document::Future));
         assert!(matches!(draft(Some(&text)), Err(Document::Future)));
