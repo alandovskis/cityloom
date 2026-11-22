@@ -36,14 +36,16 @@ impl Frame {
 
     /// The frame for a drawing `width` wide in a column that leaves it `room` pixels of height (the junction page,
     /// `view::drawing`): as tall as the room, between `MIN_ROOM_HEIGHT` and the tallest `fit` makes, so a short laptop
-    /// with the notes' tray open draws the junction smaller and whole. A narrow drawing keeps `fit`'s height, and so
-    /// does one whose column does not scroll (`room` is `INFINITY`): the window decides.
+    /// with the notes' tray open draws the junction smaller and whole. A narrow drawing (a narrow column beside the
+    /// details) keeps `fit`'s height while the room holds it, and is no taller than the room when it does not. One whose
+    /// column does not scroll (`room` is `INFINITY`) takes `fit`'s: the window decides.
     pub fn in_room(width: f64, room: f64, window_height: f64) -> Frame {
         let fitted = Frame::fit(width, window_height);
-        if fitted.narrow || !room.is_finite() {
+        if !room.is_finite() {
             return fitted;
         }
-        Frame { height: room.clamp(MIN_ROOM_HEIGHT, MAX_HEIGHT).round(), ..fitted }
+        let height = if fitted.narrow { fitted.height.min(room) } else { room.min(MAX_HEIGHT) };
+        Frame { height: height.max(MIN_ROOM_HEIGHT).round(), ..fitted }
     }
 }
 
@@ -77,7 +79,11 @@ mod tests {
         assert_eq!(Frame::in_room(1000.0, 2000.0, 900.0).height, 760.0);
         // a column that does not scroll gives no room: the window decides, as on the compare page
         assert_eq!(Frame::in_room(1000.0, f64::INFINITY, 1000.0), Frame::fit(1000.0, 1000.0));
-        // a narrow drawing keeps its own height
-        assert_eq!(Frame::in_room(400.0, 250.0, 800.0), Frame::fit(400.0, 800.0));
+        // a narrow drawing (a 1,024 px window with the details open) keeps its own height while the room holds it,
+        // and is no taller than the room when it does not
+        assert_eq!(Frame::in_room(590.0, 2000.0, 700.0), Frame::fit(590.0, 700.0));
+        let short = Frame::in_room(590.0, 330.0, 700.0);
+        assert!(short.narrow);
+        assert_eq!((short.width, short.height), (590.0, 330.0));
     }
 }
