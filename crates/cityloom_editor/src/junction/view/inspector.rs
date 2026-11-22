@@ -2207,6 +2207,77 @@ fn hour_table(w: Watch, t: Table, body: impl IntoView + 'static) -> impl IntoVie
     }
 }
 
+/// What a rate field of the hour is: the field's id and its hint's, its label's message, and its range's message and
+/// upper bound (the lower is 0).
+struct RateField {
+    id: String,
+    hint: String,
+    label: &'static str,
+    range: &'static str,
+    max: u32,
+}
+
+/// A rate an hour as a number field, `now` the rate the model holds: the arrow keys step it by one, and a typed number
+/// is rounded to a whole one. `set` asks the model for a rate, which refuses one out of range; what the field holds after
+/// a change is the model's rate, whether it took the edit or refused it.
+fn rate_field(
+    w: Watch,
+    f: RateField,
+    now: impl Fn() -> Option<u32> + Copy + Send + Sync + 'static,
+    set: impl Fn(i32) + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    let RateField { id, hint, label, range, max } = f;
+    let value = move || now().map(|r| r.to_string()).unwrap_or_default();
+    let typed = move |v: f64| {
+        // One that is not finite or is out of range is refused by the model.
+        if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+            set(v.round() as i32);
+        }
+    };
+    view! {
+        <span class="call-rate">
+            <label for=id.clone()>{words(w, label)}</label>
+            <input type="text" inputmode="numeric" autocomplete="off" id=id class="call-rate-field" aria-describedby=hint.clone()
+                value=value prop:value=value
+                on:keydown=move |ev| {
+                    if let Some(dir) = step_key(&ev.key()) {
+                        ev.prevent_default();
+                        set(now().map_or(0, |r| r as i32).saturating_add(dir));
+                    }
+                }
+                on:change=move |ev| {
+                    let input = event_target::<HtmlInputElement>(&ev);
+                    commit_typed(&input.value(), &typed);
+                    input.set_value(&value());
+                } />
+            <span class="insp-range" id=hint>{move || tr(w, range, Args::new().num("min", 0).num("max", i64::from(max)))}</span>
+        </span>
+    }
+}
+
+/// One radio of a group `name`, its id `id` and its label's message `key`: checked while `chosen`; picked, it asks
+/// `choose`, and when that is refused the radio shows the choice the model kept.
+fn choice_radio(
+    w: Watch,
+    (name, id): (String, String),
+    key: &'static str,
+    chosen: impl Fn() -> bool + Copy + Send + Sync + 'static,
+    choose: impl Fn() -> bool + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <label class="phase-move">
+            <input type="radio" name=name id=id checked=chosen prop:checked=chosen
+                on:change=move |ev| {
+                    let input = event_target::<HtmlInputElement>(&ev);
+                    if !choose() {
+                        input.set_checked(chosen());
+                    }
+                } />
+            <span>{words(w, key)}</span>
+        </label>
+    }
+}
+
 /// The findings of `section`, `found`, as the list `<section>-findings` under its heading.
 fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl IntoView {
     let (list, head) = (format!("{section}-findings"), format!("{section}-findings-h"));
@@ -2275,57 +2346,30 @@ fn bikes_section(w: Watch) -> impl IntoView {
                 view! { <p class="insp-range" id=format!("bike-effect-{uid}")>{tr(w, "jn-bikes-effect", args)}</p> }
             })
         };
-        let rate_value = move || movement(uid).map(|m| m.rate.to_string()).unwrap_or_default();
-        let set_rate = move |v: f64| {
-            // A typed number is rounded to a whole cyclist; one that is not finite or is out of range is refused by the model.
-            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
-                w.set_cyclists(uid, v.round() as i32);
-            }
-        };
         let rate = move || {
-            let (field, hint) = (rate_id.clone(), range_id.clone());
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-bikes-rate",
+                range: "jn-bikes-rate-range",
+                max: bicycles::MAX_CYCLISTS_PER_HOUR,
+            };
             on.get().then(|| {
-                view! {
-                    <span class="call-rate">
-                        <label for=field.clone()>{words(w, "jn-bikes-rate")}</label>
-                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
-                            value=rate_value prop:value=rate_value
-                            on:keydown=move |ev| {
-                                if let Some(dir) = step_key(&ev.key()) {
-                                    ev.prevent_default();
-                                    let now = movement(uid).map_or(0, |m| m.rate as i32);
-                                    w.set_cyclists(uid, now.saturating_add(dir));
-                                }
-                            }
-                            on:change=move |ev| {
-                                let input = event_target::<HtmlInputElement>(&ev);
-                                commit_typed(&input.value(), &set_rate);
-                                // What the field holds is the model's rate, whether it took the edit or refused it.
-                                input.set_value(&rate_value());
-                            } />
-                        <span class="insp-range" id=hint>
-                            {move || tr(w, "jn-bikes-rate-range", Args::new().num("min", 0).num("max", i64::from(bicycles::MAX_CYCLISTS_PER_HOUR)))}
-                        </span>
-                    </span>
-                }
+                rate_field(
+                    w,
+                    field,
+                    move || movement(uid).map(|m| m.rate),
+                    move |rate| {
+                        w.set_cyclists(uid, rate);
+                    },
+                )
             })
         };
         let (group, head) = (format!("bike-mode-{uid}"), format!("bike-mode-h-{uid}"));
+        // Refused (no phase runs it, say): the radios show the mode the model kept.
         let radio = move |detection: bool, id: &'static str, key: &'static str| {
-            let chosen = move || on.get() == detection;
-            view! {
-                <label class="phase-move">
-                    <input type="radio" name=format!("bike-mode-{uid}") id=format!("bike-mode-{uid}-{id}") checked=chosen prop:checked=chosen
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            // Refused (no phase runs it, say): the radios show the mode the model kept.
-                            if !w.set_bike_detection(uid, detection) {
-                                input.set_checked(chosen());
-                            }
-                        } />
-                    <span>{words(w, key)}</span>
-                </label>
-            }
+            let names = (format!("bike-mode-{uid}"), format!("bike-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || on.get() == detection, move || w.set_bike_detection(uid, detection))
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
@@ -2477,57 +2521,30 @@ fn priority_section(w: Watch) -> impl IntoView {
             });
             Some(view! { <p class="insp-range" id=format!("transit-effect-{uid}")>{tr(w, "jn-transit-effect", args)}</p> {moved} })
         };
-        let rate_value = move || street(uid).and_then(|s| s.priority).map(|p| p.buses.to_string()).unwrap_or_default();
-        let set_rate = move |v: f64| {
-            // A typed number is rounded to a whole bus; one that is not finite or is out of range is refused by the model.
-            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
-                w.set_buses(uid, v.round() as i32);
-            }
-        };
         let rate = move || {
-            let (field, hint) = (rate_id.clone(), range_id.clone());
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-transit-rate",
+                range: "jn-transit-rate-range",
+                max: transit::MAX_BUSES_PER_HOUR,
+            };
             on.get().then(|| {
-                view! {
-                    <span class="call-rate">
-                        <label for=field.clone()>{words(w, "jn-transit-rate")}</label>
-                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
-                            value=rate_value prop:value=rate_value
-                            on:keydown=move |ev| {
-                                if let Some(dir) = step_key(&ev.key()) {
-                                    ev.prevent_default();
-                                    let now = street(uid).and_then(|s| s.priority).map_or(0, |p| p.buses as i32);
-                                    w.set_buses(uid, now.saturating_add(dir));
-                                }
-                            }
-                            on:change=move |ev| {
-                                let input = event_target::<HtmlInputElement>(&ev);
-                                commit_typed(&input.value(), &set_rate);
-                                // What the field holds is the model's rate, whether it took the edit or refused it.
-                                input.set_value(&rate_value());
-                            } />
-                        <span class="insp-range" id=hint>
-                            {move || tr(w, "jn-transit-rate-range", Args::new().num("min", 0).num("max", i64::from(transit::MAX_BUSES_PER_HOUR)))}
-                        </span>
-                    </span>
-                }
+                rate_field(
+                    w,
+                    field,
+                    move || street(uid).and_then(|s| s.priority).map(|p| p.buses),
+                    move |rate| {
+                        w.set_buses(uid, rate);
+                    },
+                )
             })
         };
         let (group, head) = (format!("transit-mode-{uid}"), format!("transit-mode-h-{uid}"));
+        // Refused (no transit, say): the radios show the priority the model kept.
         let radio = move |choice: Option<Mode>, id: &'static str, key: &'static str| {
-            let chosen = move || mode.get() == choice;
-            view! {
-                <label class="phase-move">
-                    <input type="radio" name=format!("transit-mode-{uid}") id=format!("transit-mode-{uid}-{id}") checked=chosen prop:checked=chosen
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            // Refused (no transit, say): the radios show the priority the model kept.
-                            if !w.set_transit_priority(uid, choice) {
-                                input.set_checked(chosen());
-                            }
-                        } />
-                    <span>{words(w, key)}</span>
-                </label>
-            }
+            let names = (format!("transit-mode-{uid}"), format!("transit-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || mode.get() == choice, move || w.set_transit_priority(uid, choice))
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
