@@ -610,6 +610,12 @@ class DocsGate(unittest.TestCase):
             gate.Gate(self.repo, run).docs(self.base)
         self.assertIn("just setup-docs", str(caught.exception))
 
+    def test_a_tool_not_on_the_path_is_refused_not_a_crash(self):
+        # The shell's answer to a command it cannot find (127), which the gates refuse as the machine's.
+        code, out = gate.run(["cityloom-no-such-tool"], self.repo)
+        self.assertEqual(code, 127)
+        self.assertIn("cityloom-no-such-tool", out)
+
     def test_the_report_names_the_gate_and_each_page(self):
         report = gate.Report("docs", pages=[f"{EN}/signals.md"])
         self.assertEqual(report.text(), f"PASS docs gate\n  page: {EN}/signals.md")

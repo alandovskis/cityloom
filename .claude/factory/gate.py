@@ -298,9 +298,12 @@ Runner = Callable[..., Tuple[int, str]]
 def run(cmd: List[str], cwd: Path, env: Optional[dict] = None) -> Tuple[int, str]:
     """Runs a command with its stderr in its stdout (cargo's `Running` lines and the tests' own lines stay in order)."""
     print("$ " + " ".join(cmd), file=sys.stderr, flush=True)
-    done = subprocess.run(
-        cmd, cwd=cwd, env=dict(os.environ, **(env or {})), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
+    try:
+        done = subprocess.run(
+            cmd, cwd=cwd, env=dict(os.environ, **(env or {})), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
+    except FileNotFoundError:
+        return 127, f"{cmd[0]}: command not found"  # as a shell answers, which `Gate._tool` refuses
     return done.returncode, done.stdout
 
 
