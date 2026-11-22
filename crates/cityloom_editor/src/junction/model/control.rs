@@ -147,6 +147,12 @@ impl Turn {
     pub fn green_s(&self) -> u32 {
         u32::try_from(self.green_end - self.green_start).unwrap_or(u32::MAX)
     }
+
+    /// The green its rule and every hold gave it, before a demand cut it short, held it longer or interrupted it: the
+    /// green that ran is always this `- cut_s + prolonged_s - preempted_s`.
+    pub fn given_s(&self) -> u32 {
+        self.green_s().saturating_add(self.cut_s).saturating_add(self.preempted_s).saturating_sub(self.prolonged_s)
+    }
 }
 
 /// Something that waits for phases: it says whether it calls a phase, how long it extends or holds its green, and is
@@ -345,17 +351,18 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
 /// How phase `k`'s green of `green_s` (the phase started at `start`, its green from `green_start`, `hold` of it held by
 /// a demand) ends once the demands have their say: its green, the seconds cut short, held longer and interrupted, and
 /// whether it was kept (`(green_s, cut_s, prolonged_s, preempted_s, kept)`; the green is always `green_s - cut_s +
-/// prolonged_s - preempted_s`). A green running for a demand above every other (pre-emption) is kept: no other cuts or
-/// interrupts it. Otherwise it is cut short for a demand (transit's early green for a later phase), never below what is
+/// prolonged_s - preempted_s`). A green running for a demand above every other (pre-emption) is kept: no other cuts,
+/// interrupts or holds it, only the demand it runs for holding it longer. Otherwise it is cut short for a demand (transit's early green for a later phase), never below what is
 /// held; then any green is held longer for one coming just after it would end (transit's green extension,
 /// pre-emption's dwell). A green not kept is then interrupted by a call coming before that end: it ends at the call, or
 /// once every clearance in progress is done; ended before the cut, nothing else cut it, and ended in a green held
 /// longer, it is held only to there.
 fn settle(demands: &[&mut dyn Demand], k: usize, (start, green_start): (u64, u64), green_s: u32, hold: u32) -> (u32, u32, u32, u32, bool) {
-    let kept = demands.iter().any(|d| d.keeps(k, start, green_start, green_start + u64::from(green_s)));
+    let keeps = |d: &&&mut dyn Demand| d.keeps(k, start, green_start, green_start + u64::from(green_s));
+    let kept = demands.iter().any(|d| keeps(&d));
     let cut_to =
         if kept { green_s } else { demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s) };
-    let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
+    let prolonged_s = demands.iter().filter(|d| !kept || keeps(d)).map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
     let planned = cut_to + prolonged_s;
     let interrupted = if kept { None } else { demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_start + u64::from(planned))).min() };
     if let Some(at) = interrupted {

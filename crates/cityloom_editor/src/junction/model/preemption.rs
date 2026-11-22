@@ -742,6 +742,12 @@ mod tests {
         assert_eq!(ran[0], (0, 0, 40, 45));
         assert_eq!((served[0].outcome, served[0].extended_s), (transit::Outcome::OnArrival, 0));
         assert!(moved.is_empty(), "{moved:?}");
+        // Street 1's call waiting at 0 s: its 25 s green covers the dwell, and runs for the call alone, so its bus at
+        // 30 s is not held for: it waits for the street's next green, at 90 s.
+        let (ran, _, served, moved) = with_buses(&plan, &[street(1, 0, vec![0])], &[bus(1, transit::Mode::Extension, 0, vec![30])]);
+        assert_eq!(ran[0], (0, 0, 25, 30));
+        assert_eq!((served[0].outcome, served[0].wait_s, served[0].extended_s), (transit::Outcome::Delayed, 60, 0));
+        assert!(moved.is_empty(), "{moved:?}");
     }
 
     #[test]
@@ -753,6 +759,15 @@ mod tests {
         let (ran, calls, _, _) = with_buses(&plan, &[street(2, 1, vec![26])], &[bus(1, transit::Mode::Extension, 0, vec![27])]);
         assert_eq!(&ran[..2], &[(0, 0, 26, 31), (1, 31, 25, 61)]);
         assert_eq!(calls, vec![call(2, 26, 5, Some(1))]);
+        // A green of 8 s: street 1's bus at 17 s would hold it 10 s longer, to 18 s; street 2's call at 9 s ends it
+        // there, before the bus came. That extension gave the bus nothing, so the street's next green, from 74 s, may
+        // still hold for its bus at 82 s.
+        let short = plan_of(vec![phase(1, 8, &[], &[]), phase(2, 25, &[], &[]), phase(3, 25, &[], &[])]);
+        let (ran, calls, served, _) = with_buses(&short, &[street(2, 1, vec![9])], &[bus(1, transit::Mode::Extension, 0, vec![17, 82])]);
+        assert_eq!(&ran[..2], &[(0, 0, 9, 14), (1, 14, 25, 44)]);
+        assert_eq!(calls, vec![call(2, 9, 5, Some(1))]);
+        assert_eq!((served[0].outcome, served[0].wait_s), (transit::Outcome::Delayed, 57));
+        assert_eq!((served[1].outcome, served[1].extended_s), (transit::Outcome::Extended, 1));
         // Street 2's bus at 3 s cuts street 1's green to 15 s; street 3's call at 18 s comes in its yellow: the green
         // still ends at 15 s, the call interrupting nothing, and runs street 3's phase out of turn at 20 s, putting back
         // the bus's.

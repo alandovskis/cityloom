@@ -448,7 +448,7 @@ pub(crate) fn phase_totals(plan: &Plan, rules: &[Rule], turns: &[Turn]) -> Vec<P
                 }
                 // The green its vehicles left it at: before a bus cut it short or held it longer (transit priority), which
                 // the buses' summary counts, or an emergency call ended it (pre-emption), which the calls' summary counts.
-                let green = turn.green_s() + turn.cut_s + turn.preempted_s - turn.prolonged_s;
+                let green = turn.given_s();
                 t.served += 1;
                 t.extended += u32::from(green > floor_s);
                 t.extended_s = t.extended_s.saturating_add(green.saturating_sub(floor_s));

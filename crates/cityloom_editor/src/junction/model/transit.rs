@@ -458,9 +458,12 @@ impl<'a> Buses<'a> {
         // it), and only as far as an emergency call let it run.
         let extended = if turn.kept { 0 } else { turn.prolonged_s.saturating_sub(turn.preempted_s) };
         let base_end = turn.green_end - u64::from(extended);
+        // An extension an emergency call ended before its bus came gave no priority.
+        let mut held_for_a_bus = false;
         while let Some(t) = self.first(x).filter(|&t| t < turn.green_end) {
             let bus = &mut self.rows[x][self.next[x]];
             if t >= turn.start {
+                held_for_a_bus |= t >= base_end;
                 bus.outcome = if t < base_end { Outcome::OnArrival } else { Outcome::Extended };
                 bus.extended_s = if t < base_end { 0 } else { extended };
             } else {
@@ -470,7 +473,7 @@ impl<'a> Buses<'a> {
             }
             self.next[x] += 1;
         }
-        if extended > 0 {
+        if held_for_a_bus {
             self.given[x] = Some(self.greens[x]);
         }
         // The other approaches' next greens start that much later; each bears it as it runs.
@@ -521,10 +524,12 @@ impl control::Demand for Buses<'_> {
             return;
         }
         let (k, uid) = (turn.phase, self.uids[turn.phase]);
-        let before = turn.green_s() - turn.prolonged_s + turn.cut_s;
         // A green interrupted for a pre-emption, or kept for one, was cut for no bus.
-        if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s).filter(|_| turn.preempted_s == 0 && !turn.kept) {
-            self.record_cut(&cut, before, uid);
+        if turn.preempted_s == 0 && !turn.kept {
+            let before = turn.given_s();
+            if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s) {
+                self.record_cut(&cut, before, uid);
+            }
         }
         self.charge_shifts(k, uid);
         for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase == k) {
