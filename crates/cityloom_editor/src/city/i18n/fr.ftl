@@ -65,8 +65,8 @@ cmp-title = Comparer les conceptions · { $place }
 cmp-pick-a = Conception A
 cmp-pick-b = Conception B
 cmp-baseline = Référence
-cmp-col-a = A : { $name }
-cmp-col-b = B : { $name }
+cmp-col-a = A : { $name }
+cmp-col-b = B : { $name }
 cmp-summary-h = Ce qui diffère dans B
 cmp-same = { $b } et { $a } sont identiques.
 cmp-differs =
@@ -74,7 +74,7 @@ cmp-differs =
         [one] { $b } diffère de { $a } sur { $n } point.
        *[other] { $b } diffère de { $a } sur { $n } points.
     }
-cmp-also = Diffère aussi par : { $list }
+cmp-also = Diffère aussi par : { $list }
 # un choix refusé, puis le titre de ce qui diffère, dans la région annoncée
 cmp-refused-headline = { $why } { $headline }
 cmp-back-street = Retour à la rue
@@ -85,10 +85,10 @@ cmp-h-lanes = Voies
 cmp-h-pieces = Éléments
 cmp-h-checks = Vérifications
 cmp-h-control = Signalisation
-cmp-h-arms = Branches
+cmp-h-arms = Rues
 cmp-h-signal = Feux de circulation
-cmp-only-passes = Réussi seulement dans B : { $check }
-cmp-only-fails = Échoue seulement dans B : { $check }
+cmp-only-passes = Réussite seulement dans B : { $check }
+cmp-only-fails = Échec seulement dans B : { $check }
 cmp-other-speed = les limites de vitesse
 cmp-other-stretches = les tronçons
 cmp-other-curbside = les usages du bord de rue
@@ -96,6 +96,6 @@ cmp-other-stops = les arrêts
 cmp-other-calming = l’apaisement de la circulation
 cmp-other-green = la verdure
 cmp-other-ring = l’anneau du carrefour giratoire
-cmp-other-raised = les éléments surélevés
+cmp-other-raised = le carrefour surélevé
 cmp-other-bus = la priorité aux autobus
 cmp-other-corners = les coins

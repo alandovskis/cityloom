@@ -856,8 +856,8 @@ add-calming-no-anchor = Les deux extrémités de cette rue sont coupées par le 
 green-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arbres ni de plantations.
 
 # Ce qui distingue deux conceptions d’une rue (src/street/model/compare.rs).
-cmp-piece-added = Ajouté : { $kind }, { $width }
-cmp-piece-removed = Retiré : { $kind }, { $width }
+cmp-piece-added = Ajout : { $kind }, { $width }
+cmp-piece-removed = Retrait : { $kind }, { $width }
 cmp-piece-kind = { $from } devient { $to }
 cmp-piece-width = { $kind } : { $a } → { $b }
 cmp-lanes = { $direction } : { $a } → { $b }

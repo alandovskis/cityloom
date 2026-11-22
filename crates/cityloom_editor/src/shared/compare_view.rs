@@ -269,6 +269,20 @@ mod tests {
     }
 
     #[test]
+    fn the_summary_speaks_the_glossarys_french() {
+        use crate::shared::testing::{en, fr};
+        let check = |key| Said::new(key).with("check", Arg::Text("Trottoir assez large".into()));
+        assert_eq!(fr(&check("cmp-only-passes")), "Réussite seulement dans B\u{a0}: Trottoir assez large");
+        assert_eq!(fr(&check("cmp-only-fails")), "Échec seulement dans B\u{a0}: Trottoir assez large");
+        let piece = |key| Said::new(key).with("kind", Arg::KindLower("travel")).with("width", Arg::Length(3_000));
+        assert!(fr(&piece("cmp-piece-added")).starts_with("Ajout\u{a0}: "), "{}", fr(&piece("cmp-piece-added")));
+        assert!(fr(&piece("cmp-piece-removed")).starts_with("Retrait\u{a0}: "), "{}", fr(&piece("cmp-piece-removed")));
+        assert_eq!(fr(&Said::new("cmp-other-arm-details")), "les détails des rues à la jonction");
+        assert_eq!((en(&Said::new("cmp-other-raised")), fr(&Said::new("cmp-other-raised"))), ("the raised table".into(), "le carrefour surélevé".into()));
+        assert_eq!((en(&Said::new("cmp-h-arms")), fr(&Said::new("cmp-h-arms"))), ("Streets".into(), "Rues".into()));
+    }
+
+    #[test]
     fn a_refusal_is_said_under_the_pickers() {
         let host = fake(Locale::En, one_group());
         host.state.refuse(Said::new("scenario-missing"));
