@@ -10,7 +10,10 @@ mod merge;
 
 use abstutil::{Tags, Timer};
 pub use cityloom_model::*;
-use osm2streets::{Direction as StreetsDirection, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
+use osm2streets::{
+    Direction as StreetsDirection, DrivingSide, IntersectionControl, IntersectionID, IntersectionKind, LaneType, MapConfig, RoadID, StreetNetwork,
+    TrafficInterruption, Transformation,
+};
 use std::collections::{BTreeMap, HashSet};
 
 use osm2streets::osm::WayID;
@@ -48,6 +51,8 @@ fn read_network(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<(Network, geom::
     // Most streets carry no sidewalk tags: without inference they would have none.
     let config = MapConfig { inferred_sidewalks: true, ..MapConfig::default() };
     let (mut streets, doc) = read_streets(osm, clip, config, &mut timer)?;
+    // before osm2streets collapses the splits of a way, and the signals with them
+    carry_signals_past_splits(&mut streets, &doc);
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
     // counted on osm2streets' roads, those with no name too, so a node an alley meets keeps its roads apart
@@ -58,6 +63,111 @@ fn read_network(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<(Network, geom::
     // and the corridors, which name the roads that are left
     network.derive_corridors();
     Ok((network, streets.gps_bounds))
+}
+
+/// The farthest the signals put on a split of a way are carried to the junction they face, in metres. Measured on
+/// Montréal: of the 421 splits that took signals, 369 lie within 40 m of the junction ahead, and the few farther
+/// are as often a long block's last split as signals of something else (a bike path crossing, a lane opened one way
+/// at a time).
+const SIGNAL_CARRY_M: f64 = 40.0;
+
+/// osm2streets puts signals tagged on a way's approach (`traffic_signals:direction`, or a one-way road) on the next
+/// node it splits the way at, marking the stop line of the road that reaches it. That is the junction they face unless
+/// the way is only split there: two roads of one street meet (`one_street`), and the node has no signals of its own
+/// (`own_signals`); where one street becomes another, the signals stop traffic at that change. Then the
+/// signals are carried on along the road beyond the split, through any further splits, to the first node where three
+/// or more roads meet, at most `SIGNAL_CARRY_M` past the split; the split they were carried from loses them
+/// (osm2streets drops such a node when it joins the two roads into one, signals and all). Signals that reach no
+/// junction are not carried, and neither are signals facing the split from both sides: they stop traffic both ways at
+/// it, as at a crossing there, not at the junctions beyond. Such signals stay on the split only where osm2streets keeps
+/// it (the two roads differ); the editor never opens a node of two roads as a junction either way.
+fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
+    let splits: Vec<IntersectionID> = streets
+        .intersections
+        .values()
+        .filter(|i| i.control == IntersectionControl::Signalled && one_street(streets, i.id) && !own_signals(doc, &i.osm_ids))
+        .map(|i| i.id)
+        .collect();
+    let mut carried: Vec<(IntersectionID, IntersectionID)> = Vec::new(); // (the split, the junction ahead)
+    for &split in &splits {
+        if let [arriving] = facing(streets, split)[..]
+            && let Some(ahead) = junction_ahead(streets, doc, split, arriving)
+        {
+            carried.push((split, ahead));
+        }
+    }
+    for &(split, ahead) in &carried {
+        streets.intersections.get_mut(&split).unwrap().control = IntersectionControl::Signed;
+        streets.intersections.get_mut(&ahead).unwrap().control = IntersectionControl::Signalled;
+    }
+}
+
+/// Whether exactly two roads meet at `node` and they are pieces of one street: the same name (or none) and the same
+/// kind of road, as `blocks.rs` joins them.
+fn one_street(streets: &StreetNetwork, node: IntersectionID) -> bool {
+    match streets.intersections[&node].roads[..] {
+        [a, b] => {
+            let (a, b) = (&streets.roads[&a], &streets.roads[&b]);
+            a.name == b.name && a.highway_type == b.highway_type
+        }
+        _ => false,
+    }
+}
+
+/// The roads that reach `node` with a stop line at signals there: those whose approach signals osm2streets put on it.
+fn facing(streets: &StreetNetwork, node: IntersectionID) -> Vec<RoadID> {
+    streets.intersections[&node]
+        .roads
+        .iter()
+        .copied()
+        .filter(|arriving| {
+            let road = &streets.roads[arriving];
+            let stop = if road.dst_i == node { &road.stop_line_end } else { &road.stop_line_start };
+            stop.interruption == TrafficInterruption::Signal
+        })
+        .collect()
+}
+
+/// Whether any of the OSM nodes has signals of its own: signals tagged at the node, or a crossing with signals, which
+/// signals on the approach to it face.
+fn own_signals(doc: &Document, nodes: &[osm2streets::osm::NodeID]) -> bool {
+    nodes.iter().any(|n| {
+        doc.nodes.get(n).is_some_and(|node| {
+            node.tags.is("highway", "traffic_signals") || node.tags.is("crossing", "traffic_signals") || node.tags.is("crossing:signals", "yes")
+        })
+    })
+}
+
+/// The first node past `from`, leaving it by the road other than `came`, where three or more roads meet, through
+/// splits of the street (`one_street`), no more than `SIGNAL_CARRY_M` on; none past the edge of the map, a dead end, a
+/// ring, a node where the street becomes another, or a split that stops the traffic being carried: one with signals of its own, one that only the road the walk
+/// reaches it by faces with signals (which keeps them or carries them on), or one signalled where osm2streets placed
+/// no stop line (signals face it, from a side not known). A node of two roads faced from both sides, or only from
+/// the far side, is walked through: its signals stop traffic at it both ways, or the other way.
+fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID, came: RoadID) -> Option<IntersectionID> {
+    let (mut at, mut came, mut run) = (from, came, 0.0);
+    loop {
+        let leaving = *streets.intersections[&at].roads.iter().find(|r| **r != came)?;
+        let road = &streets.roads[&leaving];
+        run += road.untrimmed_length().inner_meters();
+        let far = if road.src_i == at { road.dst_i } else { road.src_i };
+        let node = &streets.intersections[&far];
+        if run > SIGNAL_CARRY_M || far == from || node.is_map_edge() {
+            return None;
+        }
+        let stops = |faced: Vec<RoadID>| faced.is_empty() || faced == [leaving];
+        match node.roads.len() {
+            2 if !one_street(streets, far)
+                || own_signals(doc, &node.osm_ids)
+                || (node.control == IntersectionControl::Signalled && stops(facing(streets, far))) =>
+            {
+                return None;
+            }
+            2 => (at, came) = (far, leaving),
+            n if n >= 3 => return Some(far),
+            _ => return None,
+        }
+    }
 }
 
 /// Merges the carriageways of each divided street, then the pieces of each block (`through`: the nodes where the

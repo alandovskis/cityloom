@@ -221,7 +221,7 @@ fn joined(a: &Road, b: &Road) -> Road {
 }
 
 /// Merges each node of `moved` into the node beside it: the one kept moves to the middle and takes the other's
-/// provenance, kind and control (when it has none); the other is dropped. Gives back each node merged away and the
+/// provenance, kind and control (when it has none, or the other is signalled); the other is dropped. Gives back each node merged away and the
 /// node it went into.
 fn fold_nodes(net: &mut Network, index: &HashMap<NodeId, usize>, moved: Vec<(NodeId, NodeId)>) -> HashMap<NodeId, NodeId> {
     let mut removed = vec![false; net.junctions.len()];
@@ -239,7 +239,8 @@ fn fold_nodes(net: &mut Network, index: &HashMap<NodeId, usize>, moved: Vec<(Nod
             let n = &mut net.junctions[ti];
             n.provenance.extend(g.provenance);
             n.junction |= g.junction;
-            if n.control == crate::importer::Control::None {
+            // signals on either node run the junction (osm2streets calls every other OSM node `Signed`, never none)
+            if n.control == crate::importer::Control::None || g.control == crate::importer::Control::Signals {
                 n.control = g.control;
             }
             into_of.insert(from, into);
@@ -443,10 +444,9 @@ mod tests {
         assert_eq!(first_driving.direction, Direction::Forward, "traffic going east is now on the left");
     }
 
-    #[test]
-    fn carriageways_that_end_at_two_junctions_close_together_are_joined_and_the_street_between_goes() {
-        // the crossing street meets the eastbound half at node 1 and the westbound half at node 5, 20 m north;
-        // the stub between them is road 9
+    /// `shared_ends`, but the crossing street meets the eastbound half at node 1 and the westbound half at node 5,
+    /// 20 m north (the far end: nodes 2 and 6); the stub between them is road 9.
+    fn split_ends() -> Network {
         let mut net = shared_ends();
         net.junctions.push(node(5, 0.0, 20.0));
         net.junctions.push(node(6, 300.0, 20.0));
@@ -463,6 +463,12 @@ mod tests {
             zones: vec![Zone::whole(vec![lane(LaneKind::Driving, Direction::Forward, 3.0), lane(LaneKind::Driving, Direction::Backward, 3.0)])],
             points: vec![Point::new(0.0, 0.0), Point::new(0.0, 20.0)],
         });
+        net
+    }
+
+    #[test]
+    fn carriageways_that_end_at_two_junctions_close_together_are_joined_and_the_street_between_goes() {
+        let mut net = split_ends();
         let folded = merge_dual_carriageways(&mut net);
         assert_eq!(net.roads.iter().filter(|r| r.name == "Boulevard").count(), 1);
         assert!(net.roads.iter().all(|r| r.edge.id != RoadId(9)), "the stub between the halves is gone");
@@ -474,6 +480,31 @@ mod tests {
         assert!(net.roads.iter().all(|r| r.edge.from != r.edge.to));
         // and no road points at a node that is no longer there
         assert!(net.roads.iter().all(|r| net.junctions.iter().any(|n| n.id == r.edge.from) && net.junctions.iter().any(|n| n.id == r.edge.to)));
+    }
+
+    /// Node 5 goes into node 1; each is given its control, and the control of the node they become is given back.
+    fn joined_control(at_1: Control, at_5: Control) -> Control {
+        let mut net = split_ends();
+        net.junctions.iter_mut().find(|n| n.id == NodeId(1)).unwrap().control = at_1;
+        net.junctions.iter_mut().find(|n| n.id == NodeId(5)).unwrap().control = at_5;
+        merge_dual_carriageways(&mut net);
+        net.junctions.iter().find(|n| n.provenance.has_node(5)).unwrap().control.clone()
+    }
+
+    #[test]
+    fn a_junction_is_signalled_when_the_node_merged_into_it_was() {
+        // osm2streets calls every OSM node it does not find signalled `Signed`
+        assert_eq!(joined_control(Control::Signs, Control::Signals), Control::Signals);
+    }
+
+    #[test]
+    fn a_signalled_junction_stays_signalled_when_a_node_with_signs_is_merged_into_it() {
+        assert_eq!(joined_control(Control::Signals, Control::Signs), Control::Signals);
+    }
+
+    #[test]
+    fn a_junction_with_no_control_takes_the_control_of_the_node_merged_into_it() {
+        assert_eq!(joined_control(Control::None, Control::Signs), Control::Signs);
     }
 
     #[test]
