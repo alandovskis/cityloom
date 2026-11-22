@@ -413,6 +413,56 @@ class Gates(unittest.TestCase):
         self.assertIn("street.spec.ts::splits::ui", report.new_tests)
         self.assertIn(("npx", "playwright", "test", "tests/street.spec.ts", "--reporter=json"), runner.commands)
 
+    def browser_red_runner(self, red: str, red_run: dict) -> FakeRunner:
+        """A base with two specs; the red commit adds a test to one of them, and only that spec is run."""
+        listing = "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\ntests::keeps: test\n"
+        return FakeRunner(
+            self.repo,
+            listings={self.base: listing},
+            runs={red: (101, "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\ntest tests::keeps ... ok\ntest tests::splits ... FAILED\n")},
+            playwright={
+                (self.base, True): playwright_report(
+                    ("street.spec.ts", ["adds a lane"], "expected"),
+                    ("street.spec.ts", ["drops a lane"], "expected"),
+                    ("map.spec.ts", ["opens the city"], "expected"),
+                ),
+                (red, True): playwright_report(
+                    ("street.spec.ts", ["adds a lane"], "expected"),
+                    ("street.spec.ts", ["drops a lane"], "expected"),
+                    ("street.spec.ts", ["splits"], "expected"),
+                    ("map.spec.ts", ["opens the city"], "expected"),
+                ),
+                (red, False): red_run,
+            },
+        )
+
+    def test_the_red_gate_does_not_count_the_tests_of_specs_it_did_not_run_as_gone(self):
+        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        runner = self.browser_red_runner(
+            red,
+            playwright_report(
+                ("street.spec.ts", ["adds a lane"], "expected"),
+                ("street.spec.ts", ["drops a lane"], "expected"),
+                ("street.spec.ts", ["splits"], "unexpected"),
+            ),
+        )
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, [])
+        self.assertIn("street.spec.ts::splits::ui", report.new_tests)
+        self.assertNotIn(("npx", "playwright", "test", "tests/map.spec.ts", "--reporter=json"), runner.commands)
+
+    def test_the_red_gate_still_refuses_a_test_gone_from_a_spec_it_ran(self):
+        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        runner = self.browser_red_runner(
+            red,
+            playwright_report(
+                ("street.spec.ts", ["adds a lane"], "expected"),
+                ("street.spec.ts", ["splits"], "unexpected"),
+            ),
+        )
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, ["Playwright: the test street.spec.ts::drops a lane::ui is gone"])
+
     def green_setup(self):
         red = self.red_commit()
         green = commit(self.repo, {"crates/m/src/street.rs": (self.repo / "crates/m/src/street.rs").read_text().replace("todo!()", "2"), "crates/m/Cargo.toml": '[package]\nname = "m"\nversion = "0.2.0"\n'}, "Split")

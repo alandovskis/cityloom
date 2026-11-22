@@ -435,10 +435,12 @@ class Gate:
                 report.new_tests += new
         if specs:
             asked = set(self._playwright([], listing=True)) - browser_before
-            files = sorted({"tests/" + name.split("::", 1)[0] for name in asked})
-            if files:
-                results = self._playwright(files, listing=False)
-                found, new = judge_red(browser_before, results, "Playwright")
+            ran = {name.split("::", 1)[0] for name in asked}
+            if ran:
+                results = self._playwright(sorted("tests/" + spec for spec in ran), listing=False)
+                # Only the specs with a new test are run: the base's tests of the other specs were not, and are not gone.
+                before = {name for name in browser_before if name.split("::", 1)[0] in ran}
+                found, new = judge_red(before, results, "Playwright")
                 report.problems += found
                 report.new_tests += new
         if not report.new_tests and not report.problems:
