@@ -113,7 +113,7 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
-  test("a junction's signal plan and its pedestrian calls can be read, and the calls and their detection not changed", async ({
+  test("a junction's signal plan, its pedestrian calls and its actuation can be read, and none of them changed", async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -127,6 +127,13 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#call-rate-${uid}`)).toBeVisible();
     await page.locator(`#call-detect-${uid}-passive`).check();
     await expect(page.locator(`#call-detect-${uid}-passive`)).toBeChecked();
+    // A street made actuated (CLM-12).
+    const street = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
+      "act-mode-",
+      "",
+    );
+    await page.locator(`#act-mode-${street}-actuated`).check();
+    await expect(page.locator(`#act-min-${street}`)).toHaveValue("7");
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -146,6 +153,13 @@ test.describe("a design opened read-only", () => {
       "one who leaves after waiting 30 s cancels it",
     );
     for (const r of await page.locator(`#call-detect-${uid} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    // The actuated street is shown with its settings, and none can be changed.
+    await expect(page.locator(`#act-mode-${street}-actuated`)).toBeChecked();
+    for (const r of await page.locator(`#act-mode-${street} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    await expect(page.locator(`#act-min-${street}`)).toHaveValue("7");
+    await expect(page.locator(`#act-min-${street}`)).toBeDisabled();
+    await expect(page.locator(`#act-min-${street}-more`)).toBeDisabled();
+    await expect(page.locator("#actuation-phases")).toBeVisible();
     await expect(page.locator("#calls-totals")).toBeVisible();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);

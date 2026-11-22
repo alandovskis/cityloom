@@ -3,9 +3,11 @@
 //! Pure Rust like `model.rs`, so it is tested natively. Lengths are integer
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
+pub mod actuation;
 pub mod beyond;
 pub mod calls;
 pub mod compare;
+pub mod control;
 pub mod curbside;
 pub mod geometry;
 pub mod read_model;
@@ -325,6 +327,12 @@ pub struct Arm {
     /// has one (`settle_table_and_boxes` puts it back otherwise). Read it through `calls::detection_of`.
     #[serde(default, skip_serializing_if = "calls::Detection::is_push_button")]
     pub detection: calls::Detection,
+    /// The street's phase is actuated (CLM-12): called and extended by the vehicles detected on its approach, between
+    /// its bounds, at this many vehicles an hour (the scenario `control::hour` runs). None: on recall, run every cycle at
+    /// its timing's green, as before. Saved only once set, so a junction with no actuated street is written as it was.
+    /// Read it through `actuation::actuation_of`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actuation: Option<actuation::Actuation>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -520,6 +528,7 @@ impl Arm {
             timing: None,
             calls: None,
             detection: calls::Detection::PushButton,
+            actuation: None,
             walked: false,
         }
     }
@@ -851,10 +860,15 @@ pub enum Refusal {
     CallRateOutOfRange,
     DetectionNotWalked,
     DetectionNeedsCall,
+    ActuationNoPhase,
+    ActuationAlready,
+    NotActuated,
+    ActuationOutOfRange,
+    MinAboveMax,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 39] = [
+    pub const ALL: [Refusal; 44] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -894,6 +908,11 @@ impl Refusal {
         Refusal::CallRateOutOfRange,
         Refusal::DetectionNotWalked,
         Refusal::DetectionNeedsCall,
+        Refusal::ActuationNoPhase,
+        Refusal::ActuationAlready,
+        Refusal::NotActuated,
+        Refusal::ActuationOutOfRange,
+        Refusal::MinAboveMax,
     ];
 
     /// The message that says why.
@@ -938,6 +957,11 @@ impl Refusal {
             Refusal::CallRateOutOfRange => "jn-refusal-call-rate-out-of-range",
             Refusal::DetectionNotWalked => "jn-refusal-detection-not-walked",
             Refusal::DetectionNeedsCall => "jn-refusal-detection-needs-call",
+            Refusal::ActuationNoPhase => "jn-refusal-actuation-no-phase",
+            Refusal::ActuationAlready => "jn-refusal-actuation-already",
+            Refusal::NotActuated => "jn-refusal-not-actuated",
+            Refusal::ActuationOutOfRange => "jn-refusal-actuation-out-of-range",
+            Refusal::MinAboveMax => "jn-refusal-min-above-max",
         }
     }
 }
@@ -1740,6 +1764,54 @@ impl Junction {
         )
     }
 
+    /// Makes street `uid`'s phase actuated (`on`, CLM-12), called and extended by the vehicles on its approach with the
+    /// placeholder defaults (`actuation::Actuation::default`), or puts it back on recall, run every cycle at its green.
+    /// Actuated needs a signal and a phase of the plan that is the street's own (`actuation::refusal`); recall is always
+    /// allowed, so a street an edit has left without a phase can be put back. Refused when it is that already.
+    pub fn set_actuated(&mut self, uid: u32, on: bool) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.actuation.is_some() == on {
+            return self.refuse(Refusal::ActuationAlready);
+        }
+        if on && let Some(why) = actuation::refusal(self.current(), self.region, uid) {
+            return self.refuse(why);
+        }
+        self.arm_edit(
+            uid,
+            |a| about(if on { "jn-rev-actuated-on" } else { "jn-rev-actuated-off" }, a),
+            |a| {
+                a.actuation = on.then(actuation::Actuation::default);
+                true
+            },
+        )
+    }
+
+    /// Sets one setting of actuated street `uid`: its minimum green, gap or maximum green (seconds) or its vehicles an
+    /// hour, each within its placeholder range (`actuation::Field::range`), the minimum never longer than the maximum.
+    /// A street on recall has none. A value it has already is not an edit.
+    pub fn set_actuation(&mut self, uid: u32, field: actuation::Field, value: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = actuation::actuation_of(arm) else { return self.refuse(Refusal::NotActuated) };
+        let (lo, hi) = field.range();
+        let Some(value) = u32::try_from(value).ok().filter(|v| (lo..=hi).contains(v)) else { return self.refuse(Refusal::ActuationOutOfRange) };
+        let mut next = now;
+        field.put(&mut next, value);
+        if next.min_green_s > next.max_green_s {
+            return self.refuse(Refusal::MinAboveMax);
+        }
+        if next == now {
+            return true;
+        }
+        let label = move |a: &Arm| match field {
+            actuation::Field::Vehicles => about("jn-rev-actuation-vehicles", a).with("value", Arg::Num(i64::from(value))),
+            _ => about("jn-rev-actuation", a).with("field", Arg::MsgLower(field.key())).with("value", Arg::Num(i64::from(value))),
+        };
+        self.arm_edit(uid, label, |a| {
+            a.actuation = Some(next);
+            true
+        })
+    }
+
     /// Gives the junction the suggested plan again, in place of the one the person edited.
     pub fn restore_suggestion(&mut self) -> bool {
         if self.signal_plan_to_edit().is_none() {
@@ -1983,7 +2055,9 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none());
+        // An actuated street's settings are signal timing too, and go with it.
+        let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none());
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
@@ -2226,9 +2300,11 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
         if !signal {
             a.timing = None;
             a.calls = None;
+            a.actuation = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
+        a.actuation = a.actuation.map(actuation::Actuation::settled);
         // Only a crossing on call detects anyone: one on recall (or just taken off call) has no detection.
         if a.calls.is_none() {
             a.detection = calls::Detection::PushButton;
@@ -2541,7 +2617,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 39);
+        assert_eq!(Refusal::ALL.len(), 44);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

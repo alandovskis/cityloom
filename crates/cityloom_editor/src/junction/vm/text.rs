@@ -105,6 +105,33 @@ pub fn calls_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
     })
 }
 
+/// How street `uid`'s actuated phase and its vehicles fared over the hour, said after its actuation changes: "Main
+/// Street (north): 300 vehicles in the hour; served 298, not served 2; average wait 21 s, longest 64 s. Its green: given
+/// 95 times, skipped 25, extended 40 times by 120 s in all, ended early 90 times." None while it is on recall or has no
+/// phase of its own.
+pub fn actuation_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
+    let act = &v.signal.as_ref()?.actuation;
+    let street = act.streets.iter().find(|s| s.uid == uid)?;
+    let t = act.approaches.iter().find(|a| a.arm == uid)?;
+    let phases = act.phases.iter().filter(|p| p.arm == uid);
+    let sum = |f: fn(&crate::junction::model::actuation::PhaseTotals) -> u32| phases.clone().map(f).sum::<u32>();
+    let args = Args::new()
+        .str("arm", say_now(i18n, Units::Metres, &street.label))
+        .num("vehicles", i64::from(t.vehicles))
+        .num("served", i64::from(t.served))
+        .num("not_served", i64::from(t.not_served))
+        .num("greens", i64::from(sum(|p| p.served)))
+        .num("skipped", i64::from(sum(|p| p.skipped)))
+        .num("extended", i64::from(sum(|p| p.extended)))
+        .num("extended_s", i64::from(sum(|p| p.extended_s)))
+        .num("early", i64::from(sum(|p| p.ended_early)));
+    // As the totals show it: the waits only when some vehicle was served.
+    Some(match (t.average_wait_s, t.longest_wait_s) {
+        (Some(average), Some(longest)) => i18n.tr_now("jn-act-said", &args.num("average", i64::from(average)).num("longest", i64::from(longest))),
+        _ => i18n.tr_now("jn-act-said-no-wait", &args),
+    })
+}
+
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {

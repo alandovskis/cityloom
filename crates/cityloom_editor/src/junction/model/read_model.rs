@@ -6,7 +6,6 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::junction::model::beyond;
-use crate::junction::model::calls;
 use crate::junction::model::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
@@ -16,6 +15,7 @@ use crate::junction::model::{
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
+use crate::junction::model::{actuation, calls};
 use crate::street::model::{StopKindExt, UseExt};
 
 use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
@@ -739,6 +739,34 @@ pub struct SignalView {
     pub suggested: bool,
     /// Pedestrian calls (#60): which crossings are on call, and how the plan serves an hour of their calls.
     pub calls: CallsView,
+    /// Vehicle actuation (CLM-12): which streets are actuated, and how their phases ran over the same hour.
+    pub actuation: ActuationView,
+}
+
+/// The vehicle actuation of a signal: every street that has a phase of its own (or is actuated without one) with its
+/// settings, each actuated phase and approach added up over the hour, and the findings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct ActuationView {
+    /// In the order of the bearings.
+    pub streets: Vec<ActuatedStreetView>,
+    /// One for each actuated phase, in the order of the plan; its name is the phase's (`PhaseView.name`, by `phase`).
+    pub phases: Vec<actuation::PhaseTotals>,
+    /// One for each actuated street with a phase of its own; its name is the street's (`ActuatedStreetView.label`).
+    pub approaches: Vec<actuation::ApproachTotals>,
+    /// What the person should act on, each a sentence naming the street.
+    pub findings: Vec<Said>,
+    /// The same findings as the model has them, in the same order.
+    pub found: Vec<actuation::Finding>,
+}
+
+/// One street as actuation sees it: on recall (`settings` None) or actuated with its settings, and whether the plan
+/// gives it a phase of its own (else it cannot be made actuated).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ActuatedStreetView {
+    pub uid: u32,
+    pub label: Said,
+    pub settings: Option<actuation::Actuation>,
+    pub has_phase: bool,
 }
 
 /// The pedestrian calls of a signal: every crossing with its mode, one row per call of the hour, and the findings.
@@ -778,10 +806,9 @@ pub struct CallRowView {
     pub outcome: Said,
 }
 
-/// The calls of `plan` on `s` in words: `arms` names the streets and gives each crossing's length.
-fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
+/// The calls of `plan` on `s` in words, from the hour's `summary`: `arms` names the streets.
+fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView], summary: calls::Summary) -> CallsView {
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
-    let summary = calls::summary(s, plan, &crossing_distances(arms));
     let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.crossing.is_some() || a.calls.is_some()).collect();
     listed.sort_by_key(|a| a.bearing);
     let crossings = listed
@@ -817,6 +844,35 @@ fn calls_view(s: &State, plan: &signal::Plan, arms: &[ArmView]) -> CallsView {
         })
         .collect();
     CallsView { crossings, rows, findings, found: summary.findings }
+}
+
+/// The actuation of `plan` on `s` in words, from the hour's `summary`: `arms` names the streets.
+fn actuation_view(s: &State, plan: &signal::Plan, arms: &[ArmView], summary: actuation::Summary) -> ActuationView {
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.actuation.is_some() || actuation::own_phase(plan, a.uid).is_some()).collect();
+    listed.sort_by_key(|a| a.bearing);
+    let streets = listed
+        .into_iter()
+        .map(|a| ActuatedStreetView {
+            uid: a.uid,
+            label: name(a.uid),
+            settings: actuation::actuation_of(a),
+            has_phase: actuation::own_phase(plan, a.uid).is_some(),
+        })
+        .collect();
+    let findings = summary
+        .findings
+        .iter()
+        .map(|f| match *f {
+            actuation::Finding::NoPhase { arm } => Said::new("jn-act-finding-no-phase").with("arm", Arg::Said(Box::new(name(arm)))),
+            actuation::Finding::WalkPastMax { arm, crossing, need_s, max_s } => Said::new("jn-act-finding-walk-past-max")
+                .with("arm", Arg::Said(Box::new(name(arm))))
+                .with("crossing", Arg::Said(Box::new(name(crossing))))
+                .with("need", Arg::Num(i64::from(need_s)))
+                .with("max", Arg::Num(i64::from(max_s))),
+        })
+        .collect();
+    ActuationView { streets, phases: summary.phases, approaches: summary.approaches, findings, found: summary.findings }
 }
 
 /// What happened to a call, in a few words.
@@ -940,8 +996,11 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    let calls = calls_view(s, &plan, arms);
-    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls })
+    // One hour of the controller gives both the calls and the actuation.
+    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms));
+    let calls = calls_view(s, &plan, arms, hour.calls);
+    let actuation = actuation_view(s, &plan, arms, hour.actuation);
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation })
 }
 
 /// The movements that take part in the conflicts, each once.

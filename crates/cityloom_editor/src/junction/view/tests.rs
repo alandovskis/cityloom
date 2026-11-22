@@ -4000,3 +4000,167 @@ fn compare_draws_an_iso_for_each_design_and_the_summary() {
     assert_eq!(count(&h, "aria-label=\""), 2, "{h}");
     assert!(h.contains("What differs in B"), "{h}");
 }
+
+// ---- vehicle actuation (CLM-12) ---------------------------------------------------------------------------------------
+
+/// The `#signal-actuation` section of the plan's level, as far as the end of the panel.
+fn actuation_of(h: &str) -> &str {
+    &h[h.find(r#"id="signal-actuation""#).expect("a section for vehicle actuation")..]
+}
+
+/// The `<input>` tag of the element with id `id` in `h`.
+fn input_tag<'a>(h: &'a str, id: &str) -> &'a str {
+    let at = h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"));
+    &h[h[..at].rfind("<input").unwrap()..at + h[at..].find('>').unwrap()]
+}
+
+#[test]
+fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_placeholder_figures() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let act = actuation_of(&h);
+    assert!(act.contains("Vehicle actuation"), "{act}");
+    assert!(act.contains("a minimum green of 7 s, a gap of 3 s, a maximum green of 45 s and 300 vehicles an hour"), "{act}");
+    let streets = s.view_now().signal.as_ref().unwrap().actuation.streets.clone();
+    assert_eq!(streets.len(), 4, "every street with a phase of its own");
+    for st in &streets {
+        let u = st.uid;
+        // A radio group per street, named by its heading and described by what its mode does.
+        let at = act.find(&format!(r#"id="act-mode-{u}""#)).expect("a mode group");
+        let tag = &act[act[..at].rfind("<div").unwrap()..at + act[at..].find('>').unwrap()];
+        for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="act-mode-h-{u}""#), &format!(r#"aria-describedby="act-status-{u}""#)] {
+            assert!(tag.contains(attr), "{attr}: {tag}");
+        }
+        assert!(input_tag(act, &format!("act-mode-{u}-recall")).contains("checked"), "on recall to begin with");
+        assert!(!input_tag(act, &format!("act-mode-{u}-actuated")).contains("checked"));
+    }
+    assert_eq!(act.matches("Phase on recall: runs every cycle at its green").count(), 4);
+    assert!(act.contains(r#"id="actuation-none""#) && !act.contains(r#"id="actuation-phases""#) && !act.contains("act-min-"));
+    // Actuated: its trigger and bounds, the four settings with steppers, what its phase did, and the two tables.
+    let n = arm(&s, 0);
+    assert!(s.set_actuated(n, true));
+    let h = panel(&s);
+    let act = actuation_of(&h);
+    assert!(input_tag(act, &format!("act-mode-{n}-actuated")).contains("checked"));
+    assert!(act.contains("vehicles detected on its approach call its phase"), "{act}");
+    assert!(act.contains("Its green runs at least 7 s, each vehicle holds it 3 s more, up to 45 s."), "{act}");
+    for (field, label, value, range) in [
+        ("min", "Minimum green", "7", "5 to 30 s (placeholder bound)"),
+        ("gap", "Gap", "3", "1 to 10 s (placeholder bound)"),
+        ("max", "Maximum green", "45", "10 to 120 s (placeholder bound)"),
+        ("rate", "Vehicles an hour", "300", "0 to 1800 vehicles an hour (placeholder bound)"),
+    ] {
+        assert!(act.contains(&format!(r#"<label for="act-{field}-{n}">{label}</label>"#)), "{field}: {act}");
+        let tag = input_tag(act, &format!("act-{field}-{n}"));
+        assert!(tag.contains(&format!(r#"value="{value}""#)) && tag.contains(&format!(r#"aria-describedby="act-{field}-range-{n}""#)), "{tag}");
+        assert!(act.contains(&format!(r#"id="act-{field}-range-{n}" class="insp-range">{range}"#)), "{field}: {act}");
+        assert!(act.contains(&format!(r#"id="act-{field}-{n}-less""#)) && act.contains(&format!(r#"id="act-{field}-{n}-more""#)), "{field}");
+    }
+    assert!(act.contains(r#"aria-label="Minimum green, 1 less""#) && act.contains(r#"aria-label="Vehicles an hour, 10 more""#), "{act}");
+    assert!(act.contains(&format!(r#"id="act-effect-{n}" class="insp-range">In the hour its green was given "#)), "{act}");
+    assert!(!act.contains(r#"id="actuation-none""#));
+    // Each table scrolls in a box the keys reach, named by its caption.
+    for caption in ["actuation-phases-caption", "actuation-approaches-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = act.find(&labelled).unwrap_or_else(|| panic!("{caption}: {act}"));
+        let tag = &act[act[..at].rfind("<div").unwrap()..at + act[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+    }
+    let heads = |id: &str| {
+        let t = &act[act.find(&format!(r#"id="{id}""#)).unwrap()..];
+        let t = &t[..t.find("</thead>").unwrap()];
+        t.split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(heads("actuation-phases"), ["Phase", "Served", "Skipped", "Extended", "Extended by", "Ended early"]);
+    assert_eq!(heads("actuation-approaches"), ["Approach", "Vehicles", "Served", "Not served", "Average wait", "Longest wait"]);
+    let v = s.view_now();
+    let act_v = &v.signal.as_ref().unwrap().actuation;
+    let (p, a) = (act_v.phases[0], act_v.approaches[0]);
+    let phases = &act[act.find(r#"id="actuation-phases""#).unwrap()..];
+    let row = &phases[phases.find("<tbody>").unwrap()..phases.find("</tbody>").unwrap()];
+    let name = crate::shared::said::say_now(s.i18n(), crate::shared::units::Units::Metres, &v.signal.as_ref().unwrap().phases[p.phase].name);
+    assert!(row.contains(&format!(r#"<th scope="row">{name}</th>"#)), "the phase by its name: {row}");
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    let by = format!("{} s", p.extended_s);
+    assert_eq!(cells, [p.served.to_string(), p.skipped.to_string(), p.extended.to_string(), by, p.ended_early.to_string()]);
+    let approaches = &act[act.find(r#"id="actuation-approaches""#).unwrap()..];
+    let row = &approaches[approaches.find("<tbody>").unwrap()..approaches.find("</tbody>").unwrap()];
+    assert!(row.contains(&format!(r#"<td>{}</td><td>{}</td>"#, a.vehicles, a.served)), "{row}");
+}
+
+#[test]
+fn a_street_without_a_phase_of_its_own_says_why_it_cannot_be_actuated_and_one_left_actuated_is_a_finding() {
+    let s = shared(0);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    assert!(s.set_actuated(e, true));
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: n, to: e }],
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    s.show_plan();
+    let h = panel(&s);
+    let act = actuation_of(&h);
+    assert!(act.contains(r#"id="actuation-findings""#) && act.contains("is actuated, but no phase of the plan is its own"), "{act}");
+    assert!(!act.contains(&format!(r#"id="act-mode-{}""#, arm(&s, 180))), "south has no phase of its own and is not actuated: not listed");
+    assert!(s.set_actuated(e, false));
+    let h = panel(&s);
+    assert!(!actuation_of(&h).contains(&format!(r#"id="act-mode-{e}""#)), "back on recall without a phase: no longer listed");
+}
+
+#[test]
+fn a_junction_shown_read_only_shows_its_actuation_and_offers_it_disabled() {
+    use crate::shared::ports::Storage;
+    let mut j = Junction::new(0);
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_actuated(n, true));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let act = actuation_of(&h);
+    let locked = r#"<fieldset disabled class="read-only-controls"><ul class="act-streets">"#;
+    let inside = &act[act.find(locked).expect("the streets are offered in a disabled fieldset")..];
+    let inside = &inside[..inside.find("</fieldset>").unwrap()];
+    assert!(input_tag(inside, &format!("act-mode-{n}-actuated")).contains("checked"), "{inside}");
+    assert!(input_tag(inside, &format!("act-min-{n}")).contains(r#"value="7""#), "{inside}");
+    assert!(act.contains(r#"id="actuation-phases""#), "the hour is shown");
+    assert!(!s.set_actuated(n, false) && !s.set_actuation(n, crate::junction::model::actuation::Field::MinGreen, 9), "and cannot be changed");
+}
+
+#[test]
+fn vehicle_actuation_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let n = arm(&s, 0);
+    assert!(s.set_actuated(n, true));
+    s.show_plan();
+    let h = panel(&s);
+    let act = actuation_of(&h);
+    for words in [
+        "Actionnement par les véhicules",
+        "Valeurs provisoires",
+        "un vert minimal de 7 s, un intervalle de passage de 3 s, un vert maximal de 45 s et 300 véhicules par heure",
+        "<span>En rappel</span>",
+        "<span>À la demande</span>",
+        "Son vert dure au moins 7 s, chaque véhicule le retient 3 s de plus, jusqu’à 45 s.",
+        ">Vert minimal</label>",
+        ">Intervalle de passage</label>",
+        ">Vert maximal</label>",
+        ">Véhicules par heure</label>",
+        "De 5 à 30 s (borne provisoire)",
+        "Phases à la demande en une heure",
+        "Omises",
+        "Terminées tôt",
+        "Attente moyenne",
+        "Dans l’heure, son vert a été donné",
+    ] {
+        assert!(act.contains(words), "{words}: {act}");
+    }
+}

@@ -57,8 +57,9 @@ type Meeting = (usize, u32, crate::junction::model::signal::Conflict);
 /// What an edit's announcement compares with afterwards, taken before it: what met in the plan and the calls' findings.
 struct Before {
     meetings: Vec<Meeting>,
-    /// What each finding was about (`calls::Finding::about`), not its words: a renamed street is no new finding.
-    findings: Vec<(u8, u32)>,
+    /// What each finding of the calls and of the actuation was about (`calls::Finding::about`,
+    /// `actuation::Finding::about`), not its words: a renamed street is no new finding.
+    findings: Vec<(u8, u32, u32)>,
     /// The crossings kept on call while the signal was suspended.
     kept: usize,
     /// The crossings taken off call as the junction opened (until its first edit): a sync says only more of them.
@@ -338,12 +339,30 @@ impl JunctionVm {
         self.call_edit(uid, |j| j.set_detection(uid, detection))
     }
 
-    /// An edit of a crossing's calls: the edit's text, the crossing's calls added up and any calls finding that arose,
-    /// or the refusal. It changes no phase, so nothing about the plan's conflicts or patterns is said. A rate the crossing
-    /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, as `set_detection`
-    /// takes the detection it has, and only an
-    /// edit that added one is announced, or the last revision, some earlier edit, would be read out.
+    /// The person makes street `uid`'s phase actuated (`on`, CLM-12) or puts it back on recall. Announced by what was
+    /// done and how its phase and its vehicles fared over the hour; a refusal is said with its reason (no phase of its
+    /// own, say).
+    pub fn set_actuated(&self, uid: u32, on: bool) -> bool {
+        self.policy_edit(|j| j.set_actuated(uid, on), |v, i18n| text::actuation_text(v, i18n, uid))
+    }
+
+    /// The person sets one setting of actuated street `uid`: its minimum green, gap, maximum green or vehicles an hour.
+    /// Announced as `set_actuated` is; the value it has already is said not at all.
+    pub fn set_actuation(&self, uid: u32, field: crate::junction::model::actuation::Field, value: i32) -> bool {
+        self.policy_edit(|j| j.set_actuation(uid, field, value), |v, i18n| text::actuation_text(v, i18n, uid))
+    }
+
+    /// An edit of a crossing's calls: announced as `policy_edit` says, with the crossing's calls added up.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        self.policy_edit(f, |v, i18n| text::calls_text(v, i18n, uid))
+    }
+
+    /// An edit of what the signal responds to (a crossing's calls, a street's actuation): the edit's text, then what it
+    /// did over the hour (`results`) and any finding that arose, or the refusal. It changes no phase of the plan, so
+    /// nothing about the plan's conflicts or patterns is said. A setting it had already is said not at all: the model
+    /// takes it (returns true) without adding a revision (as `set_call_rate`, `set_detection` and `set_actuation` do),
+    /// and only an edit that added one is announced, or the last revision, some earlier edit, would be read out.
+    fn policy_edit(&self, f: impl FnOnce(&mut Junction) -> bool, results: impl FnOnce(&JView, &I18n) -> Option<String>) -> bool {
         // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
         if self.refuse_read_only() {
             return false;
@@ -355,7 +374,7 @@ impl JunctionVm {
         if done && self.read(|j| j.revisions().count()) != edits {
             let v = self.view_now();
             let edit = text::edit_text(&v, &self.i18n, self.units_now());
-            self.say_parts(edit.into_iter().chain(text::calls_text(&v, &self.i18n, uid)).chain(self.findings_note(&findings)));
+            self.say_parts(edit.into_iter().chain(results(&v, &self.i18n)).chain(self.findings_note(&findings)));
         } else if !done {
             self.say_refusal();
         }
@@ -533,9 +552,12 @@ impl JunctionVm {
         Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
     }
 
-    /// What the findings of the pedestrian calls are about now, each its kind and street.
-    fn findings(&self) -> Vec<(u8, u32)> {
-        self.view_now().signal.as_ref().map(|s| s.calls.found.iter().map(|f| f.about()).collect()).unwrap_or_default()
+    /// What the findings of the pedestrian calls and of the actuation are about now, each its kind and streets.
+    fn findings(&self) -> Vec<(u8, u32, u32)> {
+        let v = self.view_now();
+        let Some(signal) = v.signal.as_ref() else { return Vec::new() };
+        let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0));
+        calls.chain(signal.actuation.found.iter().map(|f| f.about())).collect()
     }
 
     /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
@@ -545,20 +567,17 @@ impl JunctionVm {
         (n > 0 && before.kept == 0).then(|| self.i18n.tr_now("jn-calls-kept", &Args::new().num("n", n as i64)))
     }
 
-    /// The calls' findings that arose since `before`, each its own sentence, as the plan shows them; one that was there
-    /// already (the same kind at the same street, `calls::Finding::about`, whatever its words now) is not said again.
-    /// Every announcement of a change says it: an edit of the calls or of the signal, an undo, a redo, a reset and a
-    /// change of region. None when none arose.
-    fn findings_note(&self, before: &[(u8, u32)]) -> Option<String> {
+    /// The findings of the calls and of the actuation that arose since `before`, each its own sentence, as the plan shows
+    /// them; one that was there already (the same kind at the same streets, `Finding::about`, whatever its words now) is
+    /// not said again. Every announcement of a change says it: an edit of the calls, the actuation or the signal, an undo,
+    /// a redo, a reset and a change of region. None when none arose.
+    fn findings_note(&self, before: &[(u8, u32, u32)]) -> Option<String> {
         let v = self.view_now();
-        let calls = &v.signal.as_ref()?.calls;
-        let new: Vec<String> = calls
-            .found
-            .iter()
-            .zip(&calls.findings)
-            .filter(|(f, _)| !before.contains(&f.about()))
-            .map(|(_, said)| say_now(&self.i18n, self.units_now(), said))
-            .collect();
+        let signal = v.signal.as_ref()?;
+        let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0)).zip(&signal.calls.findings);
+        let actuation = signal.actuation.found.iter().map(|f| f.about()).zip(&signal.actuation.findings);
+        let new: Vec<String> =
+            calls.chain(actuation).filter(|(f, _)| !before.contains(f)).map(|(_, said)| say_now(&self.i18n, self.units_now(), said)).collect();
         (!new.is_empty()).then(|| new.join(" "))
     }
 
@@ -1410,6 +1429,82 @@ mod tests {
             said.take(),
             vec!["Aucune phase du plan n’ouvre ce passage, la détection passive ne peut donc pas le servir\u{a0}: ouvrez-le d’abord dans une phase."]
         );
+    }
+
+    #[test]
+    fn a_street_made_actuated_is_announced_with_how_its_phase_and_vehicles_fared_and_a_refusal_says_why_in_both_languages() {
+        use crate::junction::model::actuation::Field;
+        let r = rig(0);
+        let (n, e) = r.vm.read(|j| {
+            let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+            (at(0), at(90))
+        });
+        assert!(r.vm.set_actuated(n, true));
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Sample Avenue 2 (north): actuated."), "{t:?}");
+        assert!(t[0].contains("Sample Avenue 2 (north): 300 vehicles in the hour; served "), "{t:?}");
+        assert!(t[0].contains(" Its green: given "), "{t:?}");
+        assert!(r.vm.set_actuation(n, Field::Vehicles, 1));
+        assert!(r.said.take()[0].contains(": 1 vehicle in the hour;"));
+        assert!(r.vm.set_actuation(n, Field::Gap, 3), "the value it has: taken");
+        assert!(r.said.take().is_empty(), "and nothing said");
+        assert!(!r.vm.set_actuation(n, Field::MinGreen, 31));
+        assert_eq!(r.said.take(), vec!["That value is outside the placeholder bound shown."]);
+        assert!(r.vm.set_actuation(n, Field::MaxGreen, 20));
+        r.said.take();
+        assert!(!r.vm.set_actuation(n, Field::MinGreen, 25));
+        assert_eq!(r.said.take(), vec!["The minimum green cannot be longer than the maximum green."]);
+        // A maximum shorter than the walk across east's crossing in north's phase: a finding, said with the edit.
+        assert!(r.vm.set_actuation(n, Field::MaxGreen, 10));
+        let t = r.said.take();
+        assert!(t[0].starts_with("Sample Avenue 2 (north): maximum green 10 s."), "{t:?}");
+        assert!(t[0].contains("s of green, longer than the 10 s maximum green of Sample Avenue 2 (north)"), "{t:?}");
+        // Said once: the next edit leaves it as it was.
+        assert!(r.vm.set_actuation(n, Field::MinGreen, 8));
+        assert!(!r.said.take()[0].contains("longer than the 10 s maximum green"));
+        // A plan with no phase of east's own: actuated is refused, and says why.
+        let only_north = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: n, to: e }],
+                walks: vec![],
+                rides: vec![],
+                arm: None,
+            }],
+        };
+        r.vm.edit(|j| j.set_plan_for_test(only_north.clone()));
+        assert!(!r.vm.set_actuated(e, true));
+        assert_eq!(r.said.take(), vec!["No phase of the plan is this street's own, so it cannot be actuated: give it a phase first."]);
+        assert!(r.vm.set_actuated(n, false));
+        assert!(r.said.take()[0].starts_with("Sample Avenue 2 (north) back on recall."));
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.set_actuated(n, true));
+        let t = said.take();
+        assert!(t[0].starts_with("Sample Avenue 2 (nord)\u{a0}: à la demande."), "{t:?}");
+        assert!(t[0].contains("300\u{a0}véhicules dans l’heure") || t[0].contains("300 véhicules dans l’heure"), "{t:?}");
+        assert!(t[0].contains("Son vert\u{a0}: donné "), "{t:?}");
+        assert!(!fr.set_actuation(n, Field::MinGreen, 4));
+        assert_eq!(said.take(), vec!["Cette valeur dépasse la borne provisoire indiquée."]);
+        fr.edit(|j| j.set_plan_for_test(only_north));
+        assert!(!fr.set_actuated(e, true));
+        assert_eq!(
+            said.take(),
+            vec!["Aucune phase du plan n’est propre à cette rue, elle ne peut donc pas être à la demande\u{a0}: donnez-lui d’abord une phase."]
+        );
+    }
+
+    #[test]
+    fn no_vehicles_an_hour_are_said_as_none_served_never_as_a_wait_of_0_s() {
+        use crate::junction::model::actuation::Field;
+        let r = rig(0);
+        let n = r.vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid);
+        assert!(r.vm.set_actuated(n, true));
+        r.said.take();
+        assert!(r.vm.set_actuation(n, Field::Vehicles, 0));
+        let t = r.said.take();
+        assert!(t[0].contains(": 0 vehicles in the hour; served 0, not served 0; no vehicle was served."), "{t:?}");
     }
 
     #[test]

@@ -13,6 +13,7 @@
 //! Every figure here is a placeholder (synthetic, like the catalogue's rules and rates): the walk, the clearance speed,
 //! the longest extension, the bound on the call rate and the waiting limit.
 
+use crate::junction::model::control;
 use crate::junction::model::signal::Plan;
 use crate::junction::model::{Arm, Refusal, SIGNAL, State, in_force};
 
@@ -28,7 +29,7 @@ pub const MAX_CALLS_PER_HOUR: u32 = 60;
 /// The calls an hour a crossing is given when it is put on call. Placeholder.
 pub const DEFAULT_CALLS_PER_HOUR: u32 = 12;
 /// The span the calls are spread over.
-pub const HOUR_S: u32 = 3_600;
+pub use crate::junction::model::control::HOUR_S;
 /// How long a pedestrian waits at a crossing with passive detection before leaving, if the walk has not started, in
 /// seconds; one figure for the whole junction. Placeholder.
 pub const WAIT_LIMIT_S: u32 = 30;
@@ -69,27 +70,12 @@ pub fn need_s(distance_mm: i32) -> u32 {
     WALK_S + clearance_s(distance_mm)
 }
 
-/// One step of SplitMix64: a small fixed generator, so the calls are the same on every machine and in every build.
-fn splitmix(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// The seconds into the hour at which the crossing of street `uid` is called, `rate` times an hour: the hour is cut
 /// into `rate` equal slots and each slot gets one call at a point the generator, seeded from the street and the rate,
 /// picks. In order, each second at most once. A rate past `MAX_CALLS_PER_HOUR` is read as that.
 pub fn arrivals(uid: u32, rate: u32) -> Vec<u32> {
     let rate = rate.min(MAX_CALLS_PER_HOUR);
-    let mut seed = (u64::from(uid) << 32) | u64::from(rate);
-    (0..rate)
-        .map(|k| {
-            let (lo, hi) = (k * HOUR_S / rate, (k + 1) * HOUR_S / rate);
-            lo + (splitmix(&mut seed) % u64::from(hi - lo)) as u32
-        })
-        .collect()
+    control::spread((u64::from(uid) << 32) | u64::from(rate), rate)
 }
 
 /// Whether some phase of `plan` walks the crossing of street `uid`.
@@ -208,11 +194,17 @@ fn on_call(s: &State) -> Vec<(&Arm, u32)> {
     arms.into_iter().filter_map(|a| rate_of(a).map(|r| (a, r))).collect()
 }
 
-/// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call. `distances` is each
-/// crossing's length by street uid (`read_model::crossing_distances`). A crossing no phase walks is a finding and is
-/// left out; one no phase can serve (`serve`) is a finding and its calls are not served.
+/// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call, with the vehicles of its
+/// actuated streets (`control::hour`). `distances` is each crossing's length by street uid
+/// (`read_model::crossing_distances`). A crossing no phase walks is a finding and is left out; one no phase can serve
+/// (`serve`) is a finding and its calls are not served.
 pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
-    let mut out = Summary::default();
+    control::hour(s, plan, distances).calls
+}
+
+/// The calls of the hour at the crossings of `s` on call, one `Asked` a crossing, with `out` given a row of totals for
+/// each and a finding for each no phase walks (left out).
+pub(crate) fn asked(s: &State, plan: &Plan, distances: &[(u32, i32)], out: &mut Summary) -> Vec<Asked> {
     let distance = |uid: u32| distances.iter().find(|(u, _)| *u == uid).map(|(_, d)| *d);
     let mut asked: Vec<Asked> = Vec::new();
     for (arm, rate) in on_call(s) {
@@ -225,14 +217,28 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
         let passive = detection_of(arm) == Detection::Passive;
         asked.push(Asked { arm: arm.uid, need_s: need, at_s: arrivals(arm.uid, rate), passive });
     }
-    for a in &asked {
-        let walking = || plan.phases.iter().filter(|p| p.walks.contains(&a.arm));
-        if !walking().any(|p| p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s) {
-            let most_s = walking().map(|p| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
-            out.findings.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
+    asked
+}
+
+/// A finding for each crossing that no phase walking it can serve by `rules`: a fixed phase needs its green lengthened
+/// by at most `MAX_EXTENSION_S` to fit the walk and clearance; an actuated phase holds its green for them.
+pub(crate) fn cannot_serve(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for a in asked {
+        let walking = || plan.phases.iter().zip(rules).filter(|(p, _)| p.walks.contains(&a.arm));
+        let fits = |p: &crate::junction::model::signal::Phase, rule: &control::Rule| {
+            matches!(rule, control::Rule::Actuated { .. }) || p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s
+        };
+        if !walking().any(|(p, rule)| fits(p, rule)) {
+            let most_s = walking().map(|(p, _)| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
+            out.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
         }
     }
-    let run = serve(plan, &asked);
+    out
+}
+
+/// `out`'s totals added up from what the run did to every call.
+pub(crate) fn tally(out: &mut Summary, asked: &[Asked], run: Run) {
     out.calls = run.calls;
     for t in &mut out.totals {
         for c in out.calls.iter().filter(|c| c.arm == t.arm) {
@@ -250,20 +256,19 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
         }
         t.walks_skipped = asked.iter().zip(&run.skipped).filter(|(a, _)| a.arm == t.arm).map(|(_, n)| n).sum();
     }
-    out
 }
 
 /// The calls made at one crossing: its street, what a call needs of the green (`need_s`), when each was made, and
 /// whether the crossing has passive detection (a pedestrian who leaves cancels their call).
-struct Asked {
-    arm: u32,
-    need_s: u32,
-    at_s: Vec<u32>,
-    passive: bool,
+pub(crate) struct Asked {
+    pub(crate) arm: u32,
+    pub(crate) need_s: u32,
+    pub(crate) at_s: Vec<u32>,
+    pub(crate) passive: bool,
 }
 
 /// What `serve` gives: every call, and the walks each crossing skipped (by its place in the `asked` it was given).
-struct Run {
+pub(crate) struct Run {
     calls: Vec<Call>,
     skipped: Vec<u32>,
 }
@@ -283,92 +288,186 @@ struct Run {
 /// `Run.skipped`, it lengthens no green. Whoever is still there is given the whole walk and clearance as above. A
 /// crossing no phase can serve keeps its calls not served: there is no walk to leave before.
 ///
-/// A phase takes at least a second in the run, and the clock counts in u64 (a settled timing is within its range,
-/// but the run holds any), so time moves on: every call that can be served is, within a cycle of being made, and the
-/// run stops a cycle at its longest (each phase extended by at most `MAX_EXTENSION_S`, `stop_at`) past the last call,
-/// whatever is still waiting then not served.
+/// The run is the controller's (`control::run`), with every phase fixed: a phase takes at least a second, the clock
+/// counts in u64, and the run stops a cycle at its longest (each phase extended by at most `MAX_EXTENSION_S`,
+/// `stop_at`) past the last call, whatever is still waiting then not served. The hour runs the calls with the vehicles
+/// through `control::hour`; this runs them alone on a fixed plan, as the tests pin them.
+#[cfg(test)]
 fn serve(plan: &Plan, asked: &[Asked]) -> Run {
     serve_turns(plan, asked, MAX_TURNS)
 }
 
 /// A bound on the phases `serve` runs, only a guard: the run stops a cycle at its longest past the last call of the hour
 /// (`stop_at`), and a phase lasts a second or more, so it takes at most about an hour and a cycle of one-second phases.
-const MAX_TURNS: usize = 100_000;
+pub(crate) const MAX_TURNS: usize = 100_000;
 
 /// When the run stops: a cycle at its longest past the `last` call. Each phase takes a second or more, and its green
 /// may be extended by at most `MAX_EXTENSION_S`, so a call that can be served is, at the latest, a cycle that long after
 /// it was made (one that misses an extended walk waits for the next): the bound is a guard, and cuts off no call.
+#[cfg(test)]
 fn stop_at(plan: &Plan, last: u64) -> u64 {
-    last + plan.phases.iter().map(|p| u64::from(p.length_s).max(1) + u64::from(MAX_EXTENSION_S)).sum::<u64>()
+    let rules = control::fixed(plan);
+    let mut walks = Walks::new(plan, &rules, &[]);
+    let demand: &mut dyn control::Demand = &mut walks;
+    control::stop_at(plan, &rules, last, &[demand])
 }
 
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
+#[cfg(test)]
 fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Run {
-    // Whether each phase (by its place in the plan) can serve each crossing: looked up once a turn, never searched.
-    let serving: Vec<Vec<bool>> = asked
-        .iter()
-        .map(|a| plan.phases.iter().map(|p| p.walks.contains(&a.arm) && p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s).collect())
-        .collect();
-    let mut calls: Vec<(usize, Call)> = asked
-        .iter()
-        .enumerate()
-        .flat_map(|(x, a)| {
-            let outcome = if serving[x].contains(&true) { Outcome::Served } else { Outcome::NotServed };
-            a.at_s.iter().map(move |&at_s| (x, Call { arm: a.arm, at_s, outcome, wait_s: 0, extended_s: 0 }))
-        })
-        .collect();
-    calls.sort_by_key(|(x, c)| (c.at_s, *x));
-    // The calls still waiting for their walk (places in `calls`), and whether each has missed one.
-    let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
-    let mut missed = vec![false; calls.len()];
-    let mut skipped = vec![0u32; asked.len()];
-    // The clock, in u64 so no timing can wrap it, and when to stop.
-    let length = |k: usize| u64::from(plan.phases[k].length_s);
-    let stop = stop_at(plan, calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0));
-    let (mut start, mut turn) = (0u64, 0usize);
-    while !waiting.is_empty() && !plan.phases.is_empty() && turn < turns && start <= stop {
-        let k = turn % plan.phases.len();
-        let phase = &plan.phases[k];
-        let serves = |x: usize| serving[x][k];
-        let (now, later): (Vec<usize>, Vec<usize>) = waiting.iter().partition(|&&i| u64::from(calls[i].1.at_s) <= start && serves(calls[i].0));
-        let mut extension = 0;
+    let rules = control::fixed(plan);
+    let mut walks = Walks::new(plan, &rules, asked);
+    control::run(plan, &rules, &mut [&mut walks], turns);
+    walks.finish()
+}
+
+/// The pedestrian calls as a demand on the controller: who is waiting at which crossing, which phases can serve each
+/// crossing, and what happened to every call so far.
+pub(crate) struct Walks<'a> {
+    asked: &'a [Asked],
+    /// Whether each phase (by its place in the plan) can serve each crossing: looked up once a turn, never searched. A
+    /// fixed phase can when it walks the crossing and its green lengthened by `MAX_EXTENSION_S` fits the walk and
+    /// clearance; an actuated phase holds its green for them, so it can whenever it walks the crossing.
+    serving: Vec<Vec<bool>>,
+    /// Every call with the crossing it is for (its place in `asked`), in the order they were made.
+    calls: Vec<(usize, Call)>,
+    /// The calls still waiting for their walk (places in `calls`), and whether each has missed one.
+    waiting: Vec<usize>,
+    missed: Vec<bool>,
+    /// The walks each crossing skipped because everyone waiting for them had left.
+    skipped: Vec<u32>,
+    /// The longest walk and clearance each phase can be asked to hold its green for.
+    longest: Vec<u32>,
+}
+
+impl<'a> Walks<'a> {
+    pub(crate) fn new(plan: &Plan, rules: &[control::Rule], asked: &'a [Asked]) -> Walks<'a> {
+        let serving: Vec<Vec<bool>> = asked
+            .iter()
+            .map(|a| {
+                plan.phases
+                    .iter()
+                    .zip(rules)
+                    .map(|(p, rule)| {
+                        p.walks.contains(&a.arm)
+                            && match rule {
+                                control::Rule::Fixed => p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s,
+                                control::Rule::Actuated { .. } => true,
+                            }
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut calls: Vec<(usize, Call)> = asked
+            .iter()
+            .enumerate()
+            .flat_map(|(x, a)| {
+                let outcome = if serving[x].contains(&true) { Outcome::Served } else { Outcome::NotServed };
+                a.at_s.iter().map(move |&at_s| (x, Call { arm: a.arm, at_s, outcome, wait_s: 0, extended_s: 0 }))
+            })
+            .collect();
+        calls.sort_by_key(|(x, c)| (c.at_s, *x));
+        let waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
+        let longest = (0..plan.phases.len()).map(|k| asked.iter().zip(&serving).filter(|(_, s)| s[k]).map(|(a, _)| a.need_s).max().unwrap_or(0)).collect();
+        let missed = vec![false; calls.len()];
+        Walks { asked, serving, calls, waiting, missed, skipped: vec![0; asked.len()], longest }
+    }
+
+    /// Whether phase `k` serves call `i`'s crossing.
+    fn serves(&self, k: usize, i: usize) -> bool {
+        self.serving[self.calls[i].0][k]
+    }
+
+    /// The calls waiting at `at` whose crossing phase `k` serves (places in `calls`).
+    fn present(&self, k: usize, at: u64) -> impl Iterator<Item = usize> + '_ {
+        self.waiting.iter().copied().filter(move |&i| u64::from(self.calls[i].1.at_s) <= at && self.serves(k, i))
+    }
+
+    /// Whether the pedestrian of call `i` has left by `at`: passive detection, waited past `WAIT_LIMIT_S`.
+    fn left(&self, i: usize, at: u64) -> bool {
+        let (x, c) = &self.calls[i];
+        self.asked[*x].passive && at - u64::from(c.at_s) > u64::from(WAIT_LIMIT_S)
+    }
+
+    /// Every call, what happened to it, and the walks each crossing skipped. A call still waiting is not served.
+    pub(crate) fn finish(mut self) -> Run {
+        for &i in &self.waiting {
+            self.calls[i].1.outcome = Outcome::NotServed;
+        }
+        Run { calls: self.calls.into_iter().map(|(_, c)| c).collect(), skipped: self.skipped }
+    }
+}
+
+impl control::Demand for Walks<'_> {
+    /// Someone still at the kerb (not left) waits for a walk the phase gives.
+    fn calls(&self, k: usize, at: u64) -> bool {
+        self.present(k, at).any(|i| !self.left(i, at))
+    }
+
+    /// The walk and clearance of everyone the phase's walk serves, never shortened.
+    fn hold(&self, k: usize, start: u64) -> u32 {
+        self.present(k, start).filter(|&i| !self.left(i, start)).map(|i| self.asked[self.calls[i].0].need_s).max().unwrap_or(0)
+    }
+
+    /// Serves the calls waiting when the phase started, cancels those whose pedestrian left, counts a walk nobody was
+    /// left for as skipped, and marks the calls made while it walked their crossing as having missed that walk.
+    fn ran(&mut self, turn: &control::Turn) {
+        let (k, start) = (turn.phase, turn.start);
+        let now: Vec<usize> = self.present(k, start).collect();
         // Which crossings this walk serves someone at, and which had someone leave before it.
-        let (mut walked, mut left) = (vec![false; asked.len()], vec![false; asked.len()]);
+        let (mut walked, mut left) = (vec![false; self.asked.len()], vec![false; self.asked.len()]);
         for &i in &now {
-            let x = calls[i].0;
-            let c = &mut calls[i].1;
-            let wait = start - u64::from(c.at_s);
-            if asked[x].passive && wait > u64::from(WAIT_LIMIT_S) {
+            let x = self.calls[i].0;
+            let wait = start - u64::from(self.calls[i].1.at_s);
+            if self.left(i, start) {
+                let c = &mut self.calls[i].1;
                 *c = Call { outcome: Outcome::Cancelled, wait_s: WAIT_LIMIT_S, extended_s: 0, ..*c };
                 left[x] = true;
                 continue;
             }
-            let short = asked[x].need_s.saturating_sub(phase.timing.green_s);
-            extension = extension.max(short);
+            let short = self.asked[x].need_s.saturating_sub(turn.base_s);
+            let missed = self.missed[i];
+            let c = &mut self.calls[i].1;
             c.wait_s = u32::try_from(wait).unwrap_or(u32::MAX);
             c.extended_s = short;
-            c.outcome = if missed[i] { Outcome::Delayed } else { Outcome::Served };
+            c.outcome = if missed { Outcome::Delayed } else { Outcome::Served };
             walked[x] = true;
         }
-        for (x, n) in skipped.iter_mut().enumerate() {
+        for (x, n) in self.skipped.iter_mut().enumerate() {
             *n += u32::from(left[x] && !walked[x]);
         }
-        let end = start + (length(k) + u64::from(extension)).max(1);
+        self.waiting.retain(|i| !now.contains(i));
         // A call made while this phase walks its crossing has missed that walk.
-        for &i in &later {
-            let at = u64::from(calls[i].1.at_s);
-            if serves(calls[i].0) && at > start && at < end {
-                missed[i] = true;
+        if !turn.skipped {
+            for w in 0..self.waiting.len() {
+                let i = self.waiting[w];
+                let at = u64::from(self.calls[i].1.at_s);
+                if self.serves(k, i) && at > start && at < turn.end {
+                    self.missed[i] = true;
+                }
             }
         }
-        waiting = later;
-        start = end;
-        turn += 1;
     }
-    for i in waiting {
-        calls[i].1.outcome = Outcome::NotServed;
+
+    fn pending(&self) -> bool {
+        !self.waiting.is_empty()
     }
-    Run { calls: calls.into_iter().map(|(_, c)| c).collect(), skipped }
+
+    fn next_after(&self, at: u64) -> Option<u64> {
+        self.waiting.iter().map(|&i| u64::from(self.calls[i].1.at_s)).filter(|&t| t > at).min()
+    }
+
+    fn last(&self) -> u64 {
+        self.calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0)
+    }
+
+    fn most_extension(&self) -> u32 {
+        MAX_EXTENSION_S
+    }
+
+    fn longest_hold(&self, k: usize) -> u32 {
+        self.longest[k]
+    }
 }
 
 #[cfg(test)]
