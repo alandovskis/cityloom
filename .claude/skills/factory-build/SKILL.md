@@ -39,6 +39,8 @@ It returns `{ head, commits, version, checks, notes }`, or `{ dispute }`: a test
 python3 "$F/gate.py" green --repo <wt> --base "$BASE" --red <red sha>
 ```
 
+`<red sha>` is the red record's sha while it is in `<wt>`'s history. After a rebase (the `merge` agent brings the PR up to date with `main`) the red commit has a new sha: it is then the last commit of the branch carrying the trailer, `git -C <wt> log -1 --format=%H --grep '^Factory-Red: CLM-<n>$' "$BASE"..HEAD`; say so in the green record. No such commit means the history lost the red commit: hand back.
+
 - `PASS`: push the branch as the App (README, **Acting on GitHub as the App**): `git -C <wt> push -u origin HEAD` with the App's credential helper. The red commit goes up with the green ones, so the branch shows the tests failing and then passing. Then post `**Factory · green** \`<HEAD sha>\``, the gate's report and the implementer's `notes`. The issue goes on to `factory-review`.
 - `FAIL`: back to step 3 with the gate's problems, quoted; at most `rounds.green` rounds in all, then hand back with the last report. A problem that says a test or a guarded file changed since the red commit is never fixed by the implementer changing it back by hand: send it back, and if it comes again, hand back.
 - `REFUSED`: as for the red gate. A red commit not in the history means the history was rewritten: hand back.

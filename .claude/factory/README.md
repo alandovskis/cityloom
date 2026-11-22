@@ -49,7 +49,7 @@ Read in this order; the first that holds says where the issue is:
 3. A factory PR, open: waiting for approval, or merge (factory, **Approved PRs**).
 4. A `green` record at the worktree's HEAD, and the latest `review` record at that HEAD is `pass`: evidence and PR (factory-evidence).
 5. A `green` record at the worktree's HEAD: review (factory-review).
-6. A `red` record whose sha is in the worktree's history: build, from the implementer (factory-build, step 4).
+6. A `red` record whose sha is in the worktree's history, or, after a rebase, a commit carrying the trailer `Factory-Red: CLM-<n>`: build, from the implementer (factory-build, step 3).
 7. A worktree and a `plan` record: build, from the test-writer (factory-build). Commits after the base but no `red` record: the red gate is run on them first.
 8. A `plan` record: make the worktree, then build.
 9. A `triage: feasible` record: plan (factory-plan).
