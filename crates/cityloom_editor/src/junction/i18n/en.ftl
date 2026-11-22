@@ -600,7 +600,7 @@ jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
 jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.
 
-## Pedestrian calls (src/junction/model/calls.rs, #60): a crossing on call is walked only when someone pushes the button
+## Pedestrian calls (src/junction/model/calls.rs, #60): a crossing on call is walked only when a pedestrian calls it
 jn-refusal-call-not-walked = No phase of the plan walks this crossing, so it cannot be on call: walk it in a phase first.
 jn-refusal-call-already = The crossing is set that way already.
 jn-refusal-not-on-call = Only a crossing on call has calls an hour.
@@ -618,7 +618,7 @@ jn-rev-call-rate =
        *[other] { $rate } calls an hour
     }
 jn-calls-heading = Pedestrian calls
-jn-calls-intro = A crossing on call is walked only when someone pushes the button. One on recall is walked every time its phases run, and calls cannot change its service.
+jn-calls-intro = A crossing on call is walked only when a pedestrian calls it, by a push button or passive detection. One on recall is walked every time its phases run, and calls cannot change its service.
 jn-calls-bounds = Placeholder figures: walk { $walk } s, then clearance at { $speed } m/s, rounded up to the second; a green is extended by at most { $max } s; with passive detection a pedestrian leaves after waiting { $limit } s; the calls are spread over one hour.
 jn-calls-group = Crossing of { $street }
 jn-calls-on-call = On call

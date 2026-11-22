@@ -440,6 +440,8 @@ fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_pla
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).expect("a section for the pedestrian calls")..];
     assert!(calls.contains("Pedestrian calls") && calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
+    // The intro holds for either detection: nobody need push a button.
+    assert!(calls.contains("A crossing on call is walked only when a pedestrian calls it, by a push button or passive detection."), "{calls}");
     assert!(calls.contains("at most 15 s"), "{calls}");
     let crossings = s.view_now().signal.as_ref().unwrap().calls.crossings.clone();
     assert_eq!(crossings.len(), 4, "every crossing is listed");
@@ -703,6 +705,7 @@ fn the_pedestrian_calls_speak_french() {
     let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
     for words in [
         "Appels piétons",
+        "Un passage sur appel n’est ouvert que lorsqu’un piéton l’appelle, par bouton-poussoir ou détection passive.",
         "Valeurs provisoires",
         "1,0 m/s",
         "avec la détection passive, un piéton part après 30 s d’attente",

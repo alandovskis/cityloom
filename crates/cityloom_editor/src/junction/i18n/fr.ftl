@@ -600,7 +600,7 @@ jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
 
-## Appels piétons (src/junction/model/calls.rs, #60) : un passage sur appel n’est ouvert que si un piéton appuie sur le bouton
+## Appels piétons (src/junction/model/calls.rs, #60) : un passage sur appel n’est ouvert que si un piéton l’appelle
 jn-refusal-call-not-walked = Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel : ouvrez-le d’abord dans une phase.
 jn-refusal-call-already = Le passage est déjà réglé ainsi.
 jn-refusal-not-on-call = Seul un passage sur appel a un nombre d’appels par heure.
@@ -618,7 +618,7 @@ jn-rev-call-rate =
        *[other] { $rate } appels par heure
     }
 jn-calls-heading = Appels piétons
-jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton appuie sur le bouton. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
+jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton l’appelle, par bouton-poussoir ou détection passive. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
 jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; avec la détection passive, un piéton part après { $limit } s d’attente; les appels sont répartis sur une heure.
 jn-calls-group = Passage de { $street }
 jn-calls-on-call = Sur appel

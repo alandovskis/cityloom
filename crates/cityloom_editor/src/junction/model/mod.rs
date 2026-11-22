@@ -1663,7 +1663,7 @@ impl Junction {
         })
     }
 
-    /// Puts the crossing of arm `uid` on call (`on`), walked only when someone pushes the button, at
+    /// Puts the crossing of arm `uid` on call (`on`), walked only when a pedestrian calls it (`set_detection`), at
     /// `calls::DEFAULT_CALLS_PER_HOUR` calls an hour until a rate is set; or back on recall, walked every time its
     /// phases run. On call needs a signal and a phase of its plan that walks the crossing (`calls::refusal`); recall is
     /// always allowed, so a crossing an edit has left unwalked can be taken off call. Refused when it is that already.
