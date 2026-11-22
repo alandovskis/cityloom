@@ -1,0 +1,79 @@
+$ python3 -I 08-seven.py roads.opl /Users/alex/src/cityloom/main/web/data/metro tiles-head   # each such signal: its target, the node it reaches before and after, its way
+signal 9994830603: target 9994840111; in before tiles: False, in after tiles: False
+   before: reaches [8929187841, 9994830612] -> ('signs', True, 3)
+   after: reaches [8929187841, 9994830612] -> ('signs', True, 3)
+   signal way: {'highway': 'service', 'oneway': 'yes'} len 3 idx 1 target idx 2 first 8929187840 last 9994840111
+signal 5589008015: target 522276554; in before tiles: False, in after tiles: False
+   before: reaches [4667882257, 4667882258] -> ('signs', True, 3)
+   after: reaches [4667882257, 4667882258] -> ('signs', True, 3)
+   signal way: {'highway': 'secondary', 'name': 'Chemin de Chambly', 'oneway': 'yes'} len 24 idx 22 target idx 23 first 522276826 last 522276554
+signal 11649397253: target 1764298494; in before tiles: False, in after tiles: False
+   before: reaches [32661535] -> ('signs', True, 3)
+   after: reaches [32661535] -> ('signs', True, 3)
+   signal way: {'highway': 'secondary_link', 'lanes': '1', 'oneway': 'yes'} len 5 idx 3 target idx 4 first 10863546327 last 1764298494
+signal 11649397254: target 1764298494; in before tiles: False, in after tiles: False
+   before: reaches [32661535] -> ('signs', True, 3)
+   after: reaches [32661535] -> ('signs', True, 3)
+   signal way: {'highway': 'secondary_link', 'lanes': '1', 'oneway': 'yes'} len 7 idx 5 target idx 6 first 32672204 last 1764298494
+signal 10998451695: target 10998451695; in before tiles: False, in after tiles: False
+   before: reaches [10998451696] -> ('signs', True, 3)
+   after: reaches [10998451696] -> ('signs', True, 3)
+   signal way: {'highway': 'tertiary', 'lanes': '2', 'name': 'Rue Centrale'} len 3 idx 2 target idx 2 first 10998451682 last 10998451695
+   signal way: {'highway': 'tertiary', 'lanes': '2', 'name': 'Rue Centrale'} len 3 idx 0 target idx 0 first 10998451695 last 10998451696
+signal 11030876896: target 8181090046; in before tiles: True, in after tiles: True
+   before: reaches [8181090046] -> ('signs', True, 3)
+   after: reaches [8181090046] -> ('signs', True, 3)
+   signal way: {'highway': 'service', 'lanes': '1', 'name': 'BUS', 'oneway': 'yes'} len 11 idx 9 target idx 10 first 8181090078 last 8181090046
+signal 9767349276: target 10927072417; in before tiles: False, in after tiles: False
+   before: reaches [5098156688] -> ('signs', True, 3)
+   after: reaches [5098156688] -> ('signs', True, 3)
+   signal way: {'highway': 'trunk_link', 'lanes': '2', 'oneway': 'yes'} len 8 idx 6 target idx 7 first 11134116683 last 10927072417
+signal 12053666641: target 12053666619; in before tiles: False, in after tiles: False
+   before: reaches [571438239, 12057987107] -> ('signs', True, 3)
+   after: reaches [571438239, 12057987107] -> ('signs', True, 3)
+   signal way: {'highway': 'secondary_link', 'lanes': '1', 'oneway': 'yes'} len 3 idx 1 target idx 2 first 12053666642 last 12053666619
+signal 12982440248: target 12982440247; in before tiles: False, in after tiles: False
+   before: reaches [5550223112, 12982437232, 12982437238] -> ('signs', True, 4)
+   after: reaches [5550223112, 12982437232, 12982437238] -> ('signs', True, 4)
+   signal way: {'highway': 'service', 'lanes': '2'} len 6 idx 4 target idx 5 first 12982440244 last 12982440247
+
+$ python3 -I 09-at.py roads.opl <target nodes>   # the road ways at each target the tiles have no node for
+node 9994840111: signal tags None
+   ['highway=service', 'oneway=yes'] pos 2/2 ends 8929187840..9994840111
+   ['highway=service', 'oneway=yes'] pos 0/1 ends 9994840111..8929187841
+node 11134143778: signal tags None
+   ['highway=trunk_link', 'oneway=yes', 'lanes=2', 'turn:lanes=through|through;right'] pos 1/2 ends 10927072417..5098156688
+node 522276554: signal tags None
+   ['highway=secondary', 'name=Chemin de Chambly', 'oneway=yes'] pos 23/23 ends 522276826..522276554
+   ['highway=secondary', 'name=Chemin de Chambly', 'oneway=yes', 'lanes=1'] pos 0/11 ends 522276554..522276451
+   ['highway=cycleway', 'name=longueuil ouest-est', 'oneway=no'] pos 1/4 ends 5589008017..5589008016
+node 1764298494: signal tags None
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 4/4 ends 10863546327..1764298494
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 0/1 ends 1764298494..32661535
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 0/4 ends 1764298494..32672036
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 6/6 ends 32672204..1764298494
+node 10927072417: signal tags None
+   ['highway=trunk_link', 'oneway=yes', 'lanes=2', 'turn:lanes=through|through;right'] pos 7/7 ends 11134116683..10927072417
+   ['highway=trunk_link', 'oneway=yes', 'lanes=2', 'turn:lanes=through|through;right'] pos 0/2 ends 10927072417..5098156688
+node 12053666619: signal tags None
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 2/2 ends 12053666642..12053666619
+   ['highway=secondary_link', 'oneway=yes', 'lanes=1'] pos 0/7 ends 12053666619..4463269465
+node 12982440247: signal tags None
+   ['highway=service', 'lanes=2'] pos 5/5 ends 12982440244..12982440247
+   ['highway=service', 'oneway=yes', 'lanes=1'] pos 2/2 ends 445821227..12982440247
+   ['highway=service', 'oneway=yes', 'lanes=1'] pos 0/2 ends 12982440247..5550223112
+node 10998451695: signal tags {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'}
+   ['highway=tertiary', 'name=Rue Centrale', 'lanes=2'] pos 2/2 ends 10998451682..10998451695
+   ['highway=tertiary', 'name=Rue Centrale', 'lanes=2'] pos 0/2 ends 10998451695..10998451696
+
+$ python3 -I 10-dist.py roads.opl <split>:<node ahead>   # length along one way
+split 9994840111 -> junction node 8929187841: 6.5 m along one way
+split 522276554 -> junction node 4667882258: 86.1 m along one way
+split 10927072417 -> junction node 5098156688: 10.7 m along one way
+split 12053666619 -> junction node 4463269465: 55.3 m along one way
+split 10998451695 -> junction node 10998451696: 33.0 m along one way
+
+$ grep '^n11134143778 ' roads.opl   # the node between split 10927072417 and junction 5098156688
+n11134143778 v6 dV c0 t2025-03-21T20:55:42Z i0 u Tbutton_operated=no,crossing=traffic_signals,crossing:markings=lines,crossing:signals=yes,highway=crossing,tactile_paving=no,traffic_signals:sound=no,traffic_signals:vibration=no x-73.585234 y45.4822722
+$ grep '^n9994840111 ' roads.opl   # split 9994840111 itself
+n9994840111 v2 dV c0 t2026-06-04T18:13:55Z i0 u Tcrossing=traffic_signals,crossing:markings=zebra,crossing:signals=yes,highway=crossing x-73.8169411 y45.6295247

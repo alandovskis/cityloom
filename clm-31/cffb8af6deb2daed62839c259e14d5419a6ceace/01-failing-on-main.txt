@@ -1,0 +1,34 @@
+$ git rev-parse HEAD
+cffb8af6deb2daed62839c259e14d5419a6ceace
+$ git checkout origin/main -- crates/citymodel_builder/src/importer/mod.rs   # main's importer: no carry pass
+$ sed ... merge.rs   # fold_nodes takes the other node's control only when it has none, as on main
+ crates/citymodel_builder/src/importer/merge.rs |   2 +-
+ crates/citymodel_builder/src/importer/mod.rs   | 112 +------------------------
+ 2 files changed, 2 insertions(+), 112 deletions(-)
+$ cargo test -p citymodel_builder --lib importer::merge::tests::a_junction_is_signalled
+thread 'importer::merge::tests::a_junction_is_signalled_when_the_node_merged_into_it_was' (49131439) panicked at crates/citymodel_builder/src/importer/merge.rs:497:9:
+assertion `left == right` failed
+  left: Signs
+ right: Signals
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 100 filtered out; finished in 0.00s
+
+$ cargo test -p citymodel_builder --test importer   # failures listed by name, then the totals
+  left: Signs
+ right: Signals
+  left: Signs
+ right: Signals
+  left: Signs
+ right: Signals
+  left: Signs
+ right: Signals
+  left: Signs
+ right: Signals
+  left: Signs
+ right: Signals
+    import::signals_are_carried_through_a_second_split_to_the_junction
+    import::signals_are_carried_through_a_second_split_whose_own_signals_face_the_other_way
+    import::signals_are_carried_through_a_second_split_whose_signals_stay_on_it
+    import::signals_are_not_carried_past_a_second_split_that_other_signals_face
+    import::signals_facing_west_on_the_second_way_run_the_junction_past_the_split
+    import::signals_tagged_on_the_approach_before_a_split_of_the_way_run_the_junction_ahead
+test result: FAILED. 65 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.63s

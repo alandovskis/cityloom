@@ -1,0 +1,140 @@
+$ git rev-parse HEAD
+cffb8af6deb2daed62839c259e14d5419a6ceace
+$ cargo run --release -p citymodel_builder -- tiles /Users/alex/src/cityloom/main/data/quebec-latest.osm.pbf tiles-work --out tiles-head   # the steps `just prepare` runs
+PASS roads metro area 4s
+PASS roads highways 0s
+PASS roads designated tracks 0s
+PASS roads merge 0s
+PASS network whole area 218,913 roads, 407,468 junctions 40s
+PASS tiles 1,718 tiles 560.0 MB 2s
+PASS tiles index 0s
+Steps: 7 passed, 7 total
+Time:  48s
+$ cmp tiles-work/roads.osm.pbf /Users/alex/src/cityloom/main/data/metro-work/roads.osm.pbf   # the roads the current tiles were made from
+identical
+$ osmium cat tiles-work/roads.osm.pbf -f opl -o roads.opl
+(written)
+$ python3 -I 05-measure.py roads.opl /Users/alex/src/cityloom/main/web/data/metro tiles-head   # before: main's importer (version 11); after: the head (version 12)
+
+15110 highway=traffic_signals nodes; 15090 with a target (1913 of them on cycleways, paths or footways)
+
+A signal reaches its target node, or, where the tiles have no node there, the first node of the tiles ahead of it.
+
+== BEFORE ==
+  signalled nodes: 4574, of them junctions (junction: true): 4106
+  nodes a signal reaches that are not signalled: 942 (852 made of several OSM nodes)
+  of them junctions (junction: true): 675 (648 made of several OSM nodes)
+== AFTER ==
+  signalled nodes: 5262, of them junctions (junction: true): 4707
+  nodes a signal reaches that are not signalled: 209 (87 made of several OSM nodes)
+  of them junctions (junction: true): 31 (8 made of several OSM nodes)
+
+== The issue's examples: each signal's target node, before and after ==
+  Avenue Vincent-D'Indy x Boulevard Edouard-Montpetit (divided road): signal 31700054 -> before: signs (junction: true, OSM nodes [31700055, 3885464666])
+  Avenue Vincent-D'Indy x Boulevard Edouard-Montpetit (divided road): signal 31700054 -> after: signals (junction: true, OSM nodes [31700055, 3885464666])
+  Avenue Maplewood (signals before a cycleway crossing): signal 213649922 -> before: signals (junction: true, OSM nodes [29795235])
+  Avenue Maplewood (signals before a cycleway crossing): signal 213649922 -> after: signals (junction: true, OSM nodes [29795235])
+  unnamed tertiary_link (signals before a split of the way): signal 188871488 -> before: signals (junction: true, OSM nodes [8822762873, 8822762883])
+  unnamed tertiary_link (signals before a split of the way): signal 188871488 -> after: signals (junction: true, OSM nodes [8822762873, 8822762883])
+
+== AFTER: each junction (junction: true) a signal reaches that is not signalled, with the reason ==
+  OSM nodes [386921170, 11138979286]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 539236857 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'tertiary_link', 'oneway': 'yes'}
+      signal 11138979501 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'tertiary_link', 'oneway': 'yes'}
+      signal 6715772689 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'trunk_link', 'oneway': 'yes'}
+  OSM nodes [8929187841, 9994830612]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 9994830603 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'service', 'oneway': 'yes', 'access': 'customers', 'bus': 'yes'}
+  OSM nodes [4667882257, 4667882258]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 5589008015 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary', 'name': 'Chemin de Chambly', 'oneway': 'yes'}
+  OSM nodes [272907278]: now signs, 1 road(s); 1 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 13370070212 {'highway': 'traffic_signals', 'traffic_signals': 'traffic_lights', 'traffic_signals:direction': 'backward'} on way {'highway': 'service', 'oneway': 'no', 'access': 'private'}
+  OSM nodes [32661535]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 11649397253 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary_link', 'oneway': 'yes'}
+      signal 11649397254 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary_link', 'oneway': 'yes'}
+  OSM nodes [606287749]: now signs, 1 road(s); 1 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 13370070211 {'highway': 'traffic_signals', 'traffic_signals': 'traffic_lights', 'traffic_signals:direction': 'forward'} on way {'highway': 'service', 'oneway': 'no', 'access': 'private'}
+  OSM nodes [12335873400]: now signs, 1 road(s); 1 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 10201893888 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'service', 'oneway': 'no', 'access': 'customers'}
+  OSM nodes [10998451696]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 10998451695 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'tertiary', 'name': 'Rue Centrale'}
+  OSM nodes [6511942840]: now signs, 1 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 6736117793 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway'}
+  OSM nodes [501856141]: now signs, 2 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 7043642446 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Chemin de Touraine'}
+  OSM nodes [8181090046]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 11030876896 {'direction': 'forward', 'highway': 'traffic_signals', 'traffic_signals': 'signal'} on way {'highway': 'service', 'name': 'BUS', 'oneway': 'yes', 'access': 'permit', 'bus': 'designated', 'psv': 'destination'}
+  OSM nodes [534459483]: now signs, 4 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 8346301607 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Boulevard N.-P.-Lapierre'}
+  OSM nodes [6366003259]: now signs, 1 road(s); 1 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 8610934363 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'motorway_link', 'oneway': 'yes'}
+  OSM nodes [6693648795, 6753618569, 8206062548]: now signs, 2 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 10216166012 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Boulevard Lapinière'}
+  OSM nodes [581291602]: now signs, 3 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 8769910137 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Avenue des Bois'}
+  OSM nodes [3139215505]: now signs, 2 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 8769910172 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue Principale'}
+  OSM nodes [4170277500, 11401892999]: now signs, 3 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 14316229386 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Rue Rachel Ouest'}
+      signal 14316229387 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue Rachel Est'}
+  OSM nodes [209046748, 209046751]: now signs, 7 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 14316229399 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Rue Rachel Est'}
+  OSM nodes [2148352596]: now signs, 2 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 9073732436 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue Rachel Est'}
+  OSM nodes [604130705]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 5422112389 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'tertiary_link', 'oneway': 'yes'}
+  OSM nodes [5225458572]: now signs, 2 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 9687665782 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Boulevard de Pierrefonds'}
+  OSM nodes [5580840652]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 9837407061 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary_link', 'oneway': 'yes'}
+  OSM nodes [8688048368]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 8688048365 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'tertiary_link', 'oneway': 'yes'}
+  OSM nodes [12718930886]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 13280404808 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'service', 'oneway': 'yes', 'access': 'private'}
+  OSM nodes [480467417]: now signs, 4 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 5588949803 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Route verte 1', 'oneway': 'no'}
+      signal 5588956894 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Route verte 1', 'oneway': 'no'}
+  OSM nodes [554034527]: now signs, 3 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 3430609661 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'backward'} on way {'highway': 'cycleway', 'name': 'Boulevard de la Marine'}
+  OSM nodes [213883185]: now signs, 4 road(s); reached only by signals on cycleways, paths or footways, ways the importer keeps out of osm2streets
+      signal 12088264990 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue de Bellechasse', 'oneway': 'yes'}
+      signal 11422800611 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue de Bellechasse', 'oneway': 'yes'}
+      signal 12088264969 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue de Bellechasse', 'oneway': 'yes'}
+      signal 12088253815 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue de Bellechasse', 'oneway': 'yes'}
+      signal 12088253798 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'cycleway', 'name': 'Rue de Bellechasse', 'oneway': 'yes'}
+  OSM nodes [5098156688]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 9767349276 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'trunk_link', 'oneway': 'yes'}
+  OSM nodes [623676270]: now signs, 2 road(s); 2 road(s) of the network meet there: the editor opens a junction only where 3 to 5 do
+      signal 1123400880 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary_link', 'oneway': 'yes'}
+  OSM nodes [571438239, 12057987107]: now signs, 3 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 12053666641 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'secondary_link', 'oneway': 'yes'}
+  OSM nodes [5550223112, 12982437232, 12982437238]: now signs, 4 road(s); reached by a road's signals that osm2streets did not place there (see their tags)
+      signal 12982440248 {'highway': 'traffic_signals', 'traffic_signals': 'signal', 'traffic_signals:direction': 'forward'} on way {'highway': 'service', 'access': 'customers'}
+  totals:
+    178  not a junction (junction: false): the editor uses no control there
+     31  a junction (junction: true)
+
+== Nodes signalled BEFORE that are not signalled AFTER ==
+   4439  still signalled
+     60  gone: no node of the network now; before, a junction (junction: true)
+     59  not a junction (junction: false) before, not signalled now
+     16  gone: no node of the network now; before, not a junction (junction: false)
+      0  junctions (junction: true) not signalled now
+
+== The nodes signalled BEFORE that are no node of the network now: where their signals are now ==
+  (osm2streets calls two two-way roads meeting a junction too, so junction: true includes splits of a way)
+     76  2 road(s) of the network met there before
+  the signals that targeted them, by the node they reach now:
+     34  signals (junction: true, 4 roads)
+     21  signals (junction: true, 3 roads)
+      9  signals (junction: true, 5 roads)
+      8  signals (junction: true, 2 roads)
+      6  no node of the tiles ahead
+      3  signals (junction: true, 8 roads)
+      2  signs (junction: true, 2 roads)
+      2  signals (junction: false, 2 roads)
+      2  signals (junction: true, 6 roads)
+      1  signs (junction: true, 3 roads)
+      1  signs (junction: true, 7 roads)
+      1  signs (junction: true, 4 roads)
+      1  signals (junction: false, 3 roads)
+      1  signals (junction: false, 4 roads)
