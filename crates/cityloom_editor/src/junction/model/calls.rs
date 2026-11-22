@@ -651,9 +651,10 @@ mod tests {
         assert_eq!(serve(&plan, &asked).calls, vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
     }
 
-    /// How long a run of a hostile document may take and still count as "at once": far past a linear pass (0.16 s for
-    /// 100,000 stored phases, 1.16 s beside the whole suite), far short of a quadratic one. A limit near the linear time
-    /// failed on a busy machine (CLM-22).
+    /// How long a run of a hostile document may take and still count as "at once". Measured on 100,000 stored phases:
+    /// the linear read took 0.16 s alone and 1.16 s beside the whole suite, and a quadratic pass planted in
+    /// `signal::surviving` took 16.4 s. A limit near the linear time failed on a busy machine (CLM-22); one at or past
+    /// the quadratic time catches nothing, so measure both again before raising it.
     const AT_ONCE: std::time::Duration = std::time::Duration::from_secs(10);
 
     /// A phase of street `uid` that takes no time at all (a document's timing is not clamped when it is read).
