@@ -2567,37 +2567,22 @@ fn priority_section(w: Watch) -> impl IntoView {
     };
     let totals_table = move || {
         has_totals.get().then(|| {
-            view! {
-                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
-                <div class="calls-table" role="region" tabindex="0" aria-labelledby="transit-totals-caption">
-                    <table class="nt" id="transit-totals">
-                        <caption id="transit-totals-caption">{words(w, "jn-transit-totals-caption")}</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">{words(w, "jn-transit-col-street")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-buses")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-on-arrival")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-early-green")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-extended")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-delayed")}</th>
-                                <th scope="col">{words(w, "jn-transit-col-moved")}</th>
-                            </tr>
-                        </thead>
-                        <tbody><For each=totals key=|t| *t children=total_row/></tbody>
-                    </table>
-                </div>
-            }
+            let heads = &[
+                "jn-transit-col-street",
+                "jn-transit-col-buses",
+                "jn-transit-col-on-arrival",
+                "jn-transit-col-early-green",
+                "jn-transit-col-extended",
+                "jn-transit-col-delayed",
+                "jn-transit-col-moved",
+            ];
+            let body = view! { <For each=totals key=|t| *t children=total_row/> };
+            hour_table(w, Table { section: "transit", part: "totals", named: true, caption: "jn-transit-totals-caption", heads }, body)
         })
     };
     let findings = move || {
         let found = transit.with(|t| t.findings.clone());
-        (!found.is_empty()).then(|| {
-            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
-            view! {
-                <h4 class="phase-moves-h" id="transit-findings-h">{words(w, "jn-calls-findings")}</h4>
-                <ul class="calls-findings" id="transit-findings" aria-labelledby="transit-findings-h">{items}</ul>
-            }
-        })
+        (!found.is_empty()).then(|| findings_list(w, "transit", found))
     };
     // Every bus, keyed by the bus itself: a row is made again only when what happened to it changes.
     let n_rows = Memo::new(move |_| transit.with(|t| t.rows.len()));
@@ -2618,20 +2603,17 @@ fn priority_section(w: Watch) -> impl IntoView {
             view! {
                 <details class="jn-fold" id="transit-rows">
                     <summary>{move || tr(w, "jn-transit-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
-                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="transit-rows-caption">
-                        <table class="nt">
-                            <caption id="transit-rows-caption">{words(w, "jn-transit-rows-caption")}</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">{words(w, "jn-transit-col-bus")}</th>
-                                    <th scope="col">{words(w, "jn-transit-col-arrived")}</th>
-                                    <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
-                                    <th scope="col">{words(w, "jn-transit-col-wait")}</th>
-                                </tr>
-                            </thead>
-                            <tbody><For each=rows key=|r| r.bus children=bus_row/></tbody>
-                        </table>
-                    </div>
+                    {hour_table(
+                        w,
+                        Table {
+                            section: "transit",
+                            part: "rows",
+                            named: false,
+                            caption: "jn-transit-rows-caption",
+                            heads: &["jn-transit-col-bus", "jn-transit-col-arrived", "jn-calls-col-outcome", "jn-transit-col-wait"],
+                        },
+                        view! { <For each=rows key=|r| r.bus children=bus_row/> },
+                    )}
                 </details>
             }
         })
