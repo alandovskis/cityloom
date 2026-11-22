@@ -275,11 +275,11 @@ pub(super) fn settle(s: &mut State) {
     }
     // The ids kept, never more than `MAX_PLANS - 1`: a document holding a great many plans is settled in a time that
     // grows with their number alone.
-    let mut kept: Vec<u32> = Vec::with_capacity(MAX_PLANS - 1);
+    let mut kept_ids: Vec<u32> = Vec::with_capacity(MAX_PLANS - 1);
     s.plans.retain(|p| {
-        let keep = kept.len() < MAX_PLANS - 1 && p.id != DEFAULT_PLAN && !kept.contains(&p.id);
+        let keep = kept_ids.len() < MAX_PLANS - 1 && p.id != DEFAULT_PLAN && !kept_ids.contains(&p.id);
         if keep {
-            kept.push(p.id);
+            kept_ids.push(p.id);
         }
         keep
     });
@@ -896,11 +896,9 @@ mod tests {
         let held = Settings { uid, timing, calls, detection, actuation, cyclists, transit_priority, preemption };
         assert_eq!(Settings::of(&a), held);
         let mut b = j.current().arms[1].clone();
-        let street_before = Arm { uid: b.uid, ..a.clone() };
         held.put(&mut b);
-        assert_eq!(Settings::of(&b), Settings { uid: b.uid, ..held }, "every setting put");
-        assert_ne!(b, street_before, "and nothing of the street's own");
-        assert_eq!((b.bearing, b.lanes.clone()), (j.current().arms[1].bearing, j.current().arms[1].lanes.clone()));
+        let expected = Arm { timing, calls, detection, actuation, cyclists, transit_priority, preemption, ..j.current().arms[1].clone() };
+        assert_eq!(b, expected, "every setting put, and nothing of the street's own");
     }
 
     #[test]
