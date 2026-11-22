@@ -643,6 +643,7 @@ mod tests {
         assert!(j.add_period(DayType::Weekday, 22 * 60, 1));
         assert!(j.set_control(PRIORITY));
         assert!(j.current().plans.is_empty() && j.current().schedule.is_empty(), "they go with the signal's timing");
+        assert_eq!(j.revisions().last().map(|r| r.key), Some("jn-rev-control-timing"), "and the change says the timing went");
         assert_eq!(j.viewing(), DEFAULT_PLAN);
     }
 

@@ -2362,13 +2362,15 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        // An actuated street's settings, a bike movement's detection, a street's transit priority and its pre-emption are
-        // signal timing too, and go with it.
+        // An actuated street's settings, a bike movement's detection, a street's transit priority, its pre-emption and the
+        // time-of-day plans are signal timing too, and go with it.
         let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.transit_priority.is_some() && b.transit_priority.is_none())
-            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.preemption.is_some() && b.preemption.is_none());
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.preemption.is_some() && b.preemption.is_none())
+            // Time-of-day plans and their schedule are the signal's timing too (CLM-16).
+            || (!self.current().plans.is_empty() || !self.current().schedule.is_empty()) && after.plans.is_empty() && after.schedule.is_empty();
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
