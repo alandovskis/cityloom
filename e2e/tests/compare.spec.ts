@@ -55,6 +55,24 @@ const scenarioId = (page: Page) => new URL(page.url()).searchParams.get("b")!;
 const noSidewaysScroll = (page: Page, width: number) =>
   page.evaluate(() => document.documentElement.scrollWidth).then((w) => expect(w).toBeLessThanOrEqual(width));
 
+/** Both columns draw the same picture of each kind: the drawing itself, without the empty comments the renderer leaves
+ *  as placeholders. */
+const drawingsMatch = async (page: Page, kinds: string[]) => {
+  for (const kind of kinds) {
+    const figures = page.locator(`figure.${kind}`);
+    await expect
+      .poll(
+        () =>
+          figures.evaluateAll((all) => {
+            const [a, b] = all.map((f) => f.querySelector("svg")!.outerHTML.replaceAll("<!---->", ""));
+            return a === b;
+          }),
+        { message: kind },
+      )
+      .toBe(true);
+  }
+};
+
 test.describe("comparing a street's designs", () => {
   test("the baseline and a scenario are drawn side by side and what differs in B is said", async ({ page }) => {
     await openStreet(page);
@@ -104,20 +122,7 @@ test.describe("comparing a street's designs", () => {
     await expect(page.locator("#compare-summary")).toHaveText(/Wider bike lane and Wider bike lane are the same\./);
     await expect(page.locator("#compare-summary h3")).toHaveCount(0);
     // both columns now draw the one design: the drawings follow the pick, not only the summary
-    for (const kind of ["compare-plan", "compare-iso"]) {
-      const figures = page.locator(`figure.${kind}`);
-      await expect
-        .poll(
-          () =>
-            // the drawing itself, without the empty comments the renderer leaves as placeholders
-            figures.evaluateAll((all) => {
-              const [a, b] = all.map((f) => f.querySelector("svg")!.outerHTML.replaceAll("<!---->", ""));
-              return a === b;
-            }),
-          { message: kind },
-        )
-        .toBe(true);
-    }
+    await drawingsMatch(page, ["compare-plan", "compare-iso"]);
   });
 
   test("a scenario that is no longer there is refused, and the select shows what the page shows", async ({ page }) => {
@@ -210,5 +215,9 @@ test.describe("comparing a junction's designs", () => {
     // the control that changed is the Control group's line
     await expect(summary.locator("h3", { hasText: "Control" })).toBeVisible();
     await expect(summary.locator("li", { hasText: /^Control: .+ → (All-way stop|Traffic signal)$/ })).toHaveCount(1);
+    // picking the scenario for A too redraws A: both columns then draw the one design
+    await page.locator("#compare-a").selectOption(scenarioId(page));
+    await expect(summary).toContainText("are the same");
+    await drawingsMatch(page, ["compare-iso"]);
   });
 });

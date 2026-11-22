@@ -25,6 +25,14 @@ fn value_of(id: Option<u32>) -> String {
 }
 
 /// The comparison page: `column_a` and `column_b` are the two halves' columns.
+/// The comparison for the memo that draws a page's two columns (`Memo::new_with_compare`, whose `changed` answers
+/// whether the new pair differs): always true. The memo runs again only when a side, the units or the language
+/// change, and the pair is then new, so the columns must be told every time; answering false would keep the first
+/// drawing whatever is picked.
+pub fn columns_changed<T>(_: Option<&T>, _: Option<&T>) -> bool {
+    true
+}
+
 #[component]
 pub fn CompareFrame<H: CompareHost + 'static>(
     host: Rc<H>,
@@ -147,6 +155,12 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
+
+    #[test]
+    fn the_columns_memo_always_reports_a_change_so_the_drawings_follow_every_pick() {
+        assert!(columns_changed(Some(&1), Some(&1)), "an equal pair is still drawn again");
+        assert!(columns_changed::<u8>(None, None));
+    }
     use crate::shared::compare::{CompareHost, CompareState, DiffGroup, Pick, Summary};
     use crate::shared::i18n::Locale;
     use crate::shared::said::{Arg, Said};

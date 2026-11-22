@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use super::iso::{IsoSvg, iso_label, iso_pair};
 use super::plan::plan_pair;
 use crate::shared::compare::CompareHost;
-use crate::shared::compare_view::CompareFrame;
+use crate::shared::compare_view::{CompareFrame, columns_changed};
 use crate::shared::i18n::Args;
 use crate::shared::said::say;
 use crate::street::vm::compare::StreetCompareVm;
@@ -43,9 +43,7 @@ fn columns(vm: &StreetCompareVm) -> [Column; 2] {
 pub fn StreetCompare(vm: Rc<StreetCompareVm>) -> impl IntoView {
     // The view-model is not `Send`: the memo holds it in a local store.
     let held = StoredValue::new_local(vm.clone());
-    // Always changed (`changed` answers true): the memo runs again only when a side, the units or the language change,
-    // and the pair is then new, so the columns are told every time. Answering false would keep the first drawing.
-    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), |_, _| true);
+    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), columns_changed);
     let column = move |at: usize| {
         move || {
             let c = both.with(|both| both[at].clone());

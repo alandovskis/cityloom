@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use super::iso::{IsoSvg, iso_label, iso_pair};
 use crate::junction::vm::compare::JunctionCompareVm;
 use crate::shared::compare::CompareHost;
-use crate::shared::compare_view::CompareFrame;
+use crate::shared::compare_view::{CompareFrame, columns_changed};
 
 /// The width both drawings are laid out for; the page's styles scale them to the column (`width: 100%`).
 const DRAWN_WIDTH: f64 = 560.0;
@@ -35,9 +35,7 @@ fn columns(vm: &JunctionCompareVm) -> [Column; 2] {
 pub fn JunctionCompare(vm: Rc<JunctionCompareVm>) -> impl IntoView {
     // The view-model is not `Send`: the memo holds it in a local store.
     let held = StoredValue::new_local(vm.clone());
-    // Always changed (`changed` answers true): the memo runs again only when a side, the units or the language change,
-    // and the pair is then new, so the columns are told every time. Answering false would keep the first drawing.
-    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), |_, _| true);
+    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), columns_changed);
     let column = move |at: usize| {
         move || {
             let (iso_label, frame, markup) = both.with(|both| (both[at].iso_label.clone(), both[at].iso.frame, both[at].iso.markup.clone()));
