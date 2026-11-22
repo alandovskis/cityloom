@@ -127,9 +127,10 @@ fn own_signals(doc: &Document, nodes: &[osm2streets::osm::NodeID]) -> bool {
 
 /// The first node past `from`, leaving it by the road other than `came`, where three or more roads meet, through
 /// nodes where two do, no more than `SIGNAL_CARRY_M` on; none past the edge of the map, a dead end, a ring, or a node
-/// of two roads with signals of its own or with signals one road alone faces (the signals face that node, which keeps
-/// them or carries them on). A node of two roads signalled otherwise (faced from both sides, or with no stop line
-/// osm2streets could place) is walked through.
+/// of two roads that stops the traffic being carried: one with signals of its own, one that only the road the walk
+/// reaches it by faces with signals (which keeps them or carries them on), or one signalled where osm2streets placed
+/// no stop line (signals face it, from a side not known). A node of two roads faced from both sides, or only from
+/// the far side, is walked through: its signals stop traffic at it both ways, or the other way.
 fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID, came: RoadID) -> Option<IntersectionID> {
     let (mut at, mut came, mut run) = (from, came, 0.0);
     loop {
@@ -141,8 +142,9 @@ fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID,
         if run > SIGNAL_CARRY_M || far == from || node.is_map_edge() {
             return None;
         }
+        let stops = |faced: Vec<RoadID>| faced.is_empty() || faced == [leaving];
         match node.roads.len() {
-            2 if own_signals(doc, &node.osm_ids) || (node.control == IntersectionControl::Signalled && facing(streets, far).len() == 1) => return None,
+            2 if own_signals(doc, &node.osm_ids) || (node.control == IntersectionControl::Signalled && stops(facing(streets, far))) => return None,
             2 => (at, came) = (far, leaving),
             n if n >= 3 => return Some(far),
             _ => return None,

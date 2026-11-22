@@ -520,6 +520,26 @@ fn signals_are_carried_through_a_second_split_whose_signals_stay_on_it() {
 }
 
 #[test]
+fn signals_are_carried_through_a_second_split_whose_own_signals_face_the_other_way() {
+    // signals on the piece past node 8 face west, to it (that piece has four lanes, so osm2streets keeps node 8):
+    // they do not stop eastbound traffic, so the signals facing node 2 go on through node 8 to node 3
+    let osm = APPROACH_SIGNAL
+        .replace(
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#,
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>
+ <node id="8" lat="45.5000" lon="-73.5992"/>
+ <node id="28" lat="45.5000" lon="-73.5991"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="backward"/></node>"#,
+        )
+        .replace(
+            r#"<way id="11"><nd ref="2"/><nd ref="3"/>"#,
+            r#"<way id="12"><nd ref="8"/><nd ref="28"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="4"/></way>
+ <way id="11"><nd ref="2"/><nd ref="8"/>"#,
+        );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 3), Control::Signals, "the eastbound signals reach node 3");
+}
+
+#[test]
 fn signals_facing_each_other_across_a_plain_split_run_neither_junction() {
     // both ways have the same tags, so osm2streets joins them and drops the split with its signals; the junctions
     // beyond were never what the signals faced
