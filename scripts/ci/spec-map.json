@@ -41,6 +41,7 @@
     { "paths": ["web/account.html", "web/account.js", "web/account.css"], "specs": ["@account", "@cross"] },
     { "paths": ["web/share.html", "web/share.js", "web/share.css"], "specs": ["@share", "@cross"] },
     { "paths": ["web/timeline.html", "web/timeline.js", "web/timeline.css"], "specs": ["@timeline", "@cross"] },
+    { "paths": ["web/compare.html", "web/compare.js", "web/compare.css"], "specs": ["@cross"] },
     { "paths": ["web/credits.html"], "specs": ["@cross"] },
     { "paths": ["e2e/tests/account-helpers.ts"], "specs": ["account-server", "share", "sync"] },
     { "paths": ["scripts/e2e-archive.sh"], "specs": ["@archive", "@static"] },
