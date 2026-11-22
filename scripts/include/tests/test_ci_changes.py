@@ -456,21 +456,12 @@ class Pipelines(unittest.TestCase):
         self.assertIn("version", self.jobs("presubmit.yml"))
         self.assertNotIn("version", self.jobs("postsubmit.yml"))
 
-    def test_the_ui_tier_is_sharded_and_the_shards_add_up(self):
-        # The UI tier is the longest job, so a pull request splits it over runners: the matrix lists each shard once and
-        # every run is told the total, or a shard of the tier would be left out (or run twice).
+    def test_the_ui_tier_runs_the_specs_the_change_selects(self):
+        # The tier is narrowed by what the change touches (`ui_specs`), not split over runners.
         ui = self.jobs("presubmit.yml")["ui"]
-        matrix = re.search(r"shard: \[([^\]]*)\]", ui)
-        self.assertIsNotNone(matrix, "the ui job has no shard matrix")
-        shards = [int(n) for n in matrix.group(1).split(",")]
-        self.assertEqual(shards, list(range(1, len(shards) + 1)))
-        self.assertIn(f"--shard=${{{{ matrix.shard }}}}/{len(shards)}", ui)
-        # A narrowed pull request can have fewer specs than shards; a shard with none must not fail.
-        self.assertIn("--pass-with-no-tests", ui)
-
-    def test_every_shard_keeps_its_own_report(self):
-        ui = self.jobs("presubmit.yml")["ui"]
-        self.assertIn("playwright-report-ui-${{ matrix.shard }}", ui)
+        self.assertIn("npx playwright test --project=ui $SPECS", ui)
+        self.assertIn("needs.changes.outputs.ui_specs", ui)
+        self.assertNotIn("shard", ui)
 
     def test_the_wasm_check_runs_beside_the_host_tests(self):
         # `just test` (the local recipe) is both; in CI they are two jobs, so neither waits for the other.
