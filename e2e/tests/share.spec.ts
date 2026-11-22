@@ -136,6 +136,10 @@ test("a shared design is forked by keyboard into a project of one's own, whose e
   const open = other.page.locator("#fork-open");
   await expect(open).toBeFocused();
   await expect(fork).toHaveCount(0);
+  // said where it can be seen too, in place of the invitation
+  await expect(other.page.locator(".fork-notice p")).toHaveText(
+    "A copy of First project is now one of your projects. Open it to make changes.",
+  );
   const forked = new URL(await open.getAttribute("href")!, baseURL).searchParams.get("project")!;
   expect(forked).toMatch(/^p-[0-9a-f]{12}$/);
 
