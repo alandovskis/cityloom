@@ -267,6 +267,42 @@ test.describe("vehicle actuation in the signal plan (CLM-12)", () => {
   });
 });
 
+test.describe("bicycle detection in the signal plan (CLM-13)", () => {
+  test("each bike movement's mode is a radio group named by its heading and described by its state, the arrow keys choose it, its cyclists are a labelled field, and at 280 px nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const movement = page.locator(".bike-movement").first();
+    const name = (await movement.locator(".bike-name").innerText()).trim();
+    await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
+    const mode = movement.getByRole("radiogroup", { name: "Bikes" });
+    await expect(mode).toHaveAccessibleDescription(/^On recall: runs with every phase that lets it go/);
+    const recall = mode.getByRole("radio", { name: "On recall" });
+    const detection = mode.getByRole("radio", { name: "On detection" });
+    await expect(recall).toBeChecked();
+    await recall.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(detection).toBeChecked();
+    await expect(detection).toBeFocused();
+    await expect(live(page)).toContainText(": on detection.");
+    await expect(mode).toHaveAccessibleDescription(
+      /^On detection: a cyclist detected on the approach calls the movement/,
+    );
+    await expect(movement.getByRole("textbox", { name: "Cyclists an hour", exact: true })).toHaveAccessibleDescription(
+      "0 to 120 cyclists an hour (placeholder bound)",
+    );
+    await expect(page.getByRole("region", { name: "Cyclists' calls in one hour, by bike movement" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("pedestrian calls in the signal plan (#60)", () => {
   test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
     page,

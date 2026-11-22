@@ -3659,6 +3659,7 @@ svg pattern circle {
 /* Pedestrian calls (#60), in the signal plan's level: a crossing's mode and rate, then the hour's tables. */
 .calls-crossings,
 .act-streets,
+.bike-movements,
 .calls-findings {
   margin: 6px 0 0;
   padding: 0;
@@ -3671,19 +3672,22 @@ svg pattern circle {
   font-weight: 600;
 }
 .call-crossing,
-.act-street {
+.act-street,
+.bike-movement {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
 }
 .call-name,
-.act-name {
+.act-name,
+.bike-name {
   flex-basis: 100%;
   font-weight: 600;
 }
 .call-crossing > .insp-range,
-.act-street > .insp-range {
+.act-street > .insp-range,
+.bike-movement > .insp-range {
   flex-basis: 100%;
   margin: 0;
 }
@@ -3709,8 +3713,10 @@ svg pattern circle {
   flex-basis: 100%;
   margin: 0;
 }
-/* Vehicle actuation (CLM-12): a street's mode as a radio pair under its heading, then its four settings with steppers. */
-.act-mode {
+/* Vehicle actuation (CLM-12): a street's mode as a radio pair under its heading, then its four settings with steppers.
+   Bicycle detection (CLM-13): a bike movement's mode the same way. */
+.act-mode,
+.bike-mode {
   display: flex;
   flex-basis: 100%;
   flex-wrap: wrap;
@@ -3753,7 +3759,8 @@ svg pattern circle {
   font-size: 13px;
   font-weight: 600;
 }
-#calls-rows {
+#calls-rows,
+#bikes-rows {
   margin-top: 8px;
 }
 .signal-phases {

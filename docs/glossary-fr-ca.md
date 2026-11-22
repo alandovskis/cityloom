@@ -319,6 +319,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Vehicles an hour | Véhicules par heure | `véh./h` beside a field. |
 | Junction inspector | Skipped / Extended / Ended early (an actuated phase's greens) | Omises / Prolongées / Terminées tôt | Feminine plural, as the greens of `Phases à la demande` in the table; `omis`, `prolongé`, `terminé tôt` said of `son vert`. |
 | Junction inspector | Approach (the street's traffic entering the junction) | Approche |  |
+| Junction inspector | Bicycle detection (the section, CLM-13) | Détection des vélos | To confirm, see below. |
+| Junction inspector | Bike movement (a street's cyclists through the junction) | Mouvement vélo | `Vélos de Rue X vers Rue Y` names one. To confirm, see below. |
+| Junction inspector | On detection / On recall (a bike movement) | Sur détection / En rappel | `En rappel` as for a crossing (#60) and a street's phase (CLM-12). To confirm, see below. |
+| Junction inspector | Cyclists an hour | Cyclistes par heure |  |
+| Junction inspector | Minimum green and clearance (a bicycle call's) | Vert minimal et dégagement | As the pedestrian calls' `dégagement` and actuation's `vert minimal`. |
+| Junction inspector | Extended (a movement's calls whose green was lengthened) | Prolongés | Masculine plural, as the calls (`appels`) in the table. |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |
@@ -444,6 +450,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Actuated (a street’s signal phase, CLM-12) | `À la demande` | `Actionné par les véhicules`, `À commande par les véhicules` (suggestion) |
 | Vehicle actuation (the section) | `Actionnement par les véhicules` | `Détection des véhicules`, `Feux à la demande` (suggestion) |
 | Gap, passage time (an actuated green’s) | `Intervalle de passage` | `Temps de passage`, `Intervalle entre véhicules` (suggestion) |
+| Bicycle detection (the section, CLM-13) | `Détection des vélos` | `Détection cycliste` (suggestion) |
+| Bike movement | `Mouvement vélo` | `Mouvement cyclable`, `Mouvement des vélos` (suggestion) |
+| On detection (a bike movement) | `Sur détection` | `Sur appel` (the pedestrians’ term), `À la demande` (actuation’s) (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

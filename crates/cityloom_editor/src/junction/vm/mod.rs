@@ -352,15 +352,28 @@ impl JunctionVm {
         self.policy_edit(|j| j.set_actuation(uid, field, value), |v, i18n| text::actuation_text(v, i18n, uid))
     }
 
+    /// The person puts street `uid`'s bike movement on detection (`on`, CLM-13) or back on recall. Announced by what was
+    /// done and how its cyclists' calls fared over the hour; a refusal is said with its reason (no phase runs it, say).
+    pub fn set_bike_detection(&self, uid: u32, on: bool) -> bool {
+        self.policy_edit(|j| j.set_bike_detection(uid, on), |v, i18n| text::bikes_text(v, i18n, uid))
+    }
+
+    /// The person sets how many cyclists an hour street `uid`'s bike movement on detection is given. Announced as
+    /// `set_bike_detection` is; the rate it has already is said not at all.
+    pub fn set_cyclists(&self, uid: u32, rate: i32) -> bool {
+        self.policy_edit(|j| j.set_cyclists(uid, rate), |v, i18n| text::bikes_text(v, i18n, uid))
+    }
+
     /// An edit of a crossing's calls: announced as `policy_edit` says, with the crossing's calls added up.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
         self.policy_edit(f, |v, i18n| text::calls_text(v, i18n, uid))
     }
 
-    /// An edit of what the signal responds to (a crossing's calls, a street's actuation): the edit's text, then what it
-    /// did over the hour (`results`) and any finding that arose, or the refusal. It changes no phase of the plan, so
-    /// nothing about the plan's conflicts or patterns is said. A setting it had already is said not at all: the model
-    /// takes it (returns true) without adding a revision (as `set_call_rate`, `set_detection` and `set_actuation` do),
+    /// An edit of what the signal responds to (a crossing's calls, a street's actuation, a bike movement's detection):
+    /// the edit's text, then what it did over the hour (`results`) and any finding that arose, or the refusal. It changes
+    /// no phase of the plan, so nothing about the plan's conflicts or patterns is said. A setting it had already is said
+    /// not at all: the model takes it (returns true) without adding a revision (as `set_call_rate`, `set_detection`,
+    /// `set_actuation` and `set_cyclists` do),
     /// and only an edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn policy_edit(&self, f: impl FnOnce(&mut Junction) -> bool, results: impl FnOnce(&JView, &I18n) -> Option<String>) -> bool {
         // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
@@ -552,12 +565,13 @@ impl JunctionVm {
         Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
     }
 
-    /// What the findings of the pedestrian calls and of the actuation are about now, each its kind and streets.
+    /// What the findings of the pedestrian calls, the actuation and the bicycle calls are about now, each its kind and
+    /// streets.
     fn findings(&self) -> Vec<(u8, u32, u32)> {
         let v = self.view_now();
         let Some(signal) = v.signal.as_ref() else { return Vec::new() };
         let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0));
-        calls.chain(signal.actuation.found.iter().map(|f| f.about())).collect()
+        calls.chain(signal.actuation.found.iter().map(|f| f.about())).chain(signal.bicycles.found.iter().map(|f| f.about())).collect()
     }
 
     /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
@@ -576,8 +590,9 @@ impl JunctionVm {
         let signal = v.signal.as_ref()?;
         let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0)).zip(&signal.calls.findings);
         let actuation = signal.actuation.found.iter().map(|f| f.about()).zip(&signal.actuation.findings);
+        let bicycles = signal.bicycles.found.iter().map(|f| f.about()).zip(&signal.bicycles.findings);
         let new: Vec<String> =
-            calls.chain(actuation).filter(|(f, _)| !before.contains(f)).map(|(_, said)| say_now(&self.i18n, self.units_now(), said)).collect();
+            calls.chain(actuation).chain(bicycles).filter(|(f, _)| !before.contains(f)).map(|(_, said)| say_now(&self.i18n, self.units_now(), said)).collect();
         (!new.is_empty()).then(|| new.join(" "))
     }
 
@@ -1493,6 +1508,101 @@ mod tests {
             said.take(),
             vec!["Aucune phase du plan n’est propre à cette rue, elle ne peut donc pas être à la demande\u{a0}: donnez-lui d’abord une phase."]
         );
+    }
+
+    /// A view-model over the four-way whose streets have bike lanes (`junction_biked`), in `locale`, what it says, and
+    /// its north and east streets.
+    fn biked_rig(locale: crate::shared::i18n::Locale) -> (Rc<JunctionVm>, Rc<crate::shared::ports::RecordingAnnouncer>, u32, u32) {
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = JunctionVm::new(ports, crate::i18n_for(locale), crate::junction::model::junction_biked(), None);
+        let (n, e) = vm.read(|j| {
+            let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+            (at(0), at(90))
+        });
+        (vm, said, n, e)
+    }
+
+    #[test]
+    fn a_bike_movement_put_on_detection_is_announced_with_how_its_cyclists_fared_and_a_refusal_says_why_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        let (vm, said, n, e) = biked_rig(Locale::En);
+        let name = vm.read(|j| crate::shared::said::say_now(&vm.i18n, Units::Metres, &j.view().arms.iter().find(|a| a.uid == n).unwrap().label));
+        assert!(vm.set_bike_detection(n, true));
+        let t = said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with(&format!("Bikes from {name}: on detection.")), "{t:?}");
+        assert!(t[0].contains(&format!("Bikes from {name}: 30 calls in the hour; served ")), "{t:?}");
+        assert!(t[0].contains("; longest wait "), "{t:?}");
+        assert!(vm.set_cyclists(n, 1));
+        assert!(said.take()[0].contains(": 1 call in the hour;"));
+        assert!(vm.set_cyclists(n, 1), "the rate it has: taken");
+        assert!(said.take().is_empty(), "and nothing said");
+        assert!(!vm.set_cyclists(n, 121));
+        assert_eq!(said.take(), vec!["That many cyclists an hour is outside the placeholder bound shown."]);
+        assert!(vm.set_cyclists(n, 0));
+        assert!(said.take()[0].contains(": 0 calls in the hour; served 0, delayed 0, green extended 0 by 0 s in all, not served 0; no call was served."));
+        assert!(!vm.set_bike_detection(n, true));
+        assert_eq!(said.take(), vec!["The bike movement is set that way already."]);
+        // A plan of one phase that runs north's bikes only: east's on detection is refused, and says why.
+        let so = vm.read(|j| j.current().arms.iter().find(|a| a.bearing == 180).unwrap().uid);
+        let only_north = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: n, to: so }],
+                walks: vec![],
+                rides: vec![n],
+                arm: None,
+            }],
+        };
+        vm.edit(|j| j.set_plan_for_test(only_north.clone()));
+        assert!(!vm.set_bike_detection(e, true));
+        assert_eq!(
+            said.take(),
+            vec!["No phase of the plan runs this street's bike movement, so it cannot be on detection: let its bikes go in a phase first."]
+        );
+        // Its bikes taken out of that phase: north's stay on detection, and the finding is said with the edit.
+        assert!(vm.toggle_phase_ride(0, n));
+        let t = said.take();
+        assert!(t.iter().any(|s| s.contains(&format!("The bikes from {name} are on detection, but no phase runs them"))), "{t:?}");
+        assert!(vm.set_bike_detection(n, false));
+        assert!(said.take()[0].starts_with(&format!("Bikes from {name} back on recall.")));
+
+        let (fr, said, n, e) = biked_rig(Locale::FrCa);
+        assert!(fr.set_bike_detection(n, true));
+        let t = said.take();
+        assert!(t[0].contains(" : sur détection.") || t[0].contains("\u{a0}: sur détection."), "{t:?}");
+        assert!(t[0].contains("30\u{a0}appels dans l’heure") || t[0].contains("30 appels dans l’heure"), "{t:?}");
+        assert!(!fr.set_cyclists(n, -1));
+        assert_eq!(said.take(), vec!["Ce nombre de cyclistes par heure dépasse la borne provisoire indiquée."]);
+        fr.edit(|j| j.set_plan_for_test(only_north));
+        assert!(!fr.set_bike_detection(e, true));
+        assert_eq!(
+            said.take(),
+            vec![
+                "Aucune phase du plan ne fait passer les vélos de cette rue, ils ne peuvent donc pas être sur détection\u{a0}: faites-les d’abord passer dans une phase."
+            ]
+        );
+    }
+
+    #[test]
+    fn bikes_needing_more_than_an_actuated_phase_s_maximum_are_a_finding_said_with_the_edit_in_both_languages() {
+        use crate::junction::model::actuation::Field;
+        use crate::shared::i18n::Locale;
+        for (locale, words) in [
+            (Locale::En, "need 11 s of green, longer than the 10 s maximum green of"),
+            (Locale::FrCa, "demandent 11\u{a0}s de vert, plus que le vert maximal de 10\u{a0}s de"),
+        ] {
+            let (vm, said, n, _) = biked_rig(locale);
+            // North actuated with a 10 s maximum; its bikes need 5 s + 6 s (21.4 m at 4 m/s) = 11 s.
+            assert!(vm.set_actuated(n, true) && vm.set_actuation(n, Field::MaxGreen, 10));
+            said.take();
+            assert!(vm.set_bike_detection(n, true));
+            let t = said.take();
+            let plain = t[0].replace('\u{a0}', " ");
+            assert!(plain.contains(&words.replace("\u{a0}", " ")), "{t:?}");
+            // Said once: the next edit leaves it as it was.
+            assert!(vm.set_cyclists(n, 12));
+            assert!(!said.take()[0].replace('\u{a0}', " ").contains(&words.replace("\u{a0}", " ")));
+        }
     }
 
     #[test]

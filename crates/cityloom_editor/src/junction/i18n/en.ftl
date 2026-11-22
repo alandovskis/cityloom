@@ -799,3 +799,59 @@ jn-act-said-no-wait =
         [one] 1 vehicle
        *[other] { $vehicles } vehicles
     } in the hour; served { $served }, not served { $not_served }; no vehicle was served. Its green: given { $greens }, skipped { $skipped }, extended { $extended } by { $extended_s } s in all, ended early { $early }.
+
+## Bicycle detection (src/junction/model/bicycles.rs, CLM-13): a bike movement on detection is served when a cyclist is detected, with a bicycle minimum green and clearance
+jn-refusal-bike-not-ridden = No phase of the plan runs this street's bike movement, so it cannot be on detection: let its bikes go in a phase first.
+jn-refusal-bike-detection-already = The bike movement is set that way already.
+jn-refusal-not-on-bike-detection = Only a bike movement on detection has cyclists an hour: put it on detection first.
+jn-refusal-cyclists-out-of-range = That many cyclists an hour is outside the placeholder bound shown.
+jn-rev-bike-detection-on = Bikes from { $arm }: on detection
+jn-rev-bike-detection-off = Bikes from { $arm } back on recall
+jn-rev-cyclists =
+    Bikes from { $arm }: { $rate ->
+        [one] 1 cyclist an hour
+       *[other] { $rate } cyclists an hour
+    }
+jn-bikes-heading = Bicycle detection
+jn-bikes-intro = A bike movement on detection runs only when a cyclist is detected on its street's approach, and the phase that serves the call gives the cyclist a minimum green and a clearance to cross. One on recall runs with every phase that lets it go, and cyclists cannot change its service.
+jn-bikes-bounds = Placeholder figures: a bike movement put on detection has { $rate } cyclists an hour, spread over one hour. Each call needs a minimum green of { $min } s, then a clearance at { $speed } m/s over the ride across the junction, rounded up to the second; a green is extended by at most { $max } s. When a pedestrian call needs more in the same phase, the longer is kept: neither clearance is shortened, nor the yellow and all-red. A cyclist calls an actuated phase, and a call being served holds its green past its maximum.
+jn-bikes-group = Bikes from { $street }
+jn-bikes-group-to = Bikes from { $street } to { $to }
+jn-bikes-mode = Bikes
+jn-bikes-mode-recall = On recall
+jn-bikes-mode-detection = On detection
+jn-bikes-recall = On recall: runs with every phase that lets it go; cyclists cannot change its service.
+jn-bikes-trigger = On detection: a cyclist detected on the approach calls the movement, and the next phase that runs it serves the call. Each call needs a minimum green of { $min } s + a clearance of { $clearance } s over { $length } = { $need } s of green; a phase's green is extended by at most { $max } s for it.
+jn-bikes-not-ridden = No phase runs this street's bike movement, so it cannot be on detection.
+jn-bikes-rate = Cyclists an hour
+jn-bikes-rate-range = { $min } to { $max } cyclists an hour (placeholder bound)
+jn-bikes-effect =
+    In the hour { $calls ->
+        [one] 1 call
+       *[other] { $calls } calls
+    }: served { $served }, delayed { $delayed }, green extended { $extended } times by { $extended_s } s in all, not served { $not_served }.
+jn-bikes-none = No bike movement is on detection: every one runs with every phase that lets it go.
+jn-bikes-totals-caption = Cyclists' calls in one hour, by bike movement
+jn-bikes-col-movement = Bike movement
+jn-bikes-col-extended = Extended
+jn-bikes-extended-cell = { $count } ({ $seconds } s)
+jn-bikes-no-wait-said = no cyclist served
+jn-bikes-rows =
+    { $n ->
+        [one] The cyclist's call, one row
+       *[other] Every cyclist's call, one row each ({ $n })
+    }
+jn-bikes-rows-caption = Each cyclist's call of the hour, in the order made
+jn-bikes-finding-cannot = The bikes from { $arm } cannot be served safely: their minimum green and clearance need { $need } s of green, and no phase that runs them can give more than { $most } s.
+jn-bikes-finding-not-ridden = The bikes from { $arm } are on detection, but no phase runs them, so their calls are not served. Let them go in a phase, or put them back on recall.
+jn-bikes-finding-past-max = The bikes from { $arm } need { $need } s of green, longer than the { $max } s maximum green of { $phase }: a call served there holds the green past the maximum.
+jn-bikes-said =
+    Bikes from { $arm }: { $calls ->
+        [one] 1 call
+       *[other] { $calls } calls
+    } in the hour; served { $served }, delayed { $delayed }, green extended { $extended } by { $extended_s } s in all, not served { $not_served }; longest wait { $wait } s.
+jn-bikes-said-no-wait =
+    Bikes from { $arm }: { $calls ->
+        [one] 1 call
+       *[other] { $calls } calls
+    } in the hour; served { $served }, delayed { $delayed }, green extended { $extended } by { $extended_s } s in all, not served { $not_served }; no call was served.

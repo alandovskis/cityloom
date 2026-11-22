@@ -132,6 +132,28 @@ pub fn actuation_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
     })
 }
 
+/// How street `uid`'s bike movement on detection fared over the hour, said after its detection changes: "Bikes from Main
+/// Street (north): 30 calls in the hour; served 16, delayed 14, green extended 3 by 12 s in all, not served 0; longest
+/// wait 53 s." None while it is on recall or no phase runs it.
+pub fn bikes_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
+    let bikes = &v.signal.as_ref()?.bicycles;
+    let m = bikes.movements.iter().find(|m| m.uid == uid)?;
+    let t = m.totals?;
+    let args = Args::new()
+        .str("arm", say_now(i18n, Units::Metres, &m.label))
+        .num("calls", i64::from(t.calls))
+        .num("served", i64::from(t.served))
+        .num("delayed", i64::from(t.delayed))
+        .num("extended", i64::from(t.extended))
+        .num("extended_s", i64::from(t.extended_s))
+        .num("not_served", i64::from(t.not_served));
+    // As the totals show it: the longest wait only when some call was served.
+    Some(match t.longest_wait_s {
+        Some(wait) => i18n.tr_now("jn-bikes-said", &args.num("wait", i64::from(wait))),
+        None => i18n.tr_now("jn-bikes-said-no-wait", &args),
+    })
+}
+
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {

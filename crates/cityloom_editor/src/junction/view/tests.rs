@@ -4164,3 +4164,167 @@ fn vehicle_actuation_speaks_french() {
         assert!(act.contains(words), "{words}: {act}");
     }
 }
+
+// ---- bicycle detection (CLM-13) ----------------------------------------------------------------------------------------
+
+/// The four-way whose streets have bike lanes (`junction_biked`), in `locale`, its plan shown.
+fn biked_in(locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), junction_biked(), None);
+    s.show_plan();
+    s
+}
+
+/// The `#signal-bikes` section of the plan's level, as far as the end of the panel.
+fn bikes_of(h: &str) -> &str {
+    &h[h.find(r#"id="signal-bikes""#).expect("a section for bicycle detection")..]
+}
+
+#[test]
+fn the_plan_offers_each_bike_movement_it_runs_recall_or_on_detection_named_by_its_streets() {
+    let s = biked_in(crate::shared::i18n::Locale::En);
+    let h = panel(&s);
+    let bikes = bikes_of(&h);
+    assert!(bikes.contains("Bicycle detection"), "{bikes}");
+    assert!(bikes.contains("a bike movement put on detection has 30 cyclists an hour"), "{bikes}");
+    assert!(bikes.contains("a minimum green of 5 s, then a clearance at 4.0 m/s"), "{bikes}");
+    let v = s.view_now();
+    let movements = v.signal.as_ref().unwrap().bicycles.movements.clone();
+    assert_eq!(movements.len(), 4, "every street's bikes are run by some phase");
+    let say = |said: &crate::shared::said::Said| crate::shared::said::say_now(s.i18n(), Units::Metres, said);
+    for m in &movements {
+        let u = m.uid;
+        let name = format!("Bikes from {} to {}", say(&m.label), say(m.to.as_ref().unwrap()));
+        assert!(bikes.contains(&format!(r#"role="group" aria-label="{name}""#)), "{name}: {bikes}");
+        let at = bikes.find(&format!(r#"id="bike-mode-{u}""#)).expect("a mode group");
+        let tag = &bikes[bikes[..at].rfind("<div").unwrap()..at + bikes[at..].find('>').unwrap()];
+        for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="bike-mode-h-{u}""#), &format!(r#"aria-describedby="bike-status-{u}""#)] {
+            assert!(tag.contains(attr), "{attr}: {tag}");
+        }
+        assert!(input_tag(bikes, &format!("bike-mode-{u}-recall")).contains("checked"), "on recall to begin with");
+        assert!(!input_tag(bikes, &format!("bike-mode-{u}-detection")).contains("checked"));
+    }
+    assert_eq!(bikes.matches("On recall: runs with every phase that lets it go").count(), 4);
+    assert!(bikes.contains(r#"id="bikes-none""#) && !bikes.contains(r#"id="bikes-totals""#) && !bikes.contains("bike-rate-"));
+
+    // On detection: its trigger and bound, its cyclists an hour, what its calls did, the totals and every call.
+    let n = arm(&s, 0);
+    assert!(s.set_bike_detection(n, true));
+    let h = panel(&s);
+    let bikes = bikes_of(&h);
+    let m = s.view_now().signal.as_ref().unwrap().bicycles.movements.iter().find(|m| m.uid == n).cloned().unwrap();
+    assert!(input_tag(bikes, &format!("bike-mode-{n}-detection")).contains("checked"));
+    let length = Units::Metres.length(m.length_mm);
+    let bound = format!(
+        "Each call needs a minimum green of 5 s + a clearance of {} s over {length} = {} s of green; a phase's green is extended by at most 15 s for it.",
+        m.clearance_s, m.need_s
+    );
+    assert!(bikes.contains("On detection: a cyclist detected on the approach calls the movement"), "{bikes}");
+    assert!(bikes.contains(&bound), "{bound}: {bikes}");
+    assert!(bikes.contains(&format!(r#"<label for="bike-rate-{n}">Cyclists an hour</label>"#)), "{bikes}");
+    let tag = input_tag(bikes, &format!("bike-rate-{n}"));
+    assert!(tag.contains(r#"value="30""#) && tag.contains(&format!(r#"aria-describedby="bike-range-{n}""#)), "{tag}");
+    assert!(bikes.contains("0 to 120 cyclists an hour (placeholder bound)"), "{bikes}");
+    assert!(bikes.contains(&format!(r#"id="bike-effect-{n}" class="insp-range">In the hour 30 calls: served "#)), "{bikes}");
+    assert!(!bikes.contains(r#"id="bikes-none""#));
+    for caption in ["bikes-totals-caption", "bikes-rows-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = bikes.find(&labelled).unwrap_or_else(|| panic!("{caption}: {bikes}"));
+        let tag = &bikes[bikes[..at].rfind("<div").unwrap()..at + bikes[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+    }
+    let t = &bikes[bikes.find(r#"id="bikes-totals""#).unwrap()..];
+    let heads: Vec<String> = t[..t.find("</thead>").unwrap()].split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect();
+    assert_eq!(heads, ["Bike movement", "Calls", "Served", "Delayed", "Extended", "Longest wait"]);
+    let totals = m.totals.unwrap();
+    let row = &t[t.find("<tbody>").unwrap()..t.find("</tbody>").unwrap()];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    let extended = format!("{} ({} s)", totals.extended, totals.extended_s);
+    let longest = format!("{} s", totals.longest_wait_s.unwrap());
+    assert_eq!(cells, [totals.calls.to_string(), totals.served.to_string(), totals.delayed.to_string(), extended, longest]);
+    // Named apart from the pedestrian calls' fold, which can sit in the same panel.
+    assert!(bikes.contains(r#"id="bikes-rows""#) && bikes.contains("Every cyclist's call, one row each (30)"), "{bikes}");
+}
+
+#[test]
+fn a_bike_movement_no_phase_runs_says_why_it_cannot_be_on_detection_and_one_left_on_detection_is_a_finding() {
+    let s = biked_in(crate::shared::i18n::Locale::En);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    assert!(s.set_bike_detection(e, true));
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: n, to: arm(&s, 180) }],
+            rides: vec![n],
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    let h = panel(&s);
+    let bikes = bikes_of(&h);
+    assert!(bikes.contains(r#"id="bikes-findings""#) && bikes.contains("are on detection, but no phase runs them"), "{bikes}");
+    // North actuated with a 10 s maximum, its bikes on detection needing 11 s: a finding, its green held all the same.
+    let a = biked_in(crate::shared::i18n::Locale::En);
+    assert!(a.set_actuated(n, true) && a.set_actuation(n, crate::junction::model::actuation::Field::MaxGreen, 10));
+    assert!(a.set_bike_detection(n, true));
+    let ha = panel(&a);
+    let found = &bikes_of(&ha)[bikes_of(&ha).find(r#"id="bikes-findings""#).expect("the findings")..];
+    assert!(found.contains("need 11 s of green, longer than the 10 s maximum green of"), "{found}");
+    assert!(bikes.contains(&format!(r#"id="bike-status-{e}" class="insp-range">No phase runs this street's bike movement"#)), "{bikes}");
+    assert!(!bikes.contains(&format!(r#"id="bike-mode-{}""#, arm(&s, 270))), "west's bikes are run by no phase and on recall: not listed");
+    assert!(s.set_bike_detection(e, false));
+    assert!(!bikes_of(&panel(&s)).contains(&format!(r#"id="bike-mode-{e}""#)), "back on recall and run by no phase: no longer listed");
+    // The sample's streets have no bike lane: no section at all.
+    let sample = shared(0);
+    sample.show_plan();
+    assert!(!panel(&sample).contains(r#"id="signal-bikes""#));
+}
+
+#[test]
+fn a_junction_shown_read_only_shows_its_bike_detection_and_offers_it_disabled() {
+    use crate::shared::ports::Storage;
+    let mut j = junction_biked();
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_bike_detection(n, true));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let bikes = bikes_of(&h);
+    let locked = r#"<fieldset disabled class="read-only-controls"><ul class="bike-movements">"#;
+    let inside = &bikes[bikes.find(locked).expect("the movements are offered in a disabled fieldset")..];
+    let inside = &inside[..inside.find("</fieldset>").unwrap()];
+    assert!(input_tag(inside, &format!("bike-mode-{n}-detection")).contains("checked"), "{inside}");
+    assert!(input_tag(inside, &format!("bike-rate-{n}")).contains(r#"value="30""#), "{inside}");
+    assert!(bikes.contains(r#"id="bikes-totals""#), "the hour is shown");
+    assert!(!s.set_bike_detection(n, false) && !s.set_cyclists(n, 9), "and cannot be changed");
+}
+
+#[test]
+fn bicycle_detection_speaks_french() {
+    let s = biked_in(crate::shared::i18n::Locale::FrCa);
+    let n = arm(&s, 0);
+    assert!(s.set_bike_detection(n, true));
+    let h = panel(&s);
+    let bikes = bikes_of(&h);
+    for words in [
+        "Détection des vélos",
+        "Valeurs provisoires",
+        "un mouvement vélo mis sur détection a 30 cyclistes par heure",
+        "un dégagement à 4,0 m/s",
+        "<span>En rappel</span>",
+        "<span>Sur détection</span>",
+        "Sur détection",
+        "un cycliste détecté à l’approche appelle le mouvement",
+        ">Cyclistes par heure</label>",
+        "De 0 à 120 cyclistes par heure (borne provisoire)",
+        "Appels des cyclistes en une heure, par mouvement vélo",
+        "Mouvement vélo",
+        "Prolongés",
+        "Dans l’heure, 30",
+        "Vélos de ",
+    ] {
+        assert!(bikes.contains(words), "{words}: {bikes}");
+    }
+}

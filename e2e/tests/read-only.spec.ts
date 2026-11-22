@@ -113,7 +113,7 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
-  test("a junction's signal plan, its pedestrian calls and its actuation can be read, and none of them changed", async ({
+  test("a junction's signal plan, its pedestrian calls, its actuation and its bicycle detection can be read, and none of them changed", async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -134,6 +134,13 @@ test.describe("a design opened read-only", () => {
     );
     await page.locator(`#act-mode-${street}-actuated`).check();
     await expect(page.locator(`#act-min-${street}`)).toHaveValue("7");
+    // A bike movement on detection (CLM-13).
+    const bikes = (await page.locator("#signal-bikes .bike-mode").first().getAttribute("id"))!.replace(
+      "bike-mode-",
+      "",
+    );
+    await page.locator(`#bike-mode-${bikes}-detection`).check();
+    await expect(page.locator(`#bike-rate-${bikes}`)).toHaveValue("30");
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -160,6 +167,12 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#act-min-${street}`)).toBeDisabled();
     await expect(page.locator(`#act-min-${street}-more`)).toBeDisabled();
     await expect(page.locator("#actuation-phases")).toBeVisible();
+    // The bike movement on detection is shown with its cyclists, and cannot be changed.
+    await expect(page.locator(`#bike-mode-${bikes}-detection`)).toBeChecked();
+    for (const r of await page.locator(`#bike-mode-${bikes} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    await expect(page.locator(`#bike-rate-${bikes}`)).toHaveValue("30");
+    await expect(page.locator(`#bike-rate-${bikes}`)).toBeDisabled();
+    await expect(page.locator("#bikes-totals")).toBeVisible();
     await expect(page.locator("#calls-totals")).toBeVisible();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);

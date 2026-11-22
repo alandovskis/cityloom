@@ -1172,6 +1172,103 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#actuation-none")).toBeVisible();
   });
 
+  test("a bike movement put on detection shows its trigger, its bound and how its cyclists fared, keeps them on reload, and speaks French (CLM-13)", async ({
+    page,
+  }) => {
+    const section = page.locator("#signal-bikes");
+    await expect(section).toContainText("Bicycle detection");
+    await expect(page.locator("#bikes-bounds")).toContainText(
+      "Placeholder figures: a bike movement put on detection has 30 cyclists an hour, spread over one hour. Each call needs a minimum green of 5 s, then a clearance at 4.0 m/s",
+    );
+    await expect(page.locator("#bikes-none")).toBeVisible();
+    const uid = (await section.locator(".bike-mode").first().getAttribute("id"))!.replace("bike-mode-", "");
+    const recall = page.locator(`#bike-mode-${uid}-recall`);
+    const detection = page.locator(`#bike-mode-${uid}-detection`);
+    const status = page.locator(`#bike-status-${uid}`);
+    const rate = page.locator(`#bike-rate-${uid}`);
+    await expect(section.locator(".bike-name").first()).toHaveText(/^Bikes from .+/);
+    await expect(recall).toBeChecked();
+    await expect(status).toHaveText(/^On recall: runs with every phase that lets it go/);
+    await expect(rate).toHaveCount(0);
+
+    // On detection: its trigger and bound, its cyclists an hour, and how its calls fared over the hour.
+    await detection.check();
+    await expect(detection).toBeChecked();
+    await expect(live(page)).toContainText(": on detection.");
+    await expect(live(page)).toContainText(/\d+ calls in the hour; served \d+, delayed \d+/);
+    await expect(status).toContainText("a cyclist detected on the approach calls the movement");
+    await expect(status).toHaveText(
+      /Each call needs a minimum green of 5 s \+ a clearance of \d+ s over [\d.,]+ (m|ft) = \d+ s of green; a phase's green is extended by at most 15 s for it\.$/,
+    );
+    await expect(rate).toHaveValue("30");
+    await expect(rate).toHaveAccessibleName("Cyclists an hour");
+    await expect(rate).toHaveAccessibleDescription("0 to 120 cyclists an hour (placeholder bound)");
+    await expect(page.locator("#bikes-none")).toHaveCount(0);
+    const row = page.locator("#bikes-totals tbody tr");
+    await expect(row).toHaveCount(1);
+    await expect(page.locator("#bikes-totals thead th")).toHaveText([
+      "Bike movement",
+      "Calls",
+      "Served",
+      "Delayed",
+      "Extended",
+      "Longest wait",
+    ]);
+    await expect(row.locator("td").first()).toHaveText("30");
+    await expect(row.locator("td").nth(3)).toHaveText(/^\d+ \(\d+ s\)$/);
+    await expect(page.locator(`#bike-effect-${uid}`)).toHaveText(
+      /^In the hour 30 calls: served \d+, delayed \d+, green extended \d+ times by \d+ s in all, not served \d+\.$/,
+    );
+    await expect(page.getByRole("region", { name: "Cyclists' calls in one hour, by bike movement" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expect(page.locator("#bikes-rows summary")).toHaveText("Every cyclist's call, one row each (30)");
+
+    // An arrow key changes the rate; one past the bound is refused and the field keeps its value.
+    await rate.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(rate).toHaveValue("31");
+    await expect(live(page)).toContainText(": 31 cyclists an hour.");
+    await rate.fill("121");
+    await rate.press("Enter");
+    await expect(live(page)).toHaveText("That many cyclists an hour is outside the placeholder bound shown.");
+    await expect(rate).toHaveValue("31");
+    // No cyclists at all: nothing to serve, and no wait to give.
+    await rate.fill("0");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("0");
+    await expect(live(page)).toContainText("no call was served");
+    await expect(row.locator("td").last().locator("[aria-hidden=true]")).toHaveText("–");
+    await rate.fill("60");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("60");
+
+    // Kept: a reload opens it on detection with its cyclists.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page);
+    await expect(detection).toBeChecked();
+    await expect(rate).toHaveValue("60");
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(section.locator("#i-h-bikes")).toHaveText("Détection des vélos");
+    await expect(page.locator(`label:has(#bike-mode-${uid}-detection)`)).toHaveText("Sur détection");
+    await expect(page.locator(`label[for=bike-rate-${uid}]`)).toHaveText("Cyclistes par heure");
+    await expect(status).toContainText("Chaque appel demande un vert minimal de 5 s");
+    await expect(page.locator("#bikes-totals thead th").first()).toHaveText("Mouvement vélo");
+
+    // Back on recall: the rate and the hour's table go.
+    await recall.check();
+    await expect(recall).toBeChecked();
+    await expect(rate).toHaveCount(0);
+    await expect(page.locator("#bikes-totals")).toHaveCount(0);
+    await expect(page.locator("#bikes-none")).toBeVisible();
+  });
+
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
     page,
   }) => {

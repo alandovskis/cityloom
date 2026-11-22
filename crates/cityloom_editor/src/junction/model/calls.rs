@@ -14,7 +14,7 @@
 //! the longest extension, the bound on the call rate and the waiting limit.
 
 use crate::junction::model::control;
-use crate::junction::model::signal::Plan;
+use crate::junction::model::signal::{Phase, Plan};
 use crate::junction::model::{Arm, Refusal, SIGNAL, State, in_force};
 
 /// The least time the walk is shown, in seconds. Placeholder.
@@ -195,11 +195,11 @@ fn on_call(s: &State) -> Vec<(&Arm, u32)> {
 }
 
 /// Runs the cycle of `plan` over an hour of calls at the crossings of `s` that are on call, with the vehicles of its
-/// actuated streets (`control::hour`). `distances` is each crossing's length by street uid
+/// actuated streets (`control::hour`; no bike movement is given a length, so it serves none). `distances` is each crossing's length by street uid
 /// (`read_model::crossing_distances`). A crossing no phase walks is a finding and is left out; one no phase can serve
 /// (`serve`) is a finding and its calls are not served.
 pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
-    control::hour(s, plan, distances).calls
+    control::hour(s, plan, distances, &[]).calls
 }
 
 /// The calls of the hour at the crossings of `s` on call, one `Asked` a crossing, with `out` given a row of totals for
@@ -223,15 +223,26 @@ pub(crate) fn asked(s: &State, plan: &Plan, distances: &[(u32, i32)], out: &mut 
 /// A finding for each crossing that no phase walking it can serve by `rules`: a fixed phase needs its green lengthened
 /// by at most `MAX_EXTENSION_S` to fit the walk and clearance; an actuated phase holds its green for them.
 pub(crate) fn cannot_serve(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) -> Vec<Finding> {
+    unserved(plan, rules, asked, walks_it).into_iter().map(|(arm, need_s, most_s)| Finding::CannotServe { arm, need_s, most_s }).collect()
+}
+
+/// Whether phase `p` walks the crossing of street `uid`: who a pedestrian call waits for.
+pub(crate) fn walks_it(p: &Phase, uid: u32) -> bool {
+    p.walks.contains(&uid)
+}
+
+/// Each of `asked` that no phase running it (`runs`) can serve by `rules`, as (street, what it needs, the longest green
+/// a fixed phase running it could give): a fixed phase needs its green lengthened by at most `MAX_EXTENSION_S` to fit
+/// what it needs; an actuated phase holds its green for it. The pedestrian calls' rule, which the bicycle calls share.
+pub(crate) fn unserved(plan: &Plan, rules: &[control::Rule], asked: &[Asked], runs: fn(&Phase, u32) -> bool) -> Vec<(u32, u32, u32)> {
     let mut out = Vec::new();
     for a in asked {
-        let walking = || plan.phases.iter().zip(rules).filter(|(p, _)| p.walks.contains(&a.arm));
-        let fits = |p: &crate::junction::model::signal::Phase, rule: &control::Rule| {
-            matches!(rule, control::Rule::Actuated { .. }) || p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s
-        };
-        if !walking().any(|(p, rule)| fits(p, rule)) {
-            let most_s = walking().map(|(p, _)| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
-            out.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
+        let running = || plan.phases.iter().zip(rules).filter(|(p, _)| runs(p, a.arm));
+        let fits =
+            |p: &Phase, rule: &control::Rule| matches!(rule, control::Rule::Actuated { .. }) || p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s;
+        if !running().any(|(p, rule)| fits(p, rule)) {
+            let most_s = running().map(|(p, _)| p.timing.green_s).max().unwrap_or(0).saturating_add(MAX_EXTENSION_S);
+            out.push((a.arm, a.need_s, most_s));
         }
     }
     out
@@ -269,7 +280,7 @@ pub(crate) struct Asked {
 
 /// What `serve` gives: every call, and the walks each crossing skipped (by its place in the `asked` it was given).
 pub(crate) struct Run {
-    calls: Vec<Call>,
+    pub(crate) calls: Vec<Call>,
     skipped: Vec<u32>,
 }
 
@@ -322,7 +333,8 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Run {
 }
 
 /// The pedestrian calls as a demand on the controller: who is waiting at which crossing, which phases can serve each
-/// crossing, and what happened to every call so far.
+/// crossing, and what happened to every call so far. The bicycle calls (`bicycles.rs`, CLM-13) are the same demand over
+/// the phases that run a street's bike movement (`Walks::over`): a cyclist waits as a pedestrian on a push button does.
 pub(crate) struct Walks<'a> {
     asked: &'a [Asked],
     /// Whether each phase (by its place in the plan) can serve each crossing: looked up once a turn, never searched. A
@@ -342,6 +354,11 @@ pub(crate) struct Walks<'a> {
 
 impl<'a> Walks<'a> {
     pub(crate) fn new(plan: &Plan, rules: &[control::Rule], asked: &'a [Asked]) -> Walks<'a> {
+        Walks::over(plan, rules, asked, walks_it)
+    }
+
+    /// The calls of `asked`, each served by the phases that run its street's crossing or movement (`runs`).
+    pub(crate) fn over(plan: &Plan, rules: &[control::Rule], asked: &'a [Asked], runs: fn(&Phase, u32) -> bool) -> Walks<'a> {
         let serving: Vec<Vec<bool>> = asked
             .iter()
             .map(|a| {
@@ -349,7 +366,7 @@ impl<'a> Walks<'a> {
                     .iter()
                     .zip(rules)
                     .map(|(p, rule)| {
-                        p.walks.contains(&a.arm)
+                        runs(p, a.arm)
                             && match rule {
                                 control::Rule::Fixed => p.timing.green_s.saturating_add(MAX_EXTENSION_S) >= a.need_s,
                                 control::Rule::Actuated { .. } => true,
