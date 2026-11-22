@@ -75,6 +75,8 @@ cmp-differs =
        *[other] { $b } diffère de { $a } sur { $n } points.
     }
 cmp-also = Diffère aussi par : { $list }
+# un choix refusé, puis le titre de ce qui diffère, dans la région annoncée
+cmp-refused-headline = { $why } { $headline }
 cmp-back-street = Retour à la rue
 cmp-back-junction = Retour à la jonction
 cmp-skip = Passer à la comparaison

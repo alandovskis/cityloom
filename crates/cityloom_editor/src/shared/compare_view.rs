@@ -1,6 +1,7 @@
 //! The frame of the page that compares two designs of a place (`compare.rs`): a menu for each side, the two columns
 //! the street's or the junction's half draws, and the summary of what differs. Every control is a native one. A
-//! refused pick is said under the menus; the view-model says it in the live region too.
+//! refused pick is said under the menus; the view-model (`Compare::choose`) says it in the live region too, before the
+//! headline.
 
 use std::rc::Rc;
 

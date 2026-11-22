@@ -148,9 +148,11 @@ pub fn checks(a: &JView, b: &JView) -> (Vec<Said>, Vec<Said>) {
     (passes, fails)
 }
 
-/// An arm as far as nothing else reports it: what `arms`, `signal`, `Corners` and the streets' lane counts already say
-/// is cleared, as are the uids of the street's pieces, which say nothing of what the design holds.
-fn arm_details(arm: &Arm, other: &Arm, counts_differ: bool, plan_differs: bool) -> Arm {
+/// An arm as far as nothing else reports it: what `arms`, `signal`, `Corners`, the control and the streets' lane
+/// counts already say is cleared, as are the uids of the street's pieces, which say nothing of what the design holds.
+/// `timing_said`: the signal's lines or the control's line already say the timing and the calls differ (off a signal
+/// they are not drawn: a signal that comes or goes is the control's line).
+fn arm_details(arm: &Arm, other: &Arm, counts_differ: bool, timing_said: bool) -> Arm {
     let mut x = arm.clone();
     x.edge = 0;
     x.corner_mm = 0;
@@ -161,7 +163,7 @@ fn arm_details(arm: &Arm, other: &Arm, counts_differ: bool, plan_differs: bool) 
     if x.lanes.len() != other.lanes.len() {
         x.lanes.clear();
     }
-    if plan_differs {
+    if timing_said {
         x.timing = None;
         x.calls = None;
     }
@@ -178,7 +180,7 @@ fn arm_details(arm: &Arm, other: &Arm, counts_differ: bool, plan_differs: bool) 
 /// Whether any street of the junction, matched by uid, differs in what its design keeps beyond what `arms`,
 /// `signal`, `Corners` and the control say. A street only one design has counts.
 fn arm_details_differ(sa: &State, sb: &State, a: &JView, b: &JView) -> bool {
-    let plan_differs = !signal(a, b).is_empty();
+    let timing_said = a.control_index != b.control_index || !signal(a, b).is_empty();
     let mut uids_a: Vec<u32> = sa.arms.iter().map(|x| x.uid).collect();
     let mut uids_b: Vec<u32> = sb.arms.iter().map(|x| x.uid).collect();
     uids_a.sort_unstable();
@@ -192,7 +194,7 @@ fn arm_details_differ(sa: &State, sb: &State, a: &JView, b: &JView) -> bool {
         };
         let counts = |v: &JView| v.arms.iter().find(|m| m.uid == x.uid).map(|m| (m.lanes.len(), m.leave_arrows.len()));
         let counts_differ = counts(a) != counts(b);
-        arm_details(x, y, counts_differ, plan_differs) != arm_details(y, x, counts_differ, plan_differs)
+        arm_details(x, y, counts_differ, timing_said) != arm_details(y, x, counts_differ, timing_said)
     })
 }
 
@@ -223,7 +225,7 @@ pub fn others(a: &JView, b: &JView, sa: &State, sb: &State) -> Vec<JOther> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::model::{Junction, PRIORITY, ROUNDABOUT, SIGNAL};
+    use crate::junction::model::{Junction, PRIORITY, ROUNDABOUT, SIGNAL, TimingField};
     use crate::shared::testing::en;
 
     fn base() -> Junction {
@@ -346,6 +348,22 @@ mod tests {
         let (a, b) = views(&p, &base());
         assert_eq!(control(&a, &b).iter().map(|s| s.key).collect::<Vec<_>>(), ["cmp-jn-control"]);
         assert!(signal(&a, &b).is_empty());
+    }
+
+    #[test]
+    fn a_signal_with_its_timing_set_against_priority_is_only_the_control_line() {
+        let mut timed = base();
+        let uid = timed.current().arms.iter().find(|x| !x.is_pedestrian()).unwrap().uid;
+        assert!(timed.set_timing(uid, TimingField::Green, 40));
+        assert!(timed.current().arms.iter().any(|x| x.timing.is_some()));
+        let mut p = base();
+        assert!(p.set_control(PRIORITY));
+        let (a, b) = views(&timed, &p);
+        assert_eq!(control(&a, &b).iter().map(|s| s.key).collect::<Vec<_>>(), ["cmp-jn-control"]);
+        assert!(signal(&a, &b).is_empty() && arms(&a, &b).is_empty());
+        // the timing is not drawn off a signal: it is the control line's, not a detail of the streets
+        assert_eq!(others_of(&timed, &p), vec![]);
+        assert_eq!(others_of(&p, &timed), vec![]);
     }
 
     #[test]

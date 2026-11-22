@@ -120,7 +120,6 @@ pub fn pieces(a: &Street, b: &Street) -> (bool, Vec<PieceChange>) {
     for was in a.segments.iter().filter(|p| !b.segments.iter().any(|n| n.uid == p.uid)) {
         changes.push(PieceChange::Removed { kind: was.kind, width_mm: was.width_mm });
     }
-    let starts = |s: &Street| s.zones.iter().map(|z| z.from_mm).collect::<Vec<_>>();
     (starts(a) != starts(b), changes)
 }
 
@@ -151,14 +150,20 @@ fn unordered<T: Clone + std::fmt::Debug>(list: &[T]) -> Vec<T> {
     sorted
 }
 
-/// The things beyond the base section that differ between the two designs, in the order of `Other`.
+/// Where each stretch along the street starts.
+fn starts(s: &Street) -> Vec<i32> {
+    s.zones.iter().map(|z| z.from_mm).collect()
+}
+
+/// The things beyond the base section that differ between the two designs, in the order of `Other`. Stretches that
+/// start elsewhere are `pieces`' to say, so `Stretches` is only for stretches that start alike and hold other sections.
 pub fn others(a: &Street, b: &Street) -> Vec<Other> {
     let speeds = |s: &Street| (s.speed, s.zones.iter().map(|z| z.speed).collect::<Vec<_>>());
     // A zone's saved `name` is left out: the page never shows it (a stretch is named by where it lies).
-    let stretches = |s: &Street| s.zones.iter().map(|z| (z.from_mm, z.segments.as_deref().map(without_uids))).collect::<Vec<_>>();
+    let sections = |s: &Street| s.zones.iter().map(|z| z.segments.as_deref().map(without_uids)).collect::<Vec<_>>();
     [
         (Other::Speed, speeds(a) != speeds(b)),
-        (Other::Stretches, stretches(a) != stretches(b)),
+        (Other::Stretches, starts(a) == starts(b) && sections(a) != sections(b)),
         (Other::PieceDetails, piece_details_differ(a, b)),
         (Other::Curbside, unordered(&a.curb) != unordered(&b.curb)),
         (Other::Stops, unordered(&a.stops) != unordered(&b.stops)),
@@ -240,6 +245,19 @@ mod tests {
         let zone = |from_mm| Zone { from_mm, segments: None, name: None, speed: Speed::Undecided };
         b.zones = vec![zone(0), zone(5_000)];
         assert!(pieces(&a, &b).0);
+        // said once, by the pieces' line, not again among the other things
+        assert!(!others(&a, &b).contains(&Other::Stretches), "{:?}", others(&a, &b));
+    }
+
+    #[test]
+    fn stretches_that_start_alike_but_hold_other_sections_are_an_other() {
+        let mut a = sample();
+        let zone = |segments| Zone { from_mm: 5_000, segments, name: None, speed: Speed::Undecided };
+        a.zones = vec![zone(None)];
+        let mut b = a.clone();
+        b.zones = vec![zone(Some(a.segments[..1].to_vec()))];
+        assert!(!pieces(&a, &b).0);
+        assert_eq!(others(&a, &b), vec![Other::Stretches]);
     }
 
     fn with_curb(s: &mut Street) {

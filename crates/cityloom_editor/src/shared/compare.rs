@@ -211,18 +211,23 @@ pub struct Compare<S> {
 
 impl<S> Compare<S> {
     /// The picks the page's address makes among `items` (the place's scenarios), each opened with `open` (None: the
-    /// baseline). A pick that will not open is the baseline; a pick the address names that is not a scenario is
-    /// said. None where the baseline itself cannot be opened.
+    /// baseline). A pick that will not open is the baseline, and is said, as is a pick the address names that is not
+    /// a scenario. None where the baseline itself cannot be opened.
     pub fn open(ports: Ports, i18n: Rc<I18n>, items: Vec<(u32, String)>, open: impl Fn(Option<u32>) -> Option<S>) -> Option<Self> {
         let ids: Vec<u32> = items.iter().map(|(id, _)| *id).collect();
         let (a, b, missing) = initial_picks(&ports.page.path(), &ids);
         let state = CompareState::default();
         state.list(items);
-        let resolve = |id: Option<u32>| open(id).map(|s| (id, s)).or_else(|| open(None).map(|s| (None, s)));
-        let ((a, side_a), (b, side_b)) = (resolve(a)?, resolve(b)?);
+        // The design opened for a pick, and whether it is the baseline in place of a scenario that would not open.
+        let resolve = |id: Option<u32>| match open(id) {
+            Some(side) => Some((id, side, false)),
+            None if id.is_some() => open(None).map(|side| (None, side, true)),
+            None => None,
+        };
+        let ((a, side_a, gone_a), (b, side_b, gone_b)) = (resolve(a)?, resolve(b)?);
         state.set(Pick::A, a);
         state.set(Pick::B, b);
-        if missing {
+        if missing || gone_a || gone_b {
             state.refuse(Said::new("scenario-missing"));
         }
         Some(Compare { ports, i18n, state, sides: RefCell::new((side_a, side_b)), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()) })
@@ -251,7 +256,7 @@ impl<S> Compare<S> {
 
     /// Picks design `id` (None: the baseline) on `side`, with the place's scenarios as kept now (`items`): a design
     /// deleted meanwhile opens nothing, the side shows the baseline and it is said. The address is rewritten and the
-    /// headline of what differs (`summary` of the two sides) is announced.
+    /// headline of what differs (`summary` of the two sides) is announced, after the refusal when there is one.
     pub fn choose(
         &self,
         side: Pick,
@@ -284,7 +289,11 @@ impl<S> Compare<S> {
         let baseline = self.i18n.tr_now("cmp-baseline", &Args::new());
         let (name_a, name_b) = (self.state.name_of(a, &baseline), self.state.name_of(b, &baseline));
         let headline = self.read_now(summary).headline(&name_a, &name_b);
-        self.ports.announcer.say(&say_now(&self.i18n, self.units.get_untracked(), &headline));
+        let said = match self.state.refusal.get_untracked() {
+            Some(why) => Said::new("cmp-refused-headline").with("why", Arg::Said(Box::new(why))).with("headline", Arg::Said(Box::new(headline))),
+            None => headline,
+        };
+        self.ports.announcer.say(&say_now(&self.i18n, self.units.get_untracked(), &said));
     }
 }
 
@@ -343,6 +352,43 @@ mod tests {
         assert!(!two.is_same());
         let expected = Said::new("cmp-differs").with("a", Arg::Text("Baseline".into())).with("b", Arg::Text("Wider".into())).with("n", Arg::Num(2));
         assert_eq!(two.headline("Baseline", "Wider"), expected);
+    }
+
+    /// A comparison of designs that are their ids, at `/compare.html?street=7` plus `query`, over the scenarios
+    /// `items`; `opens` says which scenarios open (the baseline always does).
+    fn rig(query: &str, items: &[u32], opens: &'static [u32]) -> (Option<Compare<Option<u32>>>, Rc<crate::shared::ports::RecordingAnnouncer>) {
+        let (mut ports, said, _) = crate::shared::ports::test_ports();
+        let page = Rc::new(crate::shared::ports::FakePage::default());
+        *page.path.borrow_mut() = format!("/compare.html?street=7{query}");
+        ports.page = page;
+        let items = items.iter().map(|id| (*id, format!("Scenario {id}"))).collect();
+        let open = move |id: Option<u32>| id.is_none_or(|id| opens.contains(&id)).then_some(id);
+        (Compare::open(ports, crate::i18n_for(crate::shared::i18n::Locale::En), items, open), said)
+    }
+
+    #[test]
+    fn a_listed_scenario_that_will_not_open_is_the_baseline_and_is_said() {
+        let (compare, _) = rig("&b=3", &[3], &[]);
+        let compare = compare.unwrap();
+        assert_eq!(compare.state.pick_now(Pick::B), None);
+        assert_eq!(compare.read_now(|_, b| *b), None);
+        assert_eq!(compare.state.refusal(), Some(Said::new("scenario-missing")));
+        // the first scenario, B by default, too
+        let (compare, _) = rig("", &[3], &[]);
+        assert_eq!(compare.unwrap().state.refusal(), Some(Said::new("scenario-missing")));
+        let (compare, _) = rig("&b=3", &[3], &[3]);
+        assert!(compare.unwrap().state.refusal().is_none());
+    }
+
+    #[test]
+    fn a_refused_pick_is_announced_before_the_headline() {
+        let (compare, said) = rig("&b=base", &[3], &[]);
+        let compare = compare.unwrap();
+        let same = |_: &Option<u32>, _: &Option<u32>| Summary { groups: vec![], also: vec![] };
+        compare.choose(Pick::B, Some(3), vec![(3, "Scenario 3".into())], |id| id.is_none().then_some(None), same);
+        assert_eq!(said.take(), ["That scenario is no longer here. Baseline and Baseline are the same."]);
+        compare.choose(Pick::B, None, vec![(3, "Scenario 3".into())], |id| id.is_none().then_some(None), same);
+        assert_eq!(said.take(), ["Baseline and Baseline are the same."]);
     }
 
     #[test]
