@@ -708,6 +708,17 @@ fn a_copy_s_pages_hold_the_fork_in_a_notice_of_its_own() {
     assert!(!en.contains("role="), "no live region: {en}");
     let fr = notice(Locale::FrCa);
     assert!(fr.contains("Cet aménagement a été partagé avec vous. Pour le modifier, faites-en une copie à vous."), "{fr}");
+
+    // once forked, the notice says so where it can be seen, not only to a screen reader
+    let (vm, _, _, _) = shell_of_a_copy(Locale::En);
+    vm.fork();
+    let forked = crate::shared::testing::html(move || {
+        use leptos::prelude::IntoAny;
+        leptos::view! { <crate::shell::view::ForkNotice vm=vm/> }.into_any()
+    });
+    crate::sync::hub::reset();
+    assert!(forked.contains("A copy of Shared is now one of your projects. Open it to make changes."), "{forked}");
+    assert!(!forked.contains("To change it, make a copy of your own."), "{forked}");
 }
 
 /// The notice of a copy offers the fork as a button (keyboard reachable, described by what it does); once forked, a
@@ -736,6 +747,7 @@ fn the_fork_is_a_described_button_then_a_link_to_the_new_project() {
     let failed = fork_html(vm);
     assert!(failed.contains(">Modifier une copie<"), "{failed}");
     assert!(failed.contains(r#"id="fork-error""#), "{failed}");
+    assert!(failed.contains(r#"aria-describedby="fork-hint fork-error""#), "the button holds why it failed: {failed}");
     assert!(failed.contains("Aucune copie n’a été faite\u{a0}: ce navigateur n’a pas pu la conserver."), "{failed}");
     crate::sync::hub::reset();
 }

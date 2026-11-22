@@ -154,8 +154,8 @@ pub struct ShellVm {
     tab: ArcRwSignal<String>,
     /// Whether the project's earlier edits were just cleared (the importer changed) and the notice says so.
     edits_cleared: ArcRwSignal<bool>,
-    /// The page of the project a copy of a shared design was just forked into, opened to edit (#223).
-    forked: ArcRwSignal<Option<String>>,
+    /// The page of the project a copy of a shared design was just forked into, opened to edit, and its name (#223).
+    forked: ArcRwSignal<Option<(String, String)>>,
     /// Why the last fork failed: a message key.
     fork_error: ArcRwSignal<Option<&'static str>>,
 }
@@ -322,7 +322,8 @@ impl ShellVm {
         match crate::project::copies::fork(&self.ports.storage, &copy) {
             Ok(project) => {
                 self.fork_error.set(None);
-                self.forked.set(Some(crate::shared::project_id::editable_in(&self.ports.page.path(), &project.id)));
+                let href = crate::shared::project_id::editable_in(&self.ports.page.path(), &project.id);
+                self.forked.set(Some((href, project.name.clone())));
                 let args = Args::new().str("name", project.name);
                 self.ports.announcer.say(&self.i18n.tr_now("shell-forked", &args));
             }
@@ -340,7 +341,15 @@ impl ShellVm {
 
     /// The page of the project just forked, opened to edit; none before.
     pub fn forked(&self) -> Option<String> {
-        self.forked.get()
+        self.forked.get().map(|(href, _)| href)
+    }
+
+    /// What the notice of a copy says: how to change the design, then, once forked, that the copy is the person's.
+    pub fn fork_note(&self) -> String {
+        match self.forked.get() {
+            None => self.i18n.tr("shell-fork-intro", &Args::new()),
+            Some((_, name)) => self.i18n.tr("shell-forked", &Args::new().str("name", name)),
+        }
     }
 
     /// Why the last fork failed, in the page's language; none after a fork that worked.

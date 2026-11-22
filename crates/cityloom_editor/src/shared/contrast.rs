@@ -573,6 +573,10 @@ mod tests {
         let notice = rule(app, ".shell-notice");
         assert!(notice.contains("background: linear-gradient(var(--warn-wash), var(--warn-wash)), var(--panel);"), "{notice}");
         assert!(notice.contains("color: var(--warn);"), "{notice}");
+        // A fork that failed (#223) is said in the same colours, inside the fork's accent notice, so it reads as a failure.
+        let failed = rule(app, ".fork-notice .fork-error");
+        assert!(failed.contains("background: linear-gradient(var(--warn-wash), var(--warn-wash)), var(--panel);"), "{failed}");
+        assert!(failed.contains("color: var(--warn);"), "{failed}");
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let pick = |name: &str| {
                 let t = token(app, name);

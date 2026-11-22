@@ -237,13 +237,14 @@ pub fn ReadOnlyTag(i18n: Rc<I18n>) -> impl IntoView {
 }
 
 /// What the pages of a copy of a shared design say under the top bar (#223): that the design was shared and how to
-/// change it, and the fork (`ForkAction`). Not a live region: the fork's outcome is announced when it happens.
+/// change it, then that the copy was made (`ShellVm::fork_note`), and the fork (`ForkAction`). Not a live region: the
+/// fork's outcome is announced when it happens.
 #[component]
 pub fn ForkNotice(vm: Rc<ShellVm>) -> impl IntoView {
-    let i18n = StoredValue::new_local(vm.i18n());
+    let note = StoredValue::new_local(vm.clone());
     view! {
         <div class="shell-notice fork-notice">
-            <p>{move || i18n.with_value(|i| i.tr("shell-fork-intro", &Args::new()))}</p>
+            <p>{move || note.with_value(|v| v.fork_note())}</p>
             <ForkAction vm=vm/>
         </div>
     }
@@ -276,7 +277,11 @@ pub fn ForkAction(vm: Rc<ShellVm>) -> impl IntoView {
             }
             None => {
                 view! {
-                    <button type="button" id="fork-btn" aria-describedby="fork-hint" on:click=move |_| vm.with_value(|v| v.fork())>
+                    <button
+                        type="button"
+                        id="fork-btn"
+                        aria-describedby=move || if vm.with_value(|v| v.fork_error()).is_some() { "fork-hint fork-error" } else { "fork-hint" }
+                        on:click=move |_| vm.with_value(|v| v.fork())>
                         <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
                             <rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/>
                             <path d="M10.5 3.5v-1h-8v8h1"/>
