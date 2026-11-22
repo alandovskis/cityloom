@@ -391,8 +391,9 @@ class Gates(unittest.TestCase):
     def test_the_red_gate_refuses_a_dirty_worktree(self):
         self.red_commit()
         (self.repo / "loose.rs").write_text("x", encoding="utf-8")
+        g = gate.Gate(self.repo, FakeRunner(self.repo, {}, {}))
         with self.assertRaises(gate.Refused):
-            gate.Gate(self.repo, FakeRunner(self.repo, {}, {})).red(self.base)
+            g.red(self.base)
 
     def test_the_red_gate_runs_the_specs_with_new_browser_tests(self):
         red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
@@ -467,21 +468,24 @@ class Gates(unittest.TestCase):
             code, out = plain(cmd, cwd, env)
             return (127, "sh: prettier: command not found") if cmd == ["just", "format-check"] else (code, out)
 
+        g = gate.Gate(self.repo, missing_prettier)
         with self.assertRaises(gate.Refused) as caught:
-            gate.Gate(self.repo, missing_prettier).green(self.base, red)
+            g.green(self.base, red)
         self.assertIn("just setup", str(caught.exception))
 
     def test_the_green_gate_refuses_a_red_commit_that_is_not_in_the_history(self):
         red, _ = self.green_setup()
         git(self.repo, "checkout", "-q", "-b", "other", self.base)
         commit(self.repo, {"crates/m/src/x.rs": "\n"}, "Elsewhere")
+        g = gate.Gate(self.repo, self.passing_runner())
         with self.assertRaises(gate.Refused):
-            gate.Gate(self.repo, self.passing_runner()).green(self.base, red)
+            g.green(self.base, red)
 
     def test_the_green_gate_refuses_the_red_commit_itself(self):
         red = self.red_commit()
+        g = gate.Gate(self.repo, self.passing_runner(red))
         with self.assertRaises(gate.Refused):
-            gate.Gate(self.repo, self.passing_runner(red)).green(self.base, red)
+            g.green(self.base, red)
 
 
 class Commands(unittest.TestCase):
