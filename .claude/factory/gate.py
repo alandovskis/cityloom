@@ -494,13 +494,13 @@ class Gate:
 
         if any(p.startswith("website/") for p in changed):
             checks = (
-                (DOCS_PRETTIER, "e2e", "the Prettier check of website/ fails"),
-                (DOCS_BUILD, "website", "the documentation site does not build"),
+                (DOCS_PRETTIER, "e2e", "the Prettier check of website/ fails", _last_error),
+                (DOCS_BUILD, "website", "the documentation site does not build", build_error),
             )
-            for cmd, folder, failure in checks:
+            for cmd, folder, failure, cause in checks:
                 code, out = self._tool(list(cmd), self.repo / folder)
                 if code != 0:
-                    report.problems.append(f"{failure}: {_last_error(out)}")
+                    report.problems.append(f"{failure}: {cause(out)}")
         return report
 
     def _blocks_at(self, rev: str, path: str) -> List[str]:
@@ -512,6 +512,20 @@ def _last_error(output: str) -> str:
     lines = [line for line in output.splitlines() if line.strip()]
     errors = [line for line in lines if line.lstrip().startswith("error")]
     return (errors or lines or ["no output"])[-1].strip()
+
+
+_BOX = " \t│╰╭─▶×┌└├"
+
+
+def build_error(output: str, limit: int = 12) -> str:
+    """What a failed Docusaurus build says went wrong: from its first error on, without the box drawing, blank lines and
+    stack frames that bury the cause, at most `limit` lines."""
+    lines = [line.lstrip(_BOX) for line in output.splitlines()]
+    start = next((i for i, line in enumerate(lines) if line.startswith(("[ERROR]", "Error"))), None)
+    if start is None:
+        return _last_error(output)
+    kept = [line.rstrip() for line in lines[start:] if line.strip() and not line.startswith("at ")][:limit]
+    return "\n    ".join(kept)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

@@ -586,6 +586,23 @@ class DocsGate(unittest.TestCase):
             ],
         )
 
+    def test_a_failed_build_is_told_by_its_cause_not_its_stack(self):
+        out = (
+            "[INFO] [en] Creating an optimized production build...\n"
+            "[ERROR] Client bundle compiled with errors therefore further build is impossible.\n"
+            '╰─▶   × Error: MDX compilation failed for file "/w/website/docs/smoke.md"\n'
+            '        │ Cause: Markdown link with URL `./nowhere.md` in source file "docs/smoke.md" (3:1) couldn\'t be resolved.\n'
+            "        │\n"
+            "        │     at throwError (/w/website/node_modules/@docusaurus/logger/lib/logger.js:80:11)\n"
+            "        │     at onBrokenMarkdownLinks (/w/website/node_modules/@docusaurus/mdx-loader/lib/x.js:20:60)\n"
+        )
+        self.assertEqual(
+            gate.build_error(out),
+            "[ERROR] Client bundle compiled with errors therefore further build is impossible.\n"
+            '    Error: MDX compilation failed for file "/w/website/docs/smoke.md"\n'
+            '    Cause: Markdown link with URL `./nowhere.md` in source file "docs/smoke.md" (3:1) couldn\'t be resolved.',
+        )
+
     def test_documentation_outside_the_site_needs_no_site_check(self):
         commit(self.repo, {"docs/glossary-fr-ca.md": "# Glossaire\n", "crates/m/CLAUDE.md": "# m\n"}, "Notes")
         run = self.runner()
