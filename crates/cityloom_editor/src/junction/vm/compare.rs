@@ -47,15 +47,6 @@ impl JunctionCompareVm {
         self.shared.read(|a, b| (a.view.clone(), b.view.clone()))
     }
 
-    /// The units lengths are shown in (watched).
-    pub fn units(&self) -> Units {
-        self.shared.units()
-    }
-
-    pub fn set_units(&self, units: Units) {
-        self.shared.set_units(units);
-    }
-
     fn summary_of(a: &Side, b: &Side) -> Summary {
         let arm_lines = arms(&a.view, &b.view).iter().flat_map(|c| c.lines()).collect();
         let (passes, fails) = checks(&a.view, &b.view);
@@ -101,6 +92,14 @@ impl CompareHost for JunctionCompareVm {
 
     fn place_name(&self) -> Said {
         self.shared.read_now(|a, _| a.view.name.clone())
+    }
+
+    fn units(&self) -> Units {
+        self.shared.units()
+    }
+
+    fn set_units(&self, units: Units) {
+        self.shared.set_units(units);
     }
 }
 

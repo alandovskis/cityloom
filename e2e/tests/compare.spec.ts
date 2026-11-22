@@ -144,6 +144,21 @@ test.describe("comparing a street's designs", () => {
     await noSidewaysScroll(page, 280);
   });
 
+  test("the summary's lengths follow the units the settings menu chooses", async ({ page }) => {
+    await openStreet(page);
+    await makeScenario(page, "Wider bike lane");
+    await widenStreetPiece(page);
+    await page.locator("#scenario-compare").click();
+    const pieces = page.locator("#compare-summary h3", { hasText: "Pieces" }).locator("+ ul");
+    // the widened piece's line gives its two widths
+    await expect(pieces.locator("li", { hasText: /\d m → [\d.]+ m$/ })).toHaveCount(1);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-unit="ft"]').click();
+    await expect(page.locator('[data-unit="ft"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(pieces.locator("li", { hasText: /\d ft → [\d.]+ ft$/ })).toHaveCount(1);
+    await expect(pieces.locator("li", { hasText: / m$/ })).toHaveCount(0);
+  });
+
   test("in French the page's words follow the language switch", async ({ page }) => {
     await openStreet(page);
     await makeScenario(page, "Wider bike lane");

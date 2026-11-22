@@ -54,15 +54,6 @@ impl StreetCompareVm {
         self.shared.read(|a, b| (a.view.clone(), b.view.clone()))
     }
 
-    /// The units lengths are shown in (watched).
-    pub fn units(&self) -> Units {
-        self.shared.units()
-    }
-
-    pub fn set_units(&self, units: Units) {
-        self.shared.set_units(units);
-    }
-
     fn summary_of(a: &Side, b: &Side) -> Summary {
         let impact = diff(Cause::Edit, &Input::of(&a.view, &a.findings), &Input::of(&b.view, &b.findings));
         let mut space: Vec<Said> = impact.uses.iter().map(|u| u.said()).collect();
@@ -113,6 +104,14 @@ impl CompareHost for StreetCompareVm {
 
     fn place_name(&self) -> Said {
         self.shared.read_now(|a, _| a.street.title())
+    }
+
+    fn units(&self) -> Units {
+        self.shared.units()
+    }
+
+    fn set_units(&self, units: Units) {
+        self.shared.set_units(units);
     }
 }
 

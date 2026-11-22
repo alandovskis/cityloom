@@ -9,7 +9,6 @@ use leptos::prelude::*;
 use crate::shared::compare::{CompareHost, Pick};
 use crate::shared::i18n::Args;
 use crate::shared::said::{Arg, Said, say};
-use crate::shared::units::Units;
 
 /// The option's value for the baseline.
 const BASELINE: &str = "base";
@@ -34,7 +33,8 @@ pub fn CompareFrame<H: CompareHost + 'static>(
     let words = StoredValue::new_local(host.i18n());
     let host = StoredValue::new_local(host);
     let tr = move |key: &'static str| move || words.with_value(|i18n| i18n.tr(key, &Args::new()));
-    let said = move |what: &Said| words.with_value(|i18n| say(i18n, Units::Metres, what));
+    // In the units the page shows, watched: what is said is said again when the person chooses others.
+    let said = move |what: &Said| words.with_value(|i18n| say(i18n, host.with_value(|h| h.units()), what));
     let title = move || {
         let place = said(&host.with_value(|h| h.place_name()));
         words.with_value(|i18n| i18n.tr("cmp-title", &Args::new().str("place", place)))
@@ -148,11 +148,13 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::said::{Arg, Said};
     use crate::shared::testing::html;
+    use crate::shared::units::Units;
 
     struct Fake {
         i18n: Rc<crate::shared::i18n::I18n>,
         state: CompareState,
         summary: Summary,
+        units: leptos::prelude::ArcRwSignal<Units>,
     }
 
     impl CompareHost for Fake {
@@ -177,13 +179,19 @@ mod tests {
         fn place_name(&self) -> Said {
             Said::new("city-the-edge-of-the-map")
         }
+        fn units(&self) -> Units {
+            self.units.get()
+        }
+        fn set_units(&self, units: Units) {
+            self.units.set(units);
+        }
     }
 
     fn fake(locale: Locale, summary: Summary) -> Rc<Fake> {
         let state = CompareState::default();
         state.list(vec![(1, "Wider".into()), (2, "Greener".into())]);
         state.set(Pick::B, Some(1));
-        Rc::new(Fake { i18n: crate::i18n_for(locale), state, summary })
+        Rc::new(Fake { i18n: crate::i18n_for(locale), state, summary, units: leptos::prelude::ArcRwSignal::new(Units::Metres) })
     }
 
     fn one_group() -> Summary {
@@ -268,6 +276,16 @@ mod tests {
         let paragraph = &out[at..];
         let text = &paragraph[paragraph.find('>').unwrap() + 1..paragraph.find("</p>").unwrap()];
         assert_eq!(text, "That scenario is no longer here.", "{out}");
+    }
+
+    #[test]
+    fn lengths_are_said_in_the_units_the_page_shows() {
+        let width = Said::new("cmp-piece-added").with("kind", Arg::KindLower("travel")).with("width", Arg::Length(3_048));
+        let summary = Summary { groups: vec![DiffGroup { heading: "cmp-h-pieces", lines: vec![width] }], also: vec![] };
+        let host = fake(Locale::En, summary);
+        host.set_units(Units::Feet);
+        let out = render(host);
+        assert!(out.contains(", 10.0 ft</li>"), "{out}");
     }
 
     #[test]

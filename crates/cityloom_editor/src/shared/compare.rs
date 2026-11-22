@@ -301,6 +301,10 @@ pub trait CompareHost {
     fn back_key(&self) -> &'static str;
     /// The place's name, to say.
     fn place_name(&self) -> Said;
+    /// The units lengths are shown in (watched).
+    fn units(&self) -> Units;
+    /// The person chose the units lengths are shown in (the shell's menu).
+    fn set_units(&self, units: Units);
 }
 
 #[cfg(test)]

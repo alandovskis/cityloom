@@ -148,14 +148,53 @@ pub fn mount_timeline() -> Option<TimelinePage> {
 pub struct ComparePage {
     i18n: std::rc::Rc<shared::i18n::I18n>,
     project: Option<String>,
+    host: std::rc::Rc<dyn shared::compare::CompareHost>,
 }
 
 #[wasm_bindgen]
 impl ComparePage {
-    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page, in its project. The
-    /// shell says by itself that the page is read-only when its address asks (`view=1`).
+    /// Binds the shell every page shares (settings menu, sign-in menu, language) to this page, in its project: the
+    /// units chosen go to the comparison. The shell says by itself that the page is read-only when its address asks
+    /// (`view=1`).
     pub fn mount_shell(&self) {
-        shell::mount(self.i18n.clone(), std::rc::Rc::new(shell::Bare::in_project(self.project.clone())), "details-details", shell::NotesAtStart::Open);
+        shell::mount(
+            self.i18n.clone(),
+            std::rc::Rc::new(CompareTarget::new(self.project.clone(), self.host.clone())),
+            "details-details",
+            shell::NotesAtStart::Open,
+        );
+    }
+}
+
+/// The shell's target on the comparison page: the units go to the comparison, which draws and says its lengths in
+/// them; the region is only kept, as on a bare page, since the designs keep their own drive side. The comparison
+/// starts in the units the shell starts in (`Units::default()`, as every page: the choice is not remembered).
+struct CompareTarget {
+    bare: shell::Bare,
+    host: std::rc::Rc<dyn shared::compare::CompareHost>,
+}
+
+impl CompareTarget {
+    fn new(project: Option<String>, host: std::rc::Rc<dyn shared::compare::CompareHost>) -> CompareTarget {
+        CompareTarget { bare: shell::Bare::in_project(project), host }
+    }
+}
+
+impl shell::Target for CompareTarget {
+    fn set_units(&self, units: shared::units::Units) {
+        self.host.set_units(units);
+    }
+
+    fn apply_region(&self, region: usize) -> bool {
+        self.bare.apply_region(region)
+    }
+
+    fn region_id(&self) -> String {
+        self.bare.region_id()
+    }
+
+    fn project(&self) -> Option<String> {
+        self.bare.project()
     }
 }
 
@@ -180,13 +219,13 @@ pub fn mount_compare() -> Option<ComparePage> {
     let mounted = match (place("street"), place("junction")) {
         (Some(edge), _) => street::mount_compare_street(ports.clone(), i18n.clone(), edge),
         (None, Some(node)) => junction::mount_compare_junction(ports.clone(), i18n.clone(), node),
-        (None, None) => false,
+        (None, None) => None,
     };
-    if !mounted {
+    let Some(host) = mounted else {
         ports.navigator.replace(&shared::project_id::link_for("map.html", &*ports.storage));
         return None;
-    }
-    Some(ComparePage { i18n, project: ports.storage.project() })
+    };
+    Some(ComparePage { i18n, project: ports.storage.project(), host })
 }
 
 /// The share page as its script sees it (#221): the links of the project it is opened in, or a link being opened.
@@ -319,5 +358,29 @@ mod tests {
         *page.languages.borrow_mut() = vec!["fr".into()];
         assert_eq!(i18n_browser(&ports).locale_now(), Locale::FrCa);
         assert_eq!(*page.lang.borrow(), "fr-CA");
+    }
+
+    #[test]
+    fn the_comparison_shows_lengths_in_the_units_the_shell_chooses() {
+        use shared::compare::CompareHost;
+        use shared::units::Units;
+        use shell::Target;
+        let (mut ports, _, storage, _) = shared::ports::test_ports_with_time();
+        let page = std::rc::Rc::new(shared::ports::FakePage::default());
+        ports.page = page.clone();
+        let own: std::rc::Rc<dyn shared::ports::Storage> = std::rc::Rc::new(shared::scoped::ScopedStorage::new(storage, "p1"));
+        let store = city::store::CityStore::sample(own.clone());
+        let edge = store.open().view(0).edges[0].uid;
+        *page.path.borrow_mut() = format!("/compare.html?street={edge}");
+        ports.storage = own;
+        let binding = city::binding::CityBinding { store, place: city::binding::Place::Street(edge) };
+        let vm = street::vm::compare::StreetCompareVm::new(ports, i18n_for(Locale::En), binding).unwrap();
+        let target = CompareTarget::new(Some("p1".into()), vm.clone());
+        assert_eq!(vm.units(), Units::Metres, "the shell starts in metres, as every page does");
+        target.set_units(Units::Feet);
+        assert_eq!(vm.units(), Units::Feet);
+        assert_eq!(target.project().as_deref(), Some("p1"));
+        assert!(target.apply_region(0));
+        assert_eq!(target.region_id(), shared::catalogue::REGIONS[0].id);
     }
 }
