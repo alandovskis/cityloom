@@ -8,7 +8,8 @@ use super::{Segment, Street};
 use crate::shared::catalogue::{DIRECTIONS, DirectionRule, KINDS};
 use crate::shared::said::{Arg, Said};
 
-/// How many pieces of the base section run one way and must (driving lanes) in one direction, in each of two designs.
+/// How many driving lanes (the pieces that must run one way) of the base section run in one direction, in each of two
+/// designs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LaneCount {
     /// An index into `DIRECTIONS`.

@@ -33,7 +33,7 @@ pub enum Picked {
 }
 
 /// The query's parameters, from `search` with or without its `?` (and without any `#…`).
-fn params(search: &str) -> impl Iterator<Item = (&str, &str)> {
+pub(crate) fn params(search: &str) -> impl Iterator<Item = (&str, &str)> {
     let search = search.split('#').next().unwrap_or("");
     let search = search.rsplit_once('?').map_or(search, |(_, query)| query);
     search.split('&').filter(|p| !p.is_empty()).map(|p| p.split_once('=').unwrap_or((p, "")))

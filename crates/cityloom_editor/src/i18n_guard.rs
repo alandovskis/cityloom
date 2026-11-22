@@ -653,7 +653,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("t-changes", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
     ("p-changes", "the id of a tab of the street page's notes, or of its panel (`street::view::notes_tray`)"),
     ("notes-slot", "the id of the element the street page's notes' tray is mounted in"),
-    ("compare-slot", "the id of the element the comparison page's street half is mounted in"),
+    ("compare-slot", "the id of the element the comparison page's street or junction half is mounted in"),
     ("overflow-y", "a CSS property the street drawing reads to tell whether its column scrolls"),
     ("cityloom-goal", "a storage key: the planning goal chosen on the street and junction pages"),
     ("through-traffic", "the id of a planning goal, kept in storage, not a message"),

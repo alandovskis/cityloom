@@ -212,9 +212,8 @@ pub fn mount_compare() -> Option<ComparePage> {
         root.navigator.replace(project::context::MISSING_HREF);
         return None;
     };
-    let search = ports.page.path().split_once('?').map(|(_, search)| search.to_string()).unwrap_or_default();
-    let place =
-        |name: &str| search.split('&').find_map(|pair| pair.strip_prefix(name)?.strip_prefix('=')).and_then(|v| v.parse::<u32>().ok()).filter(|&n| n != 0);
+    let path = ports.page.path();
+    let place = |name: &str| compared_place(&path, name);
     let i18n = i18n_browser(&ports);
     let mounted = match (place("street"), place("junction")) {
         (Some(edge), _) => street::mount_compare_street(ports.clone(), i18n.clone(), edge),
@@ -226,6 +225,11 @@ pub fn mount_compare() -> Option<ComparePage> {
         return None;
     };
     Some(ComparePage { i18n, project: ports.storage.project(), host })
+}
+
+/// The place the comparison page's address `path` names by `name` (`street` or `junction`): a number other than 0.
+fn compared_place(path: &str, name: &str) -> Option<u32> {
+    shared::compare::params(path).find(|(key, _)| *key == name).and_then(|(_, value)| value.parse::<u32>().ok()).filter(|&n| n != 0)
 }
 
 /// The share page as its script sees it (#221): the links of the project it is opened in, or a link being opened.
@@ -358,6 +362,16 @@ mod tests {
         *page.languages.borrow_mut() = vec!["fr".into()];
         assert_eq!(i18n_browser(&ports).locale_now(), Locale::FrCa);
         assert_eq!(*page.lang.borrow(), "fr-CA");
+    }
+
+    #[test]
+    fn the_compared_place_is_read_from_the_query_alone() {
+        assert_eq!(compared_place("/compare.html?street=7&b=2", "street"), Some(7));
+        assert_eq!(compared_place("/compare.html?project=p1&junction=12", "junction"), Some(12));
+        assert_eq!(compared_place("/compare.html?street=7#top", "street"), Some(7));
+        assert_eq!(compared_place("/compare.html?street=0", "street"), None);
+        assert_eq!(compared_place("/compare.html?streets=7", "street"), None);
+        assert_eq!(compared_place("/compare.html", "street"), None);
     }
 
     #[test]
