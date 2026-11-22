@@ -24,7 +24,6 @@ fn value_of(id: Option<u32>) -> String {
     id.map_or_else(|| BASELINE.to_string(), |id| id.to_string())
 }
 
-/// The comparison page: `column_a` and `column_b` are the two halves' columns.
 /// The comparison for the memo that draws a page's two columns (`Memo::new_with_compare`, whose `changed` answers
 /// whether the new pair differs): always true. The memo runs again only when a side, the units or the language
 /// change, and the pair is then new, so the columns must be told every time; answering false would keep the first
@@ -33,6 +32,7 @@ pub fn columns_changed<T>(_: Option<&T>, _: Option<&T>) -> bool {
     true
 }
 
+/// The comparison page: `column_a` and `column_b` are the two halves' columns.
 #[component]
 pub fn CompareFrame<H: CompareHost + 'static>(
     host: Rc<H>,
