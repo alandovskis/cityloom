@@ -415,14 +415,14 @@ test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
       const group = page.getByRole("group", { name: `New period ${on}`, exact: true });
       await expect(group.getByLabel(`Start of a new period ${on}`, { exact: true })).toBeVisible();
       await expect(group.getByRole("combobox", { name: `Plan of a new period ${on}`, exact: true })).toBeVisible();
-      await expect(group.getByRole("button", { name: `Add the new period ${on}`, exact: true })).toBeVisible();
+      await expect(group.getByRole("button", { name: `Add period ${on}`, exact: true })).toBeVisible();
     }
     // A period added by the keys alone: its start and plan named by the day and its time.
     await page.getByLabel("Start of a new period on Saturdays", { exact: true }).fill("07:00");
     await page
       .getByRole("combobox", { name: "Plan of a new period on Saturdays", exact: true })
       .selectOption({ label: "Morning peak" });
-    await page.getByRole("button", { name: "Add the new period on Saturdays", exact: true }).press("Enter");
+    await page.getByRole("button", { name: "Add period on Saturdays", exact: true }).press("Enter");
     await expect(live(page)).toContainText("“Morning peak” from 07:00 on Saturdays.");
     await expect(page.getByLabel("Start of the period from 07:00 on Saturdays", { exact: true })).toHaveValue("07:00");
     await expect(
