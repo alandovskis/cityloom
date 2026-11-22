@@ -421,8 +421,8 @@ class Gates(unittest.TestCase):
         ("home.spec.ts", ["lists the projects"], "expected"),
     )
 
-    def browser_red_runner(self, red: str, red_listing: tuple, red_run: tuple) -> FakeRunner:
-        """A base with three specs; the red commit's listing and the run of the specs the gate asks for are given."""
+    def browser_red_runner(self, red: str, red_listing: tuple | dict, red_run: tuple) -> FakeRunner:
+        """A base with three specs; the red commit's listing (tests, or a whole report) and the run the gate asks for."""
         listing = "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\ntests::keeps: test\n"
         return FakeRunner(
             self.repo,
@@ -430,10 +430,44 @@ class Gates(unittest.TestCase):
             runs={red: (101, "     Running unittests src/lib.rs (deps/m-0123456789abcdef)\ntest tests::keeps ... ok\ntest tests::splits ... FAILED\n")},
             playwright={
                 (self.base, True): playwright_report(*self.BASE_SPECS),
-                (red, True): playwright_report(*red_listing),
+                (red, True): red_listing if isinstance(red_listing, dict) else playwright_report(*red_listing),
                 (red, False): playwright_report(*red_run),
             },
         )
+
+    def test_the_red_gate_runs_every_spec_when_a_shared_helper_changed(self):
+        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/fixtures.ts": "// a changed helper\n"})
+        splits = ("street.spec.ts", ["splits"], "unexpected")
+        broken = ("home.spec.ts", ["lists the projects"], "unexpected")
+        runner = self.browser_red_runner(
+            red,
+            red_listing=self.BASE_SPECS + (("street.spec.ts", ["splits"], "expected"),),
+            red_run=self.BASE_SPECS[:4] + (broken, splits),
+        )
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, ["Playwright: the existing test home.spec.ts::lists the projects::ui fails"])
+        self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "--reporter=json")])
+
+    def test_the_red_gate_checks_the_browser_tests_when_only_a_helper_changed(self):
+        red = self.red_commit({"e2e/tests/fixtures.ts": "// a changed helper\n"})
+        broken = ("home.spec.ts", ["lists the projects"], "unexpected")
+        runner = self.browser_red_runner(red, red_listing=self.BASE_SPECS, red_run=self.BASE_SPECS[:4] + (broken,))
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, ["Playwright: the existing test home.spec.ts::lists the projects::ui fails"])
+
+    def test_the_red_gate_says_a_spec_does_not_load_instead_of_naming_its_tests_gone(self):
+        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/map.spec.ts": "// a bad import\n"})
+        splits = ("street.spec.ts", ["splits"], "unexpected")
+        listing = playwright_report(*self.BASE_SPECS[:2], self.BASE_SPECS[4], ("street.spec.ts", ["splits"], "expected"))
+        listing["errors"] = [
+            {
+                "message": "Error: Cannot find module './missing'\n\n   at map.spec.ts:3",
+                "location": {"file": str(self.repo / "e2e/tests/map.spec.ts"), "line": 3, "column": 1},
+            }
+        ]
+        runner = self.browser_red_runner(red, red_listing=listing, red_run=self.BASE_SPECS[:2] + (splits,))
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, ["Playwright: map.spec.ts does not load: Error: Cannot find module './missing'"])
 
     def playwright_runs(self, runner: FakeRunner) -> list[tuple[str, ...]]:
         return [c for c in runner.commands if c[:3] == ("npx", "playwright", "test") and "--list" not in c]

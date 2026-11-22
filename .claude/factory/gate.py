@@ -192,6 +192,18 @@ def spec_of(name: str) -> str:
     return name.split("::", 1)[0]
 
 
+def playwright_load_errors(report: dict) -> Dict[str, str]:
+    """The files a Playwright report could not load (relative to e2e/tests when they are there), each with its error's
+    first line. Playwright leaves such a file's tests out of the report and says why in its top-level `errors`."""
+    errors: Dict[str, str] = {}
+    for error in report.get("errors", []):
+        path = (error.get("location") or {}).get("file", "")
+        name = path.split("/e2e/tests/", 1)[1] if "/e2e/tests/" in path else (path or "the specs")
+        message = (error.get("message") or "").strip()
+        errors.setdefault(name, message.splitlines()[0] if message else "")
+    return errors
+
+
 # ---- #[cfg(test)] blocks --------------------------------------------------------------------------------------------
 
 _CFG_TEST = re.compile(r"#\[cfg\((?:test|(?:all|any)\((?:[^\[\]]*[\s(,])?test(?![\w-])[^\[\]]*\))\)\]")
@@ -383,13 +395,16 @@ class Gate:
         return cargo_results(out), problems
 
     def _playwright(self, files: List[str], listing: bool) -> Dict[str, Optional[str]]:
+        return playwright_results(self._playwright_report(files, listing))
+
+    def _playwright_report(self, files: List[str], listing: bool) -> dict:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.json"
             args = ["npx", "playwright", "test"] + (["--list"] if listing else files) + ["--reporter=json"]
             self._tool(args, self.repo / "e2e", {"PLAYWRIGHT_JSON_OUTPUT_FILE": str(out), "PLAYWRIGHT_JSON_OUTPUT_NAME": str(out)})
             if not out.exists():
                 raise Refused("Playwright wrote no report: run `just e2e` by hand to see why")
-            return playwright_results(json.loads(out.read_text(encoding="utf-8")))
+            return json.loads(out.read_text(encoding="utf-8"))
 
     def _prepare_browser(self) -> None:
         for recipe in ("build", "server", "e2e-fixtures"):
@@ -410,7 +425,11 @@ class Gate:
         changed = self._changed(base, red)
         rust = any(p.endswith(".rs") or p.endswith("Cargo.toml") for p in changed)
         specs = self._specs(changed)
-        if specs:
+        # Any change under e2e/ touches the browser tests; one that is not a spec (a helper every spec imports, the
+        # fixtures, the configuration) can change any spec's outcome.
+        browser = [p for p in changed if p.startswith("e2e/")]
+        shared = any(not glob("e2e/tests/*.spec.ts", p) for p in browser)
+        if browser:
             self._prepare_browser()
 
         # What the base has, listed in the same worktree; always back to where the gate started.
@@ -423,7 +442,7 @@ class Gate:
             if rust:
                 _, listed = self.run(CARGO_TEST + ["--", "--list"], self.repo)
                 rust_before = cargo_listing(listed)
-            if specs:
+            if browser:
                 browser_before = set(self._playwright([], listing=True))
         finally:
             self.git("checkout", "-q", start)
@@ -438,15 +457,23 @@ class Gate:
                 found, new = judge_red(rust_before, results, "Rust")
                 report.problems += found + problems
                 report.new_tests += new
-        if specs:
-            listed = set(self._playwright([], listing=True))
+        if browser:
+            listing = self._playwright_report([], listing=True)
+            listed = set(playwright_results(listing))
+            # A spec that does not load is said once, with its error, rather than as each of its tests gone.
+            unloaded = playwright_load_errors(listing)
+            report.problems += [f"Playwright: {spec} does not load: {error}" for spec, error in sorted(unloaded.items())]
             # A test of the base the red commit no longer lists is gone, in whichever spec it was.
-            report.problems += [f"Playwright: the test {name} is gone" for name in sorted(browser_before - listed)]
-            # Run the specs that gain a test and the changed specs that still hold one; no other spec can differ.
-            changed = {spec[len("tests/") :] for spec in specs}
-            to_run = ({spec_of(n) for n in listed - browser_before} | changed) & {spec_of(n) for n in listed}
+            gone = sorted(n for n in browser_before - listed if spec_of(n) not in unloaded)
+            report.problems += [f"Playwright: the test {name} is gone" for name in gone]
+            # Run every spec after a shared change; otherwise the specs that gain a test and the changed specs that
+            # still hold one, since an unchanged spec with unchanged helpers runs as it did at the base.
+            listed_specs = {spec_of(n) for n in listed}
+            changed_specs = {spec[len("tests/") :] for spec in specs}
+            to_run = listed_specs if shared else ({spec_of(n) for n in listed - browser_before} | changed_specs) & listed_specs
             if to_run:
-                results = self._playwright(sorted("tests/" + spec for spec in to_run), listing=False)
+                files = [] if shared else sorted("tests/" + spec for spec in to_run)
+                results = self._playwright(files, listing=False)
                 before = {name for name in browser_before & listed if spec_of(name) in to_run}
                 found, new = judge_red(before, results, "Playwright")
                 report.problems += found
