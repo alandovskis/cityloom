@@ -405,7 +405,7 @@ impl control::Demand for Emergencies<'_> {
                 row.preempted.set(kind, others(kind, t, &[turn.phase]));
             }
         }
-        let by = if told { turn.end } else { 0 };
+        let by = if told { turn.end } else { turn.start + 1 };
         let all: Vec<usize> = (0..self.uids.len()).collect();
         while let Some(&(x, t)) = self.queue.get(self.counted).filter(|&&(_, t)| t < by) {
             let own = [self.streets[x].phase];
@@ -705,6 +705,33 @@ mod tests {
         let (ran, calls) = run_with(vec![street(1, 0, vec![20])], vec![early(2, 1, vec![3])]);
         assert_eq!(ran[0], (0, 0, 40, 45));
         assert_eq!(calls, vec![Call { delayed: Counts { buses: 1, ..Counts::default() }, ..call(1, 20, 0, None) }]);
+    }
+
+    #[test]
+    fn a_call_in_a_rest_gap_counts_who_waited_at_its_second_before_the_next_turn_serves_anyone() {
+        // Every phase actuated and nobody coming: the signal rests. At 100 s street 3's call comes, and at the same
+        // second a pedestrian at crossing 8 (street 1's phase) and one at crossing 9 (street 2's phase). The call takes the
+        // signal to street 3's phase at once; both pedestrians were waiting at its second, for other phases: delayed.
+        let plan = three();
+        let bounds = control::Bounds { min_green_s: 7, gap_s: 3, max_green_s: 45 };
+        let rules = vec![Rule::Actuated { bounds, floor_s: 7 }; 3];
+        let walks = [walk(8, 16, vec![100]), walk(9, 16, vec![100])];
+        let mut walking = Walks::new(&plan, &rules, &walks);
+        let streets = [street(3, 2, vec![100])];
+        let mut emergencies = Emergencies::new(&plan, &streets, none());
+        let turns = run(&plan, &rules, &mut [&mut walking as &mut dyn Demand, &mut emergencies], 100_000);
+        let first = turns.iter().find(|t| !t.skipped).unwrap();
+        assert_eq!((first.phase, first.start), (2, 100), "out of the rest, straight to street 3's phase");
+        let c = emergencies.finish()[0];
+        assert_eq!((c.to_green_s, c.interrupted, c.preempted), (0, None, Counts::default()));
+        assert_eq!(c.delayed, Counts { pedestrians: 2, ..Counts::default() });
+        // A pedestrian the emergency phase itself serves (crossing 10, walked in street 3's phase) is not delayed by it.
+        let plan = plan_of(vec![phase(1, 25, &[8], &[]), phase(2, 25, &[9], &[]), phase(3, 25, &[10], &[])]);
+        let walks = [walk(8, 16, vec![100]), walk(10, 16, vec![100])];
+        let mut walking = Walks::new(&plan, &rules, &walks);
+        let mut emergencies = Emergencies::new(&plan, &streets, none());
+        run(&plan, &rules, &mut [&mut walking as &mut dyn Demand, &mut emergencies], 100_000);
+        assert_eq!(emergencies.finish()[0].delayed, Counts { pedestrians: 1, ..Counts::default() });
     }
 
     #[test]
