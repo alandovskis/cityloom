@@ -1990,8 +1990,13 @@ fn schedule_table(
                     <select id=format!("period-plan-{d}-{start}") aria-label=label("jn-period-plan-of", start)
                         on:change=move |ev| {
                             let select = event_target::<HtmlSelectElement>(&ev);
-                            if let Ok(id) = select.value().parse::<u32>() && !w.edit(|j| j.set_period_plan(day, start, id)) {
+                            let Ok(id) = select.value().parse::<u32>() else { return };
+                            if !w.edit(|j| j.set_period_plan(day, start, id)) {
                                 select.set_value(&p.plan.to_string());
+                            } else if id != p.plan {
+                                // The row is keyed by its plan too, so it is drawn again: the focus follows the period
+                                // to its new choice of plan (the same id: it names the start), never left on the body.
+                                focus_after_swap(format!("period-plan-{d}-{start}"));
                             }
                         }>
                         {plan_options(ids, name_of, move || p.plan)}
@@ -2011,7 +2016,8 @@ fn schedule_table(
             start.set_value("");
         }
     };
-    let (caption, named_by) = (format!("schedule-{d}-caption"), format!("schedule-{d}-caption"));
+    let caption = format!("schedule-{d}-caption");
+    let named_by = caption.clone();
     let day_named = move || tr(w, "jn-period-new", Args::new().str("day", w.tr(day.on_key())));
     locked(
         w.read_only(),

@@ -442,6 +442,15 @@ test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
     await expect(page.locator("#period-start-saturday-480")).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(page.getByLabel("Start of the period from 09:00 on Saturdays", { exact: true })).toBeFocused();
+    // A period's plan changed keeps the focus on its choice of plan, though the row is drawn again.
+    const choice = page.getByRole("combobox", { name: "Plan of the period from 09:00 on Saturdays", exact: true });
+    await choice.focus();
+    await choice.selectOption("0");
+    await expect(choice).toHaveValue("0");
+    await expect(page.locator("#period-plan-saturday-540")).toBeFocused();
+    await choice.selectOption("1");
+    await expect(choice).toHaveValue("1");
+    await expect(page.locator("#period-plan-saturday-540")).toBeFocused();
     // Which plan runs: a day and a time, both labelled, and the answer a status.
     const runs = page.getByRole("group", { name: "Which plan runs", exact: true });
     await runs.getByRole("combobox", { name: "Day", exact: true }).selectOption("saturday");
