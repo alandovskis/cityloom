@@ -2364,7 +2364,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
         (n_rows.get() > 0).then(|| {
             view! {
                 <details class="jn-fold" id="bikes-rows">
-                    <summary>{move || tr(w, "jn-calls-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
+                    <summary>{move || tr(w, "jn-bikes-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
                     <div class="calls-table" role="region" tabindex="0" aria-labelledby="bikes-rows-caption">
                         <table class="nt">
                             <caption id="bikes-rows-caption">{words(w, "jn-bikes-rows-caption")}</caption>

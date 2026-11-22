@@ -836,6 +836,11 @@ jn-bikes-col-movement = Mouvement vélo
 jn-bikes-col-extended = Prolongés
 jn-bikes-extended-cell = { $count } ({ $seconds } s)
 jn-bikes-no-wait-said = aucun cycliste servi
+jn-bikes-rows =
+    { $n ->
+        [one] L’appel du cycliste, une ligne
+       *[other] Chaque appel de cycliste, une ligne par appel ({ $n })
+    }
 jn-bikes-rows-caption = Chaque appel de cycliste de l’heure, dans l’ordre où il a été fait
 jn-bikes-finding-cannot = Les vélos de { $arm } ne peuvent pas être servis en sécurité : leur vert minimal et leur dégagement demandent { $need } s de vert, et aucune phase qui les fait passer ne peut donner plus de { $most } s.
 jn-bikes-finding-not-ridden = Les vélos de { $arm } sont sur détection, mais aucune phase ne les fait passer : leurs appels ne sont pas servis. Faites-les passer dans une phase ou remettez-les en rappel.

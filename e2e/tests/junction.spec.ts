@@ -1223,7 +1223,7 @@ test.describe("signal timing on a junction of the city", () => {
       "tabindex",
       "0",
     );
-    await expect(page.locator("#bikes-rows summary")).toHaveText("Every call, one row each (30)");
+    await expect(page.locator("#bikes-rows summary")).toHaveText("Every cyclist's call, one row each (30)");
 
     // An arrow key changes the rate; one past the bound is refused and the field keeps its value.
     await rate.focus();

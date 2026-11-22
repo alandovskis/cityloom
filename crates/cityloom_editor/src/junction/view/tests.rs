@@ -4243,7 +4243,8 @@ fn the_plan_offers_each_bike_movement_it_runs_recall_or_on_detection_named_by_it
     let extended = format!("{} ({} s)", totals.extended, totals.extended_s);
     let longest = format!("{} s", totals.longest_wait_s.unwrap());
     assert_eq!(cells, [totals.calls.to_string(), totals.served.to_string(), totals.delayed.to_string(), extended, longest]);
-    assert!(bikes.contains(r#"id="bikes-rows""#) && bikes.contains("Every call, one row each (30)"), "{bikes}");
+    // Named apart from the pedestrian calls' fold, which can sit in the same panel.
+    assert!(bikes.contains(r#"id="bikes-rows""#) && bikes.contains("Every cyclist's call, one row each (30)"), "{bikes}");
 }
 
 #[test]
