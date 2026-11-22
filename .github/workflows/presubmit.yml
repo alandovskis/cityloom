@@ -34,7 +34,7 @@ env:
 # Actions are pinned to a commit; Dependabot proposes the updates.
 jobs:
   # What the change touches decides what runs (scripts/ci/ci_changes.py, rules in scripts/ci/spec-map.json): a pull
-  # request runs every unit test but only the browser specs its files can affect, in the tiers that own them
+  # request runs the Rust tests of the crates it touches and of their dependents (rust_args) and only the browser specs its files can affect, in the tiers that own them
   # (e2e/tiers.json: UI and integration; the E2E tier runs only in postsubmit.yml, on every spec of main).
   changes:
     name: Changes
@@ -42,6 +42,11 @@ jobs:
     timeout-minutes: 5
     outputs:
       unit: ${{ steps.select.outputs.unit }}
+      rust: ${{ steps.select.outputs.rust }}
+      rust_args: ${{ steps.select.outputs.rust_args }}
+      wasm: ${{ steps.select.outputs.wasm }}
+      wasm_args: ${{ steps.select.outputs.wasm_args }}
+      server_release: ${{ steps.select.outputs.server_release }}
       version: ${{ steps.select.outputs.version }}
       browser: ${{ steps.select.outputs.browser }}
       ui: ${{ steps.select.outputs.ui }}
@@ -82,10 +87,28 @@ jobs:
         working-directory: e2e
       - run: just format-check
 
+  # The issue system's labels, forms and labeler rules, and the CI selector's own tests (standard library only, no setup).
+  scripts:
+    name: Script tests
+    needs: changes
+    if: needs.changes.outputs.unit == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ env.JUST_VERSION }}
+      - run: just test-scripts
+
+  # The crates the change touches and the crates that depend on them (`rust_args`; every crate when something they all read
+  # changed, such as web/ or Cargo.lock).
   test:
     name: Unit tests
     needs: changes
-    if: needs.changes.outputs.unit == 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-26.04
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/cityloom
@@ -111,15 +134,15 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: ${{ env.JUST_VERSION }}
-      - run: just test-host
-      # The issue system's labels, forms and labeler rules (standard library only, no setup).
-      - run: just test-scripts
+      - run: just test-host $CRATES
+        env:
+          CRATES: ${{ needs.changes.outputs.rust_args }}
 
   # A type-check of the code only the wasm32 target compiles, beside the host tests (`just test` runs both in turn).
   wasm:
     name: Wasm type-check
     needs: changes
-    if: needs.changes.outputs.unit == 'true'
+    if: needs.changes.outputs.wasm == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -134,12 +157,14 @@ jobs:
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: ${{ env.JUST_VERSION }}
-      - run: just test-wasm
+      - run: just test-wasm $CRATES
+        env:
+          CRATES: ${{ needs.changes.outputs.wasm_args }}
 
   server-release:
     name: Release server has no fake provider
     needs: changes
-    if: needs.changes.outputs.unit == 'true'
+    if: needs.changes.outputs.server_release == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
@@ -312,7 +337,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [changes, format, test, wasm, build, ui, integration, server-release, version]
+    needs: [changes, format, scripts, test, wasm, build, ui, integration, server-release, version]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:

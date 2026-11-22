@@ -6,8 +6,13 @@
 Reads the files the change touches (git diff base..head) and the rules in scripts/ci/spec-map.json, prints what it
 decided and, when GITHUB_OUTPUT is set, writes the job's outputs:
 
-    unit       true unless every file is documentation: the unit tests run in full (presubmit.yml does not start for a
-               change to documentation alone, so in CI this is always true)
+    unit       true unless every file is documentation (presubmit.yml does not start for a change to documentation alone,
+               so in CI this is always true)
+    rust       true when some Rust crate has tests to run: the changed crates and every crate that depends on them (a
+               change to anything else Rust reads, such as web/, Cargo.lock or a workflow, runs every crate)
+    rust_args  their `cargo` arguments ("-p a -p b"; "" runs the whole workspace)
+    wasm       true when some selected crate is built for wasm32; wasm_args the same for it
+    server_release   true when the server is among the selected crates (its release build is checked for the fake provider)
     version    true unless every file is documentation or CI configuration (CI_CONFIGURATION): the version must be raised
     browser    true when some browser tier runs (the shared build of the wasm and the server)
     ui         true when the UI tier runs (e2e/tiers.json: no database, no archive)
@@ -40,6 +45,13 @@ TIERS = ("ui", "integration", "e2e")  # the tiers of e2e/tiers.json, and the CI 
 # CI configuration and its tooling: they change nothing the pages show, so they need no version bump (they still run
 # every test).
 CI_CONFIGURATION = (".github/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
+# What no Rust crate reads: a change to only these leaves the crates' tests as they were. Anything else outside crates/
+# (web/, e2e/fixtures, Cargo.lock, the justfile, the workflows) runs every crate: the tests include_str! the pages, read the
+# fixtures and are built by those files.
+RUST_NEUTRAL = ("e2e/tests/**", "website/**", "scripts/ci/**", "scripts/include/**", ".claude/**")
+# `just test-wasm` leaves these out: they are not built for the browser.
+NOT_WASM = ("cityloom_server", "citymodel_builder")
+CRATES = ROOT / "crates"
 
 
 def glob(pattern: str, path: str) -> bool:
@@ -72,17 +84,75 @@ def matched(rules: dict, path: str) -> bool:
     return rule_for(rules, path) is not None
 
 
+def crate_dependents() -> dict[str, set[str]]:
+    """For each crate of crates/, the crates that depend on it by path (`x = { path = "../x" }`), from their Cargo.toml."""
+    dependents: dict[str, set[str]] = {d.name: set() for d in CRATES.iterdir() if (d / "Cargo.toml").is_file()}
+    for name in dependents:
+        toml = (CRATES / name / "Cargo.toml").read_text(encoding="utf-8")
+        for dep in re.findall(r'path\s*=\s*"\.\./([\w-]+)"', toml):
+            if dep in dependents:
+                dependents[dep].add(name)
+    return dependents
+
+
+def rust_crates(rules: dict, files: list[str], dependents: dict[str, set[str]]) -> list[str] | None:
+    """The crates whose tests a change needs, sorted: the crates it touches and every crate depending on them, directly or
+    not. None is every crate (a file that no crate owns and that the crates may read). Empty is none."""
+    touched: set[str] = set()
+    for f in files:
+        rule = rule_for(rules, f)
+        if (rule is not None and rule.get("docs")) or any(glob(p, f) for p in RUST_NEUTRAL):
+            continue
+        owner = f.split("/")[1] if f.startswith("crates/") and f.count("/") >= 2 else None
+        if owner not in dependents:
+            return None
+        touched.add(owner)
+    closure, todo = set(touched), list(touched)
+    while todo:
+        for user in dependents[todo.pop()]:
+            if user not in closure:
+                closure.add(user)
+                todo.append(user)
+    return sorted(closure)
+
+
 @dataclass
 class Selection:
     docs_only: bool = False
     version: bool = True
     all: bool = False
+    crates: list[str] | None = None  # None: every crate
     specs: list[str] = field(default_factory=list)
     tiers: dict = field(default_factory=dict)  # e2e/tiers.json
 
     @property
     def unit(self) -> bool:
         return not self.docs_only
+
+    @property
+    def rust(self) -> bool:
+        return not self.docs_only and (self.crates is None or bool(self.crates))
+
+    @property
+    def rust_args(self) -> str:
+        return "" if self.crates is None else " ".join(f"-p {c}" for c in self.crates)
+
+    @property
+    def wasm_crates(self) -> list[str] | None:
+        """The selected crates `just test-wasm` builds; None when it builds the whole workspace."""
+        return None if self.crates is None else [c for c in self.crates if c not in NOT_WASM]
+
+    @property
+    def wasm(self) -> bool:
+        return not self.docs_only and (self.crates is None or bool(self.wasm_crates))
+
+    @property
+    def wasm_args(self) -> str:
+        return "" if self.crates is None else " ".join(f"-p {c}" for c in self.wasm_crates or [])
+
+    @property
+    def server_release(self) -> bool:
+        return not self.docs_only and (self.crates is None or "cityloom_server" in self.crates)
 
     def runs(self, tier: str) -> bool:
         """Whether the tier has a spec to run (every one on main and for a change nobody can narrow)."""
@@ -129,7 +199,14 @@ def specs_for(rules: dict, every_spec: list[str], f: str) -> set[str] | None:
     return chosen
 
 
-def select(rules: dict, every_spec: list[str], files: list[str], tiers: dict, empty_means_none: bool = False) -> Selection:
+def select(
+    rules: dict,
+    every_spec: list[str],
+    files: list[str],
+    tiers: dict,
+    empty_means_none: bool = False,
+    dependents: dict[str, set[str]] | None = None,
+) -> Selection:
     if not files:
         return Selection(all=not empty_means_none, tiers=tiers)
     docs = 0
@@ -154,6 +231,7 @@ def select(rules: dict, every_spec: list[str], files: list[str], tiers: dict, em
         docs_only=docs == len(files),
         version=no_version < len(files),
         all=everything,
+        crates=rust_crates(rules, files, dependents if dependents is not None else crate_dependents()),
         specs=sorted(every_spec if everything else chosen),
         tiers=tiers,
     )
@@ -220,6 +298,11 @@ def main() -> int:
         s = Selection(all=True, version=s.version, tiers=tiers)
     out = {
         "unit": str(s.unit).lower(),
+        "rust": str(s.rust).lower(),
+        "rust_args": s.rust_args,
+        "wasm": str(s.wasm).lower(),
+        "wasm_args": s.wasm_args,
+        "server_release": str(s.server_release).lower(),
         "version": str(s.version).lower(),
         "browser": str(s.browser).lower(),
         "ui": str(s.ui).lower(),

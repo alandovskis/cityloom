@@ -30,14 +30,25 @@ build:
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile. CI runs the two as separate jobs.
 test: test-host test-wasm
 
-# Unit tests on the host.
-test-host:
-    @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
-    cargo test --workspace --features cityloom_server/test-provider
+# Unit tests on the host: the whole workspace, or the crates given as `-p <crate>` (presubmit passes the changed ones and what depends on them); the server's test provider is on whenever the server is tested.
+test-host *crates:
+    #!/usr/bin/env sh
+    set -eu
+    [ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
+    case " {{crates}} " in
+        "  ") exec cargo test --workspace --features cityloom_server/test-provider ;;
+        *"-p cityloom_server "*) exec cargo test {{crates}} --features cityloom_server/test-provider ;;
+        *) exec cargo test {{crates}} ;;
+    esac
 
-# A type-check of the wasm-only code that the host tests do not compile.
-test-wasm:
-    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+# A type-check of the wasm-only code that the host tests do not compile: the workspace without the server and `citymodel_builder`, or the crates given as `-p <crate>`.
+test-wasm *crates:
+    #!/usr/bin/env sh
+    set -eu
+    if [ -z "{{crates}}" ]; then
+        exec cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+    fi
+    exec cargo build --target wasm32-unknown-unknown {{crates}}
 
 # A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
 db port="55432":

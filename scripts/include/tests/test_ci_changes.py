@@ -218,6 +218,88 @@ class Selection(unittest.TestCase):
         self.assertEqual(pick("e2e/tests/serve.spec.ts").spec_args("e2e"), "tests/serve.spec.ts")
 
 
+class Crates(unittest.TestCase):
+    """A pull request runs the Rust tests of the crates it touches and of the crates that depend on them."""
+
+    def test_the_dependents_are_read_from_the_manifests(self):
+        d = ci_changes.crate_dependents()
+        self.assertEqual(
+            d["cityloom_model"], {"cityloom_editor", "citymodel_builder"}, "the crates that name it as a path dependency"
+        )
+        self.assertEqual(d["cityloom_server"], set(), "nothing depends on the server")
+        self.assertIn("cityloom_report_pdf", d["cityloom_report"])
+
+    def test_a_crate_runs_with_what_depends_on_it_however_far(self):
+        # report -> report_pdf and editor; editor -> citymodel_builder; builder -> server
+        self.assertEqual(
+            pick("crates/cityloom_report/src/lib.rs").crates,
+            ["cityloom_editor", "cityloom_report", "cityloom_report_pdf", "cityloom_server", "citymodel_builder"],
+        )
+
+    def test_the_server_alone_runs_alone(self):
+        s = pick("crates/cityloom_server/src/app.rs")
+        self.assertEqual(s.crates, ["cityloom_server"])
+        self.assertEqual(s.rust_args, "-p cityloom_server")
+        self.assertTrue(s.server_release)
+        self.assertFalse(s.wasm, "the server is not built for the browser")
+        self.assertEqual(s.wasm_args, "")
+
+    def test_the_wasm_check_leaves_out_what_the_browser_does_not_load(self):
+        s = pick("crates/cityloom_report/src/lib.rs")
+        self.assertEqual(s.wasm_args, "-p cityloom_editor -p cityloom_report -p cityloom_report_pdf")
+        self.assertTrue(s.wasm)
+
+    def test_a_change_no_crate_reads_runs_no_crate(self):
+        for f in ("e2e/tests/street.spec.ts", "scripts/include/tests/test_ci_changes.py", "website/docs/a.md"):
+            with self.subTest(f):
+                s = pick(f, "scripts/ci/spec-map.json")
+                self.assertEqual(s.crates, [])
+                self.assertFalse(s.rust or s.wasm or s.server_release)
+
+    def test_what_every_crate_reads_runs_every_crate(self):
+        # The tests include the pages and fonts of web/, read the fixtures and are built by the manifests and the workflows.
+        for f in (
+            "web/street.html",
+            "e2e/fixtures/plateau.osm.pbf",
+            "Cargo.lock",
+            "Cargo.toml",
+            "justfile",
+            ".github/workflows/presubmit.yml",
+            "scripts/build.sh",
+            "rust-toolchain.toml",
+            "crates/new_crate/src/lib.rs",
+        ):
+            with self.subTest(f):
+                s = pick(f)
+                self.assertIsNone(s.crates)
+                self.assertEqual((s.rust_args, s.wasm_args), ("", ""))
+                self.assertTrue(s.rust and s.wasm and s.server_release)
+
+    def test_a_file_among_changed_crates_does_not_narrow_a_wider_change(self):
+        s = pick("crates/cityloom_server/src/app.rs", "web/app.css")
+        self.assertIsNone(s.crates)
+
+    def test_a_bare_version_bump_runs_every_crate(self):
+        # `changed_files` leaves the bump out, so nothing is left to narrow by: the doubtful case runs everything.
+        s = ci_changes.select(MAP, SPECS, [], tiers=TIERS, empty_means_none=True)
+        self.assertIsNone(s.crates)
+
+    def test_the_wasm_exclusions_are_the_justfiles(self):
+        just = (ROOT / "justfile").read_text(encoding="utf-8")
+        recipe = re.search(r"(?m)^test-wasm.*\n(?:    .*\n)+", just)
+        self.assertIsNotNone(recipe)
+        for name in ci_changes.NOT_WASM:
+            self.assertIn(f"--exclude {name}", recipe.group(0))
+        crates = {d.name for d in (ROOT / "crates").iterdir() if (d / "Cargo.toml").is_file()}
+        self.assertLessEqual(set(ci_changes.NOT_WASM), crates)
+
+    def test_the_server_feature_is_only_asked_when_the_server_is_tested(self):
+        # `cargo test -p other --features cityloom_server/test-provider` is an error: the recipe adds it for the server alone.
+        just = (ROOT / "justfile").read_text(encoding="utf-8")
+        self.assertRegex(just, r'\*"-p cityloom_server "\*\) exec cargo test \{\{crates\}\} --features cityloom_server/test-provider')
+        self.assertRegex(just, r"\*\) exec cargo test \{\{crates\}\} ;;")
+
+
 class Globs(unittest.TestCase):
     def test_star_stays_in_a_folder_and_double_star_crosses(self):
         self.assertTrue(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/a.spec.ts"))
@@ -401,6 +483,26 @@ class Pipelines(unittest.TestCase):
     def test_the_test_builds_carry_no_debug_info(self):
         # Debug info is most of the time the linker spends on the test binaries, and a CI log never shows it.
         self.assertIn('CARGO_PROFILE_TEST_DEBUG: "0"', self.text("presubmit.yml"))
+
+    def test_the_rust_jobs_run_what_the_change_selects(self):
+        jobs = self.jobs("presubmit.yml")
+        self.assertIn("rust == 'true'", jobs["test"])
+        self.assertIn("just test-host $CRATES", jobs["test"])
+        self.assertIn("rust_args", jobs["test"])
+        self.assertIn("wasm == 'true'", jobs["wasm"])
+        self.assertIn("just test-wasm $CRATES", jobs["wasm"])
+        self.assertIn("server_release == 'true'", jobs["server-release"])
+        # The script tests need no Rust, so a change without any crate still runs them.
+        self.assertIn("just test-scripts", jobs["scripts"])
+        self.assertNotIn("just test-scripts", jobs["test"])
+        outputs = self.text("presubmit.yml").split("steps:")[0]
+        for name in ("rust", "rust_args", "wasm", "wasm_args", "server_release"):
+            self.assertIn(f"{name}: ${{{{ steps.select.outputs.{name} }}}}", outputs)
+
+    def test_main_runs_every_crate(self):
+        post = self.text("postsubmit.yml")
+        self.assertNotIn("$CRATES", post)
+        self.assertNotIn("rust_args", post)
 
     def test_the_e2e_tier_runs_only_after_the_merge(self):
         # The E2E tier (an archive packed and served, the real server's headers) is the slowest to set up and proves what
