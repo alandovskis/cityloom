@@ -94,6 +94,11 @@ impl ProjectStore {
         matches!(self.document(), Document::Empty | Document::Current(_))
     }
 
+    /// Whether the list kept is a newer CityLoom's, which this build may read nothing of and never change.
+    pub fn is_newer(&self) -> bool {
+        matches!(self.document(), Document::Future)
+    }
+
     /// Applies `change` to the list as it is kept now and keeps the result. A damaged document is copied aside once the
     /// change is taken, before it is replaced.
     fn write<R>(&self, change: impl FnOnce(&mut Vec<Project>) -> Result<R, Refused>) -> Result<R, Refused> {

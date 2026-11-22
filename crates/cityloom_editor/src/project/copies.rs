@@ -158,22 +158,35 @@ pub fn keep(storage: &Rc<dyn Storage>, token: &str, name: &str, area: &str, docu
 /// slice's tests check every document a share holds is here).
 pub const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restriction::store::RESTRICTIONS_KEY];
 
+/// Why a copy of a shared design was not made one of the person's projects (`fork`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unforked {
+    /// No such copy: never kept, or gone since (the oldest of more than ten copies makes room).
+    Gone,
+    /// The browser's storage refused the project or its design (most likely full).
+    NotKept,
+    /// The list of projects is a newer CityLoom's: this build may not change it.
+    Newer,
+}
+
 /// Makes the copy `id` of a shared design one of the person's projects, to edit (#223): a new project, listed, with
 /// the copy's name and area and a copy of its design, marked for the sync with each of its places as the person's own
 /// work. The copy stays as it was shared, still a copy (its link opens it again, and replaces it, never the fork).
-/// `Unknown` where `id` is not a copy; `Unusable` where the browser cannot keep the project or its design, and then
-/// nothing of it is left listed. Takes the root storage.
-pub fn fork(storage: &Rc<dyn Storage>, id: &str) -> Result<Project, Refused> {
-    let copy = list(&**storage).into_iter().find(|c| c.id == id).ok_or(Refused::Unknown)?;
+/// Where it cannot be made (`Unforked`), nothing of it is left listed. Takes the root storage.
+pub fn fork(storage: &Rc<dyn Storage>, id: &str) -> Result<Project, Unforked> {
+    let copy = list(&**storage).into_iter().find(|c| c.id == id).ok_or(Unforked::Gone)?;
     let shared = ScopedStorage::new(storage.clone(), id);
     let documents: Vec<(&str, String)> =
         FORKED_KEYS.iter().filter_map(|key| shared.recall(key).filter(|text| !text.is_empty()).map(|text| (*key, text))).collect();
     let store = ProjectStore::new(storage.clone());
-    let project = store.create_at(&copy.name, &copy.area)?;
+    if store.is_newer() {
+        return Err(Unforked::Newer);
+    }
+    let project = store.create_at(&copy.name, &copy.area).map_err(|_| Unforked::NotKept)?;
     let forked = ScopedStorage::new(storage.clone(), &project.id);
     if !documents.iter().all(|(key, text)| forked.remember(key, text)) {
         store.delete(&project.id);
-        return Err(Refused::Unusable);
+        return Err(Unforked::NotKept);
     }
     let records = crate::project::store::records(storage, &project.id);
     crate::sync::model::mark_all(&forked, &records, false);
@@ -358,8 +371,8 @@ mod tests {
     fn only_a_copy_can_be_forked() {
         let (_, storage) = root();
         let mine = ProjectStore::new(storage.clone()).create("Mine").unwrap();
-        assert_eq!(fork(&storage, &mine.id), Err(Refused::Unknown), "a project of the person's is not a copy");
-        assert_eq!(fork(&storage, "s9"), Err(Refused::Unknown));
+        assert_eq!(fork(&storage, &mine.id), Err(Unforked::Gone), "a project of the person's is not a copy");
+        assert_eq!(fork(&storage, "s9"), Err(Unforked::Gone));
         assert_eq!(ProjectStore::new(storage.clone()).list().len(), 1);
     }
 
@@ -369,14 +382,29 @@ mod tests {
         let copy = keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[(EDITS, &edits_with_street("w1~n2~n3"))]).unwrap();
         // The new project's id is `p1` (no randomness): its edits cannot be written.
         memory.refuse("cityloom-edits@p1");
-        assert_eq!(fork(&storage, &copy), Err(Refused::Unusable));
+        assert_eq!(fork(&storage, &copy), Err(Unforked::NotKept));
         assert!(ProjectStore::new(storage.clone()).list().is_empty(), "nothing listed");
         assert!(pending(&*storage).iter().all(|name| !name.starts_with("street/")), "none of its places is sent");
         assert!(is_copy(&*storage, &copy), "the copy is still there");
         // A list of projects the browser cannot write keeps no fork either.
         memory.refuse_nothing();
         memory.refuse(crate::project::store::PROJECTS_KEY);
-        assert_eq!(fork(&storage, &copy), Err(Refused::Unusable));
+        assert_eq!(fork(&storage, &copy), Err(Unforked::NotKept));
+    }
+
+    /// A list of projects a newer CityLoom wrote cannot take the fork, and no free space would change that: it is a
+    /// refusal of its own, so the page can say to reload rather than to free space.
+    #[test]
+    fn a_fork_into_a_newer_builds_list_of_projects_is_refused_as_such() {
+        let (memory, storage) = root();
+        let copy = keep(&storage, "tok-a", "A", "area=45.5,-73.5&name=A", &[(EDITS, &edits_with_street("w1~n2~n3"))]).unwrap();
+        let newer = "{\"version\":99,\"projects\":[]}";
+        memory.remember(crate::project::store::PROJECTS_KEY, newer);
+        assert_eq!(fork(&storage, &copy), Err(Unforked::Newer));
+        assert_eq!(memory.recall(crate::project::store::PROJECTS_KEY).as_deref(), Some(newer), "the newer list is left as it was");
+        // A damaged list is not a newer one: it is copied aside and replaced, and the fork is made.
+        memory.remember(crate::project::store::PROJECTS_KEY, "{");
+        assert!(fork(&storage, &copy).is_ok());
     }
 
     #[test]

@@ -659,6 +659,28 @@ fn a_fork_that_fails_is_said_and_leaves_nothing() {
     crate::sync::hub::reset();
 }
 
+/// A list of projects a newer CityLoom wrote cannot take the fork: freeing space would not help, reloading the page
+/// (and so this CityLoom) would.
+#[test]
+fn a_fork_refused_by_a_newer_list_of_projects_says_to_reload() {
+    use crate::shared::ports::Storage;
+    for (locale, words) in [
+        (Locale::En, "No copy was made: your projects were last changed by a newer CityLoom. Reload the page and try again."),
+        (
+            Locale::FrCa,
+            "Aucune copie n’a été faite\u{a0}: vos projets ont été modifiés en dernier par une version plus récente de CityLoom. Rechargez la page et réessayez.",
+        ),
+    ] {
+        let (vm, said, storage, _) = shell_of_a_copy(locale);
+        storage.remember(crate::project::store::PROJECTS_KEY, "{\"version\":99,\"projects\":[]}");
+        vm.fork();
+        assert_eq!(said.take(), [words]);
+        assert_eq!(vm.fork_error().as_deref(), Some(words));
+        assert!(vm.can_fork(), "the button stays");
+        crate::sync::hub::reset();
+    }
+}
+
 fn fork_html(vm: std::rc::Rc<crate::shell::vm::ShellVm>) -> String {
     crate::shared::testing::html(move || {
         use leptos::prelude::IntoAny;

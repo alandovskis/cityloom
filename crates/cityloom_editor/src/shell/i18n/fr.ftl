@@ -16,6 +16,7 @@ shell-forked = Une copie de { $name } fait maintenant partie de vos projets. Ouv
 shell-fork-open = Ouvrir votre copie
 shell-fork-failed = Aucune copie n’a été faite : ce navigateur n’a pas pu la conserver. Libérez de l’espace et réessayez.
 shell-fork-gone = Aucune copie n’a été faite : cet aménagement partagé n’est plus conservé sur cet appareil. Ouvrez de nouveau son lien.
+shell-fork-newer = Aucune copie n’a été faite : vos projets ont été modifiés en dernier par une version plus récente de CityLoom. Rechargez la page et réessayez.
 notes-hidden = Notes masquées.
 details-shown = { $what } affichés.
 details-hidden = { $what } masqués.

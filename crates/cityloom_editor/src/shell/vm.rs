@@ -327,7 +327,11 @@ impl ShellVm {
                 self.ports.announcer.say(&self.i18n.tr_now("shell-forked", &args));
             }
             Err(refused) => {
-                let key = if refused == crate::project::Refused::Unknown { "shell-fork-gone" } else { "shell-fork-failed" };
+                let key = match refused {
+                    crate::project::copies::Unforked::Gone => "shell-fork-gone",
+                    crate::project::copies::Unforked::NotKept => "shell-fork-failed",
+                    crate::project::copies::Unforked::Newer => "shell-fork-newer",
+                };
                 self.fork_error.set(Some(key));
                 self.ports.announcer.say(&self.say(key));
             }

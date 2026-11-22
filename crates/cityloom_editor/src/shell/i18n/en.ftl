@@ -16,6 +16,7 @@ shell-forked = A copy of { $name } is now one of your projects. Open it to make 
 shell-fork-open = Open your copy
 shell-fork-failed = No copy was made: this browser could not keep it. Free some space and try again.
 shell-fork-gone = No copy was made: this shared design is no longer kept on this device. Open its link again.
+shell-fork-newer = No copy was made: your projects were last changed by a newer CityLoom. Reload the page and try again.
 notes-hidden = Notes hidden.
 details-shown = { $what } shown.
 details-hidden = { $what } hidden.
