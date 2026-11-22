@@ -163,6 +163,43 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
     await expect(page.locator("#p-space")).toBeVisible();
   });
 
+  test("the junction's drawing fills its column, keeps its key and part buttons in view, and the same size after the tray", async ({
+    page,
+  }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    const column = page.locator(".stage-scroll");
+    const height = async () => (await box(page, "#drawing")).height;
+    const settled = async () => {
+      let last = -1;
+      await expect
+        .poll(async () => {
+          const now = await height();
+          const same = now === last;
+          last = now;
+          return same;
+        })
+        .toBe(true);
+      return last;
+    };
+    const closed = await settled();
+    // with the tray closed the drawing's card takes the column, no more (it does not scroll) and no less
+    const fit = await column.evaluate((el) => ({
+      overflow: el.scrollHeight - el.clientHeight,
+      left: el.clientHeight - (el.querySelector(".plan-drawing") as HTMLElement).offsetHeight,
+    }));
+    expect(fit.overflow).toBeLessThanOrEqual(1);
+    expect(fit.left).toBeLessThanOrEqual(8);
+    for (const s of ["#plan-key", "#part-next"]) await expect(page.locator(s)).toBeInViewport();
+    await page.locator("#t-space").click();
+    await expect(page.locator("#p-space")).toBeVisible();
+    await settled();
+    for (const s of ["#plan-key", "#part-next", "#drawing"]) await expect(page.locator(s)).toBeInViewport();
+    await page.locator("#notes-toggle").click();
+    await expect(page.locator("#p-space")).toBeHidden();
+    expect(await settled()).toBeCloseTo(closed, 0);
+  });
+
   test("a read-only junction keeps its scenarios in the head and has no history", async ({ page }) => {
     const href = await openJunction(page);
     await page.goto(`/${href}${href.includes("?") ? "&" : "?"}view=1`);

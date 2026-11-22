@@ -122,7 +122,8 @@ pub fn mount_bare_shell(node: u32) {
     if let Some(tools) = find(".tools") {
         let _ = tools.set_attribute("hidden", "");
     }
-    if let Some(el) = find(".plan-drawing") {
+    // The drawing's scroller goes with it, so the message sits under the title, not at the end of an empty column.
+    if let Some(el) = find(".stage-scroll") {
         el.remove();
     }
     if let (Some(at), Some(name)) = (find("#street"), name) {

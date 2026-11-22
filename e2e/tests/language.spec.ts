@@ -306,6 +306,10 @@ test("a junction that cannot be drawn says so, keeps its shell and follows the l
   await expect(page.locator("#notes-toggle")).toHaveCount(0);
   await expect(page.locator(".tools")).toBeHidden();
   await expect(page.locator(".plan-drawing")).toHaveCount(0);
+  // the message sits under the title, not at the bottom of an empty column
+  const head = (await page.locator(".stage-head").boundingBox())!;
+  const message = (await stuck.boundingBox())!;
+  expect(message.y - (head.y + head.height)).toBeLessThan(40);
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
   expect(name).not.toBe("");
   expect(await page.title()).toContain(name);

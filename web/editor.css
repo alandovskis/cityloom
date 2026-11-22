@@ -367,6 +367,12 @@
   .tray-page .stage-head {
     flex: none;
   }
+  /* The junction's card is as tall as its drawing, which is laid out to the room the column leaves it
+     (`junction::view::drawing::frame_of`): grown to fill the column, the card would hold slack the drawing then
+     measured as its own. */
+  .tray-page .plan-drawing {
+    flex: none;
+  }
 }
 
 /* ---- the drawing ----------------------------------------------------------- */

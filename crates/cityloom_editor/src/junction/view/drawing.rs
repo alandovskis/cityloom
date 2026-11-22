@@ -38,8 +38,9 @@ pub fn pressed(attribute: impl Fn(&str) -> Option<String>) -> Target {
 }
 
 /// The frame the drawing is laid out in now (`Frame::in_room`): as wide as its group, and as tall as the room its
-/// column under the title leaves it: the scroller's height less what else the drawing's card holds (the plan key, its
-/// padding), as the street page measures its drawing. Where that column does not scroll (a phone: the page scrolls),
+/// column under the title leaves it: the scroller's height less what else the drawing's card holds around the picture
+/// (the part buttons, the plan key, its padding). The card does not grow to fill the column (`web/editor.css`,
+/// `.tray-page .plan-drawing`), so this holds no slack and the same room gives the same drawing, whatever came before. Where that column does not scroll (a phone: the page scrolls),
 /// the window's height decides.
 #[cfg(target_arch = "wasm32")]
 fn frame_of(wrap: &Element, column: Option<&Element>, card: Option<&Element>) -> Frame {
@@ -55,7 +56,10 @@ fn frame_of(wrap: &Element, column: Option<&Element>, card: Option<&Element>) ->
     let high = |el: &Element| el.dyn_ref::<HtmlElement>().map_or(0.0, |h| h.offset_height() as f64);
     let room = match (column, card) {
         // the column's own padding, top and bottom (`web/editor.css`, `.stage-scroll`)
-        (Some(column), Some(card)) if scrolls(column) => column.client_height() as f64 - (high(card) - high(wrap)) - 4.0,
+        (Some(column), Some(card)) if scrolls(column) => {
+            let picture = wrap.query_selector("svg").ok().flatten().map_or_else(|| high(wrap), |svg| svg.get_bounding_client_rect().height());
+            column.client_height() as f64 - (high(card) - picture) - 4.0
+        }
         _ => f64::INFINITY,
     };
     let window = leptos::web_sys::window().and_then(|w| w.inner_height().ok()).and_then(|h| h.as_f64()).unwrap_or(800.0);
