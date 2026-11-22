@@ -1047,3 +1047,45 @@ jn-refusal-period-out-of-day = Une plage horaire commence après 00:00 et avant 
 jn-refusal-period-taken = Une autre plage horaire commence déjà à cette heure ce jour-là.
 jn-refusal-too-many-periods = Une journée compte au plus 12 plages horaires, celle de 00:00 comprise.
 jn-refusal-first-period-kept = La première plage horaire de la journée commence à 00:00 et reste : choisissez plutôt son plan.
+jn-plans-heading = Plans selon l’heure
+jn-plans-intro = Des feux peuvent appliquer d’autres plans à d’autres moments de la semaine. Chaque plan a son propre réglage et ses propres réglages de réponse (appels piétons, actionnement par les véhicules, détection des vélos, priorité au transport en commun, préemption) ; les phases, leur ordre et leurs modèles sont les mêmes dans tous les plans. Ce que l’horaire ne couvre pas suit le plan par défaut.
+jn-plans-shown = Plan affiché et modifié
+jn-plans-shown-help = Le plan des feux ci-dessous, son bilan de l’heure et ses vérifications, ainsi que le réglage de chaque rue, sont ceux de ce plan : un réglage modifié l’est dans ce plan seulement.
+jn-plans-shown-said = Plan « { $plan } » affiché : son réglage et ses réglages de réponse sont affichés et modifiés.
+jn-plans-viewing = Réglage et réglages de réponse du plan « { $plan } ».
+jn-plans-bounds = Jusqu’à { $plans } plans avec le plan par défaut, des noms d’au plus { $chars } caractères, jusqu’à { $periods } plages horaires par jour (bornes provisoires).
+jn-plans-list = Plans
+jn-plans-default-mark = par défaut, ne peut pas être retiré
+jn-plans-cycle = Cycle de { $seconds } s
+jn-plans-sound = Aucun constat
+jn-plans-findings =
+    { $n ->
+        [one] 1 constat
+       *[other] { $n } constats
+    }
+jn-plans-findings-of = Constats du plan « { $plan } »
+jn-plans-name-of = Nom du plan « { $plan } »
+jn-plans-remove = Retirer
+jn-plans-remove-of = Retirer le plan « { $plan } »
+jn-plans-new-name = Nom d’un nouveau plan
+jn-plans-add = Ajouter un plan
+jn-plans-schedule = Horaire de la semaine
+jn-plans-col-start = Début
+jn-plans-col-end = Fin
+jn-plans-col-plan = Plan
+jn-plans-col-change = Modifier
+jn-plans-midnight = 24:00
+jn-period-start-of = Début de la plage horaire de { $time } { $day }
+jn-period-plan-of = Plan de la plage horaire de { $time } { $day }
+jn-period-remove-of = Retirer la plage horaire de { $time } { $day }
+jn-period-first = Début de la journée
+jn-period-new-start = Début d’une nouvelle plage horaire { $day }
+jn-period-new-plan = Plan d’une nouvelle plage horaire { $day }
+jn-period-new = Nouvelle plage horaire { $day }
+jn-period-add = Ajouter la plage horaire
+jn-period-add-of = Ajouter la nouvelle plage horaire { $day }
+jn-plans-runs-heading = Quel plan s’applique
+jn-plans-runs-day = Jour
+jn-plans-runs-time = Heure
+jn-plans-runs-at = À { $time } { $day }, le plan « { $plan } » s’applique.
+jn-plans-transition = Un changement de plan prend effet à la fin du cycle en cours au début de sa plage horaire : il n’y a pas de période de transition.

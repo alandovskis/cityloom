@@ -554,6 +554,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("speed-choices", "the end of the id of a standards profile field's input, not a message"),
     ("target-speed", "the end of the id of a standards profile field's input, not a message"),
     ("speed-target", "the id of a check, not a message"),
+    ("plan-shown", "the id of the junction plan level's choice of time-of-day plan, which the focus goes back to (junction/view/inspector.rs), not a message"),
     ("read-only-slot", "the CSS class of the element the shell puts the read-only tag in, in the top bar (shell/view.rs)"),
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
     ("swap-on", "a CSS class: the label of the scenarios' Delete button that is shown (web/editor.css)"),

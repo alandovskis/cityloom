@@ -784,12 +784,23 @@ pub struct PlansView {
     pub days: Vec<DayView>,
 }
 
+impl PlansView {
+    /// The plan scheduled at `minute` (after midnight) of day type `day`: the one whose period covers it.
+    pub fn runs_at(&self, day: DayType, minute: u32) -> Option<&PlanView> {
+        let periods = &self.days.iter().find(|d| d.day == day)?.periods;
+        let id = periods.iter().find(|p| p.start_min <= minute && minute < p.end_min)?.plan;
+        self.plans.iter().find(|p| p.id == id)
+    }
+}
+
 /// One plan: its id, its name (the default's in words), its cycle, and what is wrong with it as it runs (its failing
 /// timing checks and its policies' findings), each a sentence.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PlanView {
     pub id: u32,
     pub name: Said,
+    /// The name the person gave it, as a field shows it to be renamed; empty for the default.
+    pub own_name: String,
     pub is_default: bool,
     pub cycle_s: u32,
     pub findings: Vec<Said>,
@@ -1619,7 +1630,8 @@ impl Junction {
                         }
                     }
                 };
-                PlanView { id, name: plans::name_of(now, id), is_default: id == DEFAULT_PLAN, cycle_s, findings: found }
+                let own_name = now.plans.iter().find(|p| p.id == id).map(|p| p.name.clone()).unwrap_or_default();
+                PlanView { id, name: plans::name_of(now, id), own_name, is_default: id == DEFAULT_PLAN, cycle_s, findings: found }
             })
             .collect();
         let days = DayType::ALL
