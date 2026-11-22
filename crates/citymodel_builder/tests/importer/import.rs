@@ -403,6 +403,63 @@ fn split_block_with(the: &str, with: &str) -> importer::Network {
 
 const MIDDLE: &str = r#"<node id="2" lat="45.5000" lon="-73.6000"/>"#;
 
+const APPROACH_SIGNAL: &str = include_str!("approach_signal.osm");
+
+/// The control of the node that stands for the OSM node `osm`.
+fn control_at(net: &importer::Network, osm: i64) -> Control {
+    net.junctions.iter().find(|n| n.provenance.has_node(osm)).unwrap_or_else(|| panic!("no node for {osm}: {:?}", net.junctions)).control.clone()
+}
+
+#[test]
+fn signals_tagged_on_the_approach_before_a_split_of_the_way_run_the_junction_ahead() {
+    let net = import(APPROACH_SIGNAL.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 3), Control::Signals, "the signals face traffic heading east, to node 3");
+    assert_eq!(control_at(&net, 1), Control::Signs, "and not the junction behind them");
+}
+
+#[test]
+fn signals_facing_the_other_way_run_the_junction_behind() {
+    let net = import(APPROACH_SIGNAL.replace(r#"v="forward""#, r#"v="backward""#).as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 1), Control::Signals);
+    assert_eq!(control_at(&net, 3), Control::Signs);
+}
+
+#[test]
+fn signals_facing_west_on_the_second_way_run_the_junction_past_the_split() {
+    // the split moves to 31 m east of node 1, and the signals onto the second way, facing west
+    let osm = APPROACH_SIGNAL
+        .replace(r#"<nd ref="1"/><nd ref="9"/><nd ref="2"/>"#, r#"<nd ref="1"/><nd ref="2"/>"#)
+        .replace(r#"<nd ref="2"/><nd ref="3"/>"#, r#"<nd ref="2"/><nd ref="9"/><nd ref="3"/>"#)
+        .replace(r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#, r#"<node id="2" lat="45.5000" lon="-73.6006"/>"#)
+        .replace(r#"lon="-73.5997""#, r#"lon="-73.6003""#)
+        .replace(r#"v="forward""#, r#"v="backward""#);
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 1), Control::Signals, "heading west, node 1 is past the split at node 2");
+    assert_eq!(control_at(&net, 3), Control::Signs);
+}
+
+#[test]
+fn signals_before_a_split_far_from_the_junction_are_not_carried_to_it() {
+    // the split moves to 78 m before node 3: signals so far from a junction are not its signals
+    let osm = APPROACH_SIGNAL
+        .replace(r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#, r#"<node id="2" lat="45.5000" lon="-73.6000"/>"#)
+        .replace(r#"lon="-73.5997""#, r#"lon="-73.6003""#);
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 3), Control::Signs);
+}
+
+#[test]
+fn signals_facing_a_signalled_crossing_at_the_split_stay_with_the_crossing() {
+    for crossing in [r#"<tag k="crossing" v="traffic_signals"/>"#, r#"<tag k="crossing:signals" v="yes"/>"#] {
+        let osm = APPROACH_SIGNAL.replace(
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#,
+            &format!(r#"<node id="2" lat="45.5000" lon="-73.5994"><tag k="highway" v="crossing"/>{crossing}</node>"#),
+        );
+        let net = import(osm.as_bytes()).unwrap();
+        assert_eq!(control_at(&net, 3), Control::Signs, "{crossing}");
+    }
+}
+
 #[test]
 fn a_block_split_at_a_stop_sign_or_signals_stays_two_roads() {
     for value in ["stop", "give_way", "traffic_signals"] {
