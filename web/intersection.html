@@ -14,8 +14,9 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="v/{{build}}/app.css">
   <link rel="stylesheet" href="v/{{build}}/editor.css">
+  <link rel="stylesheet" href="v/{{build}}/tray.css">
 </head>
-<body>
+<body class="tray-page">
   <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
   <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
     <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
@@ -81,94 +82,33 @@
     </div>
   </header>
 
-  <button type="button" id="inspector-toggle" class="edge-tab left" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="jn-page-details-toggle-title" title="Show or hide the details ( [ )" data-i18n="jn-page-details">Details</button>
-  <button type="button" id="notes-toggle" class="edge-tab right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
-
-  <aside class="panel left" id="details-panel" data-i18n-aria-label="jn-page-details-panel" aria-label="Selected street, corner or crossing" data-covers>
-    <h2 class="sr-only" data-i18n="jn-page-details-panel">Selected street, corner or crossing</h2>
-    <div class="scenario-slot" id="scenario-slot"></div>
-    <div class="panel-body inspector" id="inspector"></div>
-  </aside>
-
   <main class="stage">
     <div class="stage-main">
       <div class="stage-head">
         <div class="title-card with-view">
           <div class="street" id="street"></div>
         </div>
+        <div class="scenario-slot" id="scenario-slot"></div>
         <div class="tools">
           <div id="history" style="display: contents"></div>
         </div>
       </div>
-      <section class="drawing plan-drawing" aria-labelledby="h-drawing">
-        <h2 id="h-drawing" class="sr-only" data-i18n="jn-heading">Junction in 2.5D</h2>
-        <div class="scroll" id="scroll"></div>
-        <ul class="plan-key" id="plan-key" data-i18n-aria-label="jn-page-plan-key" aria-label="Key to the strips"></ul>
-      </section>
-      <div class="statusbar">
-        <div class="fit-row">
-          <div id="fit-slot" style="display: contents"></div>
-        </div>
+      <div class="stage-scroll">
+        <section class="drawing plan-drawing" aria-labelledby="h-drawing">
+          <h2 id="h-drawing" class="sr-only" data-i18n="jn-heading">Junction in 2.5D</h2>
+          <div class="scroll" id="scroll"></div>
+          <ul class="plan-key" id="plan-key" data-i18n-aria-label="jn-page-plan-key" aria-label="Key to the strips"></ul>
+        </section>
       </div>
+      <div id="notes-slot" style="display: contents"></div>
     </div>
   </main>
-  <footer class="site-foot"><span data-version></span></footer>
-
-  <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
-    <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
-      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="jn-page-tab-streets">Streets</button>
-      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1" data-i18n="ui-tab-checks">Checks</button>
-      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
-    </div>
-    <div class="panel-body">
-      <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
-      <section aria-labelledby="h-across">
-      <h2 id="h-across" class="note-h" data-i18n="jn-page-across">Getting across</h2>
-      <table class="nt" id="across"></table>
-      </section>
-      <section aria-labelledby="h-turns">
-      <h2 id="h-turns" class="note-h" data-i18n="jn-page-turns">Turns allowed</h2>
-      <p class="hint" data-i18n="jn-page-turns-hint">Each row is a street traffic comes from. Press a cell to allow or ban that turn.</p>
-      <table class="nt turns" id="turns"></table>
-      </section>
-      <section aria-labelledby="h-conf">
-      <h2 id="h-conf" class="note-h" data-i18n="jn-page-conflicts">Where paths meet</h2>
-      <table class="nt" id="conflicts"></table>
-      <p class="fine" id="conflict-note"></p>
-      </section>
-      </div>
-
-      <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
-      <div class="checks-split">
-      <section aria-labelledby="h-checks" class="checks-main">
-      <h2 id="h-checks" class="note-h" data-i18n="jn-page-does-it-work">Does it work?</h2>
-      <ul class="checks" id="checks"></ul>
-      <div id="checks-fold-slot"></div>
-      </section>
-      <div class="checks-side">
-      <section aria-labelledby="h-goal">
-      <h2 id="h-goal" class="note-h" data-i18n="goal-heading">Guided goals</h2>
-      <div id="goal-slot"></div>
-      </section>
-      <section aria-labelledby="h-atlas">
-      <h2 id="h-atlas" class="note-h" data-i18n="src-atlas-junction-label">Transit priority at junctions</h2>
-      <div id="atlas-source"></div>
-      </section>
-      </div>
-      </div>
-      </div>
-
-      <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
-      <section aria-labelledby="h-rev" class="revs">
-      <h2 id="h-rev" class="note-h" data-i18n="jn-page-your-changes">Your changes</h2>
-      <ol class="rev-cards" id="revs" aria-labelledby="h-rev"></ol>
-      </section>
-      </div>
-
-      <p class="fine" data-i18n="jn-page-fine-print">Sample numbers and limits for now, not real measurements.</p>
-    </div>
-    <div class="title-block" id="title-block" data-i18n-aria-label="jn-page-about" aria-label="About this junction"></div>
+  <button type="button" id="inspector-toggle" class="edge-tab right" aria-controls="details-panel" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="jn-page-details-toggle-title" title="Show or hide the details ( [ )" data-i18n="jn-page-details">Details</button>
+  <aside class="panel details" id="details-panel" data-i18n-aria-label="jn-page-details-panel" aria-label="Selected street, corner or crossing" data-covers>
+    <h2 class="sr-only" data-i18n="jn-page-details-panel">Selected street, corner or crossing</h2>
+    <div class="panel-body inspector" id="inspector"></div>
   </aside>
+  <footer class="site-foot"><span data-version></span></footer>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
   <script src="boot.js"></script>

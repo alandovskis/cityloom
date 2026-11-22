@@ -32,7 +32,7 @@ impl Editor {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", crate::shell::NotesAtStart::OpenWhenRoomy);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", crate::shell::NotesAtStart::Closed);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -47,7 +47,7 @@ impl Editor {
 }
 
 /// Draws the junction page into the elements it keeps for them: the drawing, its
-/// heading and status, undo and redo, the key, and the notes beside it.
+/// heading and status, undo and redo, the key, and the notes' tray under it.
 #[wasm_bindgen]
 pub fn mount_page(editor: &Editor) {
     // Components create effects as they are built, before any is mounted.
@@ -58,6 +58,8 @@ pub fn mount_page(editor: &Editor) {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
+    // The notes' tray first: its panels hold the slots mounted next.
+    mount("notes-slot", view! { <view::notes_tray::JunctionNotes vm=vm.clone()/> }.into_any());
     mount("scroll", view! { <view::drawing::Drawing vm=vm.clone()/> }.into_any());
     mount("street", view! { <view::page::Header vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::page::TitleBlock vm=vm.clone()/> }.into_any());
@@ -115,14 +117,13 @@ pub fn mount_bare_shell(node: u32) {
     let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
     let doc = leptos::prelude::document();
     let find = |selector: &str| doc.query_selector(selector).ok().flatten();
-    // Nothing here can be drawn or changed: the drawing, its tools and its status make way for the panel.
+    // Nothing here can be drawn or changed: the drawing and its tools make way for the message. The page mounts no
+    // notes' tray, so it has no notes to toggle (`shell::view::bind_sidebars` skips a toggle that is not there).
     if let Some(tools) = find(".tools") {
         let _ = tools.set_attribute("hidden", "");
     }
-    for selector in [".plan-drawing", ".statusbar"] {
-        if let Some(el) = find(selector) {
-            el.remove();
-        }
+    if let Some(el) = find(".plan-drawing") {
+        el.remove();
     }
     if let (Some(at), Some(name)) = (find("#street"), name) {
         let i18n = i18n.clone();

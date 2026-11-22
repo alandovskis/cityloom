@@ -100,7 +100,11 @@ impl IsoFrame {
     /// `fit`, drawn no larger than `cap` pixels to the millimetre: the content is centred at that scale. Two pictures
     /// side by side take the smaller of their scales as the cap, so that they can be compared by eye.
     pub fn fit_capped(content: &[P], width: f64, window_height: f64, cap: f64) -> IsoFrame {
-        let plan = Frame::fit(width, window_height);
+        IsoFrame::fit_in(content, Frame::fit(width, window_height), cap)
+    }
+
+    /// `fit_capped` in a drawing already laid out (`Frame::in_room`, the junction page's column).
+    pub fn fit_in(content: &[P], plan: Frame, cap: f64) -> IsoFrame {
         let ground: Vec<P> = content.iter().map(|&c| project(c, 0.0)).collect();
         let (min_x, max_x) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
         let (min_y, max_y) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
@@ -144,7 +148,7 @@ impl Projection for IsoFrame {
 /// The diagram and frame of a drawing `width` wide in a window `window_height` high, for a flat figure
 /// (`junction::view::figure`).
 pub(crate) fn build_diagram(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoFrame, crate::shared::diagram::Diagram) {
-    build::build(v, i18n, width, window_height, units)
+    build::build(v, i18n, Frame::fit(width, window_height), units)
 }
 
 /// What the page needs to put the 2.5D picture in its `<svg>`.
@@ -270,7 +274,12 @@ pub(super) fn circle(r: f64) -> Vec<P> {
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high: every part the keys select can be
 /// pressed (`hit_attrs`), and the one that is selected is outlined. The diagram's layers are in one group, `iso iso-junction`.
 pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
-    let (frame, mut diagram) = build::build(v, i18n, width, window_height, units);
+    iso_svg_framed(v, i18n, Frame::fit(width, window_height), units)
+}
+
+/// `iso_svg` in a drawing already laid out: the junction page's, as tall as its column leaves it (`Frame::in_room`).
+pub fn iso_svg_framed(v: &JView, i18n: &I18n, plan: Frame, units: Units) -> IsoSvg {
+    let (frame, mut diagram) = build::build(v, i18n, plan, units);
     // The defs come before the group, as an element of the picture's own.
     let defs = std::mem::take(&mut diagram.defs);
     IsoSvg { frame, markup: format!("{defs}<g class=\"iso iso-junction\">{}</g>", render(&diagram, &frame)) }
@@ -306,6 +315,16 @@ mod tests {
 
     fn svg(j: &Junction) -> IsoSvg {
         render(&j.view())
+    }
+
+    #[test]
+    fn a_junction_drawn_in_a_frame_is_drawn_to_that_frame_and_as_the_window_formula_when_it_is_the_same() {
+        let (j, en) = (Junction::new(0), crate::i18n_for(crate::shared::i18n::Locale::En));
+        let short = Frame::in_room(1000.0, 250.0, 800.0);
+        let s = iso_svg_framed(&j.view(), &en, short, Units::Metres);
+        assert_eq!((s.frame.width, s.frame.height), (1000.0, 250.0));
+        let same = iso_svg_framed(&j.view(), &en, Frame::fit(1000.0, 1000.0), Units::Metres);
+        assert_eq!(same.markup, render(&j.view()).markup);
     }
 
     fn count(s: &str, needle: &str) -> usize {
@@ -441,7 +460,7 @@ mod tests {
     fn the_picture_is_a_diagram_of_layers_bottom_to_top_with_what_stands_far_to_near() {
         use crate::shared::diagram::{LayerKind, Shape};
         let v = Junction::new(0).view();
-        let (_, d) = build::build(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 800.0, Units::Metres);
+        let (_, d) = build::build(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), Frame::fit(1000.0, 800.0), Units::Metres);
         assert_eq!(d.ground.kind, LayerKind::Ground);
         assert_eq!(d.sections.len(), 1);
         let kinds: Vec<LayerKind> = d.sections[0].layers.iter().map(|l| l.kind).collect();

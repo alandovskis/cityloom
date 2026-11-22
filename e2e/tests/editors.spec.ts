@@ -29,36 +29,18 @@ for (const p of [
   });
 }
 
-// The junction editor: the details on the left, the notes on the right, the drawing between them.
-test.describe("the junction editor's sidebars", () => {
-  test.beforeEach(async ({ page }) => {
-    await openJunction(page);
-    await expect(page.locator("#drawing")).toBeVisible();
-  });
-
-  test("the drawing sits between the two panels and is overlapped by neither", async ({ page }) => {
-    const left = await box(page, ".panel.left");
-    const right = await box(page, ".panel.right");
-    const drawing = await box(page, ".drawing");
-    expect(drawing.x).toBeGreaterThanOrEqual(left.x + left.width);
-    expect(drawing.x + drawing.width).toBeLessThanOrEqual(right.x);
-  });
-
-  test("the status chip is under the drawing, not over it", async ({ page }) => {
-    const drawing = await box(page, ".drawing");
-    const chip = await box(page, "#fit");
-    expect(below(drawing, chip)).toBe(true);
-    await expect(page.locator("#fit")).toBeInViewport();
-  });
-});
-
 // The street editor (layout option 1 of the editors' review): one panel on the right for what is chosen, and the
-// notes as a tray under the drawing whose handle is the status line and the notes' tabs.
-test.describe("the street editor's panel and tray", () => {
+// notes as a tray under the drawing whose handle is the status line and the notes' tabs. The junction editor has the
+// same layout (CLM-32, docs/superpowers/specs/2026-11-22-junction-editor-layout-design.md).
+for (const p of [
+  { name: "street", open: openStreet },
+  { name: "junction", open: openJunction },
+]) {
+test.describe(`the ${p.name} editor's panel and tray`, () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test.beforeEach(async ({ page }) => {
-    await openStreet(page);
+    await p.open(page);
     await expect(page.locator("#drawing")).toBeVisible();
   });
 
@@ -81,6 +63,7 @@ test.describe("the street editor's panel and tray", () => {
   });
 
   test("the title and the tools stay in view while the plan below the drawing is scrolled", async ({ page }) => {
+    test.skip(p.name !== "street", "only the street has a plan and strips under its drawing");
     await page.locator(".stage-scroll").evaluate((el) => el.scrollTo(0, el.scrollHeight));
     await expect(page.locator("#plan")).toBeInViewport();
     for (const s of ["#street-name", "#add-btn", "#undo"]) await expect(page.locator(s)).toBeInViewport();
@@ -127,6 +110,8 @@ test.describe("the street editor's panel and tray", () => {
   });
 });
 
+}
+
 test("the street is not cut by a scrollbar at the usual laptop width, with the notes closed", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await openStreet(page);
@@ -138,15 +123,27 @@ test("the street is not cut by a scrollbar at the usual laptop width, with the n
 test.describe("on a screen too narrow for the notes beside the drawing", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("the junction's start closed and open when asked, and stay open", async ({ page }) => {
+  test("the junction's tray starts closed to its handle, opens when asked, and stays open", async ({ page }) => {
     await openJunction(page);
     await expect(page.locator("#drawing")).toBeVisible();
-    await expect(page.locator("#notes")).toBeHidden();
+    await expect(page.locator("#notes #fit")).toBeVisible();
+    await expect(page.locator("#p-space")).toBeHidden();
     await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.locator("#notes-toggle").click();
-    await expect(page.locator("#notes")).toBeVisible();
+    await expect(page.locator("#p-space")).toBeVisible();
     await page.reload();
-    await expect(page.locator("#notes")).toBeVisible();
+    await expect(page.locator("#p-space")).toBeVisible();
+  });
+
+  test("the junction's whole drawing, its head and the tray's handle are in view with the tray open", async ({ page }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator("#t-space").click();
+    await expect(page.locator("#p-space")).toBeVisible();
+    await expect(page.locator("#drawing")).toBeInViewport({ ratio: 0.99 });
+    for (const s of ["#street-name", "#undo", "#notes #notes-toggle"]) await expect(page.locator(s)).toBeInViewport();
+    const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(sideways).toBeLessThanOrEqual(0);
   });
 
   test("the street's tray starts closed to its handle, opens when asked, and stays open", async ({ page }) => {
@@ -159,6 +156,14 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
     await expect(page.locator("#p-space")).toBeVisible();
     await page.reload();
     await expect(page.locator("#p-space")).toBeVisible();
+  });
+
+  test("a read-only junction keeps its scenarios in the head and has no history", async ({ page }) => {
+    const href = await openJunction(page);
+    await page.goto(`/${href}${href.includes("?") ? "&" : "?"}view=1`);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator(".stage-head #scenario-slot")).toHaveCount(1);
+    await expect(page.locator("#undo")).toHaveCount(0);
   });
 
   test("on the map they are open as before", async ({ page }) => {
@@ -189,35 +194,6 @@ test("on a phone the panels stack under the drawing, and nothing overlaps it", a
   const details = await box(page, "#details-panel");
   expect(below(drawing, status)).toBe(true);
   expect(below(drawing, details)).toBe(true);
-});
-
-test.describe("the junction editor's sidebar tabs", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
-
-  test("each sidebar has an edge tab outside the header, at its panel's edge, that moves when it collapses", async ({
-    page,
-  }) => {
-    await openJunction(page);
-    await expect(page.locator("#drawing")).toBeVisible();
-    const width = page.viewportSize()!.width;
-    for (const side of [
-      { toggle: "#inspector-toggle", panel: "#details-panel", attr: "data-inspector" },
-      { toggle: "#notes-toggle", panel: "#notes", attr: "data-notes" },
-    ]) {
-      const tab = page.locator(side.toggle);
-      const left = side.attr === "data-inspector";
-      await expect(page.locator(`.bar ${side.toggle}`)).toHaveCount(0);
-      expect(await tab.evaluate((el) => getComputedStyle(el).writingMode)).toBe("vertical-rl");
-      const open = (await tab.boundingBox())!;
-      const panel = (await page.locator(side.panel).boundingBox())!;
-      expect(left ? open.x : open.x + open.width).toBeCloseTo(left ? panel.x + panel.width : panel.x, 0);
-      await tab.click();
-      await expect(page.locator("html")).toHaveAttribute(side.attr, "closed");
-      const shut = (await tab.boundingBox())!;
-      expect(left ? shut.x : shut.x + shut.width).toBeCloseTo(left ? 0 : width, 0);
-      expect(shut.height).toBeGreaterThan(shut.width);
-    }
-  });
 });
 
 test.describe("on a phone", () => {

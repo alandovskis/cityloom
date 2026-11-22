@@ -5,6 +5,7 @@
 use super::scene::Scene;
 use super::{IsoFrame, circle, content_points, flatten, height_of, hit_attrs, shades};
 use crate::junction::model::read_model::{ArmView, JView};
+use crate::junction::view::frame::Frame;
 use crate::junction::view::iso_marks::{
     LEAVE_ARROW_MM, Spot, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows, spread_labels,
 };
@@ -22,10 +23,10 @@ const SIGNAL_POST_MM: f64 = 2500.0;
 const SIGN_POST_MM: f64 = 2000.0;
 const BOLLARD_MM: f64 = 900.0;
 
-/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high. Every part the keys select can
-/// be pressed (`hit_attrs`), and the one that is selected is outlined.
-pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoFrame, Diagram) {
-    build_with(v, i18n, IsoFrame::fit(&content_points(v), width, window_height), true, units)
+/// The junction in 2.5D, in the drawing `plan` lays out. Every part the keys select can be pressed (`hit_attrs`), and
+/// the one that is selected is outlined.
+pub(super) fn build(v: &JView, i18n: &I18n, plan: Frame, units: Units) -> (IsoFrame, Diagram) {
+    build_with(v, i18n, IsoFrame::fit_in(&content_points(v), plan, f64::INFINITY), true, units)
 }
 
 /// The same in a frame already laid out. `pressable` false draws the junction to be looked at alone: nothing is

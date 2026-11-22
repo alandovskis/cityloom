@@ -103,7 +103,7 @@ for (const p of PAGES) {
     });
 
     test("the notes are hidden and shown from their button or the ] key", async ({ page }) => {
-      // The street page's notes are a tray that starts closed to its handle; the other pages' start open.
+      // The street and junction pages' notes are a tray that starts closed to its handle; the other pages' start open (the map's on a wide screen).
       const html = page.locator("html");
       const open = (await html.getAttribute("data-notes")) !== "closed";
       const said = (shown: boolean) => (shown ? "Notes shown." : "Notes hidden.");

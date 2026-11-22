@@ -125,6 +125,7 @@ test.describe("the junction editor on a junction of the city", () => {
   });
 
   test("a turn is banned and allowed again from the table, and Ctrl+Z undoes it", async ({ page }) => {
+    await page.locator("#t-space").click();
     const turn = turns(page).first();
     await expect(turn).toHaveClass(/\bon\b/);
     await turn.click();
@@ -267,6 +268,7 @@ test.describe("what the junction editor keeps in the city", () => {
 
   test("what is changed is kept across a reload and shown on the map", async ({ page }) => {
     await openJunction(page);
+    await page.locator("#t-space").click();
     const turn = turns(page).first();
     await expect(turn).toHaveClass(/\bon\b/);
     await turn.click();
@@ -280,6 +282,7 @@ test.describe("what the junction editor keeps in the city", () => {
 
   test("a change is kept even when the page is left at once", async ({ page }) => {
     const href = await openJunction(page);
+    await page.locator("#t-space").click();
     await turns(page).first().click();
     await page.goto("/map.html");
     await page.goto(`/${href}`);

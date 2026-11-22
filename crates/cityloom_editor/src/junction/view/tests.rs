@@ -2010,7 +2010,8 @@ fn every_data_i18n_key_in_intersection_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
     let keys = i18n_keys(INTERSECTION_HTML);
-    assert!(keys.len() > 42, "the page should have been converted: {}", keys.len());
+    // The notes' words are the tray's (`junction::view::notes_tray`), not the page's.
+    assert!(keys.len() > 24, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
         fr.tr_now(&key, &Args::new());
@@ -2043,7 +2044,7 @@ fn intersection_html_leaves_no_text_without_its_message() {
     // Every text between tags in the body that holds a letter is a message, unless it is a unit, a key cap, a
     // language's own name or the Atlas's name.
     use crate::shell::view::i18n_keys;
-    let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
+    let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body").unwrap()..];
     // The page's start-failure notice is worded in both languages in its own markup, because the module that holds
     // the messages is what failed to load: `shell::tests` checks it against them.
     let notice = body.find(r#"<div id="boot-failed""#).unwrap();
@@ -3875,7 +3876,8 @@ fn the_checks_list_what_fails_first_and_fold_what_passes_until_asked() {
 
 #[test]
 fn the_checks_tab_puts_the_checks_first_and_the_goal_and_its_measures_in_a_column_beside_them() {
-    let page = include_str!("../../../../../web/intersection.html");
+    let s = shared(0);
+    let page = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
     let panel = &page[page.find(r#"id="p-checks""#).unwrap()..page.find(r#"id="p-changes""#).unwrap()];
     let at = |s: &str| panel.find(s).unwrap_or_else(|| panic!("{s}: {panel}"));
     assert!(at(r#"class="checks-split""#) < at(r#"id="h-checks""#) && at(r#"id="checks""#) < at(r#"id="checks-fold-slot""#), "{panel}");
