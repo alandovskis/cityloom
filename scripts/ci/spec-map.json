@@ -1,5 +1,5 @@
 {
-  "_comment": "Which browser specs (e2e/tests/*.spec.ts) a pull request runs, by the files it changes. The first rule that matches a file decides it; `all` runs every spec, `none` runs none (the change is covered by the unit tests alone), `docs` marks documentation (presubmit.yml and postsubmit.yml do not start for a change of nothing else: keep their `paths-ignore` in step with this rule), `self` is the changed spec itself, and `@name` is a group below. A file no rule matches runs every spec. `**` crosses folders, `*` does not. Main always runs every spec: this file only narrows a pull request. e2e/tiers.json then gives each chosen spec its tier (ui, integration, e2e), and a tier with no chosen spec does not run: that is how editor code starts no Postgres and no archive. citymodel_builder runs every spec: it packs the archive the E2E tier serves and makes the fixtures' network tiles that every UI and integration spec is served (`just e2e-fixtures`). scripts/include/tests/test_ci_changes.py fails when a spec is in no group or a source folder has no rule.",
+  "_comment": "Which browser specs (e2e/tests/*.spec.ts) a pull request runs, by the files it changes. The first rule that matches a file decides it; `all` runs every spec, `none` runs none (the change is covered by the unit tests alone), `docs` marks documentation (presubmit.yml and postsubmit.yml do not start for a change of nothing else: keep their `paths-ignore` in step with this rule), `self` is the changed spec itself, and `@name` is a group below. A file no rule matches runs every spec. `**` crosses folders, `*` does not. Main always runs every spec: this file only narrows a pull request. e2e/tiers.json then gives each chosen spec its tier (ui, integration, e2e), and a tier with no chosen spec does not run: that is how editor code starts no Postgres and no archive. A page's own files in web/ run that page's group and `@cross` (the pages share their shell, so the cross-page specs check each); what every page loads (app.css, boot.js, city.js) runs every spec. citymodel_builder runs every spec: it packs the archive the E2E tier serves and makes the fixtures' network tiles that every UI and integration spec is served (`just e2e-fixtures`). scripts/include/tests/test_ci_changes.py fails when a spec is in no group or a source folder has no rule.",
   "groups": {
     "street": ["street", "street-iso", "edits", "impact", "speed", "templates", "calming", "curb", "stops", "green"],
     "standards": ["standards"],
@@ -32,6 +32,19 @@
     { "paths": ["crates/cityloom_editor/src/share/**"], "specs": ["@share", "@home", "@cross"] },
     { "paths": ["crates/citymodel_builder/**"], "specs": "all" },
     { "paths": ["crates/cityloom_report/**", "crates/cityloom_report_pdf/**"], "specs": ["@map"] },
+    { "paths": ["web/street.html", "web/app.js"], "specs": ["@street", "@cross"] },
+    { "paths": ["web/editor.css", "web/tray.css"], "specs": ["@street", "@junction", "@cross"] },
+    { "paths": ["web/intersection.html", "web/junction.js"], "specs": ["@junction", "@cross"] },
+    { "paths": ["web/map.html", "web/map.js", "web/report.js"], "specs": ["@map", "@cross"] },
+    { "paths": ["web/mapcanvas.js", "web/vendor/**", "web/glyphs/**", "package.json", "package-lock.json"], "specs": ["@map", "@home", "@cross"] },
+    { "paths": ["web/index.html", "web/home.js", "web/home.css", "web/about.html", "web/about.js", "web/about.css"], "specs": ["@home", "@cross"] },
+    { "paths": ["web/account.html", "web/account.js", "web/account.css"], "specs": ["@account", "@cross"] },
+    { "paths": ["web/share.html", "web/share.js", "web/share.css"], "specs": ["@share", "@cross"] },
+    { "paths": ["web/timeline.html", "web/timeline.js", "web/timeline.css"], "specs": ["@timeline", "@cross"] },
+    { "paths": ["web/credits.html"], "specs": ["@cross"] },
+    { "paths": ["e2e/tests/account-helpers.ts"], "specs": ["account-server", "share", "sync"] },
+    { "paths": ["scripts/e2e-archive.sh"], "specs": ["@archive", "@static"] },
+    { "paths": ["scripts/check-no-fake.sh", "scripts/check-version.sh", "scripts/deploy.sh", "deploy/**", ".github/workflows/docs.yml", ".github/workflows/sonar.yml"], "specs": "none" },
     { "paths": ["crates/cityloom_editor/src/city/**", "crates/cityloom_editor/src/shared/**", "crates/cityloom_editor/src/shell/**", "crates/cityloom_editor/src/lib.rs", "crates/cityloom_editor/src/atlas_contract.rs", "crates/cityloom_model/**", "crates/cityloom_server/**", "web/**", "e2e/**", "scripts/**", "deploy/**", "justfile", "Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock", ".github/**", "package.json", "package-lock.json", "rustfmt.toml", ".prettierrc.json", ".prettierignore", ".gitignore", ".env.example"], "specs": "all" }
   ]
 }
