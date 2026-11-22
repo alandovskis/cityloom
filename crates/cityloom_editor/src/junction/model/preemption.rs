@@ -378,29 +378,36 @@ impl control::Demand for Emergencies<'_> {
         self.recall[k].iter().map(|&(first, need)| clear_at(green_start, first, need, at)).max().unwrap_or(at)
     }
 
+    /// The green of the street of the first call not yet served, waiting or coming before it ends, runs for that call:
+    /// no lower policy cuts it.
+    fn keeps(&self, k: usize, _start: u64, _green_start: u64, green_end: u64) -> bool {
+        self.head().is_some_and(|(phase, t)| phase == k && t < green_end)
+    }
+
     /// The calls of the phase's own street coming while its green runs hold it to their dwell.
     fn prolong(&self, k: usize, start: u64, green_end: u64) -> u32 {
         let green_start = start + self.leads[k];
         u32::try_from(self.dwell_end(k, green_start, green_end) - green_end).unwrap_or(u32::MAX)
     }
 
-    /// Who an interrupted green had (before it is told), and who waited for any other phase when each call came (after
-    /// the turn it came in is told).
+    /// Who waited at each call's second: before the turn is told, the road users an interrupted green had (pre-empted)
+    /// and, for a call that came by the turn's start (in a rest gap, say), who waited for any other phase (delayed),
+    /// before the turn serves anyone; after it is told, the same for a call that came while the turn ran, those it served
+    /// before the call gone.
     fn census(&mut self, turn: &Turn, told: bool, others: &dyn Fn(Kind, u64, &[usize]) -> u32) {
-        if !told {
-            if turn.preempted_s > 0
-                && let Some(&(_, t)) = self.queue.get(self.next)
-            {
-                let row = &mut self.rows[self.next];
-                row.interrupted = Some(self.uids[turn.phase]);
-                for kind in Kind::ALL {
-                    row.preempted.set(kind, others(kind, t, &[turn.phase]));
-                }
+        if !told
+            && turn.preempted_s > 0
+            && let Some(&(_, t)) = self.queue.get(self.next)
+        {
+            let row = &mut self.rows[self.next];
+            row.interrupted = Some(self.uids[turn.phase]);
+            for kind in Kind::ALL {
+                row.preempted.set(kind, others(kind, t, &[turn.phase]));
             }
-            return;
         }
+        let by = if told { turn.end } else { 0 };
         let all: Vec<usize> = (0..self.uids.len()).collect();
-        while let Some(&(x, t)) = self.queue.get(self.counted).filter(|&&(_, t)| t < turn.end) {
+        while let Some(&(x, t)) = self.queue.get(self.counted).filter(|&&(_, t)| t < by) {
             let own = [self.streets[x].phase];
             let row = &mut self.rows[self.counted];
             for kind in Kind::ALL {
@@ -678,6 +685,29 @@ mod tests {
     }
 
     #[test]
+    fn no_lower_policy_shortens_a_green_running_for_a_pre_emption_call() {
+        let plan = three();
+        let rules = control::fixed(&plan);
+        let run_with = |emergency: Vec<Street>, buses: Vec<transit::Street>| {
+            let mut emergencies = Emergencies::new(&plan, &emergency, none());
+            let mut bus = transit::Buses::new(&plan, &rules, &buses, vec![0; 3]);
+            let turns = run(&plan, &rules, &mut [&mut bus as &mut dyn Demand, &mut emergencies], 100_000);
+            (turns.iter().filter(|t| !t.skipped).map(|t| (t.phase, t.start, t.green_s(), t.end)).collect::<Vec<_>>(), emergencies.finish())
+        };
+        let early = |arm, phase, at_s| transit::Street { arm, mode: transit::Mode::EarlyGreen, phase, at_s };
+        // Street 2's call at 5 s takes the signal to its phase from 10 s; street 3's bus at 12 s, during that emergency
+        // green, would cut it (its phase is next) by 10 s: not at all, the green runs its whole 25 s.
+        let (ran, calls) = run_with(vec![street(2, 1, vec![5])], vec![early(3, 2, vec![12])]);
+        assert_eq!(&ran[..2], &[(0, 0, 5, 10), (1, 10, 25, 40)]);
+        assert_eq!(calls, vec![call(2, 5, 5, Some(1))]);
+        // Street 1's call at 20 s in its own green: street 2's bus at 3 s would cut that green to 15 s, ending it before
+        // the call; it is not cut, and held for the dwell, so the bus waiting since 3 s is delayed by the call.
+        let (ran, calls) = run_with(vec![street(1, 0, vec![20])], vec![early(2, 1, vec![3])]);
+        assert_eq!(ran[0], (0, 0, 40, 45));
+        assert_eq!(calls, vec![Call { delayed: Counts { buses: 1, ..Counts::default() }, ..call(1, 20, 0, None) }]);
+    }
+
+    #[test]
     fn the_safe_entry_is_the_longest_clearance_yellow_and_all_red_of_the_phases_a_call_can_interrupt() {
         let plan = three();
         // Crossing 8 (9 m: a 9 s clearance) in street 1's phase; street 1's bike movement (26 m: 7 s) too.
@@ -836,7 +866,7 @@ mod tests {
             not_served: 0,
             longest_to_green_s: Some(14),
             preempted: Counts { pedestrians: 0, cyclists: 1, buses: 1, vehicles: 0 },
-            delayed: Counts { pedestrians: 1, cyclists: 0, buses: 3, vehicles: 57 },
+            delayed: Counts { pedestrians: 1, cyclists: 0, buses: 2, vehicles: 66 },
         }
     }
 

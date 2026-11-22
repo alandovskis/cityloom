@@ -183,6 +183,11 @@ pub trait Demand {
     fn cut(&self, _phase: usize, _green_start: u64, green_s: u32, _held_s: u32) -> u32 {
         green_s
     }
+    /// Whether phase `phase`'s green (the phase started at `start`, its green running from `green_start` to `green_end`)
+    /// runs for this demand above every other (a pre-emption call): then no demand cuts it short or interrupts it.
+    fn keeps(&self, _phase: usize, _start: u64, _green_start: u64, _green_end: u64) -> bool {
+        false
+    }
     /// The seconds phase `phase`, started at `start`, holds its green past `green_end`, where it would end. 0 when it
     /// holds it no longer.
     fn prolong(&self, _phase: usize, _start: u64, _green_end: u64) -> u32 {
@@ -316,7 +321,9 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
                 (base, if hold > base { extended(hold) } else { base })
             }
         };
-        let interrupted = demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_start + u64::from(green_s))).min();
+        // A green running for a demand above every other (pre-emption) is neither interrupted nor cut by any other.
+        let kept = demands.iter().any(|d| d.keeps(k, start, green_start, green_start + u64::from(green_s)));
+        let interrupted = if kept { None } else { demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_start + u64::from(green_s))).min() };
         let (green_s, cut_s, prolonged_s, preempted_s) = if let Some(at) = interrupted {
             // Interrupted (pre-emption): the green ends there, or once every clearance in progress is done; nothing
             // else cuts or holds it.
@@ -327,7 +334,11 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
         } else {
             // Cut short for a demand (transit's early green for a later phase), never below what is held; then held
             // longer for one coming just after it would end (transit's green extension, pre-emption's dwell).
-            let cut_to = demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s);
+            let cut_to = if kept {
+                green_s
+            } else {
+                demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s)
+            };
             let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
             (cut_to + prolonged_s, green_s - cut_to, prolonged_s, 0)
         };
