@@ -3759,7 +3759,8 @@ svg pattern circle {
   font-size: 13px;
   font-weight: 600;
 }
-#calls-rows {
+#calls-rows,
+#bikes-rows {
   margin-top: 8px;
 }
 .signal-phases {
