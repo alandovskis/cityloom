@@ -19,8 +19,8 @@ When either is reached, say which, with the count, and return none.
 ## Pick
 
 1. List the candidates: `list_issues` with `team: linear.team`, `state: linear.intake`, every page (follow `cursor` while `hasNextPage`), with the fields `title, priority, labels, createdAt, gitBranchName`.
-2. Skip an issue when:
-   - its priority is none (0): a person has not said how much it matters;
+2. An issue's priority is its Linear priority; when that is none (0), it is its `P-` label instead, which issues migrated from GitHub carry (`P-critical` Urgent, `P-high` High, `P-medium` Medium, `P-low` Low). Skip an issue when:
+   - it has no priority either way: a person has not said how much it matters;
    - it carries `labels.needsReview`, `labels.needsSetup`, `labels.deployFailed`, `labels.blocked` or `labels.feasible` (waiting for a person, or already taken);
    - it has sub-issues (`list_issues` with `parentId`): it is a tracking issue, and its sub-issues are the work;
    - it is blocked by an issue that is not completed (`get_issue` with `includeRelations: true`: every `blockedBy` issue's `statusType` must be `completed`);
