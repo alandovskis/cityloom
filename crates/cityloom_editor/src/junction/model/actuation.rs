@@ -434,7 +434,9 @@ pub(crate) fn phase_totals(plan: &Plan, rules: &[Rule], turns: &[Turn]) -> Vec<P
                     t.skipped += 1;
                     continue;
                 }
-                let green = turn.green_s();
+                // The green its vehicles left it at: before a bus cut it short or held it longer (transit priority), which
+                // the buses' summary counts.
+                let green = turn.green_s() + turn.cut_s - turn.prolonged_s;
                 t.served += 1;
                 t.extended += u32::from(green > floor_s);
                 t.extended_s = t.extended_s.saturating_add(green.saturating_sub(floor_s));
@@ -511,6 +513,28 @@ mod tests {
             let (lo, hi) = f.range();
             assert!((lo..=hi).contains(&f.get(&a)), "{f:?}: the default is within its bounds");
         }
+    }
+
+    #[test]
+    fn a_green_a_bus_cut_short_or_held_longer_is_counted_as_its_vehicles_left_it() {
+        // An actuated phase (floor 7 s, maximum 45 s): one green held 3 s past its floor for a bus, one its vehicles
+        // carried to the maximum and a bus then cut to 35 s. Neither is the vehicles' extension or a gap out.
+        let plan = plan_of(vec![phase(1, 25, &[])]);
+        let rules = vec![actuated(7, 3, 45)];
+        let turn = |start: u64, green_s: u32, cut_s: u32, prolonged_s: u32| Turn {
+            phase: 0,
+            start,
+            green_start: start,
+            green_end: start + u64::from(green_s),
+            end: start + u64::from(green_s) + 5,
+            base_s: 7,
+            held_s: 0,
+            cut_s,
+            prolonged_s,
+            skipped: false,
+        };
+        let totals = phase_totals(&plan, &rules, &[turn(0, 10, 0, 3), turn(100, 35, 10, 0)]);
+        assert_eq!((totals[0].served, totals[0].extended, totals[0].extended_s, totals[0].ended_early), (2, 1, 38, 1));
     }
 
     #[test]
