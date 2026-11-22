@@ -273,13 +273,16 @@ pub(super) fn settle(s: &mut State) {
         s.schedule = Schedule::default();
         return;
     }
-    let mut seen: Vec<u32> = Vec::new();
+    // The ids kept, never more than `MAX_PLANS - 1`: a document holding a great many plans is settled in a time that
+    // grows with their number alone.
+    let mut kept: Vec<u32> = Vec::with_capacity(MAX_PLANS - 1);
     s.plans.retain(|p| {
-        let fresh = p.id != DEFAULT_PLAN && !seen.contains(&p.id);
-        seen.push(p.id);
-        fresh
+        let keep = kept.len() < MAX_PLANS - 1 && p.id != DEFAULT_PLAN && !kept.contains(&p.id);
+        if keep {
+            kept.push(p.id);
+        }
+        keep
     });
-    s.plans.truncate(MAX_PLANS - 1);
     let arms = &s.arms;
     for p in &mut s.plans {
         p.name = bounded(&p.name);
@@ -831,6 +834,19 @@ mod tests {
         assert!(k.add_plan("Night") && k.view_plan(1));
         assert!(k.undo());
         assert_eq!(k.viewing(), DEFAULT_PLAN);
+    }
+
+    #[test]
+    fn a_document_holding_a_great_many_plans_is_settled_to_the_first_distinct_ones_in_little_time() {
+        let (j, _) = signal();
+        let mut s = j.current().clone();
+        // As many as a share of the largest size could hold: the same few ids at first, then each its own.
+        s.plans = (0..50_000_u32).map(|k| TimingPlan { id: if k < 100 { k % 5 + 1 } else { k }, name: format!("P{k}"), streets: Vec::new() }).collect();
+        let began = std::time::Instant::now();
+        settle(&mut s);
+        assert!(began.elapsed() < std::time::Duration::from_secs(1), "{:?}", began.elapsed());
+        assert_eq!(s.plans.iter().map(|p| p.id).collect::<Vec<_>>(), [1, 2, 3, 4, 5, 100, 101], "the first of each id, `MAX_PLANS` with the default");
+        assert_eq!(s.plans[0].name, "P0");
     }
 
     #[test]
