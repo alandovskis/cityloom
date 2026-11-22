@@ -1016,3 +1016,34 @@ jn-preempt-said-no-call =
        *[other] { $calls } appels d’urgence
     } dans l’heure; aucun appel n’a été servi.
 jn-preempt-none = Aucune rue n’a la préemption activée : un véhicule d’urgence attend le vert de sa rue comme le reste de la circulation.
+## Plans selon l’heure (CLM-16)
+jn-plan-default = Plan par défaut
+jn-day-weekday = En semaine (du lundi au vendredi)
+jn-day-saturday = Samedi
+jn-day-sunday = Dimanche
+jn-day-on-weekday = en semaine
+jn-day-on-saturday = le samedi
+jn-day-on-sunday = le dimanche
+jn-rev-in-plan = { $change }, dans le plan « { $plan } »
+jn-rev-plan-add = Ajout du plan « { $name } »
+jn-rev-plan-rename = Plan « { $from } » renommé « { $to } »
+jn-rev-plan-remove =
+    { $n ->
+        [0] Retrait du plan « { $name } »
+        [one] Retrait du plan « { $name } » : sa plage horaire suit le plan par défaut
+       *[other] Retrait du plan « { $name } » : ses { $n } plages horaires suivent le plan par défaut
+    }
+jn-rev-period-add = « { $plan } » à partir de { $time } { $day }
+jn-rev-period-remove = Retrait de la plage horaire de { $time } { $day }
+jn-rev-period-plan = La plage horaire de { $time } { $day } suit le plan « { $plan } »
+jn-rev-period-start = La plage horaire de { $time } { $day } commence maintenant à { $to }
+jn-refusal-plan-name-empty = Un plan doit avoir un nom.
+jn-refusal-plan-name-too-long = Le nom d’un plan compte au plus 40 caractères.
+jn-refusal-plan-name-taken = Un autre plan porte déjà ce nom.
+jn-refusal-too-many-plans = Une jonction compte au plus 8 plans, le plan par défaut compris.
+jn-refusal-default-plan-kept = Le plan par défaut ne peut pas être retiré : il s’applique chaque fois qu’aucun autre plan n’est prévu.
+jn-refusal-default-plan-named = Le plan par défaut garde son nom.
+jn-refusal-period-out-of-day = Une plage horaire commence après 00:00 et avant minuit. Pour changer ce qui s’applique dès 00:00, choisissez le plan de la première plage horaire de la journée.
+jn-refusal-period-taken = Une autre plage horaire commence déjà à cette heure ce jour-là.
+jn-refusal-too-many-periods = Une journée compte au plus 12 plages horaires, celle de 00:00 comprise.
+jn-refusal-first-period-kept = La première plage horaire de la journée commence à 00:00 et reste : choisissez plutôt son plan.

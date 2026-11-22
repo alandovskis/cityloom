@@ -583,6 +583,8 @@ impl Layout {
             raised: false,
             turbo: None,
             signal_plan: None,
+            plans: Vec::new(),
+            schedule: Default::default(),
             source: def.source.clone(),
         }
     }
@@ -668,6 +670,8 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         raised: false,
         turbo: None,
         signal_plan: None,
+        plans: Vec::new(),
+        schedule: Default::default(),
         source: Vec::new(),
     };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();

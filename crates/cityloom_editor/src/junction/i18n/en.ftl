@@ -1016,3 +1016,34 @@ jn-preempt-said-no-call =
        *[other] { $calls } emergency calls
     } in the hour; no call was served.
 jn-preempt-none = No street has pre-emption on: an emergency vehicle waits for its street's green like other traffic.
+## Time-of-day plans (CLM-16)
+jn-plan-default = Default plan
+jn-day-weekday = Weekdays (Monday to Friday)
+jn-day-saturday = Saturday
+jn-day-sunday = Sunday
+jn-day-on-weekday = on weekdays
+jn-day-on-saturday = on Saturdays
+jn-day-on-sunday = on Sundays
+jn-rev-in-plan = { $change }, in plan “{ $plan }”
+jn-rev-plan-add = Add plan “{ $name }”
+jn-rev-plan-rename = Rename plan “{ $from }” to “{ $to }”
+jn-rev-plan-remove =
+    { $n ->
+        [0] Remove plan “{ $name }”
+        [one] Remove plan “{ $name }”: its period runs the default plan
+       *[other] Remove plan “{ $name }”: its { $n } periods run the default plan
+    }
+jn-rev-period-add = “{ $plan }” from { $time } { $day }
+jn-rev-period-remove = Remove the period from { $time } { $day }
+jn-rev-period-plan = Period from { $time } { $day } runs “{ $plan }”
+jn-rev-period-start = Period from { $time } { $day } now starts at { $to }
+jn-refusal-plan-name-empty = A plan needs a name.
+jn-refusal-plan-name-too-long = A plan's name can have at most 40 characters.
+jn-refusal-plan-name-taken = Another plan already has that name.
+jn-refusal-too-many-plans = A junction holds at most 8 plans, the default included.
+jn-refusal-default-plan-kept = The default plan cannot be removed: it runs whenever no other plan is scheduled.
+jn-refusal-default-plan-named = The default plan keeps its name.
+jn-refusal-period-out-of-day = A period starts after 00:00 and before midnight. To change what runs from 00:00, choose the plan of the day's first period.
+jn-refusal-period-taken = Another period already starts at that time on that day.
+jn-refusal-too-many-periods = A day has at most 12 periods, the one from 00:00 included.
+jn-refusal-first-period-kept = The day's first period starts at 00:00 and stays: choose its plan instead.

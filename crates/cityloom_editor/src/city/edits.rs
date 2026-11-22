@@ -2230,6 +2230,8 @@ mod tests {
                 raised: false,
                 turbo: None,
                 signal_plan: None,
+                plans: Vec::new(),
+                schedule: Default::default(),
                 source: Default::default(),
             },
             arm_streets: BTreeMap::new(),
