@@ -46,6 +46,7 @@ scenario-duplicate = Duplicate
 scenario-rename = Rename
 scenario-delete = Delete
 scenario-delete-confirm = Confirm delete
+scenario-compare = Compare designs
 scenario-created = Scenario “{ $name }” made from the baseline. Now editing it.
 scenario-duplicated = Scenario “{ $from }” duplicated as “{ $name }”. Now editing the copy.
 scenario-renamed = Scenario “{ $from }” renamed “{ $name }”.
@@ -60,3 +61,41 @@ scenario-full = A place keeps at most { $max } scenarios. Delete one to make ano
 scenario-missing = That scenario is no longer here.
 scenario-gone = That scenario is no longer here: it was deleted elsewhere. Now showing the baseline.
 scenario-gone-edit = That scenario is no longer here: it was deleted elsewhere, so your last change to it was not kept. Now showing the baseline.
+cmp-title = Compare designs · { $place }
+cmp-pick-a = Design A
+cmp-pick-b = Design B
+cmp-baseline = Baseline
+cmp-col-a = A: { $name }
+cmp-col-b = B: { $name }
+cmp-summary-h = What differs in B
+cmp-same = { $b } and { $a } are the same.
+cmp-differs =
+    { $n ->
+        [one] { $b } differs from { $a } in { $n } way.
+       *[other] { $b } differs from { $a } in { $n } ways.
+    }
+cmp-also = Also differs in: { $list }
+# a refused pick, then the headline of what differs, in the live region
+cmp-refused-headline = { $why } { $headline }
+cmp-back-street = Back to the street
+cmp-back-junction = Back to the junction
+cmp-skip = Skip to the comparison
+cmp-h-space = Space
+cmp-h-lanes = Lanes
+cmp-h-pieces = Pieces
+cmp-h-checks = Checks
+cmp-h-control = Control
+cmp-h-arms = Streets
+cmp-h-signal = Signal
+cmp-only-passes = Passes only in B: { $check }
+cmp-only-fails = Fails only in B: { $check }
+cmp-other-speed = speed limits
+cmp-other-stretches = stretches
+cmp-other-curbside = curbside uses
+cmp-other-stops = stops
+cmp-other-calming = traffic calming
+cmp-other-green = greenery
+cmp-other-ring = the roundabout ring
+cmp-other-raised = the raised table
+cmp-other-bus = bus priority
+cmp-other-corners = corners

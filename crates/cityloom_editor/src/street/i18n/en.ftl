@@ -854,3 +854,14 @@ add-stops-no-lane = Stops need a lane a bus can stop in on this street.
 add-green-no-host = Trees and planting need a piece off the roadway, such as a sidewalk.
 add-calming-no-anchor = Both ends of this street are cut by the edge of the map, so traffic calming cannot be placed along it.
 green-refused-no-anchor = Both ends of this street are cut by the edge of the map, so trees and planting cannot be placed along it.
+
+# What differs between two designs of a street (src/street/model/compare.rs).
+cmp-piece-added = Added: { $kind }, { $width }
+cmp-piece-removed = Removed: { $kind }, { $width }
+cmp-piece-kind = { $from } becomes { $to }
+cmp-piece-width = { $kind }: { $a } → { $b }
+cmp-lanes = { $direction }: { $a } → { $b }
+cmp-stretches-differ = The stretches along the street are not the same in the two designs.
+cmp-other-piece-details = piece details or order
+# The name of the plan of a street with no length.
+cmp-plan-label = Plan of the street

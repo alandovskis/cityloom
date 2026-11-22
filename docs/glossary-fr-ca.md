@@ -328,6 +328,13 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street and junction pages | Scenario / Baseline | Scénario / Référence | A named alternative design of a place, beside its baseline (the design the map shows). |
 | Street and junction pages | Design shown | Conception affichée | As the archive's `conception`. |
 | Street and junction pages | Duplicate / Rename | Dupliquer / Renommer |  |
+| Comparison page | Compare designs (the page's title, `cmp-title`; the scenario row's link) | Comparer les conceptions | As the archive's `conception`: `Comparer les conceptions · Rue Principale`. |
+| Comparison page | Design A / Design B (the two menus) | Conception A / Conception B | The columns say `A : Référence`, `B : Voie cyclable plus large`. |
+| Comparison page | What differs in B / Also differs in: … | Ce qui diffère dans B / Diffère aussi par : … | The other things are named with their article: `les limites de vitesse`, `le carrefour surélevé`. |
+| Comparison page | Passes only in B / Fails only in B | Réussite seulement dans B / Échec seulement dans B | Nouns, as the street notes’ `réussite` / `échec`, so they agree with any check’s name. |
+| Comparison page | Added / Removed (a piece) | Ajout / Retrait | `Ajout : voie de circulation, 3,00 m`; nouns, so they agree with any piece. |
+| Comparison page | Streets (the junction’s group of lines) | Rues | As the junction’s first tab: an arm is not shown alone (`branche`). |
+| Comparison page | the raised table (another thing that differs at a junction) | le carrefour surélevé | The junction inspector’s `Carrefour surélevé`. |
 | Sync | merged (your work with your account) | fusionné avec votre compte | `0` and `1` are singular: `1 lieu envoyé`, `0 lieu reçu`. |
 | Home page | project | projet | A named container of the person's work, tied to one area. |
 | Home page | Your projects / New project / First project | Vos projets / Nouveau projet / Premier projet |  |

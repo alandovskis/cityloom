@@ -1,5 +1,6 @@
 //! The junction page's views: the Leptos components, and the pure renderers that draw the junction as SVG.
 
+pub mod compare;
 pub mod drawing;
 pub mod figure;
 pub mod frame;

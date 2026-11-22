@@ -118,6 +118,11 @@ pub trait ScenarioHost {
     fn read_only(&self) -> bool {
         false
     }
+    /// The address of the comparison page for this place, naming the design shown as B (nothing on the baseline); it
+    /// keeps the project and read-only, and follows the design shown. None where the place keeps no scenarios.
+    fn compare_href(&self) -> Option<String> {
+        None
+    }
     /// Shows scenario `id`, or the baseline, what is shown now being kept first. Whether it is shown.
     fn switch_scenario(&self, id: Option<u32>) -> bool;
     /// A new scenario named `name`, made from the baseline and shown. Whether it was made.

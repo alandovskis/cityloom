@@ -25,10 +25,16 @@ const BOLLARD_MM: f64 = 900.0;
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high. Every part the keys select can
 /// be pressed (`hit_attrs`), and the one that is selected is outlined.
 pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> (IsoFrame, Diagram) {
-    let f = IsoFrame::fit(&content_points(v), width, window_height);
-    let mut d = Scene::new(f);
+    build_with(v, i18n, IsoFrame::fit(&content_points(v), width, window_height), true, units)
+}
+
+/// The same in a frame already laid out. `pressable` false draws the junction to be looked at alone: nothing is
+/// selected (no outline, no blue name, no turns) and nothing carries what a press would select.
+pub(super) fn build_with(v: &JView, i18n: &I18n, f: IsoFrame, pressable: bool, units: Units) -> (IsoFrame, Diagram) {
+    let mut d = Scene::new(f, pressable);
     let wall = height_of("sidewalk");
-    let selected = |kind: &str, uid: u32| v.selected.kind == Some(kind) && v.selected.uid == uid;
+    let sel = if pressable { (v.selected.kind, v.selected.uid, v.selected.lane) } else { (None, 0, 0) };
+    let selected = |kind: &str, uid: u32| sel.0 == Some(kind) && sel.1 == uid;
 
     // the carriageway where the streets meet, and a roundabout's ring and island
     if let Some(ring) = &v.ring {
@@ -44,12 +50,12 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
             if let Some(bus) = &v.bus {
                 let poly = flatten(&bus.poly);
                 d.pressing(hit_attrs("bus", None, None), |d| d.lay("bus", &poly));
-                if v.selected.kind == Some("bus") {
+                if sel.0 == Some("bus") {
                     d.outline(&poly, 0.0);
                 }
             }
             d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
-            if track && v.selected.kind == Some("cycle") {
+            if track && sel.0 == Some("cycle") {
                 d.outline(&circle(ring.radius_mm as f64), 0.0);
                 d.outline(&circle(ring.road_mm as f64), 0.0);
             }
@@ -63,7 +69,7 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
                 d.divider(divider);
             }
             d.stand("median", ring.island_edge.clone(), height_of("median"), true);
-            if track && v.selected.kind == Some("cycle") {
+            if track && sel.0 == Some("cycle") {
                 d.outline(&ring.outer_edge, 0.0);
                 d.outline(&ring.road_edge, 0.0);
             }
@@ -86,7 +92,7 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
             d.mark_lines(true, "curb-line bad", true, &[flatten(&c.curb)], if c.walk { wall } else { 0.0 });
         }
         // A straight curb is no corner: nothing of it is pressed.
-        let hit = if c.straight { String::new() } else { hit_attrs("corner", Some(c.uid), None) };
+        let hit = if c.straight || !pressable { String::new() } else { hit_attrs("corner", Some(c.uid), None) };
         d.pressing(hit.clone(), |d| {
             if c.walk {
                 d.stand("sidewalk", flatten(&c.wedge), wall, true);
@@ -162,14 +168,16 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
             }
             if let Some(i) = a.crossing.as_ref().and_then(|c| c.island_poly.as_ref()) {
                 // The island of a crossing is a part of the crossing.
-                d.hit = hit_attrs("crossing", Some(a.uid), None);
+                if pressable {
+                    d.hit = hit_attrs("crossing", Some(a.uid), None);
+                }
                 d.stand("sidewalk", flatten(i), wall, true);
             }
         });
         // An entering lane is pressed over the arm's pieces, as it is on the plan.
         let name = say(i18n, units, &a.label);
         for (i, lane) in a.lanes.iter().enumerate() {
-            let on = selected("lane", a.uid) && v.selected.lane == i;
+            let on = selected("lane", a.uid) && sel.2 == i;
             let title = i18n.tr("jn-sel-lane", &Args::new().num("n", i as i64 + 1).num("count", a.lanes.len() as i64).str("arm", name.clone()));
             let class = if on { "lane-hit on" } else { "lane-hit" };
             d.press_area(class, &hit_attrs("lane", Some(a.uid), Some(i)), &flatten(&lane.poly), 0.0, Some(&title));
@@ -265,8 +273,8 @@ pub(super) fn build(v: &JView, i18n: &I18n, width: f64, window_height: f64, unit
     }
 
     // The turns of the street that is selected (or of a part of it), where they may go and where they may not.
-    if v.selected.kind.is_some()
-        && let Some(sa) = v.arms.iter().find(|a| a.uid == v.selected.uid)
+    if sel.0.is_some()
+        && let Some(sa) = v.arms.iter().find(|a| a.uid == sel.1)
     {
         let level = if v.raised && v.ring.is_none() { wall } else { 0.0 };
         for m in v.movements.iter().filter(|m| m.from == sa.uid) {

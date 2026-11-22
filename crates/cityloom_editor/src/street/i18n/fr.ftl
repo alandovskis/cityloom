@@ -854,3 +854,14 @@ add-stops-no-lane = Les arrêts demandent une voie où un autobus peut s’arrê
 add-green-no-host = Les arbres et les plantations demandent un élément hors de la chaussée, comme un trottoir.
 add-calming-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’éléments d’apaisement de la circulation.
 green-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arbres ni de plantations.
+
+# Ce qui distingue deux conceptions d’une rue (src/street/model/compare.rs).
+cmp-piece-added = Ajout : { $kind }, { $width }
+cmp-piece-removed = Retrait : { $kind }, { $width }
+cmp-piece-kind = { $from } devient { $to }
+cmp-piece-width = { $kind } : { $a } → { $b }
+cmp-lanes = { $direction } : { $a } → { $b }
+cmp-stretches-differ = Les tronçons de la rue ne sont pas les mêmes dans les deux conceptions.
+cmp-other-piece-details = les détails ou l’ordre des éléments
+# Le nom du plan d’une rue sans longueur.
+cmp-plan-label = Plan de la rue

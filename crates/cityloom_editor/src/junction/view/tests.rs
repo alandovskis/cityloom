@@ -3856,3 +3856,58 @@ fn the_junction_s_scenarios_are_a_labelled_menu_and_a_name_field_with_its_refusa
     assert!(!button_tag(&h, "scenario-delete").contains("disabled"));
     assert!(!scenarios_drawn(&shared(0)).contains("scenario"), "a sample junction keeps none");
 }
+
+/// A junction of the sample city kept in `storage`, bound to it, so that it keeps scenarios.
+fn junction_in(storage: Rc<dyn crate::shared::ports::Storage>) -> (Rc<JunctionVm>, u32) {
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(storage.clone());
+    let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+    let junction = store.open().junction_editor(node, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Junction(node) };
+    (JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding)), node)
+}
+
+#[test]
+fn the_junction_s_compare_link_names_the_junction_and_the_design_shown_and_keeps_read_only() {
+    use crate::shared::ports::Storage;
+    use crate::shared::scenarios::ScenarioHost;
+    use crate::shared::scoped::ScopedStorage;
+    let owner = Owner::new();
+    owner.set();
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let base = ports.storage.clone();
+    let editable: Rc<dyn Storage> = Rc::new(ScopedStorage::new(base.clone(), "p1"));
+    let (s, node) = junction_in(editable);
+    assert!(!scenarios_drawn(&s).contains("scenario-compare"));
+    assert!(s.create_scenario("Raised"));
+    let h = scenarios_drawn(&s);
+    assert!(h.contains(&format!(r#"id="scenario-compare" href="compare.html?junction={node}&amp;b=1&amp;project=p1" class="btn""#)), "{h}");
+    assert!(s.switch_scenario(None));
+    assert!(scenarios_drawn(&s).contains(&format!(r#"href="compare.html?junction={node}&amp;project=p1""#)));
+    // the same project opened read-only: the link keeps view=1 and is outside the lock
+    let read_only: Rc<dyn Storage> = Rc::new(ScopedStorage::new(base, "p1").only_to_read());
+    let (s, _) = junction_in(read_only);
+    assert_eq!(s.compare_href().as_deref(), Some(format!("compare.html?junction={node}&project=p1&view=1").as_str()));
+    let h = scenarios_drawn(&s);
+    let locked = h.find(r#"<fieldset disabled class="read-only-controls""#).expect("locked");
+    assert!(h.find(r#"id="scenario-compare""#).expect("the link is offered") < locked, "{h}");
+}
+
+// ---- the comparison page's junction half --------------------------------------------------
+
+#[test]
+fn compare_draws_an_iso_for_each_design_and_the_summary() {
+    use crate::junction::vm::compare::JunctionCompareVm;
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let store = crate::city::store::CityStore::sample(ports.storage.clone());
+    let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Junction(node) };
+    let vm = JunctionCompareVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), binding).unwrap();
+    let h = html(move || view! { <crate::junction::view::compare::JunctionCompare vm=vm/> }.into_any());
+    assert_eq!(count(&h, "class=\"compare-iso\""), 2, "{h}");
+    assert_eq!(count(&h, "role=\"img\""), 2, "{h}");
+    assert_eq!(count(&h, "<svg"), 2, "{h}");
+    assert!(!h.contains("aria-label=\"\""), "{h}");
+    assert_eq!(count(&h, "aria-label=\""), 2, "{h}");
+    assert!(h.contains("What differs in B"), "{h}");
+}

@@ -524,6 +524,15 @@ impl Page for BrowserPage {
         None
     }
 
+    fn replace_path(&self, path: &str) {
+        #[cfg(target_arch = "wasm32")]
+        if let Ok(history) = leptos::prelude::window().history() {
+            let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(path));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = path;
+    }
+
     fn languages(&self) -> Vec<String> {
         #[cfg(target_arch = "wasm32")]
         {

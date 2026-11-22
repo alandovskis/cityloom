@@ -46,6 +46,7 @@ scenario-duplicate = Dupliquer
 scenario-rename = Renommer
 scenario-delete = Supprimer
 scenario-delete-confirm = Confirmer la suppression
+scenario-compare = Comparer les conceptions
 scenario-created = Scénario « { $name } » créé à partir de la référence. Vous le modifiez maintenant.
 scenario-duplicated = Scénario « { $from } » dupliqué sous le nom « { $name } ». Vous modifiez maintenant la copie.
 scenario-renamed = Scénario « { $from } » renommé « { $name } ».
@@ -60,3 +61,41 @@ scenario-full = Un lieu garde au plus { $max } scénarios. Supprimez-en un pour 
 scenario-missing = Ce scénario n’existe plus.
 scenario-gone = Ce scénario n’existe plus : il a été supprimé ailleurs. La référence est maintenant affichée.
 scenario-gone-edit = Ce scénario n’existe plus : il a été supprimé ailleurs, et votre dernière modification n’a donc pas été conservée. La référence est maintenant affichée.
+cmp-title = Comparer les conceptions · { $place }
+cmp-pick-a = Conception A
+cmp-pick-b = Conception B
+cmp-baseline = Référence
+cmp-col-a = A : { $name }
+cmp-col-b = B : { $name }
+cmp-summary-h = Ce qui diffère dans B
+cmp-same = { $b } et { $a } sont identiques.
+cmp-differs =
+    { $n ->
+        [one] { $b } diffère de { $a } sur { $n } point.
+       *[other] { $b } diffère de { $a } sur { $n } points.
+    }
+cmp-also = Diffère aussi par : { $list }
+# un choix refusé, puis le titre de ce qui diffère, dans la région annoncée
+cmp-refused-headline = { $why } { $headline }
+cmp-back-street = Retour à la rue
+cmp-back-junction = Retour à la jonction
+cmp-skip = Passer à la comparaison
+cmp-h-space = Espace
+cmp-h-lanes = Voies
+cmp-h-pieces = Éléments
+cmp-h-checks = Vérifications
+cmp-h-control = Signalisation
+cmp-h-arms = Rues
+cmp-h-signal = Feux de circulation
+cmp-only-passes = Réussite seulement dans B : { $check }
+cmp-only-fails = Échec seulement dans B : { $check }
+cmp-other-speed = les limites de vitesse
+cmp-other-stretches = les tronçons
+cmp-other-curbside = les usages du bord de rue
+cmp-other-stops = les arrêts
+cmp-other-calming = l’apaisement de la circulation
+cmp-other-green = la verdure
+cmp-other-ring = l’anneau du carrefour giratoire
+cmp-other-raised = le carrefour surélevé
+cmp-other-bus = la priorité aux autobus
+cmp-other-corners = les coins

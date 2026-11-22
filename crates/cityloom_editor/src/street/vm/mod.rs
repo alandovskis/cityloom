@@ -3,6 +3,7 @@
 //! send it what the person does.
 
 pub mod add_menu;
+pub mod compare;
 pub mod impact;
 pub mod keys;
 pub mod level;
@@ -1653,6 +1654,12 @@ impl ScenarioHost for StreetVm {
 
     fn read_only(&self) -> bool {
         StreetVm::read_only(self)
+    }
+
+    fn compare_href(&self) -> Option<String> {
+        let Some(Place::Street(edge)) = self.binding().map(|b| b.place) else { return None };
+        let b = self.scenarios.active().map(|id| format!("&b={id}")).unwrap_or_default();
+        Some(self.link(&format!("compare.html?street={edge}{b}")))
     }
 
     fn switch_scenario(&self, id: Option<u32>) -> bool {

@@ -2,6 +2,7 @@
 //! it changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
+pub mod compare;
 pub mod keys;
 pub mod text;
 pub mod watch;
@@ -676,6 +677,12 @@ impl ScenarioHost for JunctionVm {
 
     fn read_only(&self) -> bool {
         JunctionVm::read_only(self)
+    }
+
+    fn compare_href(&self) -> Option<String> {
+        let Some(Place::Junction(node)) = self.binding().map(|b| b.place) else { return None };
+        let b = self.scenarios.active().map(|id| format!("&b={id}")).unwrap_or_default();
+        Some(self.link(&format!("compare.html?junction={node}{b}")))
     }
 
     fn switch_scenario(&self, id: Option<u32>) -> bool {

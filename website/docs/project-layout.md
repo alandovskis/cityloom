@@ -110,6 +110,7 @@ so a browser never mixes files from two deploys.
 | `intersection.html` | `junction.js` | The junction editor.                                                    |
 | `account.html`      | `account.js`  | The Account page.                                                       |
 | `timeline.html`     | `timeline.js` | The design timeline.                                                    |
+| `compare.html`      | `compare.js`  | Two designs of a street or junction side by side.                       |
 | `credits.html`      |               | The credits, in English only.                                           |
 
 The page scripts are start-up glue: they load the WebAssembly module and call its `mount_*` function. The other files:
@@ -118,7 +119,7 @@ The page scripts are start-up glue: they load the WebAssembly module and call it
 - `city.js`: reads which place a page was opened for from its address (`?street=7`, `?junction=3`).
 - `report.js`: loads the PDF writer and its fonts the first time a report is asked for.
 - `app.css` (every page), `editor.css` (the street and junction editors), `home.css` (home and About), and
-  `about.css`, `account.css` and `timeline.css` for their pages. The map page uses MapLibre's stylesheet from
+  `about.css`, `account.css`, `compare.css` and `timeline.css` for their pages. The map page uses MapLibre's stylesheet from
   `vendor/`.
 - `fonts/`: the Noto Sans fonts the PDF report embeds. `glyphs/`: the map's label glyphs. `licenses/`: the licences of
   what is shipped from others.

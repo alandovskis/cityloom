@@ -69,6 +69,12 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
             }
         }
     };
+    // The link to the comparison page: only while the place keeps a scenario, and outside the locked controls, since
+    // looking at the designs is not an edit.
+    let compare = move || {
+        host.with_value(|h| (!h.scenario_state().items().is_empty()).then(|| h.compare_href()).flatten())
+            .map(|href| view! { <a id="scenario-compare" class="btn" href=href>{tr("scenario-compare")}</a> })
+    };
     let switch = move |ev: leptos::ev::Event| {
         let value = event_target_value(&ev);
         let id = value.parse::<u32>().ok();
@@ -85,6 +91,7 @@ pub fn ScenarioPanel(host: Rc<dyn ScenarioHost>) -> impl IntoView {
                     <option value="" prop:selected=baseline_shown>{tr("scenario-baseline")}</option>
                     {options}
                 </select>
+                {compare}
             </div>
             <p id="scenario-mode" class="scenario-mode" class:in-scenario=move || !baseline_shown()>{mode}</p>
             <details class="scenario-manage">

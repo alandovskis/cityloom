@@ -30,8 +30,9 @@ pub fn round_trips(project: &str, key: &str) -> bool {
     split_key(&wire_key(project, key)) == (project, key)
 }
 
-/// The pages that open inside a project: the map, the two editors, the timeline and the page that shares it.
-pub const PROJECT_PAGES: [&str; 5] = ["map.html", "street.html", "intersection.html", "timeline.html", "share.html"];
+/// The pages that open inside a project: the map, the two editors, the timeline, the page that shares it and the one
+/// that compares the designs of a place.
+pub const PROJECT_PAGES: [&str; 6] = ["map.html", "street.html", "intersection.html", "timeline.html", "share.html", "compare.html"];
 
 /// What a page's address carries to open its project read-only: the design can be looked at, not changed. Nothing
 /// on a page adds it or takes it away (`link_in` keeps it on the links between a project's pages); the share link
@@ -211,6 +212,8 @@ mod tests {
         assert_eq!(link("intersection.html?junction=3", Some("first")), "intersection.html?junction=3&project=first");
         assert_eq!(link("/map.html#x", Some("p1")), "/map.html?project=p1#x");
         assert_eq!(link("timeline.html", Some("p1")), "timeline.html?project=p1");
+        assert_eq!(link("compare.html?street=7", Some("p1")), "compare.html?street=7&project=p1");
+        assert_eq!(link_in("compare.html?junction=3&b=1", Some("p1"), true), "compare.html?junction=3&b=1&project=p1&view=1");
         // already named, no project, or a page outside a project: as it is
         assert_eq!(link("map.html?project=p2", Some("p1")), "map.html?project=p2");
         assert_eq!(link("street.html?street=7", None), "street.html?street=7");

@@ -701,3 +701,17 @@ jn-check-curb-near-bad = { $uses }
 jn-curb-near = The { $use } on { $arm } stands { $gap } from the crossing; { $need } or more is needed.
 jn-curb-near-inside = The { $use } on { $arm } reaches the crossing.
 jn-sel-arm-curb = { $use } { $side }, { $at } from the centre.
+
+# What differs between two designs of a junction (src/junction/model/compare.rs).
+cmp-jn-control = Control: { $a } → { $b }
+cmp-jn-turbo = Turbo layout: { $a } → { $b }
+cmp-jn-turbo-none = none
+cmp-jn-entering = { $street }: lanes coming in, { $a } → { $b }
+cmp-jn-leaving = { $street }: lanes going out, { $a } → { $b }
+cmp-jn-crossing-added = { $street }: a crossing is added
+cmp-jn-crossing-removed = { $street }: the crossing is removed
+cmp-jn-bike-box-added = { $street }: a bike box is added
+cmp-jn-bike-box-removed = { $street }: the bike box is removed
+cmp-jn-phases = Signal phases: { $a } → { $b }
+cmp-jn-cycle = Signal cycle: { $a } s → { $b } s
+cmp-other-arm-details = details of the streets at the junction

@@ -494,6 +494,10 @@ pub trait Page {
     fn hash(&self) -> String {
         String::new()
     }
+    /// Replaces the address within the site (path and query, and `#…`) without a new entry in the history or a load.
+    fn replace_path(&self, path: &str) {
+        let _ = path;
+    }
     /// The site's own origin, such as `https://cityloom.example`, for a link meant to be given to someone else.
     fn origin(&self) -> String {
         String::new()
@@ -1034,6 +1038,9 @@ impl Page for FakePage {
     }
     fn hash(&self) -> String {
         self.fragment.borrow().clone().unwrap_or_default()
+    }
+    fn replace_path(&self, path: &str) {
+        *self.path.borrow_mut() = path.to_string();
     }
     fn origin(&self) -> String {
         FAKE_ORIGIN.to_string()

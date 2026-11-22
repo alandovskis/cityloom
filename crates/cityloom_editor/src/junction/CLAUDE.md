@@ -6,6 +6,8 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 
 Scenarios (#190): `JunctionVm` keeps a `ScenarioState` and is a `ScenarioHost` and `city::binding::ScenarioPage`; its keeper writes to the design shown (`keep_*_in`), its sync reload reads it, and `page::Scenarios` draws `shared::scenarios_view::ScenarioPanel` in `#scenario-slot`, at the top of the details panel (left), not in the head as on the street page: between the two sidebars the head is too narrow for it, and the drawing's height is the window's less a fixed 555 px (`view::frame`, at least 340), so a taller head pushed the status chip under a 900 px window (see `city/CLAUDE.md`, Scenarios, and `shared/CLAUDE.md`).
 
+Comparison (CLM-9): `compare.html` shows two designs of a junction side by side; `mount_compare_junction` (`mod.rs`) mounts this slice's half. `model/compare.rs` says what differs between two `Junction`s (pure, no wording), `vm/compare.rs` is `JunctionCompareVm` (a `shared::compare::CompareHost`, read-only, nothing written) and `view/compare.rs` draws the two figures per column (`figure.compare-iso`, each `role="img"` with an `aria-label`), over `shared::compare_view::CompareFrame`.
+
 ## The details panel (`junction/view/inspector.rs`, `#inspector`)
 
 - One level at a time under a path (`path`, a `nav.panel-path`, `jn-path-label`, the street page's styles): Junction; Junction › a street; Junction › a street › Crossing or Lane n; Junction › Corner, Bus lane or Cycle track. Steps before the last are `.path-step` buttons (`jn-path-up-<i>`) that choose the parent (`Target::None`, `Target::Arm`); the last is `#jn-path-current` (`aria-current="location"`, `tabindex=-1`), which takes the focus after a step or a "go to" button is pressed.

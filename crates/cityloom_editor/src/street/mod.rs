@@ -151,3 +151,19 @@ pub fn open_street_in(ports: Ports, edge: u32) -> Option<Sheet> {
     vm.watch_sync();
     Some(Sheet(vm, store))
 }
+
+/// The street comparison page's street half (`street/view/compare.rs`), mounted into `#compare-slot`: the designs
+/// of street `edge` of the city of the page's project, side by side and read-only. `ports` are already scoped to the
+/// project (`project::context::peek`); nothing is written. Gives the view-model, for the shell to tell it the units
+/// chosen; none when the street cannot be opened (not a street of the city), and nothing is mounted. The caller (`lib.rs::mount_compare`) runs `any_spawner::Executor::init_wasm_bindgen()`
+/// first, as every `mount_*` must.
+pub fn mount_compare_street(ports: Ports, i18n: Rc<crate::shared::i18n::I18n>, edge: u32) -> Option<Rc<dyn crate::shared::compare::CompareHost>> {
+    crate::standards::store::activate(ports.storage.clone());
+    let binding = CityBinding { store: CityStore::current(ports.storage.clone()), place: Place::Street(edge) };
+    let vm = vm::compare::StreetCompareVm::new(ports, i18n, binding)?;
+    let slot = leptos::prelude::document().get_element_by_id("compare-slot")?;
+    let host: Rc<dyn crate::shared::compare::CompareHost> = vm.clone();
+    let slot: HtmlElement = slot.unchecked_into();
+    leptos::mount::mount_to(slot, move || view! { <view::compare::StreetCompare vm=vm/> }).forget();
+    Some(host)
+}

@@ -5,6 +5,7 @@
 pub mod add_menu;
 pub mod calming_strip;
 pub mod calming_tools;
+pub mod compare;
 pub mod curb_strip;
 pub mod curb_tools;
 pub mod drawing;

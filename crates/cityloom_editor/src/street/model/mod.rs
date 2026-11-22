@@ -6,6 +6,7 @@
 //! (`Editor`), the checks, the views and the words (`Said`). What the editor reads of a street beyond its data is
 //! `StreetExt`; the `…Ext` traits of the other types hold their thresholds and the keys of the messages that name them.
 
+pub mod compare;
 pub mod measures;
 pub mod pieces;
 

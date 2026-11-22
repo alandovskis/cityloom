@@ -114,6 +114,7 @@ liée à la construction, pour qu’un navigateur ne mélange jamais les fichier
 | `intersection.html` | `junction.js` | L’éditeur de jonction.                                                               |
 | `account.html`      | `account.js`  | La page Compte.                                                                      |
 | `timeline.html`     | `timeline.js` | La chronologie de conception.                                                        |
+| `compare.html`      | `compare.js`  | Deux conceptions d’une rue ou d’une jonction côte à côte.                            |
 | `credits.html`      |               | Les mentions, en anglais seulement.                                                  |
 
 Les scripts de page ne servent qu’au démarrage : ils chargent le module WebAssembly et appellent sa fonction `mount_*`.
@@ -124,7 +125,7 @@ Les autres fichiers :
 - `city.js` : lit, dans l’adresse d’une page, le lieu pour lequel elle a été ouverte (`?street=7`, `?junction=3`).
 - `report.js` : charge le générateur de PDF et ses polices la première fois qu’un rapport est demandé.
 - `app.css` (toutes les pages), `editor.css` (les éditeurs de rue et de jonction), `home.css` (l’accueil et À propos), et
-  `about.css`, `account.css` et `timeline.css` pour leurs pages. La page de la carte utilise la feuille de style de
+  `about.css`, `account.css`, `compare.css` et `timeline.css` pour leurs pages. La page de la carte utilise la feuille de style de
   MapLibre, dans `vendor/`.
 - `fonts/` : les polices Noto Sans qu’intègre le rapport PDF. `glyphs/` : les glyphes des étiquettes de la carte.
   `licenses/` : les licences de ce qui est livré d’autres auteurs.
