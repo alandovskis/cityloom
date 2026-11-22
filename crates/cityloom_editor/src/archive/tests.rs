@@ -433,11 +433,12 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
         (19, plain.clone(), 5),
         (20, plain.clone(), 5),
         (21, plain.clone(), 5),
+        (22, plain.clone(), 5),
         (NEWEST.into(), plain.clone(), 5),
     ];
     assert_eq!(
-        NEWEST, 22,
-        "a new edits version needs a row here (18, a crossing on call, 19, passive detection, 20, an actuated street, 21, a bike movement on detection, and 22, a street given transit priority, are a junction's: below)"
+        NEWEST, 23,
+        "a new edits version needs a row here (18, a crossing on call, 19, passive detection, 20, an actuated street, 21, a bike movement on detection, 22, a street given transit priority, and 23, a street with pre-emption on, are a junction's: below)"
     );
     for (version, mut record, written) in cases {
         record["import"] = json!(11); // an unstamped record is stale and never imported
@@ -493,6 +494,13 @@ fn edits_of_every_version_this_build_reads_are_accepted_and_written_at_the_versi
     let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
     assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
     assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::TRANSIT_VERSION);
+    // a street with pre-emption on needs version 23
+    let on = json!({"state": {"arms": [{"preemption": 2}]}, "import": 11});
+    let doc = json!({"version": 23, "streets": {}, "junctions": {"n9": on}});
+    let b = device();
+    let archive = model::parse_and_validate(&raw(doc, Value::Null)).unwrap();
+    assert_eq!(model::apply(&archive, &b.ports.storage, Choice::KeepMine).unwrap().added, 1);
+    assert_eq!(stored(&b.storage, EDITS_KEY)["version"], edits::PREEMPTION_VERSION);
     for refused in [3, NEWEST + 1] {
         assert!(model::parse_and_validate(&raw(edits_with(refused.into(), json!({})), Value::Null)).is_err(), "version {refused}");
     }
