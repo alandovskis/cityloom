@@ -37,11 +37,28 @@ pub fn pressed(attribute: impl Fn(&str) -> Option<String>) -> Target {
     selected_by(&attribute("data-role").unwrap_or_default(), number("data-uid") as u32, number("data-lane"))
 }
 
-/// Where the window's size and the drawing's width are now.
+/// The drawing's width now, and the window height `Frame::fit` takes for it: the one that leaves the drawing the
+/// room its column under the title has (`Frame::window_leaving`): the scroller's height less what else the drawing's
+/// card holds (the plan key, its padding), as the street page measures its drawing. Where that column does not scroll
+/// (a phone: the page scrolls), nothing limits the drawing's height.
 #[cfg(target_arch = "wasm32")]
-fn viewport_of(wrap: &Element) -> (f64, f64) {
-    let height = leptos::web_sys::window().and_then(|w| w.inner_height().ok()).and_then(|h| h.as_f64()).unwrap_or(800.0);
-    (wrap.client_width() as f64, height)
+fn viewport_of(wrap: &Element, column: Option<&Element>, card: Option<&Element>) -> (f64, f64) {
+    use leptos::wasm_bindgen::JsCast;
+    let scrolls = |el: &Element| {
+        leptos::prelude::window()
+            .get_computed_style(el)
+            .ok()
+            .flatten()
+            .and_then(|s| s.get_property_value("overflow-y").ok())
+            .is_some_and(|o| o == "auto" || o == "scroll")
+    };
+    let high = |el: &Element| el.dyn_ref::<HtmlElement>().map_or(0.0, |h| h.offset_height() as f64);
+    let room = match (column, card) {
+        // the column's own padding, top and bottom (`web/editor.css`, `.stage-scroll`)
+        (Some(column), Some(card)) if scrolls(column) => column.client_height() as f64 - (high(card) - high(wrap)) - 4.0,
+        _ => f64::INFINITY,
+    };
+    (wrap.client_width() as f64, Frame::window_leaving(room))
 }
 
 #[component]
@@ -166,16 +183,27 @@ fn typing(e: &KeyboardEvent) -> bool {
 fn watch_size(wrap: Element, viewport: RwSignal<(f64, f64)>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
 
+    let column = wrap.closest(".stage-scroll").ok().flatten();
+    let card = wrap.closest(".drawing").ok().flatten();
     let update = {
-        let wrap = wrap.clone();
-        move || viewport.set(viewport_of(&wrap))
+        let (wrap, column, card) = (wrap.clone(), column.clone(), card.clone());
+        move || {
+            let now = viewport_of(&wrap, column.as_ref(), card.as_ref());
+            if viewport.get_untracked() != now {
+                viewport.set(now);
+            }
+        }
     };
     update();
     let on_resize = update.clone();
     let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| on_resize());
-    if let Some(scroll) = wrap.parent_element() {
-        if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+    if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+        if let Some(scroll) = wrap.parent_element() {
             o.observe(&scroll);
+        }
+        // The column changes height as the notes' tray opens and closes, and as the head wraps.
+        if let Some(column) = &column {
+            o.observe(column);
         }
     }
     observer.forget();
