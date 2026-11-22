@@ -26,8 +26,10 @@
 //!   given none for the next one; a bus coming then goes on arrival or waits (delayed). Its phase's turns are counted as
 //!   they run (an actuated phase skipped does not count).
 //! - A bus calls its street's phase when it is actuated, as a vehicle does.
-//! - What it costs: the seconds of green the other phases lost to an early green, and the seconds every other phase's
-//!   next green starts later after an extended green, added up for each approach (`Moved`).
+//! - What it costs: the seconds of green the other phases lost to an early green, and the seconds an extended green
+//!   made each other approach's next green start later, added up for each approach (`Moved`). Only delay an approach
+//!   bore counts: an extension's seconds go to each other approach once, when its next green runs before the street's
+//!   own runs again (an actuated phase skipped, or a green the hour never reaches, bore none).
 //! - The street's transit lead (`Timing::transit_lead_s`) is unchanged: a fixed early green for the bus lane every
 //!   cycle, whether a bus comes or not. Priority is on demand, on top of it.
 //!
@@ -314,6 +316,9 @@ pub(crate) struct Buses<'a> {
     greens: Vec<u32>,
     given: Vec<Option<u32>>,
     early: Vec<u32>,
+    /// The seconds each street's last green was extended, and the approaches whose next green has borne them since.
+    shift: Vec<u32>,
+    charged: Vec<Vec<u32>>,
     moved: Vec<Moved>,
     held: Vec<Finding>,
 }
@@ -352,6 +357,8 @@ impl<'a> Buses<'a> {
             greens: vec![0; n],
             given: vec![None; n],
             early: vec![0; n],
+            shift: vec![0; n],
+            charged: vec![Vec::new(); n],
             moved: Vec::new(),
             held: Vec::new(),
         }
@@ -462,6 +469,14 @@ impl control::Demand for Buses<'_> {
                 }
             }
         }
+        // A green that runs after another street's extended one started that much later: it bears the delay, once.
+        for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase != k) {
+            if self.shift[x] > 0 && !self.charged[x].contains(&uid) {
+                self.charged[x].push(uid);
+                let shift = self.shift[x];
+                self.move_delay(x, uid, shift);
+            }
+        }
         for x in (0..self.streets.len()).filter(|&x| self.streets[x].phase == k) {
             let base_end = turn.green_end - u64::from(turn.prolonged_s);
             while let Some(t) = self.first(x).filter(|&t| t < turn.green_end) {
@@ -478,17 +493,10 @@ impl control::Demand for Buses<'_> {
             }
             if turn.prolonged_s > 0 {
                 self.given[x] = Some(self.greens[x]);
-                // Every other phase's next green starts that much later.
-                let mut others: Vec<u32> = Vec::new();
-                for &u in &self.uids {
-                    if u != uid && !others.contains(&u) {
-                        others.push(u);
-                    }
-                }
-                for other in others {
-                    self.move_delay(x, other, turn.prolonged_s);
-                }
             }
+            // The other approaches' next greens start that much later; each bears it as it runs.
+            self.shift[x] = turn.prolonged_s;
+            self.charged[x].clear();
             self.greens[x] += 1;
             self.early[x] = 0;
         }
@@ -660,12 +668,15 @@ mod tests {
     #[test]
     fn a_bus_coming_just_after_its_green_would_end_holds_it_until_it_has_passed_at_most_10_s() {
         let plan = two();
-        // Street 1's green ends at 25 s; its bus comes at 27 s: the green is held 3 s, to 28 s, and every other phase's
-        // next green starts 3 s later.
-        let (ran, buses, moved, _) = serve(&plan, &control::fixed(&plan), &[street(1, 0, Mode::Extension, vec![27])], vec![0, 0], &[]);
-        assert_eq!(ran[0], (0, 0, 28, 33));
-        assert_eq!(buses, vec![bus(1, 27, Outcome::Extended, 0, 0, 3)]);
+        // Street 1's green ends at 25 s; its bus comes at 27 s: the green is held 3 s, to 28 s, and street 2's next green,
+        // which runs (a second bus keeps the signal running), starts 3 s later.
+        let (ran, buses, moved, _) = serve(&plan, &control::fixed(&plan), &[street(1, 0, Mode::Extension, vec![27, 70])], vec![0, 0], &[]);
+        assert_eq!(&ran[..2], &[(0, 0, 28, 33), (1, 33, 25, 63)]);
+        assert_eq!(buses[0], bus(1, 27, Outcome::Extended, 0, 0, 3));
         assert_eq!(moved, vec![Moved { from: 1, to: 2, seconds: 3 }]);
+        // With nobody left to serve the signal stops after the held green: no other green ran later, so none bore delay.
+        let (_, _, moved, _) = serve(&plan, &control::fixed(&plan), &[street(1, 0, Mode::Extension, vec![27])], vec![0, 0], &[]);
+        assert!(moved.is_empty(), "{moved:?}");
         // At 35 s it is past the 10 s: no extension, it waits for the next green (at 60 s).
         let (ran, buses, _, _) = serve(&plan, &control::fixed(&plan), &[street(1, 0, Mode::Extension, vec![35])], vec![0, 0], &[]);
         assert_eq!(ran[0], (0, 0, 25, 30));
@@ -678,6 +689,19 @@ mod tests {
         // Early green only: no extension.
         let (_, buses, _, _) = serve(&plan, &control::fixed(&plan), &[street(1, 0, Mode::EarlyGreen, vec![27])], vec![0, 0], &[]);
         assert_eq!(buses[0].outcome, Outcome::EarlyGreen, "it came during red, and street 2's green was cut for it");
+    }
+
+    #[test]
+    fn an_extension_moves_delay_only_to_the_approaches_whose_next_green_runs_each_once() {
+        // Street 1 fixed, street 2 actuated and called by nobody (skipped, taking no time), street 3 fixed. The bus at
+        // 27 s holds street 1's green 3 s: street 3's next green starts 3 s later; street 2's is skipped and bears none.
+        let plan = plan_of(vec![phase(1, 25, &[]), phase(2, 25, &[]), phase(3, 25, &[])]);
+        let bounds = Bounds { min_green_s: 7, gap_s: 3, max_green_s: 45 };
+        let rules = vec![Rule::Fixed, Rule::Actuated { bounds, floor_s: 7 }, Rule::Fixed];
+        let (ran, buses, moved, _) = serve(&plan, &rules, &[street(1, 0, Mode::Extension, vec![27, 100])], vec![0, 7, 0], &[]);
+        assert_eq!(&ran[..2], &[(0, 0, 28, 33), (2, 33, 25, 63)], "street 2 skipped");
+        assert_eq!(buses[0], bus(1, 27, Outcome::Extended, 0, 0, 3));
+        assert_eq!(moved, vec![Moved { from: 1, to: 3, seconds: 3 }]);
     }
 
     #[test]
