@@ -4398,10 +4398,11 @@ fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extens
     let table = &t[t.find(r#"id="transit-totals""#).unwrap()..];
     let heads: Vec<String> =
         table[..table.find("</thead>").unwrap()].split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect();
-    assert_eq!(heads, ["Street", "Buses", "On arrival", "Early green", "Extended", "Delayed", "Delay moved to others"]);
+    assert_eq!(heads, ["Street", "Buses", "On arrival", "Early green", "Extended", "Delayed", "Longest wait", "Delay moved to others"]);
     let totals = s.view_now().signal.as_ref().unwrap().transit.streets[0].totals.unwrap();
     let row = &table[table.find("<tbody>").unwrap()..table.find("</tbody>").unwrap()];
     let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    let longest = format!("{} s", totals.longest_wait_s.unwrap());
     let moved = format!("{} s", totals.moved_s);
     assert_eq!(
         cells,
@@ -4411,10 +4412,19 @@ fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extens
             totals.early_green.to_string(),
             totals.extended.to_string(),
             totals.delayed.to_string(),
+            longest,
             moved
         ]
     );
     assert_eq!(totals.buses, 12);
+    // No bus: no wait, said as none served, never as 0 s.
+    assert!(s.set_buses(n, 0));
+    let h0 = panel(&s);
+    let none = transit_of(&h0);
+    let row = &none[none.find(r#"id="transit-totals""#).unwrap()..];
+    let row = &row[row.find("<tbody>").unwrap()..row.find("</tbody>").unwrap()];
+    assert!(row.contains(r#"<span aria-hidden="true">–</span><span class="sr-only">no bus served</span>"#), "{row}");
+    assert!(s.set_buses(n, 12));
     let rows = &t[t.find(r#"id="transit-rows""#).expect("every bus")..];
     assert!(rows.contains("Every bus, one row each (12)"), "{rows}");
     let heads: Vec<String> =

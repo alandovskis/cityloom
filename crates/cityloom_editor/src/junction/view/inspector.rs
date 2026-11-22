@@ -2569,6 +2569,11 @@ fn priority_section(w: Watch) -> impl IntoView {
     let totals = move || transit.with(|t| t.streets.iter().filter_map(|s| s.totals).collect::<Vec<_>>());
     let has_totals = Memo::new(move |_| transit.with(|t| t.streets.iter().any(|s| s.totals.is_some())));
     let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    let wait = move |s: Option<u32>| match s {
+        Some(wait) => seconds(wait).into_any(),
+        None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-transit-no-wait-said")}</span> }
+            .into_any(),
+    };
     let total_row = move |t: transit::Totals| {
         view! {
             <tr>
@@ -2578,6 +2583,7 @@ fn priority_section(w: Watch) -> impl IntoView {
                 <td>{t.early_green}</td>
                 <td>{t.extended}</td>
                 <td>{t.delayed}</td>
+                <td>{move || wait(t.longest_wait_s)}</td>
                 <td>{move || seconds(t.moved_s)}</td>
             </tr>
         }
@@ -2591,6 +2597,7 @@ fn priority_section(w: Watch) -> impl IntoView {
                 "jn-transit-col-early-green",
                 "jn-transit-col-extended",
                 "jn-transit-col-delayed",
+                "jn-calls-col-longest",
                 "jn-transit-col-moved",
             ];
             let body = view! { <For each=totals key=|t| *t children=total_row/> };

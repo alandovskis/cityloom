@@ -1328,6 +1328,7 @@ test.describe("signal timing on a junction of the city", () => {
       "Early green",
       "Extended",
       "Delayed",
+      "Longest wait",
       "Delay moved to others",
     ]);
     await expect(row.locator("td").first()).toHaveText("12");
