@@ -1016,3 +1016,76 @@ jn-preempt-said-no-call =
        *[other] { $calls } emergency calls
     } in the hour; no call was served.
 jn-preempt-none = No street has pre-emption on: an emergency vehicle waits for its street's green like other traffic.
+## Time-of-day plans (CLM-16)
+jn-plan-default = Default plan
+jn-day-weekday = Weekdays (Monday to Friday)
+jn-day-saturday = Saturday
+jn-day-sunday = Sunday
+jn-day-on-weekday = on weekdays
+jn-day-on-saturday = on Saturdays
+jn-day-on-sunday = on Sundays
+jn-rev-in-plan = { $change }, in plan “{ $plan }”
+jn-rev-plan-add = Add plan “{ $name }”
+jn-rev-plan-rename = Rename plan “{ $from }” to “{ $to }”
+jn-rev-plan-remove =
+    { $n ->
+        [0] Remove plan “{ $name }”
+        [one] Remove plan “{ $name }”: its period runs the default plan
+       *[other] Remove plan “{ $name }”: its { $n } periods run the default plan
+    }
+jn-rev-period-add = “{ $plan }” from { $time } { $day }
+jn-rev-period-remove = Remove the period from { $time } { $day }
+jn-rev-period-plan = Period from { $time } { $day } runs “{ $plan }”
+jn-rev-period-start = Period from { $time } { $day } now starts at { $to }
+jn-refusal-plan-name-empty = A plan needs a name.
+jn-refusal-plan-name-too-long = A plan's name can have at most 40 characters.
+jn-refusal-plan-name-taken = Another plan already has that name.
+jn-refusal-too-many-plans = A junction holds at most 8 plans, the default included.
+jn-refusal-default-plan-kept = The default plan cannot be removed: it runs whenever no other plan is scheduled.
+jn-refusal-default-plan-named = The default plan keeps its name.
+jn-refusal-period-out-of-day = A period starts after 00:00 and before midnight. To change what runs from 00:00, choose the plan of the day's first period.
+jn-refusal-period-taken = Another period already starts at that time on that day.
+jn-refusal-too-many-periods = A day has at most 12 periods, the one from 00:00 included.
+jn-refusal-first-period-kept = The day's first period starts at 00:00 and stays: choose its plan instead.
+jn-plans-heading = Time-of-day plans
+jn-plans-intro = A signal can run other plans at other times of the week. Each plan has its own timing and its own response settings (pedestrian calls, vehicle actuation, bicycle detection, transit priority, pre-emption); the phases, their order and their patterns are the same in every plan. Whatever the schedule leaves runs the default plan.
+jn-plans-shown = Plan shown and edited
+jn-plans-shown-help = The signal plan below, its summary of the hour and its checks, and each street's timing are those of this plan: a timing or response setting changed is changed in it alone.
+jn-plans-shown-said = Showing plan “{ $plan }”: its timing and response settings are shown and edited.
+jn-plans-viewing = Timing and response settings of plan “{ $plan }”.
+jn-plans-bounds = Up to { $plans } plans with the default, names of up to { $chars } characters, up to { $periods } periods a day (placeholder bounds).
+jn-plans-list = Plans
+jn-plans-default-mark = default, cannot be removed
+jn-plans-cycle = Cycle of { $seconds } s
+jn-plans-sound = Nothing found
+jn-plans-findings =
+    { $n ->
+        [one] 1 finding
+       *[other] { $n } findings
+    }
+jn-plans-findings-of = Findings of plan “{ $plan }”
+jn-plans-name-of = Name of plan “{ $plan }”
+jn-plans-remove = Remove
+jn-plans-remove-of = Remove plan “{ $plan }”
+jn-plans-new-name = Name of a new plan
+jn-plans-add = Add plan
+jn-plans-schedule = Weekly schedule
+jn-plans-col-start = Starts
+jn-plans-col-end = Ends
+jn-plans-col-plan = Plan
+jn-plans-col-change = Change
+jn-plans-midnight = 24:00
+jn-period-start-of = Start of the period from { $time } { $day }
+jn-period-plan-of = Plan of the period from { $time } { $day }
+jn-period-remove-of = Remove the period from { $time } { $day }
+jn-period-first = Starts the day
+jn-period-new-start = Start of a new period { $day }
+jn-period-new-plan = Plan of a new period { $day }
+jn-period-new = New period { $day }
+jn-period-add = Add period
+jn-period-add-of = Add period { $day }
+jn-plans-runs-heading = Which plan runs
+jn-plans-runs-day = Day
+jn-plans-runs-time = Time
+jn-plans-runs-at = At { $time } { $day }, plan “{ $plan }” runs.
+jn-plans-transition = A change of plan takes effect at the end of the cycle running when its period starts: there is no transition period.

@@ -4678,3 +4678,118 @@ fn emergency_vehicle_pre_emption_speaks_french() {
         assert!(p.contains(words), "{words}: {p}");
     }
 }
+
+// ---- time-of-day plans (CLM-16) -----------------------------------------------------------------------------------------
+
+/// The `#signal-plans` section of the plan's level, up to the signal's own section.
+fn plans_of(h: &str) -> &str {
+    let at = h.find(r#"id="signal-plans""#).expect("a section for the time-of-day plans");
+    &h[at..at + h[at..].find(r#"id="i-h-signal""#).expect("the signal's section after it")]
+}
+
+/// The `<select>` tag with this id, up to its end.
+fn select_of<'a>(h: &'a str, id: &str) -> &'a str {
+    let at = h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"));
+    let open = h[..at].rfind("<select").unwrap();
+    &h[open..at + h[at..].find("</select>").unwrap()]
+}
+
+#[test]
+fn a_time_typed_or_chosen_is_read_as_minutes_after_midnight() {
+    assert_eq!(inspector::minute_of("07:30"), Some(450));
+    assert_eq!(inspector::minute_of(" 00:00 "), Some(0));
+    assert_eq!(inspector::minute_of("23:59:00"), Some(1_439), "a field that gives seconds");
+    for bad in ["", "7", "24:00", "12:60", "ab:cd", "-1:00"] {
+        assert_eq!(inspector::minute_of(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn the_plan_level_opens_on_the_time_of_day_plans_with_the_default_shown_and_scheduled_all_week() {
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s);
+    let p = plans_of(&h);
+    assert!(p.contains("Time-of-day plans") && p.contains("the phases, their order and their patterns are the same in every plan"), "{p}");
+    let chooser = select_of(p, "plan-shown");
+    assert!(chooser.contains(r#"aria-describedby="plan-shown-help""#) && chooser.contains("Default plan"), "{chooser}");
+    assert!(p.contains(r#"<label for="plan-shown">Plan shown and edited</label>"#), "{p}");
+    assert!(p.contains(r#"id="plan-0""#) && p.contains(r#"id="plan-default-mark""#) && p.contains("default, cannot be removed"), "{p}");
+    assert!(p.contains(r#"id="plan-summary-0""#) && p.contains("Cycle of"), "{p}");
+    assert!(!p.contains(r#"id="plan-remove-0""#) && !p.contains(r#"id="plan-name-0""#), "the default is neither removed nor renamed");
+    assert!(p.contains(r#"<label for="plan-new-name">Name of a new plan</label>"#) && p.contains(r#"id="plan-add""#), "{p}");
+    assert!(p.contains("Up to 8 plans with the default, names of up to 40 characters, up to 12 periods a day"), "{p}");
+    for (day, caption) in [("weekday", "Weekdays (Monday to Friday)"), ("saturday", "Saturday"), ("sunday", "Sunday")] {
+        assert!(p.contains(&format!(r#"<caption id="schedule-{day}-caption">{caption}</caption>"#)), "{day}: {p}");
+        assert!(p.contains(&format!(r#"role="region" tabindex="0" aria-labelledby="schedule-{day}-caption""#)), "{day}: {p}");
+        assert!(select_of(p, &format!("period-plan-{day}-0")).contains("Default plan"), "{day}");
+        assert!(p.contains(&format!(r#"id="period-new-start-{day}""#)) && p.contains(&format!(r#"id="period-add-{day}""#)), "{day}");
+    }
+    assert_eq!(heads_of(&p[p.find(r#"id="schedule-weekday""#).unwrap()..]), ["Starts", "Ends", "Plan", "Change"]);
+    assert!(p.contains("Starts the day") && p.contains("24:00"), "the first period runs from 00:00 to midnight: {p}");
+    assert!(p.contains(r#"id="runs-at" role="status""#) && p.contains("At 08:00 on weekdays, plan “Default plan” runs.</p>"), "{p}");
+    assert!(p.contains(r#"id="plans-transition""#) && p.contains("there is no transition period"), "{p}");
+    assert!(!h.contains(r#"id="plan-viewing-note""#), "the default shown needs no note");
+}
+
+#[test]
+fn plans_and_periods_show_in_the_list_the_schedule_and_the_choices_and_the_plan_shown_is_said_where_timing_is() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    assert!(s.add_plan("Night"));
+    assert!(s.edit(|j| j.add_period(crate::junction::model::plans::DayType::Weekday, 22 * 60, 1)));
+    assert!(s.edit(|j| j.set_timing(e, TimingField::Green, 120)), "the plan shown is the new one");
+    s.show_plan();
+    let h = panel(&s);
+    let p = plans_of(&h);
+    assert!(select_of(p, "plan-shown").contains(r#"value="1" selected"#), "{}", select_of(p, "plan-shown"));
+    assert!(input_tag(p, "plan-name-1").contains(r#"value="Night""#) && input_tag(p, "plan-name-1").contains(r#"aria-label="Name of plan “Night”""#));
+    assert!(button_tag(p, "plan-remove-1").contains(r#"aria-label="Remove plan “Night”""#));
+    // A green of 120 s makes the night plan's cycle too long: its finding is listed under it, the default has none.
+    let found = &p[p.find(r#"id="plan-findings-1""#).expect("the night plan's findings")..];
+    assert!(found.contains(r#"aria-label="Findings of plan “Night”""#) && found.contains("over the 120 s a signal should keep"), "{found}");
+    assert!(!p.contains(r#"id="plan-findings-0""#) && p.contains("Nothing found"), "{p}");
+    assert!(input_tag(p, "period-start-weekday-1320").contains(r#"aria-label="Start of the period from 22:00 on weekdays""#), "{p}");
+    assert!(select_of(p, "period-plan-weekday-1320").contains(r#"value="1" selected"#));
+    assert!(button_tag(p, "period-remove-weekday-1320").contains(r#"aria-label="Remove the period from 22:00 on weekdays""#));
+    assert!(p.contains("22:00</td>"), "the first period ends where the next starts: {p}");
+    // A street's timing says which plan's it is.
+    s.select(Target::Arm(e));
+    let h = panel(&s);
+    assert!(h.contains(r#"id="plan-viewing-note""#) && h.contains("Timing and response settings of plan “Night”.</p>"), "{h}");
+}
+
+#[test]
+fn a_junction_shown_read_only_lets_a_plan_be_shown_and_asked_about_and_offers_the_rest_disabled() {
+    use crate::shared::ports::Storage;
+    let mut j = Junction::new(0);
+    assert!(j.add_plan("Night"));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let p = plans_of(&h);
+    let before = |id: &str| &p[..p.find(&format!(r#"id="{id}""#)).unwrap()];
+    let open = |id: &str| before(id).matches("<fieldset").count() == before(id).matches("</fieldset>").count();
+    assert!(open("plan-shown") && open("runs-at-day") && open("runs-at-time"), "only choosing what is shown, never locked: {p}");
+    for locked in ["plan-name-1", "plan-remove-1", "plan-add", "period-plan-weekday-0", "period-add-sunday"] {
+        assert!(!open(locked), "{locked} is in a disabled fieldset: {p}");
+    }
+    assert!(s.view_plan(1));
+}
+
+#[test]
+fn the_time_of_day_plans_speak_french() {
+    let j = Junction::new(0);
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::FrCa), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let p = plans_of(&h);
+    assert!(p.contains("Plans selon l’heure") && p.contains("Plan affiché et modifié") && p.contains("Plan par défaut"), "{p}");
+    assert!(p.contains("En semaine (du lundi au vendredi)") && p.contains("Horaire de la semaine"), "{p}");
+    assert!(p.contains("À 08:00 en semaine, le plan «\u{a0}Plan par défaut\u{a0}» s’applique."), "{p}");
+    for english in ["Weekdays", "Default plan", "Starts the day", "Which plan runs"] {
+        assert!(!p.contains(english), "{english}: {p}");
+    }
+}

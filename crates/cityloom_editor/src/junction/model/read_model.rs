@@ -9,6 +9,7 @@ use crate::junction::model::beyond;
 use crate::junction::model::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
+use crate::junction::model::plans::{self, DEFAULT_PLAN, DayType};
 use crate::junction::model::{
     ALL_WAY_STOP, APPROACH_DEFAULT_MM, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD,
     ISLAND_MIN_ROAD_MM, ISLAND_MM, Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT,
@@ -771,6 +772,54 @@ pub struct SignalView {
     pub preemption: PreemptionView,
 }
 
+/// The time-of-day plans of a signal (CLM-16): which is shown (and edited), each plan with what is wrong with it, and
+/// each day type's periods.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct PlansView {
+    /// The plan shown: the signal's view, the checks and every timing and policy edit are its.
+    pub viewing: u32,
+    /// The default first, then the named plans in the order they were added.
+    pub plans: Vec<PlanView>,
+    /// Weekdays, Saturday, Sunday.
+    pub days: Vec<DayView>,
+}
+
+impl PlansView {
+    /// The plan scheduled at `minute` (after midnight) of day type `day`: the one whose period covers it.
+    pub fn runs_at(&self, day: DayType, minute: u32) -> Option<&PlanView> {
+        let periods = &self.days.iter().find(|d| d.day == day)?.periods;
+        let id = periods.iter().find(|p| p.start_min <= minute && minute < p.end_min)?.plan;
+        self.plans.iter().find(|p| p.id == id)
+    }
+}
+
+/// One plan: its id, its name (the default's in words), its cycle, and what is wrong with it as it runs (its failing
+/// timing checks and its policies' findings), each a sentence.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct PlanView {
+    pub id: u32,
+    pub name: Said,
+    /// The name the person gave it, as a field shows it to be renamed; empty for the default.
+    pub own_name: String,
+    pub is_default: bool,
+    pub cycle_s: u32,
+    pub findings: Vec<Said>,
+}
+
+/// A day type's periods in order: the first from 00:00, each to the next's start, the last to midnight (1440).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct DayView {
+    pub day: DayType,
+    pub periods: Vec<PeriodView>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct PeriodView {
+    pub start_min: u32,
+    pub end_min: u32,
+    pub plan: u32,
+}
+
 /// The pre-emption of a signal: every street with a phase of its own (or with pre-emption on without one), one row per
 /// emergency call of the hour, and the findings.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -1467,8 +1516,10 @@ pub struct JView {
     pub movements: Vec<MoveView>,
     pub conflicts: Conflicts,
     pub checks: Vec<Check>,
-    /// The signal's cycle and phases, when the junction is run by a signal.
+    /// The signal's cycle and phases, when the junction is run by a signal: the plan shown's (`plans.viewing`).
     pub signal: Option<SignalView>,
+    /// The time-of-day plans and their schedule (CLM-16), when the junction is run by a signal.
+    pub plans: Option<PlansView>,
     pub revisions: Vec<Revision>,
     pub selected: Selection,
     pub bounds: [f64; 4],
@@ -1560,6 +1611,40 @@ fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, end: f64, head: i32, us
 }
 
 impl Junction {
+    /// The plans and their schedule as the plans' level shows them: `shown` is the signal of the plan shown and
+    /// `findings` its own; every other plan's are found on the junction as it sees it, run for its own hour.
+    fn plans_view(&self, arms: &[ArmView], shown: &SignalView, findings: Vec<Said>) -> PlansView {
+        let now = self.current();
+        let mut findings = Some(findings);
+        let plans = plans::ids(now)
+            .into_iter()
+            .map(|id| {
+                let (cycle_s, found) = match findings.take_if(|_| id == self.viewing()) {
+                    Some(found) => (shown.cycle_s, found),
+                    None => {
+                        let planned = plans::applied(now, id);
+                        let s = in_force(&planned);
+                        match signal_view(&s, self.region, arms) {
+                            Some(v) => (v.cycle_s, plan_findings(&s, self.region, arms, &v)),
+                            None => (0, Vec::new()),
+                        }
+                    }
+                };
+                let own_name = now.plans.iter().find(|p| p.id == id).map(|p| p.name.clone()).unwrap_or_default();
+                PlanView { id, name: plans::name_of(now, id), own_name, is_default: id == DEFAULT_PLAN, cycle_s, findings: found }
+            })
+            .collect();
+        let days = DayType::ALL
+            .into_iter()
+            .map(|day| {
+                let periods = now.schedule.periods(day);
+                let ends = periods.iter().skip(1).map(|p| p.start_min).chain([plans::MINUTES_A_DAY]);
+                DayView { day, periods: periods.iter().zip(ends).map(|(p, end_min)| PeriodView { start_min: p.start_min, end_min, plan: p.plan }).collect() }
+            })
+            .collect();
+        PlansView { viewing: self.viewing(), plans, days }
+    }
+
     /// Sets the roundabout's outside radius, which cannot be less than its
     /// least size with these streets: smaller than that is the least size.
     pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
@@ -1568,7 +1653,9 @@ impl Junction {
     }
 
     pub fn view(&self) -> JView {
-        let in_force = in_force(self.current());
+        // The junction as the plan shown sees it (CLM-16): the default's is the junction itself.
+        let planned = plans::applied(self.current(), self.viewing());
+        let in_force = in_force(&planned);
         let s: &State = &in_force;
         let region = self.region;
         // The current state is always valid; the layout it was checked with is
@@ -2062,6 +2149,7 @@ impl Junction {
 
         let checks = checks(s, self.region, &arms, &corners, &movements, &lay);
         let signal = signal_view(s, self.region, &arms);
+        let plans = signal.as_ref().map(|shown| self.plans_view(&arms, shown, plan_findings(s, region, &arms, shown)));
         let selected = match self.selected {
             Target::None => Selection { kind: None, uid: 0, lane: 0 },
             Target::Arm(u) => Selection { kind: Some("arm"), uid: u, lane: 0 },
@@ -2082,11 +2170,7 @@ impl Junction {
             traffic_arms: traffic_arms(s),
             calls_dropped: self.calls_dropped(),
             phases_cut: self.phases_cut(),
-            calls_kept: if self.current().control == SIGNAL && s.control != SIGNAL {
-                self.current().arms.iter().filter(|a| a.calls.is_some()).count()
-            } else {
-                0
-            },
+            calls_kept: if planned.control == SIGNAL && s.control != SIGNAL { planned.arms.iter().filter(|a| a.calls.is_some()).count() } else { 0 },
             ring: ring.map(|r| {
                 let cycle = s.cycle.unwrap_or(0);
                 let (lanes, dividers, island_edge, road_edge, outer_edge) = match &turbo_shape {
@@ -2153,6 +2237,7 @@ impl Junction {
             conflicts,
             checks,
             signal,
+            plans,
             revisions: self.revisions().enumerate().map(|(i, l)| Revision { step: i + 1, label: l.clone() }).collect(),
             selected,
             bounds: [mins.0, mins.1, maxs.0, maxs.1],
@@ -2514,6 +2599,34 @@ fn approach_problems(arm: &Said, b: &Beyond, arrows_mm: f64) -> Vec<Said> {
     out
 }
 
+/// The streets whose crossing `plan` walks too briefly for its length at `WALK_SPEED_MPS`, as the "Time to cross"
+/// check says them; none when every crossing is walked long enough.
+fn walk_short(plan: &signal::Plan, arms: &[ArmView]) -> Option<Said> {
+    let short: Vec<Said> = arms
+        .iter()
+        .filter_map(|a| {
+            let needed = (a.crossing.as_ref()?.distance_mm as f64 / 1000.0 / WALK_SPEED_MPS).ceil() as u32;
+            (signal::walk_window_s(plan, a.uid) < needed).then(|| a.label.clone())
+        })
+        .collect();
+    list(short).map(|l| Said::new("jn-check-signal-walk-bad").with("arms", Arg::Said(Box::new(l))))
+}
+
+/// What the "Signal cycle" check says of a cycle longer than `MAX_CYCLE_S`; none for one within it.
+fn cycle_long(plan: &signal::Plan) -> Option<Said> {
+    (plan.cycle_s > MAX_CYCLE_S)
+        .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(i64::from(plan.cycle_s))).with("max", Arg::Num(i64::from(MAX_CYCLE_S))))
+}
+
+/// Everything wrong with a plan as it runs (CLM-16), checked as the default is: the timing checks it fails ("Time to
+/// cross", "Signal cycle") and its responsive policies' findings over the hour (`signal`, its view). `s` is the
+/// junction as the plan sees it, in force.
+fn plan_findings(s: &State, region: usize, arms: &[ArmView], signal: &SignalView) -> Vec<Said> {
+    let timing = signal::plan(s, region).map(|plan| [walk_short(&plan, arms), cycle_long(&plan)]).into_iter().flatten().flatten();
+    let policies = [&signal.calls.findings, &signal.actuation.findings, &signal.bicycles.findings, &signal.transit.findings, &signal.preemption.findings];
+    timing.chain(policies.into_iter().flatten().cloned()).collect()
+}
+
 fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
     let arms_of = |uids: Vec<u32>| list(uids.into_iter().map(name).collect());
@@ -2649,19 +2762,7 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
     ));
     // Signal timing: time to cross, and the cycle.
     if let Some(plan) = signal::plan(s, region).filter(|p| !p.phases.is_empty()) {
-        let short: Vec<u32> = arms
-            .iter()
-            .filter_map(|a| {
-                let needed = (a.crossing.as_ref()?.distance_mm as f64 / 1000.0 / WALK_SPEED_MPS).ceil() as u32;
-                (signal::walk_window_s(&plan, a.uid) < needed).then_some(a.uid)
-            })
-            .collect();
-        out.push(check(
-            "signal-walk",
-            "jn-check-signal-walk",
-            Said::new("jn-check-signal-walk-ok"),
-            arms_of(short).map(|l| Said::new("jn-check-signal-walk-bad").with("arms", Arg::Said(Box::new(l)))),
-        ));
+        out.push(check("signal-walk", "jn-check-signal-walk", Said::new("jn-check-signal-walk-ok"), walk_short(&plan, arms)));
         // Every street with a movement wants a phase that serves it: an edited plan can leave one out.
         let unserved: Vec<u32> = s
             .arms
@@ -2677,13 +2778,7 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
             arms_of(unserved).map(|l| Said::new("jn-check-signal-phases-bad").with("arms", Arg::Said(Box::new(l)))),
         ));
         let seconds = i64::from(plan.cycle_s);
-        out.push(check(
-            "signal-cycle",
-            "jn-check-signal-cycle",
-            Said::new("jn-check-signal-cycle-ok").with("seconds", Arg::Num(seconds)),
-            (plan.cycle_s > MAX_CYCLE_S)
-                .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
-        ));
+        out.push(check("signal-cycle", "jn-check-signal-cycle", Said::new("jn-check-signal-cycle-ok").with("seconds", Arg::Num(seconds)), cycle_long(&plan)));
         // A phase that puts movements together that meet is allowed, and warned about.
         let meeting: Vec<Said> = signal::conflicts(s, &plan).iter().map(|(n, c)| conflict_said(*n, c, arms)).collect();
         let mut first: Vec<Said> = meeting.iter().take(MAX_LISTED_CONFLICTS).cloned().collect();

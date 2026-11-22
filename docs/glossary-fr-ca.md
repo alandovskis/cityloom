@@ -337,6 +337,14 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Time to green (an emergency call's) | Délai avant le vert | `Délai avant le vert le plus long` as the totals' column. |
 | Junction inspector | Safe entry (the longest a call takes to reach its green) | Entrée sécuritaire | `sécuritaire` is the Québec usage. To confirm, see below. |
 | Junction inspector | Pre-empted / Delayed (road users an emergency call held up) | Préemptés / Retardés | Masculine plural, as the road users (`piétons`, `véhicules`) they count. |
+| Junction inspector | Time-of-day plans (the section, CLM-16) | Plans selon l’heure | To confirm, see below. |
+| Junction inspector | Default plan | Plan par défaut | A plan's name is quoted: `le plan « Nuit »`. |
+| Junction inspector | Plan shown and edited | Plan affiché et modifié |  |
+| Junction inspector | Weekly schedule | Horaire de la semaine |  |
+| Junction inspector | Period (of a day's schedule) | Plage horaire | `ses 2 plages horaires`. To confirm, see below. |
+| Junction inspector | Weekdays (Monday to Friday) / Saturday / Sunday | En semaine (du lundi au vendredi) / Samedi / Dimanche | In a sentence `en semaine`, `le samedi`, `le dimanche`. |
+| Junction inspector | Which plan runs / runs (a plan) | Quel plan s’applique / s’applique |  |
+| Junction inspector | Response settings (a plan's calls, actuation, detection, priority, pre-emption) | Réglages de réponse | To confirm, see below. |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |
@@ -470,6 +478,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Green extension (a bus’s priority) | `Prolongation du vert` | `Prolongement du vert`, `Vert prolongé` (suggestion) |
 | Emergency vehicle pre-emption (the section, CLM-15) | `Préemption pour les véhicules d’urgence` | `Priorité aux véhicules d’urgence`, `Préemption des feux` (suggestion) |
 | Safe entry (an emergency call’s) | `Entrée sécuritaire` | `Entrée sûre`, `Transition sécuritaire` (suggestion) |
+| Time-of-day plans (the section, CLM-16) | `Plans selon l’heure` | `Plans horaires`, `Programmation horaire des feux` (suggestion) |
+| Period (of a day's schedule) | `Plage horaire` | `Période` (suggestion) |
+| Response settings (a plan's) | `Réglages de réponse` | `Réglages des appels et de la détection` (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

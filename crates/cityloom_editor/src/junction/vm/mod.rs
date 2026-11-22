@@ -421,6 +421,51 @@ impl JunctionVm {
         done
     }
 
+    /// The person shows time-of-day plan `id` (CLM-16): the signal plan, its summary of the hour and its checks, and
+    /// every timing and response setting are then that plan's, and its edits change it alone. Not an edit, so a page
+    /// shown read-only may too. Said, unless it was shown already; false for a plan the junction does not have.
+    pub fn view_plan(&self, id: u32) -> bool {
+        if self.read(|j| j.viewing()) == id {
+            return true;
+        }
+        if !self.edit(|j| j.view_plan(id)) {
+            return false;
+        }
+        if let Some(said) = self.plan_shown_text() {
+            self.ports.announcer.say(&said);
+        }
+        true
+    }
+
+    /// "Showing plan “Night”: ...": the plan shown, in words.
+    fn plan_shown_text(&self) -> Option<String> {
+        let v = self.view_now();
+        let plans = v.plans.as_ref()?;
+        let plan = plans.plans.iter().find(|p| p.id == plans.viewing)?;
+        Some(self.i18n.tr_now("jn-plans-shown-said", &Args::new().str("plan", say_now(&self.i18n, self.units_now(), &plan.name))))
+    }
+
+    /// The person adds a time-of-day plan named `name`, a copy of the default's settings, and it is shown at once, ready
+    /// to be set: announced as an edit, then as the plan shown. A refusal (a name taken, say) is said with its reason.
+    pub fn add_plan(&self, name: &str) -> bool {
+        if self.refuse_read_only() {
+            return false;
+        }
+        let done = self.edit(|j| {
+            j.add_plan(name) && {
+                let id = j.current().plans.last().map_or(crate::junction::model::plans::DEFAULT_PLAN, |p| p.id);
+                j.view_plan(id)
+            }
+        });
+        if done {
+            let edit = text::edit_text(&self.view_now(), &self.i18n, self.units_now());
+            self.say_parts(edit.into_iter().chain(self.plan_shown_text()));
+        } else {
+            self.say_refusal();
+        }
+        done
+    }
+
     /// A selection the person made, announced by what is selected.
     pub fn select(&self, target: Target) {
         self.plan.set(false);
@@ -525,6 +570,8 @@ impl JunctionVm {
             return;
         }
         fresh.select(self.core.read(|j| j.selected));
+        // The plan shown stays shown where the junction still has it.
+        fresh.view_plan(self.core.read(|j| j.viewing()));
         let own = binding.record();
         let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
         let before = self.before();
@@ -802,8 +849,9 @@ impl ScenarioPage for JunctionVm {
     fn show_design(&self, id: Option<u32>, keep_choices: bool) -> bool {
         let Some(mut fresh) = self.open_design(id) else { return false };
         if keep_choices {
-            // as a sync reload does: the part chosen stays chosen where the junction shown has it
+            // as a sync reload does: the part chosen stays chosen where the junction shown has it, and so does the plan shown
             fresh.select(self.core.read(|j| j.selected));
+            fresh.view_plan(self.core.read(|j| j.viewing()));
         } else {
             // another design the person asked for starts as a page opens: nothing chosen, the junction's own level
             self.plan.set(false);
@@ -1374,6 +1422,45 @@ mod tests {
         assert_eq!(r.vm.units_now(), Units::Feet);
         assert_eq!(r.vm.version().get_untracked(), 0);
         assert!(Rc::ptr_eq(&a, &r.vm.view_now()));
+    }
+
+    #[test]
+    fn a_time_of_day_plan_is_added_shown_and_edited_alone_and_each_step_is_said_in_both_languages() {
+        let r = rig(0);
+        let e = arm_at(&r.vm, 90);
+        assert!(r.vm.add_plan("Night"));
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Add plan “Night”."), "{t:?}");
+        assert!(t[0].ends_with("Showing plan “Night”: its timing and response settings are shown and edited."), "{t:?}");
+        assert_eq!(r.vm.read(|j| j.viewing()), 1, "the new plan is shown, ready to be set");
+        // An edit of the plan shown is said with the plan's name, and leaves the default as it was.
+        assert!(r.vm.set_on_call(e, true));
+        let t = r.said.take();
+        assert!(t[0].starts_with("Crossing of Sample Street 1 (east) on call, in plan “Night”."), "{t:?}");
+        assert!(t[0].contains("12 calls in the hour"), "the plan's own hour: {t:?}");
+        assert!(r.vm.read(|j| j.arm(e).is_some_and(|a| a.calls.is_none())));
+        // Showing the default says so; showing it again says nothing.
+        assert!(r.vm.view_plan(0));
+        assert_eq!(r.said.take(), ["Showing plan “Default plan”: its timing and response settings are shown and edited."]);
+        assert!(r.vm.view_plan(0));
+        assert!(r.said.take().is_empty());
+        assert!(!r.vm.view_plan(7), "no such plan");
+        // Refusals say why.
+        assert!(!r.vm.add_plan("night"));
+        assert_eq!(r.said.take(), ["Another plan already has that name."]);
+        assert!(!r.vm.apply(|j| j.remove_plan(0)));
+        assert_eq!(r.said.take(), ["The default plan cannot be removed: it runs whenever no other plan is scheduled."]);
+        assert!(r.vm.apply(|j| j.add_period(crate::junction::model::plans::DayType::Weekday, 22 * 60, 1)));
+        assert!(r.said.take()[0].starts_with("“Night” from 22:00 on weekdays."));
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.add_plan("Nuit"));
+        let t = said.take();
+        assert!(t[0].starts_with("Ajout du plan «\u{a0}Nuit\u{a0}»."), "{t:?}");
+        assert!(t[0].ends_with("Plan «\u{a0}Nuit\u{a0}» affiché\u{a0}: son réglage et ses réglages de réponse sont affichés et modifiés."), "{t:?}");
+        assert!(!fr.apply(|j| j.remove_plan(0)));
+        assert_eq!(said.take(), ["Le plan par défaut ne peut pas être retiré\u{a0}: il s’applique chaque fois qu’aucun autre plan n’est prévu."]);
     }
 
     #[test]
@@ -2060,6 +2147,7 @@ mod read_only_tests {
         let arm = j.current().arms[0].uid;
         j.set_control(SIGNAL);
         assert!(j.set_corner(arm, 7_000));
+        assert!(j.add_plan("Night"), "a time-of-day plan to show");
         assert!(store.write_junction(node, j.snapshot()));
         let view: Rc<dyn Storage> = Rc::new(ScopedStorage::new(storage.clone(), "p1").only_to_read());
         let store = CityStore::sample(view.clone());
@@ -2175,6 +2263,14 @@ mod read_only_tests {
         assert_ne!(chosen(&r.vm), first, "the next thing round the junction");
         r.vm.show_plan();
         assert!(r.vm.plan_shown(), "the signal plan can be looked at");
+        r.said.take();
+        assert!(r.vm.view_plan(1), "a time-of-day plan can be shown: it only chooses what is shown");
+        assert_eq!(r.vm.read(|j| j.viewing()), 1);
+        assert_eq!(r.said.take(), ["Showing plan “Night”: its timing and response settings are shown and edited."]);
+        assert!(!r.vm.add_plan("Evening"));
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert!(!r.vm.apply(|j| j.remove_plan(1)));
+        assert_eq!(r.said.take(), [REFUSED]);
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(stored(&r.storage), before);

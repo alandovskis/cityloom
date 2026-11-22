@@ -171,6 +171,16 @@ impl Watch {
         self.vm.with_value(|v| v.set_detection(uid, detection))
     }
 
+    /// Shows time-of-day plan `id` as the person does. Whether it is the one shown afterwards.
+    pub fn view_plan(&self, id: u32) -> bool {
+        self.vm.with_value(|v| v.view_plan(id))
+    }
+
+    /// Adds a time-of-day plan named `name` as the person does, and shows it. Whether it was done.
+    pub fn add_plan(&self, name: &str) -> bool {
+        self.vm.with_value(|v| v.add_plan(name))
+    }
+
     pub fn undo(&self) -> bool {
         self.vm.with_value(|v| v.undo())
     }

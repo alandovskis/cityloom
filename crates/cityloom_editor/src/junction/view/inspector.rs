@@ -11,6 +11,8 @@ use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement,
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::bicycles;
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
+use crate::junction::model::plans::{DEFAULT_PLAN, DayType, MAX_NAME_CHARS, MAX_PERIODS, MAX_PLANS, MINUTES_A_DAY};
+use crate::junction::model::read_model::PeriodView;
 use crate::junction::model::read_model::{BusRowView, CallRowView, CrossingView, EmergencyRowView, JView, RideRowView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::transit::{self, Mode};
@@ -754,6 +756,7 @@ fn signal_summary(w: Watch) -> impl IntoView {
             view! {
                 <div class="jn-cycle-bar" aria-hidden="true">{segments}</div>
                 <p class="insp-range">{line}</p>
+                {plan_note(w)}
                 <button type="button" class="btn jn-go" id="jn-go-plan" on:click=move |_| { w.show_plan(); focus_current(); }>
                     {words(w, "jn-path-plan")}
                 </button>
@@ -1377,6 +1380,7 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
             view! {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                    {plan_note(w)}
                     <p class="insp-range">{runs}</p>
                     <p class="insp-range">{move || w.tr(if w.view().signal.as_ref().is_none_or(|s| s.suggested) { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     {signal_phases(w)}
@@ -1687,6 +1691,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
     move || {
         shown.get().then(|| {
             view! {
+                {plans_section(w)}
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
@@ -1737,6 +1742,315 @@ fn show_detection(uid: u32, kept: Detection) {
             radio.set_checked(choice == kept);
         }
     }
+}
+
+/// Which time-of-day plan's timing and response settings are shown (and edited), said where a street's timing or the
+/// junction's cycle is shown; nothing while the default is shown (CLM-16).
+fn plan_note(w: Watch) -> impl IntoView {
+    move || {
+        let v = w.view();
+        let plans = v.plans.as_ref().filter(|p| p.viewing != DEFAULT_PLAN)?;
+        let name = plans.plans.iter().find(|p| p.id == plans.viewing).map(|p| w.say(&p.name))?;
+        Some(view! { <p class="insp-range plan-note" id="plan-viewing-note">{tr(w, "jn-plans-viewing", Args::new().str("plan", name))}</p> })
+    }
+}
+
+/// A time typed or chosen in a time field ("07:30") as minutes after midnight; None for anything else.
+pub fn minute_of(typed: &str) -> Option<i32> {
+    let (h, m) = typed.trim().split_once(':')?;
+    let (h, m) = (h.parse::<i32>().ok()?, m.get(..2).unwrap_or(m).parse::<i32>().ok()?);
+    ((0..24).contains(&h) && (0..60).contains(&m)).then_some(h * 60 + m)
+}
+
+/// The options of a choice of plan: every plan by name, `chosen` selected. A plan is named by its id, never copied in.
+fn plan_options(
+    ids: Memo<Vec<u32>>,
+    name_of: impl Fn(u32) -> String + Copy + Send + Sync + 'static,
+    chosen: impl Fn() -> u32 + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <For each=move || ids.get() key=|id| *id children=move |id| {
+            view! { <option value=id.to_string() selected=move || chosen() == id prop:selected=move || chosen() == id>{move || name_of(id)}</option> }
+        } />
+    }
+}
+
+/// Time-of-day plans (CLM-16), first in the plan's level: the choice of the plan shown, whose timing and response
+/// settings every section below (and each street's timing) shows and edits; the plans with what is wrong with each
+/// (each checked on its own), added, renamed and removed (the default is marked and stays); the weekly schedule, a table
+/// a day type with each period's start, end and plan; and which plan runs at a day and time chosen. Read-only, the
+/// choice of the plan shown and the question of which runs stay usable (they only choose what is shown); the rest is
+/// locked. It decides nothing: plans, periods and findings come from the view.
+fn plans_section(w: Watch) -> impl IntoView {
+    let plans = Memo::new(move |_| w.view().plans.clone());
+    let ids = Memo::new(move |_| plans.with(|p| p.as_ref().map(|p| p.plans.iter().map(|x| x.id).collect::<Vec<u32>>()).unwrap_or_default()));
+    let plan = move |id: u32| plans.with(|p| p.as_ref().and_then(|p| p.plans.iter().find(|x| x.id == id).cloned()));
+    let name_of = move |id: u32| plan(id).map(|p| w.say(&p.name)).unwrap_or_default();
+    let viewing = Memo::new(move |_| plans.with(|p| p.as_ref().map_or(DEFAULT_PLAN, |p| p.viewing)));
+    let bounds = move || {
+        let args = Args::new().num("plans", MAX_PLANS as i64).num("chars", MAX_NAME_CHARS as i64).num("periods", MAX_PERIODS as i64);
+        tr(w, "jn-plans-bounds", args)
+    };
+    let chooser = view! {
+        <div class="plan-chooser">
+            <label for="plan-shown">{words(w, "jn-plans-shown")}</label>
+            <select id="plan-shown" aria-describedby="plan-shown-help"
+                on:change=move |ev| {
+                    let select = event_target::<HtmlSelectElement>(&ev);
+                    if let Ok(id) = select.value().parse::<u32>() {
+                        w.view_plan(id);
+                    }
+                }>
+                {plan_options(ids, name_of, move || viewing.get())}
+            </select>
+            <p class="insp-range" id="plan-shown-help">{words(w, "jn-plans-shown-help")}</p>
+        </div>
+    };
+    // One item a plan, keyed by its id: a rename or a new finding redraws its words, not the item (a field keeps the focus).
+    let item = move |id: u32| {
+        let is_default = id == DEFAULT_PLAN;
+        let summary = move || {
+            let Some(p) = plan(id) else { return String::new() };
+            let cycle = tr(w, "jn-plans-cycle", Args::new().num("seconds", i64::from(p.cycle_s)));
+            let found = if p.findings.is_empty() { w.tr("jn-plans-sound") } else { tr(w, "jn-plans-findings", Args::new().num("n", p.findings.len() as i64)) };
+            tr(w, "jn-list-comma", Args::new().str("head", cycle).str("tail", found))
+        };
+        let findings = move || {
+            let found = plan(id).map(|p| p.findings).unwrap_or_default();
+            (!found.is_empty()).then(|| {
+                let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
+                view! {
+                    <ul class="calls-findings" id=format!("plan-findings-{id}")
+                        aria-label=move || tr(w, "jn-plans-findings-of", Args::new().str("plan", name_of(id)))>{items}</ul>
+                }
+            })
+        };
+        let edits = (!is_default).then(|| {
+            let name_value = move || plan(id).map(|p| p.own_name).unwrap_or_default();
+            locked(
+                w.read_only(),
+                view! {
+                    <span class="plan-edit">
+                        <input type="text" autocomplete="off" id=format!("plan-name-{id}") maxlength=MAX_NAME_CHARS.to_string()
+                            aria-label=move || tr(w, "jn-plans-name-of", Args::new().str("plan", name_of(id)))
+                            value=name_value prop:value=name_value
+                            on:change=move |ev| {
+                                let input = event_target::<HtmlInputElement>(&ev);
+                                w.edit(|j| j.rename_plan(id, &input.value()));
+                                // What the field holds is the model's name, whether it took the edit or refused it.
+                                input.set_value(&name_value());
+                            } />
+                        <button type="button" class="btn danger" id=format!("plan-remove-{id}")
+                            aria-label=move || tr(w, "jn-plans-remove-of", Args::new().str("plan", name_of(id)))
+                            on:click=move |_| { if w.edit(|j| j.remove_plan(id)) { focus_id("plan-shown") } }>
+                            {words(w, "jn-plans-remove")}
+                        </button>
+                    </span>
+                },
+            )
+        });
+        view! {
+            <li id=format!("plan-{id}")>
+                <span class="plan-name">{move || name_of(id)}</span>
+                {is_default.then(|| view! { <span class="insp-range" id="plan-default-mark">{words(w, "jn-plans-default-mark")}</span> })}
+                <span class="insp-range" id=format!("plan-summary-{id}")>{summary}</span>
+                {findings}
+                {edits}
+            </li>
+        }
+    };
+    let new_name = NodeRef::<leptos::html::Input>::new();
+    let add = move || {
+        let Some(input) = new_name.get_untracked() else { return };
+        if w.add_plan(&input.value()) {
+            input.set_value("");
+            focus_id("plan-shown");
+        }
+    };
+    let adder = locked(
+        w.read_only(),
+        view! {
+            <div class="plan-add">
+                <label for="plan-new-name">{words(w, "jn-plans-new-name")}</label>
+                <input type="text" autocomplete="off" id="plan-new-name" maxlength=MAX_NAME_CHARS.to_string() node_ref=new_name
+                    on:keydown=move |ev| { if ev.key() == "Enter" { ev.prevent_default(); add(); } } />
+                <button type="button" class="btn" id="plan-add" on:click=move |_| add()>{words(w, "jn-plans-add")}</button>
+            </div>
+        },
+    );
+    let days = DayType::ALL.into_iter().map(|day| schedule_table(w, day, plans, ids, name_of)).collect_view();
+    // Which plan runs at a day and a time chosen: a question, not an edit.
+    let (day, minute) = (RwSignal::new(DayType::Weekday), RwSignal::new(8 * 60_u32));
+    let answer = move || {
+        let p = plans.with(|p| p.as_ref().and_then(|p| p.runs_at(day.get(), minute.get()).map(|x| x.name.clone())))?;
+        let args = Args::new().str("time", crate::shared::said::hhmm(minute.get() as i32)).str("day", w.tr(day.get().on_key())).str("plan", w.say(&p));
+        Some(tr(w, "jn-plans-runs-at", args))
+    };
+    let runs = view! {
+        <h4 class="phase-moves-h" id="plans-runs-h">{words(w, "jn-plans-runs-heading")}</h4>
+        <div class="plan-runs" role="group" aria-labelledby="plans-runs-h">
+            <label for="runs-at-day">{words(w, "jn-plans-runs-day")}</label>
+            <select id="runs-at-day" on:change=move |ev| {
+                if let Some(d) = DayType::from_id(&event_target::<HtmlSelectElement>(&ev).value()) {
+                    day.set(d);
+                }
+            }>
+                {DayType::ALL.into_iter().map(|d| view! { <option value=d.id() selected=move || day.get() == d>{words(w, d.key())}</option> }).collect_view()}
+            </select>
+            <label for="runs-at-time">{words(w, "jn-plans-runs-time")}</label>
+            <input type="time" id="runs-at-time" step="60" value=move || crate::shared::said::hhmm(minute.get_untracked() as i32)
+                on:change=move |ev| {
+                    if let Some(m) = minute_of(&event_target::<HtmlInputElement>(&ev).value()) {
+                        minute.set(m as u32);
+                    }
+                } />
+            <p class="insp-range" id="runs-at" role="status">{answer}</p>
+        </div>
+        <p class="insp-range" id="plans-transition">{words(w, "jn-plans-transition")}</p>
+    };
+    view! {
+        <section class="insp-sec" id="signal-plans" aria-labelledby="i-h-plans">
+            <h3 class="note-h" id="i-h-plans">{words(w, "jn-plans-heading")}</h3>
+            <p class="insp-range">{words(w, "jn-plans-intro")}</p>
+            {chooser}
+            <h4 class="phase-moves-h" id="plans-list-h">{words(w, "jn-plans-list")}</h4>
+            <ul class="plans-list" id="plans-list" aria-labelledby="plans-list-h"><For each=move || ids.get() key=|id| *id children=item/></ul>
+            {adder}
+            <p class="insp-range" id="plans-bounds">{bounds}</p>
+            <h4 class="phase-moves-h" id="plans-schedule-h">{words(w, "jn-plans-schedule")}</h4>
+            {days}
+            {runs}
+        </section>
+    }
+}
+
+/// The schedule of day type `day` as a table, one row a period, keyed by its start, plan and end (ids name the start, so
+/// they stay unique): its start (a time field, the first's fixed at 00:00; a start changed moves the focus to the
+/// period's new start field),
+/// its end, its plan (a choice), and a button that removes it (the first stays); then a new period's start and plan. A
+/// focusable region named by its caption, as the plan's other tables. Locked read-only.
+fn schedule_table(
+    w: Watch,
+    day: DayType,
+    plans: Memo<Option<crate::junction::model::read_model::PlansView>>,
+    ids: Memo<Vec<u32>>,
+    name_of: impl Fn(u32) -> String + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    let periods =
+        Memo::new(move |_| plans.with(|p| p.as_ref().and_then(|p| p.days.iter().find(|d| d.day == day).map(|d| d.periods.clone())).unwrap_or_default()));
+    let label = move |key: &'static str, start: u32| {
+        move || tr(w, key, Args::new().str("time", crate::shared::said::hhmm(start as i32)).str("day", w.tr(day.on_key())))
+    };
+    let d = day.id();
+    // A row a period, keyed by its start and plan: an edit of either makes the row again.
+    let row = move |p: PeriodView| {
+        let start = p.start_min;
+        let first = start == 0;
+        let end = if p.end_min >= MINUTES_A_DAY { w.tr("jn-plans-midnight") } else { crate::shared::said::hhmm(p.end_min as i32) };
+        let start_cell = if first {
+            view! { <th scope="row">{crate::shared::said::hhmm(0)}</th> }.into_any()
+        } else {
+            view! {
+                <th scope="row">
+                    <input type="time" step="60" id=format!("period-start-{d}-{start}") aria-label=label("jn-period-start-of", start)
+                        value=crate::shared::said::hhmm(start as i32)
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            let to = minute_of(&input.value()).unwrap_or(-1);
+                            if !w.edit(|j| j.set_period_start(day, start, to)) {
+                                input.set_value(&crate::shared::said::hhmm(start as i32));
+                            } else if to != start as i32 {
+                                // The row is keyed by its start, so it is drawn again (and may move): the focus follows
+                                // the period to its new start field once it is there, never left on the body.
+                                focus_after_swap(format!("period-start-{d}-{to}"));
+                            }
+                        } />
+                </th>
+            }
+            .into_any()
+        };
+        let change = if first {
+            view! { <td class="insp-range">{words(w, "jn-period-first")}</td> }.into_any()
+        } else {
+            view! {
+                <td>
+                    <button type="button" class="btn danger" id=format!("period-remove-{d}-{start}") aria-label=label("jn-period-remove-of", start)
+                        on:click=move |_| { if w.edit(|j| j.remove_period(day, start)) { focus_id(&format!("period-new-start-{d}")) } }>
+                        {words(w, "jn-plans-remove")}
+                    </button>
+                </td>
+            }
+            .into_any()
+        };
+        view! {
+            <tr>
+                {start_cell}
+                <td>{end}</td>
+                <td>
+                    <select id=format!("period-plan-{d}-{start}") aria-label=label("jn-period-plan-of", start)
+                        on:change=move |ev| {
+                            let select = event_target::<HtmlSelectElement>(&ev);
+                            let Ok(id) = select.value().parse::<u32>() else { return };
+                            if !w.edit(|j| j.set_period_plan(day, start, id)) {
+                                select.set_value(&p.plan.to_string());
+                            } else if id != p.plan {
+                                // The row is keyed by its plan too, so it is drawn again: the focus follows the period
+                                // to its new choice of plan (the same id: it names the start), never left on the body.
+                                focus_after_swap(format!("period-plan-{d}-{start}"));
+                            }
+                        }>
+                        {plan_options(ids, name_of, move || p.plan)}
+                    </select>
+                </td>
+                {change}
+            </tr>
+        }
+    };
+    let new_start = NodeRef::<leptos::html::Input>::new();
+    let new_plan = NodeRef::<leptos::html::Select>::new();
+    let add = move || {
+        let (Some(start), Some(plan)) = (new_start.get_untracked(), new_plan.get_untracked()) else { return };
+        let minute = minute_of(&start.value()).unwrap_or(-1);
+        let id = plan.value().parse::<u32>().unwrap_or(DEFAULT_PLAN);
+        if w.edit(|j| j.add_period(day, minute, id)) {
+            start.set_value("");
+        }
+    };
+    let caption = format!("schedule-{d}-caption");
+    let named_by = caption.clone();
+    let day_named = move || tr(w, "jn-period-new", Args::new().str("day", w.tr(day.on_key())));
+    locked(
+        w.read_only(),
+        view! {
+            <div class="calls-table" role="region" tabindex="0" aria-labelledby=named_by>
+                <table class="nt plan-schedule" id=format!("schedule-{d}")>
+                    <caption id=caption>{words(w, day.key())}</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">{words(w, "jn-plans-col-start")}</th>
+                            <th scope="col">{words(w, "jn-plans-col-end")}</th>
+                            <th scope="col">{words(w, "jn-plans-col-plan")}</th>
+                            <th scope="col">{words(w, "jn-plans-col-change")}</th>
+                        </tr>
+                    </thead>
+                    <tbody><For each=move || periods.get() key=|p| (p.start_min, p.plan, p.end_min) children=row/></tbody>
+                </table>
+            </div>
+            <div class="period-add" role="group" aria-label=day_named>
+                <input type="time" step="60" id=format!("period-new-start-{d}") node_ref=new_start
+                    aria-label=move || tr(w, "jn-period-new-start", Args::new().str("day", w.tr(day.on_key()))) />
+                <select id=format!("period-new-plan-{d}") node_ref=new_plan
+                    aria-label=move || tr(w, "jn-period-new-plan", Args::new().str("day", w.tr(day.on_key())))>
+                    {plan_options(ids, name_of, || DEFAULT_PLAN)}
+                </select>
+                <button type="button" class="btn" id=format!("period-add-{d}")
+                    aria-label=move || tr(w, "jn-period-add-of", Args::new().str("day", w.tr(day.on_key())))
+                    on:click=move |_| add()>
+                    {words(w, "jn-period-add")}
+                </button>
+            </div>
+        },
+    )
 }
 
 /// Pedestrian calls (#60), in the plan's level: each crossing on call (walked only when someone calls it, with its calls

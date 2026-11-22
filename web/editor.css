@@ -2079,7 +2079,9 @@ svg pattern circle {
 .wfield input,
 .var input[type="time"],
 .var select,
-.inspector select {
+.inspector select,
+#signal-plans input[type="text"],
+#signal-plans input[type="time"] {
   min-height: 36px;
   padding: 2px 10px;
   border: 1px solid var(--field-line);
@@ -2098,7 +2100,9 @@ svg pattern circle {
 .wfield input:focus,
 .var select:focus,
 .var input[type="time"]:focus,
-.inspector select:focus {
+.inspector select:focus,
+#signal-plans input[type="text"]:focus,
+#signal-plans input[type="time"]:focus {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-color: var(--accent);
@@ -3773,6 +3777,69 @@ svg pattern circle {
 #calls-rows,
 #bikes-rows {
   margin-top: 8px;
+}
+/* Time-of-day plans (CLM-16), first in the signal plan's level: the plan shown, the plans, each day type's schedule and
+   which plan runs at a day and time. The fields take the inspector's select look; the period's controls wrap. */
+.plan-chooser,
+.plan-runs {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.plan-chooser > .insp-range,
+.plan-runs > .insp-range {
+  margin: 0;
+}
+.plans-list {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.plans-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.plan-name,
+.plan-note {
+  font-weight: 600;
+}
+.plans-list > li > .insp-range,
+.plans-list > li > .calls-findings {
+  flex-basis: 100%;
+  margin: 0;
+}
+.plan-edit,
+.plan-add,
+.period-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.plan-add,
+.period-add {
+  margin-top: 8px;
+}
+#signal-plans input[type="text"],
+#signal-plans input[type="time"] {
+  min-width: 0;
+  max-width: 100%;
+}
+/* The locked look of the inspector's other fields (above), kept apart from their rule, whose selectors are pinned. */
+#signal-plans input:disabled {
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: default;
+}
+.plan-schedule select,
+.period-add select {
+  width: auto;
+  max-width: 100%;
 }
 .signal-phases {
   list-style: none;

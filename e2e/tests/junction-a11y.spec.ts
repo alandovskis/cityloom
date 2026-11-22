@@ -382,6 +382,86 @@ test.describe("emergency vehicle pre-emption in the signal plan (CLM-15)", () =>
   });
 });
 
+test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
+  test("the plan shown is a labelled choice described by what it changes, each control of the plans and the schedule is named by its plan, day and time, each day's table is a region named by its caption, which plan runs is a status, and at 280 px nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const chooser = page.getByRole("combobox", { name: "Plan shown and edited", exact: true });
+    await expect(chooser).toHaveAccessibleDescription(/^The signal plan below, its summary of the hour and its checks/);
+    await page.getByRole("textbox", { name: "Name of a new plan", exact: true }).fill("Morning peak");
+    await page.getByRole("textbox", { name: "Name of a new plan", exact: true }).press("Enter");
+    await expect(live(page)).toContainText("Showing plan “Morning peak”");
+    await expect(chooser).toHaveValue("1");
+    await expect(page.getByRole("list", { name: "Plans" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Name of plan “Morning peak”", exact: true })).toHaveValue(
+      "Morning peak",
+    );
+    await expect(page.getByRole("button", { name: "Remove plan “Morning peak”", exact: true })).toBeVisible();
+    for (const [day, caption, on] of [
+      ["weekday", "Weekdays (Monday to Friday)", "on weekdays"],
+      ["saturday", "Saturday", "on Saturdays"],
+      ["sunday", "Sunday", "on Sundays"],
+    ]) {
+      await expect(page.getByRole("region", { name: caption, exact: true })).toHaveAttribute("tabindex", "0");
+      await expect(page.locator(`#schedule-${day}`)).toBeVisible();
+      await expect(
+        page.getByRole("combobox", { name: `Plan of the period from 00:00 ${on}`, exact: true }),
+      ).toHaveValue("0");
+      const group = page.getByRole("group", { name: `New period ${on}`, exact: true });
+      await expect(group.getByLabel(`Start of a new period ${on}`, { exact: true })).toBeVisible();
+      await expect(group.getByRole("combobox", { name: `Plan of a new period ${on}`, exact: true })).toBeVisible();
+      await expect(group.getByRole("button", { name: `Add period ${on}`, exact: true })).toBeVisible();
+    }
+    // A period added by the keys alone: its start and plan named by the day and its time.
+    await page.getByLabel("Start of a new period on Saturdays", { exact: true }).fill("07:00");
+    await page
+      .getByRole("combobox", { name: "Plan of a new period on Saturdays", exact: true })
+      .selectOption({ label: "Morning peak" });
+    await page.getByRole("button", { name: "Add period on Saturdays", exact: true }).press("Enter");
+    await expect(live(page)).toContainText("“Morning peak” from 07:00 on Saturdays.");
+    await expect(page.getByLabel("Start of the period from 07:00 on Saturdays", { exact: true })).toHaveValue("07:00");
+    await expect(
+      page.getByRole("combobox", { name: "Plan of the period from 07:00 on Saturdays", exact: true }),
+    ).toHaveValue("1");
+    await expect(
+      page.getByRole("button", { name: "Remove the period from 07:00 on Saturdays", exact: true }),
+    ).toBeVisible();
+    // A start changed with the keyboard keeps the focus in that period's start field, wherever the row is drawn again.
+    const start = page.getByLabel("Start of the period from 07:00 on Saturdays", { exact: true });
+    await start.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(live(page)).toContainText("Period from 07:00 on Saturdays now starts at 08:00.");
+    const moved = page.getByLabel("Start of the period from 08:00 on Saturdays", { exact: true });
+    await expect(moved).toHaveValue("08:00");
+    await expect(moved).toBeFocused();
+    await expect(page.locator("#period-start-saturday-480")).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByLabel("Start of the period from 09:00 on Saturdays", { exact: true })).toBeFocused();
+    // A period's plan changed keeps the focus on its choice of plan, though the row is drawn again.
+    const choice = page.getByRole("combobox", { name: "Plan of the period from 09:00 on Saturdays", exact: true });
+    await choice.focus();
+    await choice.selectOption("0");
+    await expect(choice).toHaveValue("0");
+    await expect(page.locator("#period-plan-saturday-540")).toBeFocused();
+    await choice.selectOption("1");
+    await expect(choice).toHaveValue("1");
+    await expect(page.locator("#period-plan-saturday-540")).toBeFocused();
+    // Which plan runs: a day and a time, both labelled, and the answer a status.
+    const runs = page.getByRole("group", { name: "Which plan runs", exact: true });
+    await runs.getByRole("combobox", { name: "Day", exact: true }).selectOption("saturday");
+    await runs.getByLabel("Time", { exact: true }).fill("09:30");
+    await expect(page.getByRole("status").filter({ hasText: "At 09:30" })).toHaveText(
+      "At 09:30 on Saturdays, plan “Morning peak” runs.",
+    );
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("pedestrian calls in the signal plan (#60)", () => {
   test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
     page,

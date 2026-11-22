@@ -60,6 +60,7 @@ impl Junction {
             refusal_arm: None,
             calls_dropped: 0,
             phases_cut: 0,
+            viewing: plans::DEFAULT_PLAN,
         };
         j.load_sample(sample);
         j
@@ -94,11 +95,14 @@ impl Junction {
             raised: false,
             turbo: None,
             signal_plan: None,
+            plans: Vec::new(),
+            schedule: plans::Schedule::default(),
             source: Vec::new(),
         }];
         self.cursor = 0;
         self.floor = None;
         self.selected = Target::None;
+        self.viewing = plans::DEFAULT_PLAN;
     }
 
     /// An arm of a sample junction: it reads the sample street `sample`, laid out for the right-hand side.

@@ -11,6 +11,7 @@ pub mod compare;
 pub mod control;
 pub mod curbside;
 pub mod geometry;
+pub mod plans;
 pub mod preemption;
 pub mod read_model;
 pub mod signal;
@@ -385,6 +386,14 @@ pub struct State {
     /// signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signal_plan: Option<crate::junction::model::signal::SignalPlan>,
+    /// The named time-of-day plans (CLM-16), each a copy of the streets' signal settings that differs from the default
+    /// (the arms' own); the phases are shared. Only while `control` is a signal; saved only once there is one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plans: Vec<plans::TimingPlan>,
+    /// Which plan runs when, by day type and time of day; the default fills what it leaves. Saved only once something
+    /// is scheduled.
+    #[serde(default, skip_serializing_if = "plans::Schedule::is_empty")]
+    pub schedule: plans::Schedule,
     /// The OSM nodes it was made from. The sample junctions are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
@@ -898,10 +907,20 @@ pub enum Refusal {
     PreemptionNoPhase,
     NotOnPreemption,
     EmergencyCallsOutOfRange,
+    PlanNameEmpty,
+    PlanNameTooLong,
+    PlanNameTaken,
+    TooManyPlans,
+    DefaultPlanKept,
+    DefaultPlanNamed,
+    PeriodOutOfDay,
+    PeriodTaken,
+    TooManyPeriods,
+    FirstPeriodKept,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 55] = [
+    pub const ALL: [Refusal; 65] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -957,6 +976,16 @@ impl Refusal {
         Refusal::PreemptionNoPhase,
         Refusal::NotOnPreemption,
         Refusal::EmergencyCallsOutOfRange,
+        Refusal::PlanNameEmpty,
+        Refusal::PlanNameTooLong,
+        Refusal::PlanNameTaken,
+        Refusal::TooManyPlans,
+        Refusal::DefaultPlanKept,
+        Refusal::DefaultPlanNamed,
+        Refusal::PeriodOutOfDay,
+        Refusal::PeriodTaken,
+        Refusal::TooManyPeriods,
+        Refusal::FirstPeriodKept,
     ];
 
     /// The message that says why.
@@ -1017,6 +1046,16 @@ impl Refusal {
             Refusal::PreemptionNoPhase => "jn-refusal-preemption-no-phase",
             Refusal::NotOnPreemption => "jn-refusal-not-on-preemption",
             Refusal::EmergencyCallsOutOfRange => "jn-refusal-emergency-calls-out-of-range",
+            Refusal::PlanNameEmpty => "jn-refusal-plan-name-empty",
+            Refusal::PlanNameTooLong => "jn-refusal-plan-name-too-long",
+            Refusal::PlanNameTaken => "jn-refusal-plan-name-taken",
+            Refusal::TooManyPlans => "jn-refusal-too-many-plans",
+            Refusal::DefaultPlanKept => "jn-refusal-default-plan-kept",
+            Refusal::DefaultPlanNamed => "jn-refusal-default-plan-named",
+            Refusal::PeriodOutOfDay => "jn-refusal-period-out-of-day",
+            Refusal::PeriodTaken => "jn-refusal-period-taken",
+            Refusal::TooManyPeriods => "jn-refusal-too-many-periods",
+            Refusal::FirstPeriodKept => "jn-refusal-first-period-kept",
         }
     }
 }
@@ -1043,6 +1082,9 @@ pub struct Junction {
     calls_dropped: usize,
     /// How many phases of its stored plan were left out as it opened (past `signal::MAX_PHASES`); 0 once it is edited.
     phases_cut: usize,
+    /// The time-of-day plan shown, which the timing and policy edits change (`plans::DEFAULT_PLAN`: the junction's
+    /// own settings). Not history: what is chosen, as `selected`.
+    viewing: u32,
 }
 
 /// Whether two states are the same design, whatever step each is labelled as.
@@ -1082,6 +1124,7 @@ impl Junction {
             refusal_arm: None,
             calls_dropped: 0,
             phases_cut: 0,
+            viewing: plans::DEFAULT_PLAN,
         };
         if let Some(now) = now.filter(|n| !same_design(n, &today)) {
             j.states.push(State { label: earlier(), ..now });
@@ -1319,6 +1362,7 @@ impl Junction {
             self.states.push(today);
             self.cursor += 1;
             self.selected = Target::None;
+            self.fix_viewing();
             return true;
         }
         if self.cursor == 0 && self.states.len() == 1 {
@@ -1327,6 +1371,7 @@ impl Junction {
         self.states.truncate(1);
         self.cursor = 0;
         self.selected = Target::None;
+        self.fix_viewing();
         true
     }
 
@@ -1346,6 +1391,7 @@ impl Junction {
         if !keep {
             self.selected = Target::None;
         }
+        self.fix_viewing();
     }
 
     // ---- selection --------------------------------------------------------
@@ -1572,6 +1618,11 @@ impl Junction {
     /// green needs a transit lane on the street, and the value has to be within `field.range()`. A value the arm
     /// already has is not an edit.
     pub fn set_timing(&mut self, uid: u32, field: TimingField, seconds: i32) -> bool {
+        self.in_plan(|j| j.set_timing_here(uid, field, seconds))
+    }
+
+    /// `set_timing` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_timing_here(&mut self, uid: u32, field: TimingField, seconds: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if arm.is_pedestrian() {
             return self.refuse(Refusal::MeasureOnPedestrian);
@@ -1604,6 +1655,11 @@ impl Junction {
 
     /// Steps one number of the signal timing of arm `uid` by a second, up or down.
     pub fn step_timing(&mut self, uid: u32, field: TimingField, dir: i32) -> bool {
+        self.in_plan(|j| j.step_timing_here(uid, field, dir))
+    }
+
+    /// `step_timing` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn step_timing_here(&mut self, uid: u32, field: TimingField, dir: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let now = field.get(&arm.timing.unwrap_or_default()) as i32;
         self.set_timing(uid, field, now.saturating_add(dir.signum()))
@@ -1747,6 +1803,11 @@ impl Junction {
     /// phases run. On call needs a signal and a phase of its plan that walks the crossing (`calls::refusal`); recall is
     /// always allowed, so a crossing an edit has left unwalked can be taken off call. Refused when it is that already.
     pub fn set_on_call(&mut self, uid: u32, on: bool) -> bool {
+        self.in_plan(|j| j.set_on_call_here(uid, on))
+    }
+
+    /// `set_on_call` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_on_call_here(&mut self, uid: u32, on: bool) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if arm.calls.is_some() == on {
             return self.refuse(Refusal::CallAlready);
@@ -1770,6 +1831,11 @@ impl Junction {
     /// `DetectionNotWalked`). A crossing on recall has none (`DetectionNeedsCall`). The detection it has already is not
     /// an edit, as a radio chosen again.
     pub fn set_detection(&mut self, uid: u32, detection: calls::Detection) -> bool {
+        self.in_plan(|j| j.set_detection_here(uid, detection))
+    }
+
+    /// `set_detection` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_detection_here(&mut self, uid: u32, detection: calls::Detection) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let (on_call, now) = (arm.calls.is_some(), calls::detection_of(arm));
         if detection == calls::Detection::Passive
@@ -1800,6 +1866,11 @@ impl Junction {
     /// Sets how many times an hour the crossing of arm `uid`, on call, is called: 0 to `calls::MAX_CALLS_PER_HOUR`. A
     /// crossing on recall has no rate. A rate it has already is not an edit.
     pub fn set_call_rate(&mut self, uid: u32, rate: i32) -> bool {
+        self.in_plan(|j| j.set_call_rate_here(uid, rate))
+    }
+
+    /// `set_call_rate` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_call_rate_here(&mut self, uid: u32, rate: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let Some(now) = arm.calls else { return self.refuse(Refusal::NotOnCall) };
         let Ok(rate) = u32::try_from(rate) else { return self.refuse(Refusal::CallRateOutOfRange) };
@@ -1824,6 +1895,11 @@ impl Junction {
     /// Actuated needs a signal and a phase of the plan that is the street's own (`actuation::refusal`); recall is always
     /// allowed, so a street an edit has left without a phase can be put back. Refused when it is that already.
     pub fn set_actuated(&mut self, uid: u32, on: bool) -> bool {
+        self.in_plan(|j| j.set_actuated_here(uid, on))
+    }
+
+    /// `set_actuated` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_actuated_here(&mut self, uid: u32, on: bool) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if arm.actuation.is_some() == on {
             return self.refuse(Refusal::ActuationAlready);
@@ -1845,6 +1921,11 @@ impl Junction {
     /// hour, each within its placeholder range (`actuation::Field::range`), the minimum never longer than the maximum.
     /// A street on recall has none. A value it has already is not an edit.
     pub fn set_actuation(&mut self, uid: u32, field: actuation::Field, value: i32) -> bool {
+        self.in_plan(|j| j.set_actuation_here(uid, field, value))
+    }
+
+    /// `set_actuation` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_actuation_here(&mut self, uid: u32, field: actuation::Field, value: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let Some(now) = actuation::actuation_of(arm) else { return self.refuse(Refusal::NotActuated) };
         let (lo, hi) = field.range();
@@ -1873,6 +1954,11 @@ impl Junction {
     /// (`bicycles::refusal`); recall is always allowed, so a movement an edit has left unrun can be put back. Refused
     /// when it is that already.
     pub fn set_bike_detection(&mut self, uid: u32, on: bool) -> bool {
+        self.in_plan(|j| j.set_bike_detection_here(uid, on))
+    }
+
+    /// `set_bike_detection` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_bike_detection_here(&mut self, uid: u32, on: bool) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if arm.cyclists.is_some() == on {
             return self.refuse(Refusal::BikeDetectionAlready);
@@ -1893,6 +1979,11 @@ impl Junction {
     /// Sets how many cyclists an hour are detected on the approach of arm `uid`, its bike movement on detection: 0 to
     /// `bicycles::MAX_CYCLISTS_PER_HOUR`. A movement on recall has no rate. A rate it has already is not an edit.
     pub fn set_cyclists(&mut self, uid: u32, rate: i32) -> bool {
+        self.in_plan(|j| j.set_cyclists_here(uid, rate))
+    }
+
+    /// `set_cyclists` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_cyclists_here(&mut self, uid: u32, rate: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let Some(now) = arm.cyclists else { return self.refuse(Refusal::NotOnBikeDetection) };
         let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= bicycles::MAX_CYCLISTS_PER_HOUR) else {
@@ -1916,6 +2007,11 @@ impl Junction {
     /// (`None`). Priority needs a signal, transit on the street and a phase of its own in the plan (`transit::refusal`);
     /// none is always allowed, so a street an edit has left without transit can be cleared. The mode it has is no edit.
     pub fn set_transit_priority(&mut self, uid: u32, mode: Option<transit::Mode>) -> bool {
+        self.in_plan(|j| j.set_transit_priority_here(uid, mode))
+    }
+
+    /// `set_transit_priority` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_transit_priority_here(&mut self, uid: u32, mode: Option<transit::Mode>) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let now = transit::priority_of(arm);
         if now.map(|p| p.mode) == mode {
@@ -1946,6 +2042,11 @@ impl Junction {
     /// Sets how many buses an hour come on the approach of street `uid`, given priority: 0 to
     /// `transit::MAX_BUSES_PER_HOUR`. A street with no priority has no rate. A rate it has already is not an edit.
     pub fn set_buses(&mut self, uid: u32, rate: i32) -> bool {
+        self.in_plan(|j| j.set_buses_here(uid, rate))
+    }
+
+    /// `set_buses` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_buses_here(&mut self, uid: u32, rate: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let Some(now) = transit::priority_of(arm) else { return self.refuse(Refusal::NotOnPriority) };
         let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= transit::MAX_BUSES_PER_HOUR) else {
@@ -1969,6 +2070,11 @@ impl Junction {
     /// the street's own in the plan (`preemption::refusal`); off is always allowed, so a street an edit has left without
     /// a phase can be cleared. The setting it has is no edit.
     pub fn set_preemption(&mut self, uid: u32, on: bool) -> bool {
+        self.in_plan(|j| j.set_preemption_here(uid, on))
+    }
+
+    /// `set_preemption` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_preemption_here(&mut self, uid: u32, on: bool) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if preemption::rate_of(arm).is_some() == on {
             return true;
@@ -1990,6 +2096,11 @@ impl Junction {
     /// Sets how many emergency calls an hour come on the approach of street `uid`, with pre-emption on: 0 to
     /// `preemption::MAX_CALLS_PER_HOUR`. A street with it off has no rate. A rate it has already is not an edit.
     pub fn set_emergency_calls(&mut self, uid: u32, rate: i32) -> bool {
+        self.in_plan(|j| j.set_emergency_calls_here(uid, rate))
+    }
+
+    /// `set_emergency_calls` on the junction it is run on (`in_plan` runs it on the plan shown).
+    fn set_emergency_calls_here(&mut self, uid: u32, rate: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let Some(now) = preemption::rate_of(arm) else { return self.refuse(Refusal::NotOnPreemption) };
         let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= preemption::MAX_CALLS_PER_HOUR) else {
@@ -2251,13 +2362,15 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        // An actuated street's settings, a bike movement's detection, a street's transit priority and its pre-emption are
-        // signal timing too, and go with it.
+        // An actuated street's settings, a bike movement's detection, a street's transit priority, its pre-emption and the
+        // time-of-day plans are signal timing too, and go with it.
         let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.transit_priority.is_some() && b.transit_priority.is_none())
-            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.preemption.is_some() && b.preemption.is_none());
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.preemption.is_some() && b.preemption.is_none())
+            // Time-of-day plans and their schedule are the signal's timing too (CLM-16).
+            || (!self.current().plans.is_empty() || !self.current().schedule.is_empty()) && after.plans.is_empty() && after.schedule.is_empty();
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
@@ -2490,30 +2603,39 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     // number (a sync, a hand): each is brought within its range here, on load as after an edit, so no reader sees one
     // past it.
     let signal = s.control == SIGNAL;
-    for t in s.arms.iter_mut().filter_map(|a| a.timing.as_mut()) {
+    for a in &mut s.arms {
+        settle_settings(a, signal);
+    }
+    // A time-of-day plan's settings are settled as the streets' own are, and go with them off a signal (CLM-16).
+    plans::settle(s);
+    signal::settle(s, region);
+}
+
+/// Brings one street's signal settings within their bounds (`signal`: the junction's kept control is a signal), as the
+/// default has them on the arm or as a time-of-day plan holds them: none off a signal, each timing field in its range,
+/// no transit lead without a transit lane, an actuation settled, and a detection only on a crossing on call.
+fn settle_settings(a: &mut Arm, signal: bool) {
+    if let Some(t) = a.timing.as_mut() {
         for f in TimingField::ALL {
             let (lo, hi) = f.range();
             f.put(t, f.get(t).clamp(lo as u32, hi as u32));
         }
     }
-    for a in &mut s.arms {
-        if !signal {
-            a.timing = None;
-            a.calls = None;
-            a.actuation = None;
-            a.cyclists = None;
-            a.transit_priority = None;
-            a.preemption = None;
-        } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
-            t.transit_lead_s = 0;
-        }
-        a.actuation = a.actuation.map(actuation::Actuation::settled);
-        // Only a crossing on call detects anyone: one on recall (or just taken off call) has no detection.
-        if a.calls.is_none() {
-            a.detection = calls::Detection::PushButton;
-        }
+    if !signal {
+        a.timing = None;
+        a.calls = None;
+        a.actuation = None;
+        a.cyclists = None;
+        a.transit_priority = None;
+        a.preemption = None;
+    } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
+        t.transit_lead_s = 0;
     }
-    signal::settle(s, region);
+    a.actuation = a.actuation.map(actuation::Actuation::settled);
+    // Only a crossing on call detects anyone: one on recall (or just taken off call) has no detection.
+    if a.calls.is_none() {
+        a.detection = calls::Detection::PushButton;
+    }
 }
 
 /// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
@@ -2820,7 +2942,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 55);
+        assert_eq!(Refusal::ALL.len(), 65);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
