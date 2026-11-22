@@ -15,7 +15,7 @@ use crate::junction::model::{
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
-use crate::junction::model::{actuation, bicycles, calls};
+use crate::junction::model::{actuation, bicycles, calls, transit};
 use crate::street::model::{StopKindExt, UseExt};
 
 use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
@@ -763,6 +763,46 @@ pub struct SignalView {
     /// Bicycle detection (CLM-13): which bike movements are on detection, and how the plan served their cyclists over the
     /// same hour.
     pub bicycles: BicyclesView,
+    /// Transit signal priority (CLM-14): which streets with transit give their buses priority, and how the plan served
+    /// their buses over the same hour.
+    pub transit: PriorityView,
+}
+
+/// The transit priority of a signal: every street with transit (or given priority without it) with its priority, one
+/// row per bus of the hour, and the findings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct PriorityView {
+    /// In the order of the bearings.
+    pub streets: Vec<TransitStreetView>,
+    /// Every bus of the hour, in the order they came.
+    pub rows: Vec<BusRowView>,
+    /// What the person should act on, each a sentence naming the street.
+    pub findings: Vec<Said>,
+    /// The same findings as the model has them, in the same order.
+    pub found: Vec<transit::Finding>,
+}
+
+/// One street as transit priority sees it: its priority (None: none), whether it has transit and a phase of its own
+/// (else it cannot be given any), its buses added up while it has priority and both, and the delay its priority moved
+/// to each other approach ("West Street (west) 12 s and ..."), None when it moved none.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct TransitStreetView {
+    pub uid: u32,
+    pub label: Said,
+    pub priority: Option<transit::Priority>,
+    pub has_transit: bool,
+    pub has_phase: bool,
+    pub totals: Option<transit::Totals>,
+    pub moved: Option<Said>,
+}
+
+/// One bus: when it came and what happened, in words; its street's name is the street's, by `bus.arm`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BusRowView {
+    /// The bus itself (a row's identity).
+    pub bus: transit::Bus,
+    pub at: Said,
+    pub outcome: Said,
 }
 
 /// The bicycle detection of a signal: every bike movement the plan runs (or left on detection without a phase) with its
@@ -994,6 +1034,66 @@ fn bicycles_view(s: &State, plan: &signal::Plan, arms: &[ArmView], lengths: &[(u
     BicyclesView { movements, rows, findings, found: summary.findings }
 }
 
+/// The transit priority of `plan` on `s` in words, from the hour's `summary`: `arms` names the streets.
+fn priority_view(s: &State, plan: &signal::Plan, arms: &[ArmView], summary: transit::Summary) -> PriorityView {
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.transit_priority.is_some() || transit::has_transit(a)).collect();
+    listed.sort_by_key(|a| a.bearing);
+    let streets = listed
+        .into_iter()
+        .map(|a| {
+            let moved = summary
+                .moved
+                .iter()
+                .filter(|m| m.from == a.uid)
+                .map(|m| Said::new("jn-transit-moved-item").with("arm", Arg::Said(Box::new(name(m.to)))).with("seconds", Arg::Num(i64::from(m.seconds))));
+            TransitStreetView {
+                uid: a.uid,
+                label: name(a.uid),
+                priority: transit::priority_of(a),
+                has_transit: transit::has_transit(a),
+                has_phase: actuation::own_phase(plan, a.uid).is_some(),
+                totals: summary.totals.iter().find(|t| t.arm == a.uid).copied(),
+                moved: and_list(moved.collect()),
+            }
+        })
+        .collect();
+    let rows = summary
+        .buses
+        .iter()
+        .map(|b| BusRowView {
+            bus: *b,
+            at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(b.at_s / 60))).with("seconds", Arg::Num(i64::from(b.at_s % 60))),
+            outcome: bus_outcome_said(b),
+        })
+        .collect();
+    let findings = summary
+        .findings
+        .iter()
+        .map(|f| match *f {
+            transit::Finding::NoTransit { arm } => Said::new("jn-transit-finding-no-transit").with("arm", Arg::Said(Box::new(name(arm)))),
+            transit::Finding::NoPhase { arm } => Said::new("jn-transit-finding-no-phase").with("arm", Arg::Said(Box::new(name(arm)))),
+            transit::Finding::ClearanceHeld { arm, phase, times, held_s } => Said::new("jn-transit-finding-clearance")
+                .with("arm", Arg::Said(Box::new(name(arm))))
+                .with("phase", Arg::Said(Box::new(name(phase))))
+                .with("times", Arg::Num(i64::from(times)))
+                .with("held", Arg::Num(i64::from(held_s))),
+        })
+        .collect();
+    PriorityView { streets, rows, findings, found: summary.findings }
+}
+
+/// What happened to a bus, in a few words.
+fn bus_outcome_said(b: &transit::Bus) -> Said {
+    match b.outcome {
+        transit::Outcome::OnArrival => Said::new("jn-transit-outcome-on-arrival"),
+        transit::Outcome::EarlyGreen => Said::new("jn-transit-outcome-early-green").with("early", Arg::Num(i64::from(b.early_s))),
+        transit::Outcome::Extended => Said::new("jn-transit-outcome-extended").with("extended", Arg::Num(i64::from(b.extended_s))),
+        transit::Outcome::Delayed => Said::new("jn-transit-outcome-delayed"),
+        transit::Outcome::NotServed => Said::new("jn-calls-outcome-not-served"),
+    }
+}
+
 /// What happened to a cyclist's call, in the pedestrian calls' few words.
 fn ride_outcome_said(r: &bicycles::Ride) -> Said {
     let outcome = match r.outcome {
@@ -1125,13 +1225,14 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    // One hour of the controller gives the calls, the actuation and the bicycle calls.
+    // One hour of the controller gives the calls, the actuation, the bicycle calls and the buses.
     let lengths = ride_lengths(s, arms);
     let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms), &lengths);
     let calls = calls_view(s, &plan, arms, hour.calls);
     let actuation = actuation_view(s, &plan, arms, hour.actuation);
     let bicycles = bicycles_view(s, &plan, arms, &lengths, hour.bicycles);
-    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation, bicycles })
+    let transit = priority_view(s, &plan, arms, hour.transit);
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation, bicycles, transit })
 }
 
 /// The movements that take part in the conflicts, each once.

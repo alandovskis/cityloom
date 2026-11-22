@@ -11,8 +11,9 @@ use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement,
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::bicycles;
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
-use crate::junction::model::read_model::{CallRowView, CrossingView, JView, RideRowView};
+use crate::junction::model::read_model::{BusRowView, CallRowView, CrossingView, JView, RideRowView};
 use crate::junction::model::signal::Pattern;
+use crate::junction::model::transit::{self, Mode};
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
@@ -1716,6 +1717,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 {calls_section(w)}
                 {actuation_section(w)}
                 {bikes_section(w)}
+                {priority_section(w)}
             }
         })
     }
@@ -2419,6 +2421,244 @@ fn bikes_section(w: Watch) -> impl IntoView {
                 </section>
             }
         })
+    }
+}
+
+/// Transit signal priority (CLM-14), in the plan's level after bicycle detection: each street with transit gives its
+/// buses no priority, an early green, a green extension or both; while it gives some, its trigger and bounds, its buses
+/// an hour, what its buses met over the hour and the delay that moved to the other approaches; then the placeholder
+/// figures, the streets' buses added up, the findings and every bus. A street with no phase of its own says so, and
+/// priority there is refused with that reason. It decides nothing: the priorities, rates, totals and findings all come
+/// from the view.
+fn priority_section(w: Watch) -> impl IntoView {
+    // Everything below reads the transit priority through this memo, so an edit that leaves it as it was redraws none of
+    // it.
+    let transit = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.transit.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| transit.with(|t| t.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
+    let street = move |uid: u32| transit.with(|t| t.streets.iter().find(|s| s.uid == uid).cloned());
+    // A street is named by its uid, never copied in: an undo that renames a street keeps every name right.
+    let name_of = move |uid: u32| street(uid).map(|s| w.say(&s.label)).unwrap_or_default();
+    let bounds = move || {
+        let args = Args::new().num("rate", i64::from(transit::DEFAULT_BUSES_PER_HOUR)).num("early", i64::from(transit::EARLY_GREEN_MAX_S));
+        tr(w, "jn-transit-bounds", args.num("extension", i64::from(transit::EXTENSION_MAX_S)))
+    };
+    let item = move |uid: u32| {
+        // Made again only when the street's priority goes on or off, so a radio or the field keeps the focus.
+        let on = Memo::new(move |_| street(uid).is_some_and(|s| s.priority.is_some()));
+        let mode = Memo::new(move |_| street(uid).and_then(|s| s.priority).map(|p| p.mode));
+        let (status_id, rate_id, range_id) = (format!("transit-status-{uid}"), format!("transit-rate-{uid}"), format!("transit-range-{uid}"));
+        let status = move || match street(uid) {
+            Some(s) if !s.has_transit => w.tr("jn-transit-no-transit"),
+            Some(s) if !s.has_phase => w.tr("jn-transit-no-phase"),
+            Some(s) => {
+                let args = Args::new().num("early", i64::from(transit::EARLY_GREEN_MAX_S)).num("extension", i64::from(transit::EXTENSION_MAX_S));
+                match s.priority.map(|p| p.mode) {
+                    None => w.tr("jn-transit-off"),
+                    Some(Mode::EarlyGreen) => tr(w, "jn-transit-trigger-early-green", args),
+                    Some(Mode::Extension) => tr(w, "jn-transit-trigger-extension", args),
+                    Some(Mode::Both) => tr(w, "jn-transit-trigger-both", args),
+                }
+            }
+            None => String::new(),
+        };
+        let effect = move || {
+            let s = street(uid).filter(|s| s.priority.is_some())?;
+            let t = s.totals?;
+            let args = Args::new()
+                .num("buses", i64::from(t.buses))
+                .num("on_arrival", i64::from(t.on_arrival))
+                .num("early", i64::from(t.early_green))
+                .num("extended", i64::from(t.extended))
+                .num("delayed", i64::from(t.delayed))
+                .num("not_served", i64::from(t.not_served))
+                .num("moved", i64::from(t.moved_s));
+            let moved = s.moved.map(|list| {
+                view! { <p class="insp-range" id=format!("transit-moved-{uid}")>{move || tr(w, "jn-transit-moved", Args::new().str("list", w.say(&list)))}</p> }
+            });
+            Some(view! { <p class="insp-range" id=format!("transit-effect-{uid}")>{tr(w, "jn-transit-effect", args)}</p> {moved} })
+        };
+        let rate_value = move || street(uid).and_then(|s| s.priority).map(|p| p.buses.to_string()).unwrap_or_default();
+        let set_rate = move |v: f64| {
+            // A typed number is rounded to a whole bus; one that is not finite or is out of range is refused by the model.
+            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+                w.set_buses(uid, v.round() as i32);
+            }
+        };
+        let rate = move || {
+            let (field, hint) = (rate_id.clone(), range_id.clone());
+            on.get().then(|| {
+                view! {
+                    <span class="call-rate">
+                        <label for=field.clone()>{words(w, "jn-transit-rate")}</label>
+                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
+                            value=rate_value prop:value=rate_value
+                            on:keydown=move |ev| {
+                                if let Some(dir) = step_key(&ev.key()) {
+                                    ev.prevent_default();
+                                    let now = street(uid).and_then(|s| s.priority).map_or(0, |p| p.buses as i32);
+                                    w.set_buses(uid, now.saturating_add(dir));
+                                }
+                            }
+                            on:change=move |ev| {
+                                let input = event_target::<HtmlInputElement>(&ev);
+                                commit_typed(&input.value(), &set_rate);
+                                // What the field holds is the model's rate, whether it took the edit or refused it.
+                                input.set_value(&rate_value());
+                            } />
+                        <span class="insp-range" id=hint>
+                            {move || tr(w, "jn-transit-rate-range", Args::new().num("min", 0).num("max", i64::from(transit::MAX_BUSES_PER_HOUR)))}
+                        </span>
+                    </span>
+                }
+            })
+        };
+        let (group, head) = (format!("transit-mode-{uid}"), format!("transit-mode-h-{uid}"));
+        let radio = move |choice: Option<Mode>, id: &'static str, key: &'static str| {
+            let chosen = move || mode.get() == choice;
+            view! {
+                <label class="phase-move">
+                    <input type="radio" name=format!("transit-mode-{uid}") id=format!("transit-mode-{uid}-{id}") checked=chosen prop:checked=chosen
+                        on:change=move |ev| {
+                            let input = event_target::<HtmlInputElement>(&ev);
+                            // Refused (no transit, say): the radios show the priority the model kept.
+                            if !w.set_transit_priority(uid, choice) {
+                                input.set_checked(chosen());
+                            }
+                        } />
+                    <span>{words(w, key)}</span>
+                </label>
+            }
+        };
+        let (named_by, described_by) = (head.clone(), status_id.clone());
+        view! {
+            <li>
+                <div class="transit-street" role="group" aria-label=move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))>
+                    <span class="transit-name">{move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))}</span>
+                    <div class="transit-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="transit-mode-h" id=head>{words(w, "jn-transit-mode")}</span>
+                        {radio(None, "off", "jn-transit-mode-off")}
+                        {radio(Some(Mode::EarlyGreen), "early-green", "jn-transit-mode-early-green")}
+                        {radio(Some(Mode::Extension), "extension", "jn-transit-mode-extension")}
+                        {radio(Some(Mode::Both), "both", "jn-transit-mode-both")}
+                    </div>
+                    <p class="insp-range" id=status_id>{status}</p>
+                    {rate}
+                    {effect}
+                </div>
+            </li>
+        }
+    };
+    // One row a street, keyed by its totals: a row is made again only when its numbers change.
+    let totals = move || transit.with(|t| t.streets.iter().filter_map(|s| s.totals).collect::<Vec<_>>());
+    let has_totals = Memo::new(move |_| transit.with(|t| t.streets.iter().any(|s| s.totals.is_some())));
+    let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    let total_row = move |t: transit::Totals| {
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(t.arm)}</th>
+                <td>{t.buses}</td>
+                <td>{t.on_arrival}</td>
+                <td>{t.early_green}</td>
+                <td>{t.extended}</td>
+                <td>{t.delayed}</td>
+                <td>{move || seconds(t.moved_s)}</td>
+            </tr>
+        }
+    };
+    let totals_table = move || {
+        has_totals.get().then(|| {
+            view! {
+                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
+                <div class="calls-table" role="region" tabindex="0" aria-labelledby="transit-totals-caption">
+                    <table class="nt" id="transit-totals">
+                        <caption id="transit-totals-caption">{words(w, "jn-transit-totals-caption")}</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">{words(w, "jn-transit-col-street")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-buses")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-on-arrival")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-early-green")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-extended")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-delayed")}</th>
+                                <th scope="col">{words(w, "jn-transit-col-moved")}</th>
+                            </tr>
+                        </thead>
+                        <tbody><For each=totals key=|t| *t children=total_row/></tbody>
+                    </table>
+                </div>
+            }
+        })
+    };
+    let findings = move || {
+        let found = transit.with(|t| t.findings.clone());
+        (!found.is_empty()).then(|| {
+            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
+            view! {
+                <h4 class="phase-moves-h" id="transit-findings-h">{words(w, "jn-calls-findings")}</h4>
+                <ul class="calls-findings" id="transit-findings" aria-labelledby="transit-findings-h">{items}</ul>
+            }
+        })
+    };
+    // Every bus, keyed by the bus itself: a row is made again only when what happened to it changes.
+    let n_rows = Memo::new(move |_| transit.with(|t| t.rows.len()));
+    let rows = move || transit.with(|t| t.rows.clone());
+    let bus_row = move |r: BusRowView| {
+        let wait = r.bus.wait_s;
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(r.bus.arm)}</th>
+                <td>{move || w.say(&r.at)}</td>
+                <td>{move || w.say(&r.outcome)}</td>
+                <td>{move || seconds(wait)}</td>
+            </tr>
+        }
+    };
+    let every_bus = move || {
+        (n_rows.get() > 0).then(|| {
+            view! {
+                <details class="jn-fold" id="transit-rows">
+                    <summary>{move || tr(w, "jn-transit-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
+                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="transit-rows-caption">
+                        <table class="nt">
+                            <caption id="transit-rows-caption">{words(w, "jn-transit-rows-caption")}</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">{words(w, "jn-transit-col-bus")}</th>
+                                    <th scope="col">{words(w, "jn-transit-col-arrived")}</th>
+                                    <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
+                                    <th scope="col">{words(w, "jn-transit-col-wait")}</th>
+                                </tr>
+                            </thead>
+                            <tbody><For each=rows key=|r| r.bus children=bus_row/></tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        })
+    };
+    let none = Memo::new(move |_| {
+        transit.with(|t| {
+            if t.streets.is_empty() {
+                Some("jn-transit-none")
+            } else if !t.streets.iter().any(|s| s.priority.is_some()) {
+                Some("jn-transit-none-on")
+            } else {
+                None
+            }
+        })
+    });
+    view! {
+        <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
+            <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
+            <p class="insp-range">{words(w, "jn-transit-intro")}</p>
+            <p class="insp-range" id="transit-bounds">{bounds}</p>
+            // The priorities and the rate fields edit: offered disabled on a junction shown read-only.
+            {locked(w.read_only(), view! { <ul class="transit-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+            {move || none.get().map(|key| view! { <p class="insp-range" id="transit-none">{words(w, key)}</p> })}
+            {totals_table}
+            {findings}
+            {every_bus}
+        </section>
     }
 }
 

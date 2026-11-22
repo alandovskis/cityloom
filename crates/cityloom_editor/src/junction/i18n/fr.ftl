@@ -870,3 +870,68 @@ jn-rev-buses =
         [one] { $rate } autobus par heure
        *[other] { $rate } autobus par heure
     }
+jn-transit-heading = Priorité aux feux pour le transport en commun
+jn-transit-intro = Une rue qui a du transport en commun et une phase propre peut donner la priorité à ses autobus. Le vert hâtif écourte les phases qui précèdent la sienne quand un autobus arrive au rouge; la prolongation du vert retient son vert pour un autobus qui arrive juste après sa fin. Sans priorité, un autobus attend le vert de sa rue comme le reste de la circulation.
+jn-transit-bounds = Valeurs provisoires : une rue qui reçoit la priorité a { $rate } autobus par heure, répartis sur une heure. Le vert hâtif avance le vert de la rue d’au plus { $early } s, et la prolongation le retient d’au plus { $extension } s; une rue qui reçoit la priorité pour un vert n’en reçoit pas pour le suivant. Le jaune et le rouge intégral ne sont jamais raccourcis, ni le vert minimal d’une phase, une marche et son dégagement ou un dégagement vélo : un vert hâtif qu’ils écourtent est un constat. L’avance pour le transport en commun de la rue (sa minuterie) reste fixe à chaque cycle, quoi qu’il arrive.
+jn-transit-group = Autobus de { $street }
+jn-transit-mode = Priorité
+jn-transit-mode-off = Aucune
+jn-transit-mode-early-green = Vert hâtif
+jn-transit-mode-extension = Prolongation du vert
+jn-transit-mode-both = Les deux
+jn-transit-off = Sans priorité : un autobus attend le vert de la rue comme le reste de la circulation.
+jn-transit-trigger-early-green = Vert hâtif : un autobus qui arrive au rouge écourte le vert des phases qui précèdent la sienne, d’au plus { $early } s en tout, jamais sous leur vert minimal, une marche et son dégagement ou un dégagement vélo. Pas pour deux verts de suite.
+jn-transit-trigger-extension = Prolongation du vert : un autobus qui arrive dans les { $extension } s après la fin prévue du vert de la rue retient le vert jusqu’à son passage. Pas pour deux verts de suite.
+jn-transit-trigger-both = Vert hâtif et prolongation du vert : un autobus qui arrive au rouge avance le vert de la rue d’au plus { $early } s, sans jamais écourter une phase sous son vert minimal, une marche et son dégagement ou un dégagement vélo; un autobus qui arrive dans les { $extension } s après la fin prévue du vert le retient jusqu’à son passage. Pas pour deux verts de suite.
+jn-transit-no-transit = Cette rue n’a pas de transport en commun : ses autobus ne peuvent pas recevoir la priorité.
+jn-transit-no-phase = Aucune phase du plan n’est propre à cette rue : ses autobus ne peuvent pas recevoir la priorité.
+jn-transit-rate = Autobus par heure
+jn-transit-rate-range = De { $min } à { $max } autobus par heure (borne provisoire)
+jn-transit-effect =
+    Dans l’heure, { $buses ->
+        [one] { $buses } autobus
+       *[other] { $buses } autobus
+    } : à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; retard reporté sur les autres approches { $moved } s.
+jn-transit-moved = Retard reporté sur les autres approches : { $list }.
+jn-transit-moved-item = { $arm } { $seconds } s
+jn-transit-none = Aucune rue n’a de transport en commun ici. Donnez à une rue une voie réservée, un dépassement de file, une porte d’autobus, un arrêt ou un filtre pour le transport en commun (dans sa section Priorité au transport en commun) pour donner la priorité à ses autobus.
+jn-transit-totals-caption = Autobus en une heure, par rue
+jn-transit-col-street = Rue
+jn-transit-col-buses = Autobus
+jn-transit-col-on-arrival = À l’arrivée
+jn-transit-col-early-green = Vert hâtif
+jn-transit-col-extended = Prolongés
+jn-transit-col-delayed = Retardés
+jn-transit-col-moved = Retard reporté sur les autres
+jn-transit-rows =
+    { $n ->
+        [one] L’autobus, une ligne
+       *[other] Chaque autobus, une ligne par autobus ({ $n })
+    }
+jn-transit-rows-caption = Chaque autobus de l’heure, dans l’ordre d’arrivée
+jn-transit-col-bus = Autobus
+jn-transit-col-arrived = Arrivée
+jn-transit-col-wait = Attente
+jn-transit-outcome-on-arrival = À l’arrivée
+jn-transit-outcome-early-green = Vert hâtif ({ $early } s plus tôt)
+jn-transit-outcome-extended = Prolongé (retenu { $extended } s)
+jn-transit-outcome-delayed = Retardé
+jn-transit-no-wait-said = aucun autobus servi
+jn-transit-finding-no-transit = Les autobus de { $arm } ont la priorité, mais la rue n’a plus de transport en commun : ils n’en reçoivent aucune. Redonnez-lui du transport en commun ou retirez la priorité.
+jn-transit-finding-no-phase = Les autobus de { $arm } ont la priorité, mais aucune phase du plan n’est propre à la rue : ils n’en reçoivent aucune. Donnez-lui une phase ou retirez la priorité.
+jn-transit-finding-clearance =
+    Un vert hâtif pour les autobus de { $arm } a été écourté moins que demandé { $times ->
+        [one] une fois
+       *[other] { $times } fois
+    }, de { $held } s en tout, dans la phase de { $phase } : elle servait une marche et son dégagement ou un dégagement vélo, qui ne sont jamais raccourcis.
+jn-transit-said =
+    Autobus de { $arm } : { $buses ->
+        [one] { $buses } autobus
+       *[other] { $buses } autobus
+    } dans l’heure; à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; attente la plus longue { $wait } s; retard reporté sur les autres approches { $moved } s.
+jn-transit-said-no-wait =
+    Autobus de { $arm } : { $buses ->
+        [one] { $buses } autobus
+       *[other] { $buses } autobus
+    } dans l’heure; à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; aucun autobus n’a été servi.
+jn-transit-none-on = Aucune rue ne donne la priorité à ses autobus : chaque autobus attend le vert de sa rue comme le reste de la circulation.

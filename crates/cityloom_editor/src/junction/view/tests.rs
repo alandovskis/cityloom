@@ -4328,3 +4328,184 @@ fn bicycle_detection_speaks_french() {
         assert!(bikes.contains(words), "{words}: {bikes}");
     }
 }
+
+// ---- transit signal priority (CLM-14) ------------------------------------------------------------------------------------
+
+/// The four-way whose streets have bike lanes (`junction_biked`) with a bus lane on its north street, in `locale`, its
+/// plan shown, and that street.
+fn transit_in(locale: crate::shared::i18n::Locale) -> (Rc<JunctionVm>, u32) {
+    let mut j = junction_biked();
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_bus_lane(n, true));
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+    s.show_plan();
+    (s, n)
+}
+
+/// The `#signal-transit` section of the plan's level, as far as the end of the panel.
+fn transit_of(h: &str) -> &str {
+    &h[h.find(r#"id="signal-transit""#).expect("a section for transit priority")..]
+}
+
+#[test]
+fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extension_or_both() {
+    use crate::junction::model::transit::Mode;
+    let (s, n) = transit_in(crate::shared::i18n::Locale::En);
+    let h = panel(&s);
+    let t = transit_of(&h);
+    assert!(t.contains("Transit signal priority"), "{t}");
+    assert!(t.contains("a street given priority has 12 buses an hour"), "{t}");
+    assert!(t.contains("An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s"), "{t}");
+    let streets = s.view_now().signal.as_ref().unwrap().transit.streets.clone();
+    assert_eq!(streets.iter().map(|s| s.uid).collect::<Vec<_>>(), vec![n], "only north has transit");
+    let name = crate::shared::said::say_now(s.i18n(), Units::Metres, &streets[0].label);
+    assert!(t.contains(&format!(r#"role="group" aria-label="Buses on {name}""#)), "{t}");
+    let at = t.find(&format!(r#"id="transit-mode-{n}""#)).expect("a mode group");
+    let tag = &t[t[..at].rfind("<div").unwrap()..at + t[at..].find('>').unwrap()];
+    for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="transit-mode-h-{n}""#), &format!(r#"aria-describedby="transit-status-{n}""#)] {
+        assert!(tag.contains(attr), "{attr}: {tag}");
+    }
+    assert!(input_tag(t, &format!("transit-mode-{n}-off")).contains("checked"), "no priority to begin with");
+    for id in ["early-green", "extension", "both"] {
+        assert!(!input_tag(t, &format!("transit-mode-{n}-{id}")).contains("checked"), "{id}");
+    }
+    assert!(t.contains(&format!(r#"id="transit-status-{n}" class="insp-range">No priority: a bus waits"#)), "{t}");
+    assert!(t.contains(r#"id="transit-none""#) && t.contains("No street gives its buses priority"), "{t}");
+    assert!(!t.contains(r#"id="transit-totals""#) && !t.contains("transit-rate-"));
+
+    // Both: its trigger and bounds, its buses an hour, what its buses met, the delay moved, the totals and every bus.
+    assert!(s.set_transit_priority(n, Some(Mode::Both)));
+    let h = panel(&s);
+    let t = transit_of(&h);
+    assert!(input_tag(t, &format!("transit-mode-{n}-both")).contains("checked"));
+    assert!(t.contains("Early green and green extension: a bus coming during red brings the street's green forward by at most 10 s"), "{t}");
+    assert!(t.contains("a bus coming within 10 s after the green would end holds it until it has passed. Not for two greens running."), "{t}");
+    assert!(t.contains(&format!(r#"<label for="transit-rate-{n}">Buses an hour</label>"#)), "{t}");
+    let tag = input_tag(t, &format!("transit-rate-{n}"));
+    assert!(tag.contains(r#"value="12""#) && tag.contains(&format!(r#"aria-describedby="transit-range-{n}""#)), "{tag}");
+    assert!(t.contains("0 to 60 buses an hour (placeholder bound)"), "{t}");
+    assert!(t.contains(&format!(r#"id="transit-effect-{n}" class="insp-range">In the hour 12 buses: on arrival "#)), "{t}");
+    assert!(t.contains(&format!(r#"id="transit-moved-{n}" class="insp-range">Delay moved to other approaches: "#)), "{t}");
+    assert!(!t.contains(r#"id="transit-none""#));
+    for caption in ["transit-totals-caption", "transit-rows-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = t.find(&labelled).unwrap_or_else(|| panic!("{caption}: {t}"));
+        let tag = &t[t[..at].rfind("<div").unwrap()..at + t[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+    }
+    let table = &t[t.find(r#"id="transit-totals""#).unwrap()..];
+    let heads: Vec<String> =
+        table[..table.find("</thead>").unwrap()].split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect();
+    assert_eq!(heads, ["Street", "Buses", "On arrival", "Early green", "Extended", "Delayed", "Delay moved to others"]);
+    let totals = s.view_now().signal.as_ref().unwrap().transit.streets[0].totals.unwrap();
+    let row = &table[table.find("<tbody>").unwrap()..table.find("</tbody>").unwrap()];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    let moved = format!("{} s", totals.moved_s);
+    assert_eq!(
+        cells,
+        [
+            totals.buses.to_string(),
+            totals.on_arrival.to_string(),
+            totals.early_green.to_string(),
+            totals.extended.to_string(),
+            totals.delayed.to_string(),
+            moved
+        ]
+    );
+    assert_eq!(totals.buses, 12);
+    let rows = &t[t.find(r#"id="transit-rows""#).expect("every bus")..];
+    assert!(rows.contains("Every bus, one row each (12)"), "{rows}");
+    let heads: Vec<String> =
+        rows[..rows.find("</thead>").unwrap()].split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect();
+    assert_eq!(heads, ["Bus", "Arrived", "Outcome", "Wait"]);
+    // The early green: each of its phases' crossings is walked on recall (7 s + its clearance), so a cut is kept short.
+    assert!(t.contains(r#"id="transit-findings""#) && t.contains("was kept shorter"), "{t}");
+}
+
+#[test]
+fn a_street_with_transit_but_no_phase_says_why_and_one_kept_with_priority_without_transit_is_a_finding() {
+    use crate::junction::model::transit::Mode;
+    let (s, n) = transit_in(crate::shared::i18n::Locale::En);
+    let so = arm(&s, 180);
+    assert!(s.set_transit_priority(n, Some(Mode::EarlyGreen)));
+    // A bus lane on south too, and a plan of one phase, south's own: north has none.
+    assert!(s.apply(|j| j.set_bus_lane(so, true)));
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: so, to: n }],
+            arm: Some(so),
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    let h = panel(&s);
+    let t = transit_of(&h);
+    assert!(t.contains(&format!(r#"id="transit-status-{n}" class="insp-range">No phase of the plan is this street's own"#)), "{t}");
+    assert!(t.contains(r#"id="transit-findings""#) && t.contains("but no phase of the plan is the street's own, so they are given none"), "{t}");
+    // Back to the suggestion; north's bus lane taken away: kept, and a finding.
+    s.edit(|j| j.restore_suggestion());
+    assert!(s.apply(|j| j.set_bus_lane(n, false)));
+    let h = panel(&s);
+    let t = transit_of(&h);
+    assert!(t.contains(&format!(r#"id="transit-status-{n}" class="insp-range">This street has no transit"#)), "{t}");
+    assert!(t.contains("have priority, but the street has no transit any more"), "{t}");
+    assert!(s.set_transit_priority(n, None));
+    assert!(!transit_of(&panel(&s)).contains(&format!(r#"id="transit-mode-{n}""#)), "no transit and no priority: no longer listed");
+    // The sample has no transit: the section says how to give a street some.
+    let sample = shared(0);
+    sample.show_plan();
+    assert!(sample.view_now().signal.is_some(), "the sample is a signal");
+    let h = panel(&sample);
+    assert!(transit_of(&h).contains(r#"id="transit-none" class="insp-range">No street here has transit."#), "{h}");
+}
+
+#[test]
+fn a_junction_shown_read_only_shows_its_transit_priority_and_offers_it_disabled() {
+    use crate::junction::model::transit::Mode;
+    use crate::shared::ports::Storage;
+    let mut j = junction_biked();
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_bus_lane(n, true) && j.set_transit_priority(n, Some(Mode::Extension)));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let t = transit_of(&h);
+    let locked = r#"<fieldset disabled class="read-only-controls"><ul class="transit-streets">"#;
+    let inside = &t[t.find(locked).expect("the streets are offered in a disabled fieldset")..];
+    let inside = &inside[..inside.find("</fieldset>").unwrap()];
+    assert!(input_tag(inside, &format!("transit-mode-{n}-extension")).contains("checked"), "{inside}");
+    assert!(input_tag(inside, &format!("transit-rate-{n}")).contains(r#"value="12""#), "{inside}");
+    assert!(t.contains(r#"id="transit-totals""#), "the hour is shown");
+    assert!(!s.set_transit_priority(n, None) && !s.set_buses(n, 9), "and cannot be changed");
+}
+
+#[test]
+fn transit_signal_priority_speaks_french() {
+    use crate::junction::model::transit::Mode;
+    let (s, n) = transit_in(crate::shared::i18n::Locale::FrCa);
+    assert!(s.set_transit_priority(n, Some(Mode::EarlyGreen)));
+    let h = panel(&s);
+    let t = transit_of(&h);
+    for words in [
+        "Priorité aux feux pour le transport en commun",
+        "Valeurs provisoires",
+        "une rue qui reçoit la priorité a 12 autobus par heure",
+        "<span>Aucune</span>",
+        "<span>Vert hâtif</span>",
+        "<span>Prolongation du vert</span>",
+        "<span>Les deux</span>",
+        "Vert hâtif\u{a0}: un autobus qui arrive au rouge",
+        ">Autobus par heure</label>",
+        "De 0 à 60 autobus par heure (borne provisoire)",
+        "Autobus en une heure, par rue",
+        "Retard reporté sur les autres",
+        "Dans l’heure, 12",
+        "Autobus de ",
+    ] {
+        assert!(t.contains(words), "{words}: {t}");
+    }
+}
