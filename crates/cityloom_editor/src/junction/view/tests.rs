@@ -8,7 +8,7 @@ use leptos::prelude::*;
 
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::*;
-use crate::junction::view::{drawing, inspector, notes, page, turns};
+use crate::junction::view::{drawing, inspector, notes, notes_tray, page, turns};
 use crate::junction::vm::JunctionVm;
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
@@ -4792,4 +4792,43 @@ fn the_time_of_day_plans_speak_french() {
     for english in ["Weekdays", "Default plan", "Starts the day", "Which plan runs"] {
         assert!(!p.contains(english), "{english}: {p}");
     }
+}
+
+// ---- the notes' tray ------------------------------------------------------------
+
+#[test]
+fn the_junction_notes_are_the_shells_tray_with_its_three_tabs_in_order() {
+    let s = shared(0);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    assert!(h.contains(r#"class="notes tray""#) && h.contains(r#"id="notes""#), "{h}");
+    let at = |id: &str| h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("no #{id}"));
+    assert!(at("t-space") < at("t-checks") && at("t-checks") < at("t-changes"));
+    for (tab, panel) in [("t-space", "p-space"), ("t-checks", "p-checks"), ("t-changes", "p-changes")] {
+        assert!(h.contains(&format!(r#"aria-controls="{panel}""#)) && h.contains(&format!(r#"aria-labelledby="{tab}""#)), "{tab}");
+    }
+    assert!(h.contains(">Streets<") && h.contains(">Checks<") && h.contains(">Changes<"));
+    assert_eq!(count(&h, r#"role="tabpanel""#), 3);
+    assert_eq!(count(&h, r#"role="tabpanel" aria-labelledby="t-space" hidden"#), 0, "the first panel starts shown");
+    assert_eq!(count(&h, r#"role="tabpanel" aria-labelledby="t-checks" hidden"#) + count(&h, r#"role="tabpanel" aria-labelledby="t-changes" hidden"#), 2);
+}
+
+#[test]
+fn every_slot_mount_page_fills_in_the_notes_is_inside_the_tray() {
+    let s = shared(0);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    for id in ["fit-slot", "across", "turns", "conflicts", "conflict-note", "checks", "checks-fold-slot", "goal-slot", "atlas-source", "revs", "title-block"] {
+        assert!(h.contains(&format!(r#"id="{id}""#)), "no #{id}");
+    }
+    assert!(h.find(r#"id="title-block""#) > h.find(r#"id="p-changes""#), "the title block follows the panels");
+}
+
+#[test]
+fn the_junction_notes_speak_french() {
+    use crate::shared::i18n::Locale;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    for words in [">Rues<", ">Vérifications<", ">Virages permis<", "Chiffres et limites d’exemple pour l’instant, pas de vraies mesures."] {
+        assert!(h.contains(words), "no {words}: {h}");
+    }
+    assert!(!h.contains(">Streets<") && !h.contains(">Turns allowed<"));
 }
