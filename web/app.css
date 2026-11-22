@@ -1437,7 +1437,8 @@ a.btn {
     min-width: 44px;
     min-height: 44px;
   }
-  .shell-notice button {
+  .shell-notice button,
+  .shell-notice.fork-notice a {
     min-height: 44px;
   }
   details.src summary {
@@ -2016,4 +2017,48 @@ body.map-page {
 .shell-notice button:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
+}
+/* On a copy of a shared design, the notice offers to make it one of the person's projects (`shell::view::ForkNotice`),
+   in the read-only tag's colours: it says what can be done, not that something went wrong. Its link, once the copy is
+   made, looks as its button did. */
+.shell-notice.fork-notice {
+  flex-wrap: wrap;
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--panel);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+@media (min-width: 900px) {
+  body:has(main.stage) > div > .shell-notice.fork-notice {
+    box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--accent-line);
+  }
+}
+.fork-notice p {
+  margin: 0;
+}
+.fork-notice a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.fork-notice a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.fork-notice .btn-ico {
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+/* A fork that failed is said in the cleared-edits notice's warning colours, so it reads as a failure. */
+.fork-notice .fork-error {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: linear-gradient(var(--warn-wash), var(--warn-wash)), var(--panel);
+  color: var(--warn);
+  box-shadow: inset 0 0 0 1px var(--warn-line);
 }

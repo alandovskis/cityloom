@@ -32,6 +32,12 @@ partagée, la vérifie, la conserve dans ce navigateur comme une copie à part e
 n’apparaît pas parmi vos projets, n’est jamais envoyée au serveur avec votre travail et est remplacée si vous rouvrez le
 même lien. Un navigateur conserve au plus dix de ces copies; la plus ancienne part en premier.
 
+Pour modifier un aménagement partagé, choisissez **Modifier une copie** dans l’avis sous la barre du haut. Aucun compte n’est nécessaire : l’aménagement devient un nouveau projet à vous, avec le même nom, la même
+zone, les mêmes modifications et les mêmes règles de zone, affiché sur la page d’accueil et synchronisé avec votre
+travail comme tout autre projet, et la page propose **Ouvrir votre copie**. Votre projet est indépendant : ce que vous y
+changez n’atteint jamais l’aménagement partagé, la personne qui l’a créé ni quiconque ouvre le lien, et rouvrir le lien
+remplace la copie en lecture seule, pas votre projet.
+
 Quand un lien ne peut pas être ouvert, la page dit pourquoi et ne conserve rien : le lien est incomplet, aucun
 aménagement partagé n’a ce lien, il a expiré, la personne qui l’a créé l’a supprimé, il a été créé par une version plus
 récente de CityLoom, il est endommagé, le réseau ou le serveur est injoignable, ou l’espace de stockage du navigateur a

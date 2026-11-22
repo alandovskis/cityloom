@@ -109,6 +109,91 @@ test("a project shared by a signed-in person opens read-only, rules and all, for
   await other.context.close();
 });
 
+test("a shared design is forked by keyboard into a project of one's own, whose edits leave the shared copy as it was", async ({
+  page,
+  context,
+  baseURL,
+  browser,
+}) => {
+  await newAccount(page, context, baseURL!);
+  const streets = await design(page);
+  const link = await share(page);
+
+  const other = await opened(browser, baseURL!, link.split("#")[1]);
+  await expect(other.page).toHaveURL(/\/map\.html\?project=s-[0-9a-f]{12}&view=1$/);
+  const copy = new URL(other.page.url()).searchParams.get("project")!;
+  const href = (await placesOnMap(other.page)).streets[0];
+  await other.page.goto(`/${href}&project=${copy}&view=1`);
+  await expect(other.page.locator("#read-only-tag")).toBeVisible();
+  const fork = other.page.locator("#fork-btn");
+  await expect(fork).toHaveText("Edit a copy");
+  await expect(fork).toHaveAccessibleDescription(/^Adds a copy of this design to your projects/);
+  await fork.focus();
+  await other.page.keyboard.press("Enter");
+  await expect(live(other.page)).toHaveText(
+    "A copy of First project is now one of your projects. Open it to make changes.",
+  );
+  const open = other.page.locator("#fork-open");
+  await expect(open).toBeFocused();
+  await expect(fork).toHaveCount(0);
+  // said where it can be seen too, in place of the invitation
+  await expect(other.page.locator(".fork-notice p")).toHaveText(
+    "A copy of First project is now one of your projects. Open it to make changes.",
+  );
+  const forked = new URL(await open.getAttribute("href")!, baseURL).searchParams.get("project")!;
+  expect(forked).toMatch(/^p-[0-9a-f]{12}$/);
+
+  // the fork opens on the same street, to edit: not read-only, the shared edit there, and a new edit taken
+  await other.page.keyboard.press("Enter");
+  await expect(other.page).toHaveURL(new RegExp(`project=${forked}$`));
+  await expect(other.page.locator("#read-only-tag")).toHaveCount(0);
+  await expect(other.page.locator("#tb-changes")).toHaveText("1");
+  await other.page.locator("#wrap").focus();
+  await other.page.keyboard.press("ArrowRight");
+  await other.page.keyboard.press("+");
+  // the shared change and this one: the edit is taken, not refused as on the copy
+  await expect(other.page.locator("#tb-changes")).toHaveText("2");
+  await expect(live(other.page)).not.toHaveText(REFUSED);
+  await expect
+    .poll(() => other.page.evaluate((id) => JSON.parse(localStorage.getItem(`cityloom-edits@${id}`)!).streets, forked))
+    .not.toEqual(streets);
+  // the shared copy is as it was shared, and still only looked at
+  expect(
+    await other.page.evaluate((id) => JSON.parse(localStorage.getItem(`cityloom-edits@${id}`)!).streets, copy),
+  ).toEqual(streets);
+  // the fork is listed as the person's own; rules came with it
+  await other.page.goto("/index.html");
+  await expect(other.page.locator(".project-row")).toHaveCount(2);
+  expect(
+    await other.page.evaluate((id) => JSON.parse(localStorage.getItem(`cityloom-restrictions@${id}`)!), forked),
+  ).toEqual(RULES);
+  // what the creator shared is unchanged: the link still opens the design as it was
+  const again = await opened(browser, baseURL!, link.split("#")[1]);
+  await expect(again.page).toHaveURL(/\/map\.html\?project=s-[0-9a-f]{12}&view=1$/);
+  const fresh = new URL(again.page.url()).searchParams.get("project")!;
+  expect(
+    await again.page.evaluate((id) => JSON.parse(localStorage.getItem(`cityloom-edits@${id}`)!).streets, fresh),
+  ).toEqual(streets);
+  await again.context.close();
+  await other.context.close();
+});
+
+test("the fork is offered and said in French", async ({ page, context, baseURL, browser }) => {
+  await newAccount(page, context, baseURL!);
+  await design(page);
+  const link = await share(page);
+  const other = await opened(browser, baseURL!, link.split("#")[1], "fr-CA");
+  await expect(other.page).toHaveURL(/\/map\.html\?project=s-[0-9a-f]{12}&view=1$/);
+  await expect(other.page.locator("#fork-btn")).toHaveText("Modifier une copie");
+  await other.page.locator("#fork-btn").focus();
+  await other.page.keyboard.press("Enter");
+  await expect(live(other.page)).toHaveText(
+    "Une copie de First project fait maintenant partie de vos projets. Ouvrez-la pour la modifier.",
+  );
+  await expect(other.page.locator("#fork-open")).toHaveText("Ouvrir votre copie");
+  await other.context.close();
+});
+
 test("a made-up link says no shared design has it, in English and in French, and keeps nothing", async ({
   page,
   errors,

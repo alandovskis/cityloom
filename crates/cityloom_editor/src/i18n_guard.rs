@@ -765,6 +765,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("help-btn-label", "the id of an element every page shares"),
     ("help-heading", "the id of an element every page shares"),
     ("help-menu", "the id of an element every page shares"),
+    ("fork-open", "the id of the link to a forked copy, which takes the focus once it is made (#223)"),
     ("share-slot", "the id of an element the editors share"),
     ("data-share", "the attribute of the share slot that picks the menu variant"),
     ("share-btn", "the id of an element the editors share"),

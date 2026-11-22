@@ -67,6 +67,16 @@ fn a_share_holds_the_project_as_it_is_and_reads_back_whole() {
 }
 
 #[test]
+fn every_document_a_share_holds_is_one_a_fork_of_its_copy_takes() {
+    // A document the share format gains and `project::copies::FORKED_KEYS` lacks would be shown read-only, then
+    // quietly left out of the project "Edit a copy" makes (#223).
+    let shared = parse_and_validate(&share_text()).unwrap();
+    for (key, _) in shared.documents() {
+        assert!(crate::project::copies::FORKED_KEYS.contains(&key), "{key} is shared but a fork leaves it out");
+    }
+}
+
+#[test]
 fn a_project_with_no_work_shares_its_area_alone_and_unknown_fields_are_ignored() {
     let empty: Rc<dyn Storage> = Rc::new(MemoryStorage::default());
     let text = compose(&empty, "Empty", &default_area().to_query(), "0.97.0", "x").unwrap();
