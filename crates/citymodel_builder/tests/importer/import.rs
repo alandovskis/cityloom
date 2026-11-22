@@ -418,6 +418,30 @@ fn signals_tagged_on_the_approach_before_a_split_of_the_way_run_the_junction_ahe
 }
 
 #[test]
+fn signals_tagged_on_the_approach_before_a_cycleway_crossing_run_the_junction_ahead() {
+    // Rue Test is one way from node 1 to node 3; a cycleway crosses it at node 15, between the signals and node 3.
+    // The importer keeps cycleways out of osm2streets, so the crossing does not split the road
+    let osm = APPROACH_SIGNAL
+        .replace(r#"<nd ref="1"/><nd ref="9"/><nd ref="2"/>"#, r#"<nd ref="1"/><nd ref="9"/><nd ref="15"/><nd ref="3"/>"#)
+        .replace(
+            r#"<way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/></way>"#,
+            r#"<way id="40"><nd ref="16"/><nd ref="15"/><nd ref="17"/>
+  <tag k="highway" v="cycleway"/></way>"#,
+        )
+        .replace(
+            r#"<node id="3" "#,
+            r#"<node id="15" lat="45.5000" lon="-73.5992"><tag k="highway" v="crossing"/><tag k="crossing" v="unmarked"/></node>
+ <node id="16" lat="45.5003" lon="-73.5992"/>
+ <node id="17" lat="45.4997" lon="-73.5992"/>
+ <node id="3" "#,
+        );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 3), Control::Signals, "the signals face traffic heading east, to node 3");
+    assert_eq!(control_at(&net, 1), Control::Signs);
+}
+
+#[test]
 fn signals_facing_the_other_way_run_the_junction_behind() {
     let net = import(APPROACH_SIGNAL.replace(r#"v="forward""#, r#"v="backward""#).as_bytes()).unwrap();
     assert_eq!(control_at(&net, 1), Control::Signals);
