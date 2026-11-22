@@ -196,7 +196,7 @@ impl Edits {
         let import = self.streets.values().any(|r| r.import.is_some()) || self.junctions.values().any(|r| r.import.is_some());
         let on_call = |s: &State| s.arms.iter().any(|a| a.calls.is_some());
         let calls = self.junctions.values().any(|r| on_call(&r.state) || r.scenarios.iter().any(|sc| on_call(&sc.design)));
-        let passive = |s: &State| s.arms.iter().any(|a| !a.detection.is_push_button());
+        let passive = |s: &State| s.arms.iter().any(|a| !crate::junction::model::calls::detection_of(a).is_push_button());
         let detection = self.junctions.values().any(|r| passive(&r.state) || r.scenarios.iter().any(|sc| passive(&sc.design)));
         written_as(self.version.into(), import, zones, speed, curb, stops, signal, green, calming, zone_speed, chicane, filter, scenarios, calls, detection)
     }
@@ -368,14 +368,14 @@ fn holds_calls(doc: &Map<String, Value>) -> bool {
         .any(|(_, r)| on_call(r.get("state")) || r.get("scenarios").and_then(Value::as_array).is_some_and(|l| l.iter().any(|sc| on_call(sc.get("design")))))
 }
 
-/// Whether any junction record holds a crossing with passive detection: an arm with a `detection` other than the push
-/// button, in its state or in one of its scenarios' designs (decided on the raw JSON).
+/// Whether any junction record holds a crossing on call with passive detection: an arm with `calls` and a `detection`
+/// other than the push button, in its state or in one of its scenarios' designs (decided on the raw JSON).
 fn holds_detection(doc: &Map<String, Value>) -> bool {
     let passive = |state: Option<&Value>| {
-        state
-            .and_then(|s| s.get("arms"))
-            .and_then(Value::as_array)
-            .is_some_and(|arms| arms.iter().any(|a| a.get("detection").is_some_and(|d| !d.is_null() && d.as_str() != Some("push_button"))))
+        state.and_then(|s| s.get("arms")).and_then(Value::as_array).is_some_and(|arms| {
+            arms.iter()
+                .any(|a| a.get("calls").is_some_and(|c| !c.is_null()) && a.get("detection").is_some_and(|d| !d.is_null() && d.as_str() != Some("push_button")))
+        })
     };
     let mut junctions = doc.get(JUNCTIONS).and_then(Value::as_object).into_iter().flatten();
     junctions
@@ -896,6 +896,15 @@ mod tests {
         let pushed = r#"{"version":5,"streets":{},"junctions":{"n1":{"state":{"arms":[{"calls":3,"detection":"push_button"}]}}}}"#;
         let Ok(draft) = super::draft(Some(pushed)) else { panic!("a draft") };
         assert!(draft.to_json().contains(r#""version":18"#), "{}", draft.to_json());
+        // Only a crossing on call detects anyone: a detection on a crossing on recall is no reason to be a newer document.
+        let on_recall = r#"{"version":5,"streets":{},"junctions":{"n1":{"state":{"arms":[{"detection":"passive"}]}}}}"#;
+        let Ok(draft) = super::draft(Some(on_recall)) else { panic!("a draft") };
+        assert!(!draft.to_json().contains(r#""version":19"#), "{}", draft.to_json());
+        let (key, mut record) = signal_record(None);
+        record.state.arms[0].detection = crate::junction::model::calls::Detection::Passive;
+        let mut e = Edits::new();
+        e.junctions.insert(key, record);
+        assert!(e.written_version() < DETECTION_VERSION);
     }
 
     #[test]
