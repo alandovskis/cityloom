@@ -77,8 +77,9 @@ const SIGNAL_CARRY_M: f64 = 40.0;
 /// signals are carried on along the road beyond the split, through any further splits, to the first node where three
 /// or more roads meet, at most `SIGNAL_CARRY_M` past the split; the split they were carried from loses them
 /// (osm2streets drops such a node when it joins the two roads into one, signals and all). Signals that reach no
-/// junction stay where they are, and so do signals facing the split from both sides: they stop traffic both ways at
-/// it, as at a crossing there, not at the junctions beyond.
+/// junction are not carried, and neither are signals facing the split from both sides: they stop traffic both ways at
+/// it, as at a crossing there, not at the junctions beyond. Such signals stay on the split only where osm2streets keeps
+/// it (the two roads differ); the editor never opens a node of two roads as a junction either way.
 fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
     let splits: Vec<IntersectionID> = streets
         .intersections
@@ -88,17 +89,7 @@ fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
         .collect();
     let mut carried: Vec<(IntersectionID, IntersectionID)> = Vec::new(); // (the split, the junction ahead)
     for &split in &splits {
-        let facing: Vec<RoadID> = streets.intersections[&split]
-            .roads
-            .iter()
-            .copied()
-            .filter(|arriving| {
-                let road = &streets.roads[arriving];
-                let stop = if road.dst_i == split { &road.stop_line_end } else { &road.stop_line_start };
-                stop.interruption == TrafficInterruption::Signal
-            })
-            .collect();
-        if let [arriving] = facing[..]
+        if let [arriving] = facing(streets, split)[..]
             && let Some(ahead) = junction_ahead(streets, doc, split, arriving)
         {
             carried.push((split, ahead));
@@ -108,6 +99,20 @@ fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
         streets.intersections.get_mut(&split).unwrap().control = IntersectionControl::Signed;
         streets.intersections.get_mut(&ahead).unwrap().control = IntersectionControl::Signalled;
     }
+}
+
+/// The roads that reach `node` with a stop line at signals there: those whose approach signals osm2streets put on it.
+fn facing(streets: &StreetNetwork, node: IntersectionID) -> Vec<RoadID> {
+    streets.intersections[&node]
+        .roads
+        .iter()
+        .copied()
+        .filter(|arriving| {
+            let road = &streets.roads[arriving];
+            let stop = if road.dst_i == node { &road.stop_line_end } else { &road.stop_line_start };
+            stop.interruption == TrafficInterruption::Signal
+        })
+        .collect()
 }
 
 /// Whether any of the OSM nodes has signals of its own: signals tagged at the node, or a crossing with signals, which
@@ -122,7 +127,9 @@ fn own_signals(doc: &Document, nodes: &[osm2streets::osm::NodeID]) -> bool {
 
 /// The first node past `from`, leaving it by the road other than `came`, where three or more roads meet, through
 /// nodes where two do, no more than `SIGNAL_CARRY_M` on; none past the edge of the map, a dead end, a ring, or a node
-/// of two roads that is signalled or has signals of its own (the signals face that node).
+/// of two roads with signals of its own or with signals one road alone faces (the signals face that node, which keeps
+/// them or carries them on). A node of two roads signalled otherwise (faced from both sides, or with no stop line
+/// osm2streets could place) is walked through.
 fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID, came: RoadID) -> Option<IntersectionID> {
     let (mut at, mut came, mut run) = (from, came, 0.0);
     loop {
@@ -135,7 +142,7 @@ fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID,
             return None;
         }
         match node.roads.len() {
-            2 if node.control == IntersectionControl::Signalled || own_signals(doc, &node.osm_ids) => return None,
+            2 if own_signals(doc, &node.osm_ids) || (node.control == IntersectionControl::Signalled && facing(streets, far).len() == 1) => return None,
             2 => (at, came) = (far, leaving),
             n if n >= 3 => return Some(far),
             _ => return None,

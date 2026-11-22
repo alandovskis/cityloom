@@ -473,6 +473,67 @@ fn signals_are_carried_through_a_second_split_to_the_junction() {
 }
 
 #[test]
+fn signals_are_not_carried_past_a_second_split_that_other_signals_face() {
+    // node 8 splits the second way, and signals on its first piece (four lanes, so osm2streets keeps both splits)
+    // face it: the first signals stop traffic at node 2, the second at node 8, which carries them on to node 3
+    let osm = APPROACH_SIGNAL
+        .replace(
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#,
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>
+ <node id="18" lat="45.5000" lon="-73.5993"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="forward"/></node>
+ <node id="8" lat="45.5000" lon="-73.5992"/>"#,
+        )
+        .replace(
+            r#"<way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/>"#,
+            r#"<way id="12"><nd ref="8"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/></way>
+ <way id="11"><nd ref="2"/><nd ref="18"/><nd ref="8"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="4"/>"#,
+        );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 2), Control::Signals, "the first signals face node 2, not node 3");
+    assert_eq!(control_at(&net, 3), Control::Signals);
+}
+
+#[test]
+fn signals_are_carried_through_a_second_split_whose_signals_stay_on_it() {
+    // signals face node 8 from both sides (the piece before it has four lanes, so osm2streets keeps the splits): they stay
+    // there, and the signals facing node 2 go on through node 8 to node 3
+    let osm = APPROACH_SIGNAL
+        .replace(
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>"#,
+            r#"<node id="2" lat="45.5000" lon="-73.5994"/>
+ <node id="18" lat="45.5000" lon="-73.5993"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="forward"/></node>
+ <node id="8" lat="45.5000" lon="-73.5992"/>
+ <node id="28" lat="45.5000" lon="-73.5991"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="backward"/></node>"#,
+        )
+        .replace(
+            r#"<way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/>"#,
+            r#"<way id="12"><nd ref="8"/><nd ref="28"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="2"/></way>
+ <way id="11"><nd ref="2"/><nd ref="18"/><nd ref="8"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/><tag k="lanes" v="4"/>"#,
+        );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 8), Control::Signals);
+    assert_eq!(control_at(&net, 3), Control::Signals, "the signals facing node 2 reach node 3");
+}
+
+#[test]
+fn signals_facing_each_other_across_a_plain_split_run_neither_junction() {
+    // both ways have the same tags, so osm2streets joins them and drops the split with its signals; the junctions
+    // beyond were never what the signals faced
+    let osm = APPROACH_SIGNAL.replace(r#"<nd ref="2"/><nd ref="3"/>"#, r#"<nd ref="2"/><nd ref="19"/><nd ref="3"/>"#).replace(
+        r#"<node id="3" "#,
+        r#"<node id="19" lat="45.5000" lon="-73.5992"><tag k="highway" v="traffic_signals"/><tag k="traffic_signals:direction" v="backward"/></node>
+ <node id="3" "#,
+    );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 1), Control::Signs);
+    assert_eq!(control_at(&net, 3), Control::Signs);
+}
+
+#[test]
 fn the_distance_to_the_junction_counts_every_piece_past_the_split() {
     // node 2 is 47 m before node 3, in two pieces of 23 m: too far, though neither piece is
     let net = split_twice("-73.5996", "-73.5993");
