@@ -163,7 +163,9 @@ pub const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restri
 pub enum Unforked {
     /// No such copy: never kept, or gone since (the oldest of more than ten copies makes room).
     Gone,
-    /// The browser's storage refused the project or its design (most likely full).
+    /// The project or its design was not kept: the browser's storage refused it (most likely full). `create_at`'s other
+    /// refusals, a name or area it cannot keep, end here too, though a copy's were checked when its link was opened
+    /// (`share::model::parse_and_validate`).
     NotKept,
     /// The list of projects is a newer CityLoom's: this build may not change it.
     Newer,
