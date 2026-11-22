@@ -41,9 +41,10 @@ For each issue in flight that waits for no person, in the order of section 1, ru
 | Place | Station |
 | --- | --- |
 | feasible, no plan | `factory-plan` |
-| planned, worktree or not | `factory-plan` step 4 if no worktree, then `factory-build` |
+| planned, worktree or not | `factory-plan` step 4 if no worktree, then `factory-build` (from the test-writer, or the writer in the docs flow) |
 | red, not green | `factory-build` step 3 |
-| green, not reviewed at the head | `factory-review` |
+| docs flow, commits but no `docs` record at the head | `factory-build` step D2 |
+| green (docs flow: `docs` record), not reviewed at the head | `factory-review` |
 | reviewed and passed at the head | `factory-evidence` |
 
 A station that hands back ends that issue's turn; go on with the next issue. Do not do a station's work yourself: each station's skill dispatches its own agent.
@@ -63,6 +64,8 @@ At the end of the pass, the table of every issue: key, title, where it is, what 
 | "The gate is wrong here, I'll pass it on" | Only `PASS` goes on. A gate you believe is wrong is a hand-back with its output. |
 | "It's a one-line fix, I'll make it myself" | Stations dispatch their agents. The orchestrator writes no test and no code. |
 | "The test is clearly wrong, let the implementer fix it" | A dispute goes to a person. Nobody but the test-writer changes a test. |
+| "It's documentation, it needs no gate" | The docs flow has its own: only the docs gate's `PASS` goes on. |
+| "This doc issue also needs a small code change" | Then it is the code flow's. The docs flow changes only documentation. |
 | "It was approved before the last push" | Only an approval of the current head counts. |
 | "The deploy failed, a quick fix will do" | Label, hand back, move on. |
 | "The issue in Backlog looks easy" | The line takes only what a person moved to `linear.intake`. |
