@@ -103,6 +103,21 @@ test.describe("comparing a street's designs", () => {
     await expect(live(page)).toHaveText(/Wider bike lane and Wider bike lane are the same\./);
     await expect(page.locator("#compare-summary")).toHaveText(/Wider bike lane and Wider bike lane are the same\./);
     await expect(page.locator("#compare-summary h3")).toHaveCount(0);
+    // both columns now draw the one design: the drawings follow the pick, not only the summary
+    for (const kind of ["compare-plan", "compare-iso"]) {
+      const figures = page.locator(`figure.${kind}`);
+      await expect
+        .poll(
+          () =>
+            // the drawing itself, without the empty comments the renderer leaves as placeholders
+            figures.evaluateAll((all) => {
+              const [a, b] = all.map((f) => f.querySelector("svg")!.outerHTML.replaceAll("<!---->", ""));
+              return a === b;
+            }),
+          { message: kind },
+        )
+        .toBe(true);
+    }
   });
 
   test("a scenario that is no longer there is refused, and the select shows what the page shows", async ({ page }) => {

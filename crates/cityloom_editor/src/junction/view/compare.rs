@@ -35,8 +35,9 @@ fn columns(vm: &JunctionCompareVm) -> [Column; 2] {
 pub fn JunctionCompare(vm: Rc<JunctionCompareVm>) -> impl IntoView {
     // The view-model is not `Send`: the memo holds it in a local store.
     let held = StoredValue::new_local(vm.clone());
-    // Never equal: the memo runs again only when a side, the units or the language change, and the pair is then new.
-    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), |_, _| false);
+    // Always changed (`changed` answers true): the memo runs again only when a side, the units or the language change,
+    // and the pair is then new, so the columns are told every time. Answering false would keep the first drawing.
+    let both = Memo::new_with_compare(move |_| held.with_value(|vm| columns(vm)), |_, _| true);
     let column = move |at: usize| {
         move || {
             let (iso_label, frame, markup) = both.with(|both| (both[at].iso_label.clone(), both[at].iso.frame, both[at].iso.markup.clone()));

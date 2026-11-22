@@ -33,6 +33,8 @@ pub fn CompareFrame<H: CompareHost + 'static>(
 ) -> impl IntoView {
     let words = StoredValue::new_local(host.i18n());
     let host = StoredValue::new_local(host);
+    // The columns are not `Send`: held locally, so each is drawn in a closure that runs again when what it reads changes.
+    let (column_a, column_b) = (StoredValue::new_local(column_a), StoredValue::new_local(column_b));
     let tr = move |key: &'static str| move || words.with_value(|i18n| i18n.tr(key, &Args::new()));
     // In the units the page shows, watched: what is said is said again when the person chooses others.
     let said = move |what: &Said| words.with_value(|i18n| say(i18n, host.with_value(|h| h.units()), what));
@@ -126,11 +128,11 @@ pub fn CompareFrame<H: CompareHost + 'static>(
         <div class="compare-cols">
             <section class="compare-col" aria-labelledby="compare-a-h">
                 <h2 id="compare-a-h">{heading("cmp-col-a", Pick::A)}</h2>
-                {column_a()}
+                {move || column_a.with_value(|column| column())}
             </section>
             <section class="compare-col" aria-labelledby="compare-b-h">
                 <h2 id="compare-b-h">{heading("cmp-col-b", Pick::B)}</h2>
-                {column_b()}
+                {move || column_b.with_value(|column| column())}
             </section>
         </div>
         <section id="compare-summary" aria-labelledby="compare-summary-h">
