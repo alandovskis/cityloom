@@ -153,6 +153,17 @@ test.describe("a design opened read-only", () => {
     // The same street's emergency calls pre-empting the signal (CLM-15).
     await page.locator(`#preempt-mode-${street}-on`).check();
     await expect(page.locator(`#preempt-rate-${street}`)).toHaveValue("2");
+    // A time-of-day plan with that street off pre-emption, run on weekday evenings (CLM-16).
+    await page.locator("#plan-new-name").fill("Evening");
+    await page.locator("#plan-add").click();
+    await expect(page.locator("#plan-shown")).toHaveValue("1");
+    await page.locator(`#preempt-mode-${street}-off`).check();
+    await expect(page.locator(`#preempt-mode-${street}-off`)).toBeChecked();
+    await page.locator("#period-new-start-weekday").fill("18:00");
+    await page.locator("#period-new-plan-weekday").selectOption({ label: "Evening" });
+    await page.locator("#period-add-weekday").click();
+    await expect(page.locator("#period-plan-weekday-1080")).toHaveValue("1");
+    await page.locator("#plan-shown").selectOption("0");
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -200,6 +211,27 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#preempt-rate-${street}`)).toBeDisabled();
     await expect(page.locator("#preempt-totals")).toBeVisible();
     await expect(page.locator("#calls-totals")).toBeVisible();
+    // The time-of-day plans and their schedule can be read and asked which runs when, and another plan shown (it only
+    // chooses what is shown): its settings are shown, and none of them, nor the plans or the schedule, can be changed.
+    await expect(page.locator("#plan-name-1")).toHaveValue("Evening");
+    await expect(page.locator("#plan-name-1")).toBeDisabled();
+    await expect(page.locator("#plan-remove-1")).toBeDisabled();
+    await expect(page.locator("#plan-new-name")).toBeDisabled();
+    await expect(page.locator("#plan-add")).toBeDisabled();
+    await expect(page.locator("#period-plan-weekday-1080")).toHaveValue("1");
+    await expect(page.locator("#period-plan-weekday-1080")).toBeDisabled();
+    await expect(page.locator("#period-start-weekday-1080")).toBeDisabled();
+    await expect(page.locator("#period-add-weekday")).toBeDisabled();
+    await page.locator("#runs-at-time").fill("19:00");
+    await expect(page.locator("#runs-at")).toHaveText("At 19:00 on weekdays, plan “Evening” runs.");
+    await expect(page.locator("#plan-shown")).toBeEnabled();
+    await page.locator("#plan-shown").selectOption("1");
+    await expect(live(page)).toHaveText(
+      "Showing plan “Evening”: its timing and response settings are shown and edited.",
+    );
+    await expect(page.locator(`#preempt-mode-${street}-off`)).toBeChecked();
+    for (const r of await page.locator(`#preempt-mode-${street} input[type=radio]`).all())
+      await expect(r).toBeDisabled();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);
     expect(await kept(page)).toEqual(before);

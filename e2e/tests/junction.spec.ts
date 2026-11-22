@@ -1596,6 +1596,106 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#calls-rows tbody tr").filter({ hasText: name }).first()).toContainText("Not served");
   });
 
+  test("time-of-day plans are added, shown, edited alone, scheduled by day and time, asked which runs when, kept on reload, removed, and speak French (CLM-16)", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    const section = page.locator("#signal-plans");
+    const chooser = page.locator("#plan-shown");
+    const cycle = page.locator("#inspector").getByText(/^Cycle: \d+ s$/);
+    const cycleOf = async () => Number((await cycle.innerText()).match(/\d+/)![0]);
+    await expect(section.locator("#i-h-plans")).toHaveText("Time-of-day plans");
+    await expect(chooser).toHaveValue("0");
+    await expect(chooser.locator("option")).toHaveText(["Default plan"]);
+    await expect(page.locator("#plan-0")).toContainText("default, cannot be removed");
+    await expect(page.locator("#plan-remove-0")).toHaveCount(0);
+    await expect(page.locator("#runs-at")).toHaveText("At 08:00 on weekdays, plan “Default plan” runs.");
+    await expect(page.locator("#plans-transition")).toContainText("takes effect at the end of the cycle running");
+    const before = await cycleOf();
+
+    // A plan is added, a copy of the default, and shown at once.
+    await page.locator("#plan-new-name").fill("Night");
+    await page.locator("#plan-add").click();
+    await expect(live(page)).toContainText("Add plan “Night”.");
+    await expect(live(page)).toContainText(
+      "Showing plan “Night”: its timing and response settings are shown and edited.",
+    );
+    await expect(chooser).toHaveValue("1");
+    await expect(page.locator("#plan-name-1")).toHaveValue("Night");
+    await expect(page.locator("#plan-summary-1")).toHaveText(new RegExp(`^Cycle of ${before} s, `));
+    // A name another plan has is refused, and says why.
+    await page.locator("#plan-new-name").fill("night");
+    await page.locator("#plan-add").click();
+    await expect(live(page)).toHaveText("Another plan already has that name.");
+    await page.locator("#plan-new-name").fill("");
+
+    // A street's green edited in the plan shown changes it alone.
+    await page.locator("#inspector .signal-list button").first().click();
+    await expect(page.locator("#plan-viewing-note")).toHaveText("Timing and response settings of plan “Night”.");
+    const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');
+    await green.fill("60");
+    await green.press("Enter");
+    await expect(live(page)).toContainText(", in plan “Night”");
+    await page.locator("#jn-path-up-0").click();
+    await openPlan(page);
+    await expect(cycle).toHaveText(`Cycle: ${before + 35} s`);
+    await chooser.selectOption({ label: "Default plan" });
+    await expect(live(page)).toHaveText(
+      "Showing plan “Default plan”: its timing and response settings are shown and edited.",
+    );
+    await expect(cycle).toHaveText(`Cycle: ${before} s`);
+    await expect(page.locator("#plan-summary-1")).toHaveText(new RegExp(`^Cycle of ${before + 35} s, `));
+
+    // The night plan scheduled from 22:00 on weekdays: the day's first period then ends at 22:00.
+    await page.locator("#period-new-start-weekday").fill("22:00");
+    await page.locator("#period-new-plan-weekday").selectOption({ label: "Night" });
+    await page.locator("#period-add-weekday").click();
+    await expect(live(page)).toContainText("“Night” from 22:00 on weekdays.");
+    const weekdays = page.locator("#schedule-weekday tbody tr");
+    await expect(weekdays).toHaveCount(2);
+    await expect(weekdays.first().locator("td").first()).toHaveText("22:00");
+    await expect(page.locator("#period-plan-weekday-1320")).toHaveValue("1");
+    await expect(page.locator("#period-start-weekday-1320")).toHaveValue("22:00");
+    // Two periods never start at once: a start another period has is refused and the field keeps its time.
+    await page.locator("#period-new-start-weekday").fill("22:00");
+    await page.locator("#period-add-weekday").click();
+    await expect(live(page)).toHaveText("Another period already starts at that time on that day.");
+    await page.locator("#period-new-start-weekday").fill("");
+
+    // Which plan runs at a day and time.
+    await page.locator("#runs-at-time").fill("23:00");
+    await expect(page.locator("#runs-at")).toHaveText("At 23:00 on weekdays, plan “Night” runs.");
+    await page.locator("#runs-at-day").selectOption("saturday");
+    await expect(page.locator("#runs-at")).toHaveText("At 23:00 on Saturdays, plan “Default plan” runs.");
+
+    // Kept: a reload opens the plan and its period, the default shown.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page);
+    await expect(chooser).toHaveValue("0");
+    await expect(page.locator("#plan-name-1")).toHaveValue("Night");
+    await expect(page.locator("#period-plan-weekday-1320")).toHaveValue("1");
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(section.locator("#i-h-plans")).toHaveText("Plans selon l’heure");
+    await expect(page.locator("label[for=plan-shown]")).toHaveText("Plan affiché et modifié");
+    await expect(page.locator("#schedule-weekday-caption")).toHaveText("En semaine (du lundi au vendredi)");
+    await expect(page.locator("#runs-at")).toHaveText("À 08:00 en semaine, le plan « Plan par défaut » s’applique.");
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "English" }).click();
+    await page.keyboard.press("Escape");
+
+    // Removed: its period runs the default, and the default stays.
+    await page.locator("#plan-remove-1").click();
+    await expect(live(page)).toContainText("Remove plan “Night”: its period runs the default plan.");
+    await expect(page.locator("#plan-1")).toHaveCount(0);
+    await expect(page.locator("#period-plan-weekday-1320")).toHaveValue("0");
+    await expect(chooser.locator("option")).toHaveText(["Default plan"]);
+  });
+
   test("the timing is French in French", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
