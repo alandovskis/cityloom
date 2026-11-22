@@ -25,6 +25,7 @@ use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::locked::locked;
+use crate::shared::said::Said;
 use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
@@ -2173,6 +2174,48 @@ fn actuation_section(w: Watch) -> impl IntoView {
     }
 }
 
+/// What a table of the hour is: the section and the part of it it shows (its caption is `<section>-<part>-caption`, and
+/// the table itself is `<section>-<part>` when `named`), its caption's message and its column heads' messages.
+struct Table {
+    section: &'static str,
+    part: &'static str,
+    named: bool,
+    caption: &'static str,
+    heads: &'static [&'static str],
+}
+
+/// A table of the hour with `body` as its rows. Wider than a narrow panel: the box scrolls, and is a region the keys
+/// reach and its caption names.
+fn hour_table(w: Watch, t: Table, body: impl IntoView + 'static) -> impl IntoView {
+    let (section, part) = (t.section, t.part);
+    let caption_id = format!("{section}-{part}-caption");
+    let named_by = caption_id.clone();
+    let id = t.named.then(|| format!("{section}-{part}"));
+    let heads = t.heads.iter().map(|&k| view! { <th scope="col">{words(w, k)}</th> }).collect_view();
+    view! {
+        <div class="calls-table" role="region" tabindex="0" aria-labelledby=named_by>
+            <table class="nt" id=id>
+                <caption id=caption_id>{words(w, t.caption)}</caption>
+                <thead>
+                    <tr>{heads}</tr>
+                </thead>
+                <tbody>{body}</tbody>
+            </table>
+        </div>
+    }
+}
+
+/// The findings of `section`, `found`, as the list `<section>-findings` under its heading.
+fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl IntoView {
+    let (list, head) = (format!("{section}-findings"), format!("{section}-findings-h"));
+    let named_by = head.clone();
+    let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
+    view! {
+        <h4 class="phase-moves-h" id=head>{words(w, "jn-calls-findings")}</h4>
+        <ul class="calls-findings" id=list aria-labelledby=named_by>{items}</ul>
+    }
+}
+
 /// Bicycle detection (CLM-13), in the plan's level after vehicle actuation: each bike movement the plan runs on recall
 /// (with every phase that lets it go) or on detection (served when a cyclist is detected), named by the streets it goes
 /// from and to; while on detection its trigger and bound (minimum green + clearance, the longest extension), its
@@ -2323,36 +2366,21 @@ fn bikes_section(w: Watch) -> impl IntoView {
     };
     let totals_table = move || {
         has_totals.get().then(|| {
-            view! {
-                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
-                <div class="calls-table" role="region" tabindex="0" aria-labelledby="bikes-totals-caption">
-                    <table class="nt" id="bikes-totals">
-                        <caption id="bikes-totals-caption">{words(w, "jn-bikes-totals-caption")}</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">{words(w, "jn-bikes-col-movement")}</th>
-                                <th scope="col">{words(w, "jn-calls-col-calls")}</th>
-                                <th scope="col">{words(w, "jn-calls-col-served")}</th>
-                                <th scope="col">{words(w, "jn-calls-col-delayed")}</th>
-                                <th scope="col">{words(w, "jn-bikes-col-extended")}</th>
-                                <th scope="col">{words(w, "jn-calls-col-longest")}</th>
-                            </tr>
-                        </thead>
-                        <tbody><For each=totals key=|t| *t children=total_row/></tbody>
-                    </table>
-                </div>
-            }
+            let heads = &[
+                "jn-bikes-col-movement",
+                "jn-calls-col-calls",
+                "jn-calls-col-served",
+                "jn-calls-col-delayed",
+                "jn-bikes-col-extended",
+                "jn-calls-col-longest",
+            ];
+            let body = view! { <For each=totals key=|t| *t children=total_row/> };
+            hour_table(w, Table { section: "bikes", part: "totals", named: true, caption: "jn-bikes-totals-caption", heads }, body)
         })
     };
     let findings = move || {
         let found = bikes.with(|b| b.findings.clone());
-        (!found.is_empty()).then(|| {
-            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
-            view! {
-                <h4 class="phase-moves-h" id="bikes-findings-h">{words(w, "jn-calls-findings")}</h4>
-                <ul class="calls-findings" id="bikes-findings" aria-labelledby="bikes-findings-h">{items}</ul>
-            }
-        })
+        (!found.is_empty()).then(|| findings_list(w, "bikes", found))
     };
     // Every call, keyed by the call itself: a row is made again only when what happened to it changes.
     let n_rows = Memo::new(move |_| bikes.with(|b| b.rows.len()));
@@ -2365,19 +2393,11 @@ fn bikes_section(w: Watch) -> impl IntoView {
             view! {
                 <details class="jn-fold" id="bikes-rows">
                     <summary>{move || tr(w, "jn-bikes-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
-                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="bikes-rows-caption">
-                        <table class="nt">
-                            <caption id="bikes-rows-caption">{words(w, "jn-bikes-rows-caption")}</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">{words(w, "jn-bikes-col-movement")}</th>
-                                    <th scope="col">{words(w, "jn-calls-col-at")}</th>
-                                    <th scope="col">{words(w, "jn-calls-col-outcome")}</th>
-                                </tr>
-                            </thead>
-                            <tbody><For each=rows key=|r| r.ride children=ride_row/></tbody>
-                        </table>
-                    </div>
+                    {hour_table(
+                        w,
+                        Table { section: "bikes", part: "rows", named: false, caption: "jn-bikes-rows-caption", heads: &["jn-bikes-col-movement", "jn-calls-col-at", "jn-calls-col-outcome"] },
+                        view! { <For each=rows key=|r| r.ride children=ride_row/> },
+                    )}
                 </details>
             }
         })
