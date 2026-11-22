@@ -934,3 +934,15 @@ jn-transit-said-no-wait =
        *[other] { $buses } autobus
     } dans l’heure; à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; aucun autobus n’a été servi.
 jn-transit-none = Aucune rue ne donne la priorité à ses autobus : chaque autobus attend le vert de sa rue comme le reste de la circulation.
+
+## Emergency vehicle pre-emption (src/junction/model/preemption.rs, CLM-15): an emergency call takes the signal to its street's phase after a safe clearance
+jn-refusal-preemption-no-phase = Aucune phase du plan n’est propre à cette rue, ses appels d’urgence ne peuvent donc pas préempter les feux : donnez-lui d’abord une phase.
+jn-refusal-not-on-preemption = Seule une rue dont la préemption est activée a des appels d’urgence par heure : activez d’abord la préemption.
+jn-refusal-emergency-calls-out-of-range = Ce nombre d’appels d’urgence par heure dépasse la borne provisoire indiquée.
+jn-rev-preemption-on = Véhicules d’urgence de { $arm } : préemption activée
+jn-rev-preemption-off = Véhicules d’urgence de { $arm } : préemption désactivée
+jn-rev-emergency-calls =
+    Véhicules d’urgence de { $arm } : { $rate ->
+        [one] { $rate } appel d’urgence par heure
+       *[other] { $rate } appels d’urgence par heure
+    }

@@ -350,6 +350,10 @@ pub(crate) struct Walks<'a> {
     skipped: Vec<u32>,
     /// The longest walk and clearance each phase can be asked to hold its green for.
     longest: Vec<u32>,
+    /// Who waits (pedestrians, or cyclists for the bicycle calls), and the part of what a call needs that may end early
+    /// when the green is interrupted (the walk, or the bicycle minimum green): the rest, the clearance, never does.
+    kind: control::Kind,
+    first_s: u32,
 }
 
 impl<'a> Walks<'a> {
@@ -387,7 +391,13 @@ impl<'a> Walks<'a> {
         let waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
         let longest = (0..plan.phases.len()).map(|k| asked.iter().zip(&serving).filter(|(_, s)| s[k]).map(|(a, _)| a.need_s).max().unwrap_or(0)).collect();
         let missed = vec![false; calls.len()];
-        Walks { asked, serving, calls, waiting, missed, skipped: vec![0; asked.len()], longest }
+        Walks { asked, serving, calls, waiting, missed, skipped: vec![0; asked.len()], longest, kind: control::Kind::Pedestrian, first_s: WALK_S }
+    }
+
+    /// The same calls standing for `kind` of road user, the first `first_s` of what each needs ending early when the green
+    /// is interrupted (the bicycle calls: cyclists, their minimum green).
+    pub(crate) fn of(self, kind: control::Kind, first_s: u32) -> Walks<'a> {
+        Walks { kind, first_s, ..self }
     }
 
     /// Whether phase `k` serves call `i`'s crossing.
@@ -485,6 +495,33 @@ impl control::Demand for Walks<'_> {
     fn longest_hold(&self, k: usize) -> u32 {
         self.longest[k]
     }
+
+    fn kind(&self) -> Option<control::Kind> {
+        Some(self.kind)
+    }
+
+    /// The calls made by `at` and still waiting (whoever has not left) that one of `phases` serves.
+    fn waiting(&self, at: u64, phases: &[usize]) -> u32 {
+        self.waiting.iter().filter(|&&i| u64::from(self.calls[i].1.at_s) <= at && !self.left(i, at) && phases.iter().any(|&k| self.serves(k, i))).count() as u32
+    }
+
+    /// The walks served in the phase's green (those waiting at its start) run from `green_start`: one still showing at
+    /// `at` ends there and its clearance runs in full; a clearance under way runs out.
+    fn clear_by(&self, k: usize, start: u64, green_start: u64, at: u64) -> u64 {
+        self.present(k, start)
+            .filter(|&i| !self.left(i, start))
+            .map(|i| clear_at(green_start, self.first_s, self.asked[self.calls[i].0].need_s, at))
+            .max()
+            .unwrap_or(at)
+    }
+}
+
+/// When what needs `need_s` of a green from `green_start`, its first `first_s` a walk (or a bicycle minimum green) and the
+/// rest its clearance, can stop for an interruption at `at`: a walk still showing ends at `at` and the clearance follows
+/// in full; a clearance under way runs out; one done, or not begun, keeps nothing.
+pub(crate) fn clear_at(green_start: u64, first_s: u32, need_s: u32, at: u64) -> u64 {
+    let (walk_end, end) = (green_start + u64::from(first_s.min(need_s)), green_start + u64::from(need_s));
+    if at < walk_end { at + u64::from(need_s - first_s.min(need_s)) } else { at.max(end) }
 }
 
 #[cfg(test)]

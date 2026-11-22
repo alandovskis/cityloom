@@ -11,6 +11,7 @@ pub mod compare;
 pub mod control;
 pub mod curbside;
 pub mod geometry;
+pub mod preemption;
 pub mod read_model;
 pub mod signal;
 pub mod stops;
@@ -346,6 +347,11 @@ pub struct Arm {
     /// junction with no street given priority is written as it was. Read it through `transit::priority_of`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transit_priority: Option<transit::Priority>,
+    /// The street's emergency calls pre-empt the signal (CLM-15), at this many emergency calls an hour (the scenario
+    /// `control::hour` runs). None: pre-emption off, as before. Saved only once set, so a junction with no street given
+    /// pre-emption is written as it was. Read it through `preemption::rate_of`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preemption: Option<u32>,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -544,6 +550,7 @@ impl Arm {
             actuation: None,
             cyclists: None,
             transit_priority: None,
+            preemption: None,
             walked: false,
         }
     }
@@ -888,10 +895,13 @@ pub enum Refusal {
     PriorityNoPhase,
     NotOnPriority,
     BusesOutOfRange,
+    PreemptionNoPhase,
+    NotOnPreemption,
+    EmergencyCallsOutOfRange,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 52] = [
+    pub const ALL: [Refusal; 55] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -944,6 +954,9 @@ impl Refusal {
         Refusal::PriorityNoPhase,
         Refusal::NotOnPriority,
         Refusal::BusesOutOfRange,
+        Refusal::PreemptionNoPhase,
+        Refusal::NotOnPreemption,
+        Refusal::EmergencyCallsOutOfRange,
     ];
 
     /// The message that says why.
@@ -1001,6 +1014,9 @@ impl Refusal {
             Refusal::PriorityNoPhase => "jn-refusal-priority-no-phase",
             Refusal::NotOnPriority => "jn-refusal-not-on-priority",
             Refusal::BusesOutOfRange => "jn-refusal-buses-out-of-range",
+            Refusal::PreemptionNoPhase => "jn-refusal-preemption-no-phase",
+            Refusal::NotOnPreemption => "jn-refusal-not-on-preemption",
+            Refusal::EmergencyCallsOutOfRange => "jn-refusal-emergency-calls-out-of-range",
         }
     }
 }
@@ -1948,6 +1964,50 @@ impl Junction {
         )
     }
 
+    /// Turns emergency vehicle pre-emption on or off for street `uid` (CLM-15): on, at
+    /// `preemption::DEFAULT_CALLS_PER_HOUR` emergency calls an hour until a rate is set. On needs a signal and a phase of
+    /// the street's own in the plan (`preemption::refusal`); off is always allowed, so a street an edit has left without
+    /// a phase can be cleared. The setting it has is no edit.
+    pub fn set_preemption(&mut self, uid: u32, on: bool) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if preemption::rate_of(arm).is_some() == on {
+            return true;
+        }
+        if on && let Some(why) = preemption::refusal(self.current(), self.region, uid) {
+            return self.refuse(why);
+        }
+        let key = if on { "jn-rev-preemption-on" } else { "jn-rev-preemption-off" };
+        self.arm_edit(
+            uid,
+            |a| about(key, a),
+            |a| {
+                a.preemption = on.then_some(preemption::DEFAULT_CALLS_PER_HOUR);
+                true
+            },
+        )
+    }
+
+    /// Sets how many emergency calls an hour come on the approach of street `uid`, with pre-emption on: 0 to
+    /// `preemption::MAX_CALLS_PER_HOUR`. A street with it off has no rate. A rate it has already is not an edit.
+    pub fn set_emergency_calls(&mut self, uid: u32, rate: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(now) = preemption::rate_of(arm) else { return self.refuse(Refusal::NotOnPreemption) };
+        let Some(rate) = u32::try_from(rate).ok().filter(|r| *r <= preemption::MAX_CALLS_PER_HOUR) else {
+            return self.refuse(Refusal::EmergencyCallsOutOfRange);
+        };
+        if rate == now {
+            return true;
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-emergency-calls", a).with("rate", Arg::Num(i64::from(rate))),
+            |a| {
+                a.preemption = Some(rate);
+                true
+            },
+        )
+    }
+
     /// Gives the junction the suggested plan again, in place of the one the person edited.
     pub fn restore_suggestion(&mut self) -> bool {
         if self.signal_plan_to_edit().is_none() {
@@ -2191,12 +2251,13 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        // An actuated street's settings, a bike movement's detection and a street's transit priority are signal timing
-        // too, and go with it.
+        // An actuated street's settings, a bike movement's detection, a street's transit priority and its pre-emption are
+        // signal timing too, and go with it.
         let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.actuation.is_some() && b.actuation.is_none())
             || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.cyclists.is_some() && b.cyclists.is_none())
-            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.transit_priority.is_some() && b.transit_priority.is_none());
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.transit_priority.is_some() && b.transit_priority.is_none())
+            || self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.preemption.is_some() && b.preemption.is_none());
         let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
             (false, false, false) => "jn-rev-control",
             (true, false, false) => "jn-rev-control-boxes",
@@ -2442,6 +2503,7 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
             a.actuation = None;
             a.cyclists = None;
             a.transit_priority = None;
+            a.preemption = None;
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
@@ -2758,7 +2820,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 52);
+        assert_eq!(Refusal::ALL.len(), 55);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

@@ -2,18 +2,20 @@
 //! phase's green from what is waiting for it. What waits is a `Demand`: the pedestrian calls (`calls.rs`, #60 and
 //! CLM-17) are one, vehicles detected on an actuated approach (`actuation.rs`, CLM-12) another, cyclists detected on a
 //! bike movement's approach (`bicycles.rs`, CLM-13) a third, buses given transit priority (`transit.rs`, CLM-14) a
-//! fourth; pre-emption is meant to be a further one, each keeping its own rules and adding nothing to the loop but its
-//! answers. CityLoom models the behaviour to compare strategies; it never controls a signal. No DOM, no
-//! signals, no I/O, no wording.
+//! fourth, emergency vehicle pre-emption (`preemption.rs`, CLM-15) a fifth, each keeping its own rules and adding
+//! nothing to the loop but its answers. CityLoom models the behaviour to compare strategies; it never controls a signal.
+//! No DOM, no signals, no I/O, no wording.
 //!
 //! A phase is `Fixed` (it runs every time, at its timing's green) or `Actuated` (it runs only when a demand calls it,
 //! its green decided between bounds by the demands that extend it). Either way the yellow and the all-red are the
 //! timing's and are never shortened, and a demand that holds the green (a walk and its clearance being served) is
 //! given the whole of it. A demand may cut a green short (an early green for a bus whose phase comes later), never below
-//! what is held, or hold it a little longer for one coming just after it would end (a green extension).
+//! what is held, or hold it a little longer for one coming just after it would end (a green extension). Above them all,
+//! a demand may interrupt a green (an emergency call: it ends once every clearance in progress is done, no other demand
+//! cutting or holding it) and run a phase out of turn, the phase it displaced running after it (pre-emption).
 
 use crate::junction::model::signal::Plan;
-use crate::junction::model::{State, actuation, bicycles, calls, transit};
+use crate::junction::model::{State, actuation, bicycles, calls, preemption, transit};
 
 /// The span the demands are spread over: one hour.
 pub const HOUR_S: u32 = 3_600;
@@ -40,23 +42,37 @@ pub fn spread(mut seed: u64, rate: u32) -> Vec<u32> {
         .collect()
 }
 
-/// The hour of a signal: how its plan serves the pedestrian calls, the actuated streets' vehicles, the bicycle calls and
-/// the buses of the streets with transit priority together.
+/// The hour of a signal: how its plan serves the pedestrian calls, the actuated streets' vehicles, the bicycle calls,
+/// the buses of the streets with transit priority and the emergency calls of the streets with pre-emption together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Hour {
     pub calls: calls::Summary,
     pub actuation: actuation::Summary,
     pub bicycles: bicycles::Summary,
     pub transit: transit::Summary,
+    pub preemption: preemption::Summary,
+}
+
+/// The kind of road user a demand stands for: what a pre-emption counts the calls it pre-empts or delays by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum Kind {
+    Pedestrian,
+    Bicycle,
+    Bus,
+    Vehicle,
+}
+
+impl Kind {
+    pub const ALL: [Kind; 4] = [Kind::Pedestrian, Kind::Bicycle, Kind::Bus, Kind::Vehicle];
 }
 
 /// Runs `plan` on `s` over an hour: the phases by their rules (`actuation::rules`), the pedestrian calls at the crossings
 /// on call, the vehicles of the actuated streets, the cyclists of the bike movements on detection and the buses of the
-/// streets with transit priority as its demands.
+/// streets with transit priority as its demands, and the emergency calls of the streets with pre-emption above them all.
 /// `distances` is each crossing's length by street uid (`read_model::crossing_distances`), `rides` how far each street's
 /// cyclists ride to clear the junction (`read_model::ride_lengths`). With no street actuated every phase is fixed and the
 /// calls are served as #60 and CLM-17 serve them; with no bike movement on detection the cyclists change nothing, and
-/// with no street given priority the buses change nothing.
+/// with no street given priority the buses change nothing, and with no street given pre-emption nothing is pre-empted.
 pub fn hour(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &[(u32, i32)]) -> Hour {
     let rules = actuation::rules(s, plan, distances);
     let mut out = Hour::default();
@@ -72,10 +88,13 @@ pub fn hour(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &[(u32, i32
     let mut riders = bicycles::riders(plan, &rules, &ridden);
     let streets = transit::streets(s, plan, &mut out.transit);
     let mut buses = transit::Buses::new(plan, &rules, &streets, transit::kept(s, plan, &rules, distances, rides));
-    let turns = run(plan, &rules, &mut [&mut walks, &mut vehicles, &mut riders, &mut buses], calls::MAX_TURNS);
+    let emergencies = preemption::streets(s, plan, distances, rides, &mut out.preemption);
+    let mut emergency = preemption::Emergencies::new(plan, &emergencies, preemption::recall(s, plan, distances, rides));
+    let turns = run(plan, &rules, &mut [&mut walks, &mut vehicles, &mut riders, &mut buses, &mut emergency], calls::MAX_TURNS);
     calls::tally(&mut out.calls, &asked, walks.finish());
     bicycles::tally(&mut out.bicycles, riders.finish());
     transit::tally(&mut out.transit, buses.finish());
+    preemption::tally(&mut out.preemption, emergency.finish());
     out.actuation.approaches = vehicles.finish();
     out.actuation.phases = actuation::phase_totals(plan, &rules, &turns);
     out
@@ -104,7 +123,8 @@ pub enum Rule {
 /// One turn of a phase, as the controller ran it: when it started, its green (from `green_start` to `green_end`, after
 /// the transit lead), when the next phase starts, and the green its rule gave before any demand held it (`base_s`); the
 /// longest any demand held it for (`held_s`), the seconds a demand cut it short (`cut_s`) and then held it longer
-/// (`prolonged_s`). A skipped phase ends where it starts.
+/// (`prolonged_s`), and the seconds an interruption took off it (`preempted_s`, pre-emption). A skipped phase ends where
+/// it starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Turn {
     pub phase: usize,
@@ -116,6 +136,7 @@ pub struct Turn {
     pub held_s: u32,
     pub cut_s: u32,
     pub prolonged_s: u32,
+    pub preempted_s: u32,
     pub skipped: bool,
 }
 
@@ -171,6 +192,43 @@ pub trait Demand {
     fn most_prolong(&self) -> u32 {
         0
     }
+    /// What kind of road user it stands for, if any: who a pre-emption counts as pre-empted or delayed.
+    fn kind(&self) -> Option<Kind> {
+        None
+    }
+    /// How many of its arrivals have come by `at` and are not yet served that one of `phases` serves.
+    fn waiting(&self, _at: u64, _phases: &[usize]) -> u32 {
+        0
+    }
+    /// The phase to run now, out of turn, in place of `planned` (which then runs after it), if this demand takes the
+    /// signal there (pre-emption). It calls the phase it names.
+    fn jump(&self, _planned: usize, _at: u64) -> Option<usize> {
+        None
+    }
+    /// The second at which phase `phase`'s green (the phase started at `start`, its green running from `green_start` to
+    /// `green_end`) is to end for a call above every other demand (pre-emption), if one comes before `green_end`: the
+    /// green then ends there, or once every clearance in progress then is done (`clear_by`), and no other demand cuts
+    /// or holds it.
+    fn interrupt(&self, _phase: usize, _start: u64, _green_start: u64, _green_end: u64) -> Option<u64> {
+        None
+    }
+    /// When what this demand is served in phase `phase`'s green (the phase started at `start`, its green from
+    /// `green_start`) can stop at `at` without cutting a clearance in progress: `at` when none is. A walk (or a bicycle
+    /// minimum green) still showing at `at` ends there and its clearance runs in full; a clearance under way runs out.
+    fn clear_by(&self, _phase: usize, _start: u64, _green_start: u64, at: u64) -> u64 {
+        at
+    }
+    /// Whether it counts who else waits as the turns run (`census`).
+    fn counts(&self) -> bool {
+        false
+    }
+    /// Told before (`told` false) and after (`told` true) every demand is told `turn`, with `others(kind, at, phases)`:
+    /// how many road users of that kind the other demands have waiting at `at` for one of `phases`.
+    fn census(&mut self, _turn: &Turn, _told: bool, _others: &dyn Fn(Kind, u64, &[usize]) -> u32) {}
+    /// How many phases it may run out of turn after the last arrival (`stop_at`).
+    fn out_of_turn(&self) -> u32 {
+        0
+    }
 }
 
 /// Every phase of `plan` fixed: the plan as a fixed-time signal runs it.
@@ -189,6 +247,11 @@ pub fn fixed(plan: &Plan) -> Vec<Rule> {
 /// past that hold, within the maximum), then cut short as far as a demand asks (never below that hold) and held longer
 /// as far as one asks; its transit lead, yellow and all-red are its timing's. A phase takes at least a second, and the clock counts in u64 (a settled timing is within its range, but
 /// the run holds any), so time moves on. Every turn, run or skipped, is told to every demand and returned.
+///
+/// Above that, a demand may take the signal (pre-emption): it runs a phase out of turn (`jump`; the phase it displaced
+/// runs next, and the plan goes on from there), and it may interrupt a green (`interrupt`), which then ends at the
+/// interruption or once every clearance in progress is done (`clear_by`), whatever any other demand asks; its yellow
+/// and all-red still run in full.
 pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: usize) -> Vec<Turn> {
     let n = plan.phases.len();
     let mut out = Vec::new();
@@ -202,15 +265,30 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
     let stop = stop_at(plan, rules, last, demands);
     let (mut start, mut turn, mut ran, mut idle) = (0u64, 0usize, 0usize, 0usize);
     while (start < cover || demands.iter().any(|d| d.pending())) && ran < turns && start <= stop {
-        let k = turn % n;
-        turn += 1;
+        // A demand that takes the signal runs its phase out of turn; the phase it displaced runs after it.
+        let planned = turn % n;
+        let k = demands.iter().find_map(|d| d.jump(planned, start)).filter(|&j| j < n).unwrap_or(planned);
+        if k == planned {
+            turn += 1;
+        }
         let phase = &plan.phases[k];
         let lead = u64::from(phase.timing.transit_lead_s);
         if let Rule::Actuated { .. } = rules[k]
             && !demands.iter().any(|d| d.calls(k, start))
         {
-            let skipped =
-                Turn { phase: k, start, green_start: start, green_end: start, end: start, base_s: 0, held_s: 0, cut_s: 0, prolonged_s: 0, skipped: true };
+            let skipped = Turn {
+                phase: k,
+                start,
+                green_start: start,
+                green_end: start,
+                end: start,
+                base_s: 0,
+                held_s: 0,
+                cut_s: 0,
+                prolonged_s: 0,
+                preempted_s: 0,
+                skipped: true,
+            };
             for d in demands.iter_mut() {
                 d.ran(&skipped);
             }
@@ -238,20 +316,31 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
                 (base, if hold > base { extended(hold) } else { base })
             }
         };
-        // Cut short for a demand (transit's early green for a later phase), never below what is held; then held longer
-        // for one coming just after it would end (transit's green extension).
-        let cut_to = demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s);
-        let cut_s = green_s - cut_to;
-        let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
-        let green_s = cut_to + prolonged_s;
+        let interrupted = demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_start + u64::from(green_s))).min();
+        let (green_s, cut_s, prolonged_s, preempted_s) = if let Some(at) = interrupted {
+            // Interrupted (pre-emption): the green ends there, or once every clearance in progress is done; nothing
+            // else cuts or holds it.
+            let at = at.max(green_start);
+            let clear = demands.iter().map(|d| d.clear_by(k, start, green_start, at)).max().unwrap_or(at).max(at);
+            let to = u32::try_from(clear - green_start).unwrap_or(u32::MAX).min(green_s);
+            (to, 0, 0, green_s - to)
+        } else {
+            // Cut short for a demand (transit's early green for a later phase), never below what is held; then held
+            // longer for one coming just after it would end (transit's green extension, pre-emption's dwell).
+            let cut_to = demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s);
+            let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
+            (cut_to + prolonged_s, green_s - cut_to, prolonged_s, 0)
+        };
         // The phase's length with this green in place of the timing's: the transit lead, yellow and all-red kept.
         let length = u64::from(phase.length_s).saturating_sub(u64::from(phase.timing.green_s)) + u64::from(green_s);
         let end = start + length.max(1);
         let green_end = green_start + u64::from(green_s);
-        let done = Turn { phase: k, start, green_start, green_end, end, base_s, held_s: hold, cut_s, prolonged_s, skipped: false };
+        let done = Turn { phase: k, start, green_start, green_end, end, base_s, held_s: hold, cut_s, prolonged_s, preempted_s, skipped: false };
+        census(demands, &done, false);
         for d in demands.iter_mut() {
             d.ran(&done);
         }
+        census(demands, &done, true);
         out.push(done);
         start = end;
         ran += 1;
@@ -259,10 +348,27 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
     out
 }
 
+/// Tells each demand that counts (`Demand::counts`) who the others have waiting, before (`told` false) or after `turn`
+/// is told to them all.
+fn census(demands: &mut [&mut dyn Demand], turn: &Turn, told: bool) {
+    for i in 0..demands.len() {
+        if !demands[i].counts() {
+            continue;
+        }
+        let (before, rest) = demands.split_at_mut(i);
+        let Some((me, after)) = rest.split_first_mut() else { continue };
+        let others = |kind: Kind, at: u64, phases: &[usize]| -> u32 {
+            before.iter().chain(after.iter()).filter(|d| d.kind() == Some(kind)).map(|d| d.waiting(at, phases)).sum()
+        };
+        me.census(turn, told, &others);
+    }
+}
+
 /// When the run stops: a cycle at its longest past the `last` arrival. A fixed phase takes a second or more, and its
 /// green is lengthened by at most the most any demand lengthens one; an actuated phase runs at most its transit lead,
 /// the longest of its maximum, its floor and any hold, its yellow and its all-red; and any phase's green may be held
-/// longer by the most any demand prolongs one. So whoever can be served is, at the
+/// longer by the most any demand prolongs one; a phase run out of turn (pre-emption) adds the longest phase once for
+/// each the demands may run after the last arrival. So whoever can be served is, at the
 /// latest, a cycle that long after they came (one who misses a green waits for the next): the bound is a guard, and
 /// cuts off nobody.
 pub fn stop_at(plan: &Plan, rules: &[Rule], last: u64, demands: &[&mut dyn Demand]) -> u64 {
@@ -280,7 +386,8 @@ pub fn stop_at(plan: &Plan, rules: &[Rule], last: u64, demands: &[&mut dyn Deman
                 }
             }
     };
-    last + (0..plan.phases.len()).map(longest).sum::<u64>()
+    let out_of_turn = u64::from(demands.iter().map(|d| d.out_of_turn()).sum::<u32>());
+    last + (0..plan.phases.len()).map(longest).sum::<u64>() + out_of_turn * (0..plan.phases.len()).map(longest).max().unwrap_or(0)
 }
 
 #[cfg(test)]

@@ -519,7 +519,8 @@ impl control::Demand for Buses<'_> {
         }
         let (k, uid) = (turn.phase, self.uids[turn.phase]);
         let before = turn.green_s() - turn.prolonged_s + turn.cut_s;
-        if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s) {
+        // A green interrupted for a pre-emption was cut for no bus.
+        if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s).filter(|_| turn.preempted_s == 0) {
             self.record_cut(&cut, before, uid);
         }
         self.charge_shifts(k, uid);
@@ -546,6 +547,18 @@ impl control::Demand for Buses<'_> {
 
     fn most_prolong(&self) -> u32 {
         self.most_extension()
+    }
+
+    fn kind(&self) -> Option<control::Kind> {
+        Some(control::Kind::Bus)
+    }
+
+    /// The buses come by `at` and not yet served on the streets whose phase is one of `phases`.
+    fn waiting(&self, at: u64, phases: &[usize]) -> u32 {
+        (0..self.streets.len())
+            .filter(|&x| phases.contains(&self.streets[x].phase))
+            .map(|x| self.streets[x].at_s[self.next[x]..].iter().take_while(|&&t| u64::from(t) <= at).count() as u32)
+            .sum()
     }
 }
 

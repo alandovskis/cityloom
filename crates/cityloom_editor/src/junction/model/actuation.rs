@@ -410,6 +410,18 @@ impl control::Demand for Vehicles<'_> {
     fn last(&self) -> u64 {
         self.approaches.iter().filter_map(|a| a.at_s.last()).map(|&t| u64::from(t)).max().unwrap_or(0)
     }
+
+    fn kind(&self) -> Option<control::Kind> {
+        Some(control::Kind::Vehicle)
+    }
+
+    /// The vehicles come by `at` and not yet served on the approaches one of `phases` serves.
+    fn waiting(&self, at: u64, phases: &[usize]) -> u32 {
+        (0..self.approaches.len())
+            .filter(|&x| phases.iter().any(|&k| self.serves[x][k]))
+            .map(|x| self.unserved(x).iter().take_while(|&&t| u64::from(t) <= at).count() as u32)
+            .sum()
+    }
 }
 
 /// Each actuated phase's turns added up, in the order of the plan.

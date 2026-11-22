@@ -934,3 +934,15 @@ jn-transit-said-no-wait =
        *[other] { $buses } buses
     } in the hour; on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; no bus was served.
 jn-transit-none = No street gives its buses priority: each bus waits for its street's green like other traffic.
+
+## Emergency vehicle pre-emption (src/junction/model/preemption.rs, CLM-15): an emergency call takes the signal to its street's phase after a safe clearance
+jn-refusal-preemption-no-phase = No phase of the plan is this street's own, so its emergency calls cannot pre-empt the signal: give it a phase first.
+jn-refusal-not-on-preemption = Only a street with pre-emption on has emergency calls an hour: turn pre-emption on first.
+jn-refusal-emergency-calls-out-of-range = That many emergency calls an hour is outside the placeholder bound shown.
+jn-rev-preemption-on = Emergency vehicles on { $arm }: pre-emption on
+jn-rev-preemption-off = Emergency vehicles on { $arm }: pre-emption off
+jn-rev-emergency-calls =
+    Emergency vehicles on { $arm }: { $rate ->
+        [one] 1 emergency call an hour
+       *[other] { $rate } emergency calls an hour
+    }
