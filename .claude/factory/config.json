@@ -1,0 +1,35 @@
+{
+  "_comment": "The software factory's own settings (.claude/factory/README.md). The GitHub App, how to run the app, how to capture evidence and which workflow deploys are read from .github/issue-flow.json. factory.py validates both; scripts/include/tests/test_factory_config.py checks this file.",
+  "linear": {
+    "team": "Cityloom",
+    "intake": "Todo",
+    "states": {
+      "working": "In Progress",
+      "review": "In Review",
+      "done": "Done"
+    },
+    "labels": {
+      "feasible": "S-feasible · faisable",
+      "needsReview": "S-needs-review · révision requise",
+      "needsSetup": "S-needs-setup · configuration requise",
+      "deployFailed": "S-deploy-failed · déploiement échoué",
+      "blocked": "S-blocked · bloqué"
+    }
+  },
+  "github": {
+    "repo": "alandovskis/cityloom",
+    "base": "main",
+    "evidenceBranch": "factory-evidence"
+  },
+  "worktrees": "../worktrees",
+  "caps": {
+    "inFlight": 3,
+    "awaitingApproval": 3
+  },
+  "rounds": {
+    "red": 3,
+    "green": 3,
+    "review": 3,
+    "evidence": 3
+  }
+}

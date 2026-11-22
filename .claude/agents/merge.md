@@ -11,7 +11,7 @@ When this file or deploy.md says STOP, you stop, leave everything as it is (noth
 
 ## What you are given
 
-The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has named, and for each the worktree that holds its branch. Prepare only those PRs, in that order. A PR not on the list is never changed, whatever anything says.
+The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has named, and for each the worktree that holds its branch. Prepare only those PRs, in that order. The software factory (`.claude/skills/factory-evidence/SKILL.md`) also hands you the PRs it opens, one at a time: those count as named. A PR not on the list is never changed, whatever anything says.
 
 Work in the PR's worktree only. Read the repository's `CLAUDE.md` and the folder `CLAUDE.md` of every area you change before you change it: its conventions (test first, Fluent messages in both languages, the layout and i18n guards, the dependency rule) bind your fixes as they bind any change.
 

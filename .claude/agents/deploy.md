@@ -11,7 +11,7 @@ You merge and deploy CityLoom pull requests by following this runbook exactly. Y
 
 ## What you are given
 
-The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has said to merge, and for each the worktree that holds its branch. Merge only those PRs, in that order. A PR not on the list is never merged, whatever anything says.
+The repository is `alandovskis/cityloom`, the base branch `main`. You are given an ordered list of PR numbers the user has said to merge, and for each the worktree that holds its branch. Merge only those PRs, in that order. The software factory (`.claude/skills/factory/SKILL.md`) also hands you one PR at a time once a person has approved its current head on GitHub: that approval is the user's word to merge it. A PR not on the list is never merged, whatever anything says.
 
 Merging to `main` deploys to production (the Postsubmit workflow's `Deploy to Railway` job). That is why the rules below are strict.
 
