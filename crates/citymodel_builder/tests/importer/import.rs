@@ -418,6 +418,20 @@ fn signals_tagged_on_the_approach_before_a_split_of_the_way_run_the_junction_ahe
 }
 
 #[test]
+fn signals_facing_the_node_where_one_street_becomes_another_stay_there() {
+    // past node 2 the road is another street: the signals stop traffic where it changes, not at node 3
+    let osm = APPROACH_SIGNAL.replace(
+        r#"<way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Test"/>"#,
+        r#"<way id="11"><nd ref="2"/><nd ref="3"/>
+  <tag k="highway" v="residential"/><tag k="name" v="Rue Autre"/>"#,
+    );
+    let net = import(osm.as_bytes()).unwrap();
+    assert_eq!(control_at(&net, 2), Control::Signals);
+    assert_eq!(control_at(&net, 3), Control::Signs);
+}
+
+#[test]
 fn signals_tagged_on_the_approach_before_a_cycleway_crossing_run_the_junction_ahead() {
     // Rue Test is one way from node 1 to node 3; a cycleway crosses it at node 15, between the signals and node 3.
     // The importer keeps cycleways out of osm2streets, so the crossing does not split the road

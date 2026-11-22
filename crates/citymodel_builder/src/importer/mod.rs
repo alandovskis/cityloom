@@ -73,7 +73,8 @@ const SIGNAL_CARRY_M: f64 = 40.0;
 
 /// osm2streets puts signals tagged on a way's approach (`traffic_signals:direction`, or a one-way road) on the next
 /// node it splits the way at, marking the stop line of the road that reaches it. That is the junction they face unless
-/// the way is only split there: two roads meet, and the node has no signals of its own (`own_signals`). Then the
+/// the way is only split there: two roads of one street meet (`one_street`), and the node has no signals of its own
+/// (`own_signals`); where one street becomes another, the signals stop traffic at that change. Then the
 /// signals are carried on along the road beyond the split, through any further splits, to the first node where three
 /// or more roads meet, at most `SIGNAL_CARRY_M` past the split; the split they were carried from loses them
 /// (osm2streets drops such a node when it joins the two roads into one, signals and all). Signals that reach no
@@ -84,7 +85,7 @@ fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
     let splits: Vec<IntersectionID> = streets
         .intersections
         .values()
-        .filter(|i| i.control == IntersectionControl::Signalled && i.roads.len() == 2 && !own_signals(doc, &i.osm_ids))
+        .filter(|i| i.control == IntersectionControl::Signalled && one_street(streets, i.id) && !own_signals(doc, &i.osm_ids))
         .map(|i| i.id)
         .collect();
     let mut carried: Vec<(IntersectionID, IntersectionID)> = Vec::new(); // (the split, the junction ahead)
@@ -98,6 +99,18 @@ fn carry_signals_past_splits(streets: &mut StreetNetwork, doc: &Document) {
     for &(split, ahead) in &carried {
         streets.intersections.get_mut(&split).unwrap().control = IntersectionControl::Signed;
         streets.intersections.get_mut(&ahead).unwrap().control = IntersectionControl::Signalled;
+    }
+}
+
+/// Whether exactly two roads meet at `node` and they are pieces of one street: the same name (or none) and the same
+/// kind of road, as `blocks.rs` joins them.
+fn one_street(streets: &StreetNetwork, node: IntersectionID) -> bool {
+    match streets.intersections[&node].roads[..] {
+        [a, b] => {
+            let (a, b) = (&streets.roads[&a], &streets.roads[&b]);
+            a.name == b.name && a.highway_type == b.highway_type
+        }
+        _ => false,
     }
 }
 
@@ -126,8 +139,8 @@ fn own_signals(doc: &Document, nodes: &[osm2streets::osm::NodeID]) -> bool {
 }
 
 /// The first node past `from`, leaving it by the road other than `came`, where three or more roads meet, through
-/// nodes where two do, no more than `SIGNAL_CARRY_M` on; none past the edge of the map, a dead end, a ring, or a node
-/// of two roads that stops the traffic being carried: one with signals of its own, one that only the road the walk
+/// splits of the street (`one_street`), no more than `SIGNAL_CARRY_M` on; none past the edge of the map, a dead end, a
+/// ring, a node where the street becomes another, or a split that stops the traffic being carried: one with signals of its own, one that only the road the walk
 /// reaches it by faces with signals (which keeps them or carries them on), or one signalled where osm2streets placed
 /// no stop line (signals face it, from a side not known). A node of two roads faced from both sides, or only from
 /// the far side, is walked through: its signals stop traffic at it both ways, or the other way.
@@ -144,7 +157,12 @@ fn junction_ahead(streets: &StreetNetwork, doc: &Document, from: IntersectionID,
         }
         let stops = |faced: Vec<RoadID>| faced.is_empty() || faced == [leaving];
         match node.roads.len() {
-            2 if own_signals(doc, &node.osm_ids) || (node.control == IntersectionControl::Signalled && stops(facing(streets, far))) => return None,
+            2 if !one_street(streets, far)
+                || own_signals(doc, &node.osm_ids)
+                || (node.control == IntersectionControl::Signalled && stops(facing(streets, far))) =>
+            {
+                return None;
+            }
             2 => (at, came) = (far, leaving),
             n if n >= 3 => return Some(far),
             _ => return None,
