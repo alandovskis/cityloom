@@ -651,6 +651,13 @@ mod tests {
         assert_eq!(serve(&plan, &asked).calls, vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
     }
 
+    /// How long a run of a hostile document may take and still count as "at once". Measured by the test of a stored
+    /// plan of 100,000 phases: its timed run took 0.16 s alone and 1.16 s beside the whole suite, and 16.4 s with a
+    /// quadratic pass planted in `signal::surviving`. A limit near the first failed on a busy machine (CLM-22); one at
+    /// or past the last catches nothing, so measure both again before raising it. The other two tests guard a run that
+    /// never ends or steps a 2^32 s cycle second by second, far past any limit, and were not measured.
+    const AT_ONCE: std::time::Duration = std::time::Duration::from_secs(10);
+
     /// A phase of street `uid` that takes no time at all (a document's timing is not clamped when it is read).
     fn empty(uid: u32, walks: &[u32]) -> Phase {
         let timing = Timing { green_s: 0, yellow_s: 0, all_red_s: 0, transit_lead_s: 0 };
@@ -663,7 +670,7 @@ mod tests {
         let asked = [Asked { arm: 9, need_s: 10, at_s: vec![0, 100, 3_599], passive: false }];
         let started = std::time::Instant::now();
         let calls = serve(&plan, &asked).calls;
-        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
+        assert!(started.elapsed() < AT_ONCE, "it took {:?}", started.elapsed());
         // The first phase's green of 0 s is lengthened by the 10 s the crossing needs; a phase that takes no time
         // takes a second in the run, so the walk comes round again.
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 10));
@@ -685,7 +692,7 @@ mod tests {
         let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 100], passive: false }];
         let started = std::time::Instant::now();
         let calls = serve(&plan, &asked).calls;
-        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
+        assert!(started.elapsed() < AT_ONCE, "it took {:?}", started.elapsed());
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
         // The second call missed the first walk, and the next starts a whole 2^32 s cycle later: counted, not wrapped.
         assert_eq!(calls[1], call(9, 100, Outcome::Delayed, u32::MAX - 99, 0));
@@ -752,7 +759,7 @@ mod tests {
         assert_eq!(plan.phases.len(), MAX_ARMS * 2, "no more phases than an edit can make");
         let sum = summary(&s, &plan, &[(east, 9_000)]);
         assert_eq!(sum.calls.len(), MAX_CALLS_PER_HOUR as usize);
-        assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
+        assert!(started.elapsed() < AT_ONCE, "it took {:?}", started.elapsed());
     }
 
     #[test]
