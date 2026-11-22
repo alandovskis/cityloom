@@ -544,6 +544,7 @@ mod tests {
             cut_s,
             prolonged_s,
             preempted_s: 0,
+            kept: false,
             skipped: false,
         };
         let totals = phase_totals(&plan, &rules, &[turn(0, 10, 0, 3), turn(100, 35, 10, 0)]);

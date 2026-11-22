@@ -711,6 +711,57 @@ mod tests {
         assert_eq!(calls, vec![Call { delayed: Counts { buses: 1, ..Counts::default() }, ..call(1, 20, 0, None) }]);
     }
 
+    /// The emergency calls of `emergency` and the buses of `buses` served by `plan` (every phase fixed): the turns that
+    /// ran as (phase, start, green, end), every emergency call, every bus and the delay transit priority moved.
+    #[allow(clippy::type_complexity)]
+    fn with_buses(
+        plan: &Plan,
+        emergency: &[Street],
+        buses: &[transit::Street],
+    ) -> (Vec<(usize, u64, u32, u64)>, Vec<Call>, Vec<transit::Bus>, Vec<transit::Moved>) {
+        let rules = control::fixed(plan);
+        let mut emergencies = Emergencies::new(plan, emergency, none());
+        let mut bus = transit::Buses::new(plan, &rules, buses, vec![0; plan.phases.len()]);
+        let turns = run(plan, &rules, &mut [&mut bus as &mut dyn Demand, &mut emergencies], 100_000);
+        let (served, moved, _) = bus.finish();
+        (turns.iter().filter(|t| !t.skipped).map(|t| (t.phase, t.start, t.green_s(), t.end)).collect(), emergencies.finish(), served, moved)
+    }
+
+    #[test]
+    fn transit_counts_no_early_green_or_extension_a_green_kept_for_a_call_never_gave() {
+        let plan = three();
+        let bus = |arm, mode, phase, at_s| transit::Street { arm, mode, phase, at_s };
+        // Street 2's call at 5 s takes the signal to its phase from 10 s, its green not cut for street 3's bus at 12 s:
+        // that bus waits to 40 s with no early green, and no delay is moved for it.
+        let (_, _, served, moved) = with_buses(&plan, &[street(2, 1, vec![5])], &[bus(3, transit::Mode::EarlyGreen, 2, vec![12])]);
+        assert_eq!((served[0].outcome, served[0].wait_s, served[0].early_s), (transit::Outcome::Delayed, 28, 0));
+        assert!(moved.is_empty(), "{moved:?}");
+        // Street 1's call at 20 s holds its green to 40 s for the dwell; its bus at 30 s comes in that green, which ran
+        // for the call: on arrival, not an extension, and the next phases bear no delay of transit's.
+        let (ran, _, served, moved) = with_buses(&plan, &[street(1, 0, vec![20])], &[bus(1, transit::Mode::Extension, 0, vec![30])]);
+        assert_eq!(ran[0], (0, 0, 40, 45));
+        assert_eq!((served[0].outcome, served[0].extended_s), (transit::Outcome::OnArrival, 0));
+        assert!(moved.is_empty(), "{moved:?}");
+    }
+
+    #[test]
+    fn a_call_ends_a_green_a_bus_holds_longer_and_never_lengthens_one_a_bus_cut_short() {
+        let plan = three();
+        let bus = |arm, mode, phase, at_s| transit::Street { arm, mode, phase, at_s };
+        // Street 1's bus at 27 s would hold its green from 25 s to 28 s; street 2's call at 26 s ends it there, no
+        // transit extension holding the emergency vehicle: its green at 31 s, after the yellow and all-red.
+        let (ran, calls, _, _) = with_buses(&plan, &[street(2, 1, vec![26])], &[bus(1, transit::Mode::Extension, 0, vec![27])]);
+        assert_eq!(&ran[..2], &[(0, 0, 26, 31), (1, 31, 25, 61)]);
+        assert_eq!(calls, vec![call(2, 26, 5, Some(1))]);
+        // Street 2's bus at 3 s cuts street 1's green to 15 s; street 3's call at 18 s comes in its yellow: the green
+        // still ends at 15 s, the call interrupting nothing, and runs street 3's phase out of turn at 20 s, putting back
+        // the bus's.
+        let (ran, calls, served, _) = with_buses(&plan, &[street(3, 2, vec![18])], &[bus(2, transit::Mode::EarlyGreen, 1, vec![3])]);
+        assert_eq!(&ran[..3], &[(0, 0, 15, 20), (2, 20, 25, 50), (1, 50, 25, 80)]);
+        assert_eq!(calls, vec![Call { delayed: Counts { buses: 1, ..Counts::default() }, ..call(3, 18, 2, None) }]);
+        assert_eq!((served[0].outcome, served[0].early_s), (transit::Outcome::EarlyGreen, 10), "the bus's early green is kept");
+    }
+
     #[test]
     fn a_call_in_a_rest_gap_counts_who_waited_at_its_second_before_the_next_turn_serves_anyone() {
         // Every phase actuated and nobody coming: the signal rests. At 100 s street 3's call comes, and at the same
@@ -897,7 +948,7 @@ mod tests {
             not_served: 0,
             longest_to_green_s: Some(14),
             preempted: Counts { pedestrians: 0, cyclists: 1, buses: 1, vehicles: 0 },
-            delayed: Counts { pedestrians: 1, cyclists: 0, buses: 2, vehicles: 66 },
+            delayed: Counts { pedestrians: 1, cyclists: 0, buses: 2, vehicles: 67 },
         }
     }
 

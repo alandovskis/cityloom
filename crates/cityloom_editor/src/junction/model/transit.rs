@@ -454,12 +454,15 @@ impl<'a> Buses<'a> {
 
     /// Serves street `x`'s buses that came before its phase's green (`turn`) ended, and starts counting its next green.
     fn serve_street(&mut self, x: usize, turn: &Turn) {
-        let base_end = turn.green_end - u64::from(turn.prolonged_s);
+        // The extension the green was given: none in a green kept for an emergency call (its dwell, not transit, held
+        // it), and only as far as an emergency call let it run.
+        let extended = if turn.kept { 0 } else { turn.prolonged_s.saturating_sub(turn.preempted_s) };
+        let base_end = turn.green_end - u64::from(extended);
         while let Some(t) = self.first(x).filter(|&t| t < turn.green_end) {
             let bus = &mut self.rows[x][self.next[x]];
             if t >= turn.start {
                 bus.outcome = if t < base_end { Outcome::OnArrival } else { Outcome::Extended };
-                bus.extended_s = if t < base_end { 0 } else { turn.prolonged_s };
+                bus.extended_s = if t < base_end { 0 } else { extended };
             } else {
                 bus.wait_s = u32::try_from(turn.start - t).unwrap_or(u32::MAX);
                 bus.outcome = if self.early[x] > 0 { Outcome::EarlyGreen } else { Outcome::Delayed };
@@ -467,11 +470,11 @@ impl<'a> Buses<'a> {
             }
             self.next[x] += 1;
         }
-        if turn.prolonged_s > 0 {
+        if extended > 0 {
             self.given[x] = Some(self.greens[x]);
         }
         // The other approaches' next greens start that much later; each bears it as it runs.
-        self.shift[x] = turn.prolonged_s;
+        self.shift[x] = extended;
         self.charged[x].clear();
         self.greens[x] += 1;
         self.early[x] = 0;
@@ -519,8 +522,8 @@ impl control::Demand for Buses<'_> {
         }
         let (k, uid) = (turn.phase, self.uids[turn.phase]);
         let before = turn.green_s() - turn.prolonged_s + turn.cut_s;
-        // A green interrupted for a pre-emption was cut for no bus.
-        if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s).filter(|_| turn.preempted_s == 0) {
+        // A green interrupted for a pre-emption, or kept for one, was cut for no bus.
+        if let Some(cut) = self.cut_for(k, turn.green_start, before, turn.held_s).filter(|_| turn.preempted_s == 0 && !turn.kept) {
             self.record_cut(&cut, before, uid);
         }
         self.charge_shifts(k, uid);
