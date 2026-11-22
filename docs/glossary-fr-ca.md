@@ -331,6 +331,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Buses an hour | Autobus par heure | `autobus` is invariable: `1 autobus`, `12 autobus`. |
 | Junction inspector | On arrival / Delayed (a bus) | À l’arrivée / Retardés | Masculine plural, as the buses (`autobus`) in the table. |
 | Junction inspector | Delay moved to other approaches | Retard reporté sur les autres approches | `Retard reporté sur les autres` as the table's column. |
+| Junction inspector | Emergency vehicle pre-emption (the section, CLM-15) | Préemption pour les véhicules d’urgence | To confirm, see below. `préempter les feux` for the verb. |
+| Junction inspector | Pre-emption on / off | Préemption activée / désactivée | Feminine, as `la préemption`: the radios are `Activée` / `Désactivée`. |
+| Junction inspector | Emergency call / Emergency calls an hour | Appel d’urgence / Appels d’urgence par heure |  |
+| Junction inspector | Time to green (an emergency call's) | Délai avant le vert | `Délai avant le vert le plus long` as the totals' column. |
+| Junction inspector | Safe entry (the longest a call takes to reach its green) | Entrée sécuritaire | `sécuritaire` is the Québec usage. To confirm, see below. |
+| Junction inspector | Pre-empted / Delayed (road users an emergency call held up) | Préemptés / Retardés | Masculine plural, as the road users (`piétons`, `véhicules`) they count. |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |
@@ -462,6 +468,8 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Transit signal priority (the section, CLM-14) | `Priorité aux feux pour le transport en commun` | `Priorité aux feux pour autobus`, `Priorité au transport collectif aux feux` (suggestion) |
 | Early green (a bus’s priority) | `Vert hâtif` | `Vert anticipé`, `Rappel prioritaire` (suggestion) |
 | Green extension (a bus’s priority) | `Prolongation du vert` | `Prolongement du vert`, `Vert prolongé` (suggestion) |
+| Emergency vehicle pre-emption (the section, CLM-15) | `Préemption pour les véhicules d’urgence` | `Priorité aux véhicules d’urgence`, `Préemption des feux` (suggestion) |
+| Safe entry (an emergency call’s) | `Entrée sécuritaire` | `Entrée sûre`, `Transition sécuritaire` (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

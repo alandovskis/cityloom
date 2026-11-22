@@ -946,3 +946,73 @@ jn-rev-emergency-calls =
         [one] { $rate } appel d’urgence par heure
        *[other] { $rate } appels d’urgence par heure
     }
+jn-preempt-heading = Préemption pour les véhicules d’urgence
+jn-preempt-intro = Une rue qui a une phase propre peut laisser ses véhicules d’urgence préempter les feux. La préemption a la plus haute priorité de toutes, au-dessus des appels piétons et vélos, de l’actionnement par les véhicules et de la priorité au transport en commun : un appel d’urgence met fin au vert en cours après un dégagement sécuritaire et donne aussitôt le vert à la rue. Sans préemption, un véhicule d’urgence attend le vert de sa rue comme le reste de la circulation.
+jn-preempt-bounds = Valeurs provisoires : une rue qui reçoit la préemption a { $rate } appels d’urgence par heure, répartis sur une heure, et son vert dure alors au moins { $dwell } s pour le véhicule, qu’on suppose passé à ce moment. Une marche encore affichée est écourtée, mais un dégagement piéton ou vélo en cours, le jaune et le rouge intégral durent toujours en entier. Après le vert d’urgence, le plan reprend avec la phase qui suit celle interrompue. Les appels sont servis dans l’ordre d’arrivée : un appel qui arrive pendant la préemption d’une autre rue attend qu’elle se termine.
+jn-preempt-group = Véhicules d’urgence de { $street }
+jn-preempt-mode = Préemption
+jn-preempt-mode-off = Désactivée
+jn-preempt-mode-on = Activée
+jn-preempt-off = Désactivée : un véhicule d’urgence attend le vert de la rue comme le reste de la circulation.
+jn-preempt-trigger = Activée, la plus haute priorité : un appel d’urgence sur cette rue met fin au vert en cours et donne le vert à la rue, au-dessus de toute autre politique. Une marche encore affichée est écourtée, mais un dégagement piéton ou vélo en cours, le jaune et le rouge intégral durent d’abord en entier, si bien que le vert arrive au plus { $entry } s après l’appel (l’entrée sécuritaire). Il dure ensuite au moins { $dwell } s, et le plan reprend avec la phase qui suit celle interrompue.
+jn-preempt-no-phase = Aucune phase du plan n’est propre à cette rue : ses appels d’urgence ne peuvent pas préempter les feux.
+jn-preempt-rate = Appels d’urgence par heure
+jn-preempt-rate-range = De { $min } à { $max } appels d’urgence par heure (borne provisoire)
+jn-preempt-effect =
+    Dans l’heure, { $calls ->
+        [one] { $calls } appel d’urgence
+       *[other] { $calls } appels d’urgence
+    } : délai avant le vert le plus long { $longest } s; préemptés { $preempted }; retardés { $delayed }.
+jn-preempt-effect-no-call = Dans l’heure, aucun appel d’urgence n’a été servi.
+jn-preempt-totals-caption = Appels d’urgence en une heure, par rue
+jn-preempt-col-street = Rue
+jn-preempt-col-calls = Appels
+jn-preempt-col-longest = Délai avant le vert le plus long
+jn-preempt-col-preempted = Préemptés
+jn-preempt-col-delayed = Retardés
+jn-preempt-rows =
+    { $n ->
+        [one] L’appel d’urgence, une ligne
+       *[other] Chaque appel d’urgence, une ligne par appel ({ $n })
+    }
+jn-preempt-rows-caption = Chaque appel d’urgence de l’heure, dans l’ordre d’arrivée
+jn-preempt-col-call = Appel
+jn-preempt-col-arrived = Arrivée
+jn-preempt-col-to-green = Délai avant le vert
+jn-preempt-cut = Vert de { $street } écourté : { $list }
+jn-preempt-cut-none = Aucun vert écourté
+jn-preempt-not-served = Non servi
+jn-preempt-pedestrians =
+    { $n ->
+        [one] { $n } piéton
+       *[other] { $n } piétons
+    }
+jn-preempt-cyclists =
+    { $n ->
+        [one] { $n } cycliste
+       *[other] { $n } cyclistes
+    }
+jn-preempt-buses =
+    { $n ->
+        [one] { $n } autobus
+       *[other] { $n } autobus
+    }
+jn-preempt-vehicles =
+    { $n ->
+        [one] { $n } véhicule
+       *[other] { $n } véhicules
+    }
+jn-preempt-no-call-said = aucun appel d’urgence servi
+jn-preempt-nobody = personne
+jn-preempt-finding-no-phase = { $arm } a la préemption activée, mais aucune phase du plan ne lui est propre : ses appels d’urgence ne mènent les feux nulle part. Donnez-lui une phase ou désactivez la préemption.
+jn-preempt-said =
+    Véhicules d’urgence de { $arm } : { $calls ->
+        [one] { $calls } appel d’urgence
+       *[other] { $calls } appels d’urgence
+    } dans l’heure; délai avant le vert le plus long { $longest } s, entrée sécuritaire { $entry } s; préemptés { $preempted }; retardés { $delayed }.
+jn-preempt-said-no-call =
+    Véhicules d’urgence de { $arm } : { $calls ->
+        [one] { $calls } appel d’urgence
+       *[other] { $calls } appels d’urgence
+    } dans l’heure; aucun appel n’a été servi.
+jn-preempt-none = Aucune rue n’a la préemption activée : un véhicule d’urgence attend le vert de sa rue comme le reste de la circulation.

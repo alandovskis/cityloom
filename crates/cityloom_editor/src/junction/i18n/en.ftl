@@ -946,3 +946,73 @@ jn-rev-emergency-calls =
         [one] 1 emergency call an hour
        *[other] { $rate } emergency calls an hour
     }
+jn-preempt-heading = Emergency vehicle pre-emption
+jn-preempt-intro = A street with a phase of its own can let its emergency vehicles pre-empt the signal. Pre-emption has the highest priority of all, above pedestrian and bicycle calls, vehicle actuation and transit priority: an emergency call ends the green running after a safe clearance and gives the street its green at once. With pre-emption off an emergency vehicle waits for its street's green like other traffic.
+jn-preempt-bounds = Placeholder figures: a street given pre-emption has { $rate } emergency calls an hour, spread over one hour, and its green then runs at least { $dwell } s for the vehicle, which is taken to have passed by then. A walk still showing is cut short, but a pedestrian or bicycle clearance under way, the yellow and the all-red always run in full. After the emergency green the plan goes on with the phase after the one interrupted. Calls are served in the order they come: one coming during another street's pre-emption waits for it to end.
+jn-preempt-group = Emergency vehicles on { $street }
+jn-preempt-mode = Pre-emption
+jn-preempt-mode-off = Off
+jn-preempt-mode-on = On
+jn-preempt-off = Off: an emergency vehicle waits for the street's green like other traffic.
+jn-preempt-trigger = On, the highest priority: an emergency call on this street ends the green running and gives the street its green, above every other policy. A walk still showing is cut short, but a pedestrian or bicycle clearance under way, the yellow and the all-red run in full first, so the green comes at most { $entry } s after the call (the safe entry). It then runs at least { $dwell } s, and the plan goes on with the phase after the one interrupted.
+jn-preempt-no-phase = No phase of the plan is this street's own, so its emergency calls cannot pre-empt the signal.
+jn-preempt-rate = Emergency calls an hour
+jn-preempt-rate-range = { $min } to { $max } emergency calls an hour (placeholder bound)
+jn-preempt-effect =
+    In the hour { $calls ->
+        [one] 1 emergency call
+       *[other] { $calls } emergency calls
+    }: longest time to green { $longest } s; pre-empted { $preempted }; delayed { $delayed }.
+jn-preempt-effect-no-call = In the hour no emergency call was served.
+jn-preempt-totals-caption = Emergency calls in one hour, by street
+jn-preempt-col-street = Street
+jn-preempt-col-calls = Calls
+jn-preempt-col-longest = Longest time to green
+jn-preempt-col-preempted = Pre-empted
+jn-preempt-col-delayed = Delayed
+jn-preempt-rows =
+    { $n ->
+        [one] The emergency call, one row
+       *[other] Every emergency call, one row each ({ $n })
+    }
+jn-preempt-rows-caption = Each emergency call of the hour, in the order they came
+jn-preempt-col-call = Call
+jn-preempt-col-arrived = Arrived
+jn-preempt-col-to-green = Time to green
+jn-preempt-cut = Green of { $street } cut short: { $list }
+jn-preempt-cut-none = No green cut short
+jn-preempt-not-served = Not served
+jn-preempt-pedestrians =
+    { $n ->
+        [one] 1 pedestrian
+       *[other] { $n } pedestrians
+    }
+jn-preempt-cyclists =
+    { $n ->
+        [one] 1 cyclist
+       *[other] { $n } cyclists
+    }
+jn-preempt-buses =
+    { $n ->
+        [one] 1 bus
+       *[other] { $n } buses
+    }
+jn-preempt-vehicles =
+    { $n ->
+        [one] 1 vehicle
+       *[other] { $n } vehicles
+    }
+jn-preempt-no-call-said = no emergency call served
+jn-preempt-nobody = nobody
+jn-preempt-finding-no-phase = { $arm } has pre-emption on, but no phase of the plan is its own, so its emergency calls take the signal nowhere. Give it a phase, or turn pre-emption off.
+jn-preempt-said =
+    Emergency vehicles on { $arm }: { $calls ->
+        [one] 1 emergency call
+       *[other] { $calls } emergency calls
+    } in the hour; longest time to green { $longest } s, safe entry { $entry } s; pre-empted { $preempted }; delayed { $delayed }.
+jn-preempt-said-no-call =
+    Emergency vehicles on { $arm }: { $calls ->
+        [one] 1 emergency call
+       *[other] { $calls } emergency calls
+    } in the hour; no call was served.
+jn-preempt-none = No street has pre-emption on: an emergency vehicle waits for its street's green like other traffic.

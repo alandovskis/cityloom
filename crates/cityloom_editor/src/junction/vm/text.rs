@@ -176,6 +176,26 @@ pub fn transit_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
     })
 }
 
+/// How street `uid`'s emergency calls, with pre-emption on, fared over the hour, said after its pre-emption changes:
+/// "Emergency vehicles on Main Street (north): 2 emergency calls in the hour; longest time to green 9 s, safe entry 14 s;
+/// pre-empted 1 pedestrian; delayed 3 vehicles." None while it is off or has no phase of its own.
+pub fn preempt_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
+    let preemption = &v.signal.as_ref()?.preemption;
+    let street = preemption.streets.iter().find(|s| s.uid == uid)?;
+    let t = street.totals?;
+    let args = Args::new()
+        .str("arm", say_now(i18n, Units::Metres, &street.label))
+        .num("calls", i64::from(t.calls))
+        .num("entry", i64::from(t.entry_s))
+        .str("preempted", say_now(i18n, Units::Metres, &street.preempted))
+        .str("delayed", say_now(i18n, Units::Metres, &street.delayed));
+    // As the totals show it: the longest time to green only when some call was served.
+    Some(match t.longest_to_green_s {
+        Some(longest) => i18n.tr_now("jn-preempt-said", &args.num("longest", i64::from(longest))),
+        None => i18n.tr_now("jn-preempt-said-no-call", &args),
+    })
+}
+
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {

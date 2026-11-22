@@ -156,6 +156,16 @@ impl Watch {
         self.vm.with_value(|v| v.set_buses(uid, rate))
     }
 
+    /// Turns street `uid`'s pre-emption on or off, as the person does. Whether it was done.
+    pub fn set_preemption(&self, uid: u32, on: bool) -> bool {
+        self.vm.with_value(|v| v.set_preemption(uid, on))
+    }
+
+    /// Sets the emergency calls an hour of street `uid`, with pre-emption on, as the person does. Whether it was done.
+    pub fn set_emergency_calls(&self, uid: u32, rate: i32) -> bool {
+        self.vm.with_value(|v| v.set_emergency_calls(uid, rate))
+    }
+
     /// Gives the crossing of street `uid`, on call, its detection as the person does. Whether it was done.
     pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
         self.vm.with_value(|v| v.set_detection(uid, detection))

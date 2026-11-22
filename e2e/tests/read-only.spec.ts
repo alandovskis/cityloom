@@ -113,7 +113,7 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
-  test("a junction's signal plan, its pedestrian calls, its actuation, its bicycle detection and its transit priority can be read, and none of them changed", async ({
+  test("a junction's signal plan, its pedestrian calls, its actuation, its bicycle detection, its transit priority and its pre-emption can be read, and none of them changed", async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -150,6 +150,9 @@ test.describe("a design opened read-only", () => {
     await page.locator("#jn-go-plan").click();
     await page.locator(`#transit-mode-${street}-both`).check();
     await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
+    // The same street's emergency calls pre-empting the signal (CLM-15).
+    await page.locator(`#preempt-mode-${street}-on`).check();
+    await expect(page.locator(`#preempt-rate-${street}`)).toHaveValue("2");
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -189,6 +192,13 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
     await expect(page.locator(`#transit-rate-${street}`)).toBeDisabled();
     await expect(page.locator("#transit-totals")).toBeVisible();
+    // The pre-emption is shown with its calls, and cannot be changed.
+    await expect(page.locator(`#preempt-mode-${street}-on`)).toBeChecked();
+    for (const r of await page.locator(`#preempt-mode-${street} input[type=radio]`).all())
+      await expect(r).toBeDisabled();
+    await expect(page.locator(`#preempt-rate-${street}`)).toHaveValue("2");
+    await expect(page.locator(`#preempt-rate-${street}`)).toBeDisabled();
+    await expect(page.locator("#preempt-totals")).toBeVisible();
     await expect(page.locator("#calls-totals")).toBeVisible();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);

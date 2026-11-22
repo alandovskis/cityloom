@@ -3661,6 +3661,7 @@ svg pattern circle {
 .act-streets,
 .bike-movements,
 .transit-streets,
+.preempt-streets,
 .calls-findings {
   margin: 6px 0 0;
   padding: 0;
@@ -3675,7 +3676,8 @@ svg pattern circle {
 .call-crossing,
 .act-street,
 .bike-movement,
-.transit-street {
+.transit-street,
+.preempt-street {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3684,14 +3686,16 @@ svg pattern circle {
 .call-name,
 .act-name,
 .bike-name,
-.transit-name {
+.transit-name,
+.preempt-name {
   flex-basis: 100%;
   font-weight: 600;
 }
 .call-crossing > .insp-range,
 .act-street > .insp-range,
 .bike-movement > .insp-range,
-.transit-street > .insp-range {
+.transit-street > .insp-range,
+.preempt-street > .insp-range {
   flex-basis: 100%;
   margin: 0;
 }
@@ -3718,10 +3722,12 @@ svg pattern circle {
   margin: 0;
 }
 /* Vehicle actuation (CLM-12): a street's mode as a radio pair under its heading, then its four settings with steppers.
-   Bicycle detection (CLM-13): a bike movement's mode the same way; transit priority (CLM-14), a street's four choices. */
+   Bicycle detection (CLM-13): a bike movement's mode the same way; transit priority (CLM-14), a street's four choices;
+   pre-emption (CLM-15), a street's off and on. */
 .act-mode,
 .bike-mode,
-.transit-mode {
+.transit-mode,
+.preempt-mode {
   display: flex;
   flex-basis: 100%;
   flex-wrap: wrap;

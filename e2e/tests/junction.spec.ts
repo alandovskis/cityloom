@@ -1387,6 +1387,114 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#transit-none")).toBeVisible();
   });
 
+  test("a street with a phase of its own lets its emergency calls pre-empt the signal, shows the trigger, priority, safe entry and how its calls fared, keeps it on reload, and speaks French (CLM-15)", async ({
+    page,
+  }) => {
+    const section = page.locator("#signal-preemption");
+    await expect(section).toContainText("Emergency vehicle pre-emption");
+    await expect(section).toContainText("Pre-emption has the highest priority of all");
+    await expect(page.locator("#preempt-bounds")).toContainText(
+      "Placeholder figures: a street given pre-emption has 2 emergency calls an hour, spread over one hour, and its green then runs at least 20 s for the vehicle",
+    );
+    await expect(page.locator("#preempt-none")).toContainText("No street has pre-emption on");
+    const uid = (await section.locator(".preempt-mode").first().getAttribute("id"))!.replace("preempt-mode-", "");
+    const off = page.locator(`#preempt-mode-${uid}-off`);
+    const on = page.locator(`#preempt-mode-${uid}-on`);
+    const status = page.locator(`#preempt-status-${uid}`);
+    const rate = page.locator(`#preempt-rate-${uid}`);
+    await expect(section.locator(".preempt-name").first()).toHaveText(/^Emergency vehicles on .+/);
+    await expect(off).toBeChecked();
+    await expect(status).toHaveText("Off: an emergency vehicle waits for the street's green like other traffic.");
+    await expect(rate).toHaveCount(0);
+
+    // On: its trigger, highest priority, the clearance it respects, the safe entry, its calls an hour and the hour.
+    await on.check();
+    await expect(on).toBeChecked();
+    await expect(live(page)).toContainText(": pre-emption on.");
+    await expect(live(page)).toContainText(
+      /2 emergency calls in the hour; longest time to green \d+ s, safe entry \d+ s/,
+    );
+    await expect(status).toHaveText(
+      /^On, the highest priority: an emergency call on this street ends the green running and gives the street its green, above every other policy\. A walk still showing is cut short, but a pedestrian or bicycle clearance under way, the yellow and the all-red run in full first, so the green comes at most \d+ s after the call \(the safe entry\)\. It then runs at least 20 s, and the plan goes on with the phase after the one interrupted\.$/,
+    );
+    await expect(rate).toHaveValue("2");
+    await expect(rate).toHaveAccessibleName("Emergency calls an hour");
+    await expect(rate).toHaveAccessibleDescription("0 to 12 emergency calls an hour (placeholder bound)");
+    await expect(page.locator("#preempt-none")).toHaveCount(0);
+    await expect(page.locator(`#preempt-effect-${uid}`)).toHaveText(
+      /^In the hour 2 emergency calls: longest time to green \d+ s; pre-empted .+; delayed .+\.$/,
+    );
+    const row = page.locator("#preempt-totals tbody tr");
+    await expect(row).toHaveCount(1);
+    await expect(page.locator("#preempt-totals thead th")).toHaveText([
+      "Street",
+      "Calls",
+      "Longest time to green",
+      "Pre-empted",
+      "Delayed",
+    ]);
+    await expect(row.locator("td").first()).toHaveText("2");
+    await expect(row.locator("td").nth(1)).toHaveText(/^\d+ s$/);
+    await expect(page.getByRole("region", { name: "Emergency calls in one hour, by street" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expect(page.locator("#preempt-rows summary")).toHaveText("Every emergency call, one row each (2)");
+    await page.locator("#preempt-rows summary").click();
+    await expect(page.locator("#preempt-rows thead th")).toHaveText([
+      "Call",
+      "Arrived",
+      "Time to green",
+      "Pre-empted",
+      "Delayed",
+    ]);
+    await expect(page.locator("#preempt-rows tbody tr")).toHaveCount(2);
+
+    // An arrow key changes the rate; one past the bound is refused and the field keeps its value.
+    await rate.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(rate).toHaveValue("3");
+    await expect(live(page)).toContainText(": 3 emergency calls an hour.");
+    await rate.fill("13");
+    await rate.press("Enter");
+    await expect(live(page)).toHaveText("That many emergency calls an hour is outside the placeholder bound shown.");
+    await expect(rate).toHaveValue("3");
+    // No call at all: nothing to serve.
+    await rate.fill("0");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("0");
+    await expect(live(page)).toContainText("no call was served");
+    await rate.fill("6");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("6");
+
+    // Kept: a reload opens it on, with its calls.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page);
+    await expect(on).toBeChecked();
+    await expect(rate).toHaveValue("6");
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(section.locator("#i-h-preemption")).toHaveText("Préemption pour les véhicules d’urgence");
+    await expect(page.locator(`label:has(#preempt-mode-${uid}-on)`)).toHaveText("Activée");
+    await expect(page.locator(`label:has(#preempt-mode-${uid}-off)`)).toHaveText("Désactivée");
+    await expect(page.locator(`label[for=preempt-rate-${uid}]`)).toHaveText("Appels d’urgence par heure");
+    await expect(status).toContainText("Activée, la plus haute priorité");
+    await expect(status).toContainText("(l’entrée sécuritaire)");
+    await expect(page.locator("#preempt-totals thead th").nth(2)).toHaveText("Délai avant le vert le plus long");
+
+    // Off: the rate and the hour's table go.
+    await off.check();
+    await expect(off).toBeChecked();
+    await expect(rate).toHaveCount(0);
+    await expect(page.locator("#preempt-totals")).toHaveCount(0);
+    await expect(page.locator("#preempt-none")).toBeVisible();
+  });
+
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
     page,
   }) => {
