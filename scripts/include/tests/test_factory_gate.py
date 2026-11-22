@@ -553,6 +553,47 @@ class DocsGate(unittest.TestCase):
             ],
         )
 
+    def test_the_sites_configuration_code_and_dependencies_are_refused(self):
+        commit(
+            self.repo,
+            {
+                "website/package.json": "{}\n",
+                "website/package-lock.json": "{}\n",
+                "website/docusaurus.config.ts": "export default {};\n",
+                "website/tsconfig.json": "{}\n",
+                "website/src/css/custom.css": "a {}\n",
+            },
+            "Configure",
+        )
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(
+            report.problems,
+            [
+                f"{p}: the documentation site's configuration, code or dependencies, which the documentation flow may not change"
+                for p in (
+                    "website/docusaurus.config.ts",
+                    "website/package-lock.json",
+                    "website/package.json",
+                    "website/src/css/custom.css",
+                    "website/tsconfig.json",
+                )
+            ],
+        )
+
+    def test_a_new_page_may_take_its_place_in_the_sidebar(self):
+        commit(
+            self.repo,
+            {
+                f"{EN}/signals.md": "# Signals\n",
+                f"{FR}/signals.md": "# Feux\n",
+                "website/sidebars.ts": 'export default { docsSidebar: ["intro", "signals"] };\n',
+                "website/i18n/fr-CA/docusaurus-plugin-content-docs/current.json": "{}\n",
+            },
+            "Place it",
+        )
+        report = gate.Gate(self.repo, self.runner()).docs(self.base)
+        self.assertEqual(report.problems, [])
+
     def test_an_english_page_without_its_french_page_is_refused(self):
         commit(self.repo, {f"{EN}/signals.md": "# Signals\n"}, "English only")
         report = gate.Gate(self.repo, self.runner()).docs(self.base)

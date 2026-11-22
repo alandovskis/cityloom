@@ -15,7 +15,8 @@ version bump hold, and nothing the test-writer owns changed since the red commit
 `#[cfg(test)]` block, and nothing else of the guarded set (`is_guarded`: the checks and the factory itself).
 
 The docs gate is the documentation flow's, which has no red commit: it passes a head when every file the branch changes
-is documentation (the `docs` rule of scripts/ci/spec-map.json) and none is guarded, each page of the site's docs has its
+is documentation (the `docs` rule of scripts/ci/spec-map.json) and none is guarded or the site's configuration,
+code or dependencies (`SITE_CONFIGURATION`), each page of the site's docs has its
 other language's page (`website/docs/` and fr-CA's), and, when the branch changes website/, the site passes the
 Documentation workflow's Prettier check and builds in both languages (a broken link fails the build).
 
@@ -75,6 +76,15 @@ DOCS_BUILD = ("npm", "run", "build")
 DOCS_EN = "website/docs/"
 DOCS_FR = "website/i18n/fr-CA/docusaurus-plugin-content-docs/current/"
 _SPEC_MAP = ROOT / "scripts" / "ci" / "spec-map.json"
+# CI counts all of website/ as documentation, but these are the site's configuration, code and dependencies: a change to
+# them is a decision for a person, not pages (a new page's place in website/sidebars.ts is pages).
+SITE_CONFIGURATION = (
+    "website/docusaurus.config.ts",
+    "website/package.json",
+    "website/package-lock.json",
+    "website/tsconfig.json",
+    "website/src/**",
+)
 
 
 @lru_cache(maxsize=1)
@@ -484,6 +494,10 @@ class Gate:
         for path in changed:
             if is_guarded(path):
                 report.problems.append(f"{path}: a check or the factory's own file, which the documentation flow may not change")
+            elif any(glob(pattern, path) for pattern in SITE_CONFIGURATION):
+                report.problems.append(
+                    f"{path}: the documentation site's configuration, code or dependencies, which the documentation flow may not change"
+                )
             elif not is_documentation(path):
                 report.problems.append(f"{path}: not documentation, and the documentation flow changes only documentation")
             pair = other_language(path)
