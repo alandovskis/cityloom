@@ -15,7 +15,7 @@ use crate::junction::model::{
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
-use crate::junction::model::{actuation, bicycles, calls, transit};
+use crate::junction::model::{actuation, bicycles, calls, preemption, transit};
 use crate::street::model::{StopKindExt, UseExt};
 
 use crate::junction::model::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
@@ -766,6 +766,50 @@ pub struct SignalView {
     /// Transit signal priority (CLM-14): which streets with transit give their buses priority, and how the plan served
     /// their buses over the same hour.
     pub transit: PriorityView,
+    /// Emergency vehicle pre-emption (CLM-15): which streets pre-empt the signal for their emergency calls, and how the
+    /// plan served those calls over the same hour.
+    pub preemption: PreemptionView,
+}
+
+/// The pre-emption of a signal: every street with a phase of its own (or with pre-emption on without one), one row per
+/// emergency call of the hour, and the findings.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct PreemptionView {
+    /// In the order of the bearings.
+    pub streets: Vec<PreemptStreetView>,
+    /// Every emergency call of the hour, in the order they came.
+    pub rows: Vec<EmergencyRowView>,
+    /// What the person should act on, each a sentence naming the street.
+    pub findings: Vec<Said>,
+    /// The same findings as the model has them, in the same order.
+    pub found: Vec<preemption::Finding>,
+}
+
+/// One street as pre-emption sees it: its emergency calls an hour while on (None: off), whether it has a phase of its own
+/// (else it cannot be given pre-emption), the longest a call takes to reach its green when no other pre-emption runs
+/// (`preemption::entry_s`; 0 with no phase), and its calls added up while on with a phase, with who they pre-empted and
+/// delayed in words.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct PreemptStreetView {
+    pub uid: u32,
+    pub label: Said,
+    pub rate: Option<u32>,
+    pub has_phase: bool,
+    pub entry_s: u32,
+    pub totals: Option<preemption::Totals>,
+    pub preempted: Said,
+    pub delayed: Said,
+}
+
+/// One emergency call: when it came, the green it cut short with who it pre-empted, and who it delayed, in words; its
+/// street's name is the street's, by `call.arm`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct EmergencyRowView {
+    /// The call itself (a row's identity).
+    pub call: preemption::Call,
+    pub at: Said,
+    pub preempted: Said,
+    pub delayed: Said,
 }
 
 /// The transit priority of a signal: every street with transit (or given priority without it) with its priority, one
@@ -1083,6 +1127,81 @@ fn priority_view(s: &State, plan: &signal::Plan, arms: &[ArmView], summary: tran
     PriorityView { streets, rows, findings, found: summary.findings }
 }
 
+/// The emergency calls of `plan` on `s` in words, from the hour's `summary`: `arms` names the streets, `distances` and
+/// `lengths` are the crossings' and the rides' lengths (`crossing_distances`, `ride_lengths`) a safe entry is reckoned
+/// from.
+fn preemption_view(
+    s: &State,
+    plan: &signal::Plan,
+    arms: &[ArmView],
+    distances: &[(u32, i32)],
+    lengths: &[(u32, i32)],
+    summary: preemption::Summary,
+) -> PreemptionView {
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let mut listed: Vec<&Arm> = s.arms.iter().filter(|a| a.preemption.is_some() || actuation::own_phase(plan, a.uid).is_some()).collect();
+    listed.sort_by_key(|a| a.bearing);
+    let streets = listed
+        .into_iter()
+        .map(|a| {
+            let phase = actuation::own_phase(plan, a.uid);
+            let totals = summary.totals.iter().find(|t| t.arm == a.uid).copied();
+            PreemptStreetView {
+                uid: a.uid,
+                label: name(a.uid),
+                rate: preemption::rate_of(a),
+                has_phase: phase.is_some(),
+                entry_s: phase.map_or(0, |k| preemption::entry_s(plan, k, distances, lengths)),
+                preempted: kinds_said(totals.map(|t| t.preempted).unwrap_or_default()),
+                delayed: kinds_said(totals.map(|t| t.delayed).unwrap_or_default()),
+                totals,
+            }
+        })
+        .collect();
+    let rows = summary
+        .calls
+        .iter()
+        .map(|c| EmergencyRowView {
+            call: *c,
+            at: Said::new("jn-calls-at").with("minutes", Arg::Num(i64::from(c.at_s / 60))).with("seconds", Arg::Num(i64::from(c.at_s % 60))),
+            preempted: match c.interrupted {
+                Some(uid) => {
+                    Said::new("jn-preempt-cut").with("street", Arg::Said(Box::new(name(uid)))).with("list", Arg::Said(Box::new(kinds_said(c.preempted))))
+                }
+                None => Said::new("jn-preempt-cut-none"),
+            },
+            delayed: kinds_said(c.delayed),
+        })
+        .collect();
+    let findings = summary
+        .findings
+        .iter()
+        .map(|f| match *f {
+            preemption::Finding::NoPhase { arm } => Said::new("jn-preempt-finding-no-phase").with("arm", Arg::Said(Box::new(name(arm)))),
+        })
+        .collect();
+    PreemptionView { streets, rows, findings, found: summary.findings }
+}
+
+/// Road users of each kind in words ("2 pedestrians and 1 bus"), or "nobody".
+fn kinds_said(c: preemption::Counts) -> Said {
+    use crate::junction::model::control::Kind;
+    let items = Kind::ALL
+        .iter()
+        .filter(|&&k| c.of(k) > 0)
+        .map(|&k| {
+            let key = match k {
+                Kind::Pedestrian => "jn-preempt-pedestrians",
+                Kind::Bicycle => "jn-preempt-cyclists",
+                Kind::Bus => "jn-preempt-buses",
+                Kind::Vehicle => "jn-preempt-vehicles",
+            };
+            Said::new(key).with("n", Arg::Num(i64::from(c.of(k))))
+        })
+        .collect();
+    and_list(items).unwrap_or_else(|| Said::new("jn-preempt-nobody"))
+}
+
 /// What happened to a bus, in a few words.
 fn bus_outcome_said(b: &transit::Bus) -> Said {
     match b.outcome {
@@ -1225,14 +1344,16 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    // One hour of the controller gives the calls, the actuation, the bicycle calls and the buses.
+    // One hour of the controller gives the calls, the actuation, the bicycle calls, the buses and the emergency calls.
     let lengths = ride_lengths(s, arms);
-    let hour = crate::junction::model::control::hour(s, &plan, &crossing_distances(arms), &lengths);
+    let distances = crossing_distances(arms);
+    let hour = crate::junction::model::control::hour(s, &plan, &distances, &lengths);
     let calls = calls_view(s, &plan, arms, hour.calls);
     let actuation = actuation_view(s, &plan, arms, hour.actuation);
     let bicycles = bicycles_view(s, &plan, arms, &lengths, hour.bicycles);
     let transit = priority_view(s, &plan, arms, hour.transit);
-    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation, bicycles, transit })
+    let preemption = preemption_view(s, &plan, arms, &distances, &lengths, hour.preemption);
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested, calls, actuation, bicycles, transit, preemption })
 }
 
 /// The movements that take part in the conflicts, each once.

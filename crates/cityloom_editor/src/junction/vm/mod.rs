@@ -377,16 +377,30 @@ impl JunctionVm {
         self.policy_edit(|j| j.set_buses(uid, rate), |v, i18n| text::transit_text(v, i18n, uid))
     }
 
+    /// The person turns street `uid`'s emergency vehicle pre-emption on or off (CLM-15). Announced by what was done and
+    /// how its emergency calls fared over the hour; a refusal is said with its reason (no phase of its own, say). The
+    /// setting it has already is said not at all.
+    pub fn set_preemption(&self, uid: u32, on: bool) -> bool {
+        self.policy_edit(|j| j.set_preemption(uid, on), |v, i18n| text::preempt_text(v, i18n, uid))
+    }
+
+    /// The person sets how many emergency calls an hour come on street `uid`'s approach, with pre-emption on. Announced
+    /// as `set_preemption` is; the rate it has already is said not at all.
+    pub fn set_emergency_calls(&self, uid: u32, rate: i32) -> bool {
+        self.policy_edit(|j| j.set_emergency_calls(uid, rate), |v, i18n| text::preempt_text(v, i18n, uid))
+    }
+
     /// An edit of a crossing's calls: announced as `policy_edit` says, with the crossing's calls added up.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
         self.policy_edit(f, |v, i18n| text::calls_text(v, i18n, uid))
     }
 
     /// An edit of what the signal responds to (a crossing's calls, a street's actuation, a bike movement's detection, a
-    /// street's transit priority): the edit's text, then what it did over the hour (`results`) and any finding that
+    /// street's transit priority or pre-emption): the edit's text, then what it did over the hour (`results`) and any finding that
     /// arose, or the refusal. It changes no phase of the plan, so nothing about the plan's conflicts or patterns is said.
     /// A setting it had already is said not at all: the model takes it (returns true) without adding a revision (as
-    /// `set_call_rate`, `set_detection`, `set_actuation`, `set_cyclists`, `set_transit_priority` and `set_buses` do),
+    /// `set_call_rate`, `set_detection`, `set_actuation`, `set_cyclists`, `set_transit_priority`, `set_buses`,
+    /// `set_preemption` and `set_emergency_calls` do),
     /// and only an edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn policy_edit(&self, f: impl FnOnce(&mut Junction) -> bool, results: impl FnOnce(&JView, &I18n) -> Option<String>) -> bool {
         // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
@@ -578,14 +592,20 @@ impl JunctionVm {
         Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
     }
 
-    /// What the findings of the pedestrian calls, the actuation, the bicycle calls and the transit priority are about
-    /// now, each its kind and streets.
+    /// What the findings of the pedestrian calls, the actuation, the bicycle calls, the transit priority and the
+    /// pre-emption are about now, each its kind and streets.
     fn findings(&self) -> Vec<(u8, u32, u32)> {
         let v = self.view_now();
         let Some(signal) = v.signal.as_ref() else { return Vec::new() };
         let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0));
         let bicycles = signal.bicycles.found.iter().map(|f| f.about());
-        calls.chain(signal.actuation.found.iter().map(|f| f.about())).chain(bicycles).chain(signal.transit.found.iter().map(|f| f.about())).collect()
+        let preemption = signal.preemption.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0));
+        calls
+            .chain(signal.actuation.found.iter().map(|f| f.about()))
+            .chain(bicycles)
+            .chain(signal.transit.found.iter().map(|f| f.about()))
+            .chain(preemption)
+            .collect()
     }
 
     /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
@@ -606,10 +626,12 @@ impl JunctionVm {
         let actuation = signal.actuation.found.iter().map(|f| f.about()).zip(&signal.actuation.findings);
         let bicycles = signal.bicycles.found.iter().map(|f| f.about()).zip(&signal.bicycles.findings);
         let transit = signal.transit.found.iter().map(|f| f.about()).zip(&signal.transit.findings);
+        let preemption = signal.preemption.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0)).zip(&signal.preemption.findings);
         let new: Vec<String> = calls
             .chain(actuation)
             .chain(bicycles)
             .chain(transit)
+            .chain(preemption)
             .filter(|(f, _)| !before.contains(f))
             .map(|(_, said)| say_now(&self.i18n, self.units_now(), said))
             .collect();
@@ -1680,6 +1702,58 @@ mod tests {
         assert_eq!(said.take(), vec!["Ce nombre d’autobus par heure dépasse la borne provisoire indiquée."]);
         assert!(!fr.set_transit_priority(e, Some(Mode::Both)));
         assert!(said.take()[0].starts_with("Cette rue n’a pas de transport en commun"));
+    }
+
+    #[test]
+    fn a_street_s_pre_emption_is_announced_with_how_its_emergency_calls_fared_and_a_refusal_says_why_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        let (vm, said, n, e) = biked_rig(Locale::En);
+        let name = vm.read(|j| crate::shared::said::say_now(&vm.i18n, Units::Metres, &j.view().arms.iter().find(|a| a.uid == n).unwrap().label));
+        assert!(vm.set_preemption(n, true));
+        let t = said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with(&format!("Emergency vehicles on {name}: pre-emption on.")), "{t:?}");
+        assert!(t[0].contains(&format!("Emergency vehicles on {name}: 2 emergency calls in the hour; longest time to green ")), "{t:?}");
+        assert!(t[0].contains(" s, safe entry ") && t[0].contains("; pre-empted ") && t[0].contains("; delayed "), "{t:?}");
+        assert!(vm.set_preemption(n, true), "the setting it has: taken");
+        assert!(said.take().is_empty(), "and nothing said");
+        assert!(vm.set_emergency_calls(n, 1));
+        assert!(said.take()[0].contains(": 1 emergency call in the hour;"));
+        assert!(!vm.set_emergency_calls(n, 13));
+        assert_eq!(said.take(), vec!["That many emergency calls an hour is outside the placeholder bound shown."]);
+        assert!(vm.set_emergency_calls(n, 0));
+        assert!(said.take()[0].contains(": 0 emergency calls in the hour; no call was served."));
+        // A plan with no phase of east's own: refused, and says why; north's own taken away too, the finding is said.
+        let only = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: arm_at(&vm, 180), to: n }],
+                arm: Some(arm_at(&vm, 180)),
+                ..Default::default()
+            }],
+        };
+        assert!(vm.apply(|j| {
+            j.set_plan_for_test(only);
+            true
+        }));
+        let t = said.take();
+        assert!(t.iter().any(|s| s.contains(&format!("{name} has pre-emption on, but no phase of the plan is its own"))), "{t:?}");
+        assert!(!vm.set_preemption(e, true));
+        assert_eq!(said.take(), vec!["No phase of the plan is this street's own, so its emergency calls cannot pre-empt the signal: give it a phase first."]);
+        assert!(vm.set_preemption(n, false));
+        assert!(said.take()[0].starts_with(&format!("Emergency vehicles on {name}: pre-emption off.")));
+
+        let (fr, said, n, _) = biked_rig(Locale::FrCa);
+        assert!(fr.set_preemption(n, true));
+        let t = said.take();
+        assert!(t[0].contains("\u{a0}: préemption activée."), "{t:?}");
+        assert!(t[0].contains("2 appels d’urgence dans l’heure"), "{t:?}");
+        assert!(!fr.set_emergency_calls(n, -1));
+        assert_eq!(said.take(), vec!["Ce nombre d’appels d’urgence par heure dépasse la borne provisoire indiquée."]);
+    }
+
+    /// The uid of the street of `vm` at `bearing`.
+    fn arm_at(vm: &JunctionVm, bearing: i32) -> u32 {
+        vm.read(|j| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid)
     }
 
     #[test]

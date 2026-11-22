@@ -348,6 +348,40 @@ test.describe("transit signal priority in the signal plan (CLM-14)", () => {
   });
 });
 
+test.describe("emergency vehicle pre-emption in the signal plan (CLM-15)", () => {
+  test("a street's pre-emption is a radio group named by its heading and described by its state, the arrow keys choose it, its calls are a labelled field, and at 280 px nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    const street = page.locator(".preempt-street").first();
+    const name = (await street.locator(".preempt-name").innerText()).trim();
+    await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
+    const mode = street.getByRole("radiogroup", { name: "Pre-emption" });
+    await expect(mode).toHaveAccessibleDescription(/^Off: an emergency vehicle waits/);
+    const off = mode.getByRole("radio", { name: "Off" });
+    const on = mode.getByRole("radio", { name: "On" });
+    await expect(off).toBeChecked();
+    await off.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(on).toBeChecked();
+    await expect(on).toBeFocused();
+    await expect(live(page)).toContainText(": pre-emption on.");
+    await expect(mode).toHaveAccessibleDescription(/^On, the highest priority: an emergency call on this street/);
+    await expect(
+      street.getByRole("textbox", { name: "Emergency calls an hour", exact: true }),
+    ).toHaveAccessibleDescription("0 to 12 emergency calls an hour (placeholder bound)");
+    await expect(page.getByRole("region", { name: "Emergency calls in one hour, by street" })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("pedestrian calls in the signal plan (#60)", () => {
   test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
     page,

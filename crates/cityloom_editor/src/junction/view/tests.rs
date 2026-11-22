@@ -4518,3 +4518,163 @@ fn transit_signal_priority_speaks_french() {
         assert!(t.contains(words), "{words}: {t}");
     }
 }
+
+// ---- emergency vehicle pre-emption (CLM-15) ---------------------------------------------------------------------------
+
+/// The four-way whose streets have bike lanes (`junction_biked`, a phase for each street) in `locale`, its plan shown,
+/// and its north street.
+fn preempt_in(locale: crate::shared::i18n::Locale) -> (Rc<JunctionVm>, u32) {
+    let j = junction_biked();
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), j, None);
+    s.show_plan();
+    (s, n)
+}
+
+/// The `#signal-preemption` section of the plan's level, as far as the end of the panel.
+fn preempt_of(h: &str) -> &str {
+    &h[h.find(r#"id="signal-preemption""#).expect("a section for pre-emption")..]
+}
+
+/// The column heads of the first table from `h` on.
+fn heads_of(h: &str) -> Vec<String> {
+    h[..h.find("</thead>").unwrap()].split("<th scope=\"col\">").skip(1).map(|t| t[..t.find('<').unwrap()].to_string()).collect()
+}
+
+#[test]
+fn the_plan_offers_each_street_with_a_phase_pre_emption_off_or_on_with_its_trigger_priority_and_safe_entry() {
+    let (s, n) = preempt_in(crate::shared::i18n::Locale::En);
+    let h = panel(&s);
+    assert!(h.find(r#"id="signal-transit""#).is_none_or(|t| t < h.find(r#"id="signal-preemption""#).unwrap()), "after transit priority");
+    let p = preempt_of(&h);
+    assert!(p.contains("Emergency vehicle pre-emption"), "{p}");
+    assert!(p.contains("Pre-emption has the highest priority of all, above pedestrian and bicycle calls, vehicle actuation and transit priority"), "{p}");
+    assert!(p.contains("a street given pre-emption has 2 emergency calls an hour"), "{p}");
+    assert!(p.contains("its green then runs at least 20 s for the vehicle"), "{p}");
+    let streets = s.view_now().signal.as_ref().unwrap().preemption.streets.clone();
+    assert_eq!(streets.len(), 4, "every street has a phase of its own");
+    let street = streets.iter().find(|x| x.uid == n).unwrap().clone();
+    let name = crate::shared::said::say_now(s.i18n(), Units::Metres, &street.label);
+    assert!(p.contains(&format!(r#"role="group" aria-label="Emergency vehicles on {name}""#)), "{p}");
+    let at = p.find(&format!(r#"id="preempt-mode-{n}""#)).expect("a mode group");
+    let tag = &p[p[..at].rfind("<div").unwrap()..at + p[at..].find('>').unwrap()];
+    for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="preempt-mode-h-{n}""#), &format!(r#"aria-describedby="preempt-status-{n}""#)] {
+        assert!(tag.contains(attr), "{attr}: {tag}");
+    }
+    assert!(input_tag(p, &format!("preempt-mode-{n}-off")).contains("checked"), "off to begin with");
+    assert!(!input_tag(p, &format!("preempt-mode-{n}-on")).contains("checked"));
+    assert!(p.contains(&format!(r#"id="preempt-status-{n}" class="insp-range">Off: an emergency vehicle waits"#)), "{p}");
+    assert!(p.contains(r#"id="preempt-none""#) && p.contains("No street has pre-emption on"), "{p}");
+    assert!(!p.contains(r#"id="preempt-totals""#) && !p.contains("preempt-rate-"));
+
+    // On: its trigger, highest priority, the clearance it respects and its safe entry, its calls an hour, the hour.
+    assert!(s.set_preemption(n, true));
+    let h = panel(&s);
+    let p = preempt_of(&h);
+    assert!(input_tag(p, &format!("preempt-mode-{n}-on")).contains("checked"));
+    let entry = s.view_now().signal.as_ref().unwrap().preemption.streets.iter().find(|x| x.uid == n).unwrap().entry_s;
+    assert!(entry > 5, "a clearance, the yellow and the all-red: {entry}");
+    for words in [
+        "On, the highest priority: an emergency call on this street ends the green running and gives the street its green, above every other policy."
+            .to_string(),
+        "A walk still showing is cut short, but a pedestrian or bicycle clearance under way, the yellow and the all-red run in full first".to_string(),
+        format!("so the green comes at most {entry} s after the call (the safe entry). It then runs at least 20 s"),
+    ] {
+        assert!(p.contains(&words), "{words}: {p}");
+    }
+    assert!(p.contains(&format!(r#"<label for="preempt-rate-{n}">Emergency calls an hour</label>"#)), "{p}");
+    let tag = input_tag(p, &format!("preempt-rate-{n}"));
+    assert!(tag.contains(r#"value="2""#) && tag.contains(&format!(r#"aria-describedby="preempt-range-{n}""#)), "{tag}");
+    assert!(p.contains("0 to 12 emergency calls an hour (placeholder bound)"), "{p}");
+    assert!(p.contains(&format!(r#"id="preempt-effect-{n}" class="insp-range">In the hour 2 emergency calls: longest time to green "#)), "{p}");
+    assert!(!p.contains(r#"id="preempt-none""#));
+    for caption in ["preempt-totals-caption", "preempt-rows-caption"] {
+        let labelled = format!(r#"aria-labelledby="{caption}""#);
+        let at = p.find(&labelled).unwrap_or_else(|| panic!("{caption}: {p}"));
+        let tag = &p[p[..at].rfind("<div").unwrap()..at + p[at..].find('>').unwrap()];
+        for attr in [r#"role="region""#, r#"tabindex="0""#, r#"class="calls-table""#] {
+            assert!(tag.contains(attr), "{caption} {attr}: {tag}");
+        }
+    }
+    let table = &p[p.find(r#"id="preempt-totals""#).unwrap()..];
+    assert_eq!(heads_of(table), ["Street", "Calls", "Longest time to green", "Pre-empted", "Delayed"]);
+    let totals = s.view_now().signal.as_ref().unwrap().preemption.streets.iter().find(|x| x.uid == n).unwrap().totals.unwrap();
+    assert_eq!((totals.calls, totals.served), (2, 2));
+    let row = &table[table.find("<tbody>").unwrap()..table.find("</tbody>").unwrap()];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    assert_eq!(&cells[..2], ["2".to_string(), format!("{} s", totals.longest_to_green_s.unwrap())]);
+    let rows = &p[p.find(r#"id="preempt-rows""#).expect("every call")..];
+    assert!(rows.contains("Every emergency call, one row each (2)"), "{rows}");
+    assert_eq!(heads_of(rows), ["Call", "Arrived", "Time to green", "Pre-empted", "Delayed"]);
+}
+
+#[test]
+fn a_street_left_with_pre_emption_but_no_phase_says_why_and_is_a_finding() {
+    let (s, n) = preempt_in(crate::shared::i18n::Locale::En);
+    let so = arm(&s, 180);
+    assert!(s.set_preemption(n, true));
+    // A plan of one phase, south's own: north has none.
+    let only = crate::junction::model::signal::SignalPlan {
+        phases: vec![crate::junction::model::signal::StoredPhase {
+            moves: vec![crate::junction::model::signal::Move { from: so, to: n }],
+            arm: Some(so),
+            ..Default::default()
+        }],
+    };
+    s.edit(|j| j.set_plan_for_test(only));
+    let h = panel(&s);
+    let p = preempt_of(&h);
+    assert!(p.contains(&format!(r#"id="preempt-status-{n}" class="insp-range">No phase of the plan is this street's own"#)), "{p}");
+    assert!(p.contains(r#"id="preempt-findings""#) && p.contains("has pre-emption on, but no phase of the plan is its own"), "{p}");
+    assert!(!s.set_emergency_calls(n, 13), "out of its bound");
+    assert!(s.set_preemption(n, false), "off is always allowed");
+    assert!(!preempt_of(&panel(&s)).contains(&format!(r#"id="preempt-mode-{n}""#)), "no phase and off: no longer listed");
+    assert!(!s.set_preemption(n, true), "refused without a phase of its own");
+}
+
+#[test]
+fn a_junction_shown_read_only_shows_its_pre_emption_and_offers_it_disabled() {
+    use crate::shared::ports::Storage;
+    let mut j = junction_biked();
+    let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_preemption(n, true));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let p = preempt_of(&h);
+    let locked = r#"<fieldset disabled class="read-only-controls"><ul class="preempt-streets">"#;
+    let inside = &p[p.find(locked).expect("the streets are offered in a disabled fieldset")..];
+    let inside = &inside[..inside.find("</fieldset>").unwrap()];
+    assert!(input_tag(inside, &format!("preempt-mode-{n}-on")).contains("checked"), "{inside}");
+    assert!(input_tag(inside, &format!("preempt-rate-{n}")).contains(r#"value="2""#), "{inside}");
+    assert!(p.contains(r#"id="preempt-totals""#), "the hour is shown");
+    assert!(!s.set_preemption(n, false) && !s.set_emergency_calls(n, 9), "and cannot be changed");
+}
+
+#[test]
+fn emergency_vehicle_pre_emption_speaks_french() {
+    let (s, n) = preempt_in(crate::shared::i18n::Locale::FrCa);
+    assert!(s.set_preemption(n, true));
+    let h = panel(&s);
+    let p = preempt_of(&h);
+    for words in [
+        "Préemption pour les véhicules d’urgence",
+        "La préemption a la plus haute priorité de toutes",
+        "Valeurs provisoires",
+        "une rue qui reçoit la préemption a 2 appels d’urgence par heure",
+        "<span>Désactivée</span>",
+        "<span>Activée</span>",
+        "Activée, la plus haute priorité\u{a0}: un appel d’urgence sur cette rue",
+        "(l’entrée sécuritaire)",
+        ">Appels d’urgence par heure</label>",
+        "De 0 à 12 appels d’urgence par heure (borne provisoire)",
+        "Appels d’urgence en une heure, par rue",
+        "Délai avant le vert le plus long",
+        "Dans l’heure, 2 appels d’urgence",
+        "Véhicules d’urgence de ",
+    ] {
+        assert!(p.contains(words), "{words}: {p}");
+    }
+}

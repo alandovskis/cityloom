@@ -217,7 +217,7 @@ pub(crate) fn past_max(plan: &Plan, rules: &[control::Rule], asked: &[Asked]) ->
 
 /// The bicycle calls as a demand on the controller: `calls::Walks` over the phases that run each movement.
 pub(crate) fn riders<'a>(plan: &Plan, rules: &[control::Rule], asked: &'a [Asked]) -> Walks<'a> {
-    Walks::over(plan, rules, asked, rides_it)
+    Walks::over(plan, rules, asked, rides_it).of(control::Kind::Bicycle, MIN_GREEN_S)
 }
 
 /// `out`'s calls and totals from what the run did to every call.

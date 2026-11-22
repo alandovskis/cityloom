@@ -410,6 +410,18 @@ impl control::Demand for Vehicles<'_> {
     fn last(&self) -> u64 {
         self.approaches.iter().filter_map(|a| a.at_s.last()).map(|&t| u64::from(t)).max().unwrap_or(0)
     }
+
+    fn kind(&self) -> Option<control::Kind> {
+        Some(control::Kind::Vehicle)
+    }
+
+    /// The vehicles come by `at` and not yet served on the approaches one of `phases` serves.
+    fn waiting(&self, at: u64, phases: &[usize]) -> u32 {
+        (0..self.approaches.len())
+            .filter(|&x| phases.iter().any(|&k| self.serves[x][k]))
+            .map(|x| self.unserved(x).iter().take_while(|&&t| u64::from(t) <= at).count() as u32)
+            .sum()
+    }
 }
 
 /// Each actuated phase's turns added up, in the order of the plan.
@@ -435,8 +447,8 @@ pub(crate) fn phase_totals(plan: &Plan, rules: &[Rule], turns: &[Turn]) -> Vec<P
                     continue;
                 }
                 // The green its vehicles left it at: before a bus cut it short or held it longer (transit priority), which
-                // the buses' summary counts.
-                let green = turn.green_s() + turn.cut_s - turn.prolonged_s;
+                // the buses' summary counts, or an emergency call ended it (pre-emption), which the calls' summary counts.
+                let green = turn.given_s();
                 t.served += 1;
                 t.extended += u32::from(green > floor_s);
                 t.extended_s = t.extended_s.saturating_add(green.saturating_sub(floor_s));
@@ -531,10 +543,36 @@ mod tests {
             held_s: 0,
             cut_s,
             prolonged_s,
+            preempted_s: 0,
+            kept: false,
             skipped: false,
         };
         let totals = phase_totals(&plan, &rules, &[turn(0, 10, 0, 3), turn(100, 35, 10, 0)]);
         assert_eq!((totals[0].served, totals[0].extended, totals[0].extended_s, totals[0].ended_early), (2, 1, 38, 1));
+    }
+
+    #[test]
+    fn a_green_an_emergency_call_interrupted_is_counted_as_its_vehicles_left_it() {
+        // An actuated phase (floor 7 s, maximum 45 s) its vehicles carried to 30 s, an emergency call ending it at 10 s:
+        // extended 23 s past its floor by its vehicles, not a green they left at 10 s.
+        let plan = plan_of(vec![phase(1, 25, &[])]);
+        let rules = vec![actuated(7, 3, 45)];
+        let turn = Turn {
+            phase: 0,
+            start: 0,
+            green_start: 0,
+            green_end: 10,
+            end: 15,
+            base_s: 30,
+            held_s: 0,
+            cut_s: 0,
+            prolonged_s: 0,
+            preempted_s: 20,
+            kept: false,
+            skipped: false,
+        };
+        let totals = phase_totals(&plan, &rules, &[turn]);
+        assert_eq!((totals[0].served, totals[0].extended, totals[0].extended_s, totals[0].ended_early), (1, 1, 23, 1));
     }
 
     #[test]

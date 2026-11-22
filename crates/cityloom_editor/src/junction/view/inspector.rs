@@ -11,7 +11,7 @@ use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement,
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::bicycles;
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
-use crate::junction::model::read_model::{BusRowView, CallRowView, CrossingView, JView, RideRowView};
+use crate::junction::model::read_model::{BusRowView, CallRowView, CrossingView, EmergencyRowView, JView, RideRowView};
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::transit::{self, Mode};
 use crate::junction::model::{
@@ -19,6 +19,7 @@ use crate::junction::model::{
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
     RULES, STOPS, THROUGH, Target, TimingField,
 };
+use crate::junction::model::{preemption, preemption::Outcome as EmergencyOutcome};
 use crate::junction::view::phase_svg::phase_drawings;
 use crate::junction::view::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
@@ -1718,6 +1719,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 {actuation_section(w)}
                 {bikes_section(w)}
                 {priority_section(w)}
+                {preemption_section(w)}
             }
         })
     }
@@ -2657,6 +2659,179 @@ fn priority_section(w: Watch) -> impl IntoView {
                     {totals_table}
                     {findings}
                     {every_bus}
+                </section>
+            }
+        })
+    }
+}
+
+/// Emergency vehicle pre-emption (CLM-15), in the plan's level after transit priority: each street with a phase of its
+/// own has pre-emption off or on; while on, its trigger, its highest priority, the clearance it respects and its safe
+/// entry, its emergency calls an hour and what its calls did over the hour; then the placeholder figures, the streets'
+/// calls added up, the findings and every call. A street left on without a phase says so as a finding. It decides
+/// nothing: the settings, entries, totals and findings all come from the view.
+fn preemption_section(w: Watch) -> impl IntoView {
+    // Everything below reads the pre-emption through this memo, so an edit that leaves it as it was redraws none of it.
+    let preempt = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.preemption.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| preempt.with(|p| p.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
+    let street = move |uid: u32| preempt.with(|p| p.streets.iter().find(|s| s.uid == uid).cloned());
+    // A street is named by its uid, never copied in: an undo that renames a street keeps every name right.
+    let name_of = move |uid: u32| street(uid).map(|s| w.say(&s.label)).unwrap_or_default();
+    let bounds = move || {
+        let args = Args::new().num("rate", i64::from(preemption::DEFAULT_CALLS_PER_HOUR)).num("dwell", i64::from(preemption::DWELL_S));
+        tr(w, "jn-preempt-bounds", args)
+    };
+    let item = move |uid: u32| {
+        // Made again only when the street's pre-emption goes on or off, so a radio or the field keeps the focus.
+        let on = Memo::new(move |_| street(uid).is_some_and(|s| s.rate.is_some()));
+        let (status_id, rate_id, range_id) = (format!("preempt-status-{uid}"), format!("preempt-rate-{uid}"), format!("preempt-range-{uid}"));
+        let status = move || match street(uid) {
+            Some(s) if !s.has_phase => w.tr("jn-preempt-no-phase"),
+            Some(s) if s.rate.is_none() => w.tr("jn-preempt-off"),
+            Some(s) => tr(w, "jn-preempt-trigger", Args::new().num("entry", i64::from(s.entry_s)).num("dwell", i64::from(preemption::DWELL_S))),
+            None => String::new(),
+        };
+        let effect = move || {
+            let s = street(uid).filter(|s| s.rate.is_some())?;
+            let t = s.totals?;
+            let text = move || match t.longest_to_green_s {
+                Some(longest) => {
+                    let args = Args::new().num("calls", i64::from(t.calls)).num("longest", i64::from(longest));
+                    tr(w, "jn-preempt-effect", args.str("preempted", w.say(&s.preempted)).str("delayed", w.say(&s.delayed)))
+                }
+                None => w.tr("jn-preempt-effect-no-call"),
+            };
+            Some(view! { <p class="insp-range" id=format!("preempt-effect-{uid}")>{text}</p> })
+        };
+        let rate = move || {
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-preempt-rate",
+                range: "jn-preempt-rate-range",
+                max: preemption::MAX_CALLS_PER_HOUR,
+            };
+            on.get().then(|| {
+                rate_field(
+                    w,
+                    field,
+                    move || street(uid).and_then(|s| s.rate),
+                    move |rate| {
+                        w.set_emergency_calls(uid, rate);
+                    },
+                )
+            })
+        };
+        let (group, head) = (format!("preempt-mode-{uid}"), format!("preempt-mode-h-{uid}"));
+        // Refused (no phase of its own, say): the radios show the setting the model kept.
+        let radio = move |choice: bool, id: &'static str, key: &'static str| {
+            let names = (format!("preempt-mode-{uid}"), format!("preempt-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || on.get() == choice, move || w.set_preemption(uid, choice))
+        };
+        let (named_by, described_by) = (head.clone(), status_id.clone());
+        view! {
+            <li>
+                <div class="preempt-street" role="group" aria-label=move || tr(w, "jn-preempt-group", Args::new().str("street", name_of(uid)))>
+                    <span class="preempt-name">{move || tr(w, "jn-preempt-group", Args::new().str("street", name_of(uid)))}</span>
+                    <div class="preempt-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="preempt-mode-h" id=head>{words(w, "jn-preempt-mode")}</span>
+                        {radio(false, "off", "jn-preempt-mode-off")}
+                        {radio(true, "on", "jn-preempt-mode-on")}
+                    </div>
+                    <p class="insp-range" id=status_id>{status}</p>
+                    {rate}
+                    {effect}
+                </div>
+            </li>
+        }
+    };
+    // One row a street, keyed by its totals: a row is made again only when its numbers change.
+    let totals = move || preempt.with(|p| p.streets.iter().filter_map(|s| s.totals.map(|t| (t, s.preempted.clone(), s.delayed.clone()))).collect::<Vec<_>>());
+    let has_totals = Memo::new(move |_| preempt.with(|p| p.streets.iter().any(|s| s.totals.is_some())));
+    let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    let total_row = move |(t, preempted, delayed): (preemption::Totals, crate::shared::said::Said, crate::shared::said::Said)| {
+        let longest = move || wait_cell(w, t.longest_to_green_s, "jn-preempt-no-call-said");
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(t.arm)}</th>
+                <td>{t.calls}</td>
+                <td>{longest}</td>
+                <td>{move || w.say(&preempted)}</td>
+                <td>{move || w.say(&delayed)}</td>
+            </tr>
+        }
+    };
+    let totals_table = move || {
+        has_totals.get().then(|| {
+            let heads = &["jn-preempt-col-street", "jn-preempt-col-calls", "jn-preempt-col-longest", "jn-preempt-col-preempted", "jn-preempt-col-delayed"];
+            let body = view! { <For each=totals key=|r| r.0 children=total_row/> };
+            hour_table(w, Table { section: "preempt", part: "totals", named: true, caption: "jn-preempt-totals-caption", heads }, body)
+        })
+    };
+    let findings = move || {
+        let found = preempt.with(|p| p.findings.clone());
+        (!found.is_empty()).then(|| findings_list(w, "preempt", found))
+    };
+    // Every call, keyed by the call itself: a row is made again only when what happened to it changes.
+    let n_rows = Memo::new(move |_| preempt.with(|p| p.rows.len()));
+    let rows = move || preempt.with(|p| p.rows.clone());
+    let call_row = move |r: EmergencyRowView| {
+        let to_green = move || match r.call.outcome {
+            EmergencyOutcome::Served => seconds(r.call.to_green_s),
+            EmergencyOutcome::NotServed => w.tr("jn-preempt-not-served"),
+        };
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(r.call.arm)}</th>
+                <td>{move || w.say(&r.at)}</td>
+                <td>{to_green}</td>
+                <td>{move || w.say(&r.preempted)}</td>
+                <td>{move || w.say(&r.delayed)}</td>
+            </tr>
+        }
+    };
+    let every_call = move || {
+        (n_rows.get() > 0).then(|| {
+            view! {
+                <details class="jn-fold" id="preempt-rows">
+                    <summary>{move || tr(w, "jn-preempt-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
+                    {hour_table(
+                        w,
+                        Table {
+                            section: "preempt",
+                            part: "rows",
+                            named: false,
+                            caption: "jn-preempt-rows-caption",
+                            heads: &[
+                                "jn-preempt-col-call",
+                                "jn-preempt-col-arrived",
+                                "jn-preempt-col-to-green",
+                                "jn-preempt-col-preempted",
+                                "jn-preempt-col-delayed",
+                            ],
+                        },
+                        view! { <For each=rows key=|r| r.call children=call_row/> },
+                    )}
+                </details>
+            }
+        })
+    };
+    let none_on = Memo::new(move |_| preempt.with(|p| !p.streets.iter().any(|s| s.rate.is_some())));
+    // As actuation, bicycle detection and transit priority: no section with no street to list (none has a phase of its
+    // own or pre-emption).
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
+                    <h3 class="note-h" id="i-h-preemption">{words(w, "jn-preempt-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-preempt-intro")}</p>
+                    <p class="insp-range" id="preempt-bounds">{bounds}</p>
+                    // The settings and the rate fields edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="preempt-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+                    {move || none_on.get().then(|| view! { <p class="insp-range" id="preempt-none">{words(w, "jn-preempt-none")}</p> })}
+                    {totals_table}
+                    {findings}
+                    {every_call}
                 </section>
             }
         })
