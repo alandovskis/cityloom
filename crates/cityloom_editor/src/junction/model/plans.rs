@@ -373,8 +373,16 @@ impl Junction {
         if scratch.cursor == 0 {
             return true;
         }
-        let after = scratch.current();
-        let streets: Vec<Settings> = after.arms.iter().map(Settings::of).collect();
+        let (before, after) = (&scratch.states[0], scratch.current());
+        // The plan keeps the streets it holds and takes on those the edit changed; a street it holds nothing for (one
+        // that joined later) and the edit left alone runs on as in the default.
+        let held: Vec<u32> = self.current().plans.iter().find(|p| p.id == id).map(|p| p.streets.iter().map(|x| x.uid).collect()).unwrap_or_default();
+        let streets: Vec<Settings> = after
+            .arms
+            .iter()
+            .map(Settings::of)
+            .filter(|now| held.contains(&now.uid) || before.arms.iter().find(|a| a.uid == now.uid).map(Settings::of).as_ref() != Some(now))
+            .collect();
         let label = Said::new("jn-rev-in-plan").with("plan", said(name_of(self.current(), id))).with("change", said(after.label.clone()));
         self.edit(label, move |s| s.plans.iter_mut().find(|p| p.id == id).map(|p| p.streets = streets).is_some())
     }
@@ -823,6 +831,27 @@ mod tests {
         assert!(k.add_plan("Night") && k.view_plan(1));
         assert!(k.undo());
         assert_eq!(k.viewing(), DEFAULT_PLAN);
+    }
+
+    #[test]
+    fn a_street_that_joined_later_runs_as_in_the_default_even_after_the_plan_is_edited() {
+        let (mut j, first) = signal();
+        let later = j.current().arms[1].uid;
+        assert!(j.add_plan("Night"));
+        // The plan as a junction keeps it once a street has joined since it was made: nothing held for that street.
+        assert!(j.edit(Said::new("jn-rev-plan-add"), move |s| {
+            s.plans[0].streets.retain(|x| x.uid != later);
+            true
+        }));
+        let green_in = |j: &Junction, id: u32| applied(j.current(), id).arms.iter().find(|a| a.uid == later).and_then(|a| a.timing).map(|t| t.green_s);
+        assert!(j.view_plan(1) && j.set_timing(first, TimingField::Green, 40), "an edit of the plan on another street");
+        assert!(j.current().plans[0].streets.iter().all(|x| x.uid != later), "the street the plan held nothing for is still not held");
+        assert!(j.view_plan(DEFAULT_PLAN) && j.set_timing(later, TimingField::Green, 33));
+        assert_eq!(green_in(&j, 1), Some(33), "the plan runs it as the default does, as the default changes");
+        // Once edited in the plan itself, it is the plan's.
+        assert!(j.view_plan(1) && j.set_timing(later, TimingField::Green, 25));
+        assert!(j.view_plan(DEFAULT_PLAN) && j.set_timing(later, TimingField::Green, 35));
+        assert_eq!(green_in(&j, 1), Some(25));
     }
 
     #[test]
