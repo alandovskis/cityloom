@@ -300,6 +300,59 @@ class Crates(unittest.TestCase):
         self.assertRegex(just, r"\*\) exec cargo test \{\{crates\}\} ;;")
 
 
+class PageFiles(unittest.TestCase):
+    """A page's own files run that page's specs and the cross-page ones, not every spec."""
+
+    def test_a_page_runs_its_own_specs_and_the_cross_ones(self):
+        for f, own, other in (
+            ("web/account.js", ("account", "account-server"), ("map", "street", "junction", "sync")),
+            ("web/map.js", ("map", "world"), ("account", "street", "home")),
+            ("web/street.html", ("street", "curb"), ("map", "account")),
+            ("web/intersection.html", ("junction",), ("street", "map")),
+            ("web/timeline.css", ("timeline",), ("map", "account")),
+            ("web/share.js", ("share",), ("map", "timeline")),
+            ("web/home.css", ("home", "projects", "about"), ("map", "street")),
+        ):
+            with self.subTest(f):
+                s = pick(f)
+                self.assertFalse(s.all)
+                for spec in own + ("a11y", "shell"):
+                    self.assertIn(spec, s.specs)
+                for spec in other:
+                    self.assertNotIn(spec, s.specs)
+
+    def test_every_html_page_names_its_own_specs(self):
+        for page in sorted((ROOT / "web").glob("*.html")):
+            with self.subTest(page.name):
+                self.assertFalse(pick(f"web/{page.name}").all, "a page with no rule of its own runs every spec")
+
+    def test_what_every_page_loads_runs_every_spec(self):
+        for f in ("web/app.css", "web/boot.js", "web/city.js", "web/brand.svg", "web/fonts/NotoSans-Regular.ttf"):
+            with self.subTest(f):
+                self.assertTrue(pick(f).all)
+
+    def test_the_map_runtime_runs_the_map_and_the_about_page(self):
+        # The About page draws a city of the project opened last with the same map code.
+        s = pick("web/mapcanvas.js")
+        self.assertTrue({"map", "about", "a11y"} <= set(s.specs))
+        self.assertFalse(s.all)
+
+    def test_a_helper_runs_the_specs_that_import_it(self):
+        helpers = ROOT / "e2e" / "tests"
+        users = sorted(
+            p.name[: -len(".spec.ts")] for p in helpers.glob("*.spec.ts") if "account-helpers" in p.read_text(encoding="utf-8")
+        )
+        self.assertEqual(pick("e2e/tests/account-helpers.ts").specs, users)
+
+    def test_the_scripts_that_only_the_ci_jobs_run_need_no_browser_spec(self):
+        for f in ("scripts/check-no-fake.sh", "scripts/check-version.sh", "deploy/Dockerfile", ".github/workflows/docs.yml"):
+            with self.subTest(f):
+                self.assertEqual(pick(f).specs, [])
+        for f in ("scripts/build.sh", "scripts/pin-server.sh", ".github/workflows/presubmit.yml"):
+            with self.subTest(f):
+                self.assertTrue(pick(f).all)
+
+
 class Globs(unittest.TestCase):
     def test_star_stays_in_a_folder_and_double_star_crosses(self):
         self.assertTrue(ci_changes.glob("e2e/tests/*.spec.ts", "e2e/tests/a.spec.ts"))
