@@ -19,6 +19,8 @@ Writes and posts the plan for one feasible CityLoom issue, then makes the issue'
    git worktree add "<worktrees>/clm-<n>" -b "<gitBranchName>" origin/<github.base>
    ```
 
+   Then set it up once, as any new checkout: `just setup` in it (`npm ci` at its root and in `e2e/`, `wasm-bindgen` into its `.tools`, Playwright's Chromium). Without it the gates refuse to run (`could not run a tool`).
+
    `<worktrees>` is `config.worktrees` against the main checkout's folder (`<parent>/main` gives `<parent>/worktrees`); `<gitBranchName>` is Linear's for the issue. A branch of that name already on `origin` or in another worktree: hand back, naming it (someone else's work). Nothing is pushed: the branch goes to `origin` once green.
 
 **Hand-back**: add `labels.needsReview` (`save_issue`, `addLabels`), post `**Factory · handed back** (plan)` with the question or what failed, and stop. The person answers, or writes the plan as a `**Factory · plan**` comment, and removes the label.

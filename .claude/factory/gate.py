@@ -293,6 +293,16 @@ class Gate:
     def git(self, *args: str) -> str:
         return subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True).stdout.strip()
 
+    def _tool(self, cmd: List[str], cwd: Path, env: Optional[dict] = None) -> Tuple[int, str]:
+        """Runs a command; a command or tool not found (exit 127) is the machine's, not the change's: refuse."""
+        code, out = self.run(cmd, cwd, env)
+        if code == 127 or "with exit code 127" in out:
+            raise Refused(
+                f"`{' '.join(cmd)}` could not run a tool ({_last_error(out)}): set the worktree up first "
+                "(`npm ci` at its root and in e2e/, or `just setup`)"
+            )
+        return code, out
+
     def _is_ancestor(self, older: str, newer: str) -> bool:
         return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], cwd=self.repo).returncode == 0
 
@@ -319,14 +329,14 @@ class Gate:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.json"
             args = ["npx", "playwright", "test"] + (["--list"] if listing else files) + ["--reporter=json"]
-            self.run(args, self.repo / "e2e", {"PLAYWRIGHT_JSON_OUTPUT_FILE": str(out), "PLAYWRIGHT_JSON_OUTPUT_NAME": str(out)})
+            self._tool(args, self.repo / "e2e", {"PLAYWRIGHT_JSON_OUTPUT_FILE": str(out), "PLAYWRIGHT_JSON_OUTPUT_NAME": str(out)})
             if not out.exists():
                 raise Refused("Playwright wrote no report: run `just e2e` by hand to see why")
             return playwright_results(json.loads(out.read_text(encoding="utf-8")))
 
     def _prepare_browser(self) -> None:
         for recipe in ("build", "server", "e2e-fixtures"):
-            code, out = self.run(["just", recipe], self.repo)
+            code, out = self._tool(["just", recipe], self.repo)
             if code != 0:
                 raise Refused(f"`just {recipe}` fails: {_last_error(out)}")
 
@@ -405,7 +415,7 @@ class Gate:
             report.problems += [f"Rust: {name} fails" for name, outcome in sorted(results.items()) if outcome == "failed"]
             report.problems += problems
         for cmd in (["just", "format-check"], ["scripts/check-version.sh", base]):
-            code, out = self.run(cmd, self.repo)
+            code, out = self._tool(cmd, self.repo)
             if code != 0:
                 report.problems.append(f"`{' '.join(cmd)}` fails: {_last_error(out)}")
 

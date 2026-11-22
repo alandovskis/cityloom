@@ -458,6 +458,19 @@ class Gates(unittest.TestCase):
         report = gate.Gate(self.repo, runner).green(self.base, red)
         self.assertEqual(report.problems, ["Rust: m unittests src/lib.rs::tests::splits fails"])
 
+    def test_a_missing_tool_is_the_environment_not_the_change(self):
+        red, green = self.green_setup()
+        runner = self.passing_runner(green)
+        plain = runner.__call__
+
+        def missing_prettier(cmd, cwd, env=None):
+            code, out = plain(cmd, cwd, env)
+            return (127, "sh: prettier: command not found") if cmd == ["just", "format-check"] else (code, out)
+
+        with self.assertRaises(gate.Refused) as caught:
+            gate.Gate(self.repo, missing_prettier).green(self.base, red)
+        self.assertIn("just setup", str(caught.exception))
+
     def test_the_green_gate_refuses_a_red_commit_that_is_not_in_the_history(self):
         red, _ = self.green_setup()
         git(self.repo, "checkout", "-q", "-b", "other", self.base)
