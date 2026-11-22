@@ -364,16 +364,29 @@ impl JunctionVm {
         self.policy_edit(|j| j.set_cyclists(uid, rate), |v, i18n| text::bikes_text(v, i18n, uid))
     }
 
+    /// The person gives street `uid`'s buses transit priority (`Some` mode, CLM-14) or takes it off (`None`). Announced
+    /// by what was done and how its buses fared over the hour; a refusal is said with its reason (no transit, say). The
+    /// mode it has already is said not at all.
+    pub fn set_transit_priority(&self, uid: u32, mode: Option<crate::junction::model::transit::Mode>) -> bool {
+        self.policy_edit(|j| j.set_transit_priority(uid, mode), |v, i18n| text::transit_text(v, i18n, uid))
+    }
+
+    /// The person sets how many buses an hour come on street `uid`'s approach, given priority. Announced as
+    /// `set_transit_priority` is; the rate it has already is said not at all.
+    pub fn set_buses(&self, uid: u32, rate: i32) -> bool {
+        self.policy_edit(|j| j.set_buses(uid, rate), |v, i18n| text::transit_text(v, i18n, uid))
+    }
+
     /// An edit of a crossing's calls: announced as `policy_edit` says, with the crossing's calls added up.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
         self.policy_edit(f, |v, i18n| text::calls_text(v, i18n, uid))
     }
 
-    /// An edit of what the signal responds to (a crossing's calls, a street's actuation, a bike movement's detection):
-    /// the edit's text, then what it did over the hour (`results`) and any finding that arose, or the refusal. It changes
-    /// no phase of the plan, so nothing about the plan's conflicts or patterns is said. A setting it had already is said
-    /// not at all: the model takes it (returns true) without adding a revision (as `set_call_rate`, `set_detection`,
-    /// `set_actuation` and `set_cyclists` do),
+    /// An edit of what the signal responds to (a crossing's calls, a street's actuation, a bike movement's detection, a
+    /// street's transit priority): the edit's text, then what it did over the hour (`results`) and any finding that
+    /// arose, or the refusal. It changes no phase of the plan, so nothing about the plan's conflicts or patterns is said.
+    /// A setting it had already is said not at all: the model takes it (returns true) without adding a revision (as
+    /// `set_call_rate`, `set_detection`, `set_actuation`, `set_cyclists`, `set_transit_priority` and `set_buses` do),
     /// and only an edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn policy_edit(&self, f: impl FnOnce(&mut Junction) -> bool, results: impl FnOnce(&JView, &I18n) -> Option<String>) -> bool {
         // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
@@ -565,13 +578,14 @@ impl JunctionVm {
         Before { meetings: self.meetings(), findings: self.findings(), kept: self.view_now().calls_kept, dropped: self.view_now().calls_dropped }
     }
 
-    /// What the findings of the pedestrian calls, the actuation and the bicycle calls are about now, each its kind and
-    /// streets.
+    /// What the findings of the pedestrian calls, the actuation, the bicycle calls and the transit priority are about
+    /// now, each its kind and streets.
     fn findings(&self) -> Vec<(u8, u32, u32)> {
         let v = self.view_now();
         let Some(signal) = v.signal.as_ref() else { return Vec::new() };
         let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0));
-        calls.chain(signal.actuation.found.iter().map(|f| f.about())).chain(signal.bicycles.found.iter().map(|f| f.about())).collect()
+        let bicycles = signal.bicycles.found.iter().map(|f| f.about());
+        calls.chain(signal.actuation.found.iter().map(|f| f.about())).chain(bicycles).chain(signal.transit.found.iter().map(|f| f.about())).collect()
     }
 
     /// The crossings that stay on call now that the signal is suspended, when it was not before: they show nowhere
@@ -591,8 +605,14 @@ impl JunctionVm {
         let calls = signal.calls.found.iter().map(|f| f.about()).map(|(k, a)| (k, a, 0)).zip(&signal.calls.findings);
         let actuation = signal.actuation.found.iter().map(|f| f.about()).zip(&signal.actuation.findings);
         let bicycles = signal.bicycles.found.iter().map(|f| f.about()).zip(&signal.bicycles.findings);
-        let new: Vec<String> =
-            calls.chain(actuation).chain(bicycles).filter(|(f, _)| !before.contains(f)).map(|(_, said)| say_now(&self.i18n, self.units_now(), said)).collect();
+        let transit = signal.transit.found.iter().map(|f| f.about()).zip(&signal.transit.findings);
+        let new: Vec<String> = calls
+            .chain(actuation)
+            .chain(bicycles)
+            .chain(transit)
+            .filter(|(f, _)| !before.contains(f))
+            .map(|(_, said)| say_now(&self.i18n, self.units_now(), said))
+            .collect();
         (!new.is_empty()).then(|| new.join(" "))
     }
 
@@ -1603,6 +1623,63 @@ mod tests {
             assert!(vm.set_cyclists(n, 12));
             assert!(!said.take()[0].replace('\u{a0}', " ").contains(&words.replace("\u{a0}", " ")));
         }
+    }
+
+    /// A view-model over the four-way of `junction_biked` with a bus lane on its north street, in `locale`, what it says,
+    /// and its north and east streets.
+    fn transit_rig(locale: crate::shared::i18n::Locale) -> (Rc<JunctionVm>, Rc<crate::shared::ports::RecordingAnnouncer>, u32, u32) {
+        let (vm, said, n, e) = biked_rig(locale);
+        assert!(vm.edit(|j| j.set_bus_lane(n, true)));
+        said.take();
+        (vm, said, n, e)
+    }
+
+    #[test]
+    fn a_street_s_transit_priority_is_announced_with_how_its_buses_fared_and_a_refusal_says_why_in_both_languages() {
+        use crate::junction::model::transit::Mode;
+        use crate::shared::i18n::Locale;
+        let (vm, said, n, e) = transit_rig(Locale::En);
+        let name = vm.read(|j| crate::shared::said::say_now(&vm.i18n, Units::Metres, &j.view().arms.iter().find(|a| a.uid == n).unwrap().label));
+        assert!(vm.set_transit_priority(n, Some(Mode::EarlyGreen)));
+        let t = said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with(&format!("Buses on {name}: early green.")), "{t:?}");
+        assert!(t[0].contains(&format!("Buses on {name}: 12 buses in the hour; on arrival ")), "{t:?}");
+        assert!(t[0].contains("; longest wait ") && t[0].contains(" s; delay moved to other approaches "), "{t:?}");
+        assert!(vm.set_transit_priority(n, Some(Mode::EarlyGreen)), "the mode it has: taken");
+        assert!(said.take().is_empty(), "and nothing said");
+        assert!(vm.set_buses(n, 1));
+        assert!(said.take()[0].contains(": 1 bus in the hour;"));
+        assert!(!vm.set_buses(n, 61));
+        assert_eq!(said.take(), vec!["That many buses an hour is outside the placeholder bound shown."]);
+        assert!(vm.set_buses(n, 0));
+        assert!(said.take()[0].contains(": 0 buses in the hour; on arrival 0, early green 0, extended 0, delayed 0, not served 0; no bus was served."));
+        assert!(vm.set_transit_priority(n, Some(Mode::Both)));
+        assert!(said.take()[0].starts_with(&format!("Buses on {name}: early green and green extension.")));
+        // East has no transit: refused, and says why.
+        assert!(!vm.set_transit_priority(e, Some(Mode::Extension)));
+        assert_eq!(
+            said.take(),
+            vec![
+                "This street has no transit, so its buses cannot be given priority: give it a bus lane, a queue jump, a bus gate, a bus stop or a transit filter first."
+            ]
+        );
+        // North's bus lane taken away: its priority is kept, and the finding is said with the edit.
+        assert!(vm.apply(|j| j.set_bus_lane(n, false)));
+        let t = said.take();
+        assert!(t.iter().any(|s| s.contains(&format!("The buses on {name} have priority, but the street has no transit any more"))), "{t:?}");
+        assert!(vm.set_transit_priority(n, None));
+        assert!(said.take()[0].starts_with(&format!("Buses on {name}: no priority.")));
+
+        let (fr, said, n, e) = transit_rig(Locale::FrCa);
+        assert!(fr.set_transit_priority(n, Some(Mode::Extension)));
+        let t = said.take();
+        assert!(t[0].contains("\u{a0}: prolongation du vert."), "{t:?}");
+        assert!(t[0].contains("12\u{a0}autobus dans l’heure") || t[0].contains("12 autobus dans l’heure"), "{t:?}");
+        assert!(!fr.set_buses(n, -1));
+        assert_eq!(said.take(), vec!["Ce nombre d’autobus par heure dépasse la borne provisoire indiquée."]);
+        assert!(!fr.set_transit_priority(e, Some(Mode::Both)));
+        assert!(said.take()[0].starts_with("Cette rue n’a pas de transport en commun"));
     }
 
     #[test]

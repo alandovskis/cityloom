@@ -325,6 +325,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Cyclists an hour | Cyclistes par heure |  |
 | Junction inspector | Minimum green and clearance (a bicycle call's) | Vert minimal et dégagement | As the pedestrian calls' `dégagement` and actuation's `vert minimal`. |
 | Junction inspector | Extended (a movement's calls whose green was lengthened) | Prolongés | Masculine plural, as the calls (`appels`) in the table. |
+| Junction inspector | Transit signal priority (the section, CLM-14) | Priorité aux feux pour le transport en commun | Not `Priorité au transport en commun`, the street's fold of transit measures. To confirm, see below. |
+| Junction inspector | Early green (a bus's priority) | Vert hâtif | To confirm, see below. Not `Avance pour le transport en commun`, the fixed transit lead of a street's timing. |
+| Junction inspector | Green extension (a bus's priority) | Prolongation du vert | To confirm, see below. |
+| Junction inspector | Buses an hour | Autobus par heure | `autobus` is invariable: `1 autobus`, `12 autobus`. |
+| Junction inspector | On arrival / Delayed (a bus) | À l’arrivée / Retardés | Masculine plural, as the buses (`autobus`) in the table. |
+| Junction inspector | Delay moved to other approaches | Retard reporté sur les autres approches | `Retard reporté sur les autres` as the table's column. |
 | Account page | Account | Compte | As the header's menu. |
 | Account page | Sign in / Sign out | Se connecter / Se déconnecter | `se connecter` to confirm, see below. |
 | Account page | Link (a sign-in) | Associer | To confirm, see below. |
@@ -453,6 +459,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Bicycle detection (the section, CLM-13) | `Détection des vélos` | `Détection cycliste` (suggestion) |
 | Bike movement | `Mouvement vélo` | `Mouvement cyclable`, `Mouvement des vélos` (suggestion) |
 | On detection (a bike movement) | `Sur détection` | `Sur appel` (the pedestrians’ term), `À la demande` (actuation’s) (suggestion) |
+| Transit signal priority (the section, CLM-14) | `Priorité aux feux pour le transport en commun` | `Priorité aux feux pour autobus`, `Priorité au transport collectif aux feux` (suggestion) |
+| Early green (a bus’s priority) | `Vert hâtif` | `Vert anticipé`, `Rappel prioritaire` (suggestion) |
+| Green extension (a bus’s priority) | `Prolongation du vert` | `Prolongement du vert`, `Vert prolongé` (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

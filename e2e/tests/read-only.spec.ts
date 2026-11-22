@@ -113,7 +113,7 @@ test.describe("a design opened read-only", () => {
     expect(await kept(page)).toEqual(before);
   });
 
-  test("a junction's signal plan, its pedestrian calls, its actuation and its bicycle detection can be read, and none of them changed", async ({
+  test("a junction's signal plan, its pedestrian calls, its actuation, its bicycle detection and its transit priority can be read, and none of them changed", async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -141,6 +141,15 @@ test.describe("a design opened read-only", () => {
     );
     await page.locator(`#bike-mode-${bikes}-detection`).check();
     await expect(page.locator(`#bike-rate-${bikes}`)).toHaveValue("30");
+    // A street with a bus lane giving its buses both kinds of transit priority (CLM-14).
+    await page.locator("#jn-path-up-0").click();
+    await page.locator(`#jn-go-${street}`).click();
+    await page.locator("#jn-fold-transit summary").click();
+    await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
+    await page.locator("#jn-path-up-0").click();
+    await page.locator("#jn-go-plan").click();
+    await page.locator(`#transit-mode-${street}-both`).check();
+    await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
     await page.goto("/map.html");
     await mapReady(page);
     const before = await kept(page);
@@ -173,6 +182,13 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#bike-rate-${bikes}`)).toHaveValue("30");
     await expect(page.locator(`#bike-rate-${bikes}`)).toBeDisabled();
     await expect(page.locator("#bikes-totals")).toBeVisible();
+    // The transit priority is shown with its buses, and cannot be changed.
+    await expect(page.locator(`#transit-mode-${street}-both`)).toBeChecked();
+    for (const r of await page.locator(`#transit-mode-${street} input[type=radio]`).all())
+      await expect(r).toBeDisabled();
+    await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
+    await expect(page.locator(`#transit-rate-${street}`)).toBeDisabled();
+    await expect(page.locator("#transit-totals")).toBeVisible();
     await expect(page.locator("#calls-totals")).toBeVisible();
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);

@@ -146,6 +146,16 @@ impl Watch {
         self.vm.with_value(|v| v.set_cyclists(uid, rate))
     }
 
+    /// Gives street `uid`'s buses transit priority, or takes it off, as the person does. Whether it was done.
+    pub fn set_transit_priority(&self, uid: u32, mode: Option<crate::junction::model::transit::Mode>) -> bool {
+        self.vm.with_value(|v| v.set_transit_priority(uid, mode))
+    }
+
+    /// Sets the buses an hour of street `uid`, given priority, as the person does. Whether it was done.
+    pub fn set_buses(&self, uid: u32, rate: i32) -> bool {
+        self.vm.with_value(|v| v.set_buses(uid, rate))
+    }
+
     /// Gives the crossing of street `uid`, on call, its detection as the person does. Whether it was done.
     pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
         self.vm.with_value(|v| v.set_detection(uid, detection))

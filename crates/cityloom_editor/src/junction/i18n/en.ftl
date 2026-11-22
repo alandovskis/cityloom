@@ -855,3 +855,82 @@ jn-bikes-said-no-wait =
         [one] 1 call
        *[other] { $calls } calls
     } in the hour; served { $served }, delayed { $delayed }, green extended { $extended } by { $extended_s } s in all, not served { $not_served }; no call was served.
+
+## Transit signal priority (src/junction/model/transit.rs, CLM-14): a street's buses are given an early green, a green extension or both, within bounds
+jn-refusal-priority-no-transit = This street has no transit, so its buses cannot be given priority: give it a bus lane, a queue jump, a bus gate, a bus stop or a transit filter first.
+jn-refusal-priority-no-phase = No phase of the plan is this street's own, so its buses cannot be given priority: give it a phase first.
+jn-refusal-not-on-priority = Only a street whose buses have priority has buses an hour: give them priority first.
+jn-refusal-buses-out-of-range = That many buses an hour is outside the placeholder bound shown.
+jn-rev-priority-early-green = Buses on { $arm }: early green
+jn-rev-priority-extension = Buses on { $arm }: green extension
+jn-rev-priority-both = Buses on { $arm }: early green and green extension
+jn-rev-priority-off = Buses on { $arm }: no priority
+jn-rev-buses =
+    Buses on { $arm }: { $rate ->
+        [one] 1 bus an hour
+       *[other] { $rate } buses an hour
+    }
+jn-transit-heading = Transit signal priority
+jn-transit-intro = A street with transit and a phase of its own can give its buses priority. An early green cuts short the phases before its own when a bus comes during red; a green extension holds its green for a bus coming just after it would end. Without priority a bus waits for its street's green like other traffic.
+jn-transit-bounds = Placeholder figures: a street given priority has { $rate } buses an hour, spread over one hour. An early green brings the street's green forward by at most { $early } s, and an extension holds it by at most { $extension } s; a street given priority for one green gets none for the next. Yellow and all-red are never shortened, nor a phase's minimum green, a walk and its clearance or a bicycle clearance: an early green they keep shorter is a finding. The street's transit early green (its timing) stays a fixed lead every cycle, whatever comes.
+jn-transit-group = Buses on { $street }
+jn-transit-mode = Priority
+jn-transit-mode-off = None
+jn-transit-mode-early-green = Early green
+jn-transit-mode-extension = Green extension
+jn-transit-mode-both = Both
+jn-transit-off = No priority: a bus waits for the street's green like other traffic.
+jn-transit-trigger-early-green = Early green: a bus coming while the street is red cuts short the greens of the phases before its own, by at most { $early } s in all, never below their minimum green, a walk and its clearance or a bicycle clearance. Not for two greens running.
+jn-transit-trigger-extension = Green extension: a bus coming within { $extension } s after the street's green would end holds the green until it has passed. Not for two greens running.
+jn-transit-trigger-both = Early green and green extension: a bus coming during red brings the street's green forward by at most { $early } s, never cutting a phase below its minimum green, a walk and its clearance or a bicycle clearance; a bus coming within { $extension } s after the green would end holds it until it has passed. Not for two greens running.
+jn-transit-no-transit = This street has no transit, so its buses cannot be given priority.
+jn-transit-no-phase = No phase of the plan is this street's own, so its buses cannot be given priority.
+jn-transit-rate = Buses an hour
+jn-transit-rate-range = { $min } to { $max } buses an hour (placeholder bound)
+jn-transit-effect =
+    In the hour { $buses ->
+        [one] 1 bus
+       *[other] { $buses } buses
+    }: on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; delay moved to other approaches { $moved } s.
+jn-transit-moved = Delay moved to other approaches: { $list }.
+jn-transit-moved-item = { $arm } { $seconds } s
+jn-transit-totals-caption = Buses in one hour, by street
+jn-transit-col-street = Street
+jn-transit-col-buses = Buses
+jn-transit-col-on-arrival = On arrival
+jn-transit-col-early-green = Early green
+jn-transit-col-extended = Extended
+jn-transit-col-delayed = Delayed
+jn-transit-col-moved = Delay moved to others
+jn-transit-rows =
+    { $n ->
+        [one] The bus, one row
+       *[other] Every bus, one row each ({ $n })
+    }
+jn-transit-rows-caption = Each bus of the hour, in the order they came
+jn-transit-col-bus = Bus
+jn-transit-col-arrived = Arrived
+jn-transit-col-wait = Wait
+jn-transit-outcome-on-arrival = On arrival
+jn-transit-outcome-early-green = Early green ({ $early } s sooner)
+jn-transit-outcome-extended = Extended (held { $extended } s)
+jn-transit-outcome-delayed = Delayed
+jn-transit-no-wait-said = no bus served
+jn-transit-finding-no-transit = The buses on { $arm } have priority, but the street has no transit any more, so they are given none. Give it transit again, or take the priority off.
+jn-transit-finding-no-phase = The buses on { $arm } have priority, but no phase of the plan is the street's own, so they are given none. Give it a phase, or take the priority off.
+jn-transit-finding-clearance =
+    An early green for the buses on { $arm } was kept shorter { $times ->
+        [one] once
+       *[other] { $times } times
+    }, by { $held } s in all, in the phase of { $phase }: it was serving a walk and its clearance or a bicycle clearance, which are never shortened.
+jn-transit-said =
+    Buses on { $arm }: { $buses ->
+        [one] 1 bus
+       *[other] { $buses } buses
+    } in the hour; on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; longest wait { $wait } s; delay moved to other approaches { $moved } s.
+jn-transit-said-no-wait =
+    Buses on { $arm }: { $buses ->
+        [one] 1 bus
+       *[other] { $buses } buses
+    } in the hour; on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; no bus was served.
+jn-transit-none = No street gives its buses priority: each bus waits for its street's green like other traffic.

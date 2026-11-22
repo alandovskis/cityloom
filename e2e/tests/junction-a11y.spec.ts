@@ -303,6 +303,51 @@ test.describe("bicycle detection in the signal plan (CLM-13)", () => {
   });
 });
 
+test.describe("transit signal priority in the signal plan (CLM-14)", () => {
+  test("a street's priority is a radio group named by its heading and described by its state, the arrow keys choose it, its buses are a labelled field, and at 280 px nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 280, height: 700 });
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    // A bus lane gives the first street with a phase of its own transit.
+    await page.locator("#jn-go-plan").click();
+    const uid = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
+      "act-mode-",
+      "",
+    );
+    await page.locator("#jn-path-up-0").click();
+    await page.locator(`#jn-go-${uid}`).click();
+    await page.locator("#jn-fold-transit summary").click();
+    await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
+    await page.locator("#jn-path-up-0").click();
+    await page.locator("#jn-go-plan").click();
+    const street = page.locator(".transit-street").first();
+    const name = (await street.locator(".transit-name").innerText()).trim();
+    await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
+    const mode = street.getByRole("radiogroup", { name: "Priority" });
+    await expect(mode).toHaveAccessibleDescription(/^No priority: a bus waits/);
+    const none = mode.getByRole("radio", { name: "None" });
+    const early = mode.getByRole("radio", { name: "Early green" });
+    await expect(none).toBeChecked();
+    await none.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(early).toBeChecked();
+    await expect(early).toBeFocused();
+    await expect(live(page)).toContainText(": early green.");
+    await expect(mode).toHaveAccessibleDescription(/^Early green: a bus coming while the street is red/);
+    await page.keyboard.press("ArrowDown");
+    await expect(mode.getByRole("radio", { name: "Green extension" })).toBeChecked();
+    await expect(mode).toHaveAccessibleDescription(/^Green extension: a bus coming within 10 s/);
+    await expect(street.getByRole("textbox", { name: "Buses an hour", exact: true })).toHaveAccessibleDescription(
+      "0 to 60 buses an hour (placeholder bound)",
+    );
+    await expect(page.getByRole("region", { name: "Buses in one hour, by street" })).toHaveAttribute("tabindex", "0");
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
 test.describe("pedestrian calls in the signal plan (#60)", () => {
   test("each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways", async ({
     page,

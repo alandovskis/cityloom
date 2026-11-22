@@ -1269,6 +1269,124 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#bikes-none")).toBeVisible();
   });
 
+  test("a street with transit gives its buses an early green or a green extension, shows the trigger, bounds and how its buses fared, keeps it on reload, and speaks French (CLM-14)", async ({
+    page,
+  }) => {
+    // No street has transit: no section, as actuation and bicycle detection have none with nothing to list.
+    const section = page.locator("#signal-transit");
+    await expect(page.locator("#signal-bikes")).toBeVisible();
+    await expect(section).toHaveCount(0);
+    // A bus lane on a street with a phase of its own gives it transit.
+    const uid = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
+      "act-mode-",
+      "",
+    );
+    await page.locator("#jn-path-up-0").click();
+    await page.locator(`#jn-go-${uid}`).click();
+    await page.locator("#jn-fold-transit summary").click();
+    await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
+    await page.locator("#jn-path-up-0").click();
+    await openPlan(page);
+    const off = page.locator(`#transit-mode-${uid}-off`);
+    const early = page.locator(`#transit-mode-${uid}-early-green`);
+    const both = page.locator(`#transit-mode-${uid}-both`);
+    const status = page.locator(`#transit-status-${uid}`);
+    const rate = page.locator(`#transit-rate-${uid}`);
+    await expect(section).toContainText("Transit signal priority");
+    await expect(page.locator("#transit-bounds")).toContainText(
+      "Placeholder figures: a street given priority has 12 buses an hour, spread over one hour. An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s",
+    );
+    await expect(section.locator(".transit-name").first()).toHaveText(/^Buses on .+/);
+    await expect(off).toBeChecked();
+    await expect(status).toHaveText("No priority: a bus waits for the street's green like other traffic.");
+    await expect(page.locator("#transit-none")).toContainText("No street gives its buses priority");
+    await expect(rate).toHaveCount(0);
+
+    // An early green: its trigger and bound, its buses an hour, and how they fared over the hour.
+    await early.check();
+    await expect(early).toBeChecked();
+    await expect(live(page)).toContainText(": early green.");
+    await expect(live(page)).toContainText(
+      /12 buses in the hour; on arrival \d+, early green \d+, extended \d+, delayed \d+/,
+    );
+    await expect(status).toHaveText(
+      "Early green: a bus coming while the street is red cuts short the greens of the phases before its own, by at most 10 s in all, never below their minimum green, a walk and its clearance or a bicycle clearance. Not for two greens running.",
+    );
+    await expect(rate).toHaveValue("12");
+    await expect(rate).toHaveAccessibleName("Buses an hour");
+    await expect(rate).toHaveAccessibleDescription("0 to 60 buses an hour (placeholder bound)");
+    await expect(page.locator("#transit-none")).toHaveCount(0);
+    await expect(page.locator(`#transit-effect-${uid}`)).toHaveText(
+      /^In the hour 12 buses: on arrival \d+, early green \d+, extended 0, delayed \d+, not served \d+; delay moved to other approaches \d+ s\.$/,
+    );
+    const row = page.locator("#transit-totals tbody tr");
+    await expect(row).toHaveCount(1);
+    await expect(page.locator("#transit-totals thead th")).toHaveText([
+      "Street",
+      "Buses",
+      "On arrival",
+      "Early green",
+      "Extended",
+      "Delayed",
+      "Longest wait",
+      "Delay moved to others",
+    ]);
+    await expect(row.locator("td").first()).toHaveText("12");
+    await expect(row.locator("td").last()).toHaveText(/^\d+ s$/);
+    await expect(page.getByRole("region", { name: "Buses in one hour, by street" })).toHaveAttribute("tabindex", "0");
+    await expect(page.locator("#transit-rows summary")).toHaveText("Every bus, one row each (12)");
+    await page.locator("#transit-rows summary").click();
+    await expect(page.locator("#transit-rows thead th")).toHaveText(["Bus", "Arrived", "Outcome", "Wait"]);
+
+    // An arrow key changes the rate; one past the bound is refused and the field keeps its value.
+    await rate.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(rate).toHaveValue("13");
+    await expect(live(page)).toContainText(": 13 buses an hour.");
+    await rate.fill("61");
+    await rate.press("Enter");
+    await expect(live(page)).toHaveText("That many buses an hour is outside the placeholder bound shown.");
+    await expect(rate).toHaveValue("13");
+    // No bus at all: nothing to serve.
+    await rate.fill("0");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("0");
+    await expect(live(page)).toContainText("no bus was served");
+    await rate.fill("30");
+    await rate.press("Enter");
+    await expect(rate).toHaveValue("30");
+    // Both: the rate is kept.
+    await both.check();
+    await expect(both).toBeChecked();
+    await expect(live(page)).toContainText(": early green and green extension.");
+    await expect(rate).toHaveValue("30");
+
+    // Kept: a reload opens it with both and its buses.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await openPlan(page);
+    await expect(both).toBeChecked();
+    await expect(rate).toHaveValue("30");
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(section.locator("#i-h-transit-priority")).toHaveText("Priorité aux feux pour le transport en commun");
+    await expect(page.locator(`label:has(#transit-mode-${uid}-both)`)).toHaveText("Les deux");
+    await expect(page.locator(`label:has(#transit-mode-${uid}-early-green)`)).toHaveText("Vert hâtif");
+    await expect(page.locator(`label[for=transit-rate-${uid}]`)).toHaveText("Autobus par heure");
+    await expect(status).toContainText("Vert hâtif et prolongation du vert");
+    await expect(page.locator("#transit-totals thead th").first()).toHaveText("Rue");
+
+    // None: the rate and the hour's table go.
+    await off.check();
+    await expect(off).toBeChecked();
+    await expect(rate).toHaveCount(0);
+    await expect(page.locator("#transit-totals")).toHaveCount(0);
+    await expect(page.locator("#transit-none")).toBeVisible();
+  });
+
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
     page,
   }) => {

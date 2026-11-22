@@ -154,6 +154,28 @@ pub fn bikes_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
     })
 }
 
+/// How the buses of street `uid`, given transit priority, fared over the hour, said after its priority changes: "Buses
+/// on Main Street (north): 12 buses in the hour; on arrival 3, early green 4, extended 1, delayed 4, not served 0;
+/// longest wait 50 s; delay moved to other approaches 41 s." None while it has none, or no transit or phase of its own.
+pub fn transit_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
+    let transit = &v.signal.as_ref()?.transit;
+    let street = transit.streets.iter().find(|s| s.uid == uid)?;
+    let t = street.totals?;
+    let args = Args::new()
+        .str("arm", say_now(i18n, Units::Metres, &street.label))
+        .num("buses", i64::from(t.buses))
+        .num("on_arrival", i64::from(t.on_arrival))
+        .num("early", i64::from(t.early_green))
+        .num("extended", i64::from(t.extended))
+        .num("delayed", i64::from(t.delayed))
+        .num("not_served", i64::from(t.not_served));
+    // As the totals show it: the longest wait only when some bus was served.
+    Some(match t.longest_wait_s {
+        Some(wait) => i18n.tr_now("jn-transit-said", &args.num("wait", i64::from(wait)).num("moved", i64::from(t.moved_s))),
+        None => i18n.tr_now("jn-transit-said-no-wait", &args),
+    })
+}
+
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {

@@ -11,8 +11,9 @@ use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement,
 use crate::junction::model::actuation::{Actuation, ApproachTotals, Field, PhaseTotals};
 use crate::junction::model::bicycles;
 use crate::junction::model::calls::{CLEARANCE_MM_PER_S, Detection, MAX_CALLS_PER_HOUR, MAX_EXTENSION_S, Totals, WAIT_LIMIT_S, WALK_S};
-use crate::junction::model::read_model::{CallRowView, CrossingView, JView, RideRowView};
+use crate::junction::model::read_model::{BusRowView, CallRowView, CrossingView, JView, RideRowView};
 use crate::junction::model::signal::Pattern;
+use crate::junction::model::transit::{self, Mode};
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
@@ -1716,6 +1717,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 {calls_section(w)}
                 {actuation_section(w)}
                 {bikes_section(w)}
+                {priority_section(w)}
             }
         })
     }
@@ -2205,6 +2207,86 @@ fn hour_table(w: Watch, t: Table, body: impl IntoView + 'static) -> impl IntoVie
     }
 }
 
+/// A wait of the hour as a table cell: its seconds, or with none (nobody served), a dash for the eye and `said` for a
+/// screen reader.
+fn wait_cell(w: Watch, s: Option<u32>, said: &'static str) -> AnyView {
+    match s {
+        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
+        None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, said)}</span> }.into_any(),
+    }
+}
+
+/// What a rate field of the hour is: the field's id and its hint's, its label's message, and its range's message and
+/// upper bound (the lower is 0).
+struct RateField {
+    id: String,
+    hint: String,
+    label: &'static str,
+    range: &'static str,
+    max: u32,
+}
+
+/// A rate an hour as a number field, `now` the rate the model holds: the arrow keys step it by one, and a typed number
+/// is rounded to a whole one. `set` asks the model for a rate, which refuses one out of range; what the field holds after
+/// a change is the model's rate, whether it took the edit or refused it.
+fn rate_field(
+    w: Watch,
+    f: RateField,
+    now: impl Fn() -> Option<u32> + Copy + Send + Sync + 'static,
+    set: impl Fn(i32) + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    let RateField { id, hint, label, range, max } = f;
+    let value = move || now().map(|r| r.to_string()).unwrap_or_default();
+    let typed = move |v: f64| {
+        // One that is not finite or is out of range is refused by the model.
+        if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+            set(v.round() as i32);
+        }
+    };
+    view! {
+        <span class="call-rate">
+            <label for=id.clone()>{words(w, label)}</label>
+            <input type="text" inputmode="numeric" autocomplete="off" id=id class="call-rate-field" aria-describedby=hint.clone()
+                value=value prop:value=value
+                on:keydown=move |ev| {
+                    if let Some(dir) = step_key(&ev.key()) {
+                        ev.prevent_default();
+                        set(now().map_or(0, |r| r as i32).saturating_add(dir));
+                    }
+                }
+                on:change=move |ev| {
+                    let input = event_target::<HtmlInputElement>(&ev);
+                    commit_typed(&input.value(), &typed);
+                    input.set_value(&value());
+                } />
+            <span class="insp-range" id=hint>{move || tr(w, range, Args::new().num("min", 0).num("max", i64::from(max)))}</span>
+        </span>
+    }
+}
+
+/// One radio of a group `name`, its id `id` and its label's message `key`: checked while `chosen`; picked, it asks
+/// `choose`, and when that is refused the radio shows the choice the model kept.
+fn choice_radio(
+    w: Watch,
+    (name, id): (String, String),
+    key: &'static str,
+    chosen: impl Fn() -> bool + Copy + Send + Sync + 'static,
+    choose: impl Fn() -> bool + Copy + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <label class="phase-move">
+            <input type="radio" name=name id=id checked=chosen prop:checked=chosen
+                on:change=move |ev| {
+                    let input = event_target::<HtmlInputElement>(&ev);
+                    if !choose() {
+                        input.set_checked(chosen());
+                    }
+                } />
+            <span>{words(w, key)}</span>
+        </label>
+    }
+}
+
 /// The findings of `section`, `found`, as the list `<section>-findings` under its heading.
 fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl IntoView {
     let (list, head) = (format!("{section}-findings"), format!("{section}-findings-h"));
@@ -2273,57 +2355,30 @@ fn bikes_section(w: Watch) -> impl IntoView {
                 view! { <p class="insp-range" id=format!("bike-effect-{uid}")>{tr(w, "jn-bikes-effect", args)}</p> }
             })
         };
-        let rate_value = move || movement(uid).map(|m| m.rate.to_string()).unwrap_or_default();
-        let set_rate = move |v: f64| {
-            // A typed number is rounded to a whole cyclist; one that is not finite or is out of range is refused by the model.
-            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
-                w.set_cyclists(uid, v.round() as i32);
-            }
-        };
         let rate = move || {
-            let (field, hint) = (rate_id.clone(), range_id.clone());
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-bikes-rate",
+                range: "jn-bikes-rate-range",
+                max: bicycles::MAX_CYCLISTS_PER_HOUR,
+            };
             on.get().then(|| {
-                view! {
-                    <span class="call-rate">
-                        <label for=field.clone()>{words(w, "jn-bikes-rate")}</label>
-                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
-                            value=rate_value prop:value=rate_value
-                            on:keydown=move |ev| {
-                                if let Some(dir) = step_key(&ev.key()) {
-                                    ev.prevent_default();
-                                    let now = movement(uid).map_or(0, |m| m.rate as i32);
-                                    w.set_cyclists(uid, now.saturating_add(dir));
-                                }
-                            }
-                            on:change=move |ev| {
-                                let input = event_target::<HtmlInputElement>(&ev);
-                                commit_typed(&input.value(), &set_rate);
-                                // What the field holds is the model's rate, whether it took the edit or refused it.
-                                input.set_value(&rate_value());
-                            } />
-                        <span class="insp-range" id=hint>
-                            {move || tr(w, "jn-bikes-rate-range", Args::new().num("min", 0).num("max", i64::from(bicycles::MAX_CYCLISTS_PER_HOUR)))}
-                        </span>
-                    </span>
-                }
+                rate_field(
+                    w,
+                    field,
+                    move || movement(uid).map(|m| m.rate),
+                    move |rate| {
+                        w.set_cyclists(uid, rate);
+                    },
+                )
             })
         };
         let (group, head) = (format!("bike-mode-{uid}"), format!("bike-mode-h-{uid}"));
+        // Refused (no phase runs it, say): the radios show the mode the model kept.
         let radio = move |detection: bool, id: &'static str, key: &'static str| {
-            let chosen = move || on.get() == detection;
-            view! {
-                <label class="phase-move">
-                    <input type="radio" name=format!("bike-mode-{uid}") id=format!("bike-mode-{uid}-{id}") checked=chosen prop:checked=chosen
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            // Refused (no phase runs it, say): the radios show the mode the model kept.
-                            if !w.set_bike_detection(uid, detection) {
-                                input.set_checked(chosen());
-                            }
-                        } />
-                    <span>{words(w, key)}</span>
-                </label>
-            }
+            let names = (format!("bike-mode-{uid}"), format!("bike-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || on.get() == detection, move || w.set_bike_detection(uid, detection))
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
@@ -2345,12 +2400,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
     // One row a movement, keyed by its totals: a row is made again only when its numbers change.
     let totals = move || bikes.with(|b| b.movements.iter().filter_map(|m| m.totals).collect::<Vec<_>>());
     let has_totals = Memo::new(move |_| bikes.with(|b| b.movements.iter().any(|m| m.totals.is_some())));
-    let wait = move |s: Option<u32>| match s {
-        Some(wait) => tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(wait))).into_any(),
-        None => {
-            view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-bikes-no-wait-said")}</span> }.into_any()
-        }
-    };
+    let wait = move |s: Option<u32>| wait_cell(w, s, "jn-bikes-no-wait-said");
     let total_row = move |t: bicycles::Totals| {
         let extended = move || tr(w, "jn-bikes-extended-cell", Args::new().num("count", i64::from(t.extended)).num("seconds", i64::from(t.extended_s)));
         view! {
@@ -2416,6 +2466,197 @@ fn bikes_section(w: Watch) -> impl IntoView {
                     {totals_table}
                     {findings}
                     {every_call}
+                </section>
+            }
+        })
+    }
+}
+
+/// Transit signal priority (CLM-14), in the plan's level after bicycle detection: each street with transit gives its
+/// buses no priority, an early green, a green extension or both; while it gives some, its trigger and bounds, its buses
+/// an hour, what its buses met over the hour and the delay that moved to the other approaches; then the placeholder
+/// figures, the streets' buses added up, the findings and every bus. A street with no phase of its own says so, and
+/// priority there is refused with that reason. It decides nothing: the priorities, rates, totals and findings all come
+/// from the view.
+fn priority_section(w: Watch) -> impl IntoView {
+    // Everything below reads the transit priority through this memo, so an edit that leaves it as it was redraws none of
+    // it.
+    let transit = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.transit.clone()).unwrap_or_default());
+    let uids = Memo::new(move |_| transit.with(|t| t.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
+    let street = move |uid: u32| transit.with(|t| t.streets.iter().find(|s| s.uid == uid).cloned());
+    // A street is named by its uid, never copied in: an undo that renames a street keeps every name right.
+    let name_of = move |uid: u32| street(uid).map(|s| w.say(&s.label)).unwrap_or_default();
+    let bounds = move || {
+        let args = Args::new().num("rate", i64::from(transit::DEFAULT_BUSES_PER_HOUR)).num("early", i64::from(transit::EARLY_GREEN_MAX_S));
+        tr(w, "jn-transit-bounds", args.num("extension", i64::from(transit::EXTENSION_MAX_S)))
+    };
+    let item = move |uid: u32| {
+        // Made again only when the street's priority goes on or off, so a radio or the field keeps the focus.
+        let on = Memo::new(move |_| street(uid).is_some_and(|s| s.priority.is_some()));
+        let mode = Memo::new(move |_| street(uid).and_then(|s| s.priority).map(|p| p.mode));
+        let (status_id, rate_id, range_id) = (format!("transit-status-{uid}"), format!("transit-rate-{uid}"), format!("transit-range-{uid}"));
+        let status = move || match street(uid) {
+            Some(s) if !s.has_transit => w.tr("jn-transit-no-transit"),
+            Some(s) if !s.has_phase => w.tr("jn-transit-no-phase"),
+            Some(s) => {
+                let args = Args::new().num("early", i64::from(transit::EARLY_GREEN_MAX_S)).num("extension", i64::from(transit::EXTENSION_MAX_S));
+                match s.priority.map(|p| p.mode) {
+                    None => w.tr("jn-transit-off"),
+                    Some(Mode::EarlyGreen) => tr(w, "jn-transit-trigger-early-green", args),
+                    Some(Mode::Extension) => tr(w, "jn-transit-trigger-extension", args),
+                    Some(Mode::Both) => tr(w, "jn-transit-trigger-both", args),
+                }
+            }
+            None => String::new(),
+        };
+        let effect = move || {
+            let s = street(uid).filter(|s| s.priority.is_some())?;
+            let t = s.totals?;
+            let args = Args::new()
+                .num("buses", i64::from(t.buses))
+                .num("on_arrival", i64::from(t.on_arrival))
+                .num("early", i64::from(t.early_green))
+                .num("extended", i64::from(t.extended))
+                .num("delayed", i64::from(t.delayed))
+                .num("not_served", i64::from(t.not_served))
+                .num("moved", i64::from(t.moved_s));
+            let moved = s.moved.map(|list| {
+                view! { <p class="insp-range" id=format!("transit-moved-{uid}")>{move || tr(w, "jn-transit-moved", Args::new().str("list", w.say(&list)))}</p> }
+            });
+            Some(view! { <p class="insp-range" id=format!("transit-effect-{uid}")>{tr(w, "jn-transit-effect", args)}</p> {moved} })
+        };
+        let rate = move || {
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-transit-rate",
+                range: "jn-transit-rate-range",
+                max: transit::MAX_BUSES_PER_HOUR,
+            };
+            on.get().then(|| {
+                rate_field(
+                    w,
+                    field,
+                    move || street(uid).and_then(|s| s.priority).map(|p| p.buses),
+                    move |rate| {
+                        w.set_buses(uid, rate);
+                    },
+                )
+            })
+        };
+        let (group, head) = (format!("transit-mode-{uid}"), format!("transit-mode-h-{uid}"));
+        // Refused (no transit, say): the radios show the priority the model kept.
+        let radio = move |choice: Option<Mode>, id: &'static str, key: &'static str| {
+            let names = (format!("transit-mode-{uid}"), format!("transit-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || mode.get() == choice, move || w.set_transit_priority(uid, choice))
+        };
+        let (named_by, described_by) = (head.clone(), status_id.clone());
+        view! {
+            <li>
+                <div class="transit-street" role="group" aria-label=move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))>
+                    <span class="transit-name">{move || tr(w, "jn-transit-group", Args::new().str("street", name_of(uid)))}</span>
+                    <div class="transit-mode" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
+                        <span class="transit-mode-h" id=head>{words(w, "jn-transit-mode")}</span>
+                        {radio(None, "off", "jn-transit-mode-off")}
+                        {radio(Some(Mode::EarlyGreen), "early-green", "jn-transit-mode-early-green")}
+                        {radio(Some(Mode::Extension), "extension", "jn-transit-mode-extension")}
+                        {radio(Some(Mode::Both), "both", "jn-transit-mode-both")}
+                    </div>
+                    <p class="insp-range" id=status_id>{status}</p>
+                    {rate}
+                    {effect}
+                </div>
+            </li>
+        }
+    };
+    // One row a street, keyed by its totals: a row is made again only when its numbers change.
+    let totals = move || transit.with(|t| t.streets.iter().filter_map(|s| s.totals).collect::<Vec<_>>());
+    let has_totals = Memo::new(move |_| transit.with(|t| t.streets.iter().any(|s| s.totals.is_some())));
+    let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
+    let wait = move |s: Option<u32>| wait_cell(w, s, "jn-transit-no-wait-said");
+    let total_row = move |t: transit::Totals| {
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(t.arm)}</th>
+                <td>{t.buses}</td>
+                <td>{t.on_arrival}</td>
+                <td>{t.early_green}</td>
+                <td>{t.extended}</td>
+                <td>{t.delayed}</td>
+                <td>{move || wait(t.longest_wait_s)}</td>
+                <td>{move || seconds(t.moved_s)}</td>
+            </tr>
+        }
+    };
+    let totals_table = move || {
+        has_totals.get().then(|| {
+            let heads = &[
+                "jn-transit-col-street",
+                "jn-transit-col-buses",
+                "jn-transit-col-on-arrival",
+                "jn-transit-col-early-green",
+                "jn-transit-col-extended",
+                "jn-transit-col-delayed",
+                "jn-calls-col-longest",
+                "jn-transit-col-moved",
+            ];
+            let body = view! { <For each=totals key=|t| *t children=total_row/> };
+            hour_table(w, Table { section: "transit", part: "totals", named: true, caption: "jn-transit-totals-caption", heads }, body)
+        })
+    };
+    let findings = move || {
+        let found = transit.with(|t| t.findings.clone());
+        (!found.is_empty()).then(|| findings_list(w, "transit", found))
+    };
+    // Every bus, keyed by the bus itself: a row is made again only when what happened to it changes.
+    let n_rows = Memo::new(move |_| transit.with(|t| t.rows.len()));
+    let rows = move || transit.with(|t| t.rows.clone());
+    let bus_row = move |r: BusRowView| {
+        let wait = r.bus.wait_s;
+        view! {
+            <tr>
+                <th scope="row">{move || name_of(r.bus.arm)}</th>
+                <td>{move || w.say(&r.at)}</td>
+                <td>{move || w.say(&r.outcome)}</td>
+                <td>{move || seconds(wait)}</td>
+            </tr>
+        }
+    };
+    let every_bus = move || {
+        (n_rows.get() > 0).then(|| {
+            view! {
+                <details class="jn-fold" id="transit-rows">
+                    <summary>{move || tr(w, "jn-transit-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
+                    {hour_table(
+                        w,
+                        Table {
+                            section: "transit",
+                            part: "rows",
+                            named: false,
+                            caption: "jn-transit-rows-caption",
+                            heads: &["jn-transit-col-bus", "jn-transit-col-arrived", "jn-calls-col-outcome", "jn-transit-col-wait"],
+                        },
+                        view! { <For each=rows key=|r| r.bus children=bus_row/> },
+                    )}
+                </details>
+            }
+        })
+    };
+    let none_on = Memo::new(move |_| transit.with(|t| !t.streets.iter().any(|s| s.priority.is_some())));
+    // As actuation and bicycle detection: no section with no street to list (none has transit or priority).
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
+                    <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-transit-intro")}</p>
+                    <p class="insp-range" id="transit-bounds">{bounds}</p>
+                    // The priorities and the rate fields edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="transit-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+                    {move || none_on.get().then(|| view! { <p class="insp-range" id="transit-none">{words(w, "jn-transit-none")}</p> })}
+                    {totals_table}
+                    {findings}
+                    {every_bus}
                 </section>
             }
         })
