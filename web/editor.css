@@ -2116,8 +2116,7 @@ svg pattern circle {
 .wfield input:disabled,
 .var select:disabled,
 .var input[type="time"]:disabled,
-.inspector select:disabled,
-#signal-plans input:disabled {
+.inspector select:disabled {
   border-color: var(--rule);
   background: transparent;
   color: var(--ink-2);
@@ -3829,6 +3828,13 @@ svg pattern circle {
 #signal-plans input[type="time"] {
   min-width: 0;
   max-width: 100%;
+}
+/* The locked look of the inspector's other fields (above), kept apart from their rule, whose selectors are pinned. */
+#signal-plans input:disabled {
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: default;
 }
 .plan-schedule select,
 .period-add select {
