@@ -1026,6 +1026,33 @@ test.describe("signal timing on a junction of the city", () => {
     await expect.poll(cells).toEqual(pushed);
   });
 
+  test("passive detection refused on a crossing no phase walks leaves its push button chosen", async ({ page }) => {
+    const box = page.locator(".call-crossing input[type=checkbox]").nth(1);
+    const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
+    await box.click();
+    await expect(box).toBeChecked();
+    // Take the crossing out of every phase: it stays on call, and its detection is still offered.
+    const walks = page.locator(`#inspector input[id^="sig-walks-"][id$="-${uid}"]`);
+    for (let i = 0; i < (await walks.count()); i++) {
+      if (await walks.nth(i).isChecked()) {
+        await walks.nth(i).uncheck();
+        await expect(walks.nth(i)).not.toBeChecked();
+      }
+    }
+    await expect(box).toBeChecked();
+    const push = page.locator(`#call-detect-${uid}-push-button`);
+    const passive = page.locator(`#call-detect-${uid}-passive`);
+    await expect(push).toBeChecked();
+    // Chosen anyway, passive is refused with why, and the radios show the push button the crossing kept.
+    await passive.click();
+    await expect(live(page)).toHaveText(
+      "No phase of the plan walks this crossing, so passive detection cannot serve it: walk it in a phase first.",
+    );
+    await expect(passive).not.toBeChecked();
+    await expect(push).toBeChecked();
+    await expect(page.locator(`#call-detect-help-${uid}`)).toContainText("the call stays placed after they leave");
+  });
+
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
     page,
   }) => {

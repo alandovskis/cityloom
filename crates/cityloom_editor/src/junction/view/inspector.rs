@@ -1716,6 +1716,20 @@ fn signal_overview(w: Watch) -> impl IntoView {
     }
 }
 
+/// The Detection radios of a crossing on call: what each chooses, the end of its id and its label.
+const DETECTION_RADIOS: [(Detection, &str, &str); 2] =
+    [(Detection::PushButton, "push-button", "jn-calls-detection-push-button"), (Detection::Passive, "passive", "jn-calls-detection-passive")];
+
+/// Checks the Detection radio of crossing `uid` that is `kept`, and only it.
+fn show_detection(uid: u32, kept: Detection) {
+    use leptos::wasm_bindgen::JsCast;
+    for (choice, id, _) in DETECTION_RADIOS {
+        if let Some(radio) = document().get_element_by_id(&format!("call-detect-{uid}-{id}")).and_then(|e| e.dyn_into::<HtmlInputElement>().ok()) {
+            radio.set_checked(choice == kept);
+        }
+    }
+}
+
 /// Pedestrian calls (#60), in the plan's level: each crossing on call (walked only when someone calls it, with its calls
 /// an hour and how it detects them, a push button or passive detection, CLM-17) or on recall (walked every time its
 /// phases run, which calls cannot change), the placeholder figures that bound the service, the calls of the hour added
@@ -1798,11 +1812,11 @@ fn calls_section(w: Watch) -> impl IntoView {
                     view! {
                         <label class="phase-move">
                             <input type="radio" name=format!("call-detect-{uid}") id=format!("call-detect-{uid}-{id}") checked=chosen prop:checked=chosen
-                                on:change=move |ev| {
-                                    let input = event_target::<HtmlInputElement>(&ev);
-                                    // Refused (no phase walks it, say): the radios show the detection the model kept.
+                                on:change=move |_| {
+                                    // Refused (no phase walks it, say): the radios show the detection the model kept. The
+                                    // browser has unchecked the other radio, and no change re-runs its binding, so each is set.
                                     if !w.set_detection(uid, choice) {
-                                        input.set_checked(chosen());
+                                        show_detection(uid, detection());
                                     }
                                 } />
                             <span>{words(w, key)}</span>
@@ -1813,8 +1827,7 @@ fn calls_section(w: Watch) -> impl IntoView {
                 view! {
                     <div class="call-detect" id=group role="radiogroup" aria-labelledby=named_by aria-describedby=described_by>
                         <span class="call-detect-h" id=head>{words(w, "jn-calls-detection")}</span>
-                        {radio(Detection::PushButton, "push-button", "jn-calls-detection-push-button")}
-                        {radio(Detection::Passive, "passive", "jn-calls-detection-passive")}
+                        {DETECTION_RADIOS.map(|(choice, id, key)| radio(choice, id, key))}
                         <p class="insp-range" id=help>{help_text}</p>
                     </div>
                 }
