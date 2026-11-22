@@ -379,8 +379,14 @@ impl<'a> Buses<'a> {
     /// waiting, or coming before the green would end, that may be given an early green.
     fn cut_for(&self, k: usize, green_start: u64, green_s: u32, held_s: u32) -> Option<Cut> {
         let end = green_start + u64::from(green_s);
-        // A phase a bus of its own street is due to use is not cut.
-        if (0..self.streets.len()).any(|y| self.streets[y].phase == k && self.first(y).is_some_and(|t| t < end + u64::from(EXTENSION_MAX_S))) {
+        // A phase a bus of its own street is due to use is not cut: one coming before its green ends, or within an
+        // extension when its street may be given one.
+        let due = |y: usize| {
+            let st = &self.streets[y];
+            let reach = if st.mode.extends() && self.allowed(y) { end + u64::from(EXTENSION_MAX_S) } else { end };
+            st.phase == k && self.first(y).is_some_and(|t| t < reach)
+        };
+        if (0..self.streets.len()).any(due) {
             return None;
         }
         let n = self.uids.len();
@@ -758,6 +764,23 @@ mod tests {
         let (ran, buses, _, _) = serve(&plan, &control::fixed(&plan), &streets, vec![0, 0], &[]);
         assert_eq!(ran[0], (0, 0, 31, 36), "held 6 s for street 1's bus, not cut for street 2's");
         assert_eq!(buses, vec![bus(2, 3, Outcome::Delayed, 33, 0, 0), bus(1, 30, Outcome::Extended, 0, 0, 6)]);
+    }
+
+    #[test]
+    fn a_phase_is_cut_for_another_street_s_bus_when_its_own_bus_after_its_green_could_not_hold_it() {
+        let plan = two();
+        // Street 1 gives no extension: its bus at 30 s, after its green would end, cannot hold it, so street 2's bus at
+        // 3 s is given its early green (street 1's green cut to 15 s).
+        let streets = [street(1, 0, Mode::EarlyGreen, vec![30]), street(2, 1, Mode::EarlyGreen, vec![3])];
+        let (ran, buses, _, _) = serve(&plan, &control::fixed(&plan), &streets, vec![0, 0], &[]);
+        assert_eq!(ran[0], (0, 0, 15, 20), "cut for street 2's bus");
+        assert_eq!(buses[0], bus(2, 3, Outcome::EarlyGreen, 17, 10, 0));
+        // Street 1 extends, but its first green was held for its bus at 27 s: its bus at 90 s, after its second green
+        // would end (at 88 s), cannot hold that one, so it is cut for street 2's bus at 70 s.
+        let streets = [street(1, 0, Mode::Both, vec![27, 90]), street(2, 1, Mode::EarlyGreen, vec![70])];
+        let (ran, buses, _, _) = serve(&plan, &control::fixed(&plan), &streets, vec![0, 0], &[]);
+        assert_eq!(&ran[..3], &[(0, 0, 28, 33), (1, 33, 25, 63), (0, 63, 15, 83)], "{buses:?}");
+        assert_eq!(buses[1], bus(2, 70, Outcome::EarlyGreen, 13, 10, 0), "{buses:?}");
     }
 
     #[test]
