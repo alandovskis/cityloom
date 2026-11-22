@@ -2636,29 +2636,24 @@ fn priority_section(w: Watch) -> impl IntoView {
             }
         })
     };
-    let none = Memo::new(move |_| {
-        transit.with(|t| {
-            if t.streets.is_empty() {
-                Some("jn-transit-none")
-            } else if !t.streets.iter().any(|s| s.priority.is_some()) {
-                Some("jn-transit-none-on")
-            } else {
-                None
+    let none_on = Memo::new(move |_| transit.with(|t| !t.streets.iter().any(|s| s.priority.is_some())));
+    // As actuation and bicycle detection: no section with no street to list (none has transit or priority).
+    move || {
+        (!uids.with(Vec::is_empty)).then(|| {
+            view! {
+                <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
+                    <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
+                    <p class="insp-range">{words(w, "jn-transit-intro")}</p>
+                    <p class="insp-range" id="transit-bounds">{bounds}</p>
+                    // The priorities and the rate fields edit: offered disabled on a junction shown read-only.
+                    {locked(w.read_only(), view! { <ul class="transit-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
+                    {move || none_on.get().then(|| view! { <p class="insp-range" id="transit-none">{words(w, "jn-transit-none")}</p> })}
+                    {totals_table}
+                    {findings}
+                    {every_bus}
+                </section>
             }
         })
-    });
-    view! {
-        <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
-            <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
-            <p class="insp-range">{words(w, "jn-transit-intro")}</p>
-            <p class="insp-range" id="transit-bounds">{bounds}</p>
-            // The priorities and the rate fields edit: offered disabled on a junction shown read-only.
-            {locked(w.read_only(), view! { <ul class="transit-streets"><For each=move || uids.get() key=|u| *u children=item/></ul> })}
-            {move || none.get().map(|key| view! { <p class="insp-range" id="transit-none">{words(w, key)}</p> })}
-            {totals_table}
-            {findings}
-            {every_bus}
-        </section>
     }
 }
 

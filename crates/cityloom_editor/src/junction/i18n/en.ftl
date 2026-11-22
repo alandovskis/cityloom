@@ -894,7 +894,6 @@ jn-transit-effect =
     }: on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; delay moved to other approaches { $moved } s.
 jn-transit-moved = Delay moved to other approaches: { $list }.
 jn-transit-moved-item = { $arm } { $seconds } s
-jn-transit-none = No street here has transit. Give a street a bus lane, a queue jump, a bus gate, a bus stop or a transit filter (in its Transit priority fold) to give its buses priority.
 jn-transit-totals-caption = Buses in one hour, by street
 jn-transit-col-street = Street
 jn-transit-col-buses = Buses
@@ -934,4 +933,4 @@ jn-transit-said-no-wait =
         [one] 1 bus
        *[other] { $buses } buses
     } in the hour; on arrival { $on_arrival }, early green { $early }, extended { $extended }, delayed { $delayed }, not served { $not_served }; no bus was served.
-jn-transit-none-on = No street gives its buses priority: each bus waits for its street's green like other traffic.
+jn-transit-none = No street gives its buses priority: each bus waits for its street's green like other traffic.

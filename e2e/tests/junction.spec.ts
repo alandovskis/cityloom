@@ -1272,12 +1272,10 @@ test.describe("signal timing on a junction of the city", () => {
   test("a street with transit gives its buses an early green or a green extension, shows the trigger, bounds and how its buses fared, keeps it on reload, and speaks French (CLM-14)", async ({
     page,
   }) => {
+    // No street has transit: no section, as actuation and bicycle detection have none with nothing to list.
     const section = page.locator("#signal-transit");
-    await expect(section).toContainText("Transit signal priority");
-    await expect(page.locator("#transit-bounds")).toContainText(
-      "Placeholder figures: a street given priority has 12 buses an hour, spread over one hour. An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s",
-    );
-    await expect(page.locator("#transit-none")).toContainText("No street here has transit.");
+    await expect(page.locator("#signal-bikes")).toBeVisible();
+    await expect(section).toHaveCount(0);
     // A bus lane on a street with a phase of its own gives it transit.
     const uid = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
       "act-mode-",
@@ -1294,6 +1292,10 @@ test.describe("signal timing on a junction of the city", () => {
     const both = page.locator(`#transit-mode-${uid}-both`);
     const status = page.locator(`#transit-status-${uid}`);
     const rate = page.locator(`#transit-rate-${uid}`);
+    await expect(section).toContainText("Transit signal priority");
+    await expect(page.locator("#transit-bounds")).toContainText(
+      "Placeholder figures: a street given priority has 12 buses an hour, spread over one hour. An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s",
+    );
     await expect(section.locator(".transit-name").first()).toHaveText(/^Buses on .+/);
     await expect(off).toBeChecked();
     await expect(status).toHaveText("No priority: a bus waits for the street's green like other traffic.");

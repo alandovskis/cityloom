@@ -894,7 +894,6 @@ jn-transit-effect =
     } : à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; retard reporté sur les autres approches { $moved } s.
 jn-transit-moved = Retard reporté sur les autres approches : { $list }.
 jn-transit-moved-item = { $arm } { $seconds } s
-jn-transit-none = Aucune rue n’a de transport en commun ici. Donnez à une rue une voie réservée, un dépassement de file, une porte d’autobus, un arrêt ou un filtre pour le transport en commun (dans sa section Priorité au transport en commun) pour donner la priorité à ses autobus.
 jn-transit-totals-caption = Autobus en une heure, par rue
 jn-transit-col-street = Rue
 jn-transit-col-buses = Autobus
@@ -934,4 +933,4 @@ jn-transit-said-no-wait =
         [one] { $buses } autobus
        *[other] { $buses } autobus
     } dans l’heure; à l’arrivée { $on_arrival }, vert hâtif { $early }, prolongés { $extended }, retardés { $delayed }, non servis { $not_served }; aucun autobus n’a été servi.
-jn-transit-none-on = Aucune rue ne donne la priorité à ses autobus : chaque autobus attend le vert de sa rue comme le reste de la circulation.
+jn-transit-none = Aucune rue ne donne la priorité à ses autobus : chaque autobus attend le vert de sa rue comme le reste de la circulation.

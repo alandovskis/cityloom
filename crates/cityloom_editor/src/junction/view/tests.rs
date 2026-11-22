@@ -4453,12 +4453,11 @@ fn a_street_with_transit_but_no_phase_says_why_and_one_kept_with_priority_withou
     assert!(t.contains("have priority, but the street has no transit any more"), "{t}");
     assert!(s.set_transit_priority(n, None));
     assert!(!transit_of(&panel(&s)).contains(&format!(r#"id="transit-mode-{n}""#)), "no transit and no priority: no longer listed");
-    // The sample has no transit: the section says how to give a street some.
+    // The sample has no transit: no section at all, as bicycle detection and actuation have none with nothing to list.
     let sample = shared(0);
     sample.show_plan();
     assert!(sample.view_now().signal.is_some(), "the sample is a signal");
-    let h = panel(&sample);
-    assert!(transit_of(&h).contains(r#"id="transit-none" class="insp-range">No street here has transit."#), "{h}");
+    assert!(!panel(&sample).contains(r#"id="signal-transit""#));
 }
 
 #[test]
