@@ -1924,7 +1924,9 @@ fn plans_section(w: Watch) -> impl IntoView {
     }
 }
 
-/// The schedule of day type `day` as a table, one row a period: its start (a time field, the first's fixed at 00:00),
+/// The schedule of day type `day` as a table, one row a period, keyed by its start, plan and end (ids name the start, so
+/// they stay unique): its start (a time field, the first's fixed at 00:00; a start changed moves the focus to the
+/// period's new start field),
 /// its end, its plan (a choice), and a button that removes it (the first stays); then a new period's start and plan. A
 /// focusable region named by its caption, as the plan's other tables. Locked read-only.
 fn schedule_table(
@@ -1957,6 +1959,10 @@ fn schedule_table(
                             let to = minute_of(&input.value()).unwrap_or(-1);
                             if !w.edit(|j| j.set_period_start(day, start, to)) {
                                 input.set_value(&crate::shared::said::hhmm(start as i32));
+                            } else if to != start as i32 {
+                                // The row is keyed by its start, so it is drawn again (and may move): the focus follows
+                                // the period to its new start field once it is there, never left on the body.
+                                focus_after_swap(format!("period-start-{d}-{to}"));
                             }
                         } />
                 </th>

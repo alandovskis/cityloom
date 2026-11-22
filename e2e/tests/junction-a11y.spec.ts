@@ -431,12 +431,23 @@ test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
     await expect(
       page.getByRole("button", { name: "Remove the period from 07:00 on Saturdays", exact: true }),
     ).toBeVisible();
+    // A start changed with the keyboard keeps the focus in that period's start field, wherever the row is drawn again.
+    const start = page.getByLabel("Start of the period from 07:00 on Saturdays", { exact: true });
+    await start.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(live(page)).toContainText("Period from 07:00 on Saturdays now starts at 08:00.");
+    const moved = page.getByLabel("Start of the period from 08:00 on Saturdays", { exact: true });
+    await expect(moved).toHaveValue("08:00");
+    await expect(moved).toBeFocused();
+    await expect(page.locator("#period-start-saturday-480")).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(page.getByLabel("Start of the period from 09:00 on Saturdays", { exact: true })).toBeFocused();
     // Which plan runs: a day and a time, both labelled, and the answer a status.
     const runs = page.getByRole("group", { name: "Which plan runs", exact: true });
     await runs.getByRole("combobox", { name: "Day", exact: true }).selectOption("saturday");
-    await runs.getByLabel("Time", { exact: true }).fill("07:30");
-    await expect(page.getByRole("status").filter({ hasText: "At 07:30" })).toHaveText(
-      "At 07:30 on Saturdays, plan “Morning peak” runs.",
+    await runs.getByLabel("Time", { exact: true }).fill("09:30");
+    await expect(page.getByRole("status").filter({ hasText: "At 09:30" })).toHaveText(
+      "At 09:30 on Saturdays, plan “Morning peak” runs.",
     );
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
