@@ -132,14 +132,15 @@ impl Impact {
 pub fn diff(cause: Cause, before: &Input, after: &Input) -> Impact {
     // A use one side lacks has no width there: it is 0 mm on that side.
     let width = |input: &Input, mode: Mode| input.uses.iter().find(|(m, _)| *m == mode).map_or(0, |(_, mm)| *mm);
-    let modes = after.uses.iter().chain(&before.uses).map(|(mode, _)| *mode);
-    let mut listed = Vec::new();
+    // After's uses in its order, then any only before had.
+    let mut modes: Vec<Mode> = after.uses.iter().map(|(mode, _)| *mode).collect();
+    for (mode, _) in &before.uses {
+        if !modes.contains(mode) {
+            modes.push(*mode);
+        }
+    }
     let uses = modes
-        .filter(|mode| {
-            let first = !listed.contains(mode);
-            listed.push(*mode);
-            first
-        })
+        .into_iter()
         .filter_map(|mode| {
             let (before_mm, after_mm) = (width(before, mode), width(after, mode));
             (before_mm != after_mm).then_some(UseChange { mode, before_mm, after_mm })
