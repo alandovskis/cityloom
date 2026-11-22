@@ -187,6 +187,11 @@ def playwright_results(report: dict) -> Dict[str, Optional[str]]:
     return results
 
 
+def spec_of(name: str) -> str:
+    """The spec file (relative to e2e/tests) of a test named as `playwright_results` names it."""
+    return name.split("::", 1)[0]
+
+
 # ---- #[cfg(test)] blocks --------------------------------------------------------------------------------------------
 
 _CFG_TEST = re.compile(r"#\[cfg\((?:test|(?:all|any)\((?:[^\[\]]*[\s(,])?test(?![\w-])[^\[\]]*\))\)\]")
@@ -434,12 +439,15 @@ class Gate:
                 report.problems += found + problems
                 report.new_tests += new
         if specs:
-            asked = set(self._playwright([], listing=True)) - browser_before
-            ran = {name.split("::", 1)[0] for name in asked}
-            if ran:
-                results = self._playwright(sorted("tests/" + spec for spec in ran), listing=False)
-                # Only the specs with a new test are run: the base's tests of the other specs were not, and are not gone.
-                before = {name for name in browser_before if name.split("::", 1)[0] in ran}
+            listed = set(self._playwright([], listing=True))
+            # A test of the base the red commit no longer lists is gone, in whichever spec it was.
+            report.problems += [f"Playwright: the test {name} is gone" for name in sorted(browser_before - listed)]
+            # Run the specs that gain a test and the changed specs that still hold one; no other spec can differ.
+            changed = {spec[len("tests/") :] for spec in specs}
+            to_run = ({spec_of(n) for n in listed - browser_before} | changed) & {spec_of(n) for n in listed}
+            if to_run:
+                results = self._playwright(sorted("tests/" + spec for spec in to_run), listing=False)
+                before = {name for name in browser_before & listed if spec_of(name) in to_run}
                 found, new = judge_red(before, results, "Playwright")
                 report.problems += found
                 report.new_tests += new
