@@ -600,7 +600,7 @@ jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
 
-## Appels piétons (src/junction/model/calls.rs, #60) : un passage sur appel n’est ouvert que si un piéton appuie sur le bouton
+## Appels piétons (src/junction/model/calls.rs, #60) : un passage sur appel n’est ouvert que si un piéton l’appelle
 jn-refusal-call-not-walked = Aucune phase du plan n’ouvre ce passage, il ne peut donc pas être sur appel : ouvrez-le d’abord dans une phase.
 jn-refusal-call-already = Le passage est déjà réglé ainsi.
 jn-refusal-not-on-call = Seul un passage sur appel a un nombre d’appels par heure.
@@ -618,10 +618,10 @@ jn-rev-call-rate =
        *[other] { $rate } appels par heure
     }
 jn-calls-heading = Appels piétons
-jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton appuie sur le bouton. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
-jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; les appels sont répartis sur une heure.
+jn-calls-intro = Un passage sur appel n’est ouvert que lorsqu’un piéton l’appelle, par bouton-poussoir ou détection passive. Un passage en rappel est ouvert chaque fois que ses phases passent, et les appels ne changent rien à son service.
+jn-calls-bounds = Valeurs provisoires : marche de { $walk } s, puis dégagement à { $speed } m/s, arrondi à la seconde supérieure; un vert est prolongé d’au plus { $max } s; avec la détection passive, un piéton part après { $limit } s d’attente; les appels sont répartis sur une heure.
 jn-calls-group = Passage de { $street }
-jn-calls-on-call = Sur appel (bouton-poussoir)
+jn-calls-on-call = Sur appel
 jn-calls-rate = Appels par heure
 jn-calls-rate-range = De { $min } à { $max } appels par heure (borne provisoire)
 jn-calls-recall = En rappel : ouvert chaque fois que ses phases passent; les appels ne changent rien à son service.
@@ -676,6 +676,28 @@ jn-calls-said-no-wait =
         [one] { $calls } appel
        *[other] { $calls } appels
     } dans l’heure; servis { $served }, retardés { $delayed }, vert prolongé { $extended }, non servis { $not_served }; aucun appel n’a été servi.
+
+## Détection passive des piétons (src/junction/model/calls.rs, CLM-17) : la détection en bordure de trottoir place l’appel et l’annule quand le piéton part
+jn-refusal-detection-not-walked = Aucune phase du plan n’ouvre ce passage, la détection passive ne peut donc pas le servir : ouvrez-le d’abord dans une phase.
+jn-refusal-detection-needs-call = Seul un passage sur appel détecte les piétons : mettez-le d’abord sur appel.
+jn-rev-call-passive = Passage de { $arm } : détection passive
+jn-rev-call-push-button = Passage de { $arm } : bouton-poussoir
+jn-calls-detection = Détection
+jn-calls-detection-push-button = Bouton-poussoir
+jn-calls-detection-passive = Détection passive
+jn-calls-detection-push-button-help = Le piéton appuie sur le bouton pour appeler la marche; l’appel reste placé après son départ, et la marche est donc donnée même à un passage vide.
+jn-calls-detection-passive-help = Un radar, un capteur infrarouge ou une caméra en bordure de trottoir place l’appel pendant qu’un piéton attend; celui qui part après { $limit } s d’attente l’annule, et une marche que plus personne n’attend est omise. La marche et le dégagement ne sont jamais raccourcis.
+jn-calls-col-cancelled = Annulés
+jn-calls-col-skipped = Marches omises
+jn-calls-outcome-cancelled = Annulé : parti après { $wait } s d’attente
+jn-calls-said-passive =
+    Détection passive : { $cancelled ->
+        [one] { $cancelled } appel annulé
+       *[other] { $cancelled } appels annulés
+    }, { $skipped ->
+        [one] { $skipped } marche omise
+       *[other] { $skipped } marches omises
+    }.
 
 ## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/model/signal.rs `conflicts`)
 jn-conflict-move = les voitures du côté { $from } qui vont { $turn }

@@ -331,9 +331,17 @@ impl JunctionVm {
         self.call_edit(uid, |j| j.set_call_rate(uid, rate))
     }
 
+    /// The person gives the crossing of street `uid`, on call, its detection: a push button or passive kerbside detection
+    /// (CLM-17). Announced as `set_on_call` is, the cancelled calls and skipped walks with the totals; the detection it
+    /// has already is said not at all.
+    pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
+        self.call_edit(uid, |j| j.set_detection(uid, detection))
+    }
+
     /// An edit of a crossing's calls: the edit's text, the crossing's calls added up and any calls finding that arose,
     /// or the refusal. It changes no phase, so nothing about the plan's conflicts or patterns is said. A rate the crossing
-    /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, and only an
+    /// had already is said not at all: `set_call_rate` takes it (returns true) without adding a revision, as `set_detection`
+    /// takes the detection it has, and only an
     /// edit that added one is announced, or the last revision, some earlier edit, would be read out.
     fn call_edit(&self, uid: u32, f: impl FnOnce(&mut Junction) -> bool) -> bool {
         // Shown read-only, refused first, as every edit command is: the read-only sentence and nothing else is said.
@@ -1347,6 +1355,64 @@ mod tests {
     }
 
     #[test]
+    fn a_crossing_given_passive_detection_is_announced_with_its_cancelled_calls_and_a_refusal_says_why_in_both_languages() {
+        use crate::junction::model::calls::Detection;
+        let r = rig(0);
+        let (n, e) = r.vm.read(|j| {
+            let at = |b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+            (at(0), at(90))
+        });
+        // On recall: refused, and says why.
+        assert!(!r.vm.set_detection(e, Detection::Passive));
+        assert_eq!(r.said.take(), vec!["Only a crossing on call detects pedestrians: put it on call first."]);
+        assert!(r.vm.set_on_call(e, true));
+        r.said.take();
+        assert!(r.vm.set_detection(e, Detection::Passive));
+        let t = r.said.take();
+        assert_eq!(t.len(), 1);
+        assert!(t[0].starts_with("Crossing of Sample Street 1 (east): passive detection."), "{t:?}");
+        assert!(t[0].contains("Crossing of Sample Street 1 (east): 12 calls in the hour; served "), "{t:?}");
+        let totals = r.vm.view_now().signal.as_ref().unwrap().calls.crossings.iter().find(|c| c.uid == e).unwrap().totals.unwrap();
+        assert!(totals.cancelled > 0, "the sample hour has people who leave: {totals:?}");
+        let passive = format!("Passive detection: {} calls cancelled, {} ", totals.cancelled, totals.walks_skipped);
+        assert!(t[0].ends_with("skipped.") && t[0].contains(&passive), "{t:?}");
+        // The detection it has: nothing is said, as for a rate it has.
+        assert!(r.vm.set_detection(e, Detection::Passive));
+        assert!(r.said.take().is_empty());
+        assert!(r.vm.set_detection(e, Detection::PushButton));
+        let t = r.said.take();
+        assert!(t[0].starts_with("Crossing of Sample Street 1 (east): push button."), "{t:?}");
+        assert!(!t[0].contains("Passive detection"), "a push button cancels nothing: {t:?}");
+        // A plan with no phase that walks the north street's crossing: passive is refused, and says why.
+        let only_east = crate::junction::model::signal::SignalPlan {
+            phases: vec![crate::junction::model::signal::StoredPhase {
+                moves: vec![crate::junction::model::signal::Move { from: e, to: n }],
+                walks: vec![],
+                rides: vec![],
+                arm: None,
+            }],
+        };
+        r.vm.edit(|j| j.set_plan_for_test(only_east.clone()));
+        assert!(!r.vm.set_detection(e, Detection::Passive));
+        assert_eq!(r.said.take(), vec!["No phase of the plan walks this crossing, so passive detection cannot serve it: walk it in a phase first."]);
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.set_on_call(e, true));
+        said.take();
+        assert!(fr.set_detection(e, Detection::Passive));
+        let t = said.take();
+        assert!(t[0].starts_with("Passage de Sample Street 1 (est)\u{a0}: détection passive."), "{t:?}");
+        assert!(t[0].contains("Détection passive\u{a0}: "), "{t:?}");
+        fr.edit(|j| j.set_plan_for_test(only_east));
+        assert!(!fr.set_detection(e, Detection::Passive));
+        assert_eq!(
+            said.take(),
+            vec!["Aucune phase du plan n’ouvre ce passage, la détection passive ne peut donc pas le servir\u{a0}: ouvrez-le d’abord dans une phase."]
+        );
+    }
+
+    #[test]
     fn a_control_change_that_takes_crossings_off_call_counts_them_in_both_languages() {
         use crate::junction::model::PRIORITY;
         for (locale, one, two) in [
@@ -1715,6 +1781,8 @@ mod read_only_tests {
         assert!(!r.vm.set_on_call(arm, true), "on call is refused");
         assert_eq!(r.said.take(), [REFUSED], "said once, the read-only sentence and no other reason");
         assert!(!r.vm.set_call_rate(arm, 20), "a rate is refused");
+        assert_eq!(r.said.take(), [REFUSED]);
+        assert!(!r.vm.set_detection(arm, crate::junction::model::calls::Detection::Passive), "a detection is refused");
         assert_eq!(r.said.take(), [REFUSED]);
         assert_eq!(r.vm.read(|j| j.snapshot()), junction, "nothing changed");
         r.vm.flush();

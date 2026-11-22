@@ -886,7 +886,7 @@ test.describe("signal timing on a junction of the city", () => {
     const section = page.locator("#signal-calls");
     await expect(section).toContainText("Pedestrian calls");
     await expect(page.locator("#calls-bounds")).toHaveText(
-      "Placeholder figures: walk 7 s, then clearance at 1.0 m/s, rounded up to the second; a green is extended by at most 15 s; the calls are spread over one hour.",
+      "Placeholder figures: walk 7 s, then clearance at 1.0 m/s, rounded up to the second; a green is extended by at most 15 s; with passive detection a pedestrian leaves after waiting 30 s; the calls are spread over one hour.",
     );
     const boxes = section.locator(".call-crossing input[type=checkbox]");
     expect(await boxes.count()).toBeGreaterThanOrEqual(2);
@@ -937,7 +937,9 @@ test.describe("signal timing on a junction of the city", () => {
     const cells = (await totals.first().locator("td").allInnerTexts()).map((t) => t.trim());
     expect(cells[0]).toBe("30");
     expect(Number(cells[1]) + Number(cells[2])).toBe(30);
-    expect(cells[3]).toBe("0");
+    expect(cells[3]).toBe("0"); // cancelled: a push button cancels nothing
+    expect(cells[4]).toBe("0"); // not served
+    expect(cells[6]).toBe("0"); // walks skipped
     await expect(totals.first().locator("td").last()).toHaveText(/^\d+ s$/);
     // Every call, one row each, in a fold.
     const rows = page.locator("#calls-rows");
@@ -960,6 +962,95 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#calls-totals caption")).toHaveText("Appels en une heure, par passage");
     await expect(rows.locator("summary")).toHaveText("Chaque appel, une ligne par appel (30)");
     await expect(section).not.toContainText("On recall");
+  });
+
+  test("a crossing on call detected passively cancels the calls of people who leave and skips walks nobody waits for, in English and French", async ({
+    page,
+  }) => {
+    // The second crossing, which a phase walks (as in the test above).
+    const box = page.locator(".call-crossing input[type=checkbox]").nth(1);
+    const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
+    // On recall a crossing has no detection to choose.
+    await expect(page.locator(`#call-detect-${uid}`)).toHaveCount(0);
+    await box.click();
+    await expect(box).toBeChecked();
+    const push = page.locator(`#call-detect-${uid}-push-button`);
+    const passive = page.locator(`#call-detect-${uid}-passive`);
+    await expect(push).toBeChecked();
+    await expect(page.locator(`#call-detect-help-${uid}`)).toContainText("the call stays placed after they leave");
+    const row = page.locator("#calls-totals tbody tr").first();
+    const cells = async () => (await row.locator("td").allInnerTexts()).map((t) => t.trim());
+    const pushed = await cells();
+    expect([pushed[3], pushed[6]]).toEqual(["0", "0"]);
+
+    // Passive: the same 12 calls, the people who waited past 30 s cancelled, and the walks nobody waited for skipped.
+    await passive.check();
+    await expect(passive).toBeChecked();
+    await expect(push).not.toBeChecked();
+    await expect(live(page)).toContainText(/: passive detection\./);
+    await expect(live(page)).toContainText(/Passive detection: \d+ calls? cancelled, \d+ walks? skipped\./);
+    await expect(page.locator(`#call-detect-help-${uid}`)).toHaveText(
+      "Radar, infrared or video at the curb places the call while a pedestrian waits; one who leaves after waiting 30 s cancels it, and a walk with nobody left waiting is skipped. Walk and clearance are never shortened.",
+    );
+    await expect.poll(async () => Number((await cells())[3])).toBeGreaterThan(0);
+    const sensed = await cells();
+    const n = (c: string[], i: number) => Number(c[i]);
+    expect(n(sensed, 0)).toBe(12);
+    // Every call is still counted: those cancelled are taken from the served and the delayed, nothing else changes.
+    expect(n(sensed, 1) + n(sensed, 2) + n(sensed, 3)).toBe(n(pushed, 1) + n(pushed, 2));
+    expect(n(sensed, 6)).toBeGreaterThan(0);
+    const rows = page.locator("#calls-rows");
+    await rows.locator("summary").click();
+    await expect(rows.locator("tbody tr").filter({ hasText: "Cancelled: left after waiting 30 s" })).toHaveCount(
+      n(sensed, 3),
+    );
+
+    // The same in French.
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(`#call-detect-h-${uid}`)).toHaveText("Détection");
+    await expect(page.locator(`label:has(#call-detect-${uid}-passive)`)).toHaveText("Détection passive");
+    await expect(page.locator(`#call-detect-help-${uid}`)).toContainText(
+      "celui qui part après 30 s d’attente l’annule",
+    );
+    await expect(page.locator("#calls-totals thead th").nth(4)).toHaveText("Annulés");
+    await expect(page.locator("#calls-totals thead th").nth(7)).toHaveText("Marches omises");
+    await expect(
+      rows.locator("tbody tr").filter({ hasText: "Annulé\u00a0: parti après 30 s d’attente" }).first(),
+    ).toBeVisible();
+
+    // Back to a push button: every call stays placed, as before.
+    await push.check();
+    await expect(push).toBeChecked();
+    await expect.poll(cells).toEqual(pushed);
+  });
+
+  test("passive detection refused on a crossing no phase walks leaves its push button chosen", async ({ page }) => {
+    const box = page.locator(".call-crossing input[type=checkbox]").nth(1);
+    const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
+    await box.click();
+    await expect(box).toBeChecked();
+    // Take the crossing out of every phase: it stays on call, and its detection is still offered.
+    const walks = page.locator(`#inspector input[id^="sig-walks-"][id$="-${uid}"]`);
+    for (let i = 0; i < (await walks.count()); i++) {
+      if (await walks.nth(i).isChecked()) {
+        await walks.nth(i).uncheck();
+        await expect(walks.nth(i)).not.toBeChecked();
+      }
+    }
+    await expect(box).toBeChecked();
+    const push = page.locator(`#call-detect-${uid}-push-button`);
+    const passive = page.locator(`#call-detect-${uid}-passive`);
+    await expect(push).toBeChecked();
+    // Chosen anyway, passive is refused with why, and the radios show the push button the crossing kept.
+    await passive.click();
+    await expect(live(page)).toHaveText(
+      "No phase of the plan walks this crossing, so passive detection cannot serve it: walk it in a phase first.",
+    );
+    await expect(passive).not.toBeChecked();
+    await expect(push).toBeChecked();
+    await expect(page.locator(`#call-detect-help-${uid}`)).toContainText("the call stays placed after they leave");
   });
 
   test("a street turned into another compass point is named so in the totals and every call, as in the list", async ({
@@ -1050,13 +1141,15 @@ test.describe("signal timing on a junction of the city", () => {
       "Calls",
       "Served",
       "Delayed",
+      "Cancelled",
       "Not served",
       "Green extended",
+      "Walks skipped",
       "Longest wait",
     ]);
-    await expect(row.locator("td")).toHaveText(["12", "0", "0", "12", "0", "–none served"]);
+    await expect(row.locator("td")).toHaveText(["12", "0", "0", "0", "12", "0", "0", "–none served"]);
     await expect(row.locator("td").last().locator("[aria-hidden=true]")).toHaveText("–");
-    await expect(row.locator("td").nth(3)).toHaveClass("bad");
+    await expect(row.locator("td").nth(4)).toHaveClass("bad");
     await page.locator("#calls-rows summary").click();
     await expect(page.locator("#calls-rows tbody tr").filter({ hasText: name }).first()).toContainText("Not served");
   });

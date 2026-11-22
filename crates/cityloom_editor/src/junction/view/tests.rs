@@ -440,6 +440,8 @@ fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_pla
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).expect("a section for the pedestrian calls")..];
     assert!(calls.contains("Pedestrian calls") && calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
+    // The intro holds for either detection: nobody need push a button.
+    assert!(calls.contains("A crossing on call is walked only when a pedestrian calls it, by a push button or passive detection."), "{calls}");
     assert!(calls.contains("at most 15 s"), "{calls}");
     let crossings = s.view_now().signal.as_ref().unwrap().calls.crossings.clone();
     assert_eq!(crossings.len(), 4, "every crossing is listed");
@@ -494,12 +496,12 @@ fn the_totals_count_every_call_and_mark_the_ones_not_served() {
     let totals = &h[h.find(r#"id="calls-totals""#).unwrap()..];
     let totals = &totals[..totals.find("</table>").unwrap()];
     let heads: Vec<&str> = totals.split("<th scope=\"col\">").skip(1).map(|t| &t[..t.find('<').unwrap()]).collect();
-    assert_eq!(heads, ["Crossing", "Calls", "Served", "Delayed", "Not served", "Green extended", "Longest wait"]);
+    assert_eq!(heads, ["Crossing", "Calls", "Served", "Delayed", "Cancelled", "Not served", "Green extended", "Walks skipped", "Longest wait"]);
     let row = &totals[totals.find("<tbody>").unwrap()..];
     let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[..t.find("</td>").unwrap()]).collect();
     // The dash is for the eye; a screen reader is told the words.
     let none = r#"><span aria-hidden="true">–</span><span class="sr-only">none served</span>"#;
-    assert_eq!(cells, [">12", ">0", ">0", r#" class="bad">12"#, ">0", none], "{row}");
+    assert_eq!(cells, [">12", ">0", ">0", ">0", r#" class="bad">12"#, ">0", ">0", none], "{row}");
     // A crossing whose calls are all served has no mark.
     let s = shared(0);
     assert!(s.set_on_call(arm(&s, 90), true));
@@ -622,16 +624,103 @@ fn a_crossing_no_phase_walks_says_why_it_cannot_be_on_call_and_one_left_on_call_
 }
 
 #[test]
+fn a_crossing_on_call_chooses_its_detection_and_the_plan_shows_what_a_cancellation_does() {
+    use crate::junction::model::calls::Detection;
+    let s = shared(0);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    s.show_plan();
+    let h = panel(&s);
+    assert!(h.contains("with passive detection a pedestrian leaves after waiting 30 s"), "the waiting limit is a placeholder bound: {h}");
+    assert!(!h.contains("call-detect-"), "a crossing on recall has no detection: {h}");
+    assert!(s.set_on_call(e, true));
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    // A radio group per crossing on call, named by its heading and described by what the chosen detection does.
+    let at = calls.find(&format!(r#"id="call-detect-{e}""#)).expect("a detection group");
+    let group = &calls[calls[..at].rfind("<div").unwrap()..];
+    let tag = &group[..group.find('>').unwrap()];
+    for attr in [r#"role="radiogroup""#, &format!(r#"aria-labelledby="call-detect-h-{e}""#), &format!(r#"aria-describedby="call-detect-help-{e}""#)] {
+        assert!(tag.contains(attr), "{attr}: {tag}");
+    }
+    assert!(group.contains(&format!(r#"<span id="call-detect-h-{e}" class="call-detect-h">Detection</span>"#)), "{group}");
+    let radio = |h: &str, which: &str| {
+        let at = h.find(&format!(r#"id="call-detect-{e}-{which}""#)).unwrap_or_else(|| panic!("{which}: {h}"));
+        h[h[..at].rfind("<input").unwrap()..at + h[at..].find('>').unwrap()].to_string()
+    };
+    assert!(radio(calls, "push-button").contains("checked") && !radio(calls, "passive").contains("checked"));
+    for r in [radio(calls, "push-button"), radio(calls, "passive")] {
+        assert!(r.contains(r#"type="radio""#) && r.contains(&format!(r#"name="call-detect-{e}""#)), "{r}");
+    }
+    assert!(calls.contains("<span>Push button</span>") && calls.contains("<span>Passive detection</span>"), "{calls}");
+    assert!(calls.contains("the call stays placed after they leave"), "{calls}");
+    assert!(!calls.contains(&format!(r#"id="call-detect-{n}""#)), "north is on recall");
+    // Passive: the help says what a cancellation does, the totals count the cancelled calls and skipped walks, and the
+    // rows say who left.
+    assert!(s.set_detection(e, Detection::Passive));
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(radio(calls, "passive").contains("checked") && !radio(calls, "push-button").contains("checked"));
+    assert!(calls.contains("one who leaves after waiting 30 s cancels it, and a walk with nobody left waiting is skipped"), "{calls}");
+    let t = s.view_now().signal.as_ref().unwrap().calls.crossings.iter().find(|c| c.uid == e).unwrap().totals.unwrap();
+    assert!(t.cancelled > 0 && t.walks_skipped > 0, "{t:?}");
+    let totals = &calls[calls.find(r#"id="calls-totals""#).unwrap()..];
+    let row = &totals[totals.find("<tbody>").unwrap()..totals.find("</tbody>").unwrap()];
+    let cells: Vec<&str> = row.split("<td").skip(1).map(|t| &t[t.find('>').unwrap() + 1..t.find("</td>").unwrap()]).collect();
+    assert_eq!((cells[3], cells[6]), (t.cancelled.to_string().as_str(), t.walks_skipped.to_string().as_str()), "{row}");
+    let rows = &calls[calls.find(r#"id="calls-rows""#).unwrap()..];
+    assert_eq!(rows.matches("Cancelled: left after waiting 30 s").count() as u32, t.cancelled, "{rows}");
+}
+
+#[test]
+fn a_junction_shown_read_only_shows_a_crossing_s_detection_and_offers_it_disabled() {
+    use crate::junction::model::calls::Detection;
+    use crate::shared::ports::Storage;
+    let mut j = Junction::new(0);
+    let e = j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid;
+    assert!(j.set_on_call(e, true) && j.set_detection(e, Detection::Passive));
+    let (ports, ..) = crate::shared::ports::test_ports();
+    let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
+    let s = JunctionVm::new(crate::shared::ports::Ports { storage, ..ports }, crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
+    s.show_plan();
+    let h = panel(&s);
+    let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    let locked = r#"<fieldset disabled class="read-only-controls"><ul class="calls-crossings">"#;
+    let inside = &calls[calls.find(locked).expect("the crossings are offered in a disabled fieldset")..];
+    let inside = &inside[..inside.find("</fieldset>").unwrap()];
+    let at = inside.find(&format!(r#"id="call-detect-{e}-passive""#)).expect("the detection is shown");
+    assert!(inside[inside[..at].rfind("<input").unwrap()..at + inside[at..].find('>').unwrap()].contains("checked"), "{inside}");
+    assert!(inside.contains("one who leaves after waiting 30 s cancels it"), "{inside}");
+    assert!(!s.set_detection(e, Detection::PushButton), "and cannot be changed");
+}
+
+#[test]
 fn the_pedestrian_calls_speak_french() {
     use crate::shared::i18n::Locale;
     let s = shared_in(0, Locale::FrCa);
     let e = arm(&s, 90);
     assert!(s.set_on_call(e, true));
     s.show_plan();
+    assert!(s.set_detection(e, crate::junction::model::calls::Detection::Passive));
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
-    for words in ["Appels piétons", "Valeurs provisoires", "1,0 m/s", "Sur appel (bouton-poussoir)", "En rappel", "Appels par heure", "Attente la plus longue"]
-    {
+    for words in [
+        "Appels piétons",
+        "Un passage sur appel n’est ouvert que lorsqu’un piéton l’appelle, par bouton-poussoir ou détection passive.",
+        "Valeurs provisoires",
+        "1,0 m/s",
+        "avec la détection passive, un piéton part après 30 s d’attente",
+        "<span>Sur appel</span>",
+        "Détection",
+        "Bouton-poussoir",
+        "Détection passive",
+        "celui qui part après 30 s d’attente l’annule",
+        "En rappel",
+        "Appels par heure",
+        "Annulés",
+        "Marches omises",
+        "Annulé\u{a0}: parti après 30 s d’attente",
+        "Attente la plus longue",
+    ] {
         assert!(calls.contains(words), "{words}: {calls}");
     }
     assert!(!calls.contains("Pedestrian calls") && !calls.contains("On recall"), "no English left: {calls}");

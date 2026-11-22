@@ -4,6 +4,7 @@
 //! A view words the status with `arms_text` and `fit_text`, which ask with the tracked `tr` and
 //! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
+use crate::junction::model::calls::Detection;
 use crate::junction::model::control_key;
 use crate::junction::model::curbside::CurbUseView;
 use crate::junction::model::read_model::{ArmView, JView};
@@ -76,7 +77,8 @@ pub fn edit_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
 
 /// How the plan serves the calls at the crossing of street `uid`, said after its mode or rate changes: "Crossing of
 /// Main Street (north): 12 calls in the hour; served 9, delayed 3, ...", the longest wait as the totals give it (none
-/// when no call was served). None while it is on recall or no phase walks it (the findings say why).
+/// when no call was served), then, with passive detection, the calls cancelled and the walks skipped. None while it is
+/// on recall or no phase walks it (the findings say why).
 pub fn calls_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
     let calls = &v.signal.as_ref()?.calls;
     let crossing = calls.crossings.iter().find(|c| c.uid == uid)?;
@@ -89,9 +91,17 @@ pub fn calls_text(v: &JView, i18n: &I18n, uid: u32) -> Option<String> {
         .num("extended", i64::from(t.extended))
         .num("not_served", i64::from(t.not_served));
     // As the totals show it: a longest wait only when some call was served.
-    Some(match t.longest_wait_s {
+    let said = match t.longest_wait_s {
         Some(wait) => i18n.tr_now("jn-calls-said", &args.num("wait", i64::from(wait))),
         None => i18n.tr_now("jn-calls-said-no-wait", &args),
+    };
+    // Passive detection: what the people who left did to the hour (a push button cancels nothing).
+    Some(match crossing.detection {
+        Detection::PushButton => said,
+        Detection::Passive => {
+            let passive = Args::new().num("cancelled", i64::from(t.cancelled)).num("skipped", i64::from(t.walks_skipped));
+            format!("{said} {}", i18n.tr_now("jn-calls-said-passive", &passive))
+        }
     })
 }
 

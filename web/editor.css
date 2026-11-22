@@ -3693,6 +3693,18 @@ svg pattern circle {
   width: 5em;
   min-height: 24px;
 }
+/* How a crossing on call detects people (CLM-17): a radio pair under its heading, then what the chosen one does. */
+.call-detect {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.call-detect > .insp-range {
+  flex-basis: 100%;
+  margin: 0;
+}
 .calls-table {
   max-width: 100%;
   overflow-x: auto;

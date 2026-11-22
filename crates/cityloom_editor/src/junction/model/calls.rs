@@ -5,8 +5,13 @@
 //! junction, plan and rates always give the same calls and the same summary. CityLoom models the behaviour to compare
 //! strategies; it never controls a signal. No DOM, no signals, no I/O, no wording.
 //!
+//! A crossing on call detects the people waiting by a push button (as in #60) or by passive kerbside detection (radar,
+//! infrared or video, CLM-17): a pedestrian waiting at the kerb places the call without pressing anything, and one who
+//! leaves before the walk cancels it, so no walk is given to an empty crossing. A push-button call stays placed after
+//! the person leaves.
+//!
 //! Every figure here is a placeholder (synthetic, like the catalogue's rules and rates): the walk, the clearance speed,
-//! the longest extension and the bound on the call rate.
+//! the longest extension, the bound on the call rate and the waiting limit.
 
 use crate::junction::model::signal::Plan;
 use crate::junction::model::{Arm, Refusal, SIGNAL, State, in_force};
@@ -24,6 +29,34 @@ pub const MAX_CALLS_PER_HOUR: u32 = 60;
 pub const DEFAULT_CALLS_PER_HOUR: u32 = 12;
 /// The span the calls are spread over.
 pub const HOUR_S: u32 = 3_600;
+/// How long a pedestrian waits at a crossing with passive detection before leaving, if the walk has not started, in
+/// seconds; one figure for the whole junction. Placeholder.
+pub const WAIT_LIMIT_S: u32 = 30;
+
+/// How an on-call crossing knows someone is waiting (CLM-17). Saved on the arm only once passive
+/// (`Arm.detection`), so a junction saved before reads as push buttons.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Detection {
+    /// The pedestrian pushes a button; the call stays placed after they leave (#60).
+    #[default]
+    PushButton,
+    /// Kerbside detection places the call while someone waits, and cancels it when they leave.
+    Passive,
+}
+
+impl Detection {
+    /// Whether it is the push button, the detection a crossing has unless told otherwise (what is not saved).
+    pub fn is_push_button(&self) -> bool {
+        *self == Detection::PushButton
+    }
+}
+
+/// How arm `a`'s crossing detects people: what it was given while it is on call, else the push button (a crossing on
+/// recall has none to speak of). Read it here, never from `Arm.detection`.
+pub fn detection_of(a: &Arm) -> Detection {
+    if a.calls.is_some() { a.detection } else { Detection::PushButton }
+}
 
 /// The pedestrian clearance of a crossing `distance_mm` long: its length at the clearance speed, rounded up to the
 /// next whole second.
@@ -91,6 +124,8 @@ pub enum Outcome {
     Delayed,
     /// No phase can fit the walk and its clearance, even lengthened by `MAX_EXTENSION_S` (a `Finding::CannotServe`).
     NotServed,
+    /// Passive detection: the pedestrian left after waiting `WAIT_LIMIT_S`, before their walk, and so cancelled the call.
+    Cancelled,
 }
 
 /// One call: the street whose crossing was called, when (seconds into the hour), what happened, how long it waited for
@@ -113,13 +148,17 @@ pub struct Totals {
     /// The clearance and the walk plus the clearance its length needs (0 when it has no crossing).
     pub clearance_s: u32,
     pub need_s: u32,
-    /// Every call of the hour: served, delayed and not served.
+    /// Every call of the hour: served, delayed, not served and cancelled.
     pub calls: u32,
     pub served: u32,
     pub delayed: u32,
     pub not_served: u32,
+    /// The calls cancelled by a pedestrian who left before the walk (passive detection only).
+    pub cancelled: u32,
     /// The calls whose green was lengthened, served or delayed.
     pub extended: u32,
+    /// The walks not given because everyone waiting for them had left (passive detection only).
+    pub walks_skipped: u32,
     /// The longest a call waited for its walk; None when none was served or delayed, so there is no wait to give.
     pub longest_wait_s: Option<u32>,
 }
@@ -183,7 +222,8 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
         };
         let need = need_s(d);
         out.totals.push(Totals { arm: arm.uid, rate, clearance_s: clearance_s(d), need_s: need, ..Totals::default() });
-        asked.push(Asked { arm: arm.uid, need_s: need, at_s: arrivals(arm.uid, rate) });
+        let passive = detection_of(arm) == Detection::Passive;
+        asked.push(Asked { arm: arm.uid, need_s: need, at_s: arrivals(arm.uid, rate), passive });
     }
     for a in &asked {
         let walking = || plan.phases.iter().filter(|p| p.walks.contains(&a.arm));
@@ -192,29 +232,40 @@ pub fn summary(s: &State, plan: &Plan, distances: &[(u32, i32)]) -> Summary {
             out.findings.push(Finding::CannotServe { arm: a.arm, need_s: a.need_s, most_s });
         }
     }
-    out.calls = serve(plan, &asked);
+    let run = serve(plan, &asked);
+    out.calls = run.calls;
     for t in &mut out.totals {
         for c in out.calls.iter().filter(|c| c.arm == t.arm) {
             match c.outcome {
                 Outcome::Served => t.served += 1,
                 Outcome::Delayed => t.delayed += 1,
                 Outcome::NotServed => t.not_served += 1,
+                Outcome::Cancelled => t.cancelled += 1,
             }
             t.calls += 1;
             t.extended += u32::from(c.extended_s > 0);
-            if c.outcome != Outcome::NotServed {
+            if matches!(c.outcome, Outcome::Served | Outcome::Delayed) {
                 t.longest_wait_s = Some(t.longest_wait_s.unwrap_or(0).max(c.wait_s));
             }
         }
+        t.walks_skipped = asked.iter().zip(&run.skipped).filter(|(a, _)| a.arm == t.arm).map(|(_, n)| n).sum();
     }
     out
 }
 
-/// The calls made at one crossing: its street, what a call needs of the green (`need_s`), and when each was made.
+/// The calls made at one crossing: its street, what a call needs of the green (`need_s`), when each was made, and
+/// whether the crossing has passive detection (a pedestrian who leaves cancels their call).
 struct Asked {
     arm: u32,
     need_s: u32,
     at_s: Vec<u32>,
+    passive: bool,
+}
+
+/// What `serve` gives: every call, and the walks each crossing skipped (by its place in the `asked` it was given).
+struct Run {
+    calls: Vec<Call>,
+    skipped: Vec<u32>,
 }
 
 /// The phases of `plan` run in turn from second 0, round and round, until every call that can be served is.
@@ -226,11 +277,17 @@ struct Asked {
 /// clearance even so does not serve that crossing: they are never shortened. A crossing no phase can serve has its
 /// calls not served. The calls come back in the order they were made (crossings in the order given at the same second).
 ///
+/// Passive detection (`Asked.passive`): who leaves follows from the seeded arrivals alone. A pedestrian waits
+/// `WAIT_LIMIT_S` at most; one whose walk would start later than that after they arrived has left by then and cancelled
+/// their call (`Outcome::Cancelled`, waited `WAIT_LIMIT_S`). A walk everyone waiting for has left is skipped: counted in
+/// `Run.skipped`, it lengthens no green. Whoever is still there is given the whole walk and clearance as above. A
+/// crossing no phase can serve keeps its calls not served: there is no walk to leave before.
+///
 /// A phase takes at least a second in the run, and the clock counts in u64 (a settled timing is within its range,
 /// but the run holds any), so time moves on: every call that can be served is, within a cycle of being made, and the
 /// run stops a cycle at its longest (each phase extended by at most `MAX_EXTENSION_S`, `stop_at`) past the last call,
 /// whatever is still waiting then not served.
-fn serve(plan: &Plan, asked: &[Asked]) -> Vec<Call> {
+fn serve(plan: &Plan, asked: &[Asked]) -> Run {
     serve_turns(plan, asked, MAX_TURNS)
 }
 
@@ -246,7 +303,7 @@ fn stop_at(plan: &Plan, last: u64) -> u64 {
 }
 
 /// `serve`, run for at most `turns` phases. A call still waiting when it stops is not served.
-fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
+fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Run {
     // Whether each phase (by its place in the plan) can serve each crossing: looked up once a turn, never searched.
     let serving: Vec<Vec<bool>> = asked
         .iter()
@@ -264,6 +321,7 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     // The calls still waiting for their walk (places in `calls`), and whether each has missed one.
     let mut waiting: Vec<usize> = (0..calls.len()).filter(|&i| calls[i].1.outcome != Outcome::NotServed).collect();
     let mut missed = vec![false; calls.len()];
+    let mut skipped = vec![0u32; asked.len()];
     // The clock, in u64 so no timing can wrap it, and when to stop.
     let length = |k: usize| u64::from(plan.phases[k].length_s);
     let stop = stop_at(plan, calls.iter().map(|(_, c)| u64::from(c.at_s)).max().unwrap_or(0));
@@ -274,13 +332,26 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
         let serves = |x: usize| serving[x][k];
         let (now, later): (Vec<usize>, Vec<usize>) = waiting.iter().partition(|&&i| u64::from(calls[i].1.at_s) <= start && serves(calls[i].0));
         let mut extension = 0;
+        // Which crossings this walk serves someone at, and which had someone leave before it.
+        let (mut walked, mut left) = (vec![false; asked.len()], vec![false; asked.len()]);
         for &i in &now {
-            let short = asked[calls[i].0].need_s.saturating_sub(phase.timing.green_s);
-            extension = extension.max(short);
+            let x = calls[i].0;
             let c = &mut calls[i].1;
-            c.wait_s = u32::try_from(start - u64::from(c.at_s)).unwrap_or(u32::MAX);
+            let wait = start - u64::from(c.at_s);
+            if asked[x].passive && wait > u64::from(WAIT_LIMIT_S) {
+                *c = Call { outcome: Outcome::Cancelled, wait_s: WAIT_LIMIT_S, extended_s: 0, ..*c };
+                left[x] = true;
+                continue;
+            }
+            let short = asked[x].need_s.saturating_sub(phase.timing.green_s);
+            extension = extension.max(short);
+            c.wait_s = u32::try_from(wait).unwrap_or(u32::MAX);
             c.extended_s = short;
             c.outcome = if missed[i] { Outcome::Delayed } else { Outcome::Served };
+            walked[x] = true;
+        }
+        for (x, n) in skipped.iter_mut().enumerate() {
+            *n += u32::from(left[x] && !walked[x]);
         }
         let end = start + (length(k) + u64::from(extension)).max(1);
         // A call made while this phase walks its crossing has missed that walk.
@@ -297,7 +368,7 @@ fn serve_turns(plan: &Plan, asked: &[Asked], turns: usize) -> Vec<Call> {
     for i in waiting {
         calls[i].1.outcome = Outcome::NotServed;
     }
-    calls.into_iter().map(|(_, c)| c).collect()
+    Run { calls: calls.into_iter().map(|(_, c)| c).collect(), skipped }
 }
 
 #[cfg(test)]
@@ -381,9 +452,9 @@ mod tests {
     fn a_call_is_served_when_the_next_phase_that_walks_its_crossing_starts_and_delayed_if_it_missed_one() {
         // Street 9's crossing is walked in the first phase (0 to 30 s of each 60 s cycle), not in the second.
         let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
-        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 10, 40] }];
+        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 10, 40], passive: false }];
         assert_eq!(
-            serve(&plan, &asked),
+            serve(&plan, &asked).calls,
             vec![
                 call(9, 0, Outcome::Served, 0, 0),
                 call(9, 10, Outcome::Delayed, 50, 0), // its walk had started: the next is at 60 s
@@ -398,9 +469,9 @@ mod tests {
         // runs 24 to 54 s and the first again from 54 s. Street 8's crossing, walked in the second phase, waits 9 s
         // longer than it would have.
         let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[8])]);
-        let asked = [Asked { arm: 9, need_s: 19, at_s: vec![0, 5, 30] }, Asked { arm: 8, need_s: 10, at_s: vec![0] }];
+        let asked = [Asked { arm: 9, need_s: 19, at_s: vec![0, 5, 30], passive: false }, Asked { arm: 8, need_s: 10, at_s: vec![0], passive: false }];
         assert_eq!(
-            serve(&plan, &asked),
+            serve(&plan, &asked).calls,
             vec![
                 call(9, 0, Outcome::Served, 0, 9),
                 call(8, 0, Outcome::Served, 24, 0),
@@ -409,18 +480,22 @@ mod tests {
             ]
         );
         // With no call at street 9, its phase keeps its 15 s and street 8 waits only that long.
-        assert_eq!(serve(&plan, &asked[1..]), vec![call(8, 0, Outcome::Served, 15, 0)]);
+        assert_eq!(serve(&plan, &asked[1..]).calls, vec![call(8, 0, Outcome::Served, 15, 0)]);
     }
 
     #[test]
     fn a_phase_that_cannot_fit_the_walk_and_clearance_even_lengthened_does_not_serve_the_call() {
         // 26 s needed: 16 s more than the first phase's 10 s green, past the 15 s bound, so only the third (25 s) serves.
         let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[]), phase(3, 25, &[9])]);
-        let asked = [Asked { arm: 9, need_s: 26, at_s: vec![0, 5] }];
-        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 45, 1), call(9, 5, Outcome::Served, 40, 1)], "the first phase is no walk to miss");
+        let asked = [Asked { arm: 9, need_s: 26, at_s: vec![0, 5], passive: false }];
+        assert_eq!(
+            serve(&plan, &asked).calls,
+            vec![call(9, 0, Outcome::Served, 45, 1), call(9, 5, Outcome::Served, 40, 1)],
+            "the first phase is no walk to miss"
+        );
         // No phase at all: not served, and nothing waits for it.
         let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[])]);
-        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
+        assert_eq!(serve(&plan, &asked).calls, vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
     }
 
     /// A phase of street `uid` that takes no time at all (a document's timing is not clamped when it is read).
@@ -432,9 +507,9 @@ mod tests {
     #[test]
     fn a_plan_whose_phases_take_no_time_still_ends_at_once_and_serves_its_calls() {
         let plan = plan_of(vec![empty(1, &[9]), empty(2, &[])]);
-        let asked = [Asked { arm: 9, need_s: 10, at_s: vec![0, 100, 3_599] }];
+        let asked = [Asked { arm: 9, need_s: 10, at_s: vec![0, 100, 3_599], passive: false }];
         let started = std::time::Instant::now();
-        let calls = serve(&plan, &asked);
+        let calls = serve(&plan, &asked).calls;
         assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
         // The first phase's green of 0 s is lengthened by the 10 s the crossing needs; a phase that takes no time
         // takes a second in the run, so the walk comes round again.
@@ -454,22 +529,22 @@ mod tests {
         // Four phases of 2^30 s: a cycle of exactly 2^32 s, which a u32 clock wraps back to 0.
         let g = (1u32 << 30) - 5;
         let plan = plan_of(vec![huge(1, g, &[9]), huge(2, g, &[]), huge(3, g, &[]), huge(4, g, &[])]);
-        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 100] }];
+        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 100], passive: false }];
         let started = std::time::Instant::now();
-        let calls = serve(&plan, &asked);
+        let calls = serve(&plan, &asked).calls;
         assert!(started.elapsed() < std::time::Duration::from_secs(1), "it took {:?}", started.elapsed());
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
         // The second call missed the first walk, and the next starts a whole 2^32 s cycle later: counted, not wrapped.
         assert_eq!(calls[1], call(9, 100, Outcome::Delayed, u32::MAX - 99, 0));
         // A green so long that adding the extension to it would overflow.
         let plan = plan_of(vec![huge(1, u32::MAX - 3, &[9]), phase(2, 25, &[])]);
-        let calls = serve(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0, 50] }]);
+        let calls = serve(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0, 50], passive: false }]).calls;
         assert_eq!(calls[0], call(9, 0, Outcome::Served, 0, 0));
         // The first phase lasts as long as a u32 goes: its next walk is a cycle on, counted without wrapping.
         assert_eq!(calls[1], call(9, 50, Outcome::Delayed, u32::MAX - 20, 0));
         // Stopped by its turn limit before the walk comes round, the call is not served (never served with no wait).
         let plan = plan_of(vec![huge(1, 25, &[]), huge(2, 25, &[9])]);
-        let calls = serve_turns(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0] }], 1);
+        let calls = serve_turns(&plan, &[Asked { arm: 9, need_s: 16, at_s: vec![0], passive: false }], 1).calls;
         assert_eq!(calls, vec![call(9, 0, Outcome::NotServed, 0, 0)], "still waiting when the run stops");
     }
 
@@ -493,8 +568,8 @@ mod tests {
         // 35 s, so the green is extended by 10 s: the first phase runs 0 to 40 s, the second 40 to 70 s. The call at 5 s
         // missed that walk; the next starts at 70 s, past the last call and a cycle of the phases unextended (65 s).
         let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
-        let asked = [Asked { arm: 9, need_s: 35, at_s: vec![0, 5] }];
-        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 10), call(9, 5, Outcome::Delayed, 65, 10)]);
+        let asked = [Asked { arm: 9, need_s: 35, at_s: vec![0, 5], passive: false }];
+        assert_eq!(serve(&plan, &asked).calls, vec![call(9, 0, Outcome::Served, 0, 10), call(9, 5, Outcome::Delayed, 65, 10)]);
     }
 
     #[test]
@@ -504,8 +579,11 @@ mod tests {
         assert_eq!(stop_at(&plan, 1), 1 + 2 * (15 + MAX_EXTENSION_S as u64), "the last call, then a cycle at its longest");
         // The worst a call can wait: made a second into an extended walk it missed, while the other phase is extended
         // too. Its walk comes round at 60 s, a second inside the bound (61 s): delayed, not cut off.
-        let asked = [Asked { arm: 9, need_s: 25, at_s: vec![0, 1] }, Asked { arm: 8, need_s: 25, at_s: vec![0] }];
-        assert_eq!(serve(&plan, &asked), vec![call(9, 0, Outcome::Served, 0, 15), call(8, 0, Outcome::Served, 30, 15), call(9, 1, Outcome::Delayed, 59, 15)]);
+        let asked = [Asked { arm: 9, need_s: 25, at_s: vec![0, 1], passive: false }, Asked { arm: 8, need_s: 25, at_s: vec![0], passive: false }];
+        assert_eq!(
+            serve(&plan, &asked).calls,
+            vec![call(9, 0, Outcome::Served, 0, 15), call(8, 0, Outcome::Served, 30, 15), call(9, 1, Outcome::Delayed, 59, 15)]
+        );
     }
 
     #[test]
@@ -527,10 +605,10 @@ mod tests {
     #[test]
     fn a_call_still_waiting_when_the_run_stops_is_not_served_never_served_with_no_wait() {
         let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
-        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 10, 40] }];
+        let asked = [Asked { arm: 9, need_s: 16, at_s: vec![0, 10, 40], passive: false }];
         // Two turns: the first phase (serving the call at 0 s), then the second; the others are still waiting.
         assert_eq!(
-            serve_turns(&plan, &asked, 2),
+            serve_turns(&plan, &asked, 2).calls,
             vec![call(9, 0, Outcome::Served, 0, 0), call(9, 10, Outcome::NotServed, 0, 0), call(9, 40, Outcome::NotServed, 0, 0)]
         );
     }
@@ -708,12 +786,290 @@ mod tests {
                 call(e, 3067, Outcome::Delayed, 59, 0),
             ],
             totals: vec![
-                Totals { arm: e, rate: 3, clearance_s: 9, need_s: 16, calls: 3, served: 2, delayed: 1, not_served: 0, extended: 0, longest_wait_s: Some(59) },
-                Totals { arm: w, rate: 2, clearance_s: 21, need_s: 28, calls: 2, served: 1, delayed: 1, not_served: 0, extended: 2, longest_wait_s: Some(42) },
+                Totals {
+                    arm: e,
+                    rate: 3,
+                    clearance_s: 9,
+                    need_s: 16,
+                    calls: 3,
+                    served: 2,
+                    delayed: 1,
+                    not_served: 0,
+                    cancelled: 0,
+                    extended: 0,
+                    walks_skipped: 0,
+                    longest_wait_s: Some(59),
+                },
+                Totals {
+                    arm: w,
+                    rate: 2,
+                    clearance_s: 21,
+                    need_s: 28,
+                    calls: 2,
+                    served: 1,
+                    delayed: 1,
+                    not_served: 0,
+                    cancelled: 0,
+                    extended: 2,
+                    walks_skipped: 0,
+                    longest_wait_s: Some(42),
+                },
             ],
             findings: vec![],
         };
         assert_eq!(sum, pinned, "{sum:#?}");
+    }
+
+    // ---- passive detection (CLM-17) -------------------------------------------------------------------------------------
+
+    fn passive(arm: u32, need_s: u32, at_s: Vec<u32>) -> Asked {
+        Asked { arm, need_s, at_s, passive: true }
+    }
+
+    #[test]
+    fn the_waiting_limit_is_the_placeholder_the_issue_settled() {
+        assert_eq!(WAIT_LIMIT_S, 30);
+        assert_eq!(Detection::default(), Detection::PushButton, "a crossing on call has a push button until told otherwise");
+    }
+
+    #[test]
+    fn a_passive_call_whose_walk_is_past_the_waiting_limit_is_cancelled_and_a_walk_with_no_one_left_is_skipped() {
+        // Street 9's crossing is walked in the first phase, from 0, 60, 120 s.
+        let plan = plan_of(vec![phase(1, 25, &[9]), phase(2, 25, &[])]);
+        let at = vec![0, 10, 30, 40, 61, 75];
+        let run = serve(&plan, &[passive(9, 16, at.clone())]);
+        assert_eq!(
+            run.calls,
+            vec![
+                call(9, 0, Outcome::Served, 0, 0),
+                call(9, 10, Outcome::Cancelled, WAIT_LIMIT_S, 0), // its walk would have been at 60 s, 50 s on: it left at 40 s
+                call(9, 30, Outcome::Served, 30, 0),              // exactly the limit: still there when the walk starts
+                call(9, 40, Outcome::Served, 20, 0),
+                call(9, 61, Outcome::Cancelled, WAIT_LIMIT_S, 0), // missed the walk at 60 s; the next, at 120 s, is 59 s on
+                call(9, 75, Outcome::Cancelled, WAIT_LIMIT_S, 0),
+            ]
+        );
+        // The walk at 60 s still had people waiting; the one at 120 s had nobody left: skipped.
+        assert_eq!(run.skipped, vec![1]);
+        // With a push button the same people are served or delayed: a call stays placed after the person leaves.
+        let pushed = serve(&plan, &[Asked { arm: 9, need_s: 16, at_s: at, passive: false }]);
+        assert_eq!(
+            pushed.calls,
+            vec![
+                call(9, 0, Outcome::Served, 0, 0),
+                call(9, 10, Outcome::Delayed, 50, 0),
+                call(9, 30, Outcome::Served, 30, 0),
+                call(9, 40, Outcome::Served, 20, 0),
+                call(9, 61, Outcome::Delayed, 59, 0),
+                call(9, 75, Outcome::Delayed, 45, 0),
+            ]
+        );
+        assert_eq!(pushed.skipped, vec![0]);
+    }
+
+    #[test]
+    fn a_skipped_walk_lengthens_no_green_and_walk_and_clearance_are_never_shortened() {
+        // Street 9 needs 19 s and its phase has a 10 s green; street 8's crossing is walked in the second phase. The call
+        // at 5 s missed the first walk (0 to 15 s); the next starts at 45 s, 40 s on.
+        let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[8])]);
+        let pushed = serve(&plan, &[Asked { arm: 9, need_s: 19, at_s: vec![5], passive: false }, Asked { arm: 8, need_s: 10, at_s: vec![50], passive: false }]);
+        // With a push button the walk is given at 45 s with its green lengthened by 9 s, so street 8's walk is at 69 s.
+        assert_eq!(pushed.calls, vec![call(9, 5, Outcome::Delayed, 40, 9), call(8, 50, Outcome::Served, 19, 0)]);
+        // Passive: the person left at 35 s, the walk at 45 s is skipped and its green kept at 10 s, so street 8's walk
+        // comes at 60 s.
+        let run = serve(&plan, &[passive(9, 19, vec![5]), Asked { arm: 8, need_s: 10, at_s: vec![50], passive: false }]);
+        assert_eq!(run.calls, vec![call(9, 5, Outcome::Cancelled, WAIT_LIMIT_S, 0), call(8, 50, Outcome::Served, 10, 0)]);
+        assert_eq!(run.skipped, vec![1, 0]);
+        // Someone still waiting at that walk is given the whole walk and clearance, the green lengthened as before.
+        let run = serve(&plan, &[passive(9, 19, vec![5, 30]), Asked { arm: 8, need_s: 10, at_s: vec![50], passive: false }]);
+        assert_eq!(run.calls[..2], [call(9, 5, Outcome::Cancelled, WAIT_LIMIT_S, 0), call(9, 30, Outcome::Served, 15, 9)]);
+        assert_eq!(run.skipped, vec![0, 0]);
+    }
+
+    #[test]
+    fn a_passive_crossing_no_phase_can_serve_keeps_its_calls_not_served() {
+        // No walk to leave before: the finding says why, as with a push button.
+        let plan = plan_of(vec![phase(1, 10, &[9]), phase(2, 25, &[])]);
+        let run = serve(&plan, &[passive(9, 26, vec![0, 5])]);
+        assert_eq!(run.calls, vec![call(9, 0, Outcome::NotServed, 0, 0), call(9, 5, Outcome::NotServed, 0, 0)]);
+        assert_eq!(run.skipped, vec![0]);
+    }
+
+    /// `s` with the crossings of `uids` on call at `rate` an hour, each detected by `detection`.
+    fn on_call_with(mut s: State, uids: &[u32], rate: u32, detection: Detection) -> State {
+        for &uid in uids {
+            let a = arm_mut(&mut s, uid);
+            a.calls = Some(rate);
+            a.detection = detection;
+        }
+        s
+    }
+
+    #[test]
+    fn the_same_arrivals_with_push_buttons_and_passive_detection_differ_only_by_the_cancelled_calls_and_the_walks_they_skip() {
+        let s = cross();
+        let (n, e) = (at(&s, 0), at(&s, 90));
+        // Both crossings 9 m: 7 s + 9 s = 16 s fits every 25 s green, so no green is lengthened and every phase runs as
+        // planned whichever way the crossings detect people.
+        let distances = [(n, 9_000), (e, 9_000)];
+        let pushed = summary_of(&on_call_with(s.clone(), &[n, e], MAX_CALLS_PER_HOUR, Detection::PushButton), &distances);
+        let sensed = summary_of(&on_call_with(s, &[n, e], MAX_CALLS_PER_HOUR, Detection::Passive), &distances);
+        assert_eq!(pushed.findings, sensed.findings);
+        assert_eq!(pushed.calls.len(), sensed.calls.len(), "the same arrivals");
+        let left = |c: &Call| c.outcome != Outcome::NotServed && c.wait_s > WAIT_LIMIT_S;
+        for (p, q) in pushed.calls.iter().zip(&sensed.calls) {
+            if left(p) {
+                assert_eq!(*q, Call { outcome: Outcome::Cancelled, wait_s: WAIT_LIMIT_S, extended_s: 0, ..*p }, "{p:?}");
+            } else {
+                assert_eq!(q, p, "a call whose walk came in time is served as with a push button");
+            }
+        }
+        assert_eq!(pushed.totals.len(), 2);
+        for (p, q) in pushed.totals.iter().zip(&sensed.totals) {
+            let mine: Vec<&Call> = pushed.calls.iter().filter(|c| c.arm == p.arm).collect();
+            let cancelled = |o: Outcome| mine.iter().filter(|c| c.outcome == o && left(c)).count() as u32;
+            // The walks skipped: those at which every call the push button served had left.
+            let mut walks: Vec<(u32, bool)> = Vec::new();
+            for c in &mine {
+                let walk = c.at_s + c.wait_s;
+                match walks.iter_mut().find(|(w, _)| *w == walk) {
+                    Some((_, all_left)) => *all_left &= left(c),
+                    None => walks.push((walk, left(c))),
+                }
+            }
+            let skipped = walks.iter().filter(|(_, all_left)| *all_left).count() as u32;
+            let longest = mine.iter().filter(|c| !left(c) && c.outcome != Outcome::NotServed).map(|c| c.wait_s).max();
+            let expected = Totals {
+                served: p.served - cancelled(Outcome::Served),
+                delayed: p.delayed - cancelled(Outcome::Delayed),
+                cancelled: cancelled(Outcome::Served) + cancelled(Outcome::Delayed),
+                walks_skipped: skipped,
+                longest_wait_s: longest,
+                ..*p
+            };
+            assert_eq!(*q, expected);
+            assert!(q.cancelled > 0 && q.walks_skipped > 0 && q.served > 0, "the hour shows each: {q:?}");
+            assert_eq!(p.cancelled + p.walks_skipped, 0, "a push button cancels nothing");
+        }
+    }
+
+    #[test]
+    fn fixed_inputs_give_a_fixed_summary_with_passive_detection() {
+        let mut s = cross();
+        let (e, w) = (at(&s, 90), at(&s, 270));
+        arm_mut(&mut s, e).calls = Some(3);
+        arm_mut(&mut s, e).detection = Detection::Passive;
+        arm_mut(&mut s, w).calls = Some(2);
+        let sum = summary_of(&s, &[(e, 9_000), (w, 21_000)]);
+        assert_eq!(sum, summary_of(&s, &[(e, 9_000), (w, 21_000)]), "deterministic");
+        // As `fixed_inputs_give_a_fixed_summary`, but east's call at 3067 s would have waited 59 s: it left after 30 s,
+        // and nobody else waited for that walk.
+        let pinned = Summary {
+            calls: vec![
+                call(e, 455, Outcome::Served, 25, 0),
+                call(w, 479, Outcome::Served, 1, 3),
+                call(e, 1612, Outcome::Served, 11, 0),
+                call(w, 1881, Outcome::Delayed, 42, 3),
+                call(e, 3067, Outcome::Cancelled, 30, 0),
+            ],
+            totals: vec![
+                Totals {
+                    arm: e,
+                    rate: 3,
+                    clearance_s: 9,
+                    need_s: 16,
+                    calls: 3,
+                    served: 2,
+                    delayed: 0,
+                    not_served: 0,
+                    cancelled: 1,
+                    extended: 0,
+                    walks_skipped: 1,
+                    longest_wait_s: Some(25),
+                },
+                Totals {
+                    arm: w,
+                    rate: 2,
+                    clearance_s: 21,
+                    need_s: 28,
+                    calls: 2,
+                    served: 1,
+                    delayed: 1,
+                    not_served: 0,
+                    cancelled: 0,
+                    extended: 2,
+                    walks_skipped: 0,
+                    longest_wait_s: Some(42),
+                },
+            ],
+            findings: vec![],
+        };
+        assert_eq!(sum, pinned, "{sum:#?}");
+    }
+
+    #[test]
+    fn passive_detection_is_set_only_on_a_crossing_on_call_that_a_phase_walks_and_is_undone_like_any_edit() {
+        let mut j = Junction::new(0);
+        let (n, so, e) = (at(j.current(), 0), at(j.current(), 180), at(j.current(), 90));
+        // On recall: nothing to detect.
+        assert!(!j.set_detection(e, Detection::Passive));
+        assert_eq!(j.refusal(), Some(Refusal::DetectionNeedsCall));
+        assert!(!j.set_detection(e, Detection::PushButton));
+        assert_eq!(j.refusal(), Some(Refusal::DetectionNeedsCall));
+        assert!(j.set_on_call(e, true));
+        assert_eq!(detection_of(j.arm(e).unwrap()), Detection::PushButton);
+        assert!(j.set_detection(e, Detection::Passive));
+        assert_eq!((j.arm(e).unwrap().detection, j.current().label.key), (Detection::Passive, "jn-rev-call-passive"));
+        let edits = j.revisions().count();
+        assert!(j.set_detection(e, Detection::Passive), "the detection it has: taken, as a radio chosen again");
+        assert_eq!(j.revisions().count(), edits, "and no edit");
+        assert!(j.set_detection(e, Detection::PushButton));
+        assert_eq!((j.arm(e).unwrap().detection, j.current().label.key), (Detection::PushButton, "jn-rev-call-push-button"));
+        assert!(j.undo() && j.arm(e).unwrap().detection == Detection::Passive);
+        // Back on recall, the crossing has no detection; undone, it has its own again.
+        assert!(j.set_on_call(e, false));
+        assert_eq!(j.arm(e).unwrap().detection, Detection::PushButton);
+        assert!(j.undo() && j.arm(e).unwrap().detection == Detection::Passive);
+        // A plan whose only phase walks east alone: north is walked by no phase, so passive is refused with why.
+        let walk_east = StoredPhase { moves: vec![signal::Move { from: n, to: so }], walks: vec![e], rides: vec![], arm: None };
+        j.set_plan_for_test(SignalPlan { phases: vec![walk_east] });
+        assert!(!j.set_detection(n, Detection::Passive));
+        assert_eq!(j.refusal(), Some(Refusal::DetectionNotWalked));
+        // East left on call with its walk taken away: kept on call, and passive is refused with why.
+        assert!(j.set_detection(e, Detection::PushButton));
+        assert!(j.set_phase_walk(0, e, false));
+        assert_eq!(j.arm(e).unwrap().calls, Some(DEFAULT_CALLS_PER_HOUR));
+        assert!(!j.set_detection(e, Detection::Passive));
+        assert_eq!(j.refusal(), Some(Refusal::DetectionNotWalked));
+        assert_eq!(j.arm(e).unwrap().detection, Detection::PushButton);
+        // Off a signal the calls go, and the detection with them.
+        let mut j = Junction::new(0);
+        assert!(j.set_on_call(e, true) && j.set_detection(e, Detection::Passive));
+        assert!(j.set_control(PRIORITY));
+        assert_eq!((j.arm(e).unwrap().calls, j.arm(e).unwrap().detection), (None, Detection::PushButton));
+        assert!(!j.set_detection(e, Detection::Passive));
+        assert_eq!(j.refusal(), Some(Refusal::NotSignal));
+    }
+
+    #[test]
+    fn a_junction_saved_with_push_buttons_loads_unchanged_and_passive_detection_is_written_only_once_chosen() {
+        let mut s = Junction::new(0).current().clone();
+        s.arms[0].calls = Some(12);
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(!text.contains("detection"), "a crossing on call with a push button is written as #60 wrote it: {text}");
+        let back: State = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.arms[0].detection, Detection::PushButton);
+        assert_eq!(serde_json::to_string(&back).unwrap(), text);
+        s.arms[0].detection = Detection::Passive;
+        let text = serde_json::to_string(&s).unwrap();
+        assert!(text.contains(r#""detection":"passive""#), "{text}");
+        let back: State = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.arms[0].detection, Detection::Passive);
+        // A document holding a detection on a crossing on recall opens with none: only a crossing on call has one.
+        let mut stray = Junction::new(0).current().clone();
+        stray.arms[0].detection = Detection::Passive;
+        let opened = Junction::from_city(crate::street::model::named_said("J"), &stray, &stray, 0).unwrap();
+        assert!(opened.current().arms.iter().all(|a| a.detection == Detection::PushButton));
     }
 
     // ---- the edits ----------------------------------------------------------------------------------------------------

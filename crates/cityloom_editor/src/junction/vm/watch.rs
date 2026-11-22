@@ -126,6 +126,11 @@ impl Watch {
         self.vm.with_value(|v| v.set_call_rate(uid, rate))
     }
 
+    /// Gives the crossing of street `uid`, on call, its detection as the person does. Whether it was done.
+    pub fn set_detection(&self, uid: u32, detection: crate::junction::model::calls::Detection) -> bool {
+        self.vm.with_value(|v| v.set_detection(uid, detection))
+    }
+
     pub fn undo(&self) -> bool {
         self.vm.with_value(|v| v.undo())
     }

@@ -320,6 +320,11 @@ pub struct Arm {
     /// only once set, so a junction with no crossing on call is written as it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calls: Option<u32>,
+    /// How the crossing on call detects people waiting (CLM-17): a push button (#60, the default) or passive kerbside
+    /// detection. Saved only once passive, so a junction saved before reads as push buttons; only a crossing on call
+    /// has one (`settle_table_and_boxes` puts it back otherwise). Read it through `calls::detection_of`.
+    #[serde(default, skip_serializing_if = "calls::Detection::is_push_button")]
+    pub detection: calls::Detection,
     /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
     /// the crossing and the lanes a new arm has, once.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -514,6 +519,7 @@ impl Arm {
             filter: false,
             timing: None,
             calls: None,
+            detection: calls::Detection::PushButton,
             walked: false,
         }
     }
@@ -843,10 +849,12 @@ pub enum Refusal {
     CallAlready,
     NotOnCall,
     CallRateOutOfRange,
+    DetectionNotWalked,
+    DetectionNeedsCall,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 37] = [
+    pub const ALL: [Refusal; 39] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -884,6 +892,8 @@ impl Refusal {
         Refusal::CallAlready,
         Refusal::NotOnCall,
         Refusal::CallRateOutOfRange,
+        Refusal::DetectionNotWalked,
+        Refusal::DetectionNeedsCall,
     ];
 
     /// The message that says why.
@@ -926,6 +936,8 @@ impl Refusal {
             Refusal::CallAlready => "jn-refusal-call-already",
             Refusal::NotOnCall => "jn-refusal-not-on-call",
             Refusal::CallRateOutOfRange => "jn-refusal-call-rate-out-of-range",
+            Refusal::DetectionNotWalked => "jn-refusal-detection-not-walked",
+            Refusal::DetectionNeedsCall => "jn-refusal-detection-needs-call",
         }
     }
 }
@@ -1651,7 +1663,7 @@ impl Junction {
         })
     }
 
-    /// Puts the crossing of arm `uid` on call (`on`), walked only when someone pushes the button, at
+    /// Puts the crossing of arm `uid` on call (`on`), walked only when a pedestrian calls it (`set_detection`), at
     /// `calls::DEFAULT_CALLS_PER_HOUR` calls an hour until a rate is set; or back on recall, walked every time its
     /// phases run. On call needs a signal and a phase of its plan that walks the crossing (`calls::refusal`); recall is
     /// always allowed, so a crossing an edit has left unwalked can be taken off call. Refused when it is that already.
@@ -1668,6 +1680,39 @@ impl Junction {
             |a| about(if on { "jn-rev-call-on" } else { "jn-rev-call-off" }, a),
             |a| {
                 a.calls = on.then_some(calls::DEFAULT_CALLS_PER_HOUR);
+                a.detection = calls::Detection::PushButton;
+                true
+            },
+        )
+    }
+
+    /// Gives the crossing of arm `uid`, on call, its `detection` (CLM-17): a push button, or passive kerbside detection,
+    /// which only a crossing a phase of the plan walks may have, as only it may be on call (`calls::refusal`; no walk is
+    /// `DetectionNotWalked`). A crossing on recall has none (`DetectionNeedsCall`). The detection it has already is not
+    /// an edit, as a radio chosen again.
+    pub fn set_detection(&mut self, uid: u32, detection: calls::Detection) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let (on_call, now) = (arm.calls.is_some(), calls::detection_of(arm));
+        if detection == calls::Detection::Passive
+            && let Some(why) = calls::refusal(self.current(), self.region, uid)
+        {
+            return self.refuse(if why == Refusal::CallNotWalked { Refusal::DetectionNotWalked } else { why });
+        }
+        if !on_call {
+            return self.refuse(Refusal::DetectionNeedsCall);
+        }
+        if detection == now {
+            return true;
+        }
+        let key = match detection {
+            calls::Detection::PushButton => "jn-rev-call-push-button",
+            calls::Detection::Passive => "jn-rev-call-passive",
+        };
+        self.arm_edit(
+            uid,
+            |a| about(key, a),
+            |a| {
+                a.detection = detection;
                 true
             },
         )
@@ -2184,6 +2229,10 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
         } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
             t.transit_lead_s = 0;
         }
+        // Only a crossing on call detects anyone: one on recall (or just taken off call) has no detection.
+        if a.calls.is_none() {
+            a.detection = calls::Detection::PushButton;
+        }
     }
     signal::settle(s, region);
 }
@@ -2492,7 +2541,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 37);
+        assert_eq!(Refusal::ALL.len(), 39);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

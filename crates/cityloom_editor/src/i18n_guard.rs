@@ -552,6 +552,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("projects-slot", "the id of the element the list of projects is drawn into (web/index.html)"),
     ("swap-on", "a CSS class: the label of the scenarios' Delete button that is shown (web/editor.css)"),
     ("swap-off", "a CSS class: the label of the scenarios' Delete button kept hidden for its width (web/editor.css)"),
+    ("push-button", "the end of the id of a crossing's push-button detection radio, not a message (junction/view/inspector.rs)"),
     ("scenario-slot", "the id of the element a place's scenarios are drawn into (web/street.html, web/intersection.html)"),
     ("compare-a", "the id of the menu of the design on side A of the comparison page (shared/compare_view.rs)"),
     ("compare-b", "the id of the menu of the design on side B of the comparison page (shared/compare_view.rs)"),
