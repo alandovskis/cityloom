@@ -137,7 +137,7 @@ pub struct ShellVm {
     ports: Ports,
     i18n: Rc<I18n>,
     target: Rc<dyn Target>,
-    /// The message that names what the left sidebar holds on this page: `details-details`, `details-places`.
+    /// The message that names what the details panel holds on this page: `details-details`, `details-places`.
     details_word: &'static str,
     tabs: Vec<String>,
     units: ArcRwSignal<Units>,

@@ -1,4 +1,4 @@
-//! The notes as a tray under a page's drawing (the street page): a handle that stays in view (the page's status
+//! The notes as a tray under a page's drawing (the street and junction pages): a handle that stays in view (the page's status
 //! line, the notes' tabs, the toggle) over a body holding the tabs' panels. A page gives each tab as a `TrayPage`, the
 //! tab and what its panel holds together; the tray draws both from it, so a tab and its panel always name each other. The tray only draws: the shell binds its
 //! toggle (`]`, `data-notes`) and its tabs (`show_tab`, `tab_key`) as it binds any page's notes, by their ids, so a

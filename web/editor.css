@@ -423,18 +423,6 @@
   -webkit-user-select: none;
 }
 
-.statusbar {
-  position: static;
-  left: auto;
-  bottom: auto;
-  transform: none;
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 2px;
-}
 .fit-row {
   display: flex;
   flex-wrap: wrap;
@@ -469,7 +457,6 @@
   font-size: 13px;
   text-align: center;
 }
-.drawing:has(.wrap:focus-visible) ~ .statusbar .focus-hint,
 .stage-main:has(.wrap:focus-visible) .focus-hint {
   visibility: visible;
 }
@@ -3566,8 +3553,7 @@ svg pattern circle {
   .tools,
   .scenarios,
   .welcome,
-  .clock,
-  .statusbar {
+  .clock {
     display: none;
   }
   .stage-main,
