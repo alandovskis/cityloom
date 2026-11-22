@@ -202,9 +202,10 @@ fn watch_size(wrap: Element, frame: RwSignal<Frame>) {
         if let Some(scroll) = wrap.parent_element() {
             o.observe(&scroll);
         }
-        // The column changes height as the notes' tray opens and closes, and as the head wraps.
-        if let Some(column) = &column {
-            o.observe(column);
+        // The column changes height as the notes' tray opens and closes, and as the head wraps; the card as the key
+        // under the drawing gains or loses a row; the group as the part buttons wrap.
+        for el in [column.as_ref(), card.as_ref(), Some(&wrap)].into_iter().flatten() {
+            o.observe(el);
         }
     }
     observer.forget();

@@ -191,6 +191,10 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
     expect(fit.overflow).toBeLessThanOrEqual(1);
     expect(fit.left).toBeLessThanOrEqual(8);
     for (const s of ["#plan-key", "#part-next"]) await expect(page.locator(s)).toBeInViewport();
+    // the key under the drawing grows (another row of strips, longer words): the drawing makes room for it
+    await page.locator("#plan-key").evaluate((el) => (el.style.paddingBottom = "80px"));
+    await expect.poll(() => column.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    await page.locator("#plan-key").evaluate((el) => (el.style.paddingBottom = ""));
     await page.locator("#t-space").click();
     await expect(page.locator("#p-space")).toBeVisible();
     await settled();
