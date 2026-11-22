@@ -35,13 +35,11 @@ const widenStreetPiece = async (page: Page) => {
   await expect(page.locator("#undo")).toBeEnabled();
 };
 
-/** Changes the junction's design, in the scenario being edited. */
+/** Changes how the junction is run, in the scenario being edited: to an all-way stop, or a signal where it is one. */
 const changeJunction = async (page: Page) => {
-  await page.locator("#wrap").focus();
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("Shift+ArrowRight");
-  if (!(await page.locator("#undo").isEnabled())) await page.keyboard.press("Shift+ArrowLeft");
+  const control = page.locator('select[aria-labelledby="i-h-control"]');
+  const now = await control.locator("option:checked").innerText();
+  await control.selectOption({ label: now === "All-way stop" ? "Traffic signal" : "All-way stop" });
   await expect(page.locator("#undo")).toBeEnabled();
 };
 
@@ -168,6 +166,11 @@ test.describe("comparing a street's designs", () => {
     await chooseFrench(page);
     await expect(page.locator("#compare-h")).toContainText("Comparer les conceptions");
     await expect(page.locator("#compare-summary h2")).toHaveText("Ce qui diffère dans B");
+    // the summary itself, not only its heading: the headline and a group, in French
+    await expect(page.locator("#compare-summary p.compare-headline")).toHaveText(
+      /^Wider bike lane diffère de Référence sur \d+ points?\.$/,
+    );
+    await expect(page.locator("#compare-summary h3", { hasText: "Espace" })).toBeVisible();
   });
 });
 
@@ -187,6 +190,10 @@ test.describe("comparing a junction's designs", () => {
       await expect(column.locator("figure.compare-iso")).toHaveCount(1);
     }
     await expect(page.locator("figure.compare-plan")).toHaveCount(0);
-    await expect(page.locator("#compare-summary h2")).toHaveText("What differs in B");
+    const summary = page.locator("#compare-summary");
+    await expect(summary.locator("h2")).toHaveText("What differs in B");
+    // the control that changed is the Control group's line
+    await expect(summary.locator("h3", { hasText: "Control" })).toBeVisible();
+    await expect(summary.locator("li", { hasText: /^Control: .+ → (All-way stop|Traffic signal)$/ })).toHaveCount(1);
   });
 });
