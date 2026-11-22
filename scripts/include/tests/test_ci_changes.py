@@ -555,6 +555,28 @@ class Pipelines(unittest.TestCase):
         self.assertNotIn("scripts/e2e-archive.sh", self.text("presubmit.yml"))
         self.assertIn("e2e", self.jobs("postsubmit.yml"))
 
+    def test_main_splits_the_ui_tier_over_runners(self):
+        # Main runs every spec, so the UI tier (the longest job) is split: Playwright gives each shard a share of the tests.
+        ui = self.jobs("postsubmit.yml")["ui"]
+        self.assertIn("npx playwright test --project=ui --shard=${{ matrix.shard }}/6", ui)
+        self.assertIn("shard: [1, 2, 3, 4, 5, 6]", ui)
+        self.assertIn("fail-fast: false", ui)
+        self.assertIn("playwright-report-ui-${{ matrix.shard }}", ui)
+
+    def test_main_runs_the_host_tests_the_wasm_check_and_the_script_tests_side_by_side(self):
+        # What `just test` and `just test-scripts` run, as three jobs, so none waits for another.
+        jobs = self.jobs("postsubmit.yml")
+        self.assertIn("just test-host", jobs["test"])
+        self.assertNotIn("just test-wasm", jobs["test"])
+        self.assertNotIn("just test-scripts", jobs["test"])
+        self.assertIn("just test-wasm", jobs["wasm"])
+        self.assertNotIn("just test-host", jobs["wasm"])
+        self.assertIn("just test-scripts", jobs["scripts"])
+
+    def test_main_builds_its_tests_without_debug_info(self):
+        self.assertIn('CARGO_PROFILE_TEST_DEBUG: "0"', self.text("postsubmit.yml"))
+        self.assertIn('CARGO_PROFILE_DEV_DEBUG: "0"', self.text("postsubmit.yml"))
+
     def test_only_a_pull_request_is_cancelled_by_a_newer_push(self):
         self.assertIn("cancel-in-progress: true", self.text("presubmit.yml"))
         self.assertIn("cancel-in-progress: false", self.text("postsubmit.yml"))

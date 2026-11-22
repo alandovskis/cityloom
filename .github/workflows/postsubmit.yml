@@ -30,6 +30,9 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   RUSTFLAGS: -D warnings
+  # Debug info is most of what the linker does for the test binaries, and no CI log shows it.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
   JUST_VERSION: 1.59.0
 
 # Actions are pinned to a commit; Dependabot proposes the updates.
@@ -81,14 +84,43 @@ jobs:
       - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ env.JUST_VERSION }}
+      - run: just test-host
+
+  # A type-check of the code only the wasm32 target compiles, beside the host tests (`just test` runs both in turn).
+  wasm:
+    name: Wasm type-check
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # v1
+        with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: ${{ env.JUST_VERSION }}
-      # Host tests, and a type-check of the code only the wasm32 target compiles.
-      - run: just test
-      # The issue system's labels, forms and labeler rules (standard library only, no setup).
+      - run: just test-wasm
+
+  # The issue system's labels, forms and labeler rules, and the CI selector's own tests (standard library only, no setup).
+  scripts:
+    name: Script tests
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ env.JUST_VERSION }}
       - run: just test-scripts
 
   server-release:
@@ -166,23 +198,29 @@ jobs:
           retention-days: 1
 
   # UI tier (e2e/tiers.json): one page, the network stubbed, the static server only. No database, no archive.
+  # It is the longest job and main runs every spec, so it is split over runners: Playwright gives each shard a share of
+  # the tests (fullyParallel).
   ui:
-    name: UI tests
+    name: UI tests (${{ matrix.shard }}/6)
     needs: build
     runs-on: ubuntu-26.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/browser-tests
-      - run: npx playwright test --project=ui
+      - run: npx playwright test --project=ui --shard=${{ matrix.shard }}/6
         working-directory: e2e
       - name: Keep the report and traces of a failed run
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-ui
+          name: playwright-report-ui-${{ matrix.shard }}
           path: |
             e2e/playwright-report/
             e2e/test-results/
@@ -257,7 +295,7 @@ jobs:
   ci:
     name: All checks
     if: always()
-    needs: [format, test, build, ui, integration, e2e, server-release]
+    needs: [format, test, wasm, scripts, build, ui, integration, e2e, server-release]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
