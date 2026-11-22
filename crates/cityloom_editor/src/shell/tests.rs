@@ -605,7 +605,7 @@ fn a_copy_of_a_shared_design_is_forked_to_a_project_of_ones_own_and_it_is_said()
     let id = projects[0].id.clone();
     assert_eq!(projects[0].name, "Shared");
     assert_eq!(said.take(), ["A copy of Shared is now one of your projects. Open it to make changes."]);
-    assert_eq!(vm.forked(), Some(format!("/street.html?street=7&project={id}")));
+    assert_eq!(vm.forked(), Some(format!("street.html?street=7&project={id}")));
     assert!(!vm.can_fork(), "the copy is made: the page offers to open it");
     assert_eq!(vm.fork_error(), None);
     assert!(vm.read_only(), "this page still shows the shared design");
@@ -726,7 +726,7 @@ fn the_fork_is_a_described_button_then_a_link_to_the_new_project() {
     let id = crate::project::ProjectStore::new(storage.clone()).list()[0].id.clone();
     let after = fork_html(vm.clone());
     assert!(!after.contains("fork-btn"), "{after}");
-    assert!(after.contains(&format!(r#"href="/street.html?street=7&amp;project={id}""#)), "{after}");
+    assert!(after.contains(&format!(r#"href="street.html?street=7&amp;project={id}""#)), "{after}");
     assert!(after.contains(r#"id="fork-open""#) && after.contains(">Open your copy<"), "{after}");
     crate::sync::hub::reset();
 
