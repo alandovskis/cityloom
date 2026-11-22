@@ -321,27 +321,7 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
                 (base, if hold > base { extended(hold) } else { base })
             }
         };
-        // A green running for a demand above every other (pre-emption) is neither interrupted nor cut by any other.
-        let kept = demands.iter().any(|d| d.keeps(k, start, green_start, green_start + u64::from(green_s)));
-        let interrupted = if kept { None } else { demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_start + u64::from(green_s))).min() };
-        let (green_s, cut_s, prolonged_s, preempted_s) = if let Some(at) = interrupted {
-            // Interrupted (pre-emption): the green ends there, or once every clearance in progress is done; nothing
-            // else cuts or holds it.
-            let at = at.max(green_start);
-            let clear = demands.iter().map(|d| d.clear_by(k, start, green_start, at)).max().unwrap_or(at).max(at);
-            let to = u32::try_from(clear - green_start).unwrap_or(u32::MAX).min(green_s);
-            (to, 0, 0, green_s - to)
-        } else {
-            // Cut short for a demand (transit's early green for a later phase), never below what is held; then held
-            // longer for one coming just after it would end (transit's green extension, pre-emption's dwell).
-            let cut_to = if kept {
-                green_s
-            } else {
-                demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s)
-            };
-            let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
-            (cut_to + prolonged_s, green_s - cut_to, prolonged_s, 0)
-        };
+        let (green_s, cut_s, prolonged_s, preempted_s) = settle(demands, k, (start, green_start), green_s, hold);
         // The phase's length with this green in place of the timing's: the transit lead, yellow and all-red kept.
         let length = u64::from(phase.length_s).saturating_sub(u64::from(phase.timing.green_s)) + u64::from(green_s);
         let end = start + length.max(1);
@@ -357,6 +337,29 @@ pub fn run(plan: &Plan, rules: &[Rule], demands: &mut [&mut dyn Demand], turns: 
         ran += 1;
     }
     out
+}
+
+/// How phase `k`'s green of `green_s` (the phase started at `start`, its green from `green_start`, `hold` of it held by
+/// a demand) ends once the demands have their say: its green, the seconds cut short, held longer and interrupted
+/// (`(green_s, cut_s, prolonged_s, preempted_s)`). A green running for a demand above every other (pre-emption) is
+/// neither interrupted nor cut by any other. An interrupted green ends at the interruption, or once every clearance in
+/// progress is done, and nothing else cuts or holds it. Otherwise it is cut short for a demand (transit's early green
+/// for a later phase), never below what is held, then held longer for one coming just after it would end (transit's
+/// green extension, pre-emption's dwell).
+fn settle(demands: &[&mut dyn Demand], k: usize, (start, green_start): (u64, u64), green_s: u32, hold: u32) -> (u32, u32, u32, u32) {
+    let green_end = green_start + u64::from(green_s);
+    let kept = demands.iter().any(|d| d.keeps(k, start, green_start, green_end));
+    let interrupted = if kept { None } else { demands.iter().filter_map(|d| d.interrupt(k, start, green_start, green_end)).min() };
+    if let Some(at) = interrupted {
+        let at = at.max(green_start);
+        let clear = demands.iter().map(|d| d.clear_by(k, start, green_start, at)).max().unwrap_or(at).max(at);
+        let to = u32::try_from(clear - green_start).unwrap_or(u32::MAX).min(green_s);
+        return (to, 0, 0, green_s - to);
+    }
+    let cut_to =
+        if kept { green_s } else { demands.iter().map(|d| d.cut(k, green_start, green_s, hold)).min().unwrap_or(green_s).max(hold.min(green_s)).min(green_s) };
+    let prolonged_s = demands.iter().map(|d| d.prolong(k, start, green_start + u64::from(cut_to))).max().unwrap_or(0);
+    (cut_to + prolonged_s, green_s - cut_to, prolonged_s, 0)
 }
 
 /// Tells each demand that counts (`Demand::counts`) who the others have waiting, before (`told` false) or after `turn`

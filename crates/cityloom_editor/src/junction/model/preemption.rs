@@ -87,7 +87,6 @@ const EMERGENCY_STREAM: u64 = 0x0050_5245_454D_5054;
 /// may have under way (a pedestrian clearance of a crossing it walks, `distances`; a bicycle clearance of a movement it
 /// runs, `rides`) and then its yellow and all-red; then the phase's own transit lead.
 pub fn entry_s(plan: &Plan, phase: usize, distances: &[(u32, i32)], rides: &[(u32, i32)]) -> u32 {
-    let of = |list: &[(u32, i32)], uid: u32| list.iter().find(|(u, _)| *u == uid).map(|(_, d)| *d);
     let lead = plan.phases.get(phase).map_or(0, |p| p.timing.transit_lead_s);
     let worst = plan
         .phases
@@ -95,13 +94,19 @@ pub fn entry_s(plan: &Plan, phase: usize, distances: &[(u32, i32)], rides: &[(u3
         .enumerate()
         .filter(|(j, _)| *j != phase)
         .map(|(_, p)| {
-            let walks = p.walks.iter().filter_map(|&w| of(distances, w)).map(calls::clearance_s);
-            let ride = p.rides.iter().filter_map(|&r| of(rides, r)).map(bicycles::clearance_s);
+            let walks = p.walks.iter().filter_map(|&w| length_of(distances, w)).map(calls::clearance_s);
+            let ride = p.rides.iter().filter_map(|&r| length_of(rides, r)).map(bicycles::clearance_s);
             walks.chain(ride).max().unwrap_or(0) + p.timing.yellow_s + p.timing.all_red_s
         })
         .max()
         .unwrap_or(0);
     worst + lead
+}
+
+/// The length `list` gives street `uid` (a crossing's, `distances`; a ride's, `rides`), if it gives one: how the safe
+/// entry (`entry_s`) and what is cleared on an interruption (`recall`) both read them.
+fn length_of(list: &[(u32, i32)], uid: u32) -> Option<i32> {
+    list.iter().find(|(u, _)| *u == uid).map(|(_, d)| *d)
 }
 
 /// How many road users of each kind.
@@ -256,7 +261,6 @@ pub(crate) fn streets(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &
 /// each bike movement on recall it runs (`rides`), each as (the part that may end early, all it needs).
 pub(crate) fn recall(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &[(u32, i32)]) -> Vec<Vec<(u32, u32)>> {
     let arm = |uid: u32| s.arms.iter().find(|a| a.uid == uid);
-    let of = |list: &[(u32, i32)], uid: u32| list.iter().find(|(u, _)| *u == uid).map(|(_, d)| *d);
     plan.phases
         .iter()
         .map(|p| {
@@ -264,13 +268,13 @@ pub(crate) fn recall(s: &State, plan: &Plan, distances: &[(u32, i32)], rides: &[
                 .walks
                 .iter()
                 .filter(|&&w| arm(w).is_some_and(|a| a.calls.is_none() && a.crossing.is_some()))
-                .filter_map(|&w| of(distances, w))
+                .filter_map(|&w| length_of(distances, w))
                 .map(|d| (calls::WALK_S, calls::need_s(d)));
             let ridden = p
                 .rides
                 .iter()
                 .filter(|&&r| arm(r).is_some_and(|a| a.cyclists.is_none()))
-                .filter_map(|&r| of(rides, r))
+                .filter_map(|&r| length_of(rides, r))
                 .map(|d| (bicycles::MIN_GREEN_S, bicycles::need_s(d)));
             walks.chain(ridden).collect()
         })
