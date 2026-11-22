@@ -652,20 +652,22 @@ class DocsGate(unittest.TestCase):
         self.assertEqual(run.calls, [])
 
     def test_a_branch_with_no_commit_is_refused(self):
+        g = gate.Gate(self.repo, self.runner())
         with self.assertRaises(gate.Refused):
-            gate.Gate(self.repo, self.runner()).docs(self.base)
+            g.docs(self.base)
 
     def test_a_dirty_worktree_is_refused(self):
         commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Both")
         (self.repo / "loose.md").write_text("x", encoding="utf-8")
+        g = gate.Gate(self.repo, self.runner())
         with self.assertRaises(gate.Refused):
-            gate.Gate(self.repo, self.runner()).docs(self.base)
+            g.docs(self.base)
 
     def test_a_site_not_set_up_is_the_environment_not_the_change(self):
         commit(self.repo, {f"{EN}/signals.md": "# Signals\n", f"{FR}/signals.md": "# Feux\n"}, "Both")
-        run = self.runner({gate.DOCS_BUILD: (127, "sh: docusaurus: command not found")})
+        g = gate.Gate(self.repo, self.runner({gate.DOCS_BUILD: (127, "sh: docusaurus: command not found")}))
         with self.assertRaises(gate.Refused) as caught:
-            gate.Gate(self.repo, run).docs(self.base)
+            g.docs(self.base)
         self.assertIn("just setup-docs", str(caught.exception))
 
     def test_a_tool_not_on_the_path_is_refused_not_a_crash(self):
