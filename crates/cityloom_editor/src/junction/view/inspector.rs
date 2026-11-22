@@ -2703,57 +2703,30 @@ fn preemption_section(w: Watch) -> impl IntoView {
             };
             Some(view! { <p class="insp-range" id=format!("preempt-effect-{uid}")>{text}</p> })
         };
-        let rate_value = move || street(uid).and_then(|s| s.rate).map(|r| r.to_string()).unwrap_or_default();
-        let set_rate = move |v: f64| {
-            // A typed number is rounded to a whole call; one that is not finite or is out of range is refused by the model.
-            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
-                w.set_emergency_calls(uid, v.round() as i32);
-            }
-        };
         let rate = move || {
-            let (field, hint) = (rate_id.clone(), range_id.clone());
+            let field = RateField {
+                id: rate_id.clone(),
+                hint: range_id.clone(),
+                label: "jn-preempt-rate",
+                range: "jn-preempt-rate-range",
+                max: preemption::MAX_CALLS_PER_HOUR,
+            };
             on.get().then(|| {
-                view! {
-                    <span class="call-rate">
-                        <label for=field.clone()>{words(w, "jn-preempt-rate")}</label>
-                        <input type="text" inputmode="numeric" autocomplete="off" id=field class="call-rate-field" aria-describedby=hint.clone()
-                            value=rate_value prop:value=rate_value
-                            on:keydown=move |ev| {
-                                if let Some(dir) = step_key(&ev.key()) {
-                                    ev.prevent_default();
-                                    let now = street(uid).and_then(|s| s.rate).map_or(0, |r| r as i32);
-                                    w.set_emergency_calls(uid, now.saturating_add(dir));
-                                }
-                            }
-                            on:change=move |ev| {
-                                let input = event_target::<HtmlInputElement>(&ev);
-                                commit_typed(&input.value(), &set_rate);
-                                // What the field holds is the model's rate, whether it took the edit or refused it.
-                                input.set_value(&rate_value());
-                            } />
-                        <span class="insp-range" id=hint>
-                            {move || tr(w, "jn-preempt-rate-range", Args::new().num("min", 0).num("max", i64::from(preemption::MAX_CALLS_PER_HOUR)))}
-                        </span>
-                    </span>
-                }
+                rate_field(
+                    w,
+                    field,
+                    move || street(uid).and_then(|s| s.rate),
+                    move |rate| {
+                        w.set_emergency_calls(uid, rate);
+                    },
+                )
             })
         };
         let (group, head) = (format!("preempt-mode-{uid}"), format!("preempt-mode-h-{uid}"));
+        // Refused (no phase of its own, say): the radios show the setting the model kept.
         let radio = move |choice: bool, id: &'static str, key: &'static str| {
-            let chosen = move || on.get() == choice;
-            view! {
-                <label class="phase-move">
-                    <input type="radio" name=format!("preempt-mode-{uid}") id=format!("preempt-mode-{uid}-{id}") checked=chosen prop:checked=chosen
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            // Refused (no phase of its own, say): the radios show the setting the model kept.
-                            if !w.set_preemption(uid, choice) {
-                                input.set_checked(chosen());
-                            }
-                        } />
-                    <span>{words(w, key)}</span>
-                </label>
-            }
+            let names = (format!("preempt-mode-{uid}"), format!("preempt-mode-{uid}-{id}"));
+            choice_radio(w, names, key, move || on.get() == choice, move || w.set_preemption(uid, choice))
         };
         let (named_by, described_by) = (head.clone(), status_id.clone());
         view! {
@@ -2777,11 +2750,7 @@ fn preemption_section(w: Watch) -> impl IntoView {
     let has_totals = Memo::new(move |_| preempt.with(|p| p.streets.iter().any(|s| s.totals.is_some())));
     let seconds = move |s: u32| tr(w, "jn-calls-seconds", Args::new().num("seconds", i64::from(s)));
     let total_row = move |(t, preempted, delayed): (preemption::Totals, crate::shared::said::Said, crate::shared::said::Said)| {
-        let longest = move || match t.longest_to_green_s {
-            Some(s) => seconds(s).into_any(),
-            None => view! { <span aria-hidden="true">{words(w, "jn-calls-no-wait")}</span><span class="sr-only">{words(w, "jn-preempt-no-call-said")}</span> }
-                .into_any(),
-        };
+        let longest = move || wait_cell(w, t.longest_to_green_s, "jn-preempt-no-call-said");
         view! {
             <tr>
                 <th scope="row">{move || name_of(t.arm)}</th>
@@ -2794,35 +2763,14 @@ fn preemption_section(w: Watch) -> impl IntoView {
     };
     let totals_table = move || {
         has_totals.get().then(|| {
-            view! {
-                // Wider than a narrow panel: the box scrolls, and is a region the keys reach and its caption names.
-                <div class="calls-table" role="region" tabindex="0" aria-labelledby="preempt-totals-caption">
-                    <table class="nt" id="preempt-totals">
-                        <caption id="preempt-totals-caption">{words(w, "jn-preempt-totals-caption")}</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">{words(w, "jn-preempt-col-street")}</th>
-                                <th scope="col">{words(w, "jn-preempt-col-calls")}</th>
-                                <th scope="col">{words(w, "jn-preempt-col-longest")}</th>
-                                <th scope="col">{words(w, "jn-preempt-col-preempted")}</th>
-                                <th scope="col">{words(w, "jn-preempt-col-delayed")}</th>
-                            </tr>
-                        </thead>
-                        <tbody><For each=totals key=|r| r.0 children=total_row/></tbody>
-                    </table>
-                </div>
-            }
+            let heads = &["jn-preempt-col-street", "jn-preempt-col-calls", "jn-preempt-col-longest", "jn-preempt-col-preempted", "jn-preempt-col-delayed"];
+            let body = view! { <For each=totals key=|r| r.0 children=total_row/> };
+            hour_table(w, Table { section: "preempt", part: "totals", named: true, caption: "jn-preempt-totals-caption", heads }, body)
         })
     };
     let findings = move || {
         let found = preempt.with(|p| p.findings.clone());
-        (!found.is_empty()).then(|| {
-            let items = found.into_iter().map(|f| view! { <li>{move || w.say(&f)}</li> }).collect_view();
-            view! {
-                <h4 class="phase-moves-h" id="preempt-findings-h">{words(w, "jn-calls-findings")}</h4>
-                <ul class="calls-findings" id="preempt-findings" aria-labelledby="preempt-findings-h">{items}</ul>
-            }
-        })
+        (!found.is_empty()).then(|| findings_list(w, "preempt", found))
     };
     // Every call, keyed by the call itself: a row is made again only when what happened to it changes.
     let n_rows = Memo::new(move |_| preempt.with(|p| p.rows.len()));
@@ -2847,21 +2795,23 @@ fn preemption_section(w: Watch) -> impl IntoView {
             view! {
                 <details class="jn-fold" id="preempt-rows">
                     <summary>{move || tr(w, "jn-preempt-rows", Args::new().num("n", n_rows.get() as i64))}</summary>
-                    <div class="calls-table" role="region" tabindex="0" aria-labelledby="preempt-rows-caption">
-                        <table class="nt">
-                            <caption id="preempt-rows-caption">{words(w, "jn-preempt-rows-caption")}</caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">{words(w, "jn-preempt-col-call")}</th>
-                                    <th scope="col">{words(w, "jn-preempt-col-arrived")}</th>
-                                    <th scope="col">{words(w, "jn-preempt-col-to-green")}</th>
-                                    <th scope="col">{words(w, "jn-preempt-col-preempted")}</th>
-                                    <th scope="col">{words(w, "jn-preempt-col-delayed")}</th>
-                                </tr>
-                            </thead>
-                            <tbody><For each=rows key=|r| r.call children=call_row/></tbody>
-                        </table>
-                    </div>
+                    {hour_table(
+                        w,
+                        Table {
+                            section: "preempt",
+                            part: "rows",
+                            named: false,
+                            caption: "jn-preempt-rows-caption",
+                            heads: &[
+                                "jn-preempt-col-call",
+                                "jn-preempt-col-arrived",
+                                "jn-preempt-col-to-green",
+                                "jn-preempt-col-preempted",
+                                "jn-preempt-col-delayed",
+                            ],
+                        },
+                        view! { <For each=rows key=|r| r.call children=call_row/> },
+                    )}
                 </details>
             }
         })
