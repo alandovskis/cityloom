@@ -834,6 +834,91 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_holds_every_signal_setting_of_a_street_and_nothing_else() {
+        let (j, _) = signal();
+        let mut a = j.current().arms[0].clone();
+        a.timing = Some(Timing { green_s: 41, ..Timing::default() });
+        a.calls = Some(17);
+        a.detection = calls::Detection::Passive;
+        a.actuation = Some(actuation::Actuation { vehicles: 333, ..actuation::Actuation::default() });
+        a.cyclists = Some(19);
+        a.transit_priority = Some(transit::Priority { mode: transit::Mode::Both, buses: 23 });
+        a.preemption = Some(3);
+        // Every field of `Arm` named: one added fails to compile here until it is said to be a signal setting a plan
+        // holds (and put in `Settings`, `of` and `put`) or the street's own.
+        let Arm {
+            uid,
+            timing,
+            calls,
+            detection,
+            actuation,
+            cyclists,
+            transit_priority,
+            preemption,
+            edge: _,
+            section: _,
+            beyond: _,
+            stops: _,
+            curb_near: _,
+            bearing: _,
+            offset_mm: _,
+            corner_mm: _,
+            lanes: _,
+            crossing: _,
+            bulb: _,
+            bike_box: _,
+            protected: _,
+            banned: _,
+            bus_lane: _,
+            approach: _,
+            approach_mm: _,
+            stop: _,
+            rule: _,
+            filter: _,
+            walked: _,
+        } = a.clone();
+        let held = Settings { uid, timing, calls, detection, actuation, cyclists, transit_priority, preemption };
+        assert_eq!(Settings::of(&a), held);
+        let mut b = j.current().arms[1].clone();
+        let street_before = Arm { uid: b.uid, ..a.clone() };
+        held.put(&mut b);
+        assert_eq!(Settings::of(&b), Settings { uid: b.uid, ..held }, "every setting put");
+        assert_ne!(b, street_before, "and nothing of the street's own");
+        assert_eq!((b.bearing, b.lanes.clone()), (j.current().arms[1].bearing, j.current().arms[1].lanes.clone()));
+    }
+
+    #[test]
+    fn every_timing_and_policy_edit_goes_to_the_plan_shown() {
+        let mut j = crate::junction::model::fixtures::junction_biked();
+        let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+        assert!(j.set_bus_lane(n, true), "the street's own, for transit priority");
+        assert!(j.add_plan("Night") && j.view_plan(1));
+        let default_of = |j: &Junction| j.current().arms.iter().map(Settings::of).collect::<Vec<_>>();
+        let plan_of = |j: &Junction| j.current().plans[0].streets.iter().find(|x| x.uid == n).cloned();
+        let edits: [(&str, fn(&mut Junction, u32) -> bool); 13] = [
+            ("set_timing", |j, n| j.set_timing(n, TimingField::Green, 37)),
+            ("step_timing", |j, n| j.step_timing(n, TimingField::Green, 1)),
+            ("set_on_call", |j, n| j.set_on_call(n, true)),
+            ("set_detection", |j, n| j.set_detection(n, calls::Detection::Passive)),
+            ("set_call_rate", |j, n| j.set_call_rate(n, 31)),
+            ("set_actuated", |j, n| j.set_actuated(n, true)),
+            ("set_actuation", |j, n| j.set_actuation(n, actuation::Field::Vehicles, 401)),
+            ("set_bike_detection", |j, n| j.set_bike_detection(n, true)),
+            ("set_cyclists", |j, n| j.set_cyclists(n, 21)),
+            ("set_transit_priority", |j, n| j.set_transit_priority(n, Some(transit::Mode::Both))),
+            ("set_buses", |j, n| j.set_buses(n, 29)),
+            ("set_preemption", |j, n| j.set_preemption(n, true)),
+            ("set_emergency_calls", |j, n| j.set_emergency_calls(n, 5)),
+        ];
+        for (name, edit) in edits {
+            let (default, plan) = (default_of(&j), plan_of(&j));
+            assert!(edit(&mut j, n), "{name}: {:?}", j.refusal());
+            assert_eq!(default_of(&j), default, "{name} leaves the default as it was");
+            assert_ne!(plan_of(&j), plan, "{name} changes the plan shown");
+        }
+    }
+
+    #[test]
     fn a_street_that_joined_later_runs_as_in_the_default_even_after_the_plan_is_edited() {
         let (mut j, first) = signal();
         let later = j.current().arms[1].uid;
