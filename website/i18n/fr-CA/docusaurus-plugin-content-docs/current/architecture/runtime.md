@@ -95,8 +95,8 @@ flowchart LR
   pages -.->|web/report.js| pdf
   editor --> maplibre
   editor --> storage
-  pages -- "pages, code, /data/metro/" --> server
-  editor -- "/auth, /api/work, /api/share" --> server
+  pages -- "pages, code" --> server
+  editor -- "/data/metro/, /auth, /api/work, /api/share" --> server
   server --> web
   server -- DATABASE_URL --> postgres
   server -- connexion --> providers
