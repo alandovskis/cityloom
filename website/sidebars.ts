@@ -12,8 +12,9 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Architecture",
-      items: ["architecture/index", "architecture/data-model-streets-junctions"],
+      items: ["architecture/index", ],
     },
+    { type: "category", label: "Architecture", items: ["architecture/index", "architecture/runtime", "architecture/data-model-projects", "architecture/data-model-streets-junctions"] },
     "issues",
   ],
 };

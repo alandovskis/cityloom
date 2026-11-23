@@ -40,7 +40,8 @@ revient à la liste, qui indique **Ce projet n’est plus ici.**
 Le travail conservé dans le navigateur par une version de CityLoom sans projets est déplacé, à la première ouverture de
 la liste, dans un projet nommé **Premier projet**, dans la région métropolitaine de Montréal. Sa carte s’ouvre sur le même lieu
 qu’avant si ce lieu se trouvait dans la région de Montréal, sinon sur le Plateau-Mont-Royal. Il s’ouvre comme avant :
-vous n’avez rien à faire.
+vous n’avez rien à faire. [Le travail d’avant les projets](architecture/data-model-projects.md#le-travail-davant-les-projets)
+dit comment se fait le déplacement.
 
 ## Les projets sur plusieurs appareils
 
