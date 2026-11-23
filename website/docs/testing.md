@@ -45,22 +45,23 @@ flowchart LR
 ```
 
 `just test` runs `just test-host` and then `just test-wasm`. `just e2e` builds once and runs the three tiers. `just check`
-runs both.
+runs both. `just test-host` always needs `DATABASE_URL`, whichever crates it tests; `cargo test -p <crate>` runs one
+crate's tests without it.
 
-| Level                                    | What it proves                                                                  | Where it lives                                                                                   | How to run                              | What it needs                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------------- |
-| Model unit tests                         | The editing rules and pure computation                                          | `#[cfg(test)] mod tests` beside the code                                                         | `just test-host`, `cargo test <module>` | Nothing                             |
-| View-model tests                         | What a view-model shows and what its commands do                                | The `vm` modules' tests, e.g. `street/vm/mod.rs`                                                 | `just test-host`                        | The port fakes                      |
-| Component tests                          | What a view renders                                                             | Each slice's `tests.rs`                                                                          | `just test-host`                        | Nothing                             |
-| wasm32 build check                       | The code only the browser build compiles still compiles                         | The workspace without `cityloom_server` and `citymodel_builder`                                  | `just test-wasm`                        | The `wasm32-unknown-unknown` target |
-| Server tests                             | The server's routes, its database and its sealing                               | `crates/cityloom_server/tests/`                                                                  | `just test-host`                        | `DATABASE_URL`                      |
-| `citymodel_builder` and `cityloom_model` | The importer, the tiles, the archive and the pipeline's commands                | `crates/citymodel_builder/tests/`, `crates/cityloom_model/src/`                                  | `just test-host`                        | Nothing                             |
-| Report and PDF tests                     | The design review and the PDF written from it                                   | `crates/cityloom_report/src/lib.rs`, `crates/cityloom_report_pdf/tests/pdf.rs`                   | `just test-host`                        | Nothing                             |
-| Script tests                             | CI's change selector, the factory's gates and guard, the issue system           | `scripts/include/tests/`                                                                         | `just test-scripts`                     | Python 3                            |
-| Browser tests, UI tier                   | One page in a real browser, the network stubbed                                 | `e2e/tests/`, `e2e/tiers.json` (`ui`)                                                            | `just e2e-ui`                           | The built wasm and server, Chromium |
-| Browser tests, integration tier          | The pages against the real server and a database                                | `e2e/tests/`, `e2e/tiers.json` (`integration`)                                                   | `just e2e-integration`                  | The same, and `DATABASE_URL`        |
-| Browser tests, E2E tier                  | The path from the packed archive to the page, and the real server's delivery    | `e2e/tests/`, `e2e/tiers.json` (`e2e`, `archive_also`)                                           | `just e2e-archive`                      | The same, and the packed archive    |
-| Guards                                   | Rules about the code itself: wording, layout, colours, the Atlas table, sealing | `i18n_guard.rs`, `layout_guard.rs`, `atlas_contract.rs`, `shared/contrast.rs`, `no_plaintext.rs` | `just test-host`                        | `DATABASE_URL` for `no_plaintext`   |
+| Level                                    | What it proves                                                                  | Where it lives                                                                                   | How to run                                             | What it needs                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------- |
+| Model unit tests                         | The editing rules and pure computation                                          | `#[cfg(test)] mod tests` beside the code                                                         | `cargo test -p <crate> <module>`                       | Nothing                             |
+| View-model tests                         | What a view-model shows and what its commands do                                | The `vm` modules' tests, e.g. `street/vm/mod.rs`                                                 | `just test-host`                                       | The port fakes                      |
+| Component tests                          | What a view renders                                                             | Each slice's `tests.rs`                                                                          | `cargo test -p cityloom_editor`                        | Nothing                             |
+| wasm32 build check                       | The code only the browser build compiles still compiles                         | The workspace without `cityloom_server` and `citymodel_builder`                                  | `just test-wasm`                                       | The `wasm32-unknown-unknown` target |
+| Server tests                             | The server's routes, its database and its sealing                               | `crates/cityloom_server/tests/`                                                                  | `just test-host`                                       | `DATABASE_URL`                      |
+| `citymodel_builder` and `cityloom_model` | The importer, the tiles, the archive and the pipeline's commands                | `crates/citymodel_builder/tests/`, `crates/cityloom_model/src/`                                  | `cargo test -p citymodel_builder -p cityloom_model`    | Nothing                             |
+| Report and PDF tests                     | The design review and the PDF written from it                                   | `crates/cityloom_report/src/lib.rs`, `crates/cityloom_report_pdf/tests/pdf.rs`                   | `cargo test -p cityloom_report -p cityloom_report_pdf` | Nothing                             |
+| Script tests                             | CI's change selector, the factory's gates and guard, the issue system           | `scripts/include/tests/`                                                                         | `just test-scripts`                                    | Python 3                            |
+| Browser tests, UI tier                   | One page in a real browser, the network stubbed                                 | `e2e/tests/`, `e2e/tiers.json` (`ui`)                                                            | `just e2e-ui`                                          | The built wasm and server, Chromium |
+| Browser tests, integration tier          | The pages against the real server and a database                                | `e2e/tests/`, `e2e/tiers.json` (`integration`)                                                   | `just e2e-integration`                                 | The same, and `DATABASE_URL`        |
+| Browser tests, E2E tier                  | The path from the packed archive to the page, and the real server's delivery    | `e2e/tests/`, `e2e/tiers.json` (`e2e`, `archive_also`)                                           | `just e2e-archive`                                     | The same, and the packed archive    |
+| Guards                                   | Rules about the code itself: wording, layout, colours, the Atlas table, sealing | `i18n_guard.rs`, `layout_guard.rs`, `atlas_contract.rs`, `shared/contrast.rs`, `no_plaintext.rs` | `just test-host`                                       | `DATABASE_URL` for `no_plaintext`   |
 
 ## The levels
 
@@ -193,9 +194,10 @@ The first four are `#[cfg(test)]` modules of the editor.
 
 Only the browser tests reach these, so a change to them needs a spec:
 
-- Pointer drags in a real page. Real pointer events are bound only in the views (`on:pointerdown` in
-  `street/view/curb_strip.rs` and `street/view/calming_strip.rs`), and only Playwright drives them
-  (`mouse.down` or `dragTo` in `a11y`, `curb`, `restrictions`, `stops` and `street`). The junction has nothing to drag.
+- Pointer drags in a real page. Pointer events are bound only in the views, and the map's mouse events in
+  `web/mapcanvas.js`; only Playwright drives them, with `mouse.down`: the street's plan (`on:pointerdown` in
+  `street/view/plan/component.rs`) in `a11y`, `curb`, `stops` and `street`, and an area's corners on the map (the
+  `mousedown` handler of `web/mapcanvas.js`) in `restrictions`. The junction has nothing to drag.
 - MapLibre's WebGL drawing: the map is drawn with MapLibre, not SVG (`e2e/tests/webgl.spec.ts`).
 - The browser side of the ports: the `cfg(target_arch = "wasm32")` code of `shared/platform.rs`. `browser_ports()`
   builds natively, but its browser code is only type-checked by `just test-wasm`.
@@ -205,8 +207,9 @@ Only the browser tests reach these, so a change to them needs a spec:
 
 ### OpenStreetMap fixtures and tiles
 
-The browser tests' road data are `e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf`, `open-ends.osm.pbf` and
-`open-ends.osm`. `just e2e-fixtures` imports each into one network tile, `e2e/fixtures/generated/<name>.json`
+The browser tests' road data are `e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf` and `open-ends.osm.pbf`.
+`open-ends.osm` is the OSM XML source of `open-ends.osm.pbf`, with its `<bounds>` element; it is not read by the tests.
+`just e2e-fixtures` imports each `.osm.pbf` into one network tile, `e2e/fixtures/generated/<name>.json`
 (`citymodel_builder fixture`; ignored by git). It is a private recipe, so `just` does not list it; every browser recipe
 runs it first. In CI, the `build` job runs it once and hands the tiles on in the `browser-build` artifact, with the
 wasm, `web/vendor` and the pinned server.
@@ -257,7 +260,7 @@ The target is WCAG 2.2 AA.
 ### Translation
 
 - Each slice's parity test checks that its two `.ftl` files have the same messages with the same variables
-  (`shared::i18n::parity_problems`): `account`, `archive`, `city`, `junction`, `map`, `place`, `project`,
+  (`shared::i18n::tests::parity_problems`): `account`, `archive`, `city`, `junction`, `map`, `place`, `project`,
   `restriction`, `share`, `shell`, `street` and `sync`.
 - `i18n_guard` finds wording left in the code (see [The guards](#the-guards)).
 - `shared::i18n::typography` applies the OQLF's spacing to fr-CA, and is tested beside it.
@@ -351,7 +354,11 @@ the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outsi
 
 What the tests and CI do not cover today:
 
-- A drag in a page is tested only by the browser tests; the unit tests reach only the pure state machines behind it.
+- The drags of the street's plan and of an area's corners are tested only by the browser tests; the native tests reach
+  only what is behind them, the plan's state machine (`street/vm/plan.rs`) and the map's view-model
+  (`map/vm/areas.rs`).
+- The drags in the curb, calming and green strips (`on:pointerdown` in `street/view/curb_strip.rs`,
+  `calming_strip.rs` and `green_strip.rs`) are covered by no test: no spec drags a strip.
 - The E2E tier runs only in postsubmit, after the merge.
 - The documentation build is not part of the `CI` check.
 - Only Chromium is tested: every Playwright project is Desktop Chrome, and `just setup` installs only Chromium.

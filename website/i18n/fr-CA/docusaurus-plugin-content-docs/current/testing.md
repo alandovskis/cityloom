@@ -5,7 +5,7 @@ title: Tests
 
 # Tests
 
-Cette page est le seul endroit qui dit comment CityLoom est testé : les paliers de tests, où va un nouveau test, les
+Cette page est le seul endroit qui dit comment CityLoom est testé : les paliers de tests, où va un nouveau test, les
 données d’essai, quand les tests s’exécutent et ce qui doit réussir avant qu’une demande de fusion soit fusionnée.
 L’organisation du code (tranches, MVVM, ports) est décrite dans [Architecture](architecture/index.md); la façon de
 préparer et d’exécuter les commandes, dans [Démarrage](getting-started.md). Les chemins des fichiers de l’éditeur sont
@@ -46,65 +46,66 @@ flowchart LR
 ```
 
 `just test` exécute `just test-host`, puis `just test-wasm`. `just e2e` construit une fois et exécute les trois
-niveaux. `just check` exécute les deux.
+niveaux. `just check` exécute les deux. `just test-host` exige toujours `DATABASE_URL`, quelles que soient les caisses
+qu’il teste; `cargo test -p <caisse>` exécute les tests d’une caisse sans elle.
 
-| Palier                                           | Ce qu’il prouve                                                                                                    | Où il se trouve                                                                                  | Comment l’exécuter                      | Ce qu’il exige                             |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------ |
-| Tests unitaires du modèle                        | Les règles d’édition et les calculs purs                                                                           | `#[cfg(test)] mod tests` à côté du code                                                          | `just test-host`, `cargo test <module>` | Rien                                       |
-| Tests des modèles de vue                         | Ce que montre un modèle de vue et ce que font ses commandes                                                        | Les tests des modules `vm`, p. ex. `street/vm/mod.rs`                                            | `just test-host`                        | Les doublures des ports                    |
-| Tests de composant                               | Ce que rend une vue                                                                                                | Le `tests.rs` de chaque tranche                                                                  | `just test-host`                        | Rien                                       |
-| Vérification de la construction wasm32           | Le code que seule la construction pour le navigateur compile compile toujours                                      | L’espace de travail sans `cityloom_server` ni `citymodel_builder`                                | `just test-wasm`                        | La cible `wasm32-unknown-unknown`          |
-| Tests du serveur                                 | Les routes du serveur, sa base de données et son scellement                                                        | `crates/cityloom_server/tests/`                                                                  | `just test-host`                        | `DATABASE_URL`                             |
-| `citymodel_builder` et `cityloom_model`          | L’importateur, les tuiles, l’archive et les commandes de la chaîne                                                 | `crates/citymodel_builder/tests/`, `crates/cityloom_model/src/`                                  | `just test-host`                        | Rien                                       |
-| Tests du rapport et du PDF                       | La revue de conception et le PDF écrit à partir d’elle                                                             | `crates/cityloom_report/src/lib.rs`, `crates/cityloom_report_pdf/tests/pdf.rs`                   | `just test-host`                        | Rien                                       |
-| Tests des scripts                                | Le sélecteur de changements de l’intégration continue, les barrières et la garde de l’usine, le système de billets | `scripts/include/tests/`                                                                         | `just test-scripts`                     | Python 3                                   |
-| Tests dans le navigateur, niveau de l’interface  | Une page dans un vrai navigateur, le réseau simulé                                                                 | `e2e/tests/`, `e2e/tiers.json` (`ui`)                                                            | `just e2e-ui`                           | Le wasm et le serveur construits, Chromium |
-| Tests dans le navigateur, niveau d’intégration   | Les pages contre le vrai serveur et une base de données                                                            | `e2e/tests/`, `e2e/tiers.json` (`integration`)                                                   | `just e2e-integration`                  | La même chose, et `DATABASE_URL`           |
-| Tests dans le navigateur, niveau de bout en bout | Le chemin de l’archive empaquetée jusqu’à la page, et la livraison par le vrai serveur                             | `e2e/tests/`, `e2e/tiers.json` (`e2e`, `archive_also`)                                           | `just e2e-archive`                      | La même chose, et l’archive empaquetée     |
-| Gardes                                           | Des règles sur le code lui-même : formulation, organisation, couleurs, tableau Atlas, scellement                   | `i18n_guard.rs`, `layout_guard.rs`, `atlas_contract.rs`, `shared/contrast.rs`, `no_plaintext.rs` | `just test-host`                        | `DATABASE_URL` pour `no_plaintext`         |
+| Palier                                           | Ce qu’il prouve                                                                                                    | Où il se trouve                                                                                  | Comment l’exécuter                                     | Ce qu’il exige                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------ |
+| Tests unitaires du modèle                        | Les règles d’édition et les calculs purs                                                                           | `#[cfg(test)] mod tests` à côté du code                                                          | `cargo test -p <caisse> <module>`                      | Rien                                       |
+| Tests des modèles de vue                         | Ce que montre un modèle de vue et ce que font ses commandes                                                        | Les tests des modules `vm`, p. ex. `street/vm/mod.rs`                                            | `just test-host`                                       | Les doublures des ports                    |
+| Tests de composant                               | Ce que rend une vue                                                                                                | Le `tests.rs` de chaque tranche                                                                  | `cargo test -p cityloom_editor`                        | Rien                                       |
+| Vérification de la construction wasm32           | Le code que seule la construction pour le navigateur compile compile toujours                                      | L’espace de travail sans `cityloom_server` ni `citymodel_builder`                                | `just test-wasm`                                       | La cible `wasm32-unknown-unknown`          |
+| Tests du serveur                                 | Les routes du serveur, sa base de données et son scellement                                                        | `crates/cityloom_server/tests/`                                                                  | `just test-host`                                       | `DATABASE_URL`                             |
+| `citymodel_builder` et `cityloom_model`          | L’importateur, les tuiles, l’archive et les commandes de la chaîne                                                 | `crates/citymodel_builder/tests/`, `crates/cityloom_model/src/`                                  | `cargo test -p citymodel_builder -p cityloom_model`    | Rien                                       |
+| Tests du rapport et du PDF                       | La revue de conception et le PDF écrit à partir d’elle                                                             | `crates/cityloom_report/src/lib.rs`, `crates/cityloom_report_pdf/tests/pdf.rs`                   | `cargo test -p cityloom_report -p cityloom_report_pdf` | Rien                                       |
+| Tests des scripts                                | Le sélecteur de changements de l’intégration continue, les barrières et la garde de l’usine, le système de billets | `scripts/include/tests/`                                                                         | `just test-scripts`                                    | Python 3                                   |
+| Tests dans le navigateur, niveau de l’interface  | Une page dans un vrai navigateur, le réseau simulé                                                                 | `e2e/tests/`, `e2e/tiers.json` (`ui`)                                                            | `just e2e-ui`                                          | Le wasm et le serveur construits, Chromium |
+| Tests dans le navigateur, niveau d’intégration   | Les pages contre le vrai serveur et une base de données                                                            | `e2e/tests/`, `e2e/tiers.json` (`integration`)                                                   | `just e2e-integration`                                 | La même chose, et `DATABASE_URL`           |
+| Tests dans le navigateur, niveau de bout en bout | Le chemin de l’archive empaquetée jusqu’à la page, et la livraison par le vrai serveur                             | `e2e/tests/`, `e2e/tiers.json` (`e2e`, `archive_also`)                                           | `just e2e-archive`                                     | La même chose, et l’archive empaquetée     |
+| Gardes                                           | Des règles sur le code lui-même : formulation, organisation, couleurs, tableau Atlas, scellement                   | `i18n_guard.rs`, `layout_guard.rs`, `atlas_contract.rs`, `shared/contrast.rs`, `no_plaintext.rs` | `just test-host`                                       | `DATABASE_URL` pour `no_plaintext`         |
 
 ## Les paliers
 
 ### Tests unitaires du modèle
 
-Chaque fichier du modèle garde ses tests à côté du code, dans un `#[cfg(test)] mod tests` : par exemple les fichiers
+Chaque fichier du modèle garde ses tests à côté du code, dans un `#[cfg(test)] mod tests` : par exemple les fichiers
 de `street/model/`, et `crates/cityloom_model/src/cut.rs`, `graph.rs`, `osm.rs`, `importer.rs` et `corridor.rs`. Un
-modèle ne contient ni Leptos ni formulation. Une modification renvoie un `bool`, et un refus porte une raison : un test
+modèle ne contient ni Leptos ni formulation. Une modification renvoie un `bool`, et un refus porte une raison : un test
 appelle donc la règle et lit ce qu’elle renvoie. `cargo test shell::vm` exécute un seul module; le nom complet d’un
 test fonctionne aussi.
 
 ### Tests des modèles de vue
 
-Un modèle de vue n’atteint le navigateur que par les ports : ses tests s’exécutent donc en natif contre leurs
+Un modèle de vue n’atteint le navigateur que par les ports : ses tests s’exécutent donc en natif contre leurs
 doublures, dans `shared/ports.rs`.
 
 - `test_ports()` donne un ensemble de ports avec un `RecordingAnnouncer` (ce qui a été dit à un lecteur d’écran) et un
   `MemoryStorage`, que le test peut lire.
-- `test_ports_with_time()` y ajoute un `ManualScheduler` : le travail différé ne s’exécute que lorsque le test appelle
+- `test_ports_with_time()` y ajoute un `ManualScheduler` : le travail différé ne s’exécute que lorsque le test appelle
   `advance(ms)`.
 - D’autres fonctions du même fichier ajoutent le reste, comme `test_ports_with_fetcher()`, dont le `FakeFetcher` garde
   chaque requête jusqu’à ce que le test y réponde.
 
 Les tests des modèles de vue sont les `mod tests` de `street/vm/mod.rs`, de `junction/vm/mod.rs` et de
-`map/vm/mod.rs`, entre autres. La synchronisation est testée de la même façon, contre un serveur en mémoire :
+`map/vm/mod.rs`, entre autres. La synchronisation est testée de la même façon, contre un serveur en mémoire :
 `ServerSim`, `Device` et `device()` dans `sync/tests.rs`.
 
 ### Tests de composant
 
 Un test de composant rend une vue en HTML sur l’hôte, avec `shared::testing::html` (`shared/testing.rs`), et lit le
-balisage. Ils se trouvent dans le `tests.rs` de chaque tranche : `account`, `archive`, `junction/view`, `map/view`,
+balisage. Ils se trouvent dans le `tests.rs` de chaque tranche : `account`, `archive`, `junction/view`, `map/view`,
 `project`, `share`, `shell`, `standards`, `street/view`, `sync` et `timeline`.
 
 ### La vérification de la construction wasm32
 
 `just test-wasm` exécute
 `cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder`. Elle
-n’exécute aucun test : elle vérifie les types du code sous `cfg(target_arch = "wasm32")`, que `cargo test` sur l’hôte
+n’exécute aucun test : elle vérifie les types du code sous `cfg(target_arch = "wasm32")`, que `cargo test` sur l’hôte
 ne compile pas.
 
 ### Tests du serveur
 
-Les tests du serveur sont dans `crates/cityloom_server/tests/` : `api`, `areas`, `auth_flow`, `data_mount`, `db`,
+Les tests du serveur sont dans `crates/cityloom_server/tests/` : `api`, `areas`, `auth_flow`, `data_mount`, `db`,
 `no_plaintext`, `providers`, `rotate`, `share_api`, `share_db`, `static_files`, `unavailable`, `work_api` et
 `work_db`, avec leurs outils dans `tests/support/mod.rs`.
 
@@ -122,7 +123,7 @@ Les tests du serveur sont dans `crates/cityloom_server/tests/` : `api`, `areas`,
 ### Tests de `citymodel_builder` et de `cityloom_model`
 
 `crates/citymodel_builder/tests/` contient les tests de la chaîne (`archive`, `commands`, `ctrl_c`, `download`,
-`prepare`, `progress` et `tiles`) et ceux de l’importateur, qui forment une seule caisse de tests, `tests/importer/` :
+`prepare`, `progress` et `tiles`) et ceux de l’importateur, qui forment une seule caisse de tests, `tests/importer/` :
 `import.rs`, `real_city.rs`, `clip_agrees.rs` et `projection.rs`, avec de petits extraits OpenStreetMap comme
 `boulevard.osm` et `split_block.osm`. Les tests de `cityloom_model` sont dans le code (voir
 [Tests unitaires du modèle](#tests-unitaires-du-modèle)). `cityloom_model::IMPORTER_VERSION` augmente chaque fois que
@@ -132,7 +133,7 @@ ce que produit l’importateur change pour les mêmes données.
 
 - `cityloom_report` a ses tests dans le code, dans `crates/cityloom_report/src/lib.rs`.
 - `crates/cityloom_report_pdf/tests/pdf.rs` écrit des PDF avec `write_pdf` et les relit avec lopdf.
-- Les tests de l’éditeur écrivent le rapport par l’écrivain de PDF : `cityloom_report_pdf` est l’une des dépendances
+- Les tests de l’éditeur écrivent le rapport par l’écrivain de PDF : `cityloom_report_pdf` est l’une des dépendances
   de développement de l’éditeur, et reste donc hors de la construction de l’éditeur lui-même. `scripts/build.sh` échoue
   si le JavaScript de l’éditeur exporte `report_pdf`.
 - Dans le navigateur, `e2e/tests/report.spec.ts` lit le PDF que fait une page avec `pdfjs-dist`.
@@ -149,15 +150,15 @@ les règles d’étiquetage concordent).
 
 Les tests dans le navigateur sont des spécifications Playwright, `e2e/tests/*.spec.ts`, exécutées contre le
 `web/pkg` construit et un serveur construit avec le faux fournisseur. `e2e/tiers.json` donne à chaque spécification un
-seul niveau :
+seul niveau :
 
-- **Interface** (35 spécifications) : une page, le réseau simulé, le serveur statique seulement; ni base de données ni
+- **Interface** (35 spécifications) : une page, le réseau simulé, le serveur statique seulement; ni base de données ni
   archive. `just e2e-ui`.
-- **Intégration** : `account-server`, `share` et `sync`, contre le vrai serveur et un Postgres (`DATABASE_URL`).
+- **Intégration** : `account-server`, `share` et `sync`, contre le vrai serveur et un Postgres (`DATABASE_URL`).
   `just e2e-integration`.
-- **Bout en bout** : `archive`, `delivery` et `serve`, sur un serveur qui extrait l’archive empaquetée, et la
+- **Bout en bout** : `archive`, `delivery` et `serve`, sur un serveur qui extrait l’archive empaquetée, et la
   livraison du site par le vrai serveur. `just e2e-archive`.
-- **`archive_also`** : `map` et `street` sont des spécifications de l’interface que le niveau de bout en bout exécute
+- **`archive_also`** : `map` et `street` sont des spécifications de l’interface que le niveau de bout en bout exécute
   de nouveau sur l’archive extraite.
 
 `e2e/playwright.config.ts` crée un projet Playwright par niveau, et lève une erreur quand une spécification n’est dans
@@ -169,7 +170,7 @@ test fixes. Hors de l’intégration continue et du mode archive, Playwright ré
 `E2E_PORT` change le port.
 
 `just e2e` construit le wasm et le serveur et fait les tuiles des données d’essai, puis exécute les trois niveaux.
-Avec des arguments, il exécute ces spécifications, quel que soit leur niveau : `just e2e tests/street.spec.ts`.
+Avec des arguments, il exécute ces spécifications, quel que soit leur niveau : `just e2e tests/street.spec.ts`.
 
 ### Les gardes
 
@@ -179,9 +180,9 @@ Les gardes sont des tests sur le code lui-même. Ils s’exécutent avec les tes
   quelques fichiers laissés de côté, chacun avec sa raison), sur un identifiant de message utilisé qui n’est pas dans
   les deux langues, sur un fichier d’une tranche traduite qui n’est dans aucune des deux listes, et sur une entrée
   morte d’`ALLOWED_LITERALS` ou de `NOT_MESSAGE_IDS`.
-- **`layout_guard.rs`** garde les fichiers de `street/`, `junction/` et `map/` dans `model/`, `vm/` et `view/` : leur
+- **`layout_guard.rs`** garde les fichiers de `street/`, `junction/` et `map/` dans `model/`, `vm/` et `view/` : leur
   racine ne contient que `mod.rs`, `CLAUDE.md` et `i18n/`.
-- **`atlas_contract.rs`** tient le tableau Atlas (`shared::atlas::MEASURES`) pour un contrat : chaque mesure qu’il
+- **`atlas_contract.rs`** tient le tableau Atlas (`shared::atlas::MEASURES`) pour un contrat : chaque mesure qu’il
   énumère est construite, rien d’autre ne l’est, et chaque mesure est nommée dans les deux langues.
 - **`shared/contrast.rs`** mesure les jetons de couleur du CSS selon les critères 1.4.3 (texte) et 1.4.11 (le reste)
   des WCAG.
@@ -194,25 +195,26 @@ Les quatre premiers sont des modules `#[cfg(test)]` de l’éditeur.
 
 | Ce qui change                                                | Le test                                                                              | Où                                                                                                 | Ce qui change aussi                                                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Une règle d’édition                                          | Un test unitaire du modèle : le résultat de la règle, et sa raison quand elle refuse | Le `mod tests` du fichier du modèle                                                                |                                                                                                                        |
+| Une règle d’édition                                          | Un test unitaire du modèle : le résultat de la règle, et sa raison quand elle refuse | Le `mod tests` du fichier du modèle                                                                |                                                                                                                        |
 | Une commande d’un modèle de vue, ou ce qu’il montre          | Un test du modèle de vue contre `test_ports()` ou `test_ports_with_time()`           | Le `mod tests` du modèle de vue                                                                    |                                                                                                                        |
 | Une machine à états de touches ou de pointeur                | Un test unitaire de la machine, qui est pure                                         | À côté d’elle, p. ex. `street/vm/plan.rs` (`PlanGesture`, `is_boundary_drag`), `street/vm/keys.rs` | Un glisser dans la page exige aussi une spécification de navigateur                                                    |
 | Un glisser dans une page                                     | Une spécification de navigateur qui pilote la souris                                 | p. ex. `e2e/tests/curb.spec.ts`, `stops.spec.ts`, `street.spec.ts`                                 |                                                                                                                        |
 | Le balisage d’une vue                                        | Un test de composant                                                                 | Le `tests.rs` de la tranche                                                                        |                                                                                                                        |
-| Un point de terminaison du serveur                           | Un test du serveur, `#[sqlx::test]` avec `TestApp`                                   | `crates/cityloom_server/tests/*_api.rs`                                                            | Un nouveau fichier que chargent les pages : `tests/static_files.rs` vérifie chaque référence                           |
+| Un point de terminaison du serveur                           | Un test du serveur, `#[sqlx::test]` avec `TestApp`                                   | `crates/cityloom_server/tests/*_api.rs`                                                            | Un nouveau fichier que chargent les pages : `tests/static_files.rs` vérifie chaque référence                           |
 | Un cas de l’importateur                                      | Un test de l’importateur avec un petit extrait `.osm`                                | `crates/citymodel_builder/tests/importer/`                                                         | Augmenter `IMPORTER_VERSION` quand le résultat change; un fichier OSM XML exige un élément `<bounds>`                  |
 | Une chaîne                                                   | Le test de parité de la tranche, et `i18n_guard`                                     | Les deux fichiers `.ftl` de la tranche                                                             | Un littéral qui n’est pas une formulation va dans `ALLOWED_LITERALS` ou `NOT_MESSAGE_IDS`, avec sa raison              |
 | Une nouvelle page ou une nouvelle spécification              | Une spécification de navigateur                                                      | `e2e/tests/<nom>.spec.ts`                                                                          | Un niveau dans `e2e/tiers.json`, un groupe dans `scripts/ci/spec-map.json`; un nouveau dossier source reçoit une règle |
 | Une nouvelle paire de couleurs pour du texte ou une commande | Un test de contraste                                                                 | `shared/contrast.rs`                                                                               |                                                                                                                        |
 
-Seuls les tests dans le navigateur atteignent ce qui suit; un changement à ces éléments exige donc une spécification :
+Seuls les tests dans le navigateur atteignent ce qui suit; un changement à ces éléments exige donc une spécification :
 
-- Le glisser au pointeur dans une vraie page. Les vrais événements de pointeur ne sont liés que dans les vues
-  (`on:pointerdown` dans `street/view/curb_strip.rs` et `street/view/calming_strip.rs`), et seul Playwright les
-  pilote (`mouse.down` ou `dragTo` dans `a11y`, `curb`, `restrictions`, `stops` et `street`). La jonction n’a rien à
-  glisser.
-- Le dessin WebGL de MapLibre : la carte est dessinée avec MapLibre, pas en SVG (`e2e/tests/webgl.spec.ts`).
-- Le côté navigateur des ports : le code `cfg(target_arch = "wasm32")` de `shared/platform.rs`. `browser_ports()` se
+- Le glisser au pointeur dans une vraie page. Les événements de pointeur ne sont liés que dans les vues, et les
+  événements de souris de la carte dans `web/mapcanvas.js`; seul Playwright les pilote, avec `mouse.down` : le plan de
+  la rue (`on:pointerdown` dans `street/view/plan/component.rs`) dans `a11y`, `curb`, `stops` et `street`, et les
+  coins d’une zone sur la carte (le gestionnaire `mousedown` de `web/mapcanvas.js`) dans `restrictions`. La jonction
+  n’a rien à glisser.
+- Le dessin WebGL de MapLibre : la carte est dessinée avec MapLibre, pas en SVG (`e2e/tests/webgl.spec.ts`).
+- Le côté navigateur des ports : le code `cfg(target_arch = "wasm32")` de `shared/platform.rs`. `browser_ports()` se
   construit en natif, mais son code pour le navigateur n’est que vérifié par `just test-wasm`.
 - Le code de démarrage de `web/*.js`.
 
@@ -220,8 +222,9 @@ Seuls les tests dans le navigateur atteignent ce qui suit; un changement à ces 
 
 ### Données d’essai OpenStreetMap et tuiles
 
-Les données routières des tests dans le navigateur sont `e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf`,
-`open-ends.osm.pbf` et `open-ends.osm`. `just e2e-fixtures` importe chacune en une tuile du réseau,
+Les données routières des tests dans le navigateur sont `e2e/fixtures/plateau.osm.pbf`, `turbo.osm.pbf` et
+`open-ends.osm.pbf`. `open-ends.osm` est la source OSM XML de `open-ends.osm.pbf`, avec son élément `<bounds>`; les
+tests ne le lisent pas. `just e2e-fixtures` importe chaque `.osm.pbf` en une tuile du réseau,
 `e2e/fixtures/generated/<nom>.json` (`citymodel_builder fixture`; ignorée par Git). C’est une recette privée, que
 `just` n’énumère donc pas; chaque recette de navigateur l’exécute d’abord. Dans l’intégration continue, la tâche
 `build` l’exécute une fois et transmet les tuiles dans l’artefact `browser-build`, avec le wasm, `web/vendor` et le
@@ -236,7 +239,7 @@ serveur figé.
 - Chaque test échoue sur une erreur de la page ou une erreur de la console. Les erreurs de `/api/me`,
   `/api/providers` et `/api/work` sont admises, et celles de `/api/me/*` quand le test porte l’annotation
   `failing-account-api`.
-- Chaque test reçoit un contexte de navigateur neuf : le stockage commence vide.
+- Chaque test reçoit un contexte de navigateur neuf : le stockage commence vide.
 - Une donnée d’essai automatique sert la tuile du Plateau comme tuile métropolitaine par défaut, sauf avec
   `E2E_ARCHIVE`, où le serveur répond à partir de l’archive.
 - Le stockage commence avec `cityloom-lang=en` et le premier projet.
@@ -276,8 +279,8 @@ La cible est WCAG 2.2 AA.
 ### Traduction
 
 - Le test de parité de chaque tranche vérifie que ses deux fichiers `.ftl` ont les mêmes messages avec les mêmes
-  variables (`shared::i18n::parity_problems`) : `account`, `archive`, `city`, `junction`, `map`, `place`, `project`,
-  `restriction`, `share`, `shell`, `street` et `sync`.
+  variables (`shared::i18n::tests::parity_problems`) : `account`, `archive`, `city`, `junction`, `map`, `place`,
+  `project`, `restriction`, `share`, `shell`, `street` et `sync`.
 - `i18n_guard` trouve la formulation restée dans le code (voir [Les gardes](#les-gardes)).
 - `shared::i18n::typography` applique au fr-CA les espacements de l’OQLF, et est testée à côté.
 - `e2e/tests/language.spec.ts` fait passer une page au fr-CA depuis le menu du compte.
@@ -289,26 +292,26 @@ La cible est WCAG 2.2 AA.
 - `just check-no-fake` construit le serveur de publication et exécute `scripts/check-no-fake.sh`, qui échoue sur les
   marqueurs du faux fournisseur, `fake-login` et `fake-apple`.
 - La tâche `Release server has no fake provider` de l’intégration continue construit aussi le serveur avec
-  `test-provider` et s’attend à ce que ce script échoue sur lui : un contrôle positif, pour que les marqueurs ne
+  `test-provider` et s’attend à ce que ce script échoue sur lui : un contrôle positif, pour que les marqueurs ne
   puissent pas dériver sans qu’on le voie.
 
 ## Quand les tests s’exécutent
 
 ### Flux de prévérification
 
-`.github/workflows/presubmit.yml` s’exécute pour chaque demande de fusion, avec `RUSTFLAGS=-D warnings` : un nouvel
+`.github/workflows/presubmit.yml` s’exécute pour chaque demande de fusion, avec `RUSTFLAGS=-D warnings` : un nouvel
 avertissement du compilateur le fait donc échouer. Un changement qui ne touche que la documentation (`website/**`,
 `docs/**`, `**/*.md`, `LICENSE*`) ne le démarre pas.
 
 Sa tâche `changes` exécute `scripts/ci/ci_changes.py`, qui décide de ce qui s’exécute d’après les fichiers que change la
-demande de fusion :
+demande de fusion :
 
 - Les tests Rust des caisses qu’elle touche et des caisses qui en dépendent. Un changement à ce que lisent toutes les
   caisses, comme `web/`, `Cargo.lock`, le `justfile` ou un flux de travail, exécute toutes les caisses. La vérification
   wasm et celle du serveur de publication suivent les mêmes caisses.
   Une simple hausse de version (la ligne de version de `crates/cityloom_editor/Cargo.toml` et son entrée dans
   `Cargo.lock`) ne compte pas comme un changement à ces fichiers.
-- Seules les spécifications de navigateur que ses fichiers peuvent toucher : la première règle de
+- Seules les spécifications de navigateur que ses fichiers peuvent toucher : la première règle de
   `scripts/ci/spec-map.json` qui correspond à un fichier décide, par groupe. Un fichier qu’aucune règle ne nomme
   exécute toutes les spécifications.
   Les fichiers propres à une page dans `web/` exécutent le groupe de cette page et `@cross`, les spécifications
@@ -323,7 +326,7 @@ browser tests, UI tests, Integration tests et Version bump, et `CI`, qui les ras
 ### Flux de postvérification
 
 `.github/workflows/postsubmit.yml` s’exécute à chaque poussée sur `main` (avec le même `paths-ignore`) et à la main. Il
-n’a pas de tâche `changes` : il exécute toutes les tâches et toutes les spécifications, le niveau de l’interface en six
+n’a pas de tâche `changes` : il exécute toutes les tâches et toutes les spécifications, le niveau de l’interface en six
 partitions Playwright, et le niveau de bout en bout par `scripts/e2e-archive.sh`. Il fixe aussi
 `RUSTFLAGS=-D warnings`, et ses exécutions ne sont jamais annulées. Sa tâche `All checks` échoue quand une tâche a
 échoué ou a été annulée, et `Deploy to Railway` l’attend. Le déploiement ne se fait que pour une poussée sur `main`;
@@ -339,7 +342,7 @@ de `website/` ne démarre aucun flux de travail.
 ### SonarCloud
 
 `.github/workflows/sonar.yml` s’exécute pour les demandes de fusion et sur `main`, avec le même `paths-ignore`. Il
-exécute `just sonar-reports` : la couverture des tests sur l’hôte (sans `cityloom_server`) et les constats de Clippy
+exécute `just sonar-reports` : la couverture des tests sur l’hôte (sans `cityloom_server`) et les constats de Clippy
 avec `--cap-lints warn`. Il n’a pas de `-D warnings`.
 
 ## Ce qui doit réussir avant une fusion
@@ -349,57 +352,61 @@ avec `--cap-lints warn`. Il n’a pas de `-D warnings`.
 - **SonarCloud.** Son analyse ne fait pas partie de `CI` et ne bloque jamais une fusion. L’agent de fusion
   (`.claude/agents/merge.md`) exige tout de même aucun problème ouvert et aucun point chaud sur la demande de fusion,
   et la barrière de qualité à `OK`. Les autres conditions de la barrière sont une couverture du nouveau code d’au
-  moins 80 % et une duplication d’au plus 3 %.
+  moins 80 % et une duplication d’au plus 3 %.
 - **La version.** `scripts/check-version.sh` exige que la version de `crates/cityloom_editor/Cargo.toml` soit
   supérieure à celle de la base. Un changement qui ne touche que la documentation et la configuration de l’intégration
-  continue (`CI_CONFIGURATION` dans `ci_changes.py` : `.github/**`, `scripts/ci/**`, `scripts/include/**`,
+  continue (`CI_CONFIGURATION` dans `ci_changes.py` : `.github/**`, `scripts/ci/**`, `scripts/include/**`,
   `.claude/**`) n’en exige pas, et la tâche est sautée.
 - **La vérification Documentation**, pour un changement à `website/`. `CI` ne la couvre pas.
 - **La fusion elle-même.** L’agent de déploiement (`.claude/agents/deploy.md`) ne fusionne que lorsque chaque
   vérification a réussi ou a été sautée et que GitHub indique `CLEAN`. Dans l’usine logicielle, une personne approuve
   d’abord la tête de la demande de fusion.
 - **Les barrières de l’usine** (`.claude/factory/gate.py`, décrites dans `.claude/factory/README.md`), pour un billet
-  que l’usine construit :
-  - `red` : les nouveaux tests compilent, chaque nouveau test échoue, et chaque ancien test réussit;
-  - `green` : chaque test réussit avec `-D warnings`, la mise en forme et la version tiennent, et aucun fichier de
+  que l’usine construit :
+  - `red` : les nouveaux tests compilent, chaque nouveau test échoue, et chaque ancien test réussit;
+  - `green` : chaque test réussit avec `-D warnings`, la mise en forme et la version tiennent, et aucun fichier de
     test, bloc `#[cfg(test)]`, vérification ou fichier de l’usine n’a changé depuis le commit rouge;
-  - `docs` : seule la documentation a changé, chaque page a sa page dans l’autre langue, et le site passe Prettier et
+  - `docs` : seule la documentation a changé, chaque page a sa page dans l’autre langue, et le site passe Prettier et
     se construit.
 
 ## Règles
 
 - **Le test d’abord.** Écrire le test qui échoue, puis le code. Dans l’usine logicielle, seul l’agent qui écrit les
-  tests en écrit : `guard.py` refuse la modification d’un test par l’agent d’implémentation, et un test qu’il croit
+  tests en écrit : `guard.py` refuse la modification d’un test par l’agent d’implémentation, et un test qu’il croit
   faux est une question pour une personne.
 - **Ne jamais affaiblir un test pour le faire réussir.** Pas de `#[ignore]`, de `test.skip` ni de `test.fixme`, pas
   d’assertion plus lâche, pas de délai plus long, pas de reprise ajoutée (`.claude/agents/merge.md`).
 - **Un test instable est un bogue.** Il reçoit un billet et est corrigé, pas exécuté de nouveau jusqu’à ce qu’il
-  réussisse. Par exemple, CLM-22 : un test de `junction::model::calls` donnait une seconde à une exécution sur un
+  réussisse. Par exemple, CLM-22 : un test de `junction::model::calls` donnait une seconde à une exécution sur un
   document hostile, et a fait échouer une exécution de déploiement sur une machine chargée. La limite a été mesurée,
-  pas simplement relâchée : 0,16 s seul, 1,16 s à côté de toute la suite, 16,4 s avec la lecture quadratique contre
+  pas simplement relâchée : 0,16 s seul, 1,16 s à côté de toute la suite, 16,4 s avec la lecture quadratique contre
   laquelle il protège. Elle est devenue `AT_ONCE`, 10 s, qui attrape toujours cette lecture.
 
 ## Lacunes et risques connus
 
-Ce que les tests et l’intégration continue ne couvrent pas aujourd’hui :
+Ce que les tests et l’intégration continue ne couvrent pas aujourd’hui :
 
-- Un glisser dans une page n’est testé que par les tests dans le navigateur; les tests unitaires n’atteignent que les
-  machines à états pures qui sont derrière.
+- Les glissers du plan de la rue et des coins d’une zone ne sont testés que par les tests dans le navigateur; les
+  tests natifs n’atteignent que ce qui est derrière eux, la machine à états du plan (`street/vm/plan.rs`) et le modèle
+  de vue de la carte (`map/vm/areas.rs`).
+- Les glissers dans les bandes du bord de rue, des éléments surélevés et des arbres et plantations
+  (`on:pointerdown` dans `street/view/curb_strip.rs`, `calming_strip.rs` et `green_strip.rs`) ne sont couverts par
+  aucun test : aucune spécification ne glisse une bande.
 - Le niveau de bout en bout ne s’exécute que dans le flux de postvérification, après la fusion.
 - La construction de la documentation ne fait pas partie de la vérification `CI`.
-- Seul Chromium est testé : chaque projet Playwright est Desktop Chrome, et `just setup` n’installe que Chromium.
-- Dans l’intégration continue, un test de navigateur en échec est repris une fois : un test instable peut donc
+- Seul Chromium est testé : chaque projet Playwright est Desktop Chrome, et `just setup` n’installe que Chromium.
+- Dans l’intégration continue, un test de navigateur en échec est repris une fois : un test instable peut donc
   réussir.
-- SonarCloud ne mesure que la couverture des tests sur l’hôte : ni le code propre au wasm, ni les tests dans le
+- SonarCloud ne mesure que la couverture des tests sur l’hôte : ni le code propre au wasm, ni les tests dans le
   navigateur, ni `cityloom_server`, `cityloom_report` ou `cityloom_report_pdf`, que `sonar-project.properties` laisse
   de côté. SonarCloud ne bloque pas une fusion.
 - Aucune vérification d’état n’est exigée sur `main`; les flux de travail le disent.
 - L’archive du niveau de bout en bout est une seule tuile du Plateau. Aucun test ne s’exécute sur les vraies données de
   Montréal, que seule la tâche de déploiement produit.
-- Les vrais fournisseurs de connexion ne sont jamais éprouvés de bout en bout : les spécifications utilisent le faux
+- Les vrais fournisseurs de connexion ne sont jamais éprouvés de bout en bout : les spécifications utilisent le faux
   fournisseur, et les [vérifications manuelles](getting-started.md#vérifications-manuelles-une-fois-par-fournisseur)
   se font à la main.
-- Clippy n’est jamais rendu bloquant dans l’intégration continue : seul SonarCloud l’exécute, avec
+- Clippy n’est jamais rendu bloquant dans l’intégration continue : seul SonarCloud l’exécute, avec
   `--cap-lints warn`.
 - Une demande de fusion venant d’une bifurcation ne reçoit aucune analyse SonarCloud.
 - Les tranches `timeline` et `standards` ont des messages, mais aucun test de parité de leurs fichiers `.ftl`.
