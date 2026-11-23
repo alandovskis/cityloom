@@ -56,15 +56,15 @@ Les fichiers du premier niveau :
 L’espace de travail compte sept caisses, toutes dans `crates/`. Celles qui s’exécutent dans le navigateur sont
 construites en WebAssembly.
 
-| Caisse                | S’exécute dans                  | Contenu                                                                                                                                                                                                                                                                             |
-| --------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cityloom_editor`     | Le navigateur                   | L’éditeur : la logique et les vues de chaque page. Son `Cargo.toml` porte la version du produit, que chaque demande de fusion qui modifie l’application augmente.                                                                                                                   |
-| `cityloom_ui`         | Le navigateur                   | Les commandes que partagent les pages de l’éditeur : le groupe de boutons radio, le champ à boutons plus et moins, la section des détails et la question posée avant de faire quelque chose. Elle ne contient aucun texte et n’utilise aucune autre caisse de l’espace de travail.  |
-| `cityloom_model`      | Le navigateur, le constructeur  | Le réseau de rues simple que produit `citymodel_builder` et que lit l’éditeur (serde seulement).                                                                                                                                                                                    |
-| `cityloom_report`     | Le navigateur                   | Le rapport d’examen de la conception sous forme de données simples (serde seulement). L’éditeur le remplit et le remet au générateur de PDF.                                                                                                                                        |
-| `cityloom_report_pdf` | Le navigateur                   | Le générateur de PDF. C’est un module distinct, `web/pkg/cityloom_report_pdf*`, que `web/report.js` charge la première fois qu’un rapport est demandé, pour que sa lourde dépendance (krilla) reste hors du module de l’éditeur. La construction échoue si l’éditeur le lie.        |
-| `cityloom_server`     | Le serveur                      | Le serveur : il envoie `web/`, connecte les gens et conserve les comptes et le travail stocké dans Postgres. `migrations/` contient le schéma de la base de données, `tests/` ses tests d’intégration.                                                                              |
-| `citymodel_builder`   | Le poste d’un développeur, l’IC | La préparation des données derrière `just prepare` et `just pack` : il télécharge l’extrait, l’importe une seule fois avec osm2streets (`src/importer/`), découpe le réseau en tuiles et les empaquette dans une archive `.citymodel` (`src/archive/`), que le serveur décompresse. |
+| Caisse                | S’exécute dans                  | Contenu                                                                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cityloom_editor`     | Le navigateur                   | L’éditeur : la logique et les vues de chaque page. Son `Cargo.toml` porte la version du produit, que chaque demande de fusion qui modifie l’application augmente.                                                                                                                                        |
+| `cityloom_ui`         | Le navigateur                   | Les commandes que partagent les pages de l’éditeur&nbsp;: le groupe de boutons radio, les boutons plus et moins et leur champ numérique, la section des détails et la question posée avant de faire quelque chose. Elle ne contient aucun texte et n’utilise aucune autre caisse de l’espace de travail. |
+| `cityloom_model`      | Le navigateur, le constructeur  | Le réseau de rues simple que produit `citymodel_builder` et que lit l’éditeur (serde seulement).                                                                                                                                                                                                         |
+| `cityloom_report`     | Le navigateur                   | Le rapport d’examen de la conception sous forme de données simples (serde seulement). L’éditeur le remplit et le remet au générateur de PDF.                                                                                                                                                             |
+| `cityloom_report_pdf` | Le navigateur                   | Le générateur de PDF. C’est un module distinct, `web/pkg/cityloom_report_pdf*`, que `web/report.js` charge la première fois qu’un rapport est demandé, pour que sa lourde dépendance (krilla) reste hors du module de l’éditeur. La construction échoue si l’éditeur le lie.                             |
+| `cityloom_server`     | Le serveur                      | Le serveur : il envoie `web/`, connecte les gens et conserve les comptes et le travail stocké dans Postgres. `migrations/` contient le schéma de la base de données, `tests/` ses tests d’intégration.                                                                                                   |
+| `citymodel_builder`   | Le poste d’un développeur, l’IC | La préparation des données derrière `just prepare` et `just pack` : il télécharge l’extrait, l’importe une seule fois avec osm2streets (`src/importer/`), découpe le réseau en tuiles et les empaquette dans une archive `.citymodel` (`src/archive/`), que le serveur décompresse.                      |
 
 ## Les dossiers de l’éditeur
 
@@ -92,13 +92,15 @@ Dans une tranche d’édition, `model.rs` contient les règles, `vm.rs` le modè
 lecteur d’écran, `tests.rs` les tests, et `i18n/en.ftl` et `i18n/fr.ftl` les messages; les vues sont à côté. Dans les
 trois plus grandes tranches, `street/`, `junction/` et `map/`, chaque couche a son propre dossier, `model/`, `vm/` et
 `view/` (avec `model/mod.rs`, `vm/mod.rs` et `view/mod.rs` à la place de `model.rs`, `vm.rs` et `view.rs`, et les tests
-dans `view/tests.rs`); seuls `mod.rs`, `i18n/` et `CLAUDE.md` restent à la racine de la tranche. Quatre fichiers se
+dans `view/tests.rs`); seuls `mod.rs`, `i18n/` et `CLAUDE.md` restent à la racine de la tranche. Cinq fichiers se
 trouvent au sommet de `src/` :
 
 - `lib.rs` : les points d’entrée qu’appellent les pages (`mount_*`) et le registre des messages de toutes les tranches.
 - `i18n_guard.rs` : un test qui échoue quand un fichier traduit contient ses propres mots au lieu d’un message.
 - `layout_guard.rs` : un test qui échoue quand un fichier est laissé à la racine de `street/`, `junction/` ou
   `map/` au lieu d’être dans l’une de ses couches.
+- `ui_guard.rs`&nbsp;: un test qui échoue quand une tranche dessine elle-même un groupe de boutons radio, des boutons plus et
+  moins, une section des détails avec son titre ou une question, au lieu d’utiliser ceux de `cityloom_ui`.
 - `atlas_contract.rs` : un test qui garde accordés ce qui est construit et la liste des mesures du tableau Atlas.
 
 ## `web/`
