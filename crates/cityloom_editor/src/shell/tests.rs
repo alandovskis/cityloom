@@ -214,7 +214,7 @@ fn the_sign_in_menu_is_drawn_for_each_state_in_each_language() {
 #[test]
 fn the_editors_open_with_a_skip_link_to_the_drawing_that_shows_on_focus() {
     for (page, html) in [("street", include_str!("../../../../web/street.html")), ("intersection", include_str!("../../../../web/intersection.html"))] {
-        // the body's tag may carry a class (the street page's `street-page`)
+        // the body's tag may carry a class (`tray-page`)
         let tag = html.find("<body").unwrap();
         let body = &html[tag + html[tag..].find('>').unwrap() + 1..];
         assert!(

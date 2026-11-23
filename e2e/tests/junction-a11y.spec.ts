@@ -765,3 +765,212 @@ test.describe("the junction's folds are reached by heading (CLM-50)", () => {
     await expect(heading("Position")).toHaveCount(1);
   });
 });
+
+// ---- the details as a label column, as the street's (CLM-51) ------------------------------------------------------------
+
+/** What does not fit the details' label column: a box or a word past the column's right edge, a setting's name that runs into
+ *  its control, a button under 24 px. What scrolls or is cut inside a box of its own is that box's. */
+async function misfits(page: Page) {
+  return page.evaluate(() => {
+    const column = document.querySelector("#inspector > .insp-columns");
+    if (!column) return ["no label column"];
+    const found: string[] = [];
+    const edge = column.getBoundingClientRect().right + 0.5;
+    const own = (el: Element) => {
+      for (let e: Element | null = el; e && e !== column; e = e.parentElement) {
+        if (getComputedStyle(e).overflowX !== "visible") return true;
+      }
+      return false;
+    };
+    const shown = (r: DOMRect) => r.width > 0 && r.height > 0;
+    // What a message calls a control: its own name, or the setting it is in.
+    const named = (el: Element) =>
+      el.getAttribute("aria-label") ??
+      el.getAttribute("aria-labelledby") ??
+      (el.closest("section")?.querySelector(".note-h")?.textContent || el.textContent || el.className);
+    const words = document.createTreeWalker(column, NodeFilter.SHOW_TEXT);
+    for (let n = words.nextNode(); n; n = words.nextNode()) {
+      const parent = n.parentElement!;
+      if (parent.closest("option, svg") || own(parent)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const said = n.textContent!.trim();
+      const within = parent.closest(".note-h, button, li, p") ?? column;
+      const limit = Math.min(edge, within.getBoundingClientRect().right + 0.5);
+      for (const r of range.getClientRects()) {
+        if (shown(r as DOMRect) && r.right > limit) found.push(`"${said}" ends at ${r.right}, past ${limit}`);
+      }
+    }
+    for (const el of column.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (!shown(r) || el.closest("option, svg") || (el.parentElement !== column && own(el.parentElement!))) continue;
+      if (r.right > edge) found.push(`${el.tagName} "${named(el)}" ends at ${r.right}, past ${edge}`);
+      if (el.matches("button:enabled, select, input, summary") && r.height < 24) {
+        found.push(`${el.tagName} "${named(el)}" is ${r.height} high`);
+      }
+    }
+    // A number can be read in its field.
+    const pen = document.createElement("canvas").getContext("2d")!;
+    // The shorthand `font` can be empty (a variant it cannot say), and the pen would keep its own 10 px.
+    const wide = (said: string, css: CSSStyleDeclaration) => {
+      pen.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
+      if (!pen.font.includes(css.fontSize)) found.push(`"${said}" cannot be measured in ${pen.font}`);
+      return pen.measureText(said).width;
+    };
+    for (const input of column.querySelectorAll<HTMLInputElement>(".stepper input")) {
+      const css = getComputedStyle(input);
+      if (!shown(input.getBoundingClientRect())) continue;
+      const room = input.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+      const needs = wide(input.value, css);
+      if (needs > room) found.push(`${named(input)}: "${input.value}" needs ${needs} in its field's ${room}`);
+    }
+    // What a list is set to can be read in it, beside its arrow. (Two kinds are longer than the panel and were before: a
+    // bus's route, which is two streets' names, and the transit measures'; the spec's "As built" says so.)
+    for (const select of column.querySelectorAll<HTMLSelectElement>(
+      'select:not([aria-labelledby="i-h-bus"], .fld select)',
+    )) {
+      const css = getComputedStyle(select);
+      if (!shown(select.getBoundingClientRect())) continue;
+      const room = select.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 16;
+      const value = select.selectedOptions[0]?.textContent ?? "";
+      const needs = wide(value, css);
+      if (needs > room) found.push(`${named(select)}: "${value}" needs ${needs} in its list's ${room}`);
+    }
+    // A setting's name is beside its control, or above it where the column is a phone's; a list's is above it always.
+    let beside = 0;
+    for (const section of column.querySelectorAll(".insp-sec")) {
+      const name = section.querySelector(":scope > .note-h");
+      const first = [...section.children].find((c) => c !== name && shown(c.getBoundingClientRect()));
+      if (!name || !first || !shown(name.getBoundingClientRect())) continue;
+      const [n, c] = [name.getBoundingClientRect(), first.getBoundingClientRect()];
+      const above = section.matches(".insp-span") || column.clientWidth <= 270;
+      if (!above) beside++;
+      if (above ? n.bottom > c.top + 0.5 : n.right > c.left || Math.abs(n.top - c.top) > 12) {
+        found.push(`"${name.textContent}" is not ${above ? "above" : "beside"} its control`);
+      }
+    }
+    // Only a lane's and the bus lane's levels have no setting to put beside its name.
+    if (
+      column.clientWidth > 270 &&
+      !beside &&
+      !column.querySelector("#i-h-serves, .insp-actions + .insp-sec:last-child")
+    ) {
+      found.push("no setting is beside its name");
+    }
+    // A unit of a letter or two is beside its number; a longer one is under it, whatever the font, so the number has the room.
+    for (const tag of column.querySelectorAll(".stepper .unit-tag")) {
+      const field = tag.parentElement!.querySelector("input")!.getBoundingClientRect();
+      const t = tag.getBoundingClientRect();
+      const middle = (t.top + t.bottom) / 2;
+      const short = tag.textContent!.trim().length <= 2;
+      if (shown(t) && short !== (middle > field.top && middle < field.bottom)) {
+        found.push(`${named(tag)}: "${tag.textContent}" is not ${short ? "beside" : "under"} its number`);
+      }
+    }
+    // What is said under a control is right under it, however many lines the setting's name takes.
+    for (const section of column.querySelectorAll(".insp-sec:not(.insp-span)")) {
+      const parts = [...section.children].filter((c) => !c.matches(".note-h") && shown(c.getBoundingClientRect()));
+      parts.slice(1).forEach((c, i) => {
+        const gap = c.getBoundingClientRect().top - parts[i].getBoundingClientRect().bottom;
+        if (gap > 12) found.push(`"${c.textContent}" is ${gap} under what it is about`);
+      });
+    }
+    if (document.documentElement.scrollWidth > window.innerWidth) found.push("the page scrolls sideways");
+    return found;
+  });
+}
+
+for (const lang of ["en", "fr-CA"]) {
+  for (const width of [1440, 280]) {
+    test(`each level of the details is a label column that fits the panel (${lang}, ${width} px)`, async ({ page }) => {
+      await page.addInitScript((l) => localStorage.setItem("cityloom-lang", l), lang);
+      await page.setViewportSize({ width, height: 900 });
+      await openJunction(page);
+      const column = page.locator("#inspector > .insp-columns");
+      const up = page.locator("#jn-path-up-0");
+      const control = page.locator('select[aria-labelledby="i-h-control"]');
+      for (const option of ["0", "1", "2", "4", "3"]) {
+        await control.selectOption(option);
+        await expect(control).toHaveValue(option);
+        expect(await misfits(page), `the junction, control ${option}`).toEqual([]);
+      }
+      await expect(column.locator("#jn-go-plan")).toBeVisible();
+      // A street whose lanes come in: one that only leads out has no lane to go to.
+      const streets = column.locator(".jn-goes .btn");
+      for (let i = 0; i < (await streets.count()); i++) {
+        await streets.nth(i).click();
+        await expect(column.locator("#i-h-lanes")).toBeVisible();
+        if ((await column.locator(".lane-pick").count()) && (await column.locator("#i-cross-go").count())) break;
+        await up.click();
+        await expect(streets.first()).toBeVisible();
+      }
+      await expect(column.locator(".lane-pick").first()).toBeVisible();
+      for (const fold of await column.locator(".jn-fold > summary").all()) await fold.click();
+      await expect(column.locator("#i-h-bearing")).toBeVisible();
+      expect(await misfits(page), "a street").toEqual([]);
+      // A queue jump has a length, the setting with the longest name.
+      await column.locator("#jn-fold-transit .opt").first().click();
+      await column.locator('select[aria-labelledby="i-h-approach"]').selectOption("1");
+      await expect(column.locator("#i-h-alen")).toBeVisible();
+      expect(await misfits(page), "a street with a queue jump").toEqual([]);
+      await column.locator("#i-cross-go").click();
+      await expect(column.locator("#i-h-setback")).toBeVisible();
+      expect(await misfits(page), "a crossing").toEqual([]);
+      await page.locator("#jn-path-up-1").click();
+      await column.locator(".lane-pick").first().click();
+      await expect(column.locator("#i-h-serves")).toBeVisible();
+      expect(await misfits(page), "a lane").toEqual([]);
+      for (let i = 0; i < 40 && !(await column.locator("#i-h-corner").isVisible()); i++) {
+        await page.locator("#part-next").click();
+      }
+      await expect(column.locator("#i-h-corner")).toBeVisible();
+      expect(await misfits(page), "a corner").toEqual([]);
+      await up.click();
+      await control.selectOption("4");
+      const track = column.locator("section:has(#i-h-cycle) .opt");
+      await track.click();
+      await expect(column.locator("#i-h-cycle-width")).toBeVisible();
+      expect(await misfits(page), "a roundabout").toEqual([]);
+      await column.locator('select[aria-labelledby="i-h-bus"]').selectOption({ index: 1 });
+      const parts = [
+        ["bus", lang === "en" ? "Bus lane" : "Voie d’autobus"],
+        ["cycle", lang === "en" ? "Cycle track" : "Piste cyclable"],
+      ];
+      for (const [part, name] of parts) {
+        for (let i = 0; i < 40 && !(await page.locator("#jn-path-current").innerText()).startsWith(name); i++) {
+          await page.locator("#part-next").click();
+        }
+        await expect(page.locator("#jn-path-current")).toContainText(name);
+        await expect(column.locator(".insp-actions .btn.danger")).toBeVisible();
+        expect(await misfits(page), `the ${part}`).toEqual([]);
+      }
+    });
+  }
+}
+
+test.describe("the details' label column on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("the buttons of a level are 44 px high, as every other button is there", async ({ page }) => {
+    await openJunction(page);
+    expect(await page.evaluate(() => matchMedia("(any-pointer: coarse)").matches)).toBe(true);
+    const column = page.locator("#inspector > .insp-columns");
+    await column.locator(".jn-goes .btn").first().click();
+    const low = (name: string) =>
+      column
+        .locator(name)
+        .evaluateAll((all) =>
+          all
+            .map((b) => `${b.textContent}: ${b.getBoundingClientRect().height}`)
+            .filter((b) => !/: (4[4-9]|[5-9]\d)/.test(b)),
+        );
+    await expect(column.locator(".insp-sec > a.btn")).toHaveCount(1);
+    expect(await low(".insp-sec > a.btn")).toEqual([]);
+    expect(await misfits(page), "a street").toEqual([]);
+    await column.locator("#i-cross-go").click();
+    await expect(column.locator("#i-h-setback")).toBeVisible();
+    await expect(column.locator(".insp-actions .btn")).toHaveCount(1);
+    expect(await low(".insp-actions .btn")).toEqual([]);
+    expect(await misfits(page), "a crossing").toEqual([]);
+  });
+});

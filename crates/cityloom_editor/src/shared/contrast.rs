@@ -244,6 +244,8 @@ mod tests {
         assert!(chosen.contains("background: transparent;") && chosen.contains("color: var(--ink-2);"), "{chosen}");
         let field = rule(editor, ".wfield input:disabled,\n.var select:disabled,\n.var input[type=\"time\"]:disabled,\n.inspector select:disabled");
         assert!(field.contains("color: var(--ink-2);") && field.contains("cursor: default;") && field.contains("border-color: var(--rule);"), "{field}");
+        // A Remove that cannot be pressed is grey, not the red of one that can.
+        assert!(rule(editor, ".insp-actions .btn.danger:disabled").contains("color: var(--ink-3);"));
         // A turn's locked look is only a read-only page's (`.turn.read-only`): an editable junction disables a turn it
         // cannot take (an unreachable or fixed street) and keeps its own look for it.
         assert!(!editor.contains(".turn[aria-pressed=\"true\"]:disabled"), "no locked look for every disabled turn");

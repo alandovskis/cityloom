@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="v/{{build}}/editor.css">
   <link rel="stylesheet" href="v/{{build}}/tray.css">
 </head>
-<body class="tray-page street-page">
+<body class="tray-page">
   <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
   <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
     <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
@@ -130,7 +130,7 @@
         <div id="standards-slot" style="display: contents"></div>
         <p class="hint street-tip" data-i18n="st-path-hint">Choose a piece, or pick a stretch on the plan, to change it.</p>
       </div>
-      <div class="panel-level" id="p-piece" hidden><div class="inspector" id="inspector"></div></div>
+      <div class="panel-level" id="p-piece" hidden><div class="inspector insp-columns" id="inspector"></div></div>
       <div class="panel-level" id="p-curb" hidden><div id="curb-tools-slot" style="display: contents"></div></div>
       <div class="panel-level" id="p-stop" hidden><div id="stop-tools-slot" style="display: contents"></div></div>
       <div class="panel-level" id="p-calming" hidden><div id="calming-tools-slot" style="display: contents"></div></div>

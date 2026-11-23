@@ -226,6 +226,148 @@ fn fold_of<'a>(h: &'a str, id: &str) -> &'a str {
     &h[h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"))..]
 }
 
+// ---- the label column, as the street's (CLM-51) -------------------------------------------------------------------------
+
+/// The opening tag of the section whose heading has this id.
+fn section_tag<'a>(h: &'a str, heading: &str) -> &'a str {
+    let at = h.find(&format!("id=\"{heading}\"")).unwrap_or_else(|| panic!("no {heading} in {h}"));
+    let start = h[..at].rfind("<section").unwrap_or_else(|| panic!("{heading} is in no section"));
+    &h[start..start + h[start..].find('>').unwrap()]
+}
+
+/// A roundabout with a bus lane across it and a cycle track round it, so each has its level.
+fn with_bus_and_cycle() -> Rc<JunctionVm> {
+    let s = shared(0);
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_bus(Some((n, so))));
+    s.edit(|j| j.set_cycle_track(true));
+    s
+}
+
+#[test]
+fn each_level_of_the_details_is_in_the_street_s_label_column_and_the_signal_plan_is_not() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    let levels = [Target::None, Target::Arm(n), Target::Crossing(n), Target::Lane(n, 0), Target::Corner(n)];
+    for level in levels {
+        s.select(level);
+        let h = panel(&s);
+        assert_eq!(count(&h, "class=\"insp-columns\""), 1, "{level:?}: {h}");
+        let column = h.find("class=\"insp-columns\"").unwrap();
+        assert!(h.find("class=\"panel-path\"").unwrap() < column, "{level:?}: the path is above the column");
+        assert!(column < h.find("class=\"insp-head\"").unwrap(), "{level:?}: the name is in the column");
+    }
+    let r = with_bus_and_cycle();
+    for level in [Target::Bus, Target::Cycle] {
+        r.select(level);
+        assert_eq!(count(&panel(&r), "class=\"insp-columns\""), 1, "{level:?}");
+    }
+    s.edit(|j| j.set_control(SIGNAL));
+    s.show_plan();
+    let h = panel(&s);
+    assert!(h.contains("id=\"signal-calls\"") && !h.contains("insp-columns"), "the signal plan keeps its layout: {h}");
+}
+
+#[test]
+fn a_level_s_lists_span_both_columns_and_its_settings_do_not() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_control(SIGNAL));
+    let wide = |h: &str, id: &str| section_tag(h, id).contains("class=\"insp-sec insp-span\"");
+    let narrow = |h: &str, id: &str| section_tag(h, id).contains("class=\"insp-sec\"");
+    s.select(Target::None);
+    let h = panel(&s);
+    assert!(wide(&h, "i-h-streets") && wide(&h, "i-h-control") && narrow(&h, "i-h-raised"), "{h}");
+    s.select(Target::Arm(n));
+    let h = panel(&s);
+    for id in ["i-h-lanes", "i-h-signal"] {
+        assert!(wide(&h, id), "{id}: {h}");
+    }
+    let transit = fold_of(&h, "jn-fold-transit");
+    let section = &transit[transit.find("<section").unwrap()..];
+    assert!(section.starts_with("<section class=\"insp-sec insp-span\">"), "{h}");
+    assert!(narrow(&h, "i-h-bearing") && narrow(&h, "i-h-green") && narrow(&h, "i-h-cross"), "{h}");
+    s.select(Target::Lane(n, 0));
+    assert!(wide(&panel(&s), "i-h-serves"));
+}
+
+/// What a level offers under its name, before its first section (and what is said of it there).
+fn actions_of(h: &str) -> &str {
+    let name = h.find("class=\"insp-head\"").expect("a name");
+    let at = h.find("class=\"insp-actions\"").unwrap_or_else(|| panic!("no actions in {h}"));
+    let first = h.find("<section").unwrap_or(h.len());
+    assert!(name < at && at < first, "the actions are under the name and before every section: {h}");
+    &h[at..first]
+}
+
+#[test]
+fn a_level_s_actions_sit_under_its_name_before_its_first_section() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    let r = with_bus_and_cycle();
+    for (vm, level, action) in [
+        (&s, Target::Arm(n), "Remove this street"),
+        (&s, Target::Crossing(n), "Remove the crossing"),
+        (&s, Target::Lane(n, 0), "Select the whole street"),
+        (&r, Target::Bus, "Remove the bus lane"),
+        (&r, Target::Cycle, "Remove the cycle track"),
+    ] {
+        vm.select(level);
+        let h = panel(vm);
+        assert!(actions_of(&h).contains(action), "{level:?}: {h}");
+        assert_eq!(count(&h, action), 1, "{level:?}: offered once: {h}");
+    }
+    // A crossing's level keeps how far it is to cross; once the crossing is off, the junction's level is shown.
+    s.select(Target::Crossing(n));
+    assert!(panel(&s).contains("id=\"i-h-cross\""));
+    s.edit(|j| j.set_crossing(n, false));
+    // A street's level marks one in the crossing's own row.
+    s.select(Target::Arm(n));
+    let h = panel(&s);
+    assert!(!actions_of(&h).contains("Mark a crossing"), "{h}");
+    assert!(h.contains("Mark a crossing") && h.contains("id=\"i-h-cross\""), "{h}");
+    // A street that cannot be removed says why, beside its action.
+    let few = shared(1);
+    let e = few.read(|j| j.current().arms[0].uid);
+    few.select(Target::Arm(e));
+    let h = panel(&few);
+    let offered = actions_of(&h);
+    let button = &offered[offered.find("<button").unwrap()..];
+    assert!(button[..button.find('>').unwrap()].contains("disabled"), "{h}");
+    assert!(offered.contains("A junction needs at least 3 streets."), "{h}");
+}
+
+#[test]
+fn a_bus_s_choice_spans_both_columns_as_the_control_s_does() {
+    let s = with_bus_and_cycle();
+    s.select(Target::None);
+    assert!(section_tag(&panel(&s), "i-h-bus").contains("insp-span"));
+}
+
+#[test]
+fn read_only_a_level_s_actions_are_offered_disabled_but_the_way_back_to_the_street_is_not() {
+    let locked = r#"<fieldset disabled class="read-only-controls"><div class="insp-actions">"#;
+    let s = read_only_junction(0);
+    let n = arm(&s, 0);
+    for level in [Target::Arm(n), Target::Crossing(n)] {
+        s.select(level);
+        let h = panel(&s);
+        assert!(h.contains(locked), "{level:?}: {h}");
+    }
+    s.select(Target::Lane(n, 0));
+    let h = panel(&s);
+    assert!(h.contains("class=\"insp-actions\"") && !h.contains(locked), "a lane's way back is no edit: {h}");
+    let mut j = Junction::new(0);
+    let (n, so) = (j.current().arms[0].uid, j.current().arms[2].uid);
+    assert!(j.set_control(ROUNDABOUT) && j.set_bus(Some((n, so))) && j.set_cycle_track(true));
+    let r = read_only_of(j);
+    for level in [Target::Bus, Target::Cycle] {
+        r.select(level);
+        assert!(panel(&r).contains(locked), "{level:?}");
+    }
+}
+
 // ---- what the plan's grips edited is edited from the inspector and the keys (#140) --------------------------------------
 //
 // The plan had three grips: the end of a street (which turned it), a corner's (its curb radius) and a crossing's (how far
@@ -1518,11 +1660,15 @@ fn undo_redo_and_start_over_are_off_until_there_is_something_to_undo() {
 
 /// A junction of project `p1` on a page that shows the project read-only.
 fn read_only_junction(sample: usize) -> Rc<JunctionVm> {
+    read_only_of(Junction::new(sample))
+}
+
+fn read_only_of(j: Junction) -> Rc<JunctionVm> {
     use crate::shared::ports::Storage;
     let (ports, ..) = crate::shared::ports::test_ports();
     let storage: Rc<dyn Storage> = Rc::new(crate::shared::scoped::ScopedStorage::new(ports.storage.clone(), "p1").only_to_read());
     let ports = crate::shared::ports::Ports { storage, ..ports };
-    JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None)
+    JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), j, None)
 }
 
 #[test]
@@ -1532,9 +1678,9 @@ fn a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_st
     assert!(!h.contains("id=\"undo\"") && !h.contains("id=\"reset\""), "{h}");
     // the junction's level: its control disabled, its streets still to go to
     let h = panel(&s);
-    let fieldset = r#"<fieldset disabled class="read-only-controls"><section class="insp-sec"><h3 id=""#;
+    let fieldset = r#"<fieldset disabled class="read-only-controls"><section class="insp-sec insp-span"><h3 id=""#;
     assert!(h.contains(&format!("{fieldset}i-h-control\"")), "the control is offered disabled: {h}");
-    assert!(!h.contains(&format!("{fieldset}i-h-streets\"")) && h.contains("jn-go-"), "the streets can still be gone to: {h}");
+    assert!(h.contains("i-h-streets\"") && !h.contains(&format!("{fieldset}i-h-streets\"")) && h.contains("jn-go-"), "the streets can still be gone to: {h}");
     // a street's level: its number fields disabled, and the way back still there
     let n = arm(&s, 0);
     s.select(Target::Arm(n));
