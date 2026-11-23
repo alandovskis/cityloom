@@ -135,7 +135,7 @@ pub fn mount_bare_shell(node: u32) {
         let i18n = i18n.clone();
         leptos::mount::mount_to(at.unchecked_into(), move || view! { <view::page::Stuck i18n=i18n map=map/> }).forget();
     }
-    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", crate::shell::NotesAtStart::OpenWhenRoomy);
+    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::in_project(project)), "details-details", crate::shell::NotesAtStart::Closed);
 }
 
 /// The junction editor on one junction of the city of the page's project, which writes what is made back to the

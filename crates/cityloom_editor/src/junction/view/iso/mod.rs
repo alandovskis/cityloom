@@ -318,13 +318,15 @@ mod tests {
     }
 
     #[test]
-    fn a_junction_drawn_in_a_frame_is_drawn_to_that_frame_and_as_the_window_formula_when_it_is_the_same() {
+    fn a_junction_drawn_in_a_frame_is_drawn_to_that_frame_and_the_window_formula_gives_the_frame_it_gave_before() {
         let (j, en) = (Junction::new(0), crate::i18n_for(crate::shared::i18n::Locale::En));
         let short = Frame::in_room(1000.0, 250.0, 800.0);
         let s = iso_svg_framed(&j.view(), &en, short, Units::Metres);
         assert_eq!((s.frame.width, s.frame.height), (1000.0, 250.0));
-        let same = iso_svg_framed(&j.view(), &en, Frame::fit(1000.0, 1000.0), Units::Metres);
-        assert_eq!(same.markup, render(&j.view()).markup);
+        // the frame the compare page's formula gives, laid out as before the frame was passed in
+        let window = iso_svg_framed(&j.view(), &en, Frame::fit(1000.0, 1000.0), Units::Metres);
+        assert_eq!(window.frame, IsoFrame::fit_capped(&content_points(&j.view()), 1000.0, 1000.0, f64::INFINITY));
+        assert_ne!(window.frame.height, s.frame.height);
     }
 
     fn count(s: &str, needle: &str) -> usize {

@@ -204,11 +204,18 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
     expect(await settled()).toBeCloseTo(closed, 0);
   });
 
-  test("a read-only junction keeps its scenarios in the head and has no history", async ({ page }) => {
+  test("a read-only junction shows its scenarios in the head, locked, and has no history", async ({ page }) => {
     const href = await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator("details.scenario-manage summary").click();
+    await page.locator("#scenario-name").fill("Protected corners");
+    await page.locator("#scenario-new").click();
+    await expect(page.locator("#scenario-pick")).toContainText("Protected corners");
     await page.goto(`/${href}${href.includes("?") ? "&" : "?"}view=1`);
     await expect(page.locator("#drawing")).toBeVisible();
-    await expect(page.locator(".stage-head #scenario-slot")).toHaveCount(1);
+    await expect(page.locator(".stage-head #scenario-pick")).toBeVisible();
+    await page.locator("details.scenario-manage summary").click();
+    await expect(page.locator("#scenario-new")).toBeDisabled();
     await expect(page.locator("#undo")).toHaveCount(0);
   });
 
