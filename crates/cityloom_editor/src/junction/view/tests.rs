@@ -278,7 +278,7 @@ fn a_level_s_lists_span_both_columns_and_its_settings_do_not() {
     let narrow = |h: &str, id: &str| section_tag(h, id).contains("class=\"insp-sec\"");
     s.select(Target::None);
     let h = panel(&s);
-    assert!(wide(&h, "i-h-streets") && narrow(&h, "i-h-control"), "{h}");
+    assert!(wide(&h, "i-h-streets") && wide(&h, "i-h-control") && narrow(&h, "i-h-raised"), "{h}");
     s.select(Target::Arm(n));
     let h = panel(&s);
     for id in ["i-h-lanes", "i-h-signal"] {
@@ -1671,9 +1671,9 @@ fn a_junction_shown_read_only_offers_no_undo_and_its_details_disabled_and_its_st
     assert!(!h.contains("id=\"undo\"") && !h.contains("id=\"reset\""), "{h}");
     // the junction's level: its control disabled, its streets still to go to
     let h = panel(&s);
-    let fieldset = r#"<fieldset disabled class="read-only-controls"><section class="insp-sec"><h3 id=""#;
+    let fieldset = r#"<fieldset disabled class="read-only-controls"><section class="insp-sec insp-span"><h3 id=""#;
     assert!(h.contains(&format!("{fieldset}i-h-control\"")), "the control is offered disabled: {h}");
-    assert!(!h.contains(&format!("{fieldset}i-h-streets\"")) && h.contains("jn-go-"), "the streets can still be gone to: {h}");
+    assert!(h.contains("i-h-streets\"") && !h.contains(&format!("{fieldset}i-h-streets\"")) && h.contains("jn-go-"), "the streets can still be gone to: {h}");
     // a street's level: its number fields disabled, and the way back still there
     let n = arm(&s, 0);
     s.select(Target::Arm(n));

@@ -179,6 +179,11 @@ fn edit_section(w: Watch, id: &'static str, heading: &'static str, body: impl In
     locked(w.read_only(), section(w, id, heading, body))
 }
 
+/// As `edit_section`, across both columns: a list of choices too long for the control column.
+fn wide_edit_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> AnyView {
+    locked(w.read_only(), wide_section(w, id, heading, body))
+}
+
 fn hint(text: Signal<String>) -> impl IntoView {
     move || {
         let t = text.get();
@@ -520,7 +525,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
     };
     let none_selected = move || w.view().bus.is_none();
     let note = Signal::derive(move || bus_note(w).unwrap_or_else(|| w.tr("jn-insp-bus-offer")));
-    edit_section(
+    wide_edit_section(
         w,
         "i-h-bus",
         "jn-insp-bus-across",
@@ -609,7 +614,7 @@ fn control_section(w: Watch) -> impl IntoView {
             )
             .into_any()
         } else {
-            edit_section(
+            wide_edit_section(
                 w,
                 "i-h-control",
                 "jn-insp-control",

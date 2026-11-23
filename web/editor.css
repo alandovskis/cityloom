@@ -2663,8 +2663,8 @@ svg pattern circle {
   justify-content: center;
 }
 #inspector > .insp-columns .stepper .wfield input {
-  flex: 1 1 64px;
-  min-width: 64px;
+  flex: 1 1 84px;
+  min-width: 84px;
 }
 /* A tile's tick has the corner to itself: a layout's name is words alone, with no picture above it. */
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
@@ -2673,8 +2673,18 @@ svg pattern circle {
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
   padding-top: 16px;
 }
+@media (any-pointer: coarse) {
+  #inspector > .insp-columns .insp-actions .btn,
+  #inspector > .insp-columns .insp-sec .btn {
+    min-height: 44px;
+  }
+}
 /* On a phone there is no room beside a name: it goes above its control. */
 @container junction-details (max-width: 270px) {
+  #inspector > .insp-columns select {
+    padding-inline: 6px;
+    font-size: 13px;
+  }
   #inspector > .insp-columns .insp-sec:not(.insp-span) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;

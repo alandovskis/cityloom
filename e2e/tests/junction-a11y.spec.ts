@@ -806,13 +806,27 @@ async function misfits(page: Page) {
     }
     // A number can be read in its field.
     const pen = document.createElement("canvas").getContext("2d")!;
+    // The shorthand `font` can be empty (a variant it cannot say), and the pen would keep its own 10 px.
+    const wide = (said: string, css: CSSStyleDeclaration) => {
+      pen.font = `${css.fontWeight} ${css.fontSize} ${css.fontFamily}`;
+      if (!pen.font.includes(css.fontSize)) found.push(`"${said}" cannot be measured in ${pen.font}`);
+      return pen.measureText(said).width;
+    };
     for (const input of column.querySelectorAll<HTMLInputElement>(".stepper input")) {
       const css = getComputedStyle(input);
       if (!shown(input.getBoundingClientRect())) continue;
-      pen.font = css.font;
       const room = input.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
-      const needs = pen.measureText(input.value).width;
+      const needs = wide(input.value, css);
       if (needs > room) found.push(`"${input.value}" needs ${needs} in its field's ${room}`);
+    }
+    // What a list is set to can be read in it, beside its arrow (a bus's route is two streets' names, as long as they are).
+    for (const select of column.querySelectorAll<HTMLSelectElement>('select:not([aria-labelledby="i-h-bus"])')) {
+      const css = getComputedStyle(select);
+      if (!shown(select.getBoundingClientRect())) continue;
+      const room = select.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 16;
+      const value = select.selectedOptions[0]?.textContent ?? "";
+      const needs = wide(value, css);
+      if (needs > room) found.push(`"${value}" needs ${needs} in its list's ${room}`);
     }
     // What is said under a control is right under it, however many lines the setting's name takes.
     for (const section of column.querySelectorAll(".insp-sec:not(.insp-span)")) {
@@ -836,9 +850,12 @@ for (const lang of ["en", "fr-CA"]) {
       const column = page.locator("#inspector > .insp-columns");
       const up = page.locator("#jn-path-up-0");
       const control = page.locator('select[aria-labelledby="i-h-control"]');
-      await control.selectOption("3");
+      for (const option of ["0", "1", "2", "4", "3"]) {
+        await control.selectOption(option);
+        await expect(control).toHaveValue(option);
+        expect(await misfits(page), `the junction, control ${option}`).toEqual([]);
+      }
       await expect(column.locator("#jn-go-plan")).toBeVisible();
-      expect(await misfits(page), "the junction, a signal").toEqual([]);
       // A street whose lanes come in: one that only leads out has no lane to go to.
       const streets = column.locator(".jn-goes .btn");
       for (let i = 0; i < (await streets.count()); i++) {
@@ -873,3 +890,23 @@ for (const lang of ["en", "fr-CA"]) {
     });
   }
 }
+
+test.describe("the details' label column on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("the buttons of a level are 44 px high, as every other button is there", async ({ page }) => {
+    await openJunction(page);
+    expect(await page.evaluate(() => matchMedia("(any-pointer: coarse)").matches)).toBe(true);
+    const column = page.locator("#inspector > .insp-columns");
+    await column.locator(".jn-goes .btn").first().click();
+    const heights = (name: string) =>
+      column.locator(name).evaluateAll((all) => all.map((b) => b.getBoundingClientRect().height));
+    const link = await heights(".insp-sec > a.btn");
+    await column.locator("#i-cross-go").click();
+    await expect(column.locator("#i-h-setback")).toBeVisible();
+    const remove = await heights(".insp-actions .btn");
+    expect(link.length).toBe(1);
+    expect(remove.length).toBe(1);
+    expect([...link, ...remove].filter((h) => h < 44)).toEqual([]);
+  });
+});
