@@ -2622,10 +2622,31 @@ svg pattern circle {
   min-width: 2em;
   color: var(--ink-2);
 }
-/* The junction's levels in the street's label column (`.insp-columns`, CLM-51): a line of its own, a way into a level as
-   wide as its column, and no second rule under a fold's summary. */
-#inspector > .insp-columns > p {
-  padding: 10px 0 0;
+/* The junction's levels in the street's label column (`.insp-columns`, CLM-51). Its settings have longer names than a
+   piece's, so the column is a little wider and a name breaks rather than run into its control; a name of several lines
+   takes the last row's room, so what is said under a control stays right under it. */
+#inspector > .insp-columns {
+  container: junction-details / inline-size;
+}
+#inspector > .insp-columns .insp-sec:not(.insp-span) {
+  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-rows: repeat(5, min-content) 1fr;
+  row-gap: 0;
+}
+#inspector > .insp-columns .insp-sec:not(.insp-span) > .note-h {
+  grid-row: 1 / span 6;
+  overflow-wrap: break-word;
+}
+#inspector > .insp-columns .insp-sec > :not(.note-h) + * {
+  margin-top: 4px;
+}
+#inspector > .insp-columns > p:not(.jn-tip) {
+  padding: 10px 0;
+}
+#inspector > .insp-columns .insp-sec > .btn,
+#inspector > .insp-columns .insp-actions .btn {
+  max-width: 100%;
+  white-space: normal;
 }
 #inspector > .insp-columns .insp-sec > .btn.jn-go {
   justify-self: stretch;
@@ -2635,6 +2656,36 @@ svg pattern circle {
 #inspector > .insp-columns .jn-fold > summary + .read-only-controls > .insp-sec:first-child {
   padding-top: 0;
   border-top: 0;
+}
+/* A long unit ("m across") goes under its number, which keeps room to be read. */
+#inspector > .insp-columns .stepper .wfield {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#inspector > .insp-columns .stepper .wfield input {
+  flex: 1 1 64px;
+  min-width: 64px;
+}
+/* A tile's tick has the corner to itself: a layout's name is words alone, with no picture above it. */
+#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
+  padding-top: 17px;
+}
+#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
+  padding-top: 16px;
+}
+/* On a phone there is no room beside a name: it goes above its control. */
+@container junction-details (max-width: 270px) {
+  #inspector > .insp-columns .insp-sec:not(.insp-span) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  #inspector > .insp-columns .insp-sec:not(.insp-span) > * {
+    grid-column: 1;
+  }
+  #inspector > .insp-columns .insp-sec:not(.insp-span) > .note-h {
+    grid-row: auto;
+    padding: 0 0 4px;
+  }
 }
 /* A street's rarely set parts, folded, with what is set beside the name, an h3 in the summary (`fold` in the junction's inspector). */
 .jn-fold {

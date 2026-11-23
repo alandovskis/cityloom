@@ -765,3 +765,111 @@ test.describe("the junction's folds are reached by heading (CLM-50)", () => {
     await expect(heading("Position")).toHaveCount(1);
   });
 });
+
+// ---- the details as a label column, as the street's (CLM-51) ------------------------------------------------------------
+
+/** What does not fit the details' label column: a box or a word past the column's right edge, a setting's name that runs into
+ *  its control, a button under 24 px. What scrolls or is cut inside a box of its own is that box's. */
+async function misfits(page: Page) {
+  return page.evaluate(() => {
+    const column = document.querySelector("#inspector > .insp-columns");
+    if (!column) return ["no label column"];
+    const found: string[] = [];
+    const edge = column.getBoundingClientRect().right + 0.5;
+    const own = (el: Element) => {
+      for (let e: Element | null = el; e && e !== column; e = e.parentElement) {
+        if (getComputedStyle(e).overflowX !== "visible") return true;
+      }
+      return false;
+    };
+    const shown = (r: DOMRect) => r.width > 0 && r.height > 0;
+    const words = document.createTreeWalker(column, NodeFilter.SHOW_TEXT);
+    for (let n = words.nextNode(); n; n = words.nextNode()) {
+      const parent = n.parentElement!;
+      if (parent.closest("option, svg") || own(parent)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const said = n.textContent!.trim();
+      const within = parent.closest(".note-h, button, li, p") ?? column;
+      const limit = Math.min(edge, within.getBoundingClientRect().right + 0.5);
+      for (const r of range.getClientRects()) {
+        if (shown(r as DOMRect) && r.right > limit) found.push(`"${said}" ends at ${r.right}, past ${limit}`);
+      }
+    }
+    for (const el of column.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (!shown(r) || el.closest("option, svg") || (el.parentElement !== column && own(el.parentElement!))) continue;
+      if (r.right > edge) found.push(`${el.tagName}.${el.className} ends at ${r.right}, past ${edge}`);
+      if (el.matches("button:enabled, select, input, summary") && r.height < 24) {
+        found.push(`${el.tagName} "${el.textContent}" is ${r.height} high`);
+      }
+    }
+    // A number can be read in its field.
+    const pen = document.createElement("canvas").getContext("2d")!;
+    for (const input of column.querySelectorAll<HTMLInputElement>(".stepper input")) {
+      const css = getComputedStyle(input);
+      if (!shown(input.getBoundingClientRect())) continue;
+      pen.font = css.font;
+      const room = input.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+      const needs = pen.measureText(input.value).width;
+      if (needs > room) found.push(`"${input.value}" needs ${needs} in its field's ${room}`);
+    }
+    // What is said under a control is right under it, however many lines the setting's name takes.
+    for (const section of column.querySelectorAll(".insp-sec:not(.insp-span)")) {
+      const parts = [...section.children].filter((c) => !c.matches(".note-h") && shown(c.getBoundingClientRect()));
+      parts.slice(1).forEach((c, i) => {
+        const gap = c.getBoundingClientRect().top - parts[i].getBoundingClientRect().bottom;
+        if (gap > 12) found.push(`"${c.textContent}" is ${gap} under what it is about`);
+      });
+    }
+    if (document.documentElement.scrollWidth > window.innerWidth) found.push("the page scrolls sideways");
+    return found;
+  });
+}
+
+for (const lang of ["en", "fr-CA"]) {
+  for (const width of [1440, 280]) {
+    test(`each level of the details is a label column that fits the panel (${lang}, ${width} px)`, async ({ page }) => {
+      await page.addInitScript((l) => localStorage.setItem("cityloom-lang", l), lang);
+      await page.setViewportSize({ width, height: 900 });
+      await openJunction(page);
+      const column = page.locator("#inspector > .insp-columns");
+      const up = page.locator("#jn-path-up-0");
+      const control = page.locator('select[aria-labelledby="i-h-control"]');
+      await control.selectOption("3");
+      await expect(column.locator("#jn-go-plan")).toBeVisible();
+      expect(await misfits(page), "the junction, a signal").toEqual([]);
+      // A street whose lanes come in: one that only leads out has no lane to go to.
+      const streets = column.locator(".jn-goes .btn");
+      for (let i = 0; i < (await streets.count()); i++) {
+        await streets.nth(i).click();
+        await expect(column.locator("#i-h-lanes")).toBeVisible();
+        if ((await column.locator(".lane-pick").count()) && (await column.locator("#i-cross-go").count())) break;
+        await up.click();
+        await expect(streets.first()).toBeVisible();
+      }
+      await expect(column.locator(".lane-pick").first()).toBeVisible();
+      for (const fold of await column.locator(".jn-fold > summary").all()) await fold.click();
+      await expect(column.locator("#i-h-bearing")).toBeVisible();
+      expect(await misfits(page), "a street").toEqual([]);
+      await column.locator("#i-cross-go").click();
+      await expect(column.locator("#i-h-setback")).toBeVisible();
+      expect(await misfits(page), "a crossing").toEqual([]);
+      await page.locator("#jn-path-up-1").click();
+      await column.locator(".lane-pick").first().click();
+      await expect(column.locator("#i-h-serves")).toBeVisible();
+      expect(await misfits(page), "a lane").toEqual([]);
+      for (let i = 0; i < 40 && !(await column.locator("#i-h-corner").isVisible()); i++) {
+        await page.locator("#part-next").click();
+      }
+      await expect(column.locator("#i-h-corner")).toBeVisible();
+      expect(await misfits(page), "a corner").toEqual([]);
+      await up.click();
+      await control.selectOption("4");
+      const track = column.locator("section:has(#i-h-cycle) .opt");
+      await track.click();
+      await expect(column.locator("#i-h-cycle-width")).toBeVisible();
+      expect(await misfits(page), "a roundabout").toEqual([]);
+    });
+  }
+}

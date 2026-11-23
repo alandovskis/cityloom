@@ -1821,6 +1821,24 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
   await expect(page.locator('[role="radio"][tabindex="0"]')).toHaveCount(1);
 });
 
+test("the turbo layouts are tiles, three across, each with its whole name clear of its tick", async ({ page }) => {
+  await basicTurbo(page);
+  const tiles = page.locator('[role="radiogroup"][aria-labelledby="i-h-turbo"] [role="radio"]');
+  const boxes = await tiles.evaluateAll((all) =>
+    all.map((t) => {
+      const name = t.querySelector("span")!.getBoundingClientRect();
+      const tick = t.querySelector(".tick")!.getBoundingClientRect();
+      const marked =
+        tick.left < name.right && tick.right > name.left && tick.top < name.bottom && tick.bottom > name.top;
+      return { top: t.getBoundingClientRect().top, cut: t.scrollWidth > t.clientWidth, marked };
+    }),
+  );
+  expect(boxes.length).toBeGreaterThan(3);
+  expect(new Set(boxes.slice(0, 3).map((b) => b.top)).size).toBe(1);
+  expect(boxes[3].top).toBeGreaterThan(boxes[0].top);
+  expect(boxes.filter((b) => b.cut || b.marked)).toEqual([]);
+});
+
 // ---- approaches: what lies beyond an arm's end zone ---------------------------------------------------------
 
 test.describe("the approach of an arm whose street is divided", () => {
