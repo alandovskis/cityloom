@@ -380,8 +380,8 @@ test.describe("a junction of a street made pedestrian", () => {
 });
 
 /** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen), and
- *  with `folds` its options' folds (CLM-49), to reach what is inside them. */
-async function openPlan(page: Page, folds = true) {
+ *  its options' folds (CLM-49), to reach what is inside them; `{ folds: false }` leaves them closed. */
+async function openPlan(page: Page, { folds = true }: { folds?: boolean } = {}) {
   await page.locator("#jn-go-plan").click();
   await expect(page.locator("#signal-plan-state")).toBeVisible();
   if (folds) await openSignalFolds(page);
@@ -399,7 +399,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     await page.reload();
-    await openPlan(page, false);
+    await openPlan(page, { folds: false });
     // the options' own folds; the sample has no bike lane, so no bicycles fold
     const folds = page.locator('#inspector details.jn-fold[id^="jn-fold-"]');
     await expect(folds).toHaveCount(5);
