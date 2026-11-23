@@ -23,6 +23,7 @@ use crate::junction::model::{
 };
 use crate::junction::model::{preemption, preemption::Outcome as EmergencyOutcome};
 use crate::junction::view::phase_svg::phase_drawings;
+use crate::junction::view::signal_folds::{SignalFold, set_line, shown, warnings, warnings_line};
 use crate::junction::view::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::keys;
@@ -1691,7 +1692,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
     move || {
         shown.get().then(|| {
             view! {
-                {plans_section(w)}
+                {signal_fold(w, SignalFold::Plans, move |_| plans_section(w))}
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
@@ -1720,11 +1721,11 @@ fn signal_overview(w: Watch) -> impl IntoView {
                         </button>
                     </div> })}
                 </section>
-                {calls_section(w)}
-                {actuation_section(w)}
-                {bikes_section(w)}
-                {priority_section(w)}
-                {preemption_section(w)}
+                {signal_fold(w, SignalFold::Calls, move |on| calls_section(w, on))}
+                {signal_fold(w, SignalFold::Actuation, move |on| actuation_section(w, on))}
+                {signal_fold(w, SignalFold::Bikes, move |on| bikes_section(w, on))}
+                {signal_fold(w, SignalFold::Priority, move |on| priority_section(w, on))}
+                {signal_fold(w, SignalFold::Preemption, move |on| preemption_section(w, on))}
             }
         })
     }
@@ -2059,7 +2060,7 @@ fn schedule_table(
 /// up by crossing, the findings, and every call in a fold.
 /// A crossing no phase walks says so, and a box put on call there is refused with that reason. It decides nothing:
 /// the modes, rows, totals and findings all come from the view.
-fn calls_section(w: Watch) -> impl IntoView {
+fn calls_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the calls through this memo, so an edit that leaves them as they were redraws none of it.
     let calls = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.calls.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| calls.with(|c| c.crossings.iter().map(|c| c.uid).collect::<Vec<u32>>()));
@@ -2274,7 +2275,7 @@ fn calls_section(w: Watch) -> impl IntoView {
     };
     let none_on_call = Memo::new(move |_| calls.with(|c| !c.crossings.iter().any(|c| c.on_call)));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
                     <h3 class="note-h" id="i-h-calls">{words(w, "jn-calls-heading")}</h3>
@@ -2298,7 +2299,7 @@ fn calls_section(w: Watch) -> impl IntoView {
 /// over the hour; then the placeholder figures, the actuated phases and the approaches added up, and the findings. A
 /// street without a phase of its own says so, and choosing actuated there is refused with that reason. It decides
 /// nothing: the modes, settings, totals and findings all come from the view.
-fn actuation_section(w: Watch) -> impl IntoView {
+fn actuation_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the actuation through this memo, so an edit that leaves it as it was redraws none of it.
     let act = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.actuation.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| act.with(|a| a.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
@@ -2474,7 +2475,7 @@ fn actuation_section(w: Watch) -> impl IntoView {
     };
     let none_actuated = Memo::new(move |_| act.with(|a| !a.streets.iter().any(|s| s.settings.is_some())));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
                     <h3 class="note-h" id="i-h-actuation">{words(w, "jn-act-heading")}</h3>
@@ -2620,7 +2621,7 @@ fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl Into
 /// cyclists an hour, and what its calls did over the hour; then the placeholder figures, the movements' calls added up,
 /// the findings and every call. A movement no phase runs says so, and on detection there is refused with that reason.
 /// It decides nothing: the modes, rates, totals and findings all come from the view.
-fn bikes_section(w: Watch) -> impl IntoView {
+fn bikes_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the bicycle calls through this memo, so an edit that leaves them as they were redraws none
     // of it.
     let bikes = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.bicycles.clone()).unwrap_or_default());
@@ -2770,7 +2771,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
     };
     let none_on = Memo::new(move |_| bikes.with(|b| !b.movements.iter().any(|m| m.on_detection)));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
                     <h3 class="note-h" id="i-h-bikes">{words(w, "jn-bikes-heading")}</h3>
@@ -2794,7 +2795,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
 /// figures, the streets' buses added up, the findings and every bus. A street with no phase of its own says so, and
 /// priority there is refused with that reason. It decides nothing: the priorities, rates, totals and findings all come
 /// from the view.
-fn priority_section(w: Watch) -> impl IntoView {
+fn priority_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the transit priority through this memo, so an edit that leaves it as it was redraws none of
     // it.
     let transit = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.transit.clone()).unwrap_or_default());
@@ -2961,7 +2962,7 @@ fn priority_section(w: Watch) -> impl IntoView {
     let none_on = Memo::new(move |_| transit.with(|t| !t.streets.iter().any(|s| s.priority.is_some())));
     // As actuation and bicycle detection: no section with no street to list (none has transit or priority).
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
                     <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
@@ -2984,7 +2985,7 @@ fn priority_section(w: Watch) -> impl IntoView {
 /// entry, its emergency calls an hour and what its calls did over the hour; then the placeholder figures, the streets'
 /// calls added up, the findings and every call. A street left on without a phase says so as a finding. It decides
 /// nothing: the settings, entries, totals and findings all come from the view.
-fn preemption_section(w: Watch) -> impl IntoView {
+fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the pre-emption through this memo, so an edit that leaves it as it was redraws none of it.
     let preempt = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.preemption.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| preempt.with(|p| p.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
@@ -3134,7 +3135,7 @@ fn preemption_section(w: Watch) -> impl IntoView {
     // As actuation, bicycle detection and transit priority: no section with no street to list (none has a phase of its
     // own or pre-emption).
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
                     <h3 class="note-h" id="i-h-preemption">{words(w, "jn-preempt-heading")}</h3>
@@ -3210,12 +3211,40 @@ fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Act
     .into_any()
 }
 
-/// A part of a street's level that is rarely set, folded: its name and, beside it, what is set, so a measure in place is
-/// never out of sight.
-fn fold(w: Watch, id: &'static str, heading: &'static str, set: impl Fn() -> String + Send + Sync + 'static, body: impl IntoView + 'static) -> impl IntoView {
+/// One signal option of the plan level, folded (CLM-49): its line says what it has set and its warnings
+/// (`signal_folds`); the section inside, made by `section`, is as it was. Drawn only where the option has something to
+/// list (`signal_folds::shown`): the one rule, watched as one memo, `on`, which `section` is given too, so the section is
+/// drawn exactly while its fold is, and an edit that leaves the answer alone draws neither again.
+fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: impl Fn(Memo<bool>) -> V + 'static) -> impl IntoView {
+    let on = Memo::new(move |_| shown(f, &w.view()));
+    // made again each time the fold comes back (a bike lane removed, then added)
+    let section = StoredValue::new_local(section);
+    move || {
+        on.get().then(|| {
+            let body = section.with_value(|make| make(on));
+            fold(w, f.id(), f.heading(), move || set_line(f, &w.view(), &w.i18n()), move || warnings_line(warnings(f, &w.view()), &w.i18n()), body)
+        })
+    }
+}
+
+/// A part of a level that is rarely set, folded: its name and, beside it, what is set and its warnings (`warn`, empty
+/// when it has none), so a measure in place or a problem is never out of sight.
+fn fold(
+    w: Watch,
+    id: &'static str,
+    heading: &'static str,
+    set: impl Fn() -> String + Send + Sync + 'static,
+    warn: impl Fn() -> String + Send + Sync + 'static,
+    body: impl IntoView + 'static,
+) -> impl IntoView {
+    let warn = Memo::new(move |_| warn());
     view! {
         <details class="jn-fold" id=id>
-            <summary><span class="jn-fold-name">{words(w, heading)}</span><span class="jn-fold-set">{set}</span></summary>
+            <summary>
+                <span class="jn-fold-name">{words(w, heading)}</span>
+                <span class="jn-fold-set">{set}</span>
+                {move || { let text = warn.get(); (!text.is_empty()).then(|| view! { <span class="jn-fold-warn">{text}</span> }) }}
+            </summary>
             {body}
         </details>
     }
@@ -3331,12 +3360,13 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         {crossing_entry(w, uid)}
         {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
-        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), transit_section(w, uid)))}
+        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), String::new, transit_section(w, uid)))}
         {fold(
             w,
             "jn-fold-position",
             "jn-fold-position",
             move || position_set(w, uid),
+            String::new,
             view! {
                 {num_field(
                     w,

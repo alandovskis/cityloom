@@ -1089,3 +1089,38 @@ jn-plans-runs-day = Jour
 jn-plans-runs-time = Heure
 jn-plans-runs-at = À { $time } { $day }, le plan « { $plan } » s’applique.
 jn-plans-transition = Un changement de plan prend effet à la fin du cycle en cours au début de sa plage horaire : il n’y a pas de période de transition.
+
+# The signal plan level's folds (CLM-49): what each option has set, and its warnings.
+jn-fold-plans-set = { $n ->
+    [one] { $name }
+   *[other] { $n } plans, { $name } affiché
+}
+jn-fold-calls-set = { $n ->
+    [0] Aucun passage sur appel
+    [one] 1 passage sur appel
+   *[other] { $n } passages sur appel
+}
+jn-fold-actuation-set = { $n ->
+    [0] Aucune rue à la demande
+    [one] 1 rue à la demande
+   *[other] { $n } rues à la demande
+}
+jn-fold-bikes-set = { $n ->
+    [0] Aucun mouvement sur détection
+    [one] 1 mouvement sur détection
+   *[other] { $n } mouvements sur détection
+}
+jn-fold-priority-set = { $n ->
+    [0] Aucune rue avec priorité
+    [one] 1 rue avec priorité
+   *[other] { $n } rues avec priorité
+}
+jn-fold-preemption-set = { $n ->
+    [0] Aucune rue avec préemption
+    [one] 1 rue avec préemption
+   *[other] { $n } rues avec préemption
+}
+jn-fold-warnings = { $n ->
+    [one] · 1 avertissement
+   *[other] · { $n } avertissements
+}

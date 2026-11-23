@@ -1,19 +1,20 @@
 import {
-  chooseCell,
   addFromMenu,
-  TURBO_TILE,
+  chooseCell,
   expect,
   live,
   openJunction,
+  openSignalFolds,
   openStreet,
-  placesOnMap,
   pickRunAt,
   pickToEnd,
+  placesOnMap,
   planBoundaries,
   streetLength,
   test,
   tileFrom,
   transform,
+  TURBO_TILE,
 } from "./fixtures";
 
 import type { Locator, Page } from "@playwright/test";
@@ -378,10 +379,12 @@ test.describe("a junction of a street made pedestrian", () => {
   });
 });
 
-/** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen). */
-async function openPlan(page: Page) {
+/** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen), and
+ *  its options' folds (CLM-49), to reach what is inside them; `{ folds: false }` leaves them closed. */
+async function openPlan(page: Page, { folds = true }: { folds?: boolean } = {}) {
   await page.locator("#jn-go-plan").click();
   await expect(page.locator("#signal-plan-state")).toBeVisible();
+  if (folds) await openSignalFolds(page);
 }
 
 test.describe("signal timing on a junction of the city", () => {
@@ -390,6 +393,35 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await openPlan(page);
+  });
+
+  test("the signal plan's options are folds, closed, each saying what is set; Enter on one opens it", async ({
+    page,
+  }) => {
+    await page.reload();
+    await openPlan(page, { folds: false });
+    // the options' own folds; the sample has no bike lane, so no bicycles fold
+    const folds = page.locator('#inspector details.jn-fold[id^="jn-fold-"]');
+    await expect(folds).toHaveCount(5);
+    for (const d of await folds.all()) await expect(d).not.toHaveAttribute("open", "");
+    // the phases come before every option but the plans
+    const phases = await page.locator("#i-h-signal").boundingBox();
+    const calls = await page.locator("#jn-fold-calls").boundingBox();
+    expect(phases!.y).toBeLessThan(calls!.y);
+    await expect(page.locator("#jn-fold-calls summary")).toContainText("Pedestrian calls");
+    await expect(page.locator("#jn-fold-calls summary")).toContainText("None on call");
+    await expect(page.locator("#signal-calls")).toBeHidden();
+    await page.locator("#jn-fold-calls summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#signal-calls")).toBeVisible();
+    // no signal, no folds; a signal again, and each fold holds its section again
+    await page.locator("#jn-path-up-0").click();
+    const control = page.locator('select[aria-labelledby="i-h-control"]');
+    await control.selectOption({ index: 0 });
+    await control.selectOption({ label: "Traffic signal" });
+    await openPlan(page);
+    await expect(page.locator("#jn-fold-calls #signal-calls")).toBeVisible();
+    await expect(page.locator("#jn-fold-preemption #signal-preemption")).toBeVisible();
   });
 
   test("a street's green is typed, the cycle follows, and a reload keeps it", async ({ page }) => {
@@ -1578,6 +1610,11 @@ test.describe("signal timing on a junction of the city", () => {
     const name = (await crossing.locator(".call-name").innerText()).trim();
     await expect(page.locator("#calls-findings")).toHaveText(
       `The crossing of ${name} cannot be served safely: its walk and clearance need 21 s of green, and no phase that walks it can give more than 20 s.`,
+    );
+    // the calls' fold says so on its line, apart from what is set, and so does its name for a screen reader (CLM-49)
+    await expect(page.locator("#jn-fold-calls > summary .jn-fold-warn")).toHaveText("· 1 warning");
+    await expect(page.locator("#jn-fold-calls > summary")).toHaveAccessibleName(
+      /^Pedestrian calls\s*\d+ crossings on call\s*· 1 warning$/,
     );
     // Its totals count its calls and mark them not served, with no wait to report.
     const row = page.locator("#calls-totals tbody tr").filter({ hasText: name });

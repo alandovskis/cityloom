@@ -405,6 +405,81 @@ fn a_street_folds_its_transit_priority_and_position_and_says_on_each_what_is_set
 }
 
 #[test]
+fn a_signal_fold_s_line_follows_a_switch_of_language() {
+    use crate::junction::view::signal_folds::{SignalFold, set_line, warnings_line};
+    use crate::junction::vm::watch::Watch;
+    use crate::shared::i18n::Locale;
+    let owner = Owner::new();
+    owner.set();
+    let s = shared(0);
+    let w = Watch::new(s.clone());
+    // as the page keeps them: watched, and worked out again only when what they read changes
+    let set = Memo::new(move |_| set_line(SignalFold::Calls, &w.view(), &w.i18n()));
+    let warn = Memo::new(move |_| warnings_line(2, &w.i18n()));
+    assert_eq!((set.get(), warn.get()), ("None on call".to_string(), "· 2 warnings".to_string()));
+    s.i18n().set(Locale::FrCa);
+    assert_eq!((set.get(), warn.get()), ("Aucun passage sur appel".to_string(), "· 2 avertissements".to_string()));
+}
+
+#[test]
+fn the_signal_plan_folds_each_option_and_says_what_is_set_and_its_warnings() {
+    use crate::junction::view::signal_folds::{SignalFold, set_line, shown};
+    let s = shared(0);
+    s.show_plan();
+    let h = panel(&s).replace('\u{a0}', " ");
+    let at = |h: &str, id: &str| h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+    let summary = |h: &str, id: &str| {
+        let rest = &h[at(h, id)..];
+        rest[rest.find("<summary>").unwrap()..rest.find("</summary>").unwrap()].to_string()
+    };
+    let v = s.view_now();
+    // a fold where its option has something to list, as its section is drawn (sample 0 has no bike lane: no bicycles)
+    let on: Vec<SignalFold> = SignalFold::ALL.into_iter().filter(|f| shown(*f, &v)).collect();
+    assert!(!on.contains(&SignalFold::Bikes) && !h.contains("id=\"jn-fold-bikes\""), "{h}");
+    let ids: Vec<&str> = on.iter().map(|f| f.id()).collect();
+    for w in ids.windows(2) {
+        assert!(at(&h, w[0]) < at(&h, w[1]), "{} before {}", w[0], w[1]);
+    }
+    assert!(at(&h, "jn-fold-plans") < at(&h, "i-h-signal") && at(&h, "i-h-signal") < at(&h, "jn-fold-calls"), "the phases between the plans and the rest");
+    let folds: Vec<&str> = h.split("<details").skip(1).map(|d| &d[..d.find('>').unwrap()]).filter(|d| d.contains("jn-fold-")).collect();
+    assert_eq!(folds.len(), on.len(), "{folds:?}");
+    assert!(folds.iter().all(|d| !d.contains(" open")), "closed at first: {folds:?}");
+    let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+    let inside_of = |f: SignalFold| match f {
+        SignalFold::Plans => "signal-plans",
+        SignalFold::Calls => "signal-calls",
+        SignalFold::Actuation => "signal-actuation",
+        SignalFold::Bikes => "signal-bikes",
+        SignalFold::Priority => "signal-transit",
+        SignalFold::Preemption => "signal-preemption",
+    };
+    for f in on.iter() {
+        let inside = inside_of(*f);
+        let line = summary(&h, f.id());
+        assert!(line.contains(&en.tr_now(f.heading(), &crate::shared::i18n::Args::new())), "{line}");
+        assert!(line.contains(&set_line(*f, &v, &en)), "{line}");
+        assert!(!line.contains("jn-fold-warn"), "no warning: {line}");
+        // the section is inside its fold, as it was
+        let next = on.iter().position(|g| g == f).and_then(|i| on.get(i + 1)).map_or(h.len(), |g| at(&h, g.id()));
+        let section = h.find(&format!("id=\"{inside}\"")).unwrap_or_else(|| panic!("{inside}"));
+        assert!(at(&h, f.id()) < section && section < next, "{inside} inside {}", f.id());
+    }
+    // a crossing left on call that no phase walks: the calls' fold says it has a warning
+    let e = arm(&s, 90);
+    s.edit(|j| j.set_on_call(e, true));
+    let walks: Vec<usize> = s.read(|j| {
+        let plan = crate::junction::model::signal::plan(j.current(), 0).unwrap();
+        plan.phases.iter().enumerate().filter(|(_, p)| p.walks.contains(&e)).map(|(i, _)| i).collect()
+    });
+    for i in walks {
+        s.edit(|j| j.set_phase_walk(i, e, false));
+    }
+    let h = panel(&s).replace('\u{a0}', " ");
+    let calls = summary(&h, "jn-fold-calls");
+    assert!(calls.contains("jn-fold-warn") && calls.contains("· 1 warning"), "{calls}");
+}
+
+#[test]
 fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar() {
     use crate::junction::model::SIGNAL;
     let s = shared(0);

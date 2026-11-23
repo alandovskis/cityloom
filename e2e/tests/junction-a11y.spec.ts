@@ -1,4 +1,4 @@
-import { expect, live, openJunction, test } from "./fixtures";
+import { expect, live, openJunction, openSignalFolds, test } from "./fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -229,6 +229,7 @@ test.describe("vehicle actuation in the signal plan (CLM-12)", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const street = page.locator(".act-street").first();
     const name = (await street.locator(".act-name").innerText()).trim();
     await expect(page.getByRole("group", { name: `Phase of ${name}` })).toHaveCount(1);
@@ -276,6 +277,7 @@ test.describe("bicycle detection in the signal plan (CLM-13)", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const movement = page.locator(".bike-movement").first();
     const name = (await movement.locator(".bike-name").innerText()).trim();
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
@@ -313,6 +315,7 @@ test.describe("transit signal priority in the signal plan (CLM-14)", () => {
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     // A bus lane gives the first street with a phase of its own transit.
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const uid = (await page.locator("#signal-actuation .act-mode").first().getAttribute("id"))!.replace(
       "act-mode-",
       "",
@@ -323,6 +326,7 @@ test.describe("transit signal priority in the signal plan (CLM-14)", () => {
     await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
     await page.locator("#jn-path-up-0").click();
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const street = page.locator(".transit-street").first();
     const name = (await street.locator(".transit-name").innerText()).trim();
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
@@ -357,6 +361,7 @@ test.describe("emergency vehicle pre-emption in the signal plan (CLM-15)", () =>
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const street = page.locator(".preempt-street").first();
     const name = (await street.locator(".preempt-name").innerText()).trim();
     await expect(page.getByRole("group", { name, exact: true })).toHaveCount(1);
@@ -391,6 +396,7 @@ test.describe("time-of-day plans in the signal plan (CLM-16)", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const chooser = page.getByRole("combobox", { name: "Plan shown and edited", exact: true });
     await expect(chooser).toHaveAccessibleDescription(/^The signal plan below, its summary of the hour and its checks/);
     await page.getByRole("textbox", { name: "Name of a new plan", exact: true }).fill("Morning peak");
@@ -471,6 +477,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const crossing = page.locator(".call-crossing").first();
     const name = (await crossing.locator(".call-name").innerText()).trim();
     await expect(page.getByRole("group", { name: `Crossing of ${name}` })).toHaveCount(1);
@@ -560,6 +567,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
       await expect(page.locator("#drawing")).toBeVisible();
       await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
       await page.locator("#jn-go-plan").click();
+      await openSignalFolds(page);
       for (const box of await page.locator(".call-crossing input[type=checkbox]").all()) await box.click();
       await expect(page.locator("#calls-totals tbody tr")).not.toHaveCount(0);
       await page.locator("#calls-rows summary").click();

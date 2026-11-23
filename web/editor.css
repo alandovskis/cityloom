@@ -2632,6 +2632,13 @@ svg pattern circle {
   font-size: 12px;
   text-align: right;
 }
+/* A signal option's warnings, beside what it has set (CLM-49): a closed fold never hides a problem. */
+.jn-fold-warn {
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .jn-fold[open] > summary {
   padding-bottom: 6px;
 }

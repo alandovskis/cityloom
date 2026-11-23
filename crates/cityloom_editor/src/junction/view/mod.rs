@@ -11,6 +11,7 @@ pub mod notes;
 pub mod notes_tray;
 pub mod page;
 pub mod phase_svg;
+pub mod signal_folds;
 #[cfg(test)]
 pub(in crate::junction) mod tests;
 pub mod turns;
