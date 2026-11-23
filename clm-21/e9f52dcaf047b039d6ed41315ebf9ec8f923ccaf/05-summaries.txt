@@ -1,0 +1,152 @@
+What the app says at e9f52dcaf047b039d6ed41315ebf9ec8f923ccaf, on the first street of the fixture city (a Playwright script on the worktree's own fixtures and build, port 20021). Each list is the page's text. DETAIL lines are the pieces as the browser stored them ("rec.street" the baseline, "rec.scenarios.0" to ".5" Greenway, Industrial, Transit measure A1, Walking measure Sidewalk, Greenway with another surface, By hand). They show that the new ids collide (Greenway and Industrial both start at 9), and that 'piece details' against the Transit measure is true: the baseline's bike lanes have a direction (1 and 0), and the measure's have none.
+BASELINE  Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+GREENWAY  Sidewalk 1.7 m | Planting strip 0.6 m | Bike lane 1.2 m | Driving lane 2.7 m | Driving lane 2.7 m | Bike lane 1.2 m | Planting strip 0.6 m | Sidewalk 1.6 m
+SUMMARY | baseline against the Greenway scenario
+  What differs in B
+  Greenway differs from Baseline in 16 ways.
+  Space
+  Walking: 3.0 m → 3.3 m (0.3 m more)
+  Biking: 3.0 m → 2.4 m (0.6 m less)
+  Cars and trucks: 6.0 m → 5.4 m (0.6 m less)
+  Greenery: 0.0 m → 1.2 m (1.2 m more)
+  Buffer: 0.3 m → 0.0 m (0.3 m less)
+  Pieces
+  Sidewalk: 1.5 m → 1.7 m
+  Added: planting strip, 0.6 m
+  Bike lane: 1.5 m → 1.2 m
+  Driving lane: 3.0 m → 2.7 m
+  Driving lane: 3.0 m → 2.7 m
+  Bike lane: 1.5 m → 1.2 m
+  Added: planting strip, 0.6 m
+  Sidewalk: 1.5 m → 1.6 m
+  Removed: buffer, 0.15 m
+  Removed: buffer, 0.15 m
+  Checks
+  Fails only in B: Room for emergency vehicles
+TEMPLATE industrial available
+INDUSTRIAL  Sidewalk 1.4 m | Loading zone 2.1 m | Driving lane 2.7 m | Driving lane 2.7 m | Loading zone 2.1 m | Sidewalk 1.3 m
+TEMPLATE bus-corridor not available on this street
+MEASURE transit offered 6: A1 / A2 / B3 / B4 / F1 / F2
+TRANSIT MEASURE  Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.2 m | Transit lane 3.0 m | Planted median 0.6 m | Transit lane 3.0 m | Bike lane 1.2 m | Buffer 0.15 m | Sidewalk 1.5 m
+MEASURE ped offered 3: Sidewalk / Planting strip / Café terrace
+WALKING MEASURE  Sidewalk 1.5 m | Buffer 0.15 m | Bike lane 1.5 m | Sidewalk 3.0 m | Sidewalk 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+SURFACES of the first piece: Concrete (set) / Brick pavers / Asphalt / Permeable paving
+SURFACES now: Concrete / Brick pavers (set) / Asphalt / Permeable paving
+BY HAND  Sidewalk 1.6 m | Buffer 0.15 m | Bike lane 1.5 m | Driving lane 3.0 m | Driving lane 3.0 m | Bike lane 1.5 m | Buffer 0.15 m | Sidewalk 1.5 m
+DETAIL rec.scenarios.0.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":9,"variants":[],"width_mm":1700},{"curb":null,"direction":null,"kind":1,"material":7,"tram":false,"uid":10,"variants":[],"width_mm":600},{"curb":1,"direction":1,"kind":2,"material":0,"tram":false,"uid":11,"variants":[],"width_mm":1200},{"curb":null,"direction":1,"kind":3,"material":0,"tram":false,"uid":12,"variants":[],"width_mm":2700},{"curb":null,"direction":0,"kind":3,"material":0,"tram":false,"uid":13,"variants":[],"width_mm":2700},{"curb":1,"direction":0,"kind":2,"material":0,"tram":false,"uid":14,"variants":[],"width_mm":1200},{"curb":null,"direction":null,"kind":1,"material":7,"tram":false,"uid":15,"variants":[],"width_mm":600},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":16,"variants":[],"width_mm":1600}]
+DETAIL rec.scenarios.1.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":9,"variants":[],"width_mm":1400},{"curb":null,"direction":null,"kind":7,"material":0,"tram":false,"uid":10,"variants":[],"width_mm":2100},{"curb":null,"direction":1,"kind":3,"material":0,"tram":false,"uid":11,"variants":[],"width_mm":2700},{"curb":null,"direction":0,"kind":3,"material":0,"tram":false,"uid":12,"variants":[],"width_mm":2700},{"curb":null,"direction":null,"kind":7,"material":0,"tram":false,"uid":13,"variants":[],"width_mm":2100},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":14,"variants":[],"width_mm":1300}]
+DETAIL rec.scenarios.2.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":1,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":2,"variants":[],"width_mm":150},{"curb":1,"direction":null,"kind":2,"material":0,"tram":false,"uid":9,"variants":[],"width_mm":1200},{"curb":null,"direction":1,"kind":4,"material":0,"tram":false,"uid":10,"variants":[],"width_mm":3000},{"curb":null,"direction":null,"kind":6,"material":4,"tram":false,"uid":11,"variants":[],"width_mm":600},{"curb":null,"direction":0,"kind":4,"material":0,"tram":false,"uid":12,"variants":[],"width_mm":3000},{"curb":1,"direction":null,"kind":2,"material":0,"tram":false,"uid":13,"variants":[],"width_mm":1200},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":7,"variants":[],"width_mm":150},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":8,"variants":[],"width_mm":1500}]
+DETAIL rec.scenarios.3.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":1,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":2,"variants":[],"width_mm":150},{"curb":1,"direction":1,"kind":2,"material":0,"tram":false,"uid":3,"variants":[],"width_mm":1500},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":4,"variants":[],"width_mm":3000},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":5,"variants":[],"width_mm":3000},{"curb":1,"direction":0,"kind":2,"material":0,"tram":false,"uid":6,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":7,"variants":[],"width_mm":150},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":8,"variants":[],"width_mm":1500}]
+DETAIL rec.scenarios.4.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":3,"tram":false,"uid":9,"variants":[],"width_mm":1700},{"curb":null,"direction":null,"kind":1,"material":7,"tram":false,"uid":10,"variants":[],"width_mm":600},{"curb":1,"direction":1,"kind":2,"material":0,"tram":false,"uid":11,"variants":[],"width_mm":1200},{"curb":null,"direction":1,"kind":3,"material":0,"tram":false,"uid":12,"variants":[],"width_mm":2700},{"curb":null,"direction":0,"kind":3,"material":0,"tram":false,"uid":13,"variants":[],"width_mm":2700},{"curb":1,"direction":0,"kind":2,"material":0,"tram":false,"uid":14,"variants":[],"width_mm":1200},{"curb":null,"direction":null,"kind":1,"material":7,"tram":false,"uid":15,"variants":[],"width_mm":600},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":16,"variants":[],"width_mm":1600}]
+DETAIL rec.scenarios.5.design Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":1,"variants":[],"width_mm":1600},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":2,"variants":[],"width_mm":150},{"curb":1,"direction":1,"kind":2,"material":0,"tram":false,"uid":3,"variants":[],"width_mm":1500},{"curb":null,"direction":1,"kind":3,"material":0,"tram":false,"uid":4,"variants":[],"width_mm":3000},{"curb":null,"direction":0,"kind":3,"material":0,"tram":false,"uid":5,"variants":[],"width_mm":3000},{"curb":1,"direction":0,"kind":2,"material":0,"tram":false,"uid":6,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":7,"variants":[],"width_mm":150},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":8,"variants":[],"width_mm":1500}]
+DETAIL rec.street Avenue Laurier Ouest [{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":1,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":2,"variants":[],"width_mm":150},{"curb":1,"direction":1,"kind":2,"material":0,"tram":false,"uid":3,"variants":[],"width_mm":1500},{"curb":null,"direction":1,"kind":3,"material":0,"tram":false,"uid":4,"variants":[],"width_mm":3000},{"curb":null,"direction":0,"kind":3,"material":0,"tram":false,"uid":5,"variants":[],"width_mm":3000},{"curb":1,"direction":0,"kind":2,"material":0,"tram":false,"uid":6,"variants":[],"width_mm":1500},{"curb":null,"direction":null,"kind":17,"material":1,"tram":false,"uid":7,"variants":[],"width_mm":150},{"curb":1,"direction":null,"kind":0,"material":1,"tram":false,"uid":8,"variants":[],"width_mm":1500}]
+DESIGNS [["base","Baseline"],["1","Greenway"],["2","Industrial"],["3","Transit measure"],["4","Walking measure"],["5","Greenway, surface"],["6","By hand"]]
+SUMMARY | Greenway (A) against Industrial (B)
+  What differs in B
+  Industrial differs from Greenway in 12 ways.
+  Space
+  Walking: 3.3 m → 2.7 m (0.6 m less)
+  Biking: 2.4 m → 0.0 m (2.4 m less)
+  Cars and trucks: 5.4 m → 9.6 m (4.2 m more)
+  Greenery: 1.2 m → 0.0 m (1.2 m less)
+  Pieces
+  Sidewalk: 1.7 m → 1.4 m
+  Added: loading zone, 2.1 m
+  Added: loading zone, 2.1 m
+  Sidewalk: 1.6 m → 1.3 m
+  Removed: planting strip, 0.6 m
+  Removed: bike lane, 1.2 m
+  Removed: bike lane, 1.2 m
+  Removed: planting strip, 0.6 m
+SUMMARY | Baseline (A) against Transit measure (B)
+  What differs in B
+  Transit measure differs from Baseline in 14 ways.
+  Space
+  Biking: 3.0 m → 2.4 m (0.6 m less)
+  Transit: 0.0 m → 6.0 m (6.0 m more)
+  Cars and trucks: 6.0 m → 0.0 m (6.0 m less)
+  Greenery: 0.0 m → 0.6 m (0.6 m more)
+  Lanes
+  Away from you: 1 → 0
+  Toward you: 1 → 0
+  Pieces
+  Bike lane: 1.5 m → 1.2 m
+  Added: transit lane, 3.0 m
+  Added: planted median, 0.6 m
+  Added: transit lane, 3.0 m
+  Bike lane: 1.5 m → 1.2 m
+  Removed: driving lane, 3.0 m
+  Removed: driving lane, 3.0 m
+  Also differs in: piece details or order
+SUMMARY | Baseline (A) against Walking measure (B)
+  What differs in B
+  Walking measure differs from Baseline in 8 ways.
+  Space
+  Walking: 3.0 m → 9.0 m (6.0 m more)
+  Cars and trucks: 6.0 m → 0.0 m (6.0 m less)
+  Avenue Laurier Ouest is now a pedestrian street.
+  Lanes
+  Away from you: 1 → 0
+  Toward you: 1 → 0
+  Pieces
+  Driving lane becomes sidewalk
+  Driving lane becomes sidewalk
+  Also differs in: piece details or order
+SUMMARY | Greenway (A) against Greenway, surface (B)
+  What differs in B
+  Greenway, surface differs from Greenway in 1 way.
+  Also differs in: piece details or order
+SUMMARY | Baseline (A) against Greenway, surface (B)
+  What differs in B
+  Greenway, surface differs from Baseline in 17 ways.
+  Space
+  Walking: 3.0 m → 3.3 m (0.3 m more)
+  Biking: 3.0 m → 2.4 m (0.6 m less)
+  Cars and trucks: 6.0 m → 5.4 m (0.6 m less)
+  Greenery: 0.0 m → 1.2 m (1.2 m more)
+  Buffer: 0.3 m → 0.0 m (0.3 m less)
+  Pieces
+  Sidewalk: 1.5 m → 1.7 m
+  Added: planting strip, 0.6 m
+  Bike lane: 1.5 m → 1.2 m
+  Driving lane: 3.0 m → 2.7 m
+  Driving lane: 3.0 m → 2.7 m
+  Bike lane: 1.5 m → 1.2 m
+  Added: planting strip, 0.6 m
+  Sidewalk: 1.5 m → 1.6 m
+  Removed: buffer, 0.15 m
+  Removed: buffer, 0.15 m
+  Checks
+  Fails only in B: Room for emergency vehicles
+  Also differs in: piece details or order
+SUMMARY | Baseline (A) against By hand (B)
+  What differs in B
+  By hand differs from Baseline in 3 ways.
+  Space
+  Walking: 3.0 m → 3.1 m (0.1 m more)
+  Pieces
+  Sidewalk: 1.5 m → 1.6 m
+  Checks
+  Fails only in B: Fits the street width
+SUMMARY | baseline against Greenway, fr-CA
+  Ce qui diffère dans B
+  Greenway diffère de Référence sur 16 points.
+  Espace
+  Marche : 3,0 m → 3,3 m (0,3 m de plus)
+  Vélo : 3,0 m → 2,4 m (0,6 m de moins)
+  Autos et camions : 6,0 m → 5,4 m (0,6 m de moins)
+  Verdure : 0,0 m → 1,2 m (1,2 m de plus)
+  Zone tampon : 0,3 m → 0,0 m (0,3 m de moins)
+  Éléments
+  Trottoir : 1,5 m → 1,7 m
+  Ajout : bande plantée, 0,6 m
+  Piste cyclable : 1,5 m → 1,2 m
+  Voie de circulation : 3,0 m → 2,7 m
+  Voie de circulation : 3,0 m → 2,7 m
+  Piste cyclable : 1,5 m → 1,2 m
+  Ajout : bande plantée, 0,6 m
+  Trottoir : 1,5 m → 1,6 m
+  Retrait : zone tampon, 0,15 m
+  Retrait : zone tampon, 0,15 m
+  Vérifications
+  Échec seulement dans B : Place pour les véhicules d’urgence

@@ -1,0 +1,12 @@
+E2E_PORT=20021 npx playwright test tests/compare.spec.ts at e9f52dcaf047b039d6ed41315ebf9ec8f923ccaf
+Running 9 tests using 7 workers
+  ✓  7 [ui] › tests/compare.spec.ts:128:3 › comparing a street's designs › a scenario that is no longer there is refused, and the select shows what the page shows (4.3s)
+  ✓  6 [ui] › tests/compare.spec.ts:153:3 › comparing a street's designs › at 280 px wide neither the street's scenario row nor the comparison scrolls sideways (4.5s)
+  ✓  1 [ui] › tests/compare.spec.ts:165:3 › comparing a street's designs › the summary's lengths follow the units the settings menu chooses (4.5s)
+  ✓  4 [ui] › tests/compare.spec.ts:110:3 › comparing a street's designs › picking the same design twice says they are the same, and the address keeps the picks (4.6s)
+  ✓  3 [ui] › tests/compare.spec.ts:180:3 › comparing a street's designs › in French the page's words follow the language switch (4.7s)
+  ✓  5 [ui] › tests/compare.spec.ts:140:3 › comparing a street's designs › the page has no axe violations (4.8s)
+  ✓  2 [ui] › tests/compare.spec.ts:77:3 › comparing a street's designs › the baseline and a scenario are drawn side by side and what differs in B is said (4.9s)
+  ✓  9 [ui] › tests/compare.spec.ts:220:3 › comparing a junction's designs › each column draws the junction once (2.5s)
+  ✓  8 [ui] › tests/compare.spec.ts:196:3 › comparing a street's designs › a scenario made by a template says only what really changed, not every piece removed and added (2.8s)
+  9 passed (8.4s)
