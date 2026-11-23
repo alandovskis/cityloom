@@ -1,4 +1,21 @@
-import { addFromMenu, chooseCell, expect, live, openJunction, openSignalFolds, openStreet, pickRunAt, pickToEnd, placesOnMap, planBoundaries, streetLength, test, tileFrom, transform, TURBO_TILE } from "./fixtures";
+import {
+  addFromMenu,
+  chooseCell,
+  expect,
+  live,
+  openJunction,
+  openSignalFolds,
+  openStreet,
+  pickRunAt,
+  pickToEnd,
+  placesOnMap,
+  planBoundaries,
+  streetLength,
+  test,
+  tileFrom,
+  transform,
+  TURBO_TILE,
+} from "./fixtures";
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -378,7 +395,9 @@ test.describe("signal timing on a junction of the city", () => {
     await openPlan(page);
   });
 
-  test("the signal plan's options are folds, closed, each saying what is set; Enter on one opens it", async ({ page }) => {
+  test("the signal plan's options are folds, closed, each saying what is set; Enter on one opens it", async ({
+    page,
+  }) => {
     await page.reload();
     await openPlan(page, false);
     const folds = page.locator("#inspector details.jn-fold");
