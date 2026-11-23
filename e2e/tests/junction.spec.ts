@@ -1838,7 +1838,7 @@ for (const lang of ["en", "fr-CA"] as const) {
         const tick = t.querySelector(".tick")!.getBoundingClientRect();
         const marked =
           tick.left < name.right && tick.right > name.left && tick.top < name.bottom && tick.bottom > name.top;
-        return { top: t.getBoundingClientRect().top, cut: t.scrollWidth > t.clientWidth, marked };
+        return { name: t.textContent, top: t.getBoundingClientRect().top, cut: t.scrollWidth > t.clientWidth, marked };
       }),
     );
     expect(boxes.length).toBeGreaterThan(3);

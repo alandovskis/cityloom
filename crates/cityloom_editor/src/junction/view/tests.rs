@@ -339,6 +339,13 @@ fn a_level_s_actions_sit_under_its_name_before_its_first_section() {
 }
 
 #[test]
+fn a_bus_s_choice_spans_both_columns_as_the_control_s_does() {
+    let s = with_bus_and_cycle();
+    s.select(Target::None);
+    assert!(section_tag(&panel(&s), "i-h-bus").contains("insp-span"));
+}
+
+#[test]
 fn read_only_a_level_s_actions_are_offered_disabled_but_the_way_back_to_the_street_is_not() {
     let locked = r#"<fieldset disabled class="read-only-controls"><div class="insp-actions">"#;
     let s = read_only_junction(0);

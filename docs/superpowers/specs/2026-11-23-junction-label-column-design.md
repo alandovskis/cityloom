@@ -66,3 +66,11 @@ section's heading over its controls, so the two editors' panels read differently
 
 - The class names, and which sections are `.insp-span`, by what fits at 340 px.
 - Whether a level with a heading only (the bus and bike symbols) needs anything beyond the class.
+
+## As built
+
+- A crossing's level offers Remove only: with its crossing off, the model shows the junction's level, so Mark stays in the
+  crossing's row of the street's level.
+- A fold's number fields are beside their names; only the transit section spans both columns. The control's and the bus
+  lane's choosers span them too: their French values do not fit beside a name.
+- The junction's column is 88 px (« Signalisation » does not fit 76), and at 270 px or less the name is above its control.

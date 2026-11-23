@@ -783,6 +783,11 @@ async function misfits(page: Page) {
       return false;
     };
     const shown = (r: DOMRect) => r.width > 0 && r.height > 0;
+    // What a message calls a control: its own name, or the setting it is in.
+    const named = (el: Element) =>
+      el.getAttribute("aria-label") ??
+      el.getAttribute("aria-labelledby") ??
+      (el.closest("section")?.querySelector(".note-h")?.textContent || el.textContent || el.className);
     const words = document.createTreeWalker(column, NodeFilter.SHOW_TEXT);
     for (let n = words.nextNode(); n; n = words.nextNode()) {
       const parent = n.parentElement!;
@@ -799,9 +804,9 @@ async function misfits(page: Page) {
     for (const el of column.querySelectorAll("*")) {
       const r = el.getBoundingClientRect();
       if (!shown(r) || el.closest("option, svg") || (el.parentElement !== column && own(el.parentElement!))) continue;
-      if (r.right > edge) found.push(`${el.tagName}.${el.className} ends at ${r.right}, past ${edge}`);
+      if (r.right > edge) found.push(`${el.tagName} "${named(el)}" ends at ${r.right}, past ${edge}`);
       if (el.matches("button:enabled, select, input, summary") && r.height < 24) {
-        found.push(`${el.tagName} "${el.textContent}" is ${r.height} high`);
+        found.push(`${el.tagName} "${named(el)}" is ${r.height} high`);
       }
     }
     // A number can be read in its field.
@@ -817,7 +822,7 @@ async function misfits(page: Page) {
       if (!shown(input.getBoundingClientRect())) continue;
       const room = input.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
       const needs = wide(input.value, css);
-      if (needs > room) found.push(`"${input.value}" needs ${needs} in its field's ${room}`);
+      if (needs > room) found.push(`${named(input)}: "${input.value}" needs ${needs} in its field's ${room}`);
     }
     // What a list is set to can be read in it, beside its arrow (a bus's route is two streets' names, as long as they are).
     for (const select of column.querySelectorAll<HTMLSelectElement>('select:not([aria-labelledby="i-h-bus"])')) {
@@ -826,7 +831,37 @@ async function misfits(page: Page) {
       const room = select.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 16;
       const value = select.selectedOptions[0]?.textContent ?? "";
       const needs = wide(value, css);
-      if (needs > room) found.push(`"${value}" needs ${needs} in its list's ${room}`);
+      if (needs > room) found.push(`${named(select)}: "${value}" needs ${needs} in its list's ${room}`);
+    }
+    // A setting's name is beside its control, or above it where the column is a phone's; a list's is above it always.
+    let beside = 0;
+    for (const section of column.querySelectorAll(".insp-sec")) {
+      const name = section.querySelector(":scope > .note-h");
+      const first = [...section.children].find((c) => c !== name && shown(c.getBoundingClientRect()));
+      if (!name || !first || !shown(name.getBoundingClientRect())) continue;
+      const [n, c] = [name.getBoundingClientRect(), first.getBoundingClientRect()];
+      const above = section.matches(".insp-span") || column.clientWidth <= 270;
+      if (!above) beside++;
+      if (above ? n.bottom > c.top + 0.5 : n.right > c.left || Math.abs(n.top - c.top) > 12) {
+        found.push(`"${name.textContent}" is not ${above ? "above" : "beside"} its control`);
+      }
+    }
+    // Only a lane's and the bus lane's levels have no setting to put beside its name.
+    if (
+      column.clientWidth > 270 &&
+      !beside &&
+      !column.querySelector("#i-h-serves, .insp-actions + .insp-sec:last-child")
+    ) {
+      found.push("no setting is beside its name");
+    }
+    // A unit of a letter or two is beside its number.
+    for (const tag of column.querySelectorAll(".stepper .unit-tag")) {
+      const field = tag.parentElement!.querySelector("input")!.getBoundingClientRect();
+      const t = tag.getBoundingClientRect();
+      const middle = (t.top + t.bottom) / 2;
+      if (shown(t) && tag.textContent!.trim().length <= 2 && (middle < field.top || middle > field.bottom)) {
+        found.push(`${named(tag)}: "${tag.textContent}" is not beside its number`);
+      }
     }
     // What is said under a control is right under it, however many lines the setting's name takes.
     for (const section of column.querySelectorAll(".insp-sec:not(.insp-span)")) {
@@ -912,14 +947,21 @@ test.describe("the details' label column on a touch screen", () => {
     expect(await page.evaluate(() => matchMedia("(any-pointer: coarse)").matches)).toBe(true);
     const column = page.locator("#inspector > .insp-columns");
     await column.locator(".jn-goes .btn").first().click();
-    const heights = (name: string) =>
-      column.locator(name).evaluateAll((all) => all.map((b) => b.getBoundingClientRect().height));
-    const link = await heights(".insp-sec > a.btn");
+    const low = (name: string) =>
+      column
+        .locator(name)
+        .evaluateAll((all) =>
+          all
+            .map((b) => `${b.textContent}: ${b.getBoundingClientRect().height}`)
+            .filter((b) => !/: (4[4-9]|[5-9]\d)/.test(b)),
+        );
+    await expect(column.locator(".insp-sec > a.btn")).toHaveCount(1);
+    expect(await low(".insp-sec > a.btn")).toEqual([]);
+    expect(await misfits(page), "a street").toEqual([]);
     await column.locator("#i-cross-go").click();
     await expect(column.locator("#i-h-setback")).toBeVisible();
-    const remove = await heights(".insp-actions .btn");
-    expect(link.length).toBe(1);
-    expect(remove.length).toBe(1);
-    expect([...link, ...remove].filter((h) => h < 44)).toEqual([]);
+    await expect(column.locator(".insp-actions .btn")).toHaveCount(1);
+    expect(await low(".insp-actions .btn")).toEqual([]);
+    expect(await misfits(page), "a crossing").toEqual([]);
   });
 });

@@ -2325,6 +2325,9 @@ svg pattern circle {
   flex: 0 0 auto;
   color: var(--danger);
 }
+.insp-actions .btn.danger:disabled {
+  color: var(--ink-3);
+}
 .insp-meter-track {
   display: block;
   height: 4px;
@@ -2666,12 +2669,14 @@ svg pattern circle {
   justify-content: center;
 }
 #inspector > .insp-columns .stepper .wfield input {
-  flex: 1 1 84px;
-  min-width: 84px;
+  flex: 1 1 64px;
+  min-width: 64px;
+  padding-inline: 4px;
 }
 /* A tile's tick has the corner to itself: a layout's name is words alone, with no picture above it. */
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
   padding-top: 17px;
+  overflow-wrap: anywhere;
 }
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
   padding-top: 16px;
