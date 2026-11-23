@@ -1,0 +1,5 @@
+Step 8. docs/erd.mmd is removed at the head, and nothing under website/ or docs/ names it (git grep):
+
+D	docs/erd.mmd
+git grep -n erd.mmd -- website docs:
+(none outside the historical plan docs/superpowers/plans/2026-11-11-projects.md)
