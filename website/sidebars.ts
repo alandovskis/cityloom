@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
     "getting-started",
     "project-layout",
     "testing",
+    "test-inventory",
     {
       type: "category",
       label: "Architecture",

@@ -8,8 +8,9 @@ title: Tests
 Cette page est le seul endroit qui dit comment CityLoom est testé : les paliers de tests, où va un nouveau test, les
 données d’essai, quand les tests s’exécutent et ce qui doit réussir avant qu’une demande de fusion soit fusionnée.
 L’organisation du code (tranches, MVVM, ports) est décrite dans [Architecture](architecture/index.md); la façon de
-préparer et d’exécuter les commandes, dans [Démarrage](getting-started.md). Les chemins des fichiers de l’éditeur sont
-relatifs à `crates/cityloom_editor/src/`.
+préparer et d’exécuter les commandes, dans [Démarrage](getting-started.md). Le nombre de tests, par palier, par caisse et
+par niveau, et par fonctionnalité, est dans l’[inventaire des tests](test-inventory.md). Les chemins des fichiers de
+l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
 
 ## Les paliers en un coup d’œil
 
