@@ -84,6 +84,12 @@ const config: Config = {
           label: "Documentation",
         },
         {
+          type: "docSidebar",
+          sidebarId: "testingSidebar",
+          position: "left",
+          label: "Testing",
+        },
+        {
           type: "localeDropdown",
           position: "right",
         },

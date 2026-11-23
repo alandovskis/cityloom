@@ -9,9 +9,6 @@ const sidebars: SidebarsConfig = {
     "sharing",
     "getting-started",
     "project-layout",
-    "testing",
-    "test-inventory",
-    "coverage-matrix",
     {
       type: "category",
       label: "Architecture",
@@ -25,6 +22,7 @@ const sidebars: SidebarsConfig = {
     },
     "issues",
   ],
+  testingSidebar: ["testing", "test-inventory", "coverage-matrix"],
 };
 
 export default sidebars;
