@@ -1,0 +1,19 @@
+$ just build
+$ just server
+$ just e2e-fixtures
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ npx playwright test --list --reporter=json
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ npx playwright test --list --reporter=json
+$ npx playwright test tests/compare.spec.ts --reporter=json
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_measure_like_rebuild_keeps_edges_and_aligns_the_middle
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_real_measure_reports_no_removed_piece_whose_kind_survives
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_real_template_reports_no_removed_piece_whose_kind_survives
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_a_widened_piece_say_only_the_width
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_an_inserted_and_a_dropped_piece_say_only_those
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_another_curb_is_a_piece_detail
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_the_same_details_are_no_piece_detail
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::unchanged_ids_give_the_same_result_as_uid_matching
+  new test: compare.spec.ts::comparing a street's designs > a scenario made by a template says only what really changed, not every piece removed and added::ui

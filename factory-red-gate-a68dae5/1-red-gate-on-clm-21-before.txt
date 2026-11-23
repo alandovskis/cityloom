@@ -1,0 +1,611 @@
+$ just build
+$ just server
+$ just e2e-fixtures
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ npx playwright test --list --reporter=json
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ npx playwright test --list --reporter=json
+$ npx playwright test tests/compare.spec.ts --reporter=json
+FAIL red gate
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_measure_like_rebuild_keeps_edges_and_aligns_the_middle
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_real_measure_reports_no_removed_piece_whose_kind_survives
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::a_real_template_reports_no_removed_piece_whose_kind_survives
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_a_widened_piece_say_only_the_width
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_an_inserted_and_a_dropped_piece_say_only_those
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_another_curb_is_a_piece_detail
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::fresh_uids_with_the_same_details_are_no_piece_detail
+  new test: cityloom_editor unittests src/lib.rs::street::model::compare::tests::unchanged_ids_give_the_same_result_as_uid_matching
+  new test: compare.spec.ts::comparing a street's designs > a scenario made by a template says only what really changed, not every piece removed and added::ui
+  problem: Playwright: the test a11y.spec.ts::Alt and the arrows on the plan's point do not leave the page::ui is gone
+  problem: Playwright: the test a11y.spec.ts::at 320 px a boundary dragged on the plan is dropped where the pointer was released::ui is gone
+  problem: Playwright: the test a11y.spec.ts::at 320 px a street too long for the column at the plan's smallest scale scrolls inside the plan, not the page::ui is gone
+  problem: Playwright: the test a11y.spec.ts::at 320 px the plan's point is kept in sight inside the plan as the keys move it::ui is gone
+  problem: Playwright: the test a11y.spec.ts::at 400% zoom the sticky bar does not cover the control the keyboard has reached::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the add menu open on Transit, its stops greyed, passes an axe scan::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the arrow keys still work after the plan's point had focus, and V changes nothing::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the junction editor's first stop is a skip link that shows when focused and leads to the drawing::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the plan's point is one tab stop under the drawing and is named::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street editor's first stop is a skip link that shows when focused and leads to the drawing::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's 2.5D drawing > at 280 px the page does not scroll sideways, the drawing fits and a piece is chosen from the list::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's 2.5D drawing > every piece's cell and the buttons of the page are at least 24 by 24 px (2.5.8), also at 320 px::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's 2.5D drawing > the drawing keeps its screen-reader label and its list is the way to a piece the picture hides::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's 2.5D drawing > width, order, removal and addition are all done with the keyboard alone::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on a previewed choice, has no axe violations in dark::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on a previewed choice, has no axe violations in light::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on a previewed transit measure, has no axe violations in dark::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on a previewed transit measure, has no axe violations in light::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on its templates with one refused and School previewed, has no axe violations in dark::ui is gone
+  problem: Playwright: the test a11y.spec.ts::the street's Transform dialog, open on its templates with one refused and School previewed, has no axe violations in light::ui is gone
+  problem: Playwright: the test a11y.spec.ts::under 380 px the end buttons do not run over the logo::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > can be read in French and the choice is kept::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > fits the city beside the card, so no street is cut by it, and lets it run off the right edge::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > says how the city stands, and says so when a place needs attention::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > says what CityLoom is for, under its own heading::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > sends to the projects, since it is in no project and has no map to open::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > shows the city behind the card, which cannot be pressed or reached::ui is gone
+  problem: Playwright: the test about.spec.ts::the About page > the first stop is a skip link to its heading::ui is gone
+  problem: Playwright: the test about.spec.ts::the about page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the account page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the bar's links are in French for a French reader, the current one still marked::ui is gone
+  problem: Playwright: the test about.spec.ts::the city behind the card is read from the metro tile, and nothing else is asked::ui is gone
+  problem: Playwright: the test about.spec.ts::the credits page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the home page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the junction page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the map page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test about.spec.ts::the street page's bar links the projects and About, and no map::ui is gone
+  problem: Playwright: the test account-server.spec.ts::a first sign-in > a sign-in from Apple's form post takes the name sent that once::integration is gone
+  problem: Playwright: the test account-server.spec.ts::a first sign-in > goes to the Account page and asks where the work is kept, with nothing chosen for the person::integration is gone
+  problem: Playwright: the test account-server.spec.ts::a first sign-in > keeps the choice, and the person stays signed in after a reload::integration is gone
+  problem: Playwright: the test account-server.spec.ts::a returning person > signs out, signs in again to the same account and lands where they were::integration is gone
+  problem: Playwright: the test account-server.spec.ts::deleting the account > asks in the page, never in a dialog, then leaves no account behind::integration is gone
+  problem: Playwright: the test account-server.spec.ts::linked sign-ins > a second provider is linked, either signs in afterwards, and one can be unlinked but not the last::integration is gone
+  problem: Playwright: the test account-server.spec.ts::linked sign-ins > an identity that belongs to another account is refused and nothing changes::integration is gone
+  problem: Playwright: the test account-server.spec.ts::signed out > every page offers Sign in and the server says nobody is signed in::integration is gone
+  problem: Playwright: the test account-server.spec.ts::signed out > saying no at the provider comes back with Sign-in cancelled::integration is gone
+  problem: Playwright: the test account-server.spec.ts::signed out > the menu lists the providers the server has::integration is gone
+  problem: Playwright: the test account-server.spec.ts::the header > shows the person's name in French too::integration is gone
+  problem: Playwright: the test account-server.spec.ts::the header > signing out from the menu puts focus back on the menu button::integration is gone
+  problem: Playwright: the test account.spec.ts::Escape closes the deletion's confirmation and focus goes back to Delete account::ui is gone
+  problem: Playwright: the test account.spec.ts::a new account is asked where its work is kept, with nothing chosen for it::ui is gone
+  problem: Playwright: the test account.spec.ts::a session that ended meanwhile shows the signed-out page::ui is gone
+  problem: Playwright: the test account.spec.ts::a signed-out visitor is offered the providers::ui is gone
+  problem: Playwright: the test account.spec.ts::a storage choice the server refuses leaves nothing chosen and focus on the choice::ui is gone
+  problem: Playwright: the test account.spec.ts::deleting is confirmed in the page, with focus on the safe button, and leaves for the home page::ui is gone
+  problem: Playwright: the test account.spec.ts::unlinking a sign-in keeps focus on the page and the last one cannot be unlinked::ui is gone
+  problem: Playwright: the test archive.spec.ts::the map draws the Plateau from the archive::e2e is gone
+  problem: Playwright: the test archive.spec.ts::the server answers the tile index from the unpacked archive::e2e is gone
+  problem: Playwright: the test archive.spec.ts::the tile is the fixture's network, and is read in ranges::e2e is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a chicane is added with the tools, drawn as build-outs, saved and undone::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a chicane that is too short is refused with its minimum::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a crossing paints a zebra and a table does not::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a modal filter is added with the tools, drawn as one block, saved and undone::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a modal filter shorter than its minimum is refused::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a table is added with the tools, drawn, kept over a reload and undone::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a table over a transit stop fails its check, and moving it clear passes::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > a table that is too short or runs past the street is refused, and the refusal says why::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > the arrows choose a cell and Alt with them moves the table by a metre; Remove takes it away::ui is gone
+  problem: Playwright: the test calming.spec.ts::raised tables and crossings > the strip and the tools follow the language::ui is gone
+  problem: Playwright: the test curb.spec.ts::the curbside strip > a patio is added, checked, drawn raised, kept over a reload and undone::ui is gone
+  problem: Playwright: the test curb.spec.ts::the curbside strip > a use is added on the side away from traffic with the mouse alone::ui is gone
+  problem: Playwright: the test curb.spec.ts::the curbside strip > a use is dragged along the street as one undoable step, and Escape cancels a drag::ui is gone
+  problem: Playwright: the test curb.spec.ts::the curbside strip > the Use choice follows the chosen cell, also after it was changed by hand::ui is gone
+  problem: Playwright: the test curb.spec.ts::the curbside strip > the arrows move between cells and Alt with them moves the use by a metre::ui is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > follows the browser's language when none was chosen::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so in English when the module is not a module::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so in English when the module is not found::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so in French when the entry script is not found::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so in French when the person chose French::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so when the entry script is not found under its build::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so when the glue is not found under its build::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > says so when the script it imports is not found under its build::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::a module that does not start > shows nothing when the module starts::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::the delivery of the site's code > a build that is not the current one is not served::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::the delivery of the site's code > every page names its code by versioned addresses, all of them answered and kept for a year::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::the delivery of the site's code > the glyphs and the tile index are kept for a while, the tiles are always revalidated::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::the delivery of the site's code > the module is sent in Brotli, or gzip to a client that takes no Brotli, and it is smaller than the file::e2e is gone
+  problem: Playwright: the test delivery.spec.ts::the delivery of the site's code > the pages themselves are revalidated, with a tag that changes with the build::e2e is gone
+  problem: Playwright: the test design-archive.spec.ts::a damaged, foreign or future-version file shows why and leaves local work as it was::ui is gone
+  problem: Playwright: the test design-archive.spec.ts::a place that differs is not replaced until the person chooses::ui is gone
+  problem: Playwright: the test design-archive.spec.ts::a street edit survives export and import on a fresh device::ui is gone
+  problem: Playwright: the test design-archive.spec.ts::the street page's Share menu offers Export design and saves the archive::ui is gone
+  problem: Playwright: the test editors.spec.ts::a surface's name is shown whole beside its swatch, at a desktop width and on a phone::ui is gone
+  problem: Playwright: the test editors.spec.ts::on a phone > the 2.5D is scaled to the room it has: the whole street is in view and nothing scrolls sideways::ui is gone
+  problem: Playwright: the test editors.spec.ts::on a phone the panels stack under the drawing, and nothing overlaps it::ui is gone
+  problem: Playwright: the test editors.spec.ts::on a screen too narrow for the notes beside the drawing > on the map they are open as before::ui is gone
+  problem: Playwright: the test editors.spec.ts::on a screen too narrow for the notes beside the drawing > the junction's start closed and open when asked, and stay open::ui is gone
+  problem: Playwright: the test editors.spec.ts::on a screen too narrow for the notes beside the drawing > the street's tray starts closed to its handle, opens when asked, and stays open::ui is gone
+  problem: Playwright: the test editors.spec.ts::the junction editor's layout > the title and the tools sit above the drawing::ui is gone
+  problem: Playwright: the test editors.spec.ts::the junction editor's layout > the whole drawing is in view without scrolling the page::ui is gone
+  problem: Playwright: the test editors.spec.ts::the junction editor's sidebar tabs > each sidebar has an edge tab outside the header, at its panel's edge, that moves when it collapses::ui is gone
+  problem: Playwright: the test editors.spec.ts::the junction editor's sidebars > the drawing sits between the two panels and is overlapped by neither::ui is gone
+  problem: Playwright: the test editors.spec.ts::the junction editor's sidebars > the status chip is under the drawing, not over it::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's layout > the title and the tools sit above the drawing::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's layout > the whole drawing is in view without scrolling the page::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > closing the tray leaves its handle; a tab opens it on that tab::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > the details panel is right of the drawing and overlaps it nowhere::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > the details' edge tab is at the panel's left edge and goes to the window's edge when it collapses::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > the notes are a tray under the drawing, its handle the status line and the tabs, in view::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > the open tray takes no more than a quarter of the column's height::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street editor's panel and tray > the title and the tools stay in view while the plan below the drawing is scrolled::ui is gone
+  problem: Playwright: the test editors.spec.ts::the street is not cut by a scrollbar at the usual laptop width, with the notes closed::ui is gone
+  problem: Playwright: the test edits.spec.ts::a junction near the edge of the area keeps its edit in an area shifted east::ui is gone
+  problem: Playwright: the test edits.spec.ts::a speed the designer changed is kept with the record::ui is gone
+  problem: Playwright: the test edits.spec.ts::a street cut by the edge of the area keeps its edit in an area shifted east::ui is gone
+  problem: Playwright: the test edits.spec.ts::an edit is kept under the street's OSM key::ui is gone
+  problem: Playwright: the test edits.spec.ts::an old per-area save is no longer read, and is left as it was::ui is gone
+  problem: Playwright: the test edits.spec.ts::the edit is there from another area of the same tile::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::a tap on the junction selects a part, there is nothing to drag > every part that is pressed asks for a tap and the junction has no grip that takes the browser's pan::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the focus ring, dark theme > the map's search field has a 2px ring in the accent::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the focus ring, dark theme > the street's width field has a 2px ring in the accent::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the focus ring, light theme > the map's search field has a 2px ring in the accent::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the focus ring, light theme > the street's width field has a 2px ring in the accent::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the settings menu fits a 360px phone (about)::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the settings menu fits a 360px phone (home)::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the settings menu fits a 360px phone (junction)::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the settings menu fits a 360px phone (map)::ui is gone
+  problem: Playwright: the test focus-touch.spec.ts::the settings menu fits a 360px phone (street)::ui is gone
+  problem: Playwright: the test footer.spec.ts::the about page ends with a footer that says the version::ui is gone
+  problem: Playwright: the test footer.spec.ts::the about page's footer covers no control::ui is gone
+  problem: Playwright: the test footer.spec.ts::the home page ends with a footer that says the version::ui is gone
+  problem: Playwright: the test footer.spec.ts::the home page's footer covers no control::ui is gone
+  problem: Playwright: the test footer.spec.ts::the junction page ends with a footer that says the version::ui is gone
+  problem: Playwright: the test footer.spec.ts::the junction page's footer covers no control::ui is gone
+  problem: Playwright: the test footer.spec.ts::the map page ends with a footer that says the version::ui is gone
+  problem: Playwright: the test footer.spec.ts::the map page's footer covers no control::ui is gone
+  problem: Playwright: the test footer.spec.ts::the street page ends with a footer that says the version::ui is gone
+  problem: Playwright: the test footer.spec.ts::the street page's footer covers no control::ui is gone
+  problem: Playwright: the test footer.spec.ts::under 900px the footer ends the page, below the last card::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > Alt with an arrow moves the tree by a metre::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > a planting bed, a rain garden and a bioswale are added from the menu too::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > a tree 3 m from a junction fails the sightline check, naming it::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > a tree is added on a sidewalk, drawn in 2.5D, kept over a reload and undone::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > the option label is French in French::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > the roadway is not offered as a host and the settings refuse a place on it::ui is gone
+  problem: Playwright: the test green.spec.ts::street trees and green infrastructure > the settings and the row work from the keyboard alone, with one tab stop in the row::ui is gone
+  problem: Playwright: the test home.spec.ts::the credits page is in the same world and links home::ui is gone
+  problem: Playwright: the test home.spec.ts::the home page > has the settings every page has: a theme that is remembered::ui is gone
+  problem: Playwright: the test home.spec.ts::the home page > is the first thing at the site root: the projects, and nothing else::ui is gone
+  problem: Playwright: the test home.spec.ts::the home page > there is no way into an editor without a place::ui is gone
+  problem: Playwright: the test home.spec.ts::the list asks for no city: no road tile and no other host::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > a change to neither space nor checks says so::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > a grouped operation, Make pedestrian, is one change that says what the street became::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > in French the tab is Incidence and the card is worded in French::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > start over is summarized as its own change::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > the Impact tab is reached by the tab keys and remembered::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > the card is a polite live region that no key reaches, so the focus order is the page's own at 420 px high::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > the card is a polite live region that no key reaches, so the focus order is the page's own at 900 px high::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > the card waits for the edits to settle: it does not change while a run of keys goes on::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > the first tab is Impact, and the card starts by saying nothing has changed::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > undo shows what undoing changed, as passing checks, and redo shows the edit again::ui is gone
+  problem: Playwright: the test impact.spec.ts::the summary of the last change > widening a sidewalk lists the space it took, and the check it broke apart from the ones that pass::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::bicycle detection in the signal plan (CLM-13) > each bike movement's mode is a radio group named by its heading and described by its state, the arrow keys choose it, its cyclists are a labelled field, and at 280 px nothing scrolls sideways::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::emergency vehicle pre-emption in the signal plan (CLM-15) > a street's pre-emption is a radio group named by its heading and described by its state, the arrow keys choose it, its calls are a labelled field, and at 280 px nothing scrolls sideways::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::pedestrian calls in the signal plan (#60) > at 1440 px every column of the calls' tables can be read in the panel, in English and French::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::pedestrian calls in the signal plan (#60) > at 280 px every column of the calls' tables can be read in the panel, in English and French::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::pedestrian calls in the signal plan (#60) > each crossing's box is named by its words and its group, described by its state, and at 280 px the tables of calls do not make the page scroll sideways::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the drawing's label, focus and colours > a zebra and a stop line are white paint with a dark edge, not the ink that was 2.9:1 on the asphalt::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the drawing's label, focus and colours > in forced colours the marks and the outline are drawn in the system colours::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the drawing's label, focus and colours > the drawing is an image with a label that says it is the junction in 2.5D and how many streets, and the group says how to use it::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the drawing's label, focus and colours > the group shows its focus in the accent ring and the selected part is outlined in two tones::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > a key pressed on a step button is the button's, not the drawing's: it turns, resizes and removes nothing::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > a roundabout's cycle track and bus lane are reached by the keys too::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > at 1050 px the step buttons are 24 px or more and each kind of part has a place that is nearly as big::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > at 1440 px the step buttons are 24 px or more and each kind of part has a place that is nearly as big::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > at 280 px the page does not scroll sideways and the drawing fits the window::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > at 280 px the step buttons are 24 px or more and each kind of part has a place that is nearly as big::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > at 600 px the step buttons are 24 px or more and each kind of part has a place that is nearly as big::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > the arrow keys step through every kind of part, and the inspector opens the fields the old grips dragged::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::the junction's parts are reached without a pointer, and with one that is not exact > the two buttons under the drawing step through the same parts, forwards and back::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::time-of-day plans in the signal plan (CLM-16) > the plan shown is a labelled choice described by what it changes, each control of the plans and the schedule is named by its plan, day and time, each day's table is a region named by its caption, which plan runs is a status, and at 280 px nothing scrolls sideways::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::transit signal priority in the signal plan (CLM-14) > a street's priority is a radio group named by its heading and described by its state, the arrow keys choose it, its buses are a labelled field, and at 280 px nothing scrolls sideways::ui is gone
+  problem: Playwright: the test junction-a11y.spec.ts::vehicle actuation in the signal plan (CLM-12) > each street's mode is a radio group named by its heading and described by its state, the arrow keys choose it, its settings are labelled fields, and at 280 px nothing scrolls sideways::ui is gone
+  problem: Playwright: the test junction.spec.ts::a junction of a street made pedestrian > loses the crossing of that street's arm::ui is gone
+  problem: Playwright: the test junction.spec.ts::a length typed in a junction number field > is read with a decimal comma in French and shown with one::ui is gone
+  problem: Playwright: the test junction.spec.ts::a length typed in a junction number field > is read with a point in English::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > a roundabout's cycle track and bus lane are pressed too::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > a roundabout's ring has its arrows and its bus lane says so::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > a street is turned, a corner sized and a crossing set back from the inspector::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > a street, a lane, a crossing and a corner, each outlined once selected and named as the keys name them::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > the lanes carry their arrows, the crossings their lengths, and the selected street shows its turns::ui is gone
+  problem: Playwright: the test junction.spec.ts::a part of the junction is pressed to select it > what is pressed asks for a tap, and what is only looked at lets the press through::ui is gone
+  problem: Playwright: the test junction.spec.ts::a roundabout is given the basic turbo layout from its details and drawn with its painted divider::ui is gone
+  problem: Playwright: the test junction.spec.ts::a street's curbside use on the arm that meets it > parking at the centre fails the check, and drawn 30 m out it passes::ui is gone
+  problem: Playwright: the test junction.spec.ts::a street's transit stop on the arm that meets it > a bus stopped in a lane that only turns fails, and passes when the lane goes straight on::ui is gone
+  problem: Playwright: the test junction.spec.ts::a street's transit stop on the arm that meets it > a stop too near the junction is drawn and fails the checks, and passes 20 m out::ui is gone
+  problem: Playwright: the test junction.spec.ts::a turbo roundabout shows its painted dividers and its name::ui is gone
+  problem: Playwright: the test junction.spec.ts::a turbo roundabout's cycle track is pressed::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a bad typed time changes nothing and a long cycle fails its check::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a bike movement put on detection shows its trigger, its bound and how its cyclists fared, keeps them on reload, and speaks French (CLM-13)::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a chosen pattern is kept across a reload, and the group is in French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a crossing goes on call only where a phase walks it, and the plan says how an hour of its calls is served, in English and French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a crossing is switched in a phase from a checklist, kept even where cars conflict, shows Custom, can be off everywhere and fails the check::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a crossing on call detected passively cancels the calls of people who leave and skips walks nobody waits for, in English and French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a crossing too long for any phase's green, even extended by 15 s, is a finding::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a phase drawing is small, and two cards share a row where the inspector is wide enough::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a phase is given a ready-made pattern from a radio group with one tab stop, and undo and redo follow::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a phase whose movements match no pattern shows Custom, checked and not chosen, until a pattern is chosen::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a street made actuated shows its trigger, its bounds and how its phase ran, keeps them on reload, and speaks French (CLM-12)::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a street turned into another compass point is named so in the totals and every call, as in the list::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a street with a phase of its own lets its emergency calls pre-empt the signal, shows the trigger, priority, safe entry and how its calls fared, keeps it on reload, and speaks French (CLM-15)::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a street with transit gives its buses an early green or a green extension, shows the trigger, bounds and how its buses fared, keeps it on reload, and speaks French (CLM-14)::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > a street's green is typed, the cycle follows, and a reload keeps it::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > each phase is drawn, the Suggested label goes with an edit and returns with Restore, and a drawing and its street select each other::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > movements that meet in a phase are warned about on the card, the drawing and the checks, said aloud, never refused, and the warning goes with its cause::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > passive detection refused on a crossing no phase walks leaves its push button chosen::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > phases are added, moved, removed and restored from the keyboard, with undo, redo, announcements and a reload::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > pressing the later card of a street that has two phases keeps the focus on that card::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > stepping a time with the keyboard keeps the focus on the button, so it can be stepped again::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the last phase stays, and the phase buttons speak French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the pattern group speaks French and announces a choice in French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the row of drawings fits a 900 px window and works in forced colours::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the timing is French in French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the walking checklist is in French and announces a switch in French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > the warning about movements that meet is in French::ui is gone
+  problem: Playwright: the test junction.spec.ts::signal timing on a junction of the city > time-of-day plans are added, shown, edited alone, scheduled by day and time, asked which runs when, kept on reload, removed, and speak French (CLM-16)::ui is gone
+  problem: Playwright: the test junction.spec.ts::the approach of an arm whose street is divided > draws the transition and its marks, passes the check, then fails it when the end zone is short::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > Shift and an arrow turn the selected street, and Delete cannot take it away::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > a corner can be protected from its details, or says why it cannot::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > a raised table is switched on from the details and drawn with its ramps::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > a street with a bike lane is given a bike box from its details and it is drawn::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > a street's crossing is made a continuous sidewalk from its details and drawn with ramps::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > a turn is banned and allowed again from the table, and Ctrl+Z undoes it::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > is named for the junction, links back to the map, and has no streets to add or pages to go to::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > start over puts the junction back as it is today and leaves nothing to undo::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > starts as the city lays it out and says how many streets meet and whether it works::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > the arrow keys select a street, which the details then show::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > the control is changed from the details, announced, and can be undone and redone::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > the drawing is the 2.5D, has no toggle, no grips and no V, and follows an edit::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction editor on a junction of the city > the notes list the checks and the changes made, over where the junction came from::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > G1 Offset queue-jump lane is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > G2 Curbside queue-jump lane is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > G3 Virtual queue-jump lane is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > H1 Signal-controlled bus gate is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > H2 Yield-controlled bus gate is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > L1 Indirect left turn via alternative itinerary is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > L2 Indirect left turn within the intersection is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > L3 Right-in/right-out is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > L4 Dead-ending of a lateral street is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > M1 Bus bulb is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > M2 Signal-protected on-street platform is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the junction measures of the Atlas > N1 Transit modal filter is set on an arm and its code is in the drawing::ui is gone
+  problem: Playwright: the test junction.spec.ts::the roundabout and the turbo layouts in 2.5D > a turbo is drawn with its painted dividers and its name, and undo takes them away::ui is gone
+  problem: Playwright: the test junction.spec.ts::the roundabout and the turbo layouts in 2.5D > each layout the streets allow draws, is named in the label and changes the dividers::ui is gone
+  problem: Playwright: the test junction.spec.ts::the roundabout and the turbo layouts in 2.5D > the cycle track is a band round the ring that is drawn, widened and taken away::ui is gone
+  problem: Playwright: the test junction.spec.ts::the roundabout and the turbo layouts in 2.5D > the size of the turbo redraws the ring::ui is gone
+  problem: Playwright: the test junction.spec.ts::the turbo layouts are a radio group: one tab stop, the arrow keys choose, re-choosing says nothing::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > a change is kept even when the page is left at once::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > a junction that is not in the city goes back to the map::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > a street change made elsewhere shows in the junction at its end::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > says which OpenStreetMap nodes it was made from, and whether it has been changed::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > the page without a junction goes back to the map::ui is gone
+  problem: Playwright: the test junction.spec.ts::what the junction editor keeps in the city > what is changed is kept across a reload and shown on the map::ui is gone
+  problem: Playwright: the test language.spec.ts::English text does not overflow the about page::ui is gone
+  problem: Playwright: the test language.spec.ts::English text does not overflow the home page::ui is gone
+  problem: Playwright: the test language.spec.ts::English text does not overflow the junction page::ui is gone
+  problem: Playwright: the test language.spec.ts::English text does not overflow the map page::ui is gone
+  problem: Playwright: the test language.spec.ts::English text does not overflow the street page::ui is gone
+  problem: Playwright: the test language.spec.ts::French text does not overflow the about page::ui is gone
+  problem: Playwright: the test language.spec.ts::French text does not overflow the home page::ui is gone
+  problem: Playwright: the test language.spec.ts::French text does not overflow the junction page::ui is gone
+  problem: Playwright: the test language.spec.ts::French text does not overflow the map page::ui is gone
+  problem: Playwright: the test language.spec.ts::French text does not overflow the street page::ui is gone
+  problem: Playwright: the test language.spec.ts::a French reader types a decimal comma::ui is gone
+  problem: Playwright: the test language.spec.ts::a junction page opened in French is French from the first paint::ui is gone
+  problem: Playwright: the test language.spec.ts::a junction that cannot be drawn fits the page in French::ui is gone
+  problem: Playwright: the test language.spec.ts::a junction that cannot be drawn says so, keeps its shell and follows the language::ui is gone
+  problem: Playwright: the test language.spec.ts::a stored French choice is there from the first paint::ui is gone
+  problem: Playwright: the test language.spec.ts::nothing of the page is left in English once it is French, a piece selected and an edit made::ui is gone
+  problem: Playwright: the test language.spec.ts::the home page can be read in French and the choice is kept::ui is gone
+  problem: Playwright: the test language.spec.ts::the junction page can be read in French and the choice is kept::ui is gone
+  problem: Playwright: the test language.spec.ts::the map page can be read in French and the choice is kept::ui is gone
+  problem: Playwright: the test language.spec.ts::the street page can be read in French and the choice is kept::ui is gone
+  problem: Playwright: the test language.spec.ts::with no stored choice the page starts in the first of the browser's languages it speaks::ui is gone
+  problem: Playwright: the test map.spec.ts::a page for a project that is not here > /intersection.html?junction=1&project=zzz goes to the home page with missing=1, and is not left in the history::ui is gone
+  problem: Playwright: the test map.spec.ts::a page for a project that is not here > /map.html?project=zzz goes to the home page with missing=1, and is not left in the history::ui is gone
+  problem: Playwright: the test map.spec.ts::a page for a project that is not here > /street.html?street=1&project=zzz goes to the home page with missing=1, and is not left in the history::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a change made in a street's editor shows on the map::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a place the open view does not wholly hold is muted and opens nothing, and one that it holds opens::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a press on a place opens the details where they were closed, and says the place over the notes' own words::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a street added to the selection from its details is listed by its name, with a small Remove beside it::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a street made pedestrian is a pedestrian street on the map::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > a theme changes the ground and keeps the places, and the pointer on one still lights it::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > has no list of places and no left panel: the map runs to the edge of the window::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > just past a junction's press target the pointer is on the street, so a short street between two can be reached::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > on a phone the scale and the attribution stay clear of the status line and the zoom buttons::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > on a phone, where the panels stack, the places are not all muted::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > pressing a place on the map opens it::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > shows the area on the map, with its streets and junctions as places::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the button for the Notes is a tab down the right-hand side, outside the header, with vertical text::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the keys move the map when it has focus: zoom and the four directions::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the map draws pedestrian streets with a dotted line and says each street's class::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the map is one stop for the keyboard: its canvas is not a second one::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the muted places stay muted when the theme changes::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the scale and the attribution stay clear of the panels, the status bar and the zoom buttons::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > the units change the scale::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > with reduced motion the camera moves at once, without easing::ui is gone
+  problem: Playwright: the test map.spec.ts::the city map > zooming in and out moves the view and the whole city button brings it back::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > a city without a programme adds no curbside or stop features::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > a stop is a dot and a platform, and its name is a property::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > a street with a use says so in its row, in English and in French::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > a use added on the street page is a polygon beside its street on the map::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > a use of a street not wholly in view is muted and a press says so::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > pressing a use opens its street::ui is gone
+  problem: Playwright: the test map.spec.ts::the curbside uses and stops on the map > the uses and stops lie over the streets and under the junction marks, the ticks and the draft::ui is gone
+  problem: Playwright: the test map.spec.ts::the zone boundaries on the map > a boundary with a transition is a band along the street::ui is gone
+  problem: Playwright: the test map.spec.ts::the zone boundaries on the map > a street without zones adds no ticks, only the merged blocks' boundaries are there::ui is gone
+  problem: Playwright: the test map.spec.ts::the zone boundaries on the map > a theme change keeps the ticks::ui is gone
+  problem: Playwright: the test map.spec.ts::the zone boundaries on the map > a zone boundary is a tick across its street::ui is gone
+  problem: Playwright: the test map.spec.ts::the zone boundaries on the map > the street's label gives its zone count::ui is gone
+  problem: Playwright: the test map.spec.ts::when there is no map > a browser without WebGL is told, and the page and its notes still work::ui is gone
+  problem: Playwright: the test map.spec.ts::when there is no map > an area whose roads could not be got says so::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > a finding goes when the street it concerns is edited, at the map's next load::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > a route cut off at a junction is a finding, and a fix on its street clears it and lowers the lead's count::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > a walking finding names the streets and junctions of its route, and one pressed is shown and opened::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > are counted apart from the places' own checks::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > are worded in French when the page is::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > each finding says why it failed, and a place it names is shown in the details and opened from there::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > have a heading, a lead, a row with its count for each of the six checks, and each check a level::ui is gone
+  problem: Playwright: the test network.spec.ts::the network checks on the map page > the places of a finding are a list of links that are apart from one another::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > a name that is refused is said, also when it was sent with Enter::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > a page sent back from a project that is gone says so::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > a project is made in the metropolitan area chosen, which its row shows and nothing changes::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > every control has a name, every field a label, and each id is the page's only one::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > fits a phone without scrolling sideways::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > is in French for a French reader, the first project too::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > makes the work kept from before projects the first project::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > renames a project and deletes one only once asked, and says so::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > starts empty, makes a project, keeps it over a reload and opens its map::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > the choice of metropolitan area is labelled in French too::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > the first stop is a skip link to the list, and the list's own controls follow its heading::ui is gone
+  problem: Playwright: the test projects.spec.ts::the list of projects > the rename form says which project it renames::ui is gone
+  problem: Playwright: the test read-only.spec.ts::a design opened read-only > a junction can be looked at, its streets gone to, and not changed::ui is gone
+  problem: Playwright: the test read-only.spec.ts::a design opened read-only > a junction's signal plan, its pedestrian calls, its actuation, its bicycle detection, its transit priority and its pre-emption can be read, and none of them changed::ui is gone
+  problem: Playwright: the test read-only.spec.ts::a design opened read-only > a project opened without view=1 can be edited as ever::ui is gone
+  problem: Playwright: the test read-only.spec.ts::a design opened read-only > a street can be looked at and chosen in, and not changed by a control, a key or undo::ui is gone
+  problem: Playwright: the test read-only.spec.ts::a design opened read-only > the map can be searched and its places opened, read-only, and offers no area to declare::ui is gone
+  problem: Playwright: the test report.spec.ts::a report that cannot be written saves nothing::ui is gone
+  problem: Playwright: the test report.spec.ts::an edited street and an edited junction each get a page in the report::ui is gone
+  problem: Playwright: the test report.spec.ts::the Share menu downloads the report as a PDF::ui is gone
+  problem: Playwright: the test report.spec.ts::the editors' Share menu still prints::ui is gone
+  problem: Playwright: the test report.spec.ts::the place pages follow the language::ui is gone
+  problem: Playwright: the test report.spec.ts::the report downloads in French when the page is French::ui is gone
+  problem: Playwright: the test report.spec.ts::with no edits the report has the review pages and the appendix but no place pages::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > Ctrl+Z brings a deleted area back, but not while an outline is drawn::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > Finish and Cancel, while drawing, have a gap between them::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a click on a corner of the selected area moves nothing and opens nothing under it::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a corner drag ends where the corner was when the window loses focus::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a corner drag whose release was lost ends where the corner last was::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a corner of the selected area is dragged and kept, and the map does not pan under it::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a deleted area goes from the list and the map, comes back with Undo, and a reload keeps what is left::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a right button let go during a corner drag does not end it::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > a speed limit tints the streets above it, and the street page lists each street's speed against it::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > an area clicked out on the map is listed, drawn, flags the street inside, and the street editor says so::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > an area is declared from the keyboard alone; Backspace takes a corner back and Escape cancels::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > at phone width the details stack below the map::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > closing from the keyboard with the details hidden shows the Area rules form::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > closing on the first corner with the details collapsed opens them on the Area rules form::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > on a 1100 px window the status line stays a short pill and the Notes start closed::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > on a small outline a press on the first corner closes it, though a later corner is there too::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > the ] key types into the area name field and leaves the details open::ui is gone
+  problem: Playwright: the test restrictions.spec.ts::area restrictions > the area rules are a level of the details, reached from the city's row and left by its path::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a junction's scenarios > two named scenarios are made, one is edited, and switching and a reload lose nothing::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a street's scenarios > a scenario is renamed, duplicated and deleted once the delete is confirmed::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a street's scenarios > an edit of a scenario another tab deleted shows the baseline, says so, and leaves the baseline alone::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a street's scenarios > asking to confirm a delete moves neither the scenarios nor the toolbar::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a street's scenarios > in French a name already taken is refused, under the field and in the live region::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::a street's scenarios > two named scenarios are made, one is edited, and switching and a reload lose nothing::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::at 1440 by 900, in a wide typeface, the scenarios share the head's rows and the junction's status chip stays in view::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::at 280 px a 60-character name with no spaces wraps, so the page does not scroll sideways, on both pages::ui is gone
+  problem: Playwright: the test scenarios.spec.ts::on both pages the focus ring of the first action never reaches the refusal above it::ui is gone
+  problem: Playwright: the test search.spec.ts::the map under the floating panels > hiding the panels gives the map the room back and Whole city centres it again::ui is gone
+  problem: Playwright: the test search.spec.ts::the map under the floating panels > the whole city is fitted beside the details and under the bar, and centred there::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > Enter opens the first place found::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > Escape clears what was typed, then leaves the box::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > a result that needs attention says so::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > a search that finds nothing says so and how to get the places back::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > clicking a result opens the place::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > finds a junction by its name::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > has no Search button in the header: Enter does it::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > is the biggest thing in the header::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > lists the places found, says how many, and has nothing open until something is typed::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > the / key goes to it from anywhere, but not while typing in another field::ui is gone
+  problem: Playwright: the test search.spec.ts::the search box on the city map > the arrow keys move down the results and Enter opens the one they are on::ui is gone
+  problem: Playwright: the test serve.spec.ts::the static server > answers a range with just those bytes and says where they lie::e2e is gone
+  problem: Playwright: the test serve.spec.ts::the static server > answers an open-ended range and a range of the last bytes::e2e is gone
+  problem: Playwright: the test serve.spec.ts::the static server > refuses a path whose escapes are not UTF-8, and keeps serving::e2e is gone
+  problem: Playwright: the test serve.spec.ts::the static server > refuses a range past the end, and serves the whole file when there is no range::e2e is gone
+  problem: Playwright: the test share.spec.ts::a link that is not whole is refused without asking the server::integration is gone
+  problem: Playwright: the test share.spec.ts::a made-up link says no shared design has it, in English and in French, and keeps nothing::integration is gone
+  problem: Playwright: the test share.spec.ts::a project shared by a signed-in person opens read-only, rules and all, for anyone with the link::integration is gone
+  problem: Playwright: the test share.spec.ts::a share its creator deleted says so::integration is gone
+  problem: Playwright: the test share.spec.ts::a shared design is forked by keyboard into a project of one's own, whose edits leave the shared copy as it was::integration is gone
+  problem: Playwright: the test share.spec.ts::an expired share says it has expired, in English and in French::integration is gone
+  problem: Playwright: the test share.spec.ts::deleting a project deletes its share links first, so its link then says it was deleted::integration is gone
+  problem: Playwright: the test share.spec.ts::signed out, the share page says to sign in and makes no link::integration is gone
+  problem: Playwright: the test share.spec.ts::the fork is offered and said in French::integration is gone
+  problem: Playwright: the test shell.spec.ts::Print is under Share, not in the settings menu, on the junction page::ui is gone
+  problem: Playwright: the test shell.spec.ts::Print is under Share, not in the settings menu, on the street page::ui is gone
+  problem: Playwright: the test shell.spec.ts::Print keeps focus on the Share button on the junction page::ui is gone
+  problem: Playwright: the test shell.spec.ts::Print keeps focus on the Share button on the street page::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the intersection page at desktop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the intersection page at laptop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the intersection page at phone width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the map page at desktop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the map page at laptop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the map page at phone width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the street page at desktop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the street page at laptop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the street page at phone width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the timeline page at desktop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the timeline page at laptop width::ui is gone
+  problem: Playwright: the test shell.spec.ts::a project's cleared edits are announced once on the timeline page at phone width::ui is gone
+  problem: Playwright: the test shell.spec.ts::at phone width the header menus have names and stay inside the window on the junction page::ui is gone
+  problem: Playwright: the test shell.spec.ts::at phone width the header menus have names and stay inside the window on the street page::ui is gone
+  problem: Playwright: the test shell.spec.ts::only one of Settings, Help and Share is open when they are opened by keyboard on the junction page::ui is gone
+  problem: Playwright: the test shell.spec.ts::only one of Settings, Help and Share is open when they are opened by keyboard on the street page::ui is gone
+  problem: Playwright: the test shell.spec.ts::the header's buttons do not move when the sign-in button appears on the junction page::ui is gone
+  problem: Playwright: the test shell.spec.ts::the header's buttons do not move when the sign-in button appears on the map page::ui is gone
+  problem: Playwright: the test shell.spec.ts::the header's buttons do not move when the sign-in button appears on the street page::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > a region is chosen, announced with its side of the road, and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > a theme is chosen, announced and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the keyboard shortcuts are under Help, not in the settings menu, and only one of the two is open::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the keys for the sidebars are left alone while typing in a field::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the left sidebar is hidden and shown from its button or the [ key, and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the notes are hidden and shown from their button or the ] key::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the notes tabs show one panel, move with the arrow keys, and remember the choice::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the settings menu opens from the avatar and closes on Escape or a press outside::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the junction page > the units toggle says which is in use::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > a region is chosen, announced with its side of the road, and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > a theme is chosen, announced and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > the keyboard shortcuts are under Help, not in the settings menu, and only one of the two is open::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > the notes are hidden and shown from their button or the ] key::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > the settings menu opens from the avatar and closes on Escape or a press outside::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the map page > the units toggle says which is in use::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > a region is chosen, announced with its side of the road, and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > a theme is chosen, announced and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the keyboard shortcuts are under Help, not in the settings menu, and only one of the two is open::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the keys for the sidebars are left alone while typing in a field::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the left sidebar is hidden and shown from its button or the [ key, and remembered::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the notes are hidden and shown from their button or the ] key::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the notes tabs show one panel, move with the arrow keys, and remember the choice::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the settings menu opens from the avatar and closes on Escape or a press outside::ui is gone
+  problem: Playwright: the test shell.spec.ts::the shell on the street page > the units toggle says which is in use::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > Not set is kept across a reload::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > a chosen speed is kept across a reload::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > a street OpenStreetMap gives no speed shows Not set::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > the control follows the street through Undo, Redo and Start over::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > the control keeps the focus after a change::ui is gone
+  problem: Playwright: the test speed.spec.ts::a street's speed limit > the imported speed is shown; choosing another changes it and Undo restores it, with no sign in 2.5D::ui is gone
+  problem: Playwright: the test speed.spec.ts::a stretch's speed limit > is set for the picked stretch only, the rest follows the street, and Undo takes it back::ui is gone
+  problem: Playwright: the test speed.spec.ts::the details panel's path > a pressed piece shows under the street, and the path's step goes back up with the piece still chosen::ui is gone
+  problem: Playwright: the test speed.spec.ts::the details panel's path > a stretch of the curbside shows along the street, not under a zone::ui is gone
+  problem: Playwright: the test speed.spec.ts::the details panel's path > with nothing chosen it shows the street, which holds the speed limit::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > a looser figure is allowed and shown as a warning::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > a piece's width range names the standard that sets it::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > a profile is created, edited, chosen, and the access check names it with both figures::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > a profile is exported as a file, imported again, and removed after a question::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > a target speed adds a check for the street's class that names the standard::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > an invalid figure is refused with its range and nothing is kept::ui is gone
+  problem: Playwright: the test standards.spec.ts::standards profiles on the street page > with no profile the checks name no standard and the built-in standards are in force::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > a greyed item says why and adds nothing::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > a name is kept, and removing the stop takes it away::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > a stop is added, checked, drawn, kept over a reload and undone::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > a stop is dragged along the street as one undoable step, and Escape cancels a drag::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > a street of driving lanes only has a Stops row, and a curb stop on a narrow sidewalk fails to board::ui is gone
+  problem: Playwright: the test stops.spec.ts::the Stops row > the arrows move between cells and Alt with them moves the stop by a metre::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::a street with opposing lanes shows yellow paint in 2.5D, and symbols in place of the section's arrows::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::at 1050 px the widths are written down and the status line stays in view::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::at 1440 px the widths are written down and the status line stays in view::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the piece list > every piece can be chosen from the list at 320 px, where the narrow ones are hardly in the picture::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the piece list > is a listbox with one tab stop and a cell per piece, naming its kind and its width::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the piece list > the arrows, Home and End choose a piece as a press on the drawing does::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > a piece is made wider in the inspector's width field::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > a press on a piece selects it, outlines it, announces it and shows its details::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > a view kept by an earlier visit, the section included, does not change what opens::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > choosing another surface material in the inspector changes the selected piece's top in 2.5D::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > every piece can be pressed, the narrow far ones too::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > is the only drawing: no toggle, no section, no handles, and V changes nothing::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::the street in 2.5D > the 2.5D follows an edit made with the keys and outlines the selected piece::ui is gone
+  problem: Playwright: the test street-iso.spec.ts::with a coarse pointer > a tap on the narrowest piece selects that piece::ui is gone
+  problem: Playwright: the test street.spec.ts::a street cut at both ends says a stretch of it cannot be picked::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > Alt and the arrows move the boundary at the pick's end::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > Escape cancels a drag::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > Shift and the arrows pick a stretch from the keyboard, and the point says where it is on the way::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > a 2.5D with no boundary near is not split in two::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > a click picks the run under the pointer::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > a drag along the plan picks a stretch::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > a reload keeps the stretches::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > an edit in the stretch makes a boundary the plan shows, and editing it back joins it::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > drags a boundary with the pointer as one undoable step, keeping the pointer captured::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the 2.5D label at a boundary is in French when the page is::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the 2.5D says how long the transition is that leads into the run beyond::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the 2.5D shows the run where the pick starts, with its neighbour across a boundary::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the checks say a run is too short for its transition::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the plan at 375 px wide makes the page scroll no further sideways::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the plan is in French when the page is::ui is gone
+  problem: Playwright: the test street.spec.ts::changing part of a street > the whole street is picked at first, and the plan's point is one tab stop under the drawing::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > Cancel closes the dialog without changing the street and gives the focus back to its button::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > a transit measure is arranged as one edit, announced, and Undo takes it back::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > applying hands the focus to the drawing::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > fits a phone and shows its items in forced colours::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > has a tab for making the street pedestrian, one for the transit measures that fit and one for the street templates::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > is one edit that undo takes back, and the street carries traffic again::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > is operated from the keyboard::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > on a phone, the preview of the last transit measure shows without scrolling past the list::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > pointing at a choice previews it and nothing changes until Apply::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > the dialog closes with Escape and gives the focus back to its button::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > the dialog fits a phone-width window::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > the options stay where they are when pointing at one shows its preview, at 1280 px::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > the options stay where they are when pointing at one shows its preview, at 700 px::ui is gone
+  problem: Playwright: the test street.spec.ts::the Transform dialog > turns the motor space into the chosen kind, says so, and judges the street as a pedestrian one::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > at phone width the chosen topic's tab is scrolled into the row::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > at phone width the topics are a row of tabs::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > nothing matches says so and clearing returns to the topic::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > search finds an item in another topic and adds it::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > the menu opens on the chosen piece's topic::ui is gone
+  problem: Playwright: the test street.spec.ts::the add menu > undoing with an item focused keeps the focus on it as its greying changes::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > Enter in the width field keeps the width and Escape puts it back, each giving the keys to the drawing::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > Shift and an arrow move the selected piece one place along::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a buffer as narrow as an imported curb's is selected with the arrow keys and announced::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a piece is added from the menu, which opens and closes::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a piece is pressed to select it::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a piece is selected with the arrow keys, announced, and shown in the details::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a street that fits carries a tick, which goes when it is too wide and draws itself in when it fits again::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > a width typed with a decimal comma is read as a decimal::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > an Atlas measure is arranged on a street it suits, and the change can be undone::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > choosing French in the settings menu changes the page's language and its markup::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > making a piece wider says that the street is too wide, and narrower makes room again::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > removing a piece frees its width, and Ctrl+Z puts it back::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > start over puts the street back as it is today and can itself be undone::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > starts as the city has the street and says whether the pieces fit::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the Checks tab shows what fails first and folds what passes until asked::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the details change a piece's width and the street follows::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the left panel is one scroller holding the inspector and nothing else::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the menu of pieces stays inside a 1024 by 768 window and scrolls to its last piece::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the menu of pieces stays inside a 1280 by 720 window and scrolls to its last piece::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the menu of pieces stays inside a 1440 by 900 window and scrolls to its last piece::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the menu of pieces stays inside a 390 by 844 window and scrolls to its last piece::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the notes list the width shared out, the checks and the changes, over where the street came from::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the piece pane's buttons move the piece along and remove it::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > the welcome note is shown at first and put away until asked for again::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > undo and redo are announced with how the pieces now stand::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > units change the lengths shown::ui is gone
+  problem: Playwright: the test street.spec.ts::the street editor on a street of the city > with reduced motion the tick is simply there::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > a change is kept even when the page is left at once::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > a street that is not in the city goes back to the map::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > is named for the street and says where it runs between::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > keeps its own title, named for the street, when the language changes::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > says which OpenStreetMap ways it was made from, and whether it has been changed::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > the page without a street goes back to the map::ui is gone
+  problem: Playwright: the test street.spec.ts::what the street editor keeps in the city > what is changed is kept in the city across a reload::ui is gone
+  problem: Playwright: the test sync.spec.ts::a device given only rows an older CityLoom wrote, under bare keys, shows them in the first project::integration is gone
+  problem: Playwright: the test sync.spec.ts::a device that signs in to a storing account receives its places and sends its own::integration is gone
+  problem: Playwright: the test sync.spec.ts::a person who never chose server storage sends nothing and the menu shows no status::integration is gone
+  problem: Playwright: the test sync.spec.ts::a project deleted on one device sends the other, which has it open, back to the list::integration is gone
+  problem: Playwright: the test sync.spec.ts::a project renamed on one device is renamed on the other after a sync::integration is gone
+  problem: Playwright: the test sync.spec.ts::an edit made offline is sent when the network returns, and the menu says so::integration is gone
+  problem: Playwright: the test sync.spec.ts::an edit on one device appears on another when its tab is shown again::integration is gone
+  problem: Playwright: the test sync.spec.ts::deleting the account deletes the server copy and keeps the browser's work::integration is gone
+  problem: Playwright: the test sync.spec.ts::each project's street reaches a clean device in its own project::integration is gone
+  problem: Playwright: the test sync.spec.ts::the last edit is sent when the page is left, with nothing else to send it::integration is gone
+  problem: Playwright: the test sync.spec.ts::turning storage off asks first, deletes the server copy, keeps this browser's work and stops the other device::integration is gone
+  problem: Playwright: the test sync.spec.ts::turning storage on merges the work made while signed out and says how many places were sent::integration is gone
+  problem: Playwright: the test sync.spec.ts::when two devices changed the same place the later edit is kept on both and the other device says so::integration is gone
+  problem: Playwright: the test templates.spec.ts::street templates > all five are listed in the Transform dialog under their own tab::ui is gone
+  problem: Playwright: the test templates.spec.ts::street templates > applying one lays out ordinary pieces as a single edit that Undo and Start over take back::ui is gone
+  problem: Playwright: the test templates.spec.ts::street templates > on a street too narrow for one > a template that does not fit is disabled, says why, previews its reason and cannot be applied::ui is gone
+  problem: Playwright: the test templates.spec.ts::street templates > the School street on a street too short for a separate zone makes the whole street one and says so::ui is gone
+  problem: Playwright: the test templates.spec.ts::street templates > the School street's school zone > is a zone with a lower speed and a raised table, made in one step that Undo takes back::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > a project that is not here goes to the list::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > compares a milestone with the work now by place and by what changed::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > deletes a milestone after a question and leaves the work alone::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > is reached from the project's row on the home page and speaks French::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > names the project, starts empty and refuses a milestone with no name::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > restores after a question that Escape answers no, and keeps the work it replaces::ui is gone
+  problem: Playwright: the test timeline.spec.ts::the timeline page > saves a milestone of the work now, which stays over a reload::ui is gone
+  problem: Playwright: the test webgl.spec.ts::the browser can draw the map: MapLibre starts and its canvas has a WebGL context::ui is gone
+  problem: Playwright: the test world.spec.ts::a junction of the area opens in the junction editor and a street in the street editor::ui is gone
+  problem: Playwright: the test world.spec.ts::an area is made again when the checksum of its tile changes, and not otherwise::ui is gone
+  problem: Playwright: the test world.spec.ts::the map opens on the default area, made of its real streets::ui is gone
+  problem: Playwright: the test world.spec.ts::what is kept for the area is kept under its own keys::ui is gone
