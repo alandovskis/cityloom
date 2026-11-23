@@ -3,7 +3,15 @@ import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const sidebars: SidebarsConfig = {
-  docsSidebar: ["intro", "projects", "sharing", "getting-started", "project-layout", "architecture", "issues"],
+  docsSidebar: [
+    "intro",
+    "projects",
+    "sharing",
+    "getting-started",
+    "project-layout",
+    { type: "category", label: "Architecture", link: { type: "doc", id: "architecture/index" }, items: [] },
+    "issues",
+  ],
 };
 
 export default sidebars;
