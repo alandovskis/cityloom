@@ -99,7 +99,7 @@ Un test de composant rend une vue en HTML sur l’hôte, avec `shared::testing::
 balisage. Ils se trouvent dans le `tests.rs` de chaque tranche : `account`, `archive`, `junction/view`, `map/view`,
 `project`, `share`, `shell`, `standards`, `street/view`, `sync` et `timeline`.
 
-Les tests de composant des commandes partagées sont dans le code, dans `crates/cityloom_ui/src/`&nbsp;: les `mod tests` de
+Les tests de composant des commandes partagées sont dans le code, dans `crates/cityloom_ui/src/` : les `mod tests` de
 `radio.rs`, de `stepper.rs`, de `section.rs` et de `confirm.rs`, avec la fonction `testing::html` propre à cette caisse
 (`testing.rs`). `cargo test -p cityloom_ui` les exécute.
 
