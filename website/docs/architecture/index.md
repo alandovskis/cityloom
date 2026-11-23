@@ -1,5 +1,6 @@
 ---
 title: Architecture
+sidebar_label: Overview
 slug: /architecture
 ---
 

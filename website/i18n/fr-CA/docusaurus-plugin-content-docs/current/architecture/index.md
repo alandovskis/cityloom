@@ -1,5 +1,6 @@
 ---
 title: Architecture
+sidebar_label: Vue d’ensemble
 slug: /architecture
 ---
 
