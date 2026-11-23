@@ -19,29 +19,47 @@ pub struct Press<'a> {
 /// pattern: Down and Right the next, Up and Left the previous (both wrapping), Home the first, End the last. A key with
 /// Ctrl, Cmd or Alt, a repeat, a composing input method or one another handler has taken is not ours.
 pub fn radio_choice(p: &Press, count: usize, current: usize) -> Option<usize> {
-    todo!()
+    if count == 0 || p.ctrl || p.meta || p.alt || p.repeat || p.composing || p.taken {
+        return None;
+    }
+    match p.key {
+        "ArrowDown" | "ArrowRight" => Some((current + 1) % count),
+        "ArrowUp" | "ArrowLeft" => Some((current + count - 1) % count),
+        "Home" => Some(0),
+        "End" => Some(count - 1),
+        _ => None,
+    }
 }
 
 /// Which radio a key chooses in a group where none is checked that can be chosen: Down, Right and Home the first, Up,
 /// Left and End the last.
 pub fn radio_choice_from_none(p: &Press, count: usize) -> Option<usize> {
-    todo!()
+    match p.key {
+        "ArrowDown" | "ArrowRight" => radio_choice(p, count, count.wrapping_sub(1)),
+        _ => radio_choice(p, count, 0),
+    }
 }
 
 /// Whether the radio at `index` is the one a radio group stops the Tab key on: the one chosen, or the first when none is.
 pub fn radio_tab_stop(chosen: Option<usize>, index: usize) -> bool {
-    todo!()
+    chosen.unwrap_or(0) == index
 }
 
 /// Where a key pressed on the option `focused` moves the focus and the choice, as an index among all the options shown,
 /// of which `enabled` says those that can be chosen. A key held down keeps moving.
 pub fn radio_move(p: &Press, enabled: &[bool], focused: usize) -> Option<usize> {
-    todo!()
+    let press = Press { repeat: false, ..*p };
+    let open: Vec<usize> = (0..enabled.len()).filter(|&i| enabled[i]).collect();
+    let to = match open.iter().position(|&i| i == focused) {
+        Some(at) => radio_choice(&press, open.len(), at),
+        None => radio_choice_from_none(&press, open.len()),
+    };
+    to.map(|to| open[to])
 }
 
 /// Whether a press on an option is a choice: one that can be chosen and is not chosen already.
 pub fn radio_picks(chosen: bool, enabled: bool) -> bool {
-    todo!()
+    enabled && !chosen
 }
 
 /// The step an arrow key makes in a number field, as a number field would.

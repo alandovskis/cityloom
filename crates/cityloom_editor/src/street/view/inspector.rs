@@ -4,10 +4,10 @@
 
 use std::rc::Rc;
 
-use cityloom_ui::{NumberField, Section, Stepper};
+use cityloom_ui::{NumberField, RadioGroup, RadioOption, Section, Stepper};
 use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
-use leptos::web_sys::{Element, HtmlSelectElement, KeyboardEvent};
+use leptos::web_sys::HtmlSelectElement;
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS, curb_key, direction_key, kind_key, material_key};
 use crate::shared::i18n::{Args, I18n};
@@ -83,10 +83,6 @@ pub fn direction_choice(value: &str) -> Option<usize> {
 
 // ---- small pieces -------------------------------------------------------------------------
 
-fn tick() -> impl IntoView {
-    view! { <svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg> }
-}
-
 fn icon(path: &'static str) -> impl IntoView {
     view! { <svg viewBox="0 0 14 14" aria-hidden="true"><path d=path/></svg> }
 }
@@ -133,49 +129,9 @@ fn direction_swatch(id: Option<&'static str>) -> AnyView {
     }
 }
 
-/// One choice in a group where exactly one is chosen.
-fn radio(
-    checked: impl Fn() -> bool + Send + Sync + 'static,
-    glyph: AnyView,
-    name: impl Fn() -> String + Send + Sync + 'static,
-    on_click: impl Fn() + 'static,
-) -> impl IntoView {
-    let tab = {
-        // Only the chosen one is in the tab order; the arrows move between them.
-        let checked = std::sync::Arc::new(checked);
-        let c = checked.clone();
-        (move || c().to_string(), move || if checked() { "0" } else { "-1" })
-    };
-    view! {
-        <li>
-            <button type="button" class="opt" role="radio" aria-checked=tab.0 tabindex=tab.1 on:click=move |_| on_click()>
-                {glyph}<span>{name}</span>{tick()}
-            </button>
-        </li>
-    }
-}
-
-/// Arrows move the choice in a group, as native radios do.
-fn radio_keys(e: KeyboardEvent) {
-    let step = match e.key().as_str() {
-        "ArrowDown" | "ArrowRight" => 1,
-        "ArrowUp" | "ArrowLeft" => -1,
-        _ => return,
-    };
-    if e.meta_key() || e.ctrl_key() || e.alt_key() {
-        return;
-    }
-    let Some(cur) = e.target().and_then(|t| t.dyn_into::<Element>().ok()).and_then(|t| t.closest("[role=\"radio\"]").ok().flatten()) else { return };
-    let Some(group) = cur.closest("[role=\"radiogroup\"]").ok().flatten() else { return };
-    e.prevent_default();
-    let Ok(all) = group.query_selector_all("[role=\"radio\"]") else { return };
-    let items: Vec<Element> = (0..all.length()).filter_map(|i| all.item(i)?.dyn_into::<Element>().ok()).collect();
-    let at = items.iter().position(|i| *i == cur).unwrap_or(0) as i32;
-    let next = &items[(at + step).rem_euclid(items.len() as i32) as usize];
-    if let Ok(next) = next.clone().dyn_into::<leptos::web_sys::HtmlElement>() {
-        let _ = next.focus();
-        next.click();
-    }
+/// An option of a group: its picture and its name.
+fn option(w: SheetWatch, glyph: AnyView, name: impl Into<String>) -> RadioOption {
+    RadioOption { glyph: Some(glyph), ..RadioOption::new(word(w, name)) }
 }
 
 fn section(id: &'static str, heading: Signal<String>, note: impl IntoView + 'static, body: impl IntoView + 'static) -> impl IntoView {
@@ -248,25 +204,19 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
     move || {
         let k = &KINDS[kind.get()];
         let planting = k.id == "planting";
-        let options = k
-            .materials
-            .iter()
-            .map(|&m| {
-                let mat = &MATERIALS[m];
-                radio(
-                    move || w.segment(uid, |s| s.material == mat.id).unwrap_or(false),
-                    surface_swatch(mat.id),
-                    say(w, material_key(mat.id)),
-                    move || {
-                        w.edit(|e| e.set_material(uid, m));
-                    },
-                )
-            })
-            .collect_view();
+        let chosen = move || w.segment(uid, |s| MATERIALS.iter().position(|m| m.id == s.material)).flatten();
         view! {
             <Section id="i-h-surface" heading=word(w, if planting { "inspector-planting" } else { "inspector-surface" })>
                 <p class="insp-range">{say(w, if planting { "inspector-planting-note" } else { "inspector-surface-note" })}</p>
-                <ul class="opts" role="radiogroup" aria-labelledby="i-h-surface" on:keydown=radio_keys>{options}</ul>
+                <RadioGroup
+                    options=Signal::derive(move || k.materials.to_vec())
+                    chosen=Signal::derive(chosen)
+                    draw=move |m: usize| option(w, surface_swatch(MATERIALS[m].id), material_key(MATERIALS[m].id))
+                    choose=Callback::new(move |m| {
+                        w.edit(|e| e.set_material(uid, m));
+                    })
+                    labelled_by="i-h-surface"
+                />
             </Section>
         }
     }
@@ -374,57 +324,54 @@ fn times_section(w: SheetWatch, uid: u32) -> impl IntoView {
 }
 
 fn direction_section(w: SheetWatch, uid: u32, optional: bool) -> impl IntoView {
-    let chosen = move |id: Option<&'static str>| move || w.segment(uid, |s| s.direction == id).unwrap_or(false);
-    let options = DIRECTIONS
-        .iter()
-        .enumerate()
-        .map(|(i, d)| {
-            radio(chosen(Some(d.id)), direction_swatch(Some(d.id)), say(w, direction_key(d.id)), move || {
-                w.edit(|e| e.set_direction(uid, Some(i)));
-            })
-        })
-        .collect_view();
-    let both = optional.then(|| {
-        radio(chosen(None), direction_swatch(None), say(w, "inspector-two-way"), move || {
-            w.edit(|e| e.set_direction(uid, None));
-        })
-    });
+    // By their place among the directions; two-way is none of them, and last.
+    let options = move || (0..DIRECTIONS.len()).map(Some).chain(optional.then_some(None)).collect::<Vec<_>>();
+    let chosen = move || w.segment(uid, |s| s.direction.and_then(direction_choice));
+    let draw = move |i: Option<usize>| match i.map(|i| DIRECTIONS[i].id) {
+        Some(id) => option(w, direction_swatch(Some(id)), direction_key(id)),
+        None => option(w, direction_swatch(None), "inspector-two-way"),
+    };
     section(
         "i-h-dir",
         word(w, "inspector-direction"),
         view! { <p class="insp-range">{say(w, "inspector-direction-note")}</p> },
-        view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-dir" on:keydown=radio_keys>{options}{both}</ul> },
+        view! {
+            <RadioGroup
+                options=Signal::derive(options)
+                chosen=Signal::derive(chosen)
+                draw=draw
+                choose=Callback::new(move |i| {
+                    w.edit(|e| e.set_direction(uid, i));
+                })
+                labelled_by="i-h-dir"
+            />
+        },
     )
 }
 
 fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoView {
-    let options = curbs
-        .iter()
-        .map(|&ci| {
-            let c = &CURBS[ci];
-            radio(
-                move || w.segment(uid, |s| s.curb == Some(c.id)).unwrap_or(false),
-                curb_swatch(Some(c.id)),
-                say(w, curb_key(c.id)),
-                move || {
-                    w.edit(|e| e.set_curb(uid, Some(ci)));
-                },
-            )
-        })
-        .collect_view();
-    let none = radio(
-        move || w.segment(uid, |s| s.curb.is_none()).unwrap_or(false),
-        curb_swatch(None),
-        say(w, "inspector-curb-none"),
-        move || {
-            w.edit(|e| e.set_curb(uid, None));
-        },
-    );
+    // By their place in the catalogue; no curb is none of them, and last.
+    let options = move || curbs.iter().copied().map(Some).chain([None]).collect::<Vec<_>>();
+    let chosen = move || w.segment(uid, |s| s.curb.and_then(|id| CURBS.iter().position(|c| c.id == id)));
+    let draw = move |i: Option<usize>| match i.map(|i| CURBS[i].id) {
+        Some(id) => option(w, curb_swatch(Some(id)), curb_key(id)),
+        None => option(w, curb_swatch(None), "inspector-curb-none"),
+    };
     section(
         "i-h-curb",
         word(w, "inspector-curb"),
         view! { <p class="insp-range">{say(w, "inspector-curb-note")}</p> },
-        view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-curb" on:keydown=radio_keys>{options}{none}</ul> },
+        view! {
+            <RadioGroup
+                options=Signal::derive(options)
+                chosen=Signal::derive(chosen)
+                draw=draw
+                choose=Callback::new(move |i| {
+                    w.edit(|e| e.set_curb(uid, i));
+                })
+                labelled_by="i-h-curb"
+            />
+        },
     )
 }
 

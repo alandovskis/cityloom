@@ -1,6 +1,13 @@
 //! A group of radio buttons: exactly one option is chosen, or none yet.
 
+use std::sync::Arc;
+
 use leptos::prelude::*;
+use leptos::wasm_bindgen::JsCast;
+use web_sys::{Element, HtmlElement, KeyboardEvent};
+
+use crate::icons::tick;
+use crate::keys::{Press, radio_move, radio_picks, radio_tab_stop};
 
 /// One option of a group, as it is drawn.
 pub struct RadioOption {
@@ -19,8 +26,69 @@ pub struct RadioOption {
 impl RadioOption {
     /// An option that is its name alone and can be chosen.
     pub fn new(name: Signal<String>) -> Self {
-        todo!()
+        RadioOption { id: None, glyph: None, name, help: None, description: None, enabled: true }
     }
+}
+
+/// Where a key pressed in a group moves: the option to focus and choose, if it is a key that moves.
+fn moved_to(e: &KeyboardEvent) -> Option<HtmlElement> {
+    let focused = e.target()?.dyn_into::<Element>().ok()?.closest("[role=radio]").ok()??;
+    let all = focused.closest("[role=radiogroup]").ok()??.query_selector_all("[role=radio]").ok()?;
+    let radios: Vec<HtmlElement> = (0..all.length()).filter_map(|i| all.item(i)?.dyn_into().ok()).collect();
+    let enabled: Vec<bool> = radios.iter().map(|r| r.get_attribute("aria-disabled").as_deref() != Some("true")).collect();
+    let at = radios.iter().position(|r| **r == focused)?;
+    let key = e.key();
+    let press = Press {
+        key: &key,
+        ctrl: e.ctrl_key(),
+        meta: e.meta_key(),
+        alt: e.alt_key(),
+        repeat: e.repeat(),
+        composing: e.is_composing(),
+        taken: e.default_prevented(),
+    };
+    radio_move(&press, &enabled, at).map(|to| radios[to].clone())
+}
+
+/// The markup of an option, the same for every group.
+fn option_view(option: RadioOption, checked: Signal<bool>, tab_stop: Signal<bool>, pick: Callback<()>) -> AnyView {
+    let RadioOption { id, glyph, name, help, description, enabled } = option;
+    let described_by = description.as_ref().map(|(id, _)| id.clone());
+    let words = match help {
+        Some(help) => view! {
+            <span class="choice-body">
+                <span class="choice-label">{move || name.get()}</span>
+                <span class="choice-help">{move || help.get()}</span>
+            </span>
+        }
+        .into_any(),
+        None => view! { <span>{move || name.get()}</span> }.into_any(),
+    };
+    view! {
+        <li role="none">
+            <button
+                type="button"
+                class="opt"
+                role="radio"
+                id=id
+                aria-checked=move || checked.get().to_string()
+                aria-disabled=(!enabled).then_some("true")
+                aria-describedby=described_by
+                tabindex=move || if tab_stop.get() { "0" } else { "-1" }
+                on:click=move |_| {
+                    if radio_picks(checked.get_untracked(), enabled) {
+                        pick.run(());
+                    }
+                }
+            >
+                {glyph}
+                {words}
+                {tick()}
+            </button>
+            {description.map(|(id, words)| view! { <span class="insp-range" id=id>{move || words.get()}</span> })}
+        </li>
+    }
+    .into_any()
 }
 
 /// A list of radio buttons, one tab stop: the chosen option, or the first when none is. The arrow keys move the focus and
@@ -41,8 +109,40 @@ where
     K: Clone + Eq + std::hash::Hash + Send + Sync + 'static,
     D: Fn(K) -> RadioOption + Send + Sync + 'static,
 {
-    let view: AnyView = todo!();
-    view
+    let options = Memo::new(move |_| options.get());
+    // Where the chosen one is among the options; none when it is not one of them.
+    let at = Memo::new(move |_| chosen.get().and_then(|c| options.with(|all| all.iter().position(|k| *k == c))));
+    let draw = Arc::new(draw);
+    let row = move |key: K| {
+        let index = {
+            let key = key.clone();
+            Memo::new(move |_| options.with(|all| all.iter().position(|k| *k == key)))
+        };
+        let checked = Signal::derive(move || index.get().is_some() && at.get() == index.get());
+        let tab_stop = Signal::derive(move || index.get().is_some_and(|i| radio_tab_stop(at.get(), i)));
+        let option = draw(key.clone());
+        option_view(option, checked, tab_stop, Callback::new(move |_| choose.run(key.clone())))
+    };
+    let on_key = move |e: KeyboardEvent| {
+        if let Some(to) = moved_to(&e) {
+            e.prevent_default();
+            let _ = to.focus();
+            to.click();
+        }
+    };
+    view! {
+        <ul
+            role="radiogroup"
+            aria-label=move || label.map(|l| l.get())
+            aria-labelledby=labelled_by
+            aria-describedby=described_by
+            id=id
+            class=class
+            on:keydown=on_key
+        >
+            <For each=move || options.get() key=|k| k.clone() children=row/>
+        </ul>
+    }
 }
 
 #[cfg(test)]

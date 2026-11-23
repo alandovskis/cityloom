@@ -2299,7 +2299,7 @@ svg pattern circle {
 /* The street page's piece pane: Move and Remove under the name, then one row per setting, its name in a column on the
    left and the control on the right, with the width's place in its range drawn under the field, and the choices of a
    surface, a direction or a curb as tiles, three across (`.insp-columns`, which the junction's levels share but for its
-   signal plan, CLM-51). */
+   signal plan, CLM-51; the plan's signal options have the same tiles, CLM-48). */
 .insp-actions {
   display: flex;
   gap: 6px;
@@ -2400,7 +2400,8 @@ svg pattern circle {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
-.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"],
+:is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"] {
   position: relative;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
@@ -2413,11 +2414,13 @@ svg pattern circle {
   line-height: 1.2;
   text-align: center;
 }
-.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"],
+:is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"][aria-checked="true"] {
   padding: 5px 3px;
   border: 2px solid var(--accent);
 }
-.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] .tick {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] .tick,
+:is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"] .tick {
   position: absolute;
   top: 3px;
   right: 3px;
@@ -2677,12 +2680,14 @@ svg pattern circle {
   flex-basis: 100%;
   text-align: center;
 }
-/* A tile's tick has the corner to itself: a layout's name is words alone, with no picture above it. */
-#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
+/* A tile's tick has the corner to itself: a layout's or a mode's name is words alone, with no picture above it. */
+#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"],
+#inspector :is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"] {
   padding-top: 17px;
   overflow-wrap: anywhere;
 }
-#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
+#inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"],
+#inspector :is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"][aria-checked="true"] {
   padding-top: 16px;
 }
 @media (any-pointer: coarse) {
@@ -3767,30 +3772,26 @@ svg pattern circle {
   width: 5em;
   min-height: 24px;
 }
-/* How a crossing on call detects people (CLM-17): a radio pair under its heading, then what the chosen one does. */
-.call-detect {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-}
-.call-detect > .insp-range {
-  flex-basis: 100%;
-  margin: 0;
-}
-/* Vehicle actuation (CLM-12): a street's mode as a radio pair under its heading, then its four settings with steppers.
-   Bicycle detection (CLM-13): a bike movement's mode the same way; transit priority (CLM-14), a street's four choices;
-   pre-emption (CLM-15), a street's off and on. */
+/* The choices of a signal option, under their heading, as the inspector's tiles, as many across as fit: how a crossing on
+   call detects people (CLM-17), a street's actuation (CLM-12, then its four settings with steppers), a bike movement's
+   detection (CLM-13), a street's transit priority (CLM-14) and pre-emption (CLM-15). */
 .act-mode,
 .bike-mode,
 .transit-mode,
-.preempt-mode {
-  display: flex;
+.preempt-mode,
+.call-detect {
+  display: grid;
   flex-basis: 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 88px), 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.act-mode-h,
+.bike-mode-h,
+.transit-mode-h,
+.preempt-mode-h,
+.call-detect-h {
+  flex-basis: 100%;
 }
 .act-fields {
   flex-basis: 100%;

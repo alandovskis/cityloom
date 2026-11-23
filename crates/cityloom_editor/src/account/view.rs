@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use cityloom_ui::Confirm;
+use cityloom_ui::{Confirm, RadioGroup, RadioOption};
 use leptos::prelude::*;
 
 use crate::account::text::identity_text;
@@ -15,42 +15,35 @@ fn tr(vm: Vm, key: &'static str) -> String {
     vm.with_value(|v| v.i18n().tr(key, &Args::new()))
 }
 
-fn radio(vm: Vm, value: &'static str, store: bool, label: &'static str, help: &'static str) -> impl IntoView {
-    view! {
-        <label class="choice">
-            <input
-                type="radio"
-                name="storage"
-                value=value
-                checked=move || vm.with_value(|v| v.storage()) == Some(store)
-                prop:checked=move || vm.with_value(|v| v.storage()) == Some(store)
-                on:click=move |ev| {
-                    // Stopping server storage deletes the server copy: the radio stays where it is until confirmed.
-                    if vm.with_value(|v| v.guard_stop(store)) {
-                        ev.prevent_default();
-                    }
-                }
-                on:change=move |_| vm.with_value(|v| v.choose_storage(store))
-            />
-            <span class="choice-body">
-                <span class="choice-label">{move || tr(vm, label)}</span>
-                <span class="choice-help">{move || tr(vm, help)}</span>
-            </span>
-        </label>
-    }
-}
-
 fn storage(vm: Vm) -> impl IntoView {
+    let word = move |key: &'static str| Signal::derive(move || tr(vm, key));
+    let draw = move |store| {
+        let (label, help) =
+            if store { ("account-storage-server", "account-storage-server-help") } else { ("account-storage-device", "account-storage-device-help") };
+        RadioOption { help: Some(word(help)), ..RadioOption::new(word(label)) }
+    };
+    let choose = move |store| {
+        vm.with_value(|v| {
+            // Stopping server storage deletes the server copy: the choice stays where it is until confirmed.
+            if !v.guard_stop(store) {
+                v.choose_storage(store);
+            }
+        })
+    };
     view! {
         <section class="account-section" aria-labelledby="h-storage">
             <h2 id="h-storage" tabindex="-1">
                 {move || tr(vm, "account-storage-heading")}
             </h2>
             <p class="hint">{move || tr(vm, "account-storage-lead")}</p>
-            <div class="choices" role="radiogroup" aria-labelledby="h-storage">
-                {radio(vm, "device", false, "account-storage-device", "account-storage-device-help")}
-                {radio(vm, "server", true, "account-storage-server", "account-storage-server-help")}
-            </div>
+            <RadioGroup
+                options=Signal::derive(|| vec![false, true])
+                chosen=Signal::derive(move || vm.with_value(|v| v.storage()))
+                draw=draw
+                choose=Callback::new(choose)
+                labelled_by="h-storage"
+                class="opts choices"
+            />
             {move || {
                 vm.with_value(|v| v.confirming_stop())
                     .then(|| {

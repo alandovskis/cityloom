@@ -48,52 +48,8 @@ pub fn on_drawing(key: &str, shift: bool, selected: Option<&str>) -> Option<(Act
     }
 }
 
-/// A key pressed on the page, as far as a radio group cares.
-#[derive(Clone, Copy, Debug)]
-pub struct Press<'a> {
-    pub key: &'a str,
-    pub ctrl: bool,
-    pub meta: bool,
-    pub alt: bool,
-    /// The key is held down and this is a repeat of it.
-    pub repeat: bool,
-    /// An input method is composing text.
-    pub composing: bool,
-    /// A field has the key (the person is typing) or another handler has taken it.
-    pub taken: bool,
-}
-
-/// Which radio of a group of `count` a key pressed on the radio at `current` chooses, by the WAI-ARIA radio group
-/// pattern: Down and Right the next, Up and Left the previous (both wrapping), Home the first, End the last. A key with
-/// Ctrl, Cmd or Alt, a repeat, a composing input method or one another handler has taken is not ours. `None` is no choice,
-/// which the radio chosen already is not: the view chooses whatever this names and moves the focus to it.
-pub fn radio_choice(p: &Press, count: usize, current: usize) -> Option<usize> {
-    if count == 0 || p.ctrl || p.meta || p.alt || p.repeat || p.composing || p.taken {
-        return None;
-    }
-    match p.key {
-        "ArrowDown" | "ArrowRight" => Some((current + 1) % count),
-        "ArrowUp" | "ArrowLeft" => Some((current + count - 1) % count),
-        "Home" => Some(0),
-        "End" => Some(count - 1),
-        _ => None,
-    }
-}
-
-/// Which radio a key chooses in a group where none is checked that can be chosen (the phase's Custom): Down, Right
-/// and Home the first, Up, Left and End the last.
-pub fn radio_choice_from_none(p: &Press, count: usize) -> Option<usize> {
-    match p.key {
-        "ArrowDown" | "ArrowRight" => radio_choice(p, count, count.wrapping_sub(1)),
-        "ArrowUp" | "ArrowLeft" => radio_choice(p, count, 0),
-        _ => radio_choice(p, count, 0),
-    }
-}
-
-/// Whether the radio at `index` is the one a radio group stops the Tab key on: the one chosen, or the first when none is.
-pub fn radio_tab_stop(chosen: Option<usize>, index: usize) -> bool {
-    chosen.unwrap_or(0) == index
-}
+// What the keys do in a radio group is the UI crate's.
+pub use cityloom_ui::keys::{Press, radio_choice, radio_choice_from_none, radio_tab_stop};
 
 #[cfg(test)]
 mod tests {
