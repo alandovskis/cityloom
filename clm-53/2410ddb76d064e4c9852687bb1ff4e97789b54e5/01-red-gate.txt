@@ -1,0 +1,11 @@
+The red gate at 77cd82950b263a4f8272719d7aa3f3049a42656e: the five new tests fail (each on a todo!()), and every old test passes.
+
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::junction::model::tests::a_bearing_between_two_compass_points_is_named_by_the_nearer
+  new test: cityloom_editor unittests src/lib.rs::junction::model::tests::a_bearing_is_tagged_with_its_nearest_compass_point
+  new test: cityloom_editor unittests src/lib.rs::junction::model::tests::a_bearing_past_a_full_turn_or_below_zero_is_named_as_its_turn_within_the_circle
+  new test: cityloom_editor unittests src/lib.rs::junction::model::tests::each_compass_point_has_its_own_full_name
+  new test: cityloom_editor unittests src/lib.rs::junction::model::tests::each_compass_point_has_its_own_short_tag

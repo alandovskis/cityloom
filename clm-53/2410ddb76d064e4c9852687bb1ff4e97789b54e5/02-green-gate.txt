@@ -1,0 +1,7 @@
+The green gate at 2410ddb76d064e4c9852687bb1ff4e97789b54e5.
+
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ just format-check
+$ scripts/check-version.sh a01d2126c6269c9a5e851b9c3dd5f20129d7a2fe
+PASS green gate
