@@ -414,6 +414,14 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#jn-fold-calls summary").focus();
     await page.keyboard.press("Enter");
     await expect(page.locator("#signal-calls")).toBeVisible();
+    // no signal, no folds; a signal again, and each fold holds its section again
+    await page.locator("#jn-path-up-0").click();
+    const control = page.locator('select[aria-labelledby="i-h-control"]');
+    await control.selectOption({ index: 0 });
+    await control.selectOption({ label: "Traffic signal" });
+    await openPlan(page);
+    await expect(page.locator("#jn-fold-calls #signal-calls")).toBeVisible();
+    await expect(page.locator("#jn-fold-preemption #signal-preemption")).toBeVisible();
   });
 
   test("a street's green is typed, the cycle follows, and a reload keeps it", async ({ page }) => {

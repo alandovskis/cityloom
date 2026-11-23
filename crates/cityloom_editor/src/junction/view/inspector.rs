@@ -1692,7 +1692,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
     move || {
         shown.get().then(|| {
             view! {
-                {signal_fold(w, SignalFold::Plans, plans_section)}
+                {signal_fold(w, SignalFold::Plans, move |_| plans_section(w))}
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
@@ -1721,11 +1721,11 @@ fn signal_overview(w: Watch) -> impl IntoView {
                         </button>
                     </div> })}
                 </section>
-                {signal_fold(w, SignalFold::Calls, calls_section)}
-                {signal_fold(w, SignalFold::Actuation, actuation_section)}
-                {signal_fold(w, SignalFold::Bikes, bikes_section)}
-                {signal_fold(w, SignalFold::Priority, priority_section)}
-                {signal_fold(w, SignalFold::Preemption, preemption_section)}
+                {signal_fold(w, SignalFold::Calls, move |on| calls_section(w, on))}
+                {signal_fold(w, SignalFold::Actuation, move |on| actuation_section(w, on))}
+                {signal_fold(w, SignalFold::Bikes, move |on| bikes_section(w, on))}
+                {signal_fold(w, SignalFold::Priority, move |on| priority_section(w, on))}
+                {signal_fold(w, SignalFold::Preemption, move |on| preemption_section(w, on))}
             }
         })
     }
@@ -2060,7 +2060,7 @@ fn schedule_table(
 /// up by crossing, the findings, and every call in a fold.
 /// A crossing no phase walks says so, and a box put on call there is refused with that reason. It decides nothing:
 /// the modes, rows, totals and findings all come from the view.
-fn calls_section(w: Watch) -> impl IntoView {
+fn calls_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the calls through this memo, so an edit that leaves them as they were redraws none of it.
     let calls = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.calls.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| calls.with(|c| c.crossings.iter().map(|c| c.uid).collect::<Vec<u32>>()));
@@ -2274,9 +2274,6 @@ fn calls_section(w: Watch) -> impl IntoView {
         })
     };
     let none_on_call = Memo::new(move |_| calls.with(|c| !c.crossings.iter().any(|c| c.on_call)));
-    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
-    // that leaves the answer alone does not draw the section again
-    let drawn = Memo::new(move |_| shown(SignalFold::Calls, &w.view()));
     move || {
         drawn.get().then(|| {
             view! {
@@ -2302,7 +2299,7 @@ fn calls_section(w: Watch) -> impl IntoView {
 /// over the hour; then the placeholder figures, the actuated phases and the approaches added up, and the findings. A
 /// street without a phase of its own says so, and choosing actuated there is refused with that reason. It decides
 /// nothing: the modes, settings, totals and findings all come from the view.
-fn actuation_section(w: Watch) -> impl IntoView {
+fn actuation_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the actuation through this memo, so an edit that leaves it as it was redraws none of it.
     let act = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.actuation.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| act.with(|a| a.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
@@ -2477,9 +2474,6 @@ fn actuation_section(w: Watch) -> impl IntoView {
         })
     };
     let none_actuated = Memo::new(move |_| act.with(|a| !a.streets.iter().any(|s| s.settings.is_some())));
-    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
-    // that leaves the answer alone does not draw the section again
-    let drawn = Memo::new(move |_| shown(SignalFold::Actuation, &w.view()));
     move || {
         drawn.get().then(|| {
             view! {
@@ -2627,7 +2621,7 @@ fn findings_list(w: Watch, section: &'static str, found: Vec<Said>) -> impl Into
 /// cyclists an hour, and what its calls did over the hour; then the placeholder figures, the movements' calls added up,
 /// the findings and every call. A movement no phase runs says so, and on detection there is refused with that reason.
 /// It decides nothing: the modes, rates, totals and findings all come from the view.
-fn bikes_section(w: Watch) -> impl IntoView {
+fn bikes_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the bicycle calls through this memo, so an edit that leaves them as they were redraws none
     // of it.
     let bikes = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.bicycles.clone()).unwrap_or_default());
@@ -2776,9 +2770,6 @@ fn bikes_section(w: Watch) -> impl IntoView {
         })
     };
     let none_on = Memo::new(move |_| bikes.with(|b| !b.movements.iter().any(|m| m.on_detection)));
-    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
-    // that leaves the answer alone does not draw the section again
-    let drawn = Memo::new(move |_| shown(SignalFold::Bikes, &w.view()));
     move || {
         drawn.get().then(|| {
             view! {
@@ -2804,7 +2795,7 @@ fn bikes_section(w: Watch) -> impl IntoView {
 /// figures, the streets' buses added up, the findings and every bus. A street with no phase of its own says so, and
 /// priority there is refused with that reason. It decides nothing: the priorities, rates, totals and findings all come
 /// from the view.
-fn priority_section(w: Watch) -> impl IntoView {
+fn priority_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the transit priority through this memo, so an edit that leaves it as it was redraws none of
     // it.
     let transit = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.transit.clone()).unwrap_or_default());
@@ -2970,9 +2961,6 @@ fn priority_section(w: Watch) -> impl IntoView {
     };
     let none_on = Memo::new(move |_| transit.with(|t| !t.streets.iter().any(|s| s.priority.is_some())));
     // As actuation and bicycle detection: no section with no street to list (none has transit or priority).
-    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
-    // that leaves the answer alone does not draw the section again
-    let drawn = Memo::new(move |_| shown(SignalFold::Priority, &w.view()));
     move || {
         drawn.get().then(|| {
             view! {
@@ -2997,7 +2985,7 @@ fn priority_section(w: Watch) -> impl IntoView {
 /// entry, its emergency calls an hour and what its calls did over the hour; then the placeholder figures, the streets'
 /// calls added up, the findings and every call. A street left on without a phase says so as a finding. It decides
 /// nothing: the settings, entries, totals and findings all come from the view.
-fn preemption_section(w: Watch) -> impl IntoView {
+fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     // Everything below reads the pre-emption through this memo, so an edit that leaves it as it was redraws none of it.
     let preempt = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.preemption.clone()).unwrap_or_default());
     let uids = Memo::new(move |_| preempt.with(|p| p.streets.iter().map(|s| s.uid).collect::<Vec<u32>>()));
@@ -3146,9 +3134,6 @@ fn preemption_section(w: Watch) -> impl IntoView {
     let none_on = Memo::new(move |_| preempt.with(|p| !p.streets.iter().any(|s| s.rate.is_some())));
     // As actuation, bicycle detection and transit priority: no section with no street to list (none has a phase of its
     // own or pre-emption).
-    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
-    // that leaves the answer alone does not draw the section again
-    let drawn = Memo::new(move |_| shown(SignalFold::Preemption, &w.view()));
     move || {
         drawn.get().then(|| {
             view! {
@@ -3228,12 +3213,16 @@ fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Act
 
 /// One signal option of the plan level, folded (CLM-49): its line says what it has set and its warnings
 /// (`signal_folds`); the section inside, made by `section`, is as it was. Drawn only where the option has something to
-/// list (`signal_folds::shown`), as the section itself is.
-fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: fn(Watch) -> V) -> impl IntoView {
+/// list (`signal_folds::shown`): the one rule, watched as one memo, `on`, which `section` is given too, so the section is
+/// drawn exactly while its fold is, and an edit that leaves the answer alone draws neither again.
+fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: impl Fn(Memo<bool>) -> V + 'static) -> impl IntoView {
     let on = Memo::new(move |_| shown(f, &w.view()));
+    // made again each time the fold comes back (a bike lane removed, then added)
+    let section = StoredValue::new_local(section);
     move || {
         on.get().then(|| {
-            fold(w, f.id(), f.heading(), move || set_line(f, &w.view(), &w.i18n()), move || warnings_line(warnings(f, &w.view()), &w.i18n()), section(w))
+            let body = section.with_value(|make| make(on));
+            fold(w, f.id(), f.heading(), move || set_line(f, &w.view(), &w.i18n()), move || warnings_line(warnings(f, &w.view()), &w.i18n()), body)
         })
     }
 }
