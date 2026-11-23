@@ -2382,10 +2382,10 @@ svg pattern circle {
   font-size: 13px;
 }
 /* A section whose body is a list, too wide for the control column: its name above it, the list across both columns. */
-.insp-columns .insp-sec.insp-wide > * {
+.insp-columns .insp-sec.insp-span > * {
   grid-column: 1 / -1;
 }
-.insp-columns .insp-sec.insp-wide > .note-h {
+.insp-columns .insp-sec.insp-span > .note-h {
   grid-row: auto;
   padding: 0 0 2px;
 }
@@ -2621,6 +2621,20 @@ svg pattern circle {
 .jn-goes .btn b {
   min-width: 2em;
   color: var(--ink-2);
+}
+/* The junction's levels in the street's label column (`.insp-columns`, CLM-51): a line of its own, a way into a level as
+   wide as its column, and no second rule under a fold's summary. */
+#inspector > .insp-columns > p {
+  padding: 10px 0 0;
+}
+#inspector > .insp-columns .insp-sec > .btn.jn-go {
+  justify-self: stretch;
+  width: 100%;
+}
+#inspector > .insp-columns .jn-fold > summary + .insp-sec,
+#inspector > .insp-columns .jn-fold > summary + .read-only-controls > .insp-sec:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 /* A street's rarely set parts, folded, with what is set beside the name, an h3 in the summary (`fold` in the junction's inspector). */
 .jn-fold {

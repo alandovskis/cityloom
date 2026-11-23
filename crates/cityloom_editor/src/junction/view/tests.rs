@@ -226,6 +226,72 @@ fn fold_of<'a>(h: &'a str, id: &str) -> &'a str {
     &h[h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"))..]
 }
 
+// ---- the label column, as the street's (CLM-51) -------------------------------------------------------------------------
+
+/// The opening tag of the section whose heading has this id.
+fn section_tag<'a>(h: &'a str, heading: &str) -> &'a str {
+    let at = h.find(&format!("id=\"{heading}\"")).unwrap_or_else(|| panic!("no {heading} in {h}"));
+    let start = h[..at].rfind("<section").unwrap_or_else(|| panic!("{heading} is in no section"));
+    &h[start..start + h[start..].find('>').unwrap()]
+}
+
+/// A roundabout with a bus lane across it and a cycle track round it, so each has its level.
+fn with_bus_and_cycle() -> Rc<JunctionVm> {
+    let s = shared(0);
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_bus(Some((n, so))));
+    s.edit(|j| j.set_cycle_track(true));
+    s
+}
+
+#[test]
+fn each_level_of_the_details_is_in_the_street_s_label_column_and_the_signal_plan_is_not() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    let levels = [Target::None, Target::Arm(n), Target::Crossing(n), Target::Lane(n, 0), Target::Corner(n)];
+    for level in levels {
+        s.select(level);
+        let h = panel(&s);
+        assert_eq!(count(&h, "class=\"insp-columns\""), 1, "{level:?}: {h}");
+        let column = h.find("class=\"insp-columns\"").unwrap();
+        assert!(h.find("class=\"panel-path\"").unwrap() < column, "{level:?}: the path is above the column");
+        assert!(column < h.find("class=\"insp-head\"").unwrap(), "{level:?}: the name is in the column");
+    }
+    let r = with_bus_and_cycle();
+    for level in [Target::Bus, Target::Cycle] {
+        r.select(level);
+        assert_eq!(count(&panel(&r), "class=\"insp-columns\""), 1, "{level:?}");
+    }
+    s.edit(|j| j.set_control(SIGNAL));
+    s.show_plan();
+    let h = panel(&s);
+    assert!(h.contains("id=\"signal-calls\"") && !h.contains("insp-columns"), "the signal plan keeps its layout: {h}");
+}
+
+#[test]
+fn a_level_s_lists_span_both_columns_and_its_settings_do_not() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_control(SIGNAL));
+    let wide = |h: &str, id: &str| section_tag(h, id).contains("class=\"insp-sec insp-span\"");
+    let narrow = |h: &str, id: &str| section_tag(h, id).contains("class=\"insp-sec\"");
+    s.select(Target::None);
+    let h = panel(&s);
+    assert!(wide(&h, "i-h-streets") && narrow(&h, "i-h-control"), "{h}");
+    s.select(Target::Arm(n));
+    let h = panel(&s);
+    for id in ["i-h-lanes", "i-h-signal"] {
+        assert!(wide(&h, id), "{id}: {h}");
+    }
+    let transit = fold_of(&h, "jn-fold-transit");
+    let section = &transit[transit.find("<section").unwrap()..];
+    assert!(section.starts_with("<section class=\"insp-sec insp-span\">"), "{h}");
+    assert!(narrow(&h, "i-h-bearing") && narrow(&h, "i-h-green") && narrow(&h, "i-h-cross"), "{h}");
+    s.select(Target::Lane(n, 0));
+    assert!(wide(&panel(&s), "i-h-serves"));
+}
+
 // ---- what the plan's grips edited is edited from the inspector and the keys (#140) --------------------------------------
 //
 // The plan had three grips: the end of a street (which turned it), a corner's (its curb radius) and a crossing's (how far

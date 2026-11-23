@@ -169,6 +169,11 @@ fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoVie
     view! { <section class="insp-sec"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
 }
 
+/// A section whose body is a list, too wide for the control column: its name is above it and the list spans both columns.
+fn wide_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
+    view! { <section class="insp-sec insp-span"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
+}
+
 /// A section of editing controls: offered disabled on a junction shown read-only (`shared::locked`).
 fn edit_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> AnyView {
     locked(w.read_only(), section(w, id, heading, body))
@@ -724,7 +729,7 @@ fn junction_panel(w: Watch) -> AnyView {
         {head(name, sub)}
         {control_section(w)}
         {dropped}
-        {section(w, "i-h-streets", "jn-insp-streets", view! { <ul class="jn-goes">{streets}</ul> })}
+        {wide_section(w, "i-h-streets", "jn-insp-streets", view! { <ul class="jn-goes">{streets}</ul> })}
         {signal_summary(w)}
         <p class="insp-empty jn-tip">{words(w, "jn-insp-empty")}</p>
     }
@@ -972,7 +977,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     };
     view! {
         {head(title, sub)}
-        {locked(w.read_only(), view! { <section class="insp-sec">
+        {locked(w.read_only(), view! { <section class="insp-sec insp-span">
             <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
@@ -1276,7 +1281,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
         })
     };
     view! {
-        {locked(w.read_only(), view! { <section class="insp-sec">
+        {locked(w.read_only(), view! { <section class="insp-sec insp-span">
             <ul class="opts">
                 {option_btn(
                     bus_lane,
@@ -1378,7 +1383,7 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
             };
             let lead = w.arm(uid, |a| a.transit.bus_lane).unwrap_or(false);
             view! {
-                <section class="insp-sec">
+                <section class="insp-sec insp-span">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     {plan_note(w)}
                     <p class="insp-range">{runs}</p>
@@ -3350,7 +3355,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     });
     view! {
         {head(name, sub)}
-        <section class="insp-sec">
+        <section class="insp-sec insp-span">
             <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
             {move || if walk.get() {
                 view! { <p class="insp-range">{words(w, "jn-insp-lanes-pedestrian")}</p> }.into_any()
@@ -3409,7 +3414,7 @@ pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
             return view! { {path(w, Some("plan"), 0, 0)} {signal_overview(w)} }.into_any();
         }
         let (kind, uid, lane) = selected.get();
-        view! { {path(w, kind, uid, lane)} {panel_of(w, kind, uid, lane)} }.into_any()
+        view! { {path(w, kind, uid, lane)} <div class="insp-columns">{panel_of(w, kind, uid, lane)}</div> }.into_any()
     }
 }
 
