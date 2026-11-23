@@ -657,11 +657,15 @@ fn head_view(name: Signal<String>, sub: Signal<String>) -> AnyView {
     view! { <div class="insp-head"><div><h2 class="insp-name">{move || name.get()}</h2><p class="insp-sub">{move || sub.get()}</p></div></div> }.into_any()
 }
 
-fn danger_button(w: Watch, label: &'static str, on_click: impl Fn() + 'static) -> impl IntoView {
-    locked(
-        w.read_only(),
-        view! { <section class="insp-sec"><button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{words(w, label)}</button></section> },
-    )
+/// What a level offers for the whole of what it shows, under its name, as the street's piece pane does. Those that edit
+/// (`edits`) are offered disabled on a junction shown read-only.
+fn actions(w: Watch, edits: bool, buttons: impl IntoView + 'static) -> AnyView {
+    locked(edits && w.read_only(), view! { <div class="insp-actions">{buttons}</div> })
+}
+
+/// The one action of a level that takes what it shows away.
+fn remove_action(w: Watch, label: &'static str, on_click: impl Fn() + 'static) -> AnyView {
+    actions(w, true, view! { <button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{words(w, label)}</button> })
 }
 
 fn bus_panel(w: Watch) -> AnyView {
@@ -673,12 +677,12 @@ fn bus_panel(w: Watch) -> AnyView {
     };
     view! {
         {head(words(w, "jn-insp-bus"), label)}
-        <section class="insp-sec">
-            {hint(Signal::derive(move || bus_note(w).unwrap_or_default()))}
-        </section>
-        {danger_button(w, "jn-insp-bus-remove", move || {
+        {remove_action(w, "jn-insp-bus-remove", move || {
             w.edit(|j| j.set_bus(None));
         })}
+        <section class="insp-sec insp-span">
+            {hint(Signal::derive(move || bus_note(w).unwrap_or_default()))}
+        </section>
     }
     .into_any()
 }
@@ -686,10 +690,10 @@ fn bus_panel(w: Watch) -> AnyView {
 fn cycle_panel(w: Watch) -> AnyView {
     view! {
         {head(words(w, "jn-insp-cycle"), words(w, "jn-insp-cycle-sub"))}
-        {cycle_width(w, "jn-insp-track-hint-crossing")}
-        {danger_button(w, "jn-insp-cycle-remove", move || {
+        {remove_action(w, "jn-insp-cycle-remove", move || {
             w.edit(|j| j.set_cycle_track(false));
         })}
+        {cycle_width(w, "jn-insp-track-hint-crossing")}
     }
     .into_any()
 }
@@ -977,15 +981,17 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     };
     view! {
         {head(title, sub)}
+        {actions(
+            w,
+            false,
+            view! { <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button> },
+        )}
         {locked(w.read_only(), view! { <section class="insp-sec insp-span">
             <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
             {hint(Signal::derive(move || if fixed() { w.tr("jn-insp-lane-fixed") } else { String::new() }))}
         </section> })}
-        <section class="insp-sec">
-            <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button>
-        </section>
     }
     .into_any()
 }
@@ -1032,11 +1038,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
         )
     };
     view! {
-        {locked(w.read_only(), view! { <section class="insp-sec">
-            <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
-            {hint(range)}
-            <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, false)); }>{btn_icon(false)}{words(w, "jn-insp-crossing-remove")}</button>
-        </section> })}
+        {section(w, "i-h-cross", "jn-insp-crossing", hint(range))}
         {num_field(
             w,
             setback,
@@ -1125,6 +1127,23 @@ fn crossing_entry(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
+/// What a crossing's level offers under its name: taking the crossing off. A street people walk along has none to take.
+fn crossing_actions(w: Watch, uid: u32) -> impl IntoView {
+    let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
+    move || {
+        (!walk.get()).then(|| {
+            remove_action(w, "jn-insp-crossing-remove", move || {
+                w.edit(|j| j.set_crossing(uid, false));
+            })
+        })
+    }
+}
+
+fn mark_crossing(w: Watch, uid: u32) -> impl IntoView {
+    view! { <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, true)); }>{btn_icon(true)}{words(w, "jn-insp-crossing-mark")}</button> }
+}
+
+/// A street's crossing: what it is, or the way to mark one.
 fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     let has = Memo::new(move |_| w.arm(uid, |a| a.crossing.is_some()).unwrap_or(false));
     let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
@@ -1140,13 +1159,7 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
         } else if has.get() {
             crossing_fields(w, uid).into_any()
         } else {
-            view! {
-                {locked(w.read_only(), view! { <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
-                    <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, true)); }>{btn_icon(true)}{words(w, "jn-insp-crossing-mark")}</button>
-                </section> })}
-            }
-            .into_any()
+            edit_section(w, "i-h-cross", "jn-insp-crossing", mark_crossing(w, uid))
         }
     }
 }
@@ -3305,7 +3318,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         .unwrap_or_default()
     };
     if crossing_only {
-        return view! { {head(name, sub)} {crossing_section(w, uid)} }.into_any();
+        return view! { {head(name, sub)} {crossing_actions(w, uid)} {crossing_section(w, uid)} }.into_any();
     }
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
     let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
@@ -3345,16 +3358,21 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let remove = (!linked).then(|| {
         let can = move || w.view().can_remove;
         view! {
-            {locked(w.read_only(), view! { <section class="insp-sec">
-                <button type="button" class="btn danger" disabled=move || !can() on:click=move |_| { w.edit(|j| j.remove_arm(uid)); }>
-                    {btn_icon(false)}{words(w, "jn-insp-remove-street")}
-                </button>
-                {move || (!can()).then(|| view! { <p class="insp-range">{move || tr(w, "jn-insp-min-arms", Args::new().num("n", MIN_ARMS as i64))}</p> })}
-            </section> })}
+            {actions(
+                w,
+                true,
+                view! {
+                    <button type="button" class="btn danger" disabled=move || !can() on:click=move |_| { w.edit(|j| j.remove_arm(uid)); }>
+                        {btn_icon(false)}{words(w, "jn-insp-remove-street")}
+                    </button>
+                },
+            )}
+            {move || (!can()).then(|| view! { <p class="insp-range">{move || tr(w, "jn-insp-min-arms", Args::new().num("n", MIN_ARMS as i64))}</p> })}
         }
     });
     view! {
         {head(name, sub)}
+        {remove}
         <section class="insp-sec insp-span">
             <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
             {move || if walk.get() {
@@ -3392,7 +3410,6 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             },
         )}
         {street}
-        {remove}
     }
     .into_any()
 }
