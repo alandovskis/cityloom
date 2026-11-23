@@ -74,3 +74,5 @@ section's heading over its controls, so the two editors' panels read differently
 - A fold's number fields are beside their names; only the transit section spans both columns. The control's and the bus
   lane's choosers span them too: their French values do not fit beside a name.
 - The junction's column is 88 px (« Signalisation » does not fit 76), and at 270 px or less the name is above its control.
+- The bus lane's chooser is still cut where its route is longer than the panel (two streets' names, « Avenue Laurier Est
+  (nord-est) vers Avenue Laurier Ouest (sud-ouest) »), as it was before; the bus lane's own level says the route whole.
