@@ -2646,11 +2646,14 @@ svg pattern circle {
 #inspector > .insp-columns .insp-sec > .btn,
 #inspector > .insp-columns .insp-actions .btn {
   max-width: 100%;
+  padding-block: 4px;
+  text-align: center;
   white-space: normal;
 }
 #inspector > .insp-columns .insp-sec > .btn.jn-go {
   justify-self: stretch;
   width: 100%;
+  text-align: left;
 }
 #inspector > .insp-columns .jn-fold > summary + .insp-sec,
 #inspector > .insp-columns .jn-fold > summary + .read-only-controls > .insp-sec:first-child {

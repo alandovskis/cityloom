@@ -36,7 +36,7 @@ section's heading over its controls, so the two editors' panels read differently
 - **One class both pages carry (chosen).** The rules now scoped `.street-page #inspector` (the grid of `.insp-sec`, its
   `.note-h` in the first column, the radio tiles three across) move to a class, `.insp-columns` (builder's call on the
   name), set on the street's `#inspector` and on each junction level's container. A section that spans both columns
-  carries `.insp-wide`.
+  carries `.insp-span`.
 - **Widen the rules to `.tray-page #inspector`.** Rejected: the junction's signal plan level also draws into
   `#inspector`, and its phase cards and tables would be put in a 76 px column.
 - **A copy for the junction.** Rejected: the duplication step 1 removed (SonarCloud failed on it).
@@ -44,11 +44,11 @@ section's heading over its controls, so the two editors' panels read differently
 ## The design
 
 - **CSS (`web/editor.css`).** `.street-page #inspector` rules become `.insp-columns` rules, unchanged in value; the
-  street's `#inspector` gets the class (its look is unchanged, pinned by its specs). `.insp-columns .insp-wide > *`
+  street's `#inspector` gets the class (its look is unchanged, pinned by its specs). `.insp-columns .insp-span > *`
   spans both columns, its `.note-h` on its own row above.
 - **Markup (`junction/view/inspector.rs`).** `panel_of`'s level views (not the signal plan's) are wrapped in
   `<div class="insp-columns">`. Each level's sections keep their ids and `h3`; a section whose body is a list or a
-  fold gets `.insp-wide`. A level's actions move into an `.insp-actions` row under `head(…)`, as the street's.
+  fold gets `.insp-span`. A level's actions move into an `.insp-actions` row under `head(…)`, as the street's.
 - **Radio groups** become the street's tiles where they are `.opts[role="radiogroup"]` (the crossing's Shorten choice,
   the junction's control if a radio group): builder's call, kept only where three across fits their labels in French.
 
@@ -64,5 +64,5 @@ section's heading over its controls, so the two editors' panels read differently
 
 ## Left to the builder
 
-- The class names, and which sections are `.insp-wide`, by what fits at 340 px.
+- The class names, and which sections are `.insp-span`, by what fits at 340 px.
 - Whether a level with a heading only (the bus and bike symbols) needs anything beyond the class.

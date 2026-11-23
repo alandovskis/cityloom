@@ -887,6 +887,19 @@ for (const lang of ["en", "fr-CA"]) {
       await track.click();
       await expect(column.locator("#i-h-cycle-width")).toBeVisible();
       expect(await misfits(page), "a roundabout").toEqual([]);
+      await column.locator('select[aria-labelledby="i-h-bus"]').selectOption({ index: 1 });
+      const parts = [
+        ["bus", lang === "en" ? "Bus lane" : "Voie d’autobus"],
+        ["cycle", lang === "en" ? "Cycle track" : "Piste cyclable"],
+      ];
+      for (const [part, name] of parts) {
+        for (let i = 0; i < 40 && !(await page.locator("#jn-path-current").innerText()).startsWith(name); i++) {
+          await page.locator("#part-next").click();
+        }
+        await expect(page.locator("#jn-path-current")).toContainText(name);
+        await expect(column.locator(".insp-actions .btn.danger")).toBeVisible();
+        expect(await misfits(page), `the ${part}`).toEqual([]);
+      }
     });
   }
 }

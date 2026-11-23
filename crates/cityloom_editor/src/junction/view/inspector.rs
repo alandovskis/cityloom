@@ -991,12 +991,11 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
             false,
             view! { <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button> },
         )}
-        {locked(w.read_only(), view! { <section class="insp-sec insp-span">
-            <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
+        {wide_edit_section(w, "i-h-serves", "jn-insp-lane-goes", view! {
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
             {hint(Signal::derive(move || if fixed() { w.tr("jn-insp-lane-fixed") } else { String::new() }))}
-        </section> })}
+        })}
     }
     .into_any()
 }
@@ -1401,13 +1400,12 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
             };
             let lead = w.arm(uid, |a| a.transit.bus_lane).unwrap_or(false);
             view! {
-                <section class="insp-sec insp-span">
-                    <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                {wide_section(w, "i-h-signal", "jn-insp-signal", view! {
                     {plan_note(w)}
                     <p class="insp-range">{runs}</p>
                     <p class="insp-range">{move || w.tr(if w.view().signal.as_ref().is_none_or(|s| s.suggested) { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     {signal_phases(w)}
-                </section>
+                })}
                 {timing_field(w, uid, TimingField::Green)}
                 {timing_field(w, uid, TimingField::Yellow)}
                 {timing_field(w, uid, TimingField::AllRed)}
@@ -3378,8 +3376,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     view! {
         {head(name, sub)}
         {remove}
-        <section class="insp-sec insp-span">
-            <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
+        {wide_section(w, "i-h-lanes", "jn-insp-lanes-in", view! {
             {move || if walk.get() {
                 view! { <p class="insp-range">{words(w, "jn-insp-lanes-pedestrian")}</p> }.into_any()
             } else if enters.get() {
@@ -3387,7 +3384,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             } else {
                 view! { <p class="insp-range">{words(w, "jn-insp-one-way-out")}</p> }.into_any()
             }}
-        </section>
+        })}
         {crossing_entry(w, uid)}
         {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
