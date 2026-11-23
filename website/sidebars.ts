@@ -9,7 +9,7 @@ const sidebars: SidebarsConfig = {
     "sharing",
     "getting-started",
     "project-layout",
-    { type: "category", label: "Architecture", link: { type: "doc", id: "architecture/index" }, items: [] },
+    { type: "category", label: "Architecture", items: ["architecture/index"] },
     "issues",
   ],
 };
