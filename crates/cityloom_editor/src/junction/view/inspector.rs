@@ -3222,7 +3222,15 @@ fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: impl Fn(
     move || {
         on.get().then(|| {
             let body = section.with_value(|make| make(on));
-            fold(w, f.id(), f.heading(), move || set_line(f, &w.view(), &w.i18n()), move || warnings_line(warnings(f, &w.view()), &w.i18n()), body)
+            fold(
+                w,
+                f.id(),
+                f.heading_id(),
+                f.heading(),
+                move || set_line(f, &w.view(), &w.i18n()),
+                move || warnings_line(warnings(f, &w.view()), &w.i18n()),
+                body,
+            )
         })
     }
 }
@@ -3232,11 +3240,13 @@ fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: impl Fn(
 fn fold(
     w: Watch,
     id: &'static str,
+    heading_id: &'static str,
     heading: &'static str,
     set: impl Fn() -> String + Send + Sync + 'static,
     warn: impl Fn() -> String + Send + Sync + 'static,
     body: impl IntoView + 'static,
 ) -> impl IntoView {
+    let _ = heading_id; // CLM-50: the id of the heading that names the fold, not drawn yet
     let warn = Memo::new(move |_| warn());
     view! {
         <details class="jn-fold" id=id>
@@ -3360,10 +3370,11 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         {crossing_entry(w, uid)}
         {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
-        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), String::new, transit_section(w, uid)))}
+        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "i-h-transit", "jn-insp-transit", move || transit_set(w, uid), String::new, transit_section(w, uid)))}
         {fold(
             w,
             "jn-fold-position",
+            "i-h-position",
             "jn-fold-position",
             move || position_set(w, uid),
             String::new,

@@ -221,6 +221,11 @@ fn panel(s: &Rc<JunctionVm>) -> String {
     html(|| view! { <inspector::Inspector vm=s.clone()/> }.into_any())
 }
 
+/// `h` from the fold with id `id` (`jn-fold-calls`…) to the end of the panel: its summary, which names it, then its section.
+fn fold_of<'a>(h: &'a str, id: &str) -> &'a str {
+    &h[h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("{id}: {h}"))..]
+}
+
 // ---- what the plan's grips edited is edited from the inspector and the keys (#140) --------------------------------------
 //
 // The plan had three grips: the end of a street (which turned it), a corner's (its curb radius) and a crossing's (how far
@@ -480,6 +485,71 @@ fn the_signal_plan_folds_each_option_and_says_what_is_set_and_its_warnings() {
 }
 
 #[test]
+fn the_signal_plan_s_folds_are_named_by_a_heading_in_their_summary() {
+    use crate::junction::view::signal_folds::{SignalFold, set_line, shown};
+    let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+    // the heading that names each fold, and that its section is labelled by
+    let heading_id = |f: SignalFold| match f {
+        SignalFold::Plans => "i-h-plans",
+        SignalFold::Calls => "i-h-calls",
+        SignalFold::Actuation => "i-h-actuation",
+        SignalFold::Bikes => "i-h-bikes",
+        SignalFold::Priority => "i-h-transit-priority",
+        SignalFold::Preemption => "i-h-preemption",
+    };
+    let plain = shared(0);
+    plain.show_plan();
+    // sample 0 has no bike lane: the bikes' fold is checked on the four-way whose streets have them
+    let biked = biked_in(crate::shared::i18n::Locale::En);
+    let mut checked = Vec::new();
+    for s in [plain, biked] {
+        let h = panel(&s).replace('\u{a0}', " ");
+        let v = s.view_now();
+        for f in SignalFold::ALL.into_iter().filter(|f| shown(*f, &v)) {
+            assert_eq!(f.heading_id(), heading_id(f), "{f:?}");
+            let id = heading_id(f);
+            let name = en.tr_now(f.heading(), &crate::shared::i18n::Args::new());
+            let rest = fold_of(&h, f.id());
+            let tag = &rest[..rest.find('>').unwrap()];
+            assert!(tag.starts_with(&format!(r#"id="{}""#, f.id())), "{tag}");
+            let open = rest.find("<summary").unwrap();
+            assert!(rest[open..].starts_with("<summary>"), "the summary keeps no attributes: {rest}");
+            let summary = &rest[open..rest.find("</summary>").unwrap()];
+            assert!(summary.contains(&format!(r#"<h3 class="jn-fold-name" id="{id}">{name}</h3>"#)), "{f:?} named by a heading: {summary}");
+            assert!(summary.contains(&set_line(f, &v, &en)), "{f:?} still says what is set: {summary}");
+            // a heading once, an id once: the section has no heading of its own, and is labelled by the fold's
+            assert_eq!(h.matches(&format!(">{name}</h3>")).count(), 1, "{f:?}: {h}");
+            assert_eq!(h.matches(&format!(r#"id="{id}""#)).count(), 1, "{f:?}: {h}");
+            assert!(h.contains(&format!(r#"aria-labelledby="{id}""#)), "{f:?}: {h}");
+            checked.push(f);
+        }
+    }
+    for f in SignalFold::ALL {
+        assert!(checked.contains(&f), "{f:?} was drawn and checked");
+    }
+}
+
+#[test]
+fn a_street_s_folds_are_named_by_a_heading_in_their_summary() {
+    let s = shared(0);
+    s.select(Target::Arm(arm(&s, 90)));
+    let h = panel(&s).replace('\u{a0}', " ");
+    let summary = |id: &str| {
+        let rest = fold_of(&h, id);
+        let open = rest.find("<summary").unwrap();
+        assert!(rest[open..].starts_with("<summary>"), "the summary keeps no attributes: {rest}");
+        rest[open..rest.find("</summary>").unwrap()].to_string()
+    };
+    let transit = summary("jn-fold-transit");
+    assert!(transit.contains(r#"<h3 class="jn-fold-name" id="i-h-transit">Transit priority</h3>"#) && transit.contains("None set"), "{transit}");
+    let position = summary("jn-fold-position");
+    assert!(position.contains(r#"<h3 class="jn-fold-name" id="i-h-position">Position</h3>"#) && position.contains("90°, not shifted"), "{position}");
+    assert_eq!(h.matches(">Transit priority</h3>").count(), 1, "named once: {h}");
+    assert_eq!(h.matches(r#"id="i-h-transit""#).count(), 1, "{h}");
+    assert!(h.contains(r#"id="i-h-bearing""#) && h.contains(r#"id="i-h-offset""#), "the position's fields keep their headings: {h}");
+}
+
+#[test]
 fn the_signal_plan_is_a_level_of_its_own_and_the_junction_shows_its_cycle_as_a_bar() {
     use crate::junction::model::SIGNAL;
     let s = shared(0);
@@ -514,7 +584,8 @@ fn the_plan_marks_each_crossing_on_call_or_on_recall_and_shows_its_bounds_as_pla
     s.show_plan();
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).expect("a section for the pedestrian calls")..];
-    assert!(calls.contains("Pedestrian calls") && calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
+    assert!(fold_of(&h, "jn-fold-calls").contains("Pedestrian calls"), "{h}");
+    assert!(calls.contains("Placeholder figures: walk 7 s, then clearance at 1.0 m/s"), "{calls}");
     // The intro holds for either detection: nobody need push a button.
     assert!(calls.contains("A crossing on call is walked only when a pedestrian calls it, by a push button or passive detection."), "{calls}");
     assert!(calls.contains("at most 15 s"), "{calls}");
@@ -778,8 +849,8 @@ fn the_pedestrian_calls_speak_french() {
     assert!(s.set_detection(e, crate::junction::model::calls::Detection::Passive));
     let h = panel(&s);
     let calls = &h[h.find(r#"id="signal-calls""#).unwrap()..];
+    assert!(fold_of(&h, "jn-fold-calls").contains("Appels piétons"), "{h}");
     for words in [
-        "Appels piétons",
         "Un passage sur appel n’est ouvert que lorsqu’un piéton l’appelle, par bouton-poussoir ou détection passive.",
         "Valeurs provisoires",
         "1,0 m/s",
@@ -4097,7 +4168,7 @@ fn the_plan_offers_each_street_with_a_phase_recall_or_actuated_and_shows_the_pla
     s.show_plan();
     let h = panel(&s);
     let act = actuation_of(&h);
-    assert!(act.contains("Vehicle actuation"), "{act}");
+    assert!(fold_of(&h, "jn-fold-actuation").contains("Vehicle actuation"), "{h}");
     assert!(act.contains("a minimum green of 7 s, a gap of 3 s, a maximum green of 45 s and 300 vehicles an hour"), "{act}");
     let streets = s.view_now().signal.as_ref().unwrap().actuation.streets.clone();
     assert_eq!(streets.len(), 4, "every street with a phase of its own");
@@ -4220,8 +4291,8 @@ fn vehicle_actuation_speaks_french() {
     s.show_plan();
     let h = panel(&s);
     let act = actuation_of(&h);
+    assert!(fold_of(&h, "jn-fold-actuation").contains("Actionnement par les véhicules"), "{h}");
     for words in [
-        "Actionnement par les véhicules",
         "Valeurs provisoires",
         "un vert minimal de 7 s, un intervalle de passage de 3 s, un vert maximal de 45 s et 300 véhicules par heure",
         "<span>En rappel</span>",
@@ -4261,7 +4332,7 @@ fn the_plan_offers_each_bike_movement_it_runs_recall_or_on_detection_named_by_it
     let s = biked_in(crate::shared::i18n::Locale::En);
     let h = panel(&s);
     let bikes = bikes_of(&h);
-    assert!(bikes.contains("Bicycle detection"), "{bikes}");
+    assert!(fold_of(&h, "jn-fold-bikes").contains("Bicycle detection"), "{h}");
     assert!(bikes.contains("a bike movement put on detection has 30 cyclists an hour"), "{bikes}");
     assert!(bikes.contains("a minimum green of 5 s, then a clearance at 4.0 m/s"), "{bikes}");
     let v = s.view_now();
@@ -4385,8 +4456,8 @@ fn bicycle_detection_speaks_french() {
     assert!(s.set_bike_detection(n, true));
     let h = panel(&s);
     let bikes = bikes_of(&h);
+    assert!(fold_of(&h, "jn-fold-bikes").contains("Détection des vélos"), "{h}");
     for words in [
-        "Détection des vélos",
         "Valeurs provisoires",
         "un mouvement vélo mis sur détection a 30 cyclistes par heure",
         "un dégagement à 4,0 m/s",
@@ -4430,7 +4501,7 @@ fn the_plan_offers_each_street_with_transit_no_priority_an_early_green_an_extens
     let (s, n) = transit_in(crate::shared::i18n::Locale::En);
     let h = panel(&s);
     let t = transit_of(&h);
-    assert!(t.contains("Transit signal priority"), "{t}");
+    assert!(fold_of(&h, "jn-fold-priority").contains("Transit signal priority"), "{h}");
     assert!(t.contains("a street given priority has 12 buses an hour"), "{t}");
     assert!(t.contains("An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s"), "{t}");
     let streets = s.view_now().signal.as_ref().unwrap().transit.streets.clone();
@@ -4576,8 +4647,8 @@ fn transit_signal_priority_speaks_french() {
     assert!(s.set_transit_priority(n, Some(Mode::EarlyGreen)));
     let h = panel(&s);
     let t = transit_of(&h);
+    assert!(fold_of(&h, "jn-fold-priority").contains("Priorité aux feux pour le transport en commun"), "{h}");
     for words in [
-        "Priorité aux feux pour le transport en commun",
         "Valeurs provisoires",
         "une rue qui reçoit la priorité a 12 autobus par heure",
         "<span>Aucune</span>",
@@ -4624,7 +4695,7 @@ fn the_plan_offers_each_street_with_a_phase_pre_emption_off_or_on_with_its_trigg
     let h = panel(&s);
     assert!(h.find(r#"id="signal-transit""#).is_none_or(|t| t < h.find(r#"id="signal-preemption""#).unwrap()), "after transit priority");
     let p = preempt_of(&h);
-    assert!(p.contains("Emergency vehicle pre-emption"), "{p}");
+    assert!(fold_of(&h, "jn-fold-preemption").contains("Emergency vehicle pre-emption"), "{h}");
     assert!(p.contains("Pre-emption has the highest priority of all, above pedestrian and bicycle calls, vehicle actuation and transit priority"), "{p}");
     assert!(p.contains("a street given pre-emption has 2 emergency calls an hour"), "{p}");
     assert!(p.contains("its green then runs at least 20 s for the vehicle"), "{p}");
@@ -4736,8 +4807,8 @@ fn emergency_vehicle_pre_emption_speaks_french() {
     assert!(s.set_preemption(n, true));
     let h = panel(&s);
     let p = preempt_of(&h);
+    assert!(fold_of(&h, "jn-fold-preemption").contains("Préemption pour les véhicules d’urgence"), "{h}");
     for words in [
-        "Préemption pour les véhicules d’urgence",
         "La préemption a la plus haute priorité de toutes",
         "Valeurs provisoires",
         "une rue qui reçoit la préemption a 2 appels d’urgence par heure",
@@ -4787,7 +4858,8 @@ fn the_plan_level_opens_on_the_time_of_day_plans_with_the_default_shown_and_sche
     s.show_plan();
     let h = panel(&s);
     let p = plans_of(&h);
-    assert!(p.contains("Time-of-day plans") && p.contains("the phases, their order and their patterns are the same in every plan"), "{p}");
+    assert!(fold_of(&h, "jn-fold-plans").contains("Time-of-day plans"), "{h}");
+    assert!(p.contains("the phases, their order and their patterns are the same in every plan"), "{p}");
     let chooser = select_of(p, "plan-shown");
     assert!(chooser.contains(r#"aria-describedby="plan-shown-help""#) && chooser.contains("Default plan"), "{chooser}");
     assert!(p.contains(r#"<label for="plan-shown">Plan shown and edited</label>"#), "{p}");
@@ -4863,7 +4935,8 @@ fn the_time_of_day_plans_speak_french() {
     s.show_plan();
     let h = panel(&s);
     let p = plans_of(&h);
-    assert!(p.contains("Plans selon l’heure") && p.contains("Plan affiché et modifié") && p.contains("Plan par défaut"), "{p}");
+    assert!(fold_of(&h, "jn-fold-plans").contains("Plans selon l’heure"), "{h}");
+    assert!(p.contains("Plan affiché et modifié") && p.contains("Plan par défaut"), "{p}");
     assert!(p.contains("En semaine (du lundi au vendredi)") && p.contains("Horaire de la semaine"), "{p}");
     assert!(p.contains("À 08:00 en semaine, le plan «\u{a0}Plan par défaut\u{a0}» s’applique."), "{p}");
     for english in ["Weekdays", "Default plan", "Starts the day", "Which plan runs"] {
