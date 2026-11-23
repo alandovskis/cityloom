@@ -144,7 +144,8 @@ At a desktop width (900 px and wider):
 - **The shell.** `Editor::mount_shell` passes `NotesAtStart::Closed`. The shell binds the tray's toggle and tabs by
   their ids, as on the street page; nothing in `shell/` changes beyond that.
 - **The stuck page (`mount_bare_shell`).** A junction whose streets can no longer be drawn shows only its name and
-  the message in the details panel. With the notes no longer in the markup, it mounts no tray; what it removes
+  the message, in the drawing's place in the column (corrected after the build: the message was never in the details
+  panel, which stays empty on that page, as before). With the notes no longer in the markup, it mounts no tray; what it removes
   (`.plan-drawing`, `.statusbar` today) follows the new structure, and the shell copes with a page with no notes
   toggle (builder's call how; the stuck page's specs keep passing).
 - **The compare page** draws its junction half through `mount_compare_junction`, which uses none of this markup; it
