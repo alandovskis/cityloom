@@ -36,4 +36,4 @@ celles de tout autre projet.
 
 - [Projets](projects.md) explique comment votre travail est conservé dans des projets.
 - [Démarrage](getting-started.md) construit et sert l’application sur votre machine.
-- [Architecture](architecture.md) explique comment le code est organisé.
+- [Architecture](architecture/index.md) explique comment le code est organisé.

@@ -35,4 +35,4 @@ that project, and its edits are kept in the browser's storage, apart from every 
 
 - [Projects](projects.md) explains how your work is kept in projects.
 - [Getting started](getting-started.md) builds and serves the app on your machine.
-- [Architecture](architecture.md) explains how the code is organised.
+- [Architecture](architecture/index.md) explains how the code is organised.

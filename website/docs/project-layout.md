@@ -6,7 +6,7 @@ sidebar_position: 4
 
 # Project layout
 
-This page says where things are in the repository. [Architecture](architecture.md) explains how the code inside them
+This page says where things are in the repository. [Architecture](architecture/index.md) explains how the code inside them
 fits together.
 
 ## The top level
@@ -64,7 +64,7 @@ The workspace has six crates, all in `crates/`. Those that run in the browser ar
 
 ## The editor's folders
 
-The editor's source, `crates/cityloom_editor/src/`, has one folder per feature (a slice). [Architecture](architecture.md)
+The editor's source, `crates/cityloom_editor/src/`, has one folder per feature (a slice). [Architecture](architecture/index.md)
 says which slice may use which.
 
 | Folder         | What it holds                                                                                                        |

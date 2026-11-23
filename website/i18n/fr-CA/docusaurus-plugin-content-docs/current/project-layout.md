@@ -6,7 +6,7 @@ sidebar_position: 4
 
 # Organisation du dépôt
 
-Cette page indique où se trouve chaque chose dans le dépôt. [Architecture](architecture.md) explique comment le code
+Cette page indique où se trouve chaque chose dans le dépôt. [Architecture](architecture/index.md) explique comment le code
 qu’ils contiennent s’assemble.
 
 ## Le premier niveau
@@ -68,7 +68,7 @@ construites en WebAssembly.
 ## Les dossiers de l’éditeur
 
 Le code source de l’éditeur, `crates/cityloom_editor/src/`, compte un dossier par fonctionnalité (une tranche).
-[Architecture](architecture.md) indique quelle tranche peut utiliser laquelle.
+[Architecture](architecture/index.md) indique quelle tranche peut utiliser laquelle.
 
 | Dossier        | Contenu                                                                                                                                           |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
