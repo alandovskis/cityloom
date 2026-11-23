@@ -69,25 +69,82 @@ fn a_signed_out_page_offers_the_providers_and_a_server_that_is_down_says_so() {
     assert!(out.contains("Accounts are not available right now.") && !out.contains("data-provider"), "{out}");
 }
 
+const DEVICE: &str = "Keep my work on this device only";
+const SERVER: &str = "Store my work on the server";
+
+/// Whether the storage option labelled `label` is checked: the last `<input` or `<button` before its label has
+/// `aria-checked="true"`, or `checked` (a native radio's).
+fn option_checked(out: &str, label: &str) -> bool {
+    let before = &out[..out.find(label).unwrap_or_else(|| panic!("{label}: {out}"))];
+    let tag = &before[before.rfind("<input").max(before.rfind("<button")).unwrap()..];
+    let tag = &tag[..tag.find('>').unwrap()];
+    tag.contains(r#"aria-checked="true""#) || tag.replace("aria-checked", "").contains("checked")
+}
+
+/// How many radios there are, native or not.
+fn radios(out: &str) -> usize {
+    out.matches(r#"type="radio""#).count() + out.matches(r#"role="radio""#).count()
+}
+
+/// The storage choices that are radio buttons: the tag of each, and what is inside it.
+fn radio_buttons(out: &str) -> Vec<(&str, &str)> {
+    out.split("<button")
+        .skip(1)
+        .filter_map(|b| {
+            let (tag, rest) = b.split_once('>')?;
+            tag.contains(r#"role="radio""#).then(|| (tag, rest.split("</button>").next().unwrap()))
+        })
+        .collect()
+}
+
 #[test]
 fn a_new_account_sees_the_storage_choice_first_with_two_options_and_nothing_selected() {
     let out = page(Locale::En, signed_in(None, vec![identity("a", "google", Some("ada@example.org"))]), no_op);
     let storage = out.find("Where is your work kept?").expect("the choice is shown");
     let linked = out.find("Linked sign-ins").expect("the linked list is shown");
     assert!(storage < linked, "the choice comes first while nothing is chosen: {out}");
-    assert!(out.contains("Keep my work on this device only") && out.contains("Store my work on the server"), "{out}");
-    assert_eq!(out.matches(r#"type="radio""#).count(), 2, "{out}");
-    assert!(!out.contains("checked"), "nothing is preselected: {out}");
+    assert!(out.contains(DEVICE) && out.contains(SERVER), "{out}");
+    assert_eq!(radios(&out), 2, "{out}");
+    assert!(!option_checked(&out, DEVICE) && !option_checked(&out, SERVER), "nothing is preselected: {out}");
     assert!(out.contains("nothing you make is sent to the server"), "{out}");
 }
 
 #[test]
 fn once_chosen_the_choice_is_marked_and_moves_below_the_linked_sign_ins() {
-    for (store, checked) in [(Some(true), "server"), (Some(false), "device")] {
+    for (store, checked, other) in [(Some(true), SERVER, DEVICE), (Some(false), DEVICE, SERVER)] {
         let out = page(Locale::En, signed_in(store, vec![identity("a", "google", None)]), no_op);
-        assert_eq!(out.matches("checked").count(), 1, "{out}");
-        assert!(out.contains(&format!(r#"value="{checked}" checked"#)), "{checked}: {out}");
+        assert_eq!(radios(&out), 2, "{out}");
+        assert!(option_checked(&out, checked) && !option_checked(&out, other), "{checked}: {out}");
         assert!(out.find("Linked sign-ins").unwrap() < out.find("Where is your work kept?").unwrap(), "{out}");
+    }
+}
+
+#[test]
+fn the_storage_choices_are_radio_buttons_with_their_help_and_nothing_chosen_puts_the_first_in_the_tab_order() {
+    let out = page(Locale::En, signed_in(None, vec![identity("a", "google", None)]), no_op);
+    let buttons = radio_buttons(&out);
+    assert_eq!(buttons.len(), 2, "{out}");
+    for ((tag, inside), (label, tabindex)) in buttons.into_iter().zip([(DEVICE, "0"), (SERVER, "-1")]) {
+        assert!(tag.contains(r#"aria-checked="false""#) && tag.contains(&format!(r#"tabindex="{tabindex}""#)), "{label}: {tag}");
+        assert!(inside.contains(label) && inside.contains(r#"class="choice-help""#), "{label}, with its help: {inside}");
+    }
+    assert!(!out.contains(r#"type="radio""#), "{out}");
+    let group = out.split("<ul").skip(1).map(|u| u.split('>').next().unwrap()).find(|tag| tag.contains(r#"role="radiogroup""#));
+    let group = group.unwrap_or_else(|| panic!("a list that is the group: {out}"));
+    assert!(group.contains(r#"aria-labelledby="h-storage""#), "{group}");
+}
+
+#[test]
+fn the_storage_choice_made_is_the_checked_radio_button_and_the_tab_stop() {
+    for (store, chosen) in [(Some(true), SERVER), (Some(false), DEVICE)] {
+        let out = page(Locale::En, signed_in(store, vec![identity("a", "google", None)]), no_op);
+        let buttons = radio_buttons(&out);
+        assert_eq!(buttons.len(), 2, "{out}");
+        for (tag, inside) in buttons {
+            let (checked, tabindex) = if inside.contains(chosen) { ("true", "0") } else { ("false", "-1") };
+            assert!(tag.contains(&format!(r#"aria-checked="{checked}""#)) && tag.contains(&format!(r#"tabindex="{tabindex}""#)), "{chosen}: {tag}");
+        }
+        assert_eq!(out.matches(r#"aria-checked="true""#).count(), 1, "{out}");
     }
 }
 

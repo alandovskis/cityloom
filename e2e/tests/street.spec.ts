@@ -266,6 +266,20 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
+  test("Home and End choose the first and the last surface of a piece", async ({ page }) => {
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const surfaces = page.locator('[aria-labelledby="i-h-surface"]').getByRole("radio");
+    await expect(surfaces.nth(1)).toBeVisible();
+    await page.locator('[aria-labelledby="i-h-surface"] [role=radio][aria-checked="true"]').focus();
+    await page.keyboard.press("End");
+    await expect(surfaces.last()).toBeChecked();
+    await expect(surfaces.last()).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(surfaces.first()).toBeChecked();
+    await expect(surfaces.first()).toBeFocused();
+  });
+
   test("the piece pane's buttons move the piece along and remove it", async ({ page }) => {
     const cells = page.locator("#piece-list [role=option]");
     const count = await cells.count();

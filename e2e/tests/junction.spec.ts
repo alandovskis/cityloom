@@ -1045,7 +1045,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator(`#call-detect-h-${uid}`)).toHaveText("Détection");
-    await expect(page.locator(`label:has(#call-detect-${uid}-passive)`)).toHaveText("Détection passive");
+    await expect(page.locator(`#call-detect-${uid}-passive`)).toHaveAccessibleName("Détection passive");
     await expect(page.locator(`#call-detect-help-${uid}`)).toContainText(
       "celui qui part après 30 s d’attente l’annule",
     );
@@ -1191,7 +1191,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("#i-h-actuation")).toHaveText("Actionnement par les véhicules");
-    await expect(page.locator(`label:has(#act-mode-${uid}-actuated)`)).toHaveText("À la demande");
+    await expect(page.locator(`#act-mode-${uid}-actuated`)).toHaveAccessibleName("À la demande");
     await expect(page.locator(`label[for=act-min-${uid}]`)).toHaveText("Vert minimal");
     await expect(page.locator(`label[for=act-gap-${uid}]`)).toHaveText("Intervalle de passage");
     await expect(status).toContainText(
@@ -1291,7 +1291,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("#i-h-bikes")).toHaveText("Détection des vélos");
-    await expect(page.locator(`label:has(#bike-mode-${uid}-detection)`)).toHaveText("Sur détection");
+    await expect(page.locator(`#bike-mode-${uid}-detection`)).toHaveAccessibleName("Sur détection");
     await expect(page.locator(`label[for=bike-rate-${uid}]`)).toHaveText("Cyclistes par heure");
     await expect(status).toContainText("Chaque appel demande un vert minimal de 5 s");
     await expect(page.locator("#bikes-totals thead th").first()).toHaveText("Mouvement vélo");
@@ -1408,8 +1408,8 @@ test.describe("signal timing on a junction of the city", () => {
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("#i-h-transit-priority")).toHaveText("Priorité aux feux pour le transport en commun");
-    await expect(page.locator(`label:has(#transit-mode-${uid}-both)`)).toHaveText("Les deux");
-    await expect(page.locator(`label:has(#transit-mode-${uid}-early-green)`)).toHaveText("Vert hâtif");
+    await expect(page.locator(`#transit-mode-${uid}-both`)).toHaveAccessibleName("Les deux");
+    await expect(page.locator(`#transit-mode-${uid}-early-green`)).toHaveAccessibleName("Vert hâtif");
     await expect(page.locator(`label[for=transit-rate-${uid}]`)).toHaveText("Autobus par heure");
     await expect(status).toContainText("Vert hâtif et prolongation du vert");
     await expect(page.locator("#transit-totals thead th").first()).toHaveText("Rue");
@@ -1515,8 +1515,8 @@ test.describe("signal timing on a junction of the city", () => {
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("#i-h-preemption")).toHaveText("Préemption pour les véhicules d’urgence");
-    await expect(page.locator(`label:has(#preempt-mode-${uid}-on)`)).toHaveText("Activée");
-    await expect(page.locator(`label:has(#preempt-mode-${uid}-off)`)).toHaveText("Désactivée");
+    await expect(page.locator(`#preempt-mode-${uid}-on`)).toHaveAccessibleName("Activée");
+    await expect(page.locator(`#preempt-mode-${uid}-off`)).toHaveAccessibleName("Désactivée");
     await expect(page.locator(`label[for=preempt-rate-${uid}]`)).toHaveText("Appels d’urgence par heure");
     await expect(status).toContainText("Activée, la plus haute priorité");
     await expect(status).toContainText("(l’entrée sécuritaire)");

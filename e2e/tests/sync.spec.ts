@@ -55,7 +55,7 @@ const narrow = (page: Page) => resize(page, "-");
 async function storingAccount(page: Page, context: BrowserContext, baseURL: string) {
   const sub = unique();
   await newAccount(page, context, baseURL, { sub });
-  await page.getByRole("radio", { name: SERVER }).check();
+  await page.getByRole("radio", { name: SERVER }).click();
   // no place waits; only the first project's own record (the fixtures seed it) goes up, and it is no place
   await expect(live(page)).toHaveText("Your work was merged with your account: 0 places sent, 0 places received.");
   expect(await serverRecords(context)).toEqual(["project/first"]);
@@ -237,7 +237,7 @@ test("turning storage on merges the work made while signed out and says how many
   await widen(page); // signed out: marked, not sent
   await page.goto("/map.html");
   await newAccount(page, context, baseURL!);
-  await page.getByRole("radio", { name: SERVER }).check();
+  await page.getByRole("radio", { name: SERVER }).click();
   // the street; the first project's own record goes up too, but it is no place
   await expect(live(page)).toHaveText("Your work was merged with your account: 1 place sent, 0 places received.");
   await expect(page.locator("#merge-report")).toHaveText(
@@ -253,7 +253,8 @@ test("a person who never chose server storage sends nothing and the menu shows n
   baseURL,
 }) => {
   await newAccount(page, context, baseURL!);
-  await page.getByRole("radio", { name: /Keep my work on this device only/ }).check();
+  await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
+  await expect(page.getByRole("radio", { name: /Keep my work on this device only/ })).toBeChecked();
   await openStreet(page, 0);
   await widen(page);
   await page.locator("#session-btn").click();
@@ -460,7 +461,7 @@ test("a device given only rows an older CityLoom wrote, under bare keys, shows t
   await seeder.page.goto("/");
   await chooseProvider(seeder.page, "fake");
   await expect(seeder.page).toHaveURL(/\/account\.html$/);
-  await seeder.page.getByRole("radio", { name: SERVER }).check();
+  await seeder.page.getByRole("radio", { name: SERVER }).click();
   await expect(live(seeder.page)).toHaveText(
     "Your work was merged with your account: 0 places sent, 0 places received.",
   );

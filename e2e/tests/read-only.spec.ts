@@ -38,6 +38,13 @@ const saysReadOnly = async (page: Page, short: string, full: string) => {
   await expect(tag.locator(".sr-only")).toHaveText(full);
 };
 
+/** Each option of the radio group `group` is shown disabled, and there are some. */
+const radiosDisabled = async (page: Page, group: string) => {
+  const radios = page.locator(group).getByRole("radio");
+  await expect(radios).not.toHaveCount(0);
+  for (const r of await radios.all()) await expect(r).toBeDisabled();
+};
+
 const toFrench = async (page: Page) => {
   await page.locator("#account-btn").click();
   await page.locator('[data-lang="fr-CA"]').click();
@@ -185,31 +192,29 @@ test.describe("a design opened read-only", () => {
     await expect(page.locator(`#call-detect-help-${uid}`)).toContainText(
       "one who leaves after waiting 30 s cancels it",
     );
-    for (const r of await page.locator(`#call-detect-${uid} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#call-detect-${uid}`);
     // The actuated street is shown with its settings, and none can be changed.
     await expect(page.locator(`#act-mode-${street}-actuated`)).toBeChecked();
-    for (const r of await page.locator(`#act-mode-${street} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#act-mode-${street}`);
     await expect(page.locator(`#act-min-${street}`)).toHaveValue("7");
     await expect(page.locator(`#act-min-${street}`)).toBeDisabled();
     await expect(page.locator(`#act-min-${street}-more`)).toBeDisabled();
     await expect(page.locator("#actuation-phases")).toBeVisible();
     // The bike movement on detection is shown with its cyclists, and cannot be changed.
     await expect(page.locator(`#bike-mode-${bikes}-detection`)).toBeChecked();
-    for (const r of await page.locator(`#bike-mode-${bikes} input[type=radio]`).all()) await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#bike-mode-${bikes}`);
     await expect(page.locator(`#bike-rate-${bikes}`)).toHaveValue("30");
     await expect(page.locator(`#bike-rate-${bikes}`)).toBeDisabled();
     await expect(page.locator("#bikes-totals")).toBeVisible();
     // The transit priority is shown with its buses, and cannot be changed.
     await expect(page.locator(`#transit-mode-${street}-both`)).toBeChecked();
-    for (const r of await page.locator(`#transit-mode-${street} input[type=radio]`).all())
-      await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#transit-mode-${street}`);
     await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
     await expect(page.locator(`#transit-rate-${street}`)).toBeDisabled();
     await expect(page.locator("#transit-totals")).toBeVisible();
     // The pre-emption is shown with its calls, and cannot be changed.
     await expect(page.locator(`#preempt-mode-${street}-on`)).toBeChecked();
-    for (const r of await page.locator(`#preempt-mode-${street} input[type=radio]`).all())
-      await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#preempt-mode-${street}`);
     await expect(page.locator(`#preempt-rate-${street}`)).toHaveValue("2");
     await expect(page.locator(`#preempt-rate-${street}`)).toBeDisabled();
     await expect(page.locator("#preempt-totals")).toBeVisible();
@@ -233,8 +238,7 @@ test.describe("a design opened read-only", () => {
       "Showing plan “Evening”: its timing and response settings are shown and edited.",
     );
     await expect(page.locator(`#preempt-mode-${street}-off`)).toBeChecked();
-    for (const r of await page.locator(`#preempt-mode-${street} input[type=radio]`).all())
-      await expect(r).toBeDisabled();
+    await radiosDisabled(page, `#preempt-mode-${street}`);
     await page.goto(`/map.html?${VIEW}`);
     await mapReady(page);
     expect(await kept(page)).toEqual(before);

@@ -1,0 +1,11 @@
+[package]
+name = "cityloom_ui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+leptos = { version = "0.8.23", features = ["csr"] }
+web-sys = { version = "0.3.107", features = ["Element", "HtmlElement", "HtmlInputElement", "KeyboardEvent", "Event", "EventTarget", "Node", "NodeList"] }
+
+[dev-dependencies]
+leptos = { version = "0.8.23", features = ["ssr"] }

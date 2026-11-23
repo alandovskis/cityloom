@@ -228,6 +228,10 @@ class Crates(unittest.TestCase):
         )
         self.assertEqual(d["cityloom_server"], set(), "nothing depends on the server")
         self.assertIn("cityloom_report_pdf", d["cityloom_report"])
+        # The editor's controls depend on no crate of the workspace (so on no wording), and a change to them runs every spec.
+        self.assertEqual(d["cityloom_ui"], {"cityloom_editor"}, "only the editor uses the controls")
+        self.assertEqual([name for name, users in d.items() if "cityloom_ui" in users], [], "cityloom_ui depends on none")
+        self.assertTrue(pick("crates/cityloom_ui/src/radio.rs").all)
 
     def test_a_crate_runs_with_what_depends_on_it_however_far(self):
         # report -> report_pdf and editor; editor -> citymodel_builder; builder -> server
