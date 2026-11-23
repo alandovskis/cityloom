@@ -1,0 +1,114 @@
+Pressed in Chromium on the built pages at ade600e9fd0a4091523c8af0f253208c03307c4f. For each group: each option, whether it is checked, its tabindex, and which has the focus, after each key. Groups: the five signal groups, a phase's patterns, the turbo layouts, the street's surface, direction and curb, the account's storage (nothing chosen at first; "requests" are the PUTs sent; the question is the one asked before syncing stops). Then the width's stepper: its + and - buttons away from the limits (1.50 m, allowed up to 3.00 m), arrows, Enter, Escape and a refused word.
+
+## junction .call-detect
+focus      Push button checked=true tabindex=0 FOCUSED | Passive detection checked=false tabindex=-1
+ArrowDown  Push button checked=false tabindex=-1 | Passive detection checked=true tabindex=0 FOCUSED
+ArrowRight Push button checked=true tabindex=0 FOCUSED | Passive detection checked=false tabindex=-1
+ArrowUp    Push button checked=false tabindex=-1 | Passive detection checked=true tabindex=0 FOCUSED
+ArrowLeft  Push button checked=true tabindex=0 FOCUSED | Passive detection checked=false tabindex=-1
+ArrowUp    Push button checked=false tabindex=-1 | Passive detection checked=true tabindex=0 FOCUSED
+End        Push button checked=false tabindex=-1 | Passive detection checked=true tabindex=0 FOCUSED
+Home       Push button checked=true tabindex=0 FOCUSED | Passive detection checked=false tabindex=-1
+## junction .act-mode
+focus      On recall checked=true tabindex=0 FOCUSED | Actuated checked=false tabindex=-1
+ArrowDown  On recall checked=false tabindex=-1 | Actuated checked=true tabindex=0 FOCUSED
+ArrowRight On recall checked=true tabindex=0 FOCUSED | Actuated checked=false tabindex=-1
+ArrowUp    On recall checked=false tabindex=-1 | Actuated checked=true tabindex=0 FOCUSED
+ArrowLeft  On recall checked=true tabindex=0 FOCUSED | Actuated checked=false tabindex=-1
+ArrowUp    On recall checked=false tabindex=-1 | Actuated checked=true tabindex=0 FOCUSED
+End        On recall checked=false tabindex=-1 | Actuated checked=true tabindex=0 FOCUSED
+Home       On recall checked=true tabindex=0 FOCUSED | Actuated checked=false tabindex=-1
+## junction .bike-mode
+focus      On recall checked=true tabindex=0 FOCUSED | On detection checked=false tabindex=-1
+ArrowDown  On recall checked=false tabindex=-1 | On detection checked=true tabindex=0 FOCUSED
+ArrowRight On recall checked=true tabindex=0 FOCUSED | On detection checked=false tabindex=-1
+ArrowUp    On recall checked=false tabindex=-1 | On detection checked=true tabindex=0 FOCUSED
+ArrowLeft  On recall checked=true tabindex=0 FOCUSED | On detection checked=false tabindex=-1
+ArrowUp    On recall checked=false tabindex=-1 | On detection checked=true tabindex=0 FOCUSED
+End        On recall checked=false tabindex=-1 | On detection checked=true tabindex=0 FOCUSED
+Home       On recall checked=true tabindex=0 FOCUSED | On detection checked=false tabindex=-1
+## junction .transit-mode
+focus      None checked=true tabindex=0 FOCUSED | Early green checked=false tabindex=-1 | Green extension checked=false tabindex=-1 | Both checked=false tabindex=-1
+ArrowDown  None checked=false tabindex=-1 | Early green checked=true tabindex=0 FOCUSED | Green extension checked=false tabindex=-1 | Both checked=false tabindex=-1
+ArrowRight None checked=false tabindex=-1 | Early green checked=false tabindex=-1 | Green extension checked=true tabindex=0 FOCUSED | Both checked=false tabindex=-1
+ArrowUp    None checked=false tabindex=-1 | Early green checked=true tabindex=0 FOCUSED | Green extension checked=false tabindex=-1 | Both checked=false tabindex=-1
+ArrowLeft  None checked=true tabindex=0 FOCUSED | Early green checked=false tabindex=-1 | Green extension checked=false tabindex=-1 | Both checked=false tabindex=-1
+ArrowUp    None checked=false tabindex=-1 | Early green checked=false tabindex=-1 | Green extension checked=false tabindex=-1 | Both checked=true tabindex=0 FOCUSED
+End        None checked=false tabindex=-1 | Early green checked=false tabindex=-1 | Green extension checked=false tabindex=-1 | Both checked=true tabindex=0 FOCUSED
+Home       None checked=true tabindex=0 FOCUSED | Early green checked=false tabindex=-1 | Green extension checked=false tabindex=-1 | Both checked=false tabindex=-1
+## junction .preempt-mode
+focus      Off checked=true tabindex=0 FOCUSED | On checked=false tabindex=-1
+ArrowDown  Off checked=false tabindex=-1 | On checked=true tabindex=0 FOCUSED
+ArrowRight Off checked=true tabindex=0 FOCUSED | On checked=false tabindex=-1
+ArrowUp    Off checked=false tabindex=-1 | On checked=true tabindex=0 FOCUSED
+ArrowLeft  Off checked=true tabindex=0 FOCUSED | On checked=false tabindex=-1
+ArrowUp    Off checked=false tabindex=-1 | On checked=true tabindex=0 FOCUSED
+End        Off checked=false tabindex=-1 | On checked=true tabindex=0 FOCUSED
+Home       Off checked=true tabindex=0 FOCUSED | On checked=false tabindex=-1
+## junction, a phase's patterns
+focus      Through only checked=false tabindex=-1 | All movements checked=true tabindex=0 FOCUSED | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=false tabindex=-1
+ArrowDown  Through only checked=false tabindex=-1 | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=true tabindex=0 FOCUSED | Pedestrian scramble checked=false tabindex=-1
+ArrowRight Through only checked=false tabindex=-1 | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=true tabindex=0 FOCUSED
+ArrowUp    Through only checked=false tabindex=-1 | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=true tabindex=0 FOCUSED | Pedestrian scramble checked=false tabindex=-1
+ArrowLeft  Through only checked=false tabindex=-1 | All movements checked=true tabindex=0 FOCUSED | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=false tabindex=-1
+ArrowUp    Through only checked=true tabindex=0 FOCUSED | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=false tabindex=-1
+End        Through only checked=false tabindex=-1 | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=true tabindex=0 FOCUSED
+Home       Through only checked=true tabindex=0 FOCUSED | All movements checked=false tabindex=-1 | Protected turn across traffic, then through checked=false tabindex=-1 | Pedestrian scramble checked=false tabindex=-1
+
+## junction, turbo layouts
+focus      Single lane checked=false tabindex=-1 | Basic checked=true tabindex=0 FOCUSED | Egg checked=false tabindex=-1 | Knee checked=false tabindex=-1
+ArrowDown  Single lane checked=false tabindex=-1 | Basic checked=false tabindex=-1 | Egg checked=true tabindex=0 FOCUSED | Knee checked=false tabindex=-1
+ArrowRight Single lane checked=false tabindex=-1 | Basic checked=false tabindex=-1 | Egg checked=false tabindex=-1 | Knee checked=true tabindex=0 FOCUSED
+ArrowUp    Single lane checked=false tabindex=-1 | Basic checked=false tabindex=-1 | Egg checked=true tabindex=0 FOCUSED | Knee checked=false tabindex=-1
+ArrowLeft  Single lane checked=false tabindex=-1 | Basic checked=true tabindex=0 FOCUSED | Egg checked=false tabindex=-1 | Knee checked=false tabindex=-1
+ArrowUp    Single lane checked=true tabindex=0 FOCUSED | Basic checked=false tabindex=-1 | Egg checked=false tabindex=-1 | Knee checked=false tabindex=-1
+End        Single lane checked=false tabindex=-1 | Basic checked=false tabindex=-1 | Egg checked=false tabindex=-1 | Knee checked=true tabindex=0 FOCUSED
+Home       Single lane checked=true tabindex=0 FOCUSED | Basic checked=false tabindex=-1 | Egg checked=false tabindex=-1 | Knee checked=false tabindex=-1
+
+## street, a driving lane: surface
+focus      Asphalt checked=true tabindex=0 FOCUSED | Concrete checked=false tabindex=-1 | Permeable paving checked=false tabindex=-1
+ArrowDown  Asphalt checked=false tabindex=-1 | Concrete checked=true tabindex=0 FOCUSED | Permeable paving checked=false tabindex=-1
+ArrowRight Asphalt checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Permeable paving checked=true tabindex=0 FOCUSED
+ArrowUp    Asphalt checked=false tabindex=-1 | Concrete checked=true tabindex=0 FOCUSED | Permeable paving checked=false tabindex=-1
+ArrowLeft  Asphalt checked=true tabindex=0 FOCUSED | Concrete checked=false tabindex=-1 | Permeable paving checked=false tabindex=-1
+ArrowUp    Asphalt checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Permeable paving checked=true tabindex=0 FOCUSED
+End        Asphalt checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Permeable paving checked=true tabindex=0 FOCUSED
+Home       Asphalt checked=true tabindex=0 FOCUSED | Concrete checked=false tabindex=-1 | Permeable paving checked=false tabindex=-1
+## street, a driving lane: dir
+focus      Away from you checked=false tabindex=-1 | Toward you checked=true tabindex=0 FOCUSED | Two-way checked=false tabindex=-1
+ArrowDown  Away from you checked=false tabindex=-1 | Toward you checked=false tabindex=-1 | Two-way checked=true tabindex=0 FOCUSED
+ArrowRight Away from you checked=true tabindex=0 FOCUSED | Toward you checked=false tabindex=-1 | Two-way checked=false tabindex=-1
+ArrowUp    Away from you checked=false tabindex=-1 | Toward you checked=false tabindex=-1 | Two-way checked=true tabindex=0 FOCUSED
+ArrowLeft  Away from you checked=false tabindex=-1 | Toward you checked=true tabindex=0 FOCUSED | Two-way checked=false tabindex=-1
+ArrowUp    Away from you checked=true tabindex=0 FOCUSED | Toward you checked=false tabindex=-1 | Two-way checked=false tabindex=-1
+End        Away from you checked=false tabindex=-1 | Toward you checked=false tabindex=-1 | Two-way checked=true tabindex=0 FOCUSED
+Home       Away from you checked=true tabindex=0 FOCUSED | Toward you checked=false tabindex=-1 | Two-way checked=false tabindex=-1
+## street, a driving lane's width stepper
+at first                          value=1.50 focus=BUTTON
+the + button                      value=1.60 focus=Wider by 0.1 m
+the - button                      value=1.50 focus=Narrower by 0.1 m
+the - button again                value=1.40 focus=Narrower by 0.1 m
+ArrowUp in the field              value=1.50 focus=width
+ArrowDown in the field            value=1.40 focus=width
+3.2 typed, Enter                  value=3.00 focus=wrap
+3.9 typed, Escape                 value=3.00 focus=wrap
+abc typed, Enter (refused)        value=3.00 focus=width
+## street: curb
+focus      Granite checked=false tabindex=-1 | Concrete checked=true tabindex=0 FOCUSED | Asphalt checked=false tabindex=-1 | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+ArrowDown  Granite checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Asphalt checked=true tabindex=0 FOCUSED | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+ArrowRight Granite checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Asphalt checked=false tabindex=-1 | Planted checked=true tabindex=0 FOCUSED | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+ArrowUp    Granite checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Asphalt checked=true tabindex=0 FOCUSED | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+ArrowLeft  Granite checked=false tabindex=-1 | Concrete checked=true tabindex=0 FOCUSED | Asphalt checked=false tabindex=-1 | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+ArrowUp    Granite checked=true tabindex=0 FOCUSED | Concrete checked=false tabindex=-1 | Asphalt checked=false tabindex=-1 | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+End        Granite checked=false tabindex=-1 | Concrete checked=false tabindex=-1 | Asphalt checked=false tabindex=-1 | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=true tabindex=0 FOCUSED
+Home       Granite checked=true tabindex=0 FOCUSED | Concrete checked=false tabindex=-1 | Asphalt checked=false tabindex=-1 | Planted checked=false tabindex=-1 | Bus-friendly curb checked=false tabindex=-1 | Bike-friendly curb checked=false tabindex=-1 | Bus boarding island checked=false tabindex=-1 | None (flush) checked=false tabindex=-1
+
+## account, nothing chosen
+at first   Keep my work on this device only checked=false tabindex=0 | Store my work on the server checked=false tabindex=-1
+End        Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0 FOCUSED | question=0 requests=true
+Home       Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0 | question=1 requests=true
+Escape     Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0
+ArrowDown  Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0 | question=1 requests=true
+Escape     Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0
+ArrowUp    Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0 | question=1 requests=true
+Escape     Keep my work on this device only checked=false tabindex=-1 | Store my work on the server checked=true tabindex=0
