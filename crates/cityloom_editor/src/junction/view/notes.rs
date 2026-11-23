@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::junction::model::compass_key;
 use crate::junction::model::read_model::Check;
 use crate::junction::model::read_model::{CrossingView, JView};
-use crate::junction::view::turns::compass_key;
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::{Args, I18n, Locale};

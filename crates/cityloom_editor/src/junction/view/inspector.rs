@@ -19,12 +19,12 @@ use crate::junction::model::transit::{self, Mode};
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
-    RULES, STOPS, THROUGH, Target, TimingField,
+    RULES, STOPS, THROUGH, Target, TimingField, compass_key,
 };
 use crate::junction::model::{preemption, preemption::Outcome as EmergencyOutcome};
 use crate::junction::view::phase_svg::phase_drawings;
 use crate::junction::view::signal_folds::{SignalFold, set_line, shown, warnings, warnings_line};
-use crate::junction::view::turns::{compass_key, turn_glyph};
+use crate::junction::view::turns::turn_glyph;
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;

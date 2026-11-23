@@ -805,6 +805,34 @@ pub fn compass(bearing: i32) -> Said {
     Said::new(KEYS[(((bearing + 22).rem_euclid(360)) / 45) as usize])
 }
 
+const COMPASS_KEYS: [&str; 8] = [
+    "jn-compass-short-n",
+    "jn-compass-short-ne",
+    "jn-compass-short-e",
+    "jn-compass-short-se",
+    "jn-compass-short-s",
+    "jn-compass-short-sw",
+    "jn-compass-short-w",
+    "jn-compass-short-nw",
+];
+
+const COMPASS_NAMES: [&str; 8] =
+    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+
+fn point(bearing: i32) -> usize {
+    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+}
+
+/// The message of the compass point a bearing is nearest, as a short tag ("NE").
+pub fn compass_key(bearing: i32) -> &'static str {
+    COMPASS_KEYS[point(bearing)]
+}
+
+/// The message of the compass point a bearing is nearest, in full ("north-east").
+pub fn compass_name_key(bearing: i32) -> &'static str {
+    COMPASS_NAMES[point(bearing)]
+}
+
 /// An arm by its street and the way it leaves the junction: "Main Street (north)".
 pub fn arm_name(a: &Arm) -> Said {
     Said::new("jn-arm-name").with("street", Arg::Said(Box::new(a.street_name()))).with("compass", Arg::Said(Box::new(compass(a.bearing))))
@@ -4116,6 +4144,62 @@ mod tests {
         assert_eq!(en(&Said::new(control_key(SIGNAL))), "Traffic signal");
         assert_eq!(fr(&Said::new(control_key(ROUNDABOUT))), "Carrefour giratoire");
         assert_eq!((en(&compass(45)), fr(&compass(225))), ("north-east".into(), "sud-ouest".into()));
+    }
+
+    #[test]
+    fn a_bearing_is_tagged_with_its_nearest_compass_point() {
+        assert_eq!(compass_key(0), "jn-compass-short-n");
+        assert_eq!(compass_key(22), "jn-compass-short-n");
+        assert_eq!(compass_key(90), "jn-compass-short-e");
+        assert_eq!(compass_key(359), "jn-compass-short-n");
+        assert_eq!(compass_key(-45), "jn-compass-short-nw");
+        assert_eq!(compass_key(23), "jn-compass-short-ne");
+    }
+
+    #[test]
+    fn each_compass_point_has_its_own_short_tag() {
+        assert_eq!(compass_key(0), "jn-compass-short-n");
+        assert_eq!(compass_key(45), "jn-compass-short-ne");
+        assert_eq!(compass_key(90), "jn-compass-short-e");
+        assert_eq!(compass_key(135), "jn-compass-short-se");
+        assert_eq!(compass_key(180), "jn-compass-short-s");
+        assert_eq!(compass_key(225), "jn-compass-short-sw");
+        assert_eq!(compass_key(270), "jn-compass-short-w");
+        assert_eq!(compass_key(315), "jn-compass-short-nw");
+    }
+
+    #[test]
+    fn each_compass_point_has_its_own_full_name() {
+        assert_eq!(compass_name_key(0), "jn-compass-n");
+        assert_eq!(compass_name_key(45), "jn-compass-ne");
+        assert_eq!(compass_name_key(90), "jn-compass-e");
+        assert_eq!(compass_name_key(135), "jn-compass-se");
+        assert_eq!(compass_name_key(180), "jn-compass-s");
+        assert_eq!(compass_name_key(225), "jn-compass-sw");
+        assert_eq!(compass_name_key(270), "jn-compass-w");
+        assert_eq!(compass_name_key(315), "jn-compass-nw");
+    }
+
+    #[test]
+    fn a_bearing_between_two_compass_points_is_named_by_the_nearer() {
+        assert_eq!(compass_name_key(22), "jn-compass-n");
+        assert_eq!(compass_name_key(23), "jn-compass-ne");
+        assert_eq!(compass_name_key(67), "jn-compass-ne");
+        assert_eq!(compass_name_key(68), "jn-compass-e");
+        assert_eq!(compass_name_key(337), "jn-compass-nw");
+        assert_eq!(compass_name_key(338), "jn-compass-n");
+        assert_eq!(compass_name_key(359), "jn-compass-n");
+    }
+
+    #[test]
+    fn a_bearing_past_a_full_turn_or_below_zero_is_named_as_its_turn_within_the_circle() {
+        assert_eq!(compass_name_key(360), "jn-compass-n");
+        assert_eq!(compass_name_key(405), "jn-compass-ne");
+        assert_eq!(compass_name_key(450), "jn-compass-e");
+        assert_eq!(compass_name_key(-22), "jn-compass-n");
+        assert_eq!(compass_name_key(-23), "jn-compass-nw");
+        assert_eq!(compass_name_key(-45), "jn-compass-nw");
+        assert_eq!(compass_name_key(-90), "jn-compass-w");
     }
 
     #[test]
