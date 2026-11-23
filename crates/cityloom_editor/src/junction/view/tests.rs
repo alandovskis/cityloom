@@ -499,10 +499,12 @@ fn the_signal_plan_s_folds_are_named_by_a_heading_in_their_summary() {
     };
     let plain = shared(0);
     plain.show_plan();
-    // sample 0 has no bike lane: the bikes' fold is checked on the four-way whose streets have them
+    // sample 0 has no bike lane and no transit: the bikes' fold is checked on the four-way whose streets have bike lanes,
+    // and the priority's on the same with a bus lane on a street, since neither other junction draws it
     let biked = biked_in(crate::shared::i18n::Locale::En);
+    let (transit, _) = transit_in(crate::shared::i18n::Locale::En);
     let mut checked = Vec::new();
-    for s in [plain, biked] {
+    for s in [plain, biked, transit] {
         let h = panel(&s).replace('\u{a0}', " ");
         let v = s.view_now();
         for f in SignalFold::ALL.into_iter().filter(|f| shown(*f, &v)) {
