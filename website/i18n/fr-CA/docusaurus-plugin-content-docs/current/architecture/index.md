@@ -264,31 +264,8 @@ et `map.js` crée la carte. `boot.js` affiche un avis quand le module d’une pa
 `city.js` lit pour quel lieu une page a été ouverte, et `report.js` charge le générateur de PDF. La seule exception à la
 règle est `web/mapcanvas.js`, l’adaptateur qui possède la carte MapLibre.
 
-## Persistance
+## Modèle de données
 
-Une page ouverte depuis la carte modifie un lieu de la ville. Ses modifications sont réécrites par `CityStore`, avec un
-délai antirebond de 250 ms, et enregistrées quand on quitte la page. Chaque projet garde ses modifications dans un
-document à lui, `cityloom-edits@<project>` (`shared/scoped.rs`), dont les enregistrements sont indexés d’après ce dont
-le lieu a été fait (identifiants de nœuds et de voies OpenStreetMap); une modification suit donc son lieu dans une
-autre zone qui le contient. En route vers le serveur, les enregistrements du premier projet gardent leurs clés nues, et
-ceux de tout autre projet partent sous la forme `<project>:<key>`.
-
-## L’archive de conception
-
-La page Compte peut exporter le travail de conception d’un projet (celui ouvert en dernier) dans un seul fichier JSON,
-et y importer un tel fichier. Le format est décrit dans `archive/model.rs`; il porte un `format_version` entier (1) et
-un `kind` valant `cityloom-design`, la version de l’application, l’heure, ce sur quoi la conception a été faite (zone,
-somme de contrôle de la tuile, version de l’importeur), le document `cityloom-edits` (lu à partir de la version 4 et
-écrit à la version que son contenu exige) et le document `cityloom-restrictions`. Il ne contient ni les jalons du
-projet, ni le document de synchronisation, ni rien du compte, ni la langue et le thème, ni les réseaux de rues
-téléchargés. Le fichier se nomme `*.cityloom-design.json`, jamais un simple `.citymodel`, qui est l’archive de zone que
-construit `citymodel_builder`.
-
-Une importation vérifie tout le fichier avant d’écrire quoi que ce soit. Un fichier qui n’est pas du JSON, qui n’est pas
-une archive de conception CityLoom, qui est endommagé, qui dépasse 10 Mo, qui vient d’un format plus récent ou qui
-contient des modifications ou des règles d’une version plus récente est refusé avec un message qui le dit et qui précise
-que rien n’a été modifié. Les lieux absents de l’appareil sont ajoutés; un lieu présent qui diffère n’est remplacé que si
-la personne choisit « Utiliser ceux de l’archive » pour cette importation. Des modifications ou des règles de l’appareil
-qui sont endommagées ou d’une version plus récente arrêtent l’importation. Les champs inconnus sont ignorés à la
-lecture, et `notes` et `scenarios` sont des noms réservés que la version 1 n’écrit ni ne lit. Les enregistrements
-importés sont marqués pour la synchronisation comme toute modification.
+[Modèle de données : les projets et ce que garde le navigateur](data-model-projects.md) dit de quoi un projet est fait
+et ce que contient chaque clé du stockage du navigateur, comment les modifications sont conservées, ce que porte
+l’archive de conception et comment le travail d’avant les projets a été déplacé dans le premier projet.

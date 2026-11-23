@@ -246,27 +246,8 @@ and junction scripts flush the page's edits on `pagehide`, and `map.js` creates 
 page's module cannot be loaded or started, `city.js` reads which place a page was opened for, and `report.js` loads the
 PDF writer. The one exception to the rule is `web/mapcanvas.js`, the adapter that owns the MapLibre map.
 
-## Persistence
+## Data model
 
-A page opened from the map edits one place of the city. Its edits are written back through `CityStore` behind a 250 ms
-debounce and flushed when the page is left. Each project keeps its edits in a document of its own,
-`cityloom-edits@<project>` (`shared/scoped.rs`), whose records are keyed by what the place was made from (OpenStreetMap
-node and way ids), so an edit follows its place into another area that holds it. On the way to the server, the first
-project's records keep their bare keys and any other project's go up as `<project>:<key>`.
-
-## The design archive
-
-The Account page can export the design work of a project (the one opened last) as one JSON file, and import such a file
-into it. The format is documented in `archive/model.rs`; it carries an integer `format_version` (1) and a `kind` of
-`cityloom-design`, the app version, the time, what the design was made on (area, tile checksum, importer version), the
-`cityloom-edits` document (read from version 4 and written at the version its content needs) and the
-`cityloom-restrictions` document. It does not carry the project's milestones, the sync document, anything of the
-account, the language and theme, or the downloaded street networks. The file is named `*.cityloom-design.json`, never
-a bare `.citymodel`, which is the area archive that `citymodel_builder` builds.
-
-An import checks the whole file before it writes anything. A file that is not JSON, not a CityLoom design archive,
-damaged, larger than 10 MB, from a newer format, or holding edits or rules from a newer build is refused with a message
-that says so and that nothing was changed. Places that are not on the device are added; a place that is on the device
-and differs is replaced only if the person chooses "Use the archive's" for that import. Edits or rules on the device that
-are damaged or from a newer build stop the import. Unknown fields are ignored on read, and `notes` and `scenarios` are
-reserved names that version 1 neither writes nor reads. Imported records are marked for the sync like any edit.
+[Data model: projects and what the browser keeps](data-model-projects.md) says what a project is made of and what every
+key of the browser's storage holds, how the edits are kept, what the design archive carries, and how the work from
+before projects was moved into the first project.

@@ -38,7 +38,8 @@ the list, which says **That project is no longer here.**
 
 Work kept in the browser by a CityLoom that had no projects moves, the first time the list opens, into a project named
 **First project**, in the Montréal metropolitan area. Its map opens on the same place as before if that place was in
-the Montréal region, else on Plateau Mont-Royal. It opens as it did, so nothing has to be done.
+the Montréal region, else on Plateau Mont-Royal. It opens as it did, so nothing has to be done. [The work from before projects](architecture/data-model-projects.md#the-work-from-before-projects)
+says how the move is done.
 
 ## Projects on several devices
 
