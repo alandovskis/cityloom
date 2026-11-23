@@ -1,0 +1,7 @@
+The red gate at 03415d00f22ce7c4487315c2cc8c356722586e4b: the four new tests fail, and every old test passes.
+
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_street_s_folds_are_named_by_a_heading_in_their_summary
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::the_signal_plan_s_folds_are_named_by_a_heading_in_their_summary
+  new test: junction-a11y.spec.ts::the junction's folds are reached by heading (CLM-50) > a street's folds are named by level-3 headings, open or closed::ui
+  new test: junction-a11y.spec.ts::the junction's folds are reached by heading (CLM-50) > each signal option's fold is named by a level-3 heading, open or closed, and opens with Enter or Space::ui

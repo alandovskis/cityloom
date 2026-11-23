@@ -1,0 +1,79 @@
+HEADINGS | a street's level, folds closed
+  h2# "Rue Saint-Viateur Est"
+  h3#i-h-lanes "Lanes coming in"
+  h3#i-h-cross "Crossing"
+  h3#i-h-signal "Signal timing"
+  h3#i-h-green "Green"
+  h3#i-h-yellow "Yellow"
+  h3#i-h-all-red "All-red"
+  h3#i-h-bike-box "Bike box"
+  h3#i-h-transit "Transit priority"  (in a summary)
+  h3#i-h-position "Position"  (in a summary)
+  h3#i-h-street "Street"
+  duplicate ids: []; aria-labelledby naming nothing: []
+HEADINGS | a street's level, folds opened with Enter (transit) and Space (position)
+  h2# "Rue Saint-Viateur Est"
+  h3#i-h-lanes "Lanes coming in"
+  h3#i-h-cross "Crossing"
+  h3#i-h-signal "Signal timing"
+  h3#i-h-green "Green"
+  h3#i-h-yellow "Yellow"
+  h3#i-h-all-red "All-red"
+  h3#i-h-bike-box "Bike box"
+  h3#i-h-transit "Transit priority"  (in a summary)
+  h3#i-h-position "Position"  (in a summary)
+  h3#i-h-bearing "Direction"
+  h3#i-h-offset "Shift sideways"
+  h3#i-h-street "Street"
+  duplicate ids: []; aria-labelledby naming nothing: []
+HEADINGS | Signal plan, every fold closed, a bus lane on one street
+  h3#i-h-plans "Time-of-day plans"  (in a summary)
+  h3#i-h-signal "Signal timing"
+  h3#i-h-calls "Pedestrian calls"  (in a summary)
+  h3#i-h-actuation "Vehicle actuation"  (in a summary)
+  h3#i-h-bikes "Bicycle detection"  (in a summary)
+  h3#i-h-transit-priority "Transit signal priority"  (in a summary)
+  h3#i-h-preemption "Emergency vehicle pre-emption"  (in a summary)
+  duplicate ids: []; aria-labelledby naming nothing: []
+PRIORITY FOLD drawn: 1
+SUMMARIES, closed, crossings on call:
+  h3: Time-of-day plans | span: Default plan | span: · 2 warnings
+  h3: Pedestrian calls | span: 4 crossings on call | span: · 1 warning
+  h3: Vehicle actuation | span: None actuated
+  h3: Bicycle detection | span: None on detection
+  h3: Transit signal priority | span: None with priority
+  h3: Emergency vehicle pre-emption | span: None with pre-emption
+ARIA of the calls summary: - heading "Pedestrian calls" [level=3]
+  - text: 4 crossings on call · 1 warning
+HEADINGS | Signal plan, every fold open
+  h3#i-h-plans "Time-of-day plans"  (in a summary)
+  h4#plans-list-h "Plans"
+  h4#plans-schedule-h "Weekly schedule"
+  h4#plans-runs-h "Which plan runs"
+  h3#i-h-signal "Signal timing"
+  h3#i-h-calls "Pedestrian calls"  (in a summary)
+  h4#calls-findings-h "Findings"
+  h3#i-h-actuation "Vehicle actuation"  (in a summary)
+  h3#i-h-bikes "Bicycle detection"  (in a summary)
+  h3#i-h-transit-priority "Transit signal priority"  (in a summary)
+  h3#i-h-preemption "Emergency vehicle pre-emption"  (in a summary)
+  duplicate ids: []; aria-labelledby naming nothing: []
+HEADINGS | Signal plan in fr-CA, every fold closed
+  h3#i-h-plans "Plans selon l’heure"  (in a summary)
+  h3#i-h-signal "Réglage des feux"
+  h3#i-h-calls "Appels piétons"  (in a summary)
+  h3#i-h-actuation "Actionnement par les véhicules"  (in a summary)
+  h3#i-h-bikes "Détection des vélos"  (in a summary)
+  h3#i-h-transit-priority "Priorité aux feux pour le transport en commun"  (in a summary)
+  h3#i-h-preemption "Préemption pour les véhicules d’urgence"  (in a summary)
+  duplicate ids: []; aria-labelledby naming nothing: []
+HEADINGS | Signal plan read-only (view=1), fr-CA, every fold closed
+  h3#i-h-plans "Plans selon l’heure"  (in a summary)
+  h3#i-h-signal "Réglage des feux"
+  h3#i-h-calls "Appels piétons"  (in a summary)
+  h3#i-h-actuation "Actionnement par les véhicules"  (in a summary)
+  h3#i-h-bikes "Détection des vélos"  (in a summary)
+  h3#i-h-transit-priority "Priorité aux feux pour le transport en commun"  (in a summary)
+  h3#i-h-preemption "Préemption pour les véhicules d’urgence"  (in a summary)
+  duplicate ids: []; aria-labelledby naming nothing: []
+  1 passed (14.2s)

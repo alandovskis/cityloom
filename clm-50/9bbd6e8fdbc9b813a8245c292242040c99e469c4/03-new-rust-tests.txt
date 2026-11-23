@@ -1,0 +1,4 @@
+cargo test -p cityloom_editor folds_are_named_by, at 9bbd6e8fdbc9b813a8245c292242040c99e469c4
+test junction::view::tests::a_street_s_folds_are_named_by_a_heading_in_their_summary ... ok
+test junction::view::tests::the_signal_plan_s_folds_are_named_by_a_heading_in_their_summary ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3915 filtered out; finished in 0.19s

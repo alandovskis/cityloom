@@ -1,0 +1,11 @@
+The green gate at 9bbd6e8fdbc9b813a8245c292242040c99e469c4.
+
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ just format-check
+$ scripts/check-version.sh 4d1a80133ea59a9bf9ff0aedfec0f29a2febb918
+$ just build
+$ just server
+$ just e2e-fixtures
+$ npx playwright test tests/junction-a11y.spec.ts tests/junction.spec.ts --reporter=json
+PASS green gate

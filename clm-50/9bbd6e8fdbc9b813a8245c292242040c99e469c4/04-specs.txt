@@ -1,0 +1,10 @@
+E2E_PORT=20050 npx playwright test tests/junction-a11y.spec.ts tests/read-only.spec.ts tests/junction.spec.ts (the three specs whole; kept here: the lines about folds, CLM-50 and read-only, and the total), at 9bbd6e8fdbc9b813a8245c292242040c99e469c4
+  ✓   23 [ui] › tests/junction-a11y.spec.ts:739:3 › the junction's folds are reached by heading (CLM-50) › a street's folds are named by level-3 headings, open or closed (3.6s)
+  ✓   22 [ui] › tests/junction-a11y.spec.ts:694:3 › the junction's folds are reached by heading (CLM-50) › each signal option's fold is named by a level-3 heading, open or closed, and opens with Enter or Space 
+  ✓   58 [ui] › tests/junction.spec.ts:398:3 › signal timing on a junction of the city › the signal plan's options are folds, closed, each saying what is set; Enter on one opens it (5.0s)
+  ✓  109 [ui] › tests/read-only.spec.ts:269:3 › a design opened read-only › a project opened without view=1 can be edited as ever (8.0s)
+  ✓  105 [ui] › tests/read-only.spec.ts:48:3 › a design opened read-only › a street can be looked at and chosen in, and not changed by a control, a key or undo (11.9s)
+  ✓  108 [ui] › tests/read-only.spec.ts:243:3 › a design opened read-only › the map can be searched and its places opened, read-only, and offers no area to declare (13.1s)
+  ✓  107 [ui] › tests/read-only.spec.ts:116:3 › a design opened read-only › a junction's signal plan, its pedestrian calls, its actuation, its bicycle detection, its transit priority and its pre-emption can be 
+  ✓  106 [ui] › tests/read-only.spec.ts:84:3 › a design opened read-only › a junction can be looked at, its streets gone to, and not changed (18.0s)
+  109 passed (1.6m)
