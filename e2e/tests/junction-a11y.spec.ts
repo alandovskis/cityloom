@@ -824,8 +824,11 @@ async function misfits(page: Page) {
       const needs = wide(input.value, css);
       if (needs > room) found.push(`${named(input)}: "${input.value}" needs ${needs} in its field's ${room}`);
     }
-    // What a list is set to can be read in it, beside its arrow (a bus's route is two streets' names, as long as they are).
-    for (const select of column.querySelectorAll<HTMLSelectElement>('select:not([aria-labelledby="i-h-bus"])')) {
+    // What a list is set to can be read in it, beside its arrow. (Two kinds are longer than the panel and were before: a
+    // bus's route, which is two streets' names, and the transit measures'; the spec's "As built" says so.)
+    for (const select of column.querySelectorAll<HTMLSelectElement>(
+      'select:not([aria-labelledby="i-h-bus"], .fld select)',
+    )) {
       const css = getComputedStyle(select);
       if (!shown(select.getBoundingClientRect())) continue;
       const room = select.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 16;
@@ -904,6 +907,11 @@ for (const lang of ["en", "fr-CA"]) {
       for (const fold of await column.locator(".jn-fold > summary").all()) await fold.click();
       await expect(column.locator("#i-h-bearing")).toBeVisible();
       expect(await misfits(page), "a street").toEqual([]);
+      // A queue jump has a length, the setting with the longest name.
+      await column.locator("#jn-fold-transit .opt").first().click();
+      await column.locator('select[aria-labelledby="i-h-approach"]').selectOption("1");
+      await expect(column.locator("#i-h-alen")).toBeVisible();
+      expect(await misfits(page), "a street with a queue jump").toEqual([]);
       await column.locator("#i-cross-go").click();
       await expect(column.locator("#i-h-setback")).toBeVisible();
       expect(await misfits(page), "a crossing").toEqual([]);
