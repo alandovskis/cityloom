@@ -1,6 +1,9 @@
 //! A value between two buttons that step it, and the number field that usually is that value.
 
 use leptos::prelude::*;
+use web_sys::{HtmlInputElement, KeyboardEvent};
+
+use crate::keys::{FieldEnd, field_end, step_key};
 
 /// A button that steps down, the value (`children`), a button that steps up.
 #[component]
@@ -21,8 +24,38 @@ pub fn Stepper(
     group: Option<String>,
     children: Children,
 ) -> impl IntoView {
-    let view: AnyView = todo!();
-    view
+    let is = |off: Option<Signal<bool>>| off.is_some_and(|off| off.get());
+    let step = move |dir: i32, off: Option<Signal<bool>>| {
+        if !off.is_some_and(|off| off.get_untracked()) {
+            on_step.run(dir);
+        }
+    };
+    let role = group.is_some().then_some("group");
+    view! {
+        <div class="stepper" role=role aria-labelledby=group>
+            <button
+                type="button"
+                class="ico"
+                id=less_id
+                aria-label=move || less.get()
+                aria-disabled=move || is(less_off).then_some("true")
+                on:click=move |_| step(-1, less_off)
+            >
+                <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
+            </button>
+            {children()}
+            <button
+                type="button"
+                class="ico"
+                id=more_id
+                aria-label=move || more.get()
+                aria-disabled=move || is(more_off).then_some("true")
+                on:click=move |_| step(1, more_off)
+            >
+                <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
+            </button>
+        </div>
+    }
 }
 
 /// A number and its unit. An arrow key steps it; a change is handed to `commit`, which says whether it was taken, and the
@@ -43,8 +76,52 @@ pub fn NumberField(
     long_unit: bool,
     #[prop(optional)] on_end: Option<Callback<()>>,
 ) -> impl IntoView {
-    let view: AnyView = todo!();
-    view
+    // A field taken off the page while it is typed in may still be told it changed: there is then nothing to ask.
+    let commit = move |input: &HtmlInputElement| commit.try_run(input.value()).unwrap_or(false);
+    let show = move |input: &HtmlInputElement| {
+        if let Some(value) = value.try_get_untracked() {
+            input.set_value(&value);
+        }
+    };
+    let on_key = move |e: KeyboardEvent| {
+        if let Some(dir) = step_key(&e.key()) {
+            e.prevent_default();
+            on_step.run(dir);
+        } else if let (Some(end), Some(on_end)) = (field_end(&e.key()), on_end) {
+            e.prevent_default();
+            let input = event_target::<HtmlInputElement>(&e);
+            let kept = end == FieldEnd::Commit && commit(&input);
+            if !kept {
+                show(&input);
+            }
+            // A refused Enter keeps the focus, with the old value back, so the person can type again.
+            if kept || end == FieldEnd::Revert {
+                on_end.run(());
+            }
+        }
+    };
+    view! {
+        <span class="wfield">
+            <input
+                type="text"
+                id=id
+                inputmode=inputmode
+                autocomplete="off"
+                value=move || value.get()
+                prop:value=move || value.get()
+                aria-labelledby=labelled_by
+                aria-describedby=move || described_by.and_then(|d| d.get())
+                on:keydown=on_key
+                on:change=move |e| {
+                    let input = event_target::<HtmlInputElement>(&e);
+                    commit(&input);
+                    // What the field holds is the value, whether the change was taken or refused.
+                    show(&input);
+                }
+            />
+            <span class="unit-tag" class:unit-long=move || long_unit && unit.with(|u| u.chars().count() > 2) aria-hidden="true">{move || unit.get()}</span>
+        </span>
+    }
 }
 
 #[cfg(test)]

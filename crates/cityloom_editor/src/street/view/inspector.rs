@@ -4,10 +4,10 @@
 
 use std::rc::Rc;
 
-use cityloom_ui::Section;
+use cityloom_ui::{NumberField, Section, Stepper};
 use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
-use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
+use leptos::web_sys::{Element, HtmlSelectElement, KeyboardEvent};
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS, curb_key, direction_key, kind_key, material_key};
 use crate::shared::i18n::{Args, I18n};
@@ -198,30 +198,9 @@ pub fn commit_width(w: SheetWatch, uid: u32, typed: &str) -> bool {
     true
 }
 
-/// The step an arrow key makes in the width field, as a number field would.
-pub fn width_key(key: &str) -> Option<i32> {
-    match key {
-        "ArrowUp" => Some(1),
-        "ArrowDown" => Some(-1),
-        _ => None,
-    }
-}
-
-/// How a key ends the width field: Enter keeps what was typed, Escape puts the width back, and either returns the focus to
-/// the drawing (where Enter had brought it from), as the drawing's own keys expect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FieldEnd {
-    Commit,
-    Revert,
-}
-
-pub fn width_end(key: &str) -> Option<FieldEnd> {
-    match key {
-        "Enter" => Some(FieldEnd::Commit),
-        "Escape" => Some(FieldEnd::Revert),
-        _ => None,
-    }
-}
+// The width field's keys: the arrows step it, and Enter and Escape end it and return the focus to the drawing (where
+// Enter had brought it from), as the drawing's own keys expect.
+pub use cityloom_ui::keys::{FieldEnd, field_end as width_end, step_key as width_key};
 
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let value = move || {
@@ -230,55 +209,31 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     };
     let range = move || w.segment(uid, |s| width_range(s, &w.i18n(), w.units())).unwrap_or_default();
     let standard = move || w.segment(uid, |s| width_standard(s, &w.i18n(), w.units())).flatten();
-    let nudge = move |dir: i32| {
+    let nudge = Callback::new(move |dir: i32| {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
-    };
+    });
     view! {
         <Section id="i-h-width" heading=word(w, "inspector-width")>
-            <div class="stepper">
-                <button type="button" class="ico" aria-label=move || step_label(false, &w.i18n(), w.units()) on:click=move |_| nudge(-1)>{icon("M3 7h8")}</button>
-                <span class="wfield">
-                    <input
-                        type="text"
-                        id="width"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        value=value
-                        prop:value=value
-                        aria-labelledby="i-h-width"
-                        aria-describedby="i-width-range i-width-varies"
-                        on:keydown=move |e| {
-                            if let Some(dir) = width_key(&e.key()) {
-                                e.prevent_default();
-                                nudge(dir);
-                            } else if let Some(end) = width_end(&e.key()) {
-                                e.prevent_default();
-                                let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
-                                let kept = end == FieldEnd::Commit && commit_width(w, uid, &input.value());
-                                if !kept {
-                                    let locale = w.i18n().locale_now();
-                                    input.set_value(&w.segment(uid, |s| w.units_now().fixed_in(s.width_mm, 2, locale)).unwrap_or_default());
-                                }
-                                // A refused Enter keeps the focus, with the old width back, so the person can type again.
-                                if kept || end == FieldEnd::Revert {
-                                    if let Some(wrap) = document().get_element_by_id("wrap").and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
-                                        let _ = wrap.focus();
-                                    }
-                                }
-                            }
+            <Stepper
+                less=Signal::derive(move || step_label(false, &w.i18n(), w.units()))
+                more=Signal::derive(move || step_label(true, &w.i18n(), w.units()))
+                on_step=nudge
+            >
+                <NumberField
+                    id="width"
+                    value=Signal::derive(value)
+                    unit=Signal::derive(move || w.units().word().to_string())
+                    commit=Callback::new(move |typed: String| commit_width(w, uid, &typed))
+                    on_step=nudge
+                    labelled_by="i-h-width"
+                    described_by=Signal::derive(|| Some("i-width-range i-width-varies".to_string()))
+                    on_end=Callback::new(move |_| {
+                        if let Some(wrap) = document().get_element_by_id("wrap").and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+                            let _ = wrap.focus();
                         }
-                        on:change=move |e| {
-                            let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
-                            if !commit_width(w, uid, &input.value()) {
-                                let locale = w.i18n().locale_now();
-                                input.set_value(&w.segment(uid, |s| w.units_now().fixed_in(s.width_mm, 2, locale)).unwrap_or_default());
-                            }
-                        }
-                    />
-                    <span class="unit-tag" aria-hidden="true">{move || w.units().word()}</span>
-                </span>
-                <button type="button" class="ico" aria-label=move || step_label(true, &w.i18n(), w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
-            </div>
+                    })
+                />
+            </Stepper>
             <span class="insp-meter-track" aria-hidden="true">
                 <span class="insp-meter" style=move || format!("width: {:.0}%", w.segment(uid, meter_pct).unwrap_or(0.0))></span>
             </span>

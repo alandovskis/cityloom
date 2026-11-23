@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use cityloom_ui::Section;
+use cityloom_ui::{NumberField, Section, Stepper};
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
@@ -211,44 +211,18 @@ fn num_field(w: Watch, n: Num, on_step: impl Fn(i32) + 'static, on_set: impl Fn(
 
 /// The markup of a number field, made once for every field of the panel.
 fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>) -> AnyView {
-    let (down, up, keyed) = (on_step.clone(), on_step.clone(), on_step);
+    let (on_step, on_set) = (StoredValue::new_local(on_step), StoredValue::new_local(on_set));
+    let step = Callback::new(move |dir| on_step.with_value(|step| step(dir)));
+    let commit = Callback::new(move |typed: String| on_set.with_value(|set| commit_typed(&typed, &**set)));
     let Num { id, label, minus, plus, value, tag, hint: note } = n;
     let hint_id = format!("{id}-hint");
-    let described_by = hint_id.clone();
+    let described = hint_id.clone();
+    let described_by = Signal::derive(move || (!note.get().is_empty()).then(|| described.clone()));
     let field = view! {
-            <div class="stepper">
-                <button type="button" class="ico" aria-label=move || minus.get() on:click=move |_| down(-1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
-                <span class="wfield">
-                    <input
-                        type="text"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        value=move || value.get()
-                        prop:value=move || value.get()
-                        aria-labelledby=id
-                        aria-describedby=move || (!note.get().is_empty()).then(|| described_by.clone())
-                        on:keydown=move |ev| {
-                            if let Some(dir) = step_key(&ev.key()) {
-                                ev.prevent_default();
-                                keyed(dir);
-                            }
-                        }
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            commit_typed(&input.value(), &*on_set);
-                            // What the field holds is the model's value, whether it took the edit or refused it.
-                            input.set_value(&value.get_untracked());
-                        }
-                    />
-                    <span class="unit-tag" class:unit-long=move || tag.with(|t| t.chars().count() > 2) aria-hidden="true">{move || tag.get()}</span>
-                </span>
-                <button type="button" class="ico" aria-label=move || plus.get() on:click=move |_| up(1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
-            {hint_with_id(note, hint_id)}
+        <Stepper less=minus more=plus on_step=step>
+            <NumberField value=value unit=tag commit=commit on_step=step labelled_by=id described_by=described_by long_unit=true/>
+        </Stepper>
+        {hint_with_id(note, hint_id)}
     };
     // Every number field edits: offered disabled on a junction shown read-only.
     edit_section(w, id, label, field)
@@ -262,14 +236,8 @@ fn hint_with_id(text: Signal<String>, id: String) -> impl IntoView {
     }
 }
 
-/// The step an arrow key makes in a number field, as the browser's spinner did.
-pub fn step_key(key: &str) -> Option<i32> {
-    match key {
-        "ArrowUp" => Some(1),
-        "ArrowDown" => Some(-1),
-        _ => None,
-    }
-}
+// The step an arrow key makes in a number field, as the browser's spinner did.
+pub use cityloom_ui::keys::step_key;
 
 /// Hands what was typed (a comma or a point for the decimal mark) to `set`;
 /// false when it is not a number.
@@ -425,35 +393,18 @@ fn turbo_size(w: Watch) -> impl IntoView {
         "i-h-turbo-size",
         "jn-insp-turbo-size",
         view! {
-            <div class="stepper" role="group" aria-labelledby="i-h-turbo-size">
-                <button
-                    type="button"
-                    class="ico"
-                    aria-label=words(w, "jn-insp-turbo-smaller")
-                    aria-disabled=move || (!can_smaller()).then_some("true")
-                    on:click=move |_| {
-                        if can_smaller() {
-                            w.edit(|j| j.step_turbo_size(-1));
-                        }
-                    }
-                >
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
+            <Stepper
+                less=Signal::derive(words(w, "jn-insp-turbo-smaller"))
+                more=Signal::derive(words(w, "jn-insp-turbo-larger"))
+                less_off=Signal::derive(move || !can_smaller())
+                more_off=Signal::derive(move || !can_larger())
+                on_step=Callback::new(move |dir| {
+                    w.edit(|j| j.step_turbo_size(dir));
+                })
+                group="i-h-turbo-size"
+            >
                 <span class="wfield turbo-size">{size}</span>
-                <button
-                    type="button"
-                    class="ico"
-                    aria-label=words(w, "jn-insp-turbo-larger")
-                    aria-disabled=move || (!can_larger()).then_some("true")
-                    on:click=move |_| {
-                        if can_larger() {
-                            w.edit(|j| j.step_turbo_size(1));
-                        }
-                    }
-                >
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
+            </Stepper>
         },
     )
 }
@@ -3162,19 +3113,18 @@ fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
     }
 }
 
-/// One setting of actuated street `uid` as a number field with steppers (the street page's and the timing's `.stepper`
-/// markup): its name as the label, the value the model holds, a step down and up (and the arrow keys) by
+/// One setting of actuated street `uid` as a number field with steppers (the street page's and the timing's): its name as the label, the value the model holds, a step down and up (and the arrow keys) by
 /// `Field::step`, and its placeholder bound under it, which the field is described by. A typed value is rounded to a
 /// whole one; one the model refuses (out of its bound, a minimum above the maximum) is said and the field shows the
 /// value kept.
 fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Actuation> + Copy + Send + Sync + 'static) -> AnyView {
     let (id, range_id) = (format!("act-{}-{uid}", field.id()), format!("act-{}-range-{uid}", field.id()));
     let value = move || settings().map(|a| field.get(&a).to_string()).unwrap_or_default();
-    let step = move |dir: i32| {
+    let step = Callback::new(move |dir: i32| {
         if let Some(a) = settings() {
             w.set_actuation(uid, field, (field.get(&a) as i32).saturating_add(dir * field.step() as i32));
         }
-    };
+    });
     let set = move |v: f64| {
         if v.is_finite() && v.abs() < f64::from(i32::MAX) {
             w.set_actuation(uid, field, v.round() as i32);
@@ -3185,35 +3135,22 @@ fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Act
         Field::Vehicles => ("jn-act-range-vehicles", "jn-act-unit-vehicles"),
         _ => ("jn-act-range-seconds", "jn-act-unit-seconds"),
     };
-    let stepper = move |key: &'static str| move || tr(w, key, Args::new().str("field", w.tr(field.key())).num("step", i64::from(field.step())));
+    let stepper = move |key: &'static str| Signal::derive(move || tr(w, key, Args::new().str("field", w.tr(field.key())).num("step", i64::from(field.step()))));
     let (label_for, described_by) = (id.clone(), range_id.clone());
     view! {
         <div class="act-field">
             <label for=label_for>{words(w, field.key())}</label>
-            <div class="stepper">
-                <button type="button" class="ico" id=format!("{id}-less") aria-label=stepper("jn-act-less") on:click=move |_| step(-1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
-                </button>
-                <span class="wfield">
-                    <input type="text" inputmode="numeric" autocomplete="off" id=id aria-describedby=described_by value=value prop:value=value
-                        on:keydown=move |ev| {
-                            if let Some(dir) = step_key(&ev.key()) {
-                                ev.prevent_default();
-                                step(dir);
-                            }
-                        }
-                        on:change=move |ev| {
-                            let input = event_target::<HtmlInputElement>(&ev);
-                            commit_typed(&input.value(), &set);
-                            // What the field holds is the model's value, whether it took the edit or refused it.
-                            input.set_value(&value());
-                        } />
-                    <span class="unit-tag" aria-hidden="true">{words(w, unit_key)}</span>
-                </span>
-                <button type="button" class="ico" id=format!("act-{}-{uid}-more", field.id()) aria-label=stepper("jn-act-more") on:click=move |_| step(1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                </button>
-            </div>
+            <Stepper less=stepper("jn-act-less") more=stepper("jn-act-more") on_step=step less_id=format!("{id}-less") more_id=format!("{id}-more")>
+                <NumberField
+                    id=id
+                    value=Signal::derive(value)
+                    unit=Signal::derive(words(w, unit_key))
+                    commit=Callback::new(move |typed: String| commit_typed(&typed, &set))
+                    on_step=step
+                    inputmode="numeric"
+                    described_by=Signal::derive(move || Some(described_by.clone()))
+                />
+            </Stepper>
             <span class="insp-range" id=range_id>{move || tr(w, range_key, Args::new().num("min", i64::from(lo)).num("max", i64::from(hi)))}</span>
         </div>
     }

@@ -46,7 +46,11 @@ pub fn radio_picks(chosen: bool, enabled: bool) -> bool {
 
 /// The step an arrow key makes in a number field, as a number field would.
 pub fn step_key(key: &str) -> Option<i32> {
-    todo!()
+    match key {
+        "ArrowUp" => Some(1),
+        "ArrowDown" => Some(-1),
+        _ => None,
+    }
 }
 
 /// How a key ends a number field: Enter keeps what was typed, Escape puts the value back.
@@ -57,7 +61,11 @@ pub enum FieldEnd {
 }
 
 pub fn field_end(key: &str) -> Option<FieldEnd> {
-    todo!()
+    match key {
+        "Enter" => Some(FieldEnd::Commit),
+        "Escape" => Some(FieldEnd::Revert),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
