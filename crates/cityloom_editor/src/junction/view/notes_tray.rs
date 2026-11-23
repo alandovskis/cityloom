@@ -8,15 +8,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::vm::JunctionVm;
-use crate::shared::i18n::{Args, I18n};
-use crate::shell::tray::{Tray, TrayPage, TrayTab};
-
-/// A message in the page's language, following a switch.
-type Words = StoredValue<Rc<I18n>, LocalStorage>;
-
-fn tr(words: Words, key: &'static str) -> impl Fn() -> String + Copy + 'static {
-    move || words.with_value(|i| i.tr(key, &Args::new()))
-}
+use crate::shared::i18n::I18n;
+use crate::shell::tray::{Tray, TrayPage, TrayTab, Words, changes_page, checks_page, tr};
 
 #[component]
 pub fn JunctionNotes(vm: Rc<JunctionVm>) -> impl IntoView {
@@ -55,43 +48,12 @@ fn streets(words: Words) -> TrayPage {
     )
 }
 
-/// Checks: whether the junction works; beside them the goal, then where the transit measures' names come from.
+/// Checks: whether the junction works.
 fn checks(words: Words) -> TrayPage {
-    let tab = TrayTab { id: "t-checks", panel: "p-checks", label: "ui-tab-checks", badge: None };
-    TrayPage::new(
-        tab,
-        view! {
-            <div class="checks-split">
-                <section aria-labelledby="h-checks" class="checks-main">
-                    <h2 id="h-checks" class="note-h">{tr(words, "jn-page-does-it-work")}</h2>
-                    <ul class="checks" id="checks"></ul>
-                    <div id="checks-fold-slot"></div>
-                </section>
-                <div class="checks-side">
-                    <section aria-labelledby="h-goal">
-                        <h2 id="h-goal" class="note-h">{tr(words, "goal-heading")}</h2>
-                        <div id="goal-slot"></div>
-                    </section>
-                    <section aria-labelledby="h-atlas">
-                        <h2 id="h-atlas" class="note-h">{tr(words, "src-atlas-junction-label")}</h2>
-                        <div id="atlas-source"></div>
-                    </section>
-                </div>
-            </div>
-        },
-    )
+    checks_page(words, tr(words, "jn-page-does-it-work").into_any(), "src-atlas-junction-label", None)
 }
 
 /// Changes: the person's changes to the junction.
 fn changes(words: Words) -> TrayPage {
-    let tab = TrayTab { id: "t-changes", panel: "p-changes", label: "ui-tab-changes", badge: None };
-    TrayPage::new(
-        tab,
-        view! {
-            <section aria-labelledby="h-rev" class="revs">
-                <h2 id="h-rev" class="note-h">{tr(words, "jn-page-your-changes")}</h2>
-                <ol class="rev-cards" id="revs" aria-labelledby="h-rev"></ol>
-            </section>
-        },
-    )
+    changes_page(words, "jn-page-your-changes")
 }

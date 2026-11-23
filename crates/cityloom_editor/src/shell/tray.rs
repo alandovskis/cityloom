@@ -1,8 +1,9 @@
 //! The notes as a tray under a page's drawing (the street and junction pages): a handle that stays in view (the page's status
 //! line, the notes' tabs, the toggle) over a body holding the tabs' panels. A page gives each tab as a `TrayPage`, the
-//! tab and what its panel holds together; the tray draws both from it, so a tab and its panel always name each other. The tray only draws: the shell binds its
-//! toggle (`]`, `data-notes`) and its tabs (`show_tab`, `tab_key`) as it binds any page's notes, by their ids, so a
-//! page mounts its tray before `mount_shell`. Its styles are `web/tray.css`.
+//! tab and what its panel holds together; the tray draws both from it, so a tab and its panel always name each other.
+//! The two editors' Checks and Changes tabs are the same but for their headings (`checks_page`, `changes_page`). The
+//! tray only draws: the shell binds its toggle (`]`, `data-notes`) and its tabs (`show_tab`, `tab_key`) as it binds any
+//! page's notes, by their ids, so a page mounts its tray before `mount_shell`. Its styles are `web/tray.css`.
 
 use std::rc::Rc;
 
@@ -18,6 +19,57 @@ pub struct TrayTab {
     pub panel: &'static str,
     pub label: &'static str,
     pub badge: Option<&'static str>,
+}
+
+/// A message in the page's language, following a switch.
+pub type Words = StoredValue<Rc<I18n>, LocalStorage>;
+
+/// The message `key` in the page's language, following a switch.
+pub fn tr(words: Words, key: &'static str) -> impl Fn() -> String + Copy + 'static {
+    move || words.with_value(|i| i.tr(key, &Args::new()))
+}
+
+/// Checks: the checks headed by `heading`, what fails first; beside them a column for the goal and its measures, then
+/// where the transit measures' names come from, headed by the message `atlas`. `badge` is the slot after the tab's
+/// name (the street's count of failing checks).
+pub fn checks_page(words: Words, heading: AnyView, atlas: &'static str, badge: Option<&'static str>) -> TrayPage {
+    let tab = TrayTab { id: "t-checks", panel: "p-checks", label: "ui-tab-checks", badge };
+    TrayPage::new(
+        tab,
+        view! {
+            <div class="checks-split">
+                <section aria-labelledby="h-checks" class="checks-main">
+                    <h2 id="h-checks" class="note-h">{heading}</h2>
+                    <ul class="checks" id="checks"></ul>
+                    <div id="checks-fold-slot"></div>
+                </section>
+                <div class="checks-side">
+                    <section aria-labelledby="h-goal">
+                        <h2 id="h-goal" class="note-h">{tr(words, "goal-heading")}</h2>
+                        <div id="goal-slot"></div>
+                    </section>
+                    <section aria-labelledby="h-atlas">
+                        <h2 id="h-atlas" class="note-h">{tr(words, atlas)}</h2>
+                        <div id="atlas-source"></div>
+                    </section>
+                </div>
+            </div>
+        },
+    )
+}
+
+/// Changes: the person's changes, headed by the message `heading`.
+pub fn changes_page(words: Words, heading: &'static str) -> TrayPage {
+    let tab = TrayTab { id: "t-changes", panel: "p-changes", label: "ui-tab-changes", badge: None };
+    TrayPage::new(
+        tab,
+        view! {
+            <section aria-labelledby="h-rev" class="revs">
+                <h2 id="h-rev" class="note-h">{tr(words, heading)}</h2>
+                <ol class="rev-cards" id="revs" aria-labelledby="h-rev"></ol>
+            </section>
+        },
+    )
 }
 
 /// One tab of the tray and what its panel holds.
