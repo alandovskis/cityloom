@@ -11,8 +11,24 @@ pub fn Confirm(
     on_escape: Callback<()>,
     children: Children,
 ) -> impl IntoView {
-    let view: AnyView = todo!();
-    view
+    view! {
+        <div
+            role="group"
+            class="confirm"
+            id=id
+            aria-labelledby=labelled_by
+            aria-describedby=described_by
+            on:keydown=move |e| {
+                if e.key() == "Escape" {
+                    // Not a key of what the question is asked in: Escape only answers it.
+                    e.stop_propagation();
+                    on_escape.run(());
+                }
+            }
+        >
+            {children()}
+        </div>
+    }
 }
 
 #[cfg(test)]

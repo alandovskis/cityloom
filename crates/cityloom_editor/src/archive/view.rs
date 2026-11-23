@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Confirm;
 use leptos::prelude::*;
 
 use crate::archive::model::Choice;
@@ -16,18 +17,11 @@ fn tr(vm: Vm, key: &'static str) -> String {
 
 fn confirmation(vm: Vm) -> impl IntoView {
     view! {
-        <div
-            role="group"
-            aria-labelledby="h-archive-confirm"
-            aria-describedby="archive-confirm-summary"
+        <Confirm
+            labelled_by="h-archive-confirm"
+            described_by="archive-confirm-summary"
             id="archive-confirm"
-            class="confirm"
-            on:keydown=move |e| {
-                if e.key() == "Escape" {
-                    e.stop_propagation();
-                    vm.with_value(|v| v.cancel());
-                }
-            }
+            on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel()))
         >
             <h3 id="h-archive-confirm">{move || tr(vm, "archive-confirm-heading")}</h3>
             <p id="archive-confirm-summary">{move || vm.with_value(|v| v.summary_text())}</p>
@@ -41,7 +35,7 @@ fn confirmation(vm: Vm) -> impl IntoView {
             <button type="button" id="archive-cancel" class="btn" on:click=move |_| vm.with_value(|v| v.cancel())>
                 {move || tr(vm, "archive-confirm-cancel")}
             </button>
-        </div>
+        </Confirm>
     }
 }
 

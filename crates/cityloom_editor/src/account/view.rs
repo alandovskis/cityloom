@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Confirm;
 use leptos::prelude::*;
 
 use crate::account::text::identity_text;
@@ -54,18 +55,11 @@ fn storage(vm: Vm) -> impl IntoView {
                 vm.with_value(|v| v.confirming_stop())
                     .then(|| {
                         view! {
-                            <div
-                                role="group"
-                                aria-labelledby="h-stop"
-                                aria-describedby="stop-warning"
+                            <Confirm
+                                labelled_by="h-stop"
+                                described_by="stop-warning"
                                 id="stop-confirm"
-                                class="confirm"
-                                on:keydown=move |e| {
-                                    if e.key() == "Escape" {
-                                        e.stop_propagation();
-                                        vm.with_value(|v| v.cancel_stop());
-                                    }
-                                }
+                                on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_stop()))
                             >
                                 <h3 id="h-stop">{move || tr(vm, "account-stop-heading")}</h3>
                                 <p id="stop-warning">{move || tr(vm, "account-stop-warning")}</p>
@@ -75,7 +69,7 @@ fn storage(vm: Vm) -> impl IntoView {
                                 <button type="button" id="stop-yes" class="btn danger" on:click=move |_| vm.with_value(|v| v.confirm_stop())>
                                     {move || tr(vm, "account-stop-yes")}
                                 </button>
-                            </div>
+                            </Confirm>
                         }
                     })
             }}
@@ -170,28 +164,21 @@ fn delete(vm: Vm) -> impl IntoView {
             {move || {
                 if vm.with_value(|v| v.confirming_delete()) {
                     view! {
-                        <div
-                            role="group"
-                            aria-labelledby="h-confirm"
-                            aria-describedby="delete-warning"
+                        <Confirm
+                            labelled_by="h-confirm"
+                            described_by="delete-warning"
                             id="delete-confirm"
-                            class="confirm"
-                            on:keydown=move |e| {
-                                if e.key() == "Escape" {
-                                    e.stop_propagation();
-                                    vm.with_value(|v| v.cancel_delete());
-                                }
-                            }
+                            on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_delete()))
                         >
-                            <h3 id="h-confirm">{tr(vm, "account-delete-confirm-heading")}</h3>
-                            <p id="delete-warning">{tr(vm, "account-delete-warning")}</p>
+                            <h3 id="h-confirm">{move || tr(vm, "account-delete-confirm-heading")}</h3>
+                            <p id="delete-warning">{move || tr(vm, "account-delete-warning")}</p>
                             <button type="button" id="delete-no" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
-                                {tr(vm, "account-delete-no")}
+                                {move || tr(vm, "account-delete-no")}
                             </button>
                             <button type="button" class="btn danger" on:click=move |_| vm.with_value(|v| v.confirm_delete())>
-                                {tr(vm, "account-delete-yes")}
+                                {move || tr(vm, "account-delete-yes")}
                             </button>
-                        </div>
+                        </Confirm>
                     }
                         .into_any()
                 } else {

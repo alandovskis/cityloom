@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Confirm;
 use leptos::prelude::*;
 
 use crate::share::vm::{Account, LinkRow, OpenVm, Opening, ShareVm};
@@ -40,17 +41,7 @@ fn follow_focus(vm: Vm) {
 /// The question asked in a row before its link is deleted.
 fn delete_question(vm: Vm) -> impl IntoView {
     view! {
-        <div
-            role="group"
-            class="confirm"
-            aria-labelledby="sharing-delete-question"
-            on:keydown=move |e| {
-                if e.key() == "Escape" {
-                    e.stop_propagation();
-                    vm.with_value(|v| v.cancel_delete());
-                }
-            }
-        >
+        <Confirm labelled_by="sharing-delete-question" on_escape=Callback::new(move |_| vm.with_value(|v| v.cancel_delete()))>
             <p id="sharing-delete-question">{move || vm.with_value(|v| v.delete_question())}</p>
             <div class="share-buttons">
                 <button type="button" id="sharing-delete-safe" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
@@ -69,7 +60,7 @@ fn delete_question(vm: Vm) -> impl IntoView {
                     {move || word(vm, "share-delete-yes")}
                 </button>
             </div>
-        </div>
+        </Confirm>
     }
 }
 
