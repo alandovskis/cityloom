@@ -5,6 +5,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Section;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
@@ -165,13 +166,13 @@ fn option_view(checked: Signal<bool>, disabled: Signal<bool>, glyph: AnyView, na
 }
 
 /// A section with a heading (a message) and its contents.
-fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
+fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> impl IntoView {
+    view! { <Section id=id heading=Signal::derive(words(w, heading))>{body}</Section> }
 }
 
 /// A section whose body is a list, too wide for the control column: its name is above it and the list spans both columns.
-fn wide_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec insp-span"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
+fn wide_section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView + 'static) -> impl IntoView {
+    view! { <Section id=id heading=Signal::derive(words(w, heading)) span=true>{body}</Section> }
 }
 
 /// A section of editing controls: offered disabled on a junction shown read-only (`shared::locked`).
@@ -215,8 +216,6 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
     let hint_id = format!("{id}-hint");
     let described_by = hint_id.clone();
     let field = view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id=id>{words(w, label)}</h3>
             <div class="stepper">
                 <button type="button" class="ico" aria-label=move || minus.get() on:click=move |_| down(-1)>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
@@ -250,10 +249,9 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                 </button>
             </div>
             {hint_with_id(note, hint_id)}
-        </section>
     };
     // Every number field edits: offered disabled on a junction shown read-only.
-    locked(w.read_only(), field)
+    edit_section(w, id, label, field)
 }
 
 /// A hint that a field is described by.
@@ -1154,10 +1152,9 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     move || {
         if walk.get() {
             view! {
-                <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
+                <Section id="i-h-cross" heading=Signal::derive(words(w, "jn-insp-crossing"))>
                     <p class="insp-range">{words(w, "jn-insp-crossing-pedestrian")}</p>
-                </section>
+                </Section>
             }
             .into_any()
         } else if has.get() {
@@ -1374,10 +1371,9 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
     move || match phase.get() {
         None => ().into_any(),
         Some(false) => view! {
-            <section class="insp-sec">
-                <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+            <Section id="i-h-signal" heading=Signal::derive(words(w, "jn-insp-signal"))>
                 <p class="insp-range">{words(w, "jn-sig-no-phase")}</p>
-            </section>
+            </Section>
         }
         .into_any(),
         Some(true) => {
@@ -1713,8 +1709,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
         shown.get().then(|| {
             view! {
                 {signal_fold(w, SignalFold::Plans, move |_| plans_section(w))}
-                <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                <Section id="i-h-signal" heading=Signal::derive(words(w, "jn-insp-signal"))>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     {move || {
@@ -1740,7 +1735,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                             {words(w, "jn-sig-restore")}
                         </button>
                     </div> })}
-                </section>
+                </Section>
                 {signal_fold(w, SignalFold::Calls, move |on| calls_section(w, on))}
                 {signal_fold(w, SignalFold::Actuation, move |on| actuation_section(w, on))}
                 {signal_fold(w, SignalFold::Bikes, move |on| bikes_section(w, on))}

@@ -17,8 +17,13 @@ pub fn Section(
     labelled: bool,
     children: Children,
 ) -> impl IntoView {
-    let view: AnyView = todo!();
-    view
+    let named_by = labelled.then(|| id.clone());
+    view! {
+        <section class=if span { "insp-sec insp-span" } else { "insp-sec" } aria-labelledby=named_by>
+            <h3 class="note-h" id=id>{move || heading.get()}</h3>
+            {children()}
+        </section>
+    }
 }
 
 #[cfg(test)]

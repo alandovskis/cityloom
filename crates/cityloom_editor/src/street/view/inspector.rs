@@ -4,6 +4,7 @@
 
 use std::rc::Rc;
 
+use cityloom_ui::Section;
 use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
@@ -67,6 +68,11 @@ pub fn step_label(more: bool, i18n: &I18n, units: Units) -> String {
 fn say(w: SheetWatch, key: impl Into<String>) -> impl Fn() -> String + Send + Sync + 'static {
     let key = key.into();
     move || w.i18n().tr(&key, &Args::new())
+}
+
+/// As `say`, for a control of `cityloom_ui`.
+fn word(w: SheetWatch, key: impl Into<String>) -> Signal<String> {
+    Signal::derive(say(w, key))
 }
 
 /// How a direction is picked in the field's `<select>`: the index into the
@@ -172,8 +178,8 @@ fn radio_keys(e: KeyboardEvent) {
     }
 }
 
-fn section(id: &'static str, heading: impl Fn() -> String + Send + Sync + 'static, note: impl IntoView, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec"><h3 class="note-h" id=id>{heading}</h3>{note}{body}</section> }
+fn section(id: &'static str, heading: Signal<String>, note: impl IntoView + 'static, body: impl IntoView + 'static) -> impl IntoView {
+    view! { <Section id=id heading=heading>{note}{body}</Section> }
 }
 
 // ---- the panel ------------------------------------------------------------------------------
@@ -228,8 +234,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
     };
     view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id="i-h-width">{say(w, "inspector-width")}</h3>
+        <Section id="i-h-width" heading=word(w, "inspector-width")>
             <div class="stepper">
                 <button type="button" class="ico" aria-label=move || step_label(false, &w.i18n(), w.units()) on:click=move |_| nudge(-1)>{icon("M3 7h8")}</button>
                 <span class="wfield">
@@ -279,7 +284,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
             </span>
             <p class="insp-range" id="i-width-range">{range}{move || standard().map(|s| view! { " " <span class="check-standard">{s}</span> })}</p>
             {move || w.segment(uid, |s| s.varies).unwrap_or(false).then(|| view! { <p class="insp-range" id="i-width-varies">{say(w, "st-varies")}</p> })}
-        </section>
+        </Section>
     }
 }
 
@@ -304,11 +309,10 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
             })
             .collect_view();
         view! {
-            <section class="insp-sec">
-                <h3 class="note-h" id="i-h-surface">{say(w, if planting { "inspector-planting" } else { "inspector-surface" })}</h3>
+            <Section id="i-h-surface" heading=word(w, if planting { "inspector-planting" } else { "inspector-surface" })>
                 <p class="insp-range">{say(w, if planting { "inspector-planting-note" } else { "inspector-surface-note" })}</p>
                 <ul class="opts" role="radiogroup" aria-labelledby="i-h-surface" on:keydown=radio_keys>{options}</ul>
-            </section>
+            </Section>
         }
     }
 }
@@ -316,13 +320,12 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
 fn vehicle_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let tram = move || w.segment(uid, |s| s.tram).unwrap_or(false);
     view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id="i-h-veh">{say(w, "inspector-vehicle")}</h3>
+        <Section id="i-h-veh" heading=word(w, "inspector-vehicle")>
             <div class="units" role="group" aria-labelledby="i-h-veh">
                 <button type="button" class="unit" aria-pressed=move || (!tram()).to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, false)); }>{say(w, "inspector-bus")}</button>
                 <button type="button" class="unit" aria-pressed=move || tram().to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, true)); }>{say(w, "inspector-tram")}</button>
             </div>
-        </section>
+        </Section>
     }
 }
 
@@ -404,15 +407,14 @@ fn times_section(w: SheetWatch, uid: u32) -> impl IntoView {
     };
     let can_add = move || w.segment(uid, |s| !s.alt_kinds.is_empty()).unwrap_or(false);
     view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id="i-h-times">{say(w, "inspector-times")}</h3>
+        <Section id="i-h-times" heading=word(w, "inspector-times")>
             <p class="insp-range">{base}</p>
             <ul class="vars"><For each=move || 0..count.get() key=|i| *i children=move |vi| variant_row(w, uid, vi)/></ul>
             <button type="button" class="btn" disabled=move || !can_add() on:click=move |_| { w.edit(|e| e.add_variant(uid)); }>
                 <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
                 {say(w, "inspector-times-add")}
             </button>
-        </section>
+        </Section>
     }
 }
 
@@ -434,7 +436,7 @@ fn direction_section(w: SheetWatch, uid: u32, optional: bool) -> impl IntoView {
     });
     section(
         "i-h-dir",
-        say(w, "inspector-direction"),
+        word(w, "inspector-direction"),
         view! { <p class="insp-range">{say(w, "inspector-direction-note")}</p> },
         view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-dir" on:keydown=radio_keys>{options}{both}</ul> },
     )
@@ -465,7 +467,7 @@ fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoVi
     );
     section(
         "i-h-curb",
-        say(w, "inspector-curb"),
+        word(w, "inspector-curb"),
         view! { <p class="insp-range">{say(w, "inspector-curb-note")}</p> },
         view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-curb" on:keydown=radio_keys>{options}{none}</ul> },
     )
