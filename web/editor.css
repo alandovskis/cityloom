@@ -2298,7 +2298,8 @@ svg pattern circle {
 }
 /* The street page's piece pane: Move and Remove under the name, then one row per setting, its name in a column on the
    left and the control on the right, with the width's place in its range drawn under the field, and the choices of a
-   surface, a direction or a curb as tiles, three across. The junction's inspector keeps its own look. */
+   surface, a direction or a curb as tiles, three across (`.insp-columns`, which the junction's levels share but for its
+   signal plan, CLM-51). */
 .insp-actions {
   display: flex;
   gap: 6px;
@@ -2338,16 +2339,19 @@ svg pattern circle {
   border-radius: 2px;
   background: var(--accent);
 }
-.street-page #inspector {
+.insp-columns {
+  display: flex;
+  flex-direction: column;
   gap: 0;
+  min-width: 0;
 }
-.street-page #inspector .insp-head {
+.insp-columns .insp-head {
   margin-bottom: 10px;
 }
-.street-page #inspector .insp-actions {
+.insp-columns .insp-actions {
   margin-bottom: 4px;
 }
-.street-page #inspector .insp-sec {
+.insp-columns .insp-sec {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr);
   gap: 4px 10px;
@@ -2355,11 +2359,11 @@ svg pattern circle {
   padding: 12px 0;
   border-top: 1px solid var(--rule);
 }
-.street-page #inspector .insp-sec > * {
+.insp-columns .insp-sec > * {
   grid-column: 2;
   min-width: 0;
 }
-.street-page #inspector .insp-sec > .note-h {
+.insp-columns .insp-sec > .note-h {
   grid-column: 1;
   grid-row: 1;
   margin: 0;
@@ -2367,25 +2371,33 @@ svg pattern circle {
   border: 0;
   font-size: 13px;
 }
-.street-page #inspector .insp-sec > .insp-range {
+.insp-columns .insp-sec > .insp-range {
   margin: 0;
   font-size: 12px;
 }
-.street-page #inspector .insp-sec > .btn {
+.insp-columns .insp-sec > .btn {
   justify-self: start;
   width: auto;
   min-height: 32px;
   font-size: 13px;
 }
-.street-page #inspector .vars:empty {
+/* A section whose body is a list, too wide for the control column: its name above it, the list across both columns. */
+.insp-columns .insp-sec.insp-wide > * {
+  grid-column: 1 / -1;
+}
+.insp-columns .insp-sec.insp-wide > .note-h {
+  grid-row: auto;
+  padding: 0 0 2px;
+}
+.insp-columns .vars:empty {
   display: none;
 }
-.street-page #inspector .opts[role="radiogroup"] {
+.insp-columns .insp-sec > .opts[role="radiogroup"] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
-.street-page #inspector .opt[role="radio"] {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {
   position: relative;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
@@ -2398,18 +2410,18 @@ svg pattern circle {
   line-height: 1.2;
   text-align: center;
 }
-.street-page #inspector .opt[role="radio"][aria-checked="true"] {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"] {
   padding: 5px 3px;
   border: 2px solid var(--accent);
 }
-.street-page #inspector .opt[role="radio"] .tick {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] .tick {
   position: absolute;
   top: 3px;
   right: 3px;
   width: 12px;
   height: 12px;
 }
-.street-page #inspector .opt[role="radio"] .swatch {
+.insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] .swatch {
   width: 100%;
   max-width: 64px;
   height: 20px;
