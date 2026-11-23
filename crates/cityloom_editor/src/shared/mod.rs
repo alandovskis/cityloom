@@ -6,6 +6,8 @@ pub mod atlas;
 pub mod bind;
 pub mod catalogue;
 pub mod check_fold;
+#[cfg(target_arch = "wasm32")]
+pub mod column_room;
 pub mod compare;
 pub mod compare_view;
 #[cfg(test)]
