@@ -4,9 +4,11 @@
 //!
 //! Pure: no wording but `Said`. The designs are the street's own data; nothing is read from the page.
 
+use super::matching::rising;
 use super::{Segment, Street};
 use crate::shared::catalogue::{DIRECTIONS, DirectionRule, KINDS};
 use crate::shared::said::{Arg, Said};
+use std::collections::BTreeSet;
 
 /// How many driving lanes (the pieces that must run one way) of the base section run in one direction, in each of two
 /// designs.
@@ -37,14 +39,16 @@ fn direction_message(direction: usize) -> &'static str {
 }
 
 /// One difference between the base sections of the two designs. A piece is the same piece in both by its `uid`, else by
-/// the longest common subsequence of the kinds, left to right, between the pieces paired by `uid` (see `pair`).
+/// a longest common subsequence of the kinds, left to right, between the pieces paired by `uid`; where the uids of the
+/// sections are not the same set and that pairs fewer pieces of one kind, by a longest common subsequence of the kinds
+/// over both whole sections alone (see `pair`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceChange {
     /// A piece only B has.
     Added { kind: usize, width_mm: i32 },
     /// A piece only A has.
     Removed { kind: usize, width_mm: i32 },
-    /// A piece that is of another kind in B; only a pair by `uid` can be.
+    /// A piece that is of another kind in B; only a pair by `uid` can be, so none when the pairing is by kinds alone.
     Kind { from: usize, to: usize },
     /// A piece of one kind that is wider or narrower in B.
     Width { kind: usize, a_mm: i32, b_mm: i32 },
@@ -71,7 +75,8 @@ pub enum Other {
     Speed,
     Stretches,
     /// Something other than their kinds and widths of the base pieces paired as `pieces` pairs them (surface, curb,
-    /// direction of a piece that need not have one, times of day), or the order of those paired by `uid`.
+    /// direction of a piece that need not have one, times of day), or, where they are paired by `uid` first, the order of
+    /// those paired by `uid`.
     PieceDetails,
     Curbside,
     Stops,
@@ -108,26 +113,45 @@ struct Paired {
     b: usize,
 }
 
-/// The base pieces of designs A and B that are the same piece: those with the same `uid`, whatever their kinds, and,
-/// since a Transform measure or a template gives its pieces new uids, those a longest common subsequence of the kinds,
-/// left to right, pairs among the rest. The pairs by `uid` that keep their order part the street in gaps, and the
-/// alignment stays within a gap, so it crosses none of them.
+/// The base pieces of designs A and B that are the same piece.
+struct Pairing {
+    pairs: Vec<Paired>,
+    /// Paired by `uid` first (`pair_by_uid`), not by the kinds alone.
+    by_uid: bool,
+}
+
+/// The base pieces of designs A and B that are the same piece: by `uid` first (`pair_by_uid`), or by the kinds alone, a
+/// longest common subsequence of them over both whole sections.
 ///
-/// Not `matching::match_pieces`, which pairs the pieces of a taper: it refuses a pair by `uid` of another kind, and
-/// takes a non-crossing set greedily, which need not be the longest.
-fn pair(a: &[Segment], b: &[Segment]) -> Vec<Paired> {
+/// A scenario numbers its new pieces from the baseline's next uid, so two designs can give one uid to pieces that are
+/// not the same. When both sections hold the same set of uids, the pairing is by `uid`; otherwise it is by `uid` only
+/// when that gives at least as many pairs of one kind, by `uid` and by alignment, as the kinds alone do.
+fn pair(a: &[Segment], b: &[Segment]) -> Pairing {
+    let uids = |section: &[Segment]| section.iter().map(|p| p.uid).collect::<BTreeSet<_>>();
+    let by_uid = pair_by_uid(a, b);
+    let by_kind = align(a, &Vec::from_iter(0..a.len()), b, &Vec::from_iter(0..b.len()));
+    let of_one_kind = by_uid.iter().filter(|p| a[p.a].kind == b[p.b].kind).count();
+    if uids(a) == uids(b) || of_one_kind >= by_kind.len() { Pairing { pairs: by_uid, by_uid: true } } else { Pairing { pairs: by_kind, by_uid: false } }
+}
+
+/// The pieces with the same `uid`, whatever their kinds, and, since a Transform measure or a template gives its pieces
+/// new uids, those a longest common subsequence of the kinds, left to right, pairs among the rest. The pairs by `uid`
+/// that keep their order (the longest run of them whose places in B rise with those in A) part the street in gaps, and
+/// the alignment stays within a gap, so it crosses none of them.
+///
+/// Not `matching::match_pieces`, which pairs the pieces of a taper: it refuses a pair by `uid` of another kind; it gives
+/// a piece with none the first free piece of its kind, wherever that lies, so what is left without crossings need not be
+/// a longest common subsequence of the kinds; and it keeps only the longest rising run of its pairs and splits the
+/// others in a dropped and an added piece, where here a pair by `uid` that crosses others stays a pair, a piece detail.
+fn pair_by_uid(a: &[Segment], b: &[Segment]) -> Vec<Paired> {
     let mut pairs: Vec<Paired> =
         b.iter().enumerate().filter_map(|(j, now)| a.iter().position(|was| was.uid == now.uid).map(|i| Paired { a: i, b: j })).collect();
     let free_a: Vec<usize> = (0..a.len()).filter(|&i| !pairs.iter().any(|p| p.a == i)).collect();
     let free_b: Vec<usize> = (0..b.len()).filter(|&j| !pairs.iter().any(|p| p.b == j)).collect();
     pairs.sort_by_key(|p| p.a);
     // the gaps, each up to (and without) its end in A and in B: one before each pair that keeps its order, and the last
-    let mut ends: Vec<(usize, usize)> = Vec::new();
-    for p in &pairs {
-        if ends.last().is_none_or(|&(_, end_b)| p.b > end_b) {
-            ends.push((p.a, p.b));
-        }
-    }
+    let keep = rising(&pairs.iter().map(|p| p.b).collect::<Vec<_>>());
+    let mut ends: Vec<(usize, usize)> = pairs.iter().zip(&keep).filter(|&(_, &kept)| kept).map(|(p, _)| (p.a, p.b)).collect();
     ends.push((a.len(), b.len()));
     let (mut from_a, mut from_b) = (0, 0);
     for (end_a, end_b) in ends {
@@ -167,9 +191,10 @@ fn align(a: &[Segment], of_a: &[usize], b: &[Segment], of_b: &[usize]) -> Vec<Pa
 
 /// The pieces added, removed or changed from design A to design B in the base section, in B's order and then A's
 /// removed ones, and whether the stretches along the street (where each starts, and how many) differ. A piece is the
-/// same in both as `pair` pairs them; one it leaves unpaired is added or removed.
+/// same in both as the pairing `pair` chooses (by `uid` first, or by kinds alone) says; one it leaves unpaired is added
+/// or removed.
 pub fn pieces(a: &Street, b: &Street) -> (bool, Vec<PieceChange>) {
-    let pairs = pair(&a.segments, &b.segments);
+    let pairs = pair(&a.segments, &b.segments).pairs;
     let mut changes = Vec::new();
     for (j, now) in b.segments.iter().enumerate() {
         match pairs.iter().find(|p| p.b == j).map(|p| &a.segments[p.a]) {
@@ -196,16 +221,18 @@ fn without_uids(section: &[Segment]) -> Vec<Segment> {
 }
 
 /// Whether the base sections differ in more than what `pieces` lists: a field other than uid, kind and width of a piece
-/// both have, as `pair` pairs them (a driving lane's direction is `lanes`'), or the order of the pieces paired by uid.
+/// both have, as `pair` pairs them (a driving lane's direction is `lanes`'), or, when it pairs them by `uid` first, the
+/// order of the pieces paired by `uid`: by kinds alone, a shared uid says nothing.
 fn piece_details_differ(a: &Street, b: &Street) -> bool {
     let shared =
         |from: &Street, other: &Street| from.segments.iter().filter(|p| other.segments.iter().any(|q| q.uid == p.uid)).map(|p| p.uid).collect::<Vec<_>>();
-    pair(&a.segments, &b.segments).iter().any(|p| {
+    let pairing = pair(&a.segments, &b.segments);
+    pairing.pairs.iter().any(|p| {
         let (was, now) = (&a.segments[p.a], &b.segments[p.b]);
         let driving = |p: &Segment| KINDS[p.kind].direction == DirectionRule::Required;
         let direction = if driving(was) || driving(now) { now.direction } else { was.direction };
         Segment { uid: now.uid, kind: now.kind, width_mm: now.width_mm, direction, ..was.clone() } != *now
-    }) || shared(a, b) != shared(b, a)
+    }) || (pairing.by_uid && shared(a, b) != shared(b, a))
 }
 
 /// A list whose order carries no meaning, in an order that is the same for the same contents. It sorts by the
