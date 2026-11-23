@@ -2274,8 +2274,11 @@ fn calls_section(w: Watch) -> impl IntoView {
         })
     };
     let none_on_call = Memo::new(move |_| calls.with(|c| !c.crossings.iter().any(|c| c.on_call)));
+    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
+    // that leaves the answer alone does not draw the section again
+    let drawn = Memo::new(move |_| shown(SignalFold::Calls, &w.view()));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
                     <h3 class="note-h" id="i-h-calls">{words(w, "jn-calls-heading")}</h3>
@@ -2474,8 +2477,11 @@ fn actuation_section(w: Watch) -> impl IntoView {
         })
     };
     let none_actuated = Memo::new(move |_| act.with(|a| !a.streets.iter().any(|s| s.settings.is_some())));
+    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
+    // that leaves the answer alone does not draw the section again
+    let drawn = Memo::new(move |_| shown(SignalFold::Actuation, &w.view()));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
                     <h3 class="note-h" id="i-h-actuation">{words(w, "jn-act-heading")}</h3>
@@ -2770,8 +2776,11 @@ fn bikes_section(w: Watch) -> impl IntoView {
         })
     };
     let none_on = Memo::new(move |_| bikes.with(|b| !b.movements.iter().any(|m| m.on_detection)));
+    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
+    // that leaves the answer alone does not draw the section again
+    let drawn = Memo::new(move |_| shown(SignalFold::Bikes, &w.view()));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
                     <h3 class="note-h" id="i-h-bikes">{words(w, "jn-bikes-heading")}</h3>
@@ -2961,8 +2970,11 @@ fn priority_section(w: Watch) -> impl IntoView {
     };
     let none_on = Memo::new(move |_| transit.with(|t| !t.streets.iter().any(|s| s.priority.is_some())));
     // As actuation and bicycle detection: no section with no street to list (none has transit or priority).
+    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
+    // that leaves the answer alone does not draw the section again
+    let drawn = Memo::new(move |_| shown(SignalFold::Priority, &w.view()));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
                     <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
@@ -3134,8 +3146,11 @@ fn preemption_section(w: Watch) -> impl IntoView {
     let none_on = Memo::new(move |_| preempt.with(|p| !p.streets.iter().any(|s| s.rate.is_some())));
     // As actuation, bicycle detection and transit priority: no section with no street to list (none has a phase of its
     // own or pre-emption).
+    // drawn where its fold is (`signal_folds::shown`): one rule for both, watched as a memo so an edit
+    // that leaves the answer alone does not draw the section again
+    let drawn = Memo::new(move |_| shown(SignalFold::Preemption, &w.view()));
     move || {
-        (!uids.with(Vec::is_empty)).then(|| {
+        drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
                     <h3 class="note-h" id="i-h-preemption">{words(w, "jn-preempt-heading")}</h3>
