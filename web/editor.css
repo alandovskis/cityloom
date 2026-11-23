@@ -2663,7 +2663,7 @@ svg pattern circle {
   padding-top: 0;
   border-top: 0;
 }
-/* A long unit ("m across") goes under its number, which keeps room to be read. */
+/* A long unit ("m across") goes under its number, which keeps room to be read in any font. */
 #inspector > .insp-columns .stepper .wfield {
   flex-wrap: wrap;
   justify-content: center;
@@ -2672,6 +2672,10 @@ svg pattern circle {
   flex: 1 1 64px;
   min-width: 64px;
   padding-inline: 4px;
+}
+#inspector > .insp-columns .stepper .unit-long {
+  flex-basis: 100%;
+  text-align: center;
 }
 /* A tile's tick has the corner to itself: a layout's name is words alone, with no picture above it. */
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"] {

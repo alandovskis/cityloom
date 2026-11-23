@@ -857,13 +857,14 @@ async function misfits(page: Page) {
     ) {
       found.push("no setting is beside its name");
     }
-    // A unit of a letter or two is beside its number.
+    // A unit of a letter or two is beside its number; a longer one is under it, whatever the font, so the number has the room.
     for (const tag of column.querySelectorAll(".stepper .unit-tag")) {
       const field = tag.parentElement!.querySelector("input")!.getBoundingClientRect();
       const t = tag.getBoundingClientRect();
       const middle = (t.top + t.bottom) / 2;
-      if (shown(t) && tag.textContent!.trim().length <= 2 && (middle < field.top || middle > field.bottom)) {
-        found.push(`${named(tag)}: "${tag.textContent}" is not beside its number`);
+      const short = tag.textContent!.trim().length <= 2;
+      if (shown(t) && short !== (middle > field.top && middle < field.bottom)) {
+        found.push(`${named(tag)}: "${tag.textContent}" is not ${short ? "beside" : "under"} its number`);
       }
     }
     // What is said under a control is right under it, however many lines the setting's name takes.

@@ -243,7 +243,7 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                             input.set_value(&value.get_untracked());
                         }
                     />
-                    <span class="unit-tag" aria-hidden="true">{move || tag.get()}</span>
+                    <span class="unit-tag" class:unit-long=move || tag.with(|t| t.chars().count() > 2) aria-hidden="true">{move || tag.get()}</span>
                 </span>
                 <button type="button" class="ico" aria-label=move || plus.get() on:click=move |_| up(1)>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
