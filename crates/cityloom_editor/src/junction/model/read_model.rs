@@ -14,7 +14,8 @@ use crate::junction::model::{
     ALL_WAY_STOP, APPROACH_DEFAULT_MM, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD,
     ISLAND_MIN_ROAD_MM, ISLAND_MM, Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT,
     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
-    TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
+    TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, compass_name_key, in_force, protected_blocker, protected_island_mm, traffic_arms,
+    turn_class,
 };
 use crate::junction::model::{actuation, bicycles, calls, preemption, transit};
 use crate::street::model::{StopKindExt, UseExt};
@@ -1342,7 +1343,7 @@ pub struct PatternView {
 
 /// The compass point an arm leaves by, said in full ("north-east").
 fn compass_said(bearing: i32) -> Said {
-    Said::new(crate::junction::view::turns::compass_name_key(bearing))
+    Said::new(compass_name_key(bearing))
 }
 
 /// "a", "a and b", "a, b and c", each item a `Said`.

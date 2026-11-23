@@ -6,38 +6,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::model::read_model::JView;
-use crate::junction::model::{LEFT, THROUGH};
+use crate::junction::model::{LEFT, THROUGH, compass_key};
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::watch::Watch;
 use crate::shared::i18n::Args;
-
-const COMPASS_KEYS: [&str; 8] = [
-    "jn-compass-short-n",
-    "jn-compass-short-ne",
-    "jn-compass-short-e",
-    "jn-compass-short-se",
-    "jn-compass-short-s",
-    "jn-compass-short-sw",
-    "jn-compass-short-w",
-    "jn-compass-short-nw",
-];
-
-const COMPASS_NAMES: [&str; 8] =
-    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
-
-fn point(bearing: i32) -> usize {
-    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
-}
-
-/// The message of the compass point a bearing is nearest, as a short tag ("NE").
-pub fn compass_key(bearing: i32) -> &'static str {
-    COMPASS_KEYS[point(bearing)]
-}
-
-/// The message of the compass point a bearing is nearest, in full ("north-east").
-pub fn compass_name_key(bearing: i32) -> &'static str {
-    COMPASS_NAMES[point(bearing)]
-}
 
 /// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
 pub fn turn_glyph(class: u8, size: u32) -> impl IntoView {

@@ -805,14 +805,32 @@ pub fn compass(bearing: i32) -> Said {
     Said::new(KEYS[(((bearing + 22).rem_euclid(360)) / 45) as usize])
 }
 
+const COMPASS_KEYS: [&str; 8] = [
+    "jn-compass-short-n",
+    "jn-compass-short-ne",
+    "jn-compass-short-e",
+    "jn-compass-short-se",
+    "jn-compass-short-s",
+    "jn-compass-short-sw",
+    "jn-compass-short-w",
+    "jn-compass-short-nw",
+];
+
+const COMPASS_NAMES: [&str; 8] =
+    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+
+fn point(bearing: i32) -> usize {
+    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+}
+
 /// The message of the compass point a bearing is nearest, as a short tag ("NE").
 pub fn compass_key(bearing: i32) -> &'static str {
-    todo!()
+    COMPASS_KEYS[point(bearing)]
 }
 
 /// The message of the compass point a bearing is nearest, in full ("north-east").
 pub fn compass_name_key(bearing: i32) -> &'static str {
-    todo!()
+    COMPASS_NAMES[point(bearing)]
 }
 
 /// An arm by its street and the way it leaves the junction: "Main Street (north)".
