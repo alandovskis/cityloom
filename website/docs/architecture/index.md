@@ -60,8 +60,8 @@ Tests also use more of other slices, to set up what they test:
 - `restriction::fixtures`: the tests of city, map and street.
 - `shell::view::i18n_keys`: the tests of account, junction, map and project.
 - `sync::SyncVm` and `sync::Status`: the tests of account.
-- `sync::tests::Device`, `sync::local::ids`, `share::links::ProjectShares`, `share::store` and `timeline::store`: the
-  tests of project.
+- `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`), `sync::local::ids`, `share::links::ProjectShares`,
+  `share::store` and `timeline::store`: the tests of project.
 - `city::scenario::Action`: the tests of street and junction.
 
 A few stores are used across slices too. `sync::local` uses `project::store` and

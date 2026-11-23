@@ -63,8 +63,8 @@ Les tests utilisent aussi davantage des autres tranches, pour mettre en place ce
 - `restriction::fixtures` : les tests de la ville, de la carte et de la rue.
 - `shell::view::i18n_keys` : les tests du compte, de la jonction, de la carte et des projets.
 - `sync::SyncVm` et `sync::Status` : les tests du compte.
-- `sync::tests::Device`, `sync::local::ids`, `share::links::ProjectShares`, `share::store` et `timeline::store` : les
-  tests des projets.
+- `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`), `sync::local::ids`, `share::links::ProjectShares`,
+  `share::store` et `timeline::store` : les tests des projets.
 - `city::scenario::Action` : les tests de la rue et de la jonction.
 
 Quelques magasins sont aussi utilisés d’une tranche à l’autre. `sync::local` utilise `project::store` et
