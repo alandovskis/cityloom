@@ -1,0 +1,586 @@
+{
+  "_comment": "The product's features, at the level a person tests by hand, so that a test can be mapped to the feature it covers (the test inventory, CLM-44). Each feature: a stable id; its name in English and in fr-CA; the pages of web/ it lives on (none for a feature with no page of its own); the slice of crates/cityloom_editor/src/ or the crate that owns it; the globs of its code, from the repository's root, so that a Rust test is mapped by its file; and the browser specs (e2e/tests/<name>.spec.ts) that cover it. Every slice, every other crate, every page and every spec of e2e/tiers.json belongs to at least one feature: scripts/include/tests/test_features.py (`just test-scripts`) fails otherwise, and when an id repeats, a name is missing, a glob matches no file or a spec does not exist. Keep it at tens of features.",
+  "features": [
+    {
+      "id": "street.pieces",
+      "en": "A street's cross-section is laid out from pieces that are added, removed, resized and rearranged, with Undo and Start over",
+      "fr-CA": "La coupe d’une rue se compose d’éléments qu’on ajoute, retire, redimensionne et réorganise, avec Annuler et Recommencer",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/pieces.rs",
+        "crates/cityloom_editor/src/street/model/pick.rs",
+        "crates/cityloom_editor/src/street/model/mod.rs",
+        "crates/cityloom_editor/src/street/vm/mod.rs",
+        "crates/cityloom_editor/src/street/vm/row.rs",
+        "crates/cityloom_editor/src/street/vm/add_menu.rs",
+        "crates/cityloom_editor/src/street/vm/keys.rs",
+        "crates/cityloom_editor/src/street/view/piece_list.rs",
+        "crates/cityloom_editor/src/street/view/add_menu.rs",
+        "crates/cityloom_editor/src/street/view/inspector.rs",
+        "crates/cityloom_editor/src/street/view/page.rs",
+        "crates/cityloom_editor/src/shared/catalogue.rs",
+        "crates/cityloom_model/src/catalogue.rs",
+        "crates/cityloom_model/src/street/*.rs"
+      ],
+      "specs": ["street", "editors"]
+    },
+    {
+      "id": "street.drawing",
+      "en": "A street is drawn in 2.5D, and a piece is chosen by pressing it on the drawing",
+      "fr-CA": "Une rue est dessinée en 2,5D, et on choisit un élément en appuyant dessus dans le dessin",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/view/iso/**/*.rs",
+        "crates/cityloom_editor/src/street/view/drawing.rs",
+        "crates/cityloom_editor/src/shared/iso/*.rs"
+      ],
+      "specs": ["street-iso"]
+    },
+    {
+      "id": "street.stretches",
+      "en": "A street is split into stretches, each with its own layout, whose boundaries are dragged on the street's plan",
+      "fr-CA": "Une rue se divise en tronçons, chacun avec sa propre disposition, dont on glisse les limites sur le plan de la rue",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/zones.rs",
+        "crates/cityloom_editor/src/street/model/transition.rs",
+        "crates/cityloom_editor/src/street/model/joint.rs",
+        "crates/cityloom_editor/src/street/model/plan.rs",
+        "crates/cityloom_editor/src/street/vm/plan.rs",
+        "crates/cityloom_editor/src/street/vm/level.rs",
+        "crates/cityloom_editor/src/street/view/plan/**/*.rs"
+      ],
+      "specs": ["street", "a11y"]
+    },
+    {
+      "id": "street.speed",
+      "en": "A street and each of its stretches have a speed limit, imported from OpenStreetMap and changed by the designer",
+      "fr-CA": "Une rue et chacun de ses tronçons ont une limite de vitesse, importée d’OpenStreetMap et modifiée par le concepteur",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": ["crates/cityloom_editor/src/street/model/zone_speed.rs", "crates/cityloom_model/src/street/speed.rs"],
+      "specs": ["speed"]
+    },
+    {
+      "id": "street.curbside",
+      "en": "Curbside uses (parking, loading, trees, patios, bike parking, platforms) are placed along the curb",
+      "fr-CA": "Les usages du bord de rue (stationnement, livraison, arbres, terrasses, stationnement pour vélos, quais) se placent le long de la bordure",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/curb*.rs",
+        "crates/cityloom_editor/src/street/model/map_uses.rs",
+        "crates/cityloom_editor/src/street/view/curb_*.rs",
+        "crates/cityloom_model/src/street/curb.rs"
+      ],
+      "specs": ["curb"]
+    },
+    {
+      "id": "street.stops",
+      "en": "Bus stops are added along a street, at the curb, on a bulb or on an island, with or without a shelter",
+      "fr-CA": "Des arrêts d’autobus s’ajoutent le long d’une rue, en bordure, sur une avancée ou sur un îlot, avec ou sans abri",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/stop*.rs",
+        "crates/cityloom_editor/src/street/view/stop_*.rs",
+        "crates/cityloom_model/src/street/stop.rs"
+      ],
+      "specs": ["stops"]
+    },
+    {
+      "id": "street.calming",
+      "en": "Raised elements calm traffic: raised tables, raised crossings, chicanes and modal filters",
+      "fr-CA": "Des éléments surélevés apaisent la circulation : plateaux surélevés, passages piétons surélevés, chicanes et filtres modaux",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/calming*.rs",
+        "crates/cityloom_editor/src/street/view/calming_*.rs",
+        "crates/cityloom_model/src/street/calming.rs"
+      ],
+      "specs": ["calming"]
+    },
+    {
+      "id": "street.green",
+      "en": "Street trees and green infrastructure (tree pits, planting beds, rain gardens, bioswales) are placed on a street",
+      "fr-CA": "Des arbres et des infrastructures vertes (fosses d’arbre, plates-bandes, jardins de pluie, noues végétalisées) se placent dans une rue",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/green.rs",
+        "crates/cityloom_editor/src/street/view/green_*.rs",
+        "crates/cityloom_model/src/street/green.rs"
+      ],
+      "specs": ["green"]
+    },
+    {
+      "id": "street.checks",
+      "en": "A street's checks say whether its pieces fit and meet the standards, and the Impact card says what the last change did",
+      "fr-CA": "Les vérifications d’une rue disent si ses éléments tiennent et respectent les normes, et la carte Impact dit ce qu’a changé la dernière modification",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/measures.rs",
+        "crates/cityloom_editor/src/street/model/profile.rs",
+        "crates/cityloom_editor/src/street/model/unavailable.rs",
+        "crates/cityloom_editor/src/street/vm/impact.rs",
+        "crates/cityloom_editor/src/shared/check_fold.rs"
+      ],
+      "specs": ["impact", "street"]
+    },
+    {
+      "id": "street.templates",
+      "en": "A street is transformed by a template, such as a transit street or a school street, in one step that Undo takes back",
+      "fr-CA": "Une rue se transforme d’un coup selon un modèle, comme une rue de transport en commun ou une rue scolaire, et Annuler le défait",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/street",
+      "code": [
+        "crates/cityloom_editor/src/street/model/templates.rs",
+        "crates/cityloom_editor/src/street/model/school.rs",
+        "crates/cityloom_editor/src/street/vm/transform.rs"
+      ],
+      "specs": ["templates"]
+    },
+    {
+      "id": "street.standards",
+      "en": "A standards profile replaces the built-in thresholds that a street's checks read",
+      "fr-CA": "Un profil de normes remplace les seuils intégrés que lisent les vérifications d’une rue",
+      "pages": ["street.html"],
+      "owner": "crates/cityloom_editor/src/standards",
+      "code": ["crates/cityloom_editor/src/standards/*.rs"],
+      "specs": ["standards"]
+    },
+    {
+      "id": "junction.layout",
+      "en": "A junction's arms, lanes, turns, crossings and control are drawn and edited, and every part is reached by keyboard or by a tap",
+      "fr-CA": "Les branches, voies, virages, passages pour piétons et la signalisation d’une jonction sont dessinés et modifiés, et chaque partie s’atteint au clavier ou d’une touche",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": [
+        "crates/cityloom_editor/src/junction/model/mod.rs",
+        "crates/cityloom_editor/src/junction/model/geometry.rs",
+        "crates/cityloom_editor/src/junction/model/control.rs",
+        "crates/cityloom_editor/src/junction/model/read_model.rs",
+        "crates/cityloom_editor/src/junction/model/beyond.rs",
+        "crates/cityloom_editor/src/junction/model/curbside.rs",
+        "crates/cityloom_editor/src/junction/model/stops.rs",
+        "crates/cityloom_editor/src/junction/vm/*.rs",
+        "crates/cityloom_editor/src/junction/view/*.rs",
+        "crates/cityloom_editor/src/junction/view/iso/*.rs"
+      ],
+      "specs": ["junction", "junction-a11y", "focus-touch"]
+    },
+    {
+      "id": "junction.roundabout",
+      "en": "A junction is made a roundabout or a turbo roundabout",
+      "fr-CA": "Une jonction devient un carrefour giratoire ou un giratoire turbo",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/turbo*.rs"],
+      "specs": ["junction"]
+    },
+    {
+      "id": "junction.signal.phases",
+      "en": "A signalled junction's phases are chosen from ready-made patterns or set by hand, with their timing",
+      "fr-CA": "Les phases d’une jonction à feux se choisissent parmi des modèles tout faits ou se règlent à la main, avec leur minutage",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": [
+        "crates/cityloom_editor/src/junction/model/signal.rs",
+        "crates/cityloom_editor/src/junction/view/phase_svg.rs",
+        "crates/cityloom_editor/src/junction/view/turns.rs",
+        "crates/cityloom_editor/src/junction/view/signal_folds.rs"
+      ],
+      "specs": ["junction"]
+    },
+    {
+      "id": "junction.signal.plans",
+      "en": "A signal follows time-of-day plans on a weekly schedule",
+      "fr-CA": "Des feux suivent des plans selon l’heure, d’après l’horaire de la semaine",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/plans.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "junction.signal.calls",
+      "en": "A signal serves pedestrians on call, by push button or by passive detection",
+      "fr-CA": "Des feux servent les piétons sur appel, par bouton-poussoir ou par détection passive",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/calls.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "junction.signal.actuation",
+      "en": "A signal's green responds to vehicle demand (actuation)",
+      "fr-CA": "Le vert des feux répond à la demande des véhicules (à la demande)",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/actuation.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "junction.signal.bicycles",
+      "en": "A signal detects bicycles and gives them their green",
+      "fr-CA": "Des feux détectent les vélos et leur donnent leur vert",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/bicycles.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "junction.signal.transit",
+      "en": "A signal gives transit priority by early green or green extension",
+      "fr-CA": "Des feux donnent la priorité au transport en commun par vert hâtif ou prolongation du vert",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/transit.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "junction.signal.preemption",
+      "en": "A junction's signal pre-empts for emergency calls",
+      "fr-CA": "Les feux d’une jonction accordent la préemption aux appels d’urgence",
+      "pages": ["intersection.html"],
+      "owner": "crates/cityloom_editor/src/junction",
+      "code": ["crates/cityloom_editor/src/junction/model/preemption.rs"],
+      "specs": ["junction", "read-only"]
+    },
+    {
+      "id": "design.scenarios",
+      "en": "A street or a junction has named scenarios beside its baseline, made, renamed, duplicated, deleted and switched between",
+      "fr-CA": "Une rue ou une jonction a des scénarios nommés à côté de sa référence, qu’on crée, renomme, duplique, supprime et entre lesquels on passe",
+      "pages": ["street.html", "intersection.html"],
+      "owner": "crates/cityloom_editor/src/city",
+      "code": [
+        "crates/cityloom_editor/src/city/scenario.rs",
+        "crates/cityloom_editor/src/shared/scenarios.rs",
+        "crates/cityloom_editor/src/shared/scenarios_view.rs"
+      ],
+      "specs": ["scenarios"]
+    },
+    {
+      "id": "design.compare",
+      "en": "Two designs of one street or junction are compared side by side, with what differs in the second",
+      "fr-CA": "Deux aménagements d’une même rue ou jonction se comparent côte à côte, avec ce qui diffère dans le second",
+      "pages": ["compare.html"],
+      "owner": "crates/cityloom_editor/src/shared",
+      "code": [
+        "crates/cityloom_editor/src/shared/compare.rs",
+        "crates/cityloom_editor/src/shared/compare_view.rs",
+        "crates/cityloom_editor/src/street/*/compare.rs",
+        "crates/cityloom_editor/src/junction/*/compare.rs"
+      ],
+      "specs": ["compare"]
+    },
+    {
+      "id": "map.city",
+      "en": "The city map shows the project's area with its streets and junctions, and opens each in its editor",
+      "fr-CA": "La carte de la ville montre la zone du projet avec ses rues et ses jonctions, et ouvre chacune dans son éditeur",
+      "pages": ["map.html"],
+      "owner": "crates/cityloom_editor/src/map",
+      "code": [
+        "crates/cityloom_editor/src/map/mod.rs",
+        "crates/cityloom_editor/src/map/model/editable.rs",
+        "crates/cityloom_editor/src/map/vm/mod.rs",
+        "crates/cityloom_editor/src/map/vm/camera.rs",
+        "crates/cityloom_editor/src/map/vm/selection.rs",
+        "crates/cityloom_editor/src/map/vm/overlay.rs",
+        "crates/cityloom_editor/src/map/vm/style.rs",
+        "crates/cityloom_editor/src/map/view/mod.rs",
+        "crates/cityloom_editor/src/map/view/selection_view.rs",
+        "crates/cityloom_editor/src/map/view/details.rs",
+        "web/mapcanvas.js"
+      ],
+      "specs": ["map", "webgl"]
+    },
+    {
+      "id": "map.search",
+      "en": "Places of the map are found by name from the search box",
+      "fr-CA": "Les lieux de la carte se trouvent par leur nom dans la boîte de recherche",
+      "pages": ["map.html"],
+      "owner": "crates/cityloom_editor/src/map",
+      "code": ["crates/cityloom_editor/src/shared/search.rs"],
+      "specs": ["search"]
+    },
+    {
+      "id": "map.goals",
+      "en": "A planning goal chosen on the map is followed on the street and junction pages",
+      "fr-CA": "Un objectif de planification choisi sur la carte se suit sur les pages de rue et de jonction",
+      "pages": ["map.html", "street.html", "intersection.html"],
+      "owner": "crates/cityloom_editor/src/map",
+      "code": [
+        "crates/cityloom_editor/src/shared/goals.rs",
+        "crates/cityloom_editor/src/shared/goals_view.rs",
+        "crates/cityloom_editor/src/map/view/goal_view.rs"
+      ],
+      "specs": ["map"]
+    },
+    {
+      "id": "map.network-checks",
+      "en": "The network checks find dead ends, missing crossings, broken cycling links and transit corridors across the area",
+      "fr-CA": "Les vérifications du réseau repèrent culs-de-sac, passages pour piétons manquants, liens cyclables rompus et axes de transport en commun dans la zone",
+      "pages": ["map.html"],
+      "owner": "crates/cityloom_editor/src/map",
+      "code": [
+        "crates/cityloom_editor/src/map/model/network.rs",
+        "crates/cityloom_editor/src/map/model/corridor.rs",
+        "crates/cityloom_editor/src/map/view/network_view.rs",
+        "crates/cityloom_model/src/corridor.rs"
+      ],
+      "specs": ["network"]
+    },
+    {
+      "id": "map.area-rules",
+      "en": "Rules are declared over an area drawn on the map (car-free, bus and bike only, speed limit, no parking or loading), and streets that break them are flagged",
+      "fr-CA": "Des règles se déclarent sur une zone tracée sur la carte (sans voitures, autobus et vélos seulement, limite de vitesse, stationnement et chargement interdits), et les rues qui les enfreignent sont signalées",
+      "pages": ["map.html", "street.html"],
+      "owner": "crates/cityloom_editor/src/restriction",
+      "code": [
+        "crates/cityloom_editor/src/restriction/*.rs",
+        "crates/cityloom_editor/src/map/vm/areas.rs",
+        "crates/cityloom_editor/src/map/view/areas_view.rs"
+      ],
+      "specs": ["restrictions"]
+    },
+    {
+      "id": "map.report",
+      "en": "The design review report is downloaded as a PDF, in the page's language",
+      "fr-CA": "Le rapport d’examen de l’aménagement se télécharge en PDF, dans la langue de la page",
+      "pages": ["map.html", "street.html", "intersection.html"],
+      "owner": "crates/cityloom_report",
+      "code": [
+        "crates/cityloom_report/src/*.rs",
+        "crates/cityloom_report_pdf/src/*.rs",
+        "crates/cityloom_editor/src/map/vm/report.rs",
+        "crates/cityloom_editor/src/map/vm/report_review.rs"
+      ],
+      "specs": ["report"]
+    },
+    {
+      "id": "city.area",
+      "en": "A project's area is fetched from its tiles, cut out and made into a city of streets and junctions, and made again when its tile changes",
+      "fr-CA": "La zone d’un projet est tirée de ses tuiles, découpée et transformée en une ville de rues et de jonctions, puis refaite quand sa tuile change",
+      "pages": ["map.html", "street.html", "intersection.html"],
+      "owner": "crates/cityloom_editor/src/place",
+      "code": [
+        "crates/cityloom_editor/src/place/*.rs",
+        "crates/cityloom_editor/src/city/import.rs",
+        "crates/cityloom_editor/src/city/projection.rs",
+        "crates/cityloom_editor/src/city/model.rs",
+        "crates/cityloom_editor/src/city/model/*.rs"
+      ],
+      "specs": ["world"]
+    },
+    {
+      "id": "city.edits",
+      "en": "A street's or junction's edits are kept in the browser under its OpenStreetMap ids, and survive a reload",
+      "fr-CA": "Les modifications d’une rue ou d’une jonction sont conservées dans le navigateur sous ses identifiants OpenStreetMap, et survivent au rechargement",
+      "pages": ["street.html", "intersection.html", "map.html"],
+      "owner": "crates/cityloom_editor/src/city",
+      "code": [
+        "crates/cityloom_editor/src/city/edits.rs",
+        "crates/cityloom_editor/src/city/keys.rs",
+        "crates/cityloom_editor/src/city/store.rs",
+        "crates/cityloom_editor/src/city/binding.rs",
+        "crates/cityloom_editor/src/shared/store.rs",
+        "crates/cityloom_editor/src/shared/scoped.rs"
+      ],
+      "specs": ["edits", "world"]
+    },
+    {
+      "id": "data.importer",
+      "en": "OpenStreetMap's roads become the street network the editor reads",
+      "fr-CA": "Les routes d’OpenStreetMap deviennent le réseau de rues que lit l’éditeur",
+      "pages": [],
+      "owner": "crates/citymodel_builder",
+      "code": [
+        "crates/citymodel_builder/src/importer/**/*.rs",
+        "crates/cityloom_model/src/*.rs"
+      ],
+      "specs": []
+    },
+    {
+      "id": "data.archive",
+      "en": "The network is cut into tiles and packed into the city archive, which the server serves",
+      "fr-CA": "Le réseau est découpé en tuiles et regroupé dans l’archive de la ville, que le serveur sert",
+      "pages": [],
+      "owner": "crates/citymodel_builder",
+      "code": [
+        "crates/citymodel_builder/src/*.rs",
+        "crates/citymodel_builder/src/archive/**/*.rs",
+        "crates/citymodel_builder/src/progress/**/*.rs"
+      ],
+      "specs": ["archive"]
+    },
+    {
+      "id": "projects.list",
+      "en": "The home page lists the person's projects; a project is made in a metropolitan area and opens on its map",
+      "fr-CA": "La page d’accueil liste les projets de la personne; un projet se crée dans une région métropolitaine et s’ouvre sur sa carte",
+      "pages": ["index.html"],
+      "owner": "crates/cityloom_editor/src/project",
+      "code": [
+        "crates/cityloom_editor/src/project/*.rs",
+        "crates/cityloom_editor/src/shared/project_id.rs"
+      ],
+      "specs": ["home", "projects"]
+    },
+    {
+      "id": "projects.timeline",
+      "en": "A project's milestones keep its work at a moment, and are compared with the work now",
+      "fr-CA": "Les jalons d’un projet conservent son travail à un moment donné, et se comparent au travail actuel",
+      "pages": ["timeline.html"],
+      "owner": "crates/cityloom_editor/src/timeline",
+      "code": ["crates/cityloom_editor/src/timeline/*.rs"],
+      "specs": ["timeline"]
+    },
+    {
+      "id": "projects.design-archive",
+      "en": "A project's design is exported as one file and imported on another device",
+      "fr-CA": "L’aménagement d’un projet s’exporte en un seul fichier et s’importe sur un autre appareil",
+      "pages": ["street.html", "account.html"],
+      "owner": "crates/cityloom_editor/src/archive",
+      "code": ["crates/cityloom_editor/src/archive/*.rs"],
+      "specs": ["design-archive"]
+    },
+    {
+      "id": "projects.share",
+      "en": "A project is shared by a link that opens it read-only, and a shared design is copied into one's own projects",
+      "fr-CA": "Un projet se partage par un lien qui l’ouvre en lecture seule, et un aménagement partagé se copie dans ses propres projets",
+      "pages": ["share.html"],
+      "owner": "crates/cityloom_editor/src/share",
+      "code": [
+        "crates/cityloom_editor/src/share/*.rs",
+        "crates/cityloom_editor/src/project/copies.rs",
+        "crates/cityloom_server/src/share.rs",
+        "crates/cityloom_server/src/db/share.rs"
+      ],
+      "specs": ["share"]
+    },
+    {
+      "id": "projects.read-only",
+      "en": "A design opened read-only can be looked at and chosen in, and no control changes it",
+      "fr-CA": "Un aménagement ouvert en lecture seule se consulte et on peut y choisir des éléments, mais aucune commande ne le modifie",
+      "pages": ["street.html", "intersection.html", "map.html"],
+      "owner": "crates/cityloom_editor/src/shared",
+      "code": [
+        "crates/cityloom_editor/src/shared/locked.rs",
+        "crates/cityloom_editor/src/project/context.rs"
+      ],
+      "specs": ["read-only"]
+    },
+    {
+      "id": "account.sign-in",
+      "en": "A person signs in with a provider, links or unlinks sign-ins, chooses where the work is kept, and deletes the account",
+      "fr-CA": "Une personne se connecte par un fournisseur, associe ou dissocie des connexions, choisit où conserver son travail et supprime son compte",
+      "pages": ["account.html"],
+      "owner": "crates/cityloom_server",
+      "code": [
+        "crates/cityloom_editor/src/account/*.rs",
+        "crates/cityloom_editor/src/shell/session*.rs",
+        "crates/cityloom_server/src/accounts.rs",
+        "crates/cityloom_server/src/auth.rs",
+        "crates/cityloom_server/src/flow.rs",
+        "crates/cityloom_server/src/providers.rs",
+        "crates/cityloom_server/src/providers/**/*.rs",
+        "crates/cityloom_server/src/session.rs",
+        "crates/cityloom_server/src/crypto.rs",
+        "crates/cityloom_server/src/db.rs"
+      ],
+      "specs": ["account", "account-server"]
+    },
+    {
+      "id": "account.sync",
+      "en": "A signed-in person's work is kept on the server and merged between devices, also after working offline",
+      "fr-CA": "Le travail d’une personne connectée est conservé sur le serveur et fusionné entre ses appareils, même après un travail hors ligne",
+      "pages": ["street.html", "intersection.html", "map.html", "account.html"],
+      "owner": "crates/cityloom_editor/src/sync",
+      "code": [
+        "crates/cityloom_editor/src/sync/*.rs",
+        "crates/cityloom_server/src/work.rs",
+        "crates/cityloom_server/src/db/work.rs"
+      ],
+      "specs": ["sync"]
+    },
+    {
+      "id": "shell.settings",
+      "en": "Every page has the top bar, the settings menu (theme, units, region, keyboard shortcuts), the details panel and the notes tray",
+      "fr-CA": "Chaque page a la barre du haut, le menu des réglages (thème, unités, région, raccourcis clavier), le panneau des détails et le tiroir des notes",
+      "pages": ["index.html", "about.html", "map.html", "street.html", "intersection.html", "account.html", "timeline.html", "share.html", "compare.html"],
+      "owner": "crates/cityloom_editor/src/shell",
+      "code": [
+        "crates/cityloom_editor/src/shell/*.rs",
+        "crates/cityloom_editor/src/shared/units.rs",
+        "crates/cityloom_editor/src/shared/shortcut.rs"
+      ],
+      "specs": ["shell", "editors", "footer"]
+    },
+    {
+      "id": "shell.language",
+      "en": "Every app page can be read in English or in Canadian French, and the choice is kept",
+      "fr-CA": "Chaque page de l’application se lit en anglais ou en français canadien, et le choix est conservé",
+      "pages": ["index.html", "about.html", "map.html", "street.html", "intersection.html", "account.html", "timeline.html", "share.html", "compare.html"],
+      "owner": "crates/cityloom_editor/src/shared",
+      "code": [
+        "crates/cityloom_editor/src/shared/i18n.rs",
+        "crates/cityloom_editor/src/shared/said.rs",
+        "crates/cityloom_editor/src/shell/i18n/*.ftl"
+      ],
+      "specs": ["language"]
+    },
+    {
+      "id": "shell.accessibility",
+      "en": "Every page is usable by keyboard and screen reader, at any zoom and width, and its colours meet WCAG 2.2 AA",
+      "fr-CA": "Chaque page s’utilise au clavier et avec un lecteur d’écran, à tout zoom et toute largeur, et ses couleurs respectent les WCAG 2.2 AA",
+      "pages": ["index.html", "about.html", "map.html", "street.html", "intersection.html", "account.html", "timeline.html", "share.html", "compare.html"],
+      "owner": "crates/cityloom_editor/src/shared",
+      "code": [
+        "crates/cityloom_editor/src/shared/contrast.rs",
+        "web/app.css",
+        "web/editor.css"
+      ],
+      "specs": ["a11y", "focus-touch"]
+    },
+    {
+      "id": "pages.about",
+      "en": "The About page says what CityLoom is for, over the city of the project opened last",
+      "fr-CA": "La page À propos dit à quoi sert CityLoom, sur la ville du dernier projet ouvert",
+      "pages": ["about.html"],
+      "owner": "crates/cityloom_editor/src/map",
+      "code": [
+        "crates/cityloom_editor/src/map/view/home.rs",
+        "crates/cityloom_editor/src/map/view/svg.rs",
+        "web/about.js"
+      ],
+      "specs": ["about"]
+    },
+    {
+      "id": "pages.credits",
+      "en": "The Credits page names the data and the software CityLoom is made from",
+      "fr-CA": "La page des remerciements nomme les données et les logiciels dont CityLoom est fait",
+      "pages": ["credits.html"],
+      "owner": "crates/cityloom_server",
+      "code": ["web/credits.html"],
+      "specs": []
+    },
+    {
+      "id": "server.delivery",
+      "en": "The server delivers the site and the city's data quickly: versioned addresses, compression and byte ranges",
+      "fr-CA": "Le serveur livre rapidement le site et les données de la ville : adresses versionnées, compression et plages d’octets",
+      "pages": [],
+      "owner": "crates/cityloom_server",
+      "code": [
+        "crates/cityloom_server/src/static_files.rs",
+        "crates/cityloom_server/src/app.rs",
+        "crates/cityloom_server/src/config.rs",
+        "crates/cityloom_server/src/main.rs"
+      ],
+      "specs": ["delivery", "serve"]
+    }
+  ]
+}
