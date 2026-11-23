@@ -11,12 +11,12 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 
 ## Tiers
 
-- `e2e/tiers.json` is the one place a spec gets its tier, and each spec is in exactly one: `playwright.config.ts` throws and `just test-scripts` fails for a spec in none or in two. A Playwright project per tier: `ui` (one page, network stubbed, static server only: no database, no archive; `just e2e-ui`), `integration` (the real server and a Postgres, `account-server` and `sync`; `just e2e-integration`), `e2e` (the unpacked archive and the real server's delivery: `archive`, `delivery`, `serve`; `just e2e-archive`). `archive_also` (map, street) are UI specs the e2e tier runs again over the archive. `just e2e` runs all three; `just e2e tests/street.spec.ts` runs the named specs whatever their tier.
-- CI runs one job per tier after a shared `build` job (the wasm, `web/vendor` and the pinned server as an artifact; `.github/actions/browser-tests`); `scripts/ci/ci_changes.py` picks the tiers and specs a pull request needs.
+- Each spec is in exactly one tier of `e2e/tiers.json` (`playwright.config.ts` throws and `just test-scripts` fails otherwise) and in one group of `scripts/ci/spec-map.json`. `archive_also` (map, street) are UI specs the E2E tier runs again over the archive.
+- The tiers, their recipes and CI jobs: `website/docs/testing.md`.
 
 ## Fixtures
 
-- The OSM fixtures (`e2e/fixtures/*.osm.pbf`, `open-ends.osm`) are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures` (`citymodel_builder fixture`), which every browser recipe runs first and CI's `build` job runs once and hands on in the `browser-build` artifact. `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`; `tileFrom(file)` answers a request for a tile with one.
+- The OSM fixtures are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures`, which every browser recipe runs first; `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`, and `tileFrom(file)` answers a request for a tile with one. Test data: `website/docs/testing.md`.
 - `about.spec.ts` checks the city behind the About card is read from the metro tile and no other host is asked (no Overpass), and, on every page, the top bar (Projects and About, the current one `aria-current="page"`, no Map link, the logo to `index.html`); `home.spec.ts` that the list asks for no road tile; `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
 - `junction.spec.ts` turbo tests serve `TURBO_TILE`: no Plateau junction has room for the basic layout. `street.spec.ts` serves `OPEN_ENDS_TILE` for open street ends (its source `open-ends.osm` has a `<bounds>` element: the importer panics inside osm2streets on OSM XML without one).
 - `restrictions.spec.ts`: area by clicks and by keyboard (map focused, Enter places a corner at the centre, Shift+Enter closes).
