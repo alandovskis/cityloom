@@ -8,7 +8,8 @@ title: Testing
 This page is the one place that says how CityLoom is tested: the levels of tests, where a new test goes, the test data,
 when the tests run and what must pass before a pull request is merged. How the code is organised (slices, MVVM, ports)
 is in [Architecture](architecture/index.md); how to set up and run the commands is in
-[Getting started](getting-started.md). The paths of the editor's files are relative to `crates/cityloom_editor/src/`.
+[Getting started](getting-started.md). How many tests there are, by level, by crate and tier, and by feature, is in the
+[Test inventory](test-inventory.md). The paths of the editor's files are relative to `crates/cityloom_editor/src/`.
 
 ## The levels at a glance
 
