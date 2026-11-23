@@ -18,6 +18,14 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::str::FromStr;
+
+use proc_macro2::{Delimiter, Group, Ident, Spacing, TokenStream, TokenTree};
+
+use crate::i18n_guard::{is_cfg_test, is_punct};
+
+/// The composition root, which may use any slice.
+const ROOT: &str = "lib.rs";
 
 /// The kernel every slice may use, and which may use no slice.
 const SHARED: &str = "shared";
@@ -129,27 +137,274 @@ struct Use {
 
 /// Every `.rs` file under `src`.
 fn sources(src: &Path) -> Sources {
-    todo!()
+    let mut out = Sources::new();
+    add_sources(src, "", &mut out);
+    out
+}
+
+/// Adds the `.rs` files under `dir`, whose own path from `src/` is `prefix`: empty, or ending in `/`.
+fn add_sources(dir: &Path, prefix: &str, out: &mut Sources) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = format!("{prefix}{}", entry.file_name().into_string().unwrap());
+        if entry.file_type().unwrap().is_dir() {
+            add_sources(&entry.path(), &format!("{path}/"), out);
+        } else if path.ends_with(".rs") {
+            out.insert(path, std::fs::read_to_string(entry.path()).unwrap());
+        }
+    }
 }
 
 /// Every use of another slice by production code, sorted, each once.
 fn uses(sources: &Sources) -> Vec<Use> {
-    todo!()
+    let mut found = Vec::new();
+    read(sources, ROOT, &[], &mut found);
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// Adds to `found` the uses in `file`, which is `module`, and in the files of the modules it declares.
+fn read(sources: &Sources, file: &str, module: &[String], found: &mut Vec<Use>) {
+    let stream = TokenStream::from_str(&sources[file]).unwrap_or_else(|e| panic!("src/{file} does not lex: {e}"));
+    Reader { sources, file, found }.walk(stream, module);
+}
+
+/// What reads one file.
+struct Reader<'a> {
+    sources: &'a Sources,
+    file: &'a str,
+    found: &'a mut Vec<Use>,
+}
+
+impl Reader<'_> {
+    /// Reads the production code of `stream`, which stands in `module`.
+    fn walk(&mut self, stream: TokenStream, module: &[String]) {
+        let t: Vec<TokenTree> = stream.into_iter().collect();
+        let mut i = 0;
+        while i < t.len() {
+            if is_punct(&t[i], '#') && t.get(i + 1).is_some_and(is_cfg_test) {
+                i = after_test_code(&t, i + 2);
+                continue;
+            }
+            if is_word(&t[i], "mod")
+                && let [TokenTree::Ident(name), body, ..] = &t[i + 1..]
+            {
+                let mut inner = module.to_vec();
+                inner.push(bare(name));
+                if let Some(group) = braced(body) {
+                    self.walk(group.stream(), &inner);
+                    i += 3;
+                    continue;
+                }
+                if is_punct(body, ';') {
+                    self.declared(&inner);
+                    i += 3;
+                    continue;
+                }
+            }
+            if starts_path(&t, i) {
+                i = self.path(&t, i, module, false);
+                continue;
+            }
+            if let TokenTree::Group(group) = &t[i] {
+                self.walk(group.stream(), module);
+            }
+            i += 1;
+        }
+    }
+
+    /// Reads the file of `module`, which this file declares.
+    fn declared(&mut self, module: &[String]) {
+        let path = module.join("/");
+        let files = [format!("{path}.rs"), format!("{path}/mod.rs")];
+        let Some(file) = files.iter().find(|file| self.sources.contains_key(*file)) else {
+            panic!("src/{} declares the module {}, which has no file", self.file, module.join("::"));
+        };
+        read(self.sources, file, module, self.found);
+    }
+
+    /// Finds what the path at `t[i]` names, from the module `from` (a group's names are `grouped`), and gives where the
+    /// path ends.
+    fn path(&mut self, t: &[TokenTree], mut i: usize, from: &[String], grouped: bool) -> usize {
+        let mut at = from.to_vec();
+        while let Some(part) = t.get(i) {
+            let mut opens = false;
+            match part {
+                TokenTree::Ident(name) if name == "crate" => at.clear(),
+                TokenTree::Ident(name) if name == "self" => opens = grouped,
+                TokenTree::Ident(name) if name == "super" => {
+                    at.pop();
+                }
+                TokenTree::Ident(name) => at.push(bare(name)),
+                star if is_punct(star, '*') => at.push("*".to_string()),
+                group => {
+                    let Some(group) = braced(group) else { return i };
+                    self.names(group, &at);
+                    return i + 1;
+                }
+            }
+            i += 1;
+            if is_separator(t, i) && t.get(i + 2).is_some_and(is_part) {
+                i += 2;
+                continue;
+            }
+            opens |= t.get(i).is_some_and(|next| is_word(next, "as"));
+            self.keep(part.span().start().line, &at, opens);
+            return i;
+        }
+        i
+    }
+
+    /// Finds what each name of the group of a path names, from the module `from`.
+    fn names(&mut self, group: &Group, from: &[String]) {
+        let t: Vec<TokenTree> = group.stream().into_iter().collect();
+        let mut i = 0;
+        while i < t.len() {
+            i = self.path(&t, i, from, true);
+            // An alias changes nothing in what is used.
+            i += t[i..].iter().take_while(|x| !is_punct(x, ',')).count() + 1;
+        }
+    }
+
+    /// Keeps the use of `path` (from the crate's root) if it is of another slice, or of the crate's root itself when it
+    /// `opens` it to other names. The composition root's are its own business.
+    fn keep(&mut self, line: usize, path: &[String], opens: bool) {
+        if self.file == ROOT {
+            return;
+        }
+        let path = match path {
+            [] if opens => "crate".to_string(),
+            [star] if star == "*" => "crate::*".to_string(),
+            [slice, ..] if SLICES.contains(&slice.as_str()) && folder(self.file) != Some(slice) => path.join("::"),
+            _ => return,
+        };
+        self.found.push(Use { file: self.file.to_string(), line, path });
+    }
+}
+
+/// Where what is under a `#[cfg(test)]` ends, from what follows it: an item or a statement at its `;` or its braces, a
+/// field or a struct literal's entry at its comma.
+fn after_test_code(t: &[TokenTree], start: usize) -> usize {
+    if !is_field(t, start) {
+        let end = (start..t.len()).find(|&i| is_punct(&t[i], ';') || braced(&t[i]).is_some());
+        return end.map_or(t.len(), |end| end + 1);
+    }
+    let mut depth = 0_usize;
+    for i in start..t.len() {
+        if is_punct(&t[i], '<') {
+            depth += 1;
+        } else if is_punct(&t[i], '>') && !is_joint(&t[i - 1], '-') && !is_joint(&t[i - 1], '=') {
+            depth = depth.saturating_sub(1);
+        } else if is_punct(&t[i], ',') && depth == 0 {
+            return i + 1;
+        }
+    }
+    t.len()
+}
+
+/// Whether a field or a struct literal's entry is at `t[i]`: after its attributes and its visibility, a name and one `:`.
+fn is_field(t: &[TokenTree], mut i: usize) -> bool {
+    while t.get(i).is_some_and(|x| is_punct(x, '#')) {
+        i += 2;
+    }
+    if t.get(i).is_some_and(|x| is_word(x, "pub")) {
+        i += 1;
+        if matches!(t.get(i), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis) {
+            i += 1;
+        }
+    }
+    matches!(t.get(i), Some(TokenTree::Ident(_))) && t.get(i + 1).is_some_and(|x| is_punct(x, ':')) && !is_separator(t, i + 1)
+}
+
+/// Whether a path from the crate, this module or the one above begins at `t[i]`.
+fn starts_path(t: &[TokenTree], i: usize) -> bool {
+    let above = is_word(&t[i], "crate") || is_word(&t[i], "super");
+    if !above && !is_word(&t[i], "self") || i >= 2 && is_separator(t, i - 2) {
+        return false;
+    }
+    is_separator(t, i + 1) || above && t.get(i + 1).is_some_and(|x| is_word(x, "as"))
+}
+
+/// Whether `t` can follow a `::` in a path: a name, a glob or a group. A turbofish cannot, so the path stops before it.
+fn is_part(t: &TokenTree) -> bool {
+    matches!(t, TokenTree::Ident(_)) || is_punct(t, '*') || braced(t).is_some()
+}
+
+/// Whether `t[i]` begins a `::`.
+fn is_separator(t: &[TokenTree], i: usize) -> bool {
+    matches!(t.get(i..), Some([a, b, ..]) if is_joint(a, ':') && is_punct(b, ':'))
+}
+
+/// Whether `t` is `c` with another punctuation mark right after it.
+fn is_joint(t: &TokenTree, c: char) -> bool {
+    matches!(t, TokenTree::Punct(p) if p.as_char() == c && p.spacing() == Spacing::Joint)
+}
+
+fn is_word(t: &TokenTree, word: &str) -> bool {
+    matches!(t, TokenTree::Ident(name) if name == word)
+}
+
+fn braced(t: &TokenTree) -> Option<&Group> {
+    match t {
+        TokenTree::Group(g) if g.delimiter() == Delimiter::Brace => Some(g),
+        _ => None,
+    }
+}
+
+/// The name without the `r#` a raw identifier has.
+fn bare(name: &Ident) -> String {
+    name.to_string().trim_start_matches("r#").to_string()
+}
+
+/// The folder of `src/` that `file` is in: its slice's, or `shared`. A root file is in none.
+fn folder(file: &str) -> Option<&str> {
+    file.split_once('/').map(|(folder, _)| folder)
+}
+
+/// Whether an entry's `by` names `file`.
+fn names(by: &str, file: &str) -> bool {
+    by == file || folder(file).is_some_and(|folder| by == folder || by == ANY && SLICES.contains(&folder))
+}
+
+/// Whether an entry's `pattern` covers `path`, component by component. Nothing covers the crate's root.
+fn covers(pattern: &str, path: &str) -> bool {
+    let mut path = path.split("::");
+    let mut pattern = pattern.split("::");
+    let same_slice = path.next().is_some_and(|slice| SLICES.contains(&slice) && pattern.next().is_some_and(|p| p == ANY || p == slice));
+    same_slice && pattern.all(|p| path.next() == Some(p))
 }
 
 /// What is wrong with each use that `allowed` does not let its file make, in the order of `uses`.
 fn refused(uses: &[Use], allowed: &[Entry]) -> Vec<String> {
-    todo!()
+    let may = |u: &Use| allowed.iter().any(|e| e.by.iter().any(|by| names(by, &u.file)) && e.uses.iter().any(|pattern| covers(pattern, &u.path)));
+    uses.iter()
+        .filter(|u| folder(&u.file) == Some(SHARED) || !may(u))
+        .map(|u| format!("src/{}:{}: uses {}, which ALLOWED does not let it use", u.file, u.line, u.path))
+        .collect()
 }
 
 /// Each pair of who and what in `allowed` that no use matches, in the table's order.
 fn dead(uses: &[Use], allowed: &[Entry]) -> Vec<String> {
-    todo!()
+    let pairs = allowed.iter().flat_map(|e| e.by.iter().flat_map(|by| e.uses.iter().map(move |pattern| (by, pattern))));
+    pairs
+        .filter(|(by, pattern)| !uses.iter().any(|u| names(by, &u.file) && covers(pattern, &u.path)))
+        .map(|(by, pattern)| format!("ALLOWED: nothing in {by} uses {pattern}"))
+        .collect()
 }
 
 /// The folders of `src` that are neither a slice nor `shared`, sorted. A hidden one is the system's or an editor's.
 fn unknown_folders(src: &Path) -> Vec<String> {
-    todo!()
+    let mut unknown = Vec::new();
+    for entry in std::fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().into_string().unwrap();
+        if entry.file_type().unwrap().is_dir() && !name.starts_with('.') && name != SHARED && !SLICES.contains(&name.as_str()) {
+            unknown.push(name);
+        }
+    }
+    unknown.sort();
+    unknown
 }
 
 #[cfg(test)]
