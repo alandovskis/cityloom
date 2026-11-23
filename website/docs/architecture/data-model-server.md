@@ -164,9 +164,9 @@ say nothing about the person by themselves.
 
 A person who stores their work on the server has one `work` row for each record the browser sends
 (`src/api/work.rs`). The server checks the kind, the key and the time, and passes the body through as the browser sent
-it, sealed. Each kind is a part of the project's documents in the browser
-(`crates/cityloom_editor/src/sync/local.rs`), described on
-[Data model: projects](./data-model-projects.md#every-key-the-browser-keeps):
+it, sealed. Each kind other than `project` is a part of a project's documents in the browser; a `project` record is
+the project's entry of `cityloom-projects`, which no project holds (`crates/cityloom_editor/src/sync/local.rs`). Both
+are described on [Data model: projects](./data-model-projects.md#every-key-the-browser-keeps):
 
 | `kind`      | The browser document                                      | `key`              |
 | ----------- | --------------------------------------------------------- | ------------------ |
@@ -177,9 +177,10 @@ it, sealed. Each kind is a part of the project's documents in the browser
 | `milestone` | A milestone of `cityloom-milestones`                      | The milestone's id |
 | `project`   | The project's entry of `cityloom-projects`                | The project's id   |
 
-- `key` is the wire key. A record of the first project, whose id is `first`, keeps its bare key. A record of any other
-  project has `<project>:<key>` (`crates/cityloom_editor/src/shared/project_id.rs`). A key is 1 to 200 characters of
-  letters, digits and `~_.:-` (`src/work.rs`, `valid_key`).
+- `key` is the wire key. For `street`, `junction`, `rule`, `area` and `milestone`, a record of the first project, whose
+  id is `first`, keeps its bare key, and a record of any other project has `<project>:<key>`
+  (`crates/cityloom_editor/src/shared/project_id.rs`). A `project` record's key is the project's id itself, for every
+  project. A key is 1 to 200 characters of letters, digits and `~_.:-` (`src/work.rs`, `valid_key`).
 - `rev` is the account's revision when the row last changed. `users.work_rev` is the counter: each record a push
   accepts takes the next revision.
 - `edited_at` is when the device made the edit. A time later than the server's clock is stored as the server's time.

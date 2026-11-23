@@ -168,8 +168,9 @@ sur elles, et elles ne disent rien de la personne à elles seules.
 
 Une personne qui stocke son travail sur le serveur a une ligne de `work` pour chaque enregistrement qu’envoie le
 navigateur (`src/api/work.rs`). Le serveur vérifie le genre, la clé et l’heure, et transmet le contenu tel que le
-navigateur l’a envoyé, scellé. Chaque genre est une partie des documents du projet dans le navigateur
-(`crates/cityloom_editor/src/sync/local.rs`), décrits dans
+navigateur l’a envoyé, scellé. Chaque genre autre que `project` est une partie des documents d’un projet dans le
+navigateur; un enregistrement `project` est l’entrée du projet dans `cityloom-projects`, qu’aucun projet ne contient
+(`crates/cityloom_editor/src/sync/local.rs`). Les deux sont décrits dans
 [Modèle de données : projets](./data-model-projects.md#toutes-les-clés-que-garde-le-navigateur) :
 
 | `kind`      | Le document du navigateur                                  | `key`                     |
@@ -181,9 +182,11 @@ navigateur l’a envoyé, scellé. Chaque genre est une partie des documents du 
 | `milestone` | Un jalon de `cityloom-milestones`                          | L’identifiant du jalon    |
 | `project`   | L’entrée du projet dans `cityloom-projects`                | L’identifiant du projet   |
 
-- `key` est la clé de transmission. Un enregistrement du premier projet, dont l’identifiant est `first`, garde sa clé
-  nue. Un enregistrement de tout autre projet a `<project>:<key>` (`crates/cityloom_editor/src/shared/project_id.rs`).
-  Une clé compte de 1 à 200 caractères parmi les lettres, les chiffres et `~_.:-` (`src/work.rs`, `valid_key`).
+- `key` est la clé de transmission. Pour `street`, `junction`, `rule`, `area` et `milestone`, un enregistrement du
+  premier projet, dont l’identifiant est `first`, garde sa clé nue, et un enregistrement de tout autre projet a
+  `<project>:<key>` (`crates/cityloom_editor/src/shared/project_id.rs`). La clé d’un enregistrement `project` est
+  l’identifiant même du projet, pour tout projet. Une clé compte de 1 à 200 caractères parmi les lettres, les chiffres
+  et `~_.:-` (`src/work.rs`, `valid_key`).
 - `rev` est la révision du compte quand la ligne a changé pour la dernière fois. `users.work_rev` est le compteur :
   chaque enregistrement qu’un envoi accepte prend la révision suivante.
 - `edited_at` est le moment où l’appareil a fait la modification. Une heure plus tardive que l’horloge du serveur est
