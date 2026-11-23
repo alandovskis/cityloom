@@ -476,8 +476,11 @@ A place's key, which its record is kept under, is built from these ids (`city/ke
 
 - a junction's is `n` and the smallest OpenStreetMap node it was made from: `n2`;
 - a street's is `w` and its smallest way, then the keys of its two ends in sorted order: `w7~n2~n5`. An end with no
-  OpenStreetMap node, where a road leaves the area's box, is `x`, and the key then ends with a compass word, `n`, `e`,
-  `s` or `w`, for the way the street leaves its other end: `w7~n2~x~e`.
+  OpenStreetMap node, where a road leaves the area's box, is `x`, and sorts after a real end. When exactly one end is
+  `x`, the key then ends with a compass word, `n`, `e`, `s` or `w`, for the way the street leaves its real end:
+  `w7~n2~x~e`. When both ends are `x`, no word is added: `w7~x~x`. The two halves of a closed way join the same two
+  real ends; each key then ends with the word for the way that half leaves its first end in sorted order:
+  `w7~n1~n2~n`. Any other street with two real ends has no word.
 
 The key is the same whichever tile the place is read from. The other ids stay inside: `NodeId` and `RoadId` number the
 network's graph, and a street's or a junction's uid in the city is its place in the city's layout, counting from 1

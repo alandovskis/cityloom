@@ -494,9 +494,12 @@ La clé d’un lieu, sous laquelle son enregistrement est conservé, est constru
 
 - celle d’une jonction est `n` suivi du plus petit nœud OpenStreetMap dont elle a été faite : `n2`;
 - celle d’une rue est `w` suivi de son plus petit chemin, puis des clés de ses deux extrémités, triées : `w7~n2~n5`.
-  Une extrémité sans nœud OpenStreetMap, là où une route sort du cadre du lieu, est `x`, et la clé se termine alors
-  par un mot de la boussole, `n`, `e`, `s` ou `w`, pour la direction dans laquelle la rue quitte son autre extrémité :
-  `w7~n2~x~e`.
+  Une extrémité sans nœud OpenStreetMap, là où une route sort du cadre du lieu, est `x`, et se trie après une
+  extrémité réelle. Quand exactement une extrémité est `x`, la clé se termine alors par un mot de la boussole, `n`,
+  `e`, `s` ou `w`, pour la direction dans laquelle la rue quitte son extrémité réelle : `w7~n2~x~e`. Quand les deux
+  extrémités sont `x`, aucun mot n’est ajouté : `w7~x~x`. Les deux moitiés d’un chemin fermé relient les deux mêmes
+  extrémités réelles; la clé de chacune se termine alors par le mot de la direction dans laquelle cette moitié quitte
+  sa première extrémité, dans l’ordre trié : `w7~n1~n2~n`. Toute autre rue à deux extrémités réelles n’a pas de mot.
 
 La clé est la même quelle que soit la tuile dont le lieu est lu. Les autres identifiants restent internes : `NodeId` et
 `RoadId` numérotent le graphe du réseau, et l’uid d’une rue ou d’une jonction dans la ville est sa place dans la
