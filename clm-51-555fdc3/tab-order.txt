@@ -1,0 +1,25 @@
+Tab from the path's current step, at each level: what takes the focus, in order
+
+Crossing
+  1. Remove the crossing   [action row]
+  2. Closer by 0.5 m
+  3. field: Set back from the junction
+  4. Farther by 0.5 m
+
+Lane
+  1. Select the whole street   [action row]
+  2. Left to Avenue Laurier Ouest (south-west)
+  3. Straight on to Boulevard Saint-Laurent (north-west)
+  4. Right to Avenue Laurier Est (north-east)
+
+Bus lane
+  1. Remove the bus lane   [action row]
+  2. (left the details)
+  3. (left the details)
+  4. (left the details)
+
+Cycle track
+  1. Remove the cycle track   [action row]
+  2. Narrower by 0.5 m
+  3. field: Track width
+  4. Wider by 0.5 m
