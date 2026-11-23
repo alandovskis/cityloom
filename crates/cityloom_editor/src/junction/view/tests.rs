@@ -515,7 +515,7 @@ fn the_signal_plan_s_folds_are_named_by_a_heading_in_their_summary() {
             let open = rest.find("<summary").unwrap();
             assert!(rest[open..].starts_with("<summary>"), "the summary keeps no attributes: {rest}");
             let summary = &rest[open..rest.find("</summary>").unwrap()];
-            assert!(summary.contains(&format!(r#"<h3 class="jn-fold-name" id="{id}">{name}</h3>"#)), "{f:?} named by a heading: {summary}");
+            assert!(summary.contains(&format!(r#"<h3 id="{id}" class="jn-fold-name">{name}</h3>"#)), "{f:?} named by a heading: {summary}");
             assert!(summary.contains(&set_line(f, &v, &en)), "{f:?} still says what is set: {summary}");
             // a heading once, an id once: the section has no heading of its own, and is labelled by the fold's
             assert_eq!(h.matches(&format!(">{name}</h3>")).count(), 1, "{f:?}: {h}");
@@ -541,9 +541,9 @@ fn a_street_s_folds_are_named_by_a_heading_in_their_summary() {
         rest[open..rest.find("</summary>").unwrap()].to_string()
     };
     let transit = summary("jn-fold-transit");
-    assert!(transit.contains(r#"<h3 class="jn-fold-name" id="i-h-transit">Transit priority</h3>"#) && transit.contains("None set"), "{transit}");
+    assert!(transit.contains(r#"<h3 id="i-h-transit" class="jn-fold-name">Transit priority</h3>"#) && transit.contains("None set"), "{transit}");
     let position = summary("jn-fold-position");
-    assert!(position.contains(r#"<h3 class="jn-fold-name" id="i-h-position">Position</h3>"#) && position.contains("90°, not shifted"), "{position}");
+    assert!(position.contains(r#"<h3 id="i-h-position" class="jn-fold-name">Position</h3>"#) && position.contains("90°, not shifted"), "{position}");
     assert_eq!(h.matches(">Transit priority</h3>").count(), 1, "named once: {h}");
     assert_eq!(h.matches(r#"id="i-h-transit""#).count(), 1, "{h}");
     assert!(h.contains(r#"id="i-h-bearing""#) && h.contains(r#"id="i-h-offset""#), "the position's fields keep their headings: {h}");
