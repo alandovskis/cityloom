@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
         "architecture/runtime",
         "architecture/data-model-projects",
         "architecture/data-model-streets-junctions",
+        "architecture/data-model-server",
       ],
     },
     "issues",
