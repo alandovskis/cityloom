@@ -16,7 +16,7 @@ Writes and posts the plan for one feasible CityLoom issue, then makes the issue'
    - **docs** flow: it must have the five headings `## Change`, `## Where`, `## Facts`, `## Translation`, `## Out of scope`, in that order, `## Where` must name at least one page, each page of the site with both its English and its fr-CA path, and every line of `## Change` must rest on a line of `## Facts` that names a file. There is no `## Version`: a documentation change raises none.
 
    A plan that fails a check goes back to the planner once, with what failed; failing again is a hand-back. Then post it: `save_comment` whose body is `**Factory · plan**`, a blank line, and the plan.
-4. Make the worktree, from the main checkout, unless it exists:
+4. Make the worktree, from the main checkout, unless it exists; other issues may be making theirs, so these git commands take their turn (README, **Side by side**):
 
    ```sh
    git fetch -q origin

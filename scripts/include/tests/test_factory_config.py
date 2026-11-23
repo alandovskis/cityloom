@@ -32,6 +32,8 @@ class Config(unittest.TestCase):
         self.assertEqual(config["github"]["repo"], "alandovskis/cityloom")
         self.assertTrue(config["app"]["privateKeyPath"].startswith("/"))
         self.assertTrue(config["run"].strip() and config["evidence"].strip())
+        # Todo empty, the queue takes from these states, in this order; the intake is never one of them.
+        self.assertEqual(config["linear"]["fallback"], ["Triage", "Backlog"])
 
     def test_every_label_the_factory_applies_is_one_github_knows(self):
         # Linear's S- labels mirror .github/labels.yml: the factory's words must be the same in both trackers.
@@ -48,6 +50,7 @@ class Config(unittest.TestCase):
             good = json.loads((ROOT / ".claude" / "factory" / "config.json").read_text(encoding="utf-8"))
             del good["linear"]["team"]
             good["caps"]["inFlight"] = 0
+            good["linear"]["fallback"] = ["Triage", " "]
             (root / ".claude" / "factory" / "config.json").write_text(json.dumps(good), encoding="utf-8")
             (root / ".github" / "issue-flow.json").write_text(json.dumps({"app": {"id": 1}}), encoding="utf-8")
             with self.assertRaises(factory.ConfigError) as caught:
@@ -55,6 +58,7 @@ class Config(unittest.TestCase):
         problems = caught.exception.problems
         self.assertIn("linear.team is missing", problems)
         self.assertIn("caps.inFlight must be a whole number above 0", problems)
+        self.assertIn("linear.fallback must be a list of texts that are not blank", problems)
         self.assertIn("app.installationId is missing", problems)
         self.assertIn("app.privateKeyPath is missing", problems)
         self.assertIn("run is missing", problems)

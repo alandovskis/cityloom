@@ -13,12 +13,12 @@ The head must be the one the latest `**Factory · review <k>: pass**` record nam
 
 1. **Red**: the `**Factory · red**` record's gate report, as a text file: the new tests, each failing.
 2. **Green**: the `**Factory · green**` record's gate report for the head, as a text file: every test passing. When the change has new Rust tests, add `cargo test <each new test>` run at the head, its output as a text file.
-3. **The app**: what the plan's `## Change` says a person sees, exercised as the triage's `howToExercise` says, by `run`, captured as `evidence` says: for a browser behaviour, run its spec (`just e2e tests/<spec>.spec.ts`) and keep its screenshots and trace, or drive the page and take screenshots of each step and its result. A change with nothing to see (server, model) is evidenced by its tests' output alone, and the PR says so.
+3. **The app**: what the plan's `## Change` says a person sees, exercised as the triage's `howToExercise` says, by `run`, captured as `evidence` says: for a browser behaviour, run its spec (`E2E_PORT=<port> just e2e tests/<spec>.spec.ts`, the issue's port: README, **Side by side**) and keep its screenshots and trace, or drive the page and take screenshots of each step and its result. A change with nothing to see (server, model) is evidenced by its tests' output alone, and the PR says so.
 
 **The docs flow** (README, **Two flows**) has no red and no green report. Its steps are:
 
 1. **The gate**: the `**Factory · docs**` record's gate report for the head, as a text file: the pages changed, nothing else, and the site built.
-2. **The pages**, as a reader sees them: in `<wt>`, `just docs-build`, then serve the build (`cd website && npx docusaurus serve --no-open --port 3100`), and for each page of the site the branch adds or changes, a full-page screenshot in English and in fr-CA (`cd e2e && npx playwright screenshot --full-page http://localhost:3100/cityloom/<page> <file>`, and `.../cityloom/fr-CA/<page>`), one capture per page and language; stop the server after. A changed file outside the site (`docs/`, a `CLAUDE.md`, a README) is evidenced by its text at the head, as a file.
+2. **The pages**, as a reader sees them: in `<wt>`, `just docs-build`, then serve the build on the issue's port, since other issues may be serving theirs (`cd website && npx docusaurus serve --no-open --port <port>`), and for each page of the site the branch adds or changes, a full-page screenshot in English and in fr-CA (`cd e2e && npx playwright screenshot --full-page http://localhost:<port>/cityloom/<page> <file>`, and `.../cityloom/fr-CA/<page>`), one capture per page and language; stop the server after. A changed file outside the site (`docs/`, a `CLAUDE.md`, a README) is evidenced by its text at the head, as a file.
 
 ## 2. Check
 
@@ -33,7 +33,7 @@ git -C <main checkout> fetch -q origin <evidenceBranch> || true
 git -C <main checkout> worktree add <scratch>/evidence origin/<evidenceBranch>     # or, the first time: --detach, then checkout --orphan <evidenceBranch> and rm -rf .
 # copy the files, then:
 git -C <scratch>/evidence add clm-<n> && git -C <scratch>/evidence commit -m "Evidence for CLM-<n> at <head>"
-git -C <scratch>/evidence push origin HEAD:<evidenceBranch>      # rejected: fetch, rebase onto origin/<evidenceBranch>, push again, once
+git -C <scratch>/evidence push origin HEAD:<evidenceBranch>      # rejected: fetch, rebase onto origin/<evidenceBranch>, push again, up to five times
 git -C <main checkout> worktree remove --force <scratch>/evidence
 ```
 
@@ -74,7 +74,7 @@ ending with the attribution lines the session gives for pull requests. Then post
 
 ## 5. Ready for approval
 
-Dispatch the `merge` agent with the PR's number and `<wt>`: it brings the PR up to date with `main`, fixes failing checks and SonarCloud issues on the branch, and hands it back green and `CLEAN`; it never merges. If it changed the head, run the green gate on the new head (`factory-build` step 4, which posts a new green record and pushes nothing new; docs flow: the docs gate, step D2) and capture, check and publish again (steps 1 to 3), then replace the PR's Proof with `gh pr edit <pr> --body-file <file>`, as the App. A STOP from the merge agent is a hand-back, quoting its report.
+Dispatch the `merge` agent with the PR's number, `<wt>` and the issue's `E2E_PORT` (README, **Side by side**), in the background: it brings the PR up to date with `main`, fixes failing checks and SonarCloud issues on the branch, and hands it back green and `CLEAN`; it never merges. If it changed the head, run the green gate on the new head (`factory-build` step 4, which posts a new green record and pushes nothing new; docs flow: the docs gate, step D2) and capture, check and publish again (steps 1 to 3), then replace the PR's Proof with `gh pr edit <pr> --body-file <file>`, as the App. A STOP from the merge agent is a hand-back, quoting its report.
 
 The PR now waits for a person's approval on its head.
 
