@@ -32,23 +32,48 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 
 A slice may use another slice's `model` (junction uses the street's, city uses both, `sync::local` uses
 `project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits` (project, sync),
-`restriction::store`, `standards::model` and `standards::store` (street), `place::area`, `project::copies` (share, for
-the copy of a shared design; the shell, to make a copy one of the person's projects), `project::context` (which project
-a page is opened in, and whether it is shown read-only) and `shared`. It never uses another slice's view-model, views or
-text. Of `street/`, `junction/` and `map/`, another slice uses only what is under `model/`, with two exceptions: the
-report, whose figures `map/vm/report.rs` draws with `street::view::drawing` and `junction::view::figure`, and a shell
-test, which builds a `street::vm::StreetVm`.
+`restriction::store`, `standards::model` and `standards::store` (street), `place::area` (and `place::Bounds`, the box
+that `Area::bounds` gives and `city::projection` takes), `project::copies` (share, for the copy of a shared design; the
+shell, to make a copy one of the person's projects), `project::context` (which project a page is opened in, and whether
+it is shown read-only) and `shared`. It never uses another slice's view-model, views or text, nor its other modules,
+except as this section says:
+
+- The archive panel. The Account page (`account/mod.rs`) builds it with `archive::vm::ArchiveVm::for_page` and mounts
+  it with `archive::view::ArchiveView`. The shell's Share menu builds an `ArchiveVm::for_page` for its export
+  (`shell/view.rs`).
+- The shell's tray. The street page's Notes tray (`street/view/notes_tray.rs`) is made with `shell::tray`.
+- The shell's mount. The street, junction, map and account pages mount the shell with `shell::mount`, saying with
+  `shell::NotesAtStart` how their notes start. Its target is a `shell::Target`, which `StreetVm`, `JunctionVm` and
+  `MapVm` implement; the account page and a junction that cannot be drawn hand it a `shell::Bare`.
+- The drawing of an area. The map uses `restriction::draw`, the pure state machine that draws an area's outline
+  (`map/vm/mod.rs`, `map/vm/areas.rs`, `map/view/mod.rs`, `map/view/areas_view.rs`).
+- The report. `map/vm/report.rs` draws its figures with `street::view::drawing` and `junction::view::figure`.
+- A shell test, which builds a `street::vm::StreetVm`.
+
+Of `street/`, `junction/` and `map/`, another slice uses only what is under `model/`, but for the report and that shell
+test.
+
+Tests also use more of other slices, to set up what they test:
+
+- `project::ProjectStore` and `project::store::PROJECTS_KEY`: the tests of archive, city, junction, map, share, shell,
+  street and sync.
+- `restriction::fixtures`: the tests of city, map and street.
+- `shell::view::i18n_keys`: the tests of account, junction, map and project.
+- `sync::SyncVm` and `sync::Status`: the tests of account.
+- `sync::tests::Device`, `sync::local::ids`, `share::links::ProjectShares`, `share::store` and `timeline::store`: the
+  tests of project.
+- `city::scenario::Action`: the tests of street and junction.
 
 A few stores are used across slices too. `sync::local` uses `project::store` and
 `project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` uses `city::edits`, `city::store` and
-`restriction::store`. `sync::local` and `project::store` use `timeline::store`.
+`restriction::store`. `sync::local` and `project::store` use `timeline::store`. The Account page (`account/mod.rs`)
+runs `project::migrate::move_legacy_work` before it syncs.
 
 The stores and the editors also use `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), which depends
 only on `shared`. The shell builds `sync::SyncVm`; every other slice reaches the sync only through `sync::hub` and
 `sync::model`. `shared` depends on no slice.
 
-The editors reach the shell through `shell::Target`, which `StreetVm`, `JunctionVm` and `MapVm` implement, and
-`shell::mount`. A page made of several slices is put together in `lib.rs`, the composition root (see
+A page made of several slices is put together in `lib.rs`, the composition root, which may use any slice (see
 [Pages and entry points](#pages-and-entry-points)).
 
 ## Layers inside a slice

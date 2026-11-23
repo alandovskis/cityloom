@@ -34,25 +34,50 @@ qui possède la fonctionnalité.
 
 Une tranche peut utiliser le `model` d’une autre tranche (la jonction utilise celui de la rue, la ville les deux,
 `sync::local` utilise `project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits` (projet,
-synchronisation), `restriction::store`, `standards::model` et `standards::store` (rue), `place::area`,
-`project::copies` (le partage, pour la copie d’un aménagement partagé; le shell, pour faire d’une copie un projet de la
-personne), `project::context` (le projet dans lequel une page est ouverte, et s’il est affiché en lecture seule) et
-`shared`. Elle n’utilise jamais le modèle de vue, les vues ni les textes d’une autre tranche. De `street/`, `junction/`
-et `map/`, une autre tranche n’utilise que ce qui se trouve sous `model/`, à deux exceptions près : le rapport, dont
-`map/vm/report.rs` dessine les figures avec `street::view::drawing` et `junction::view::figure`, et un test du shell,
-qui construit un `street::vm::StreetVm`.
+synchronisation), `restriction::store`, `standards::model` et `standards::store` (rue), `place::area` (et
+`place::Bounds`, le cadre que donne `Area::bounds` et que prend `city::projection`), `project::copies` (le partage, pour
+la copie d’un aménagement partagé; le shell, pour faire d’une copie un projet de la personne), `project::context` (le
+projet dans lequel une page est ouverte, et s’il est affiché en lecture seule) et `shared`. Elle n’utilise jamais le
+modèle de vue, les vues ni les textes d’une autre tranche, ni ses autres modules, sauf comme le dit cette section :
+
+- Le panneau de l’archive. La page Compte (`account/mod.rs`) le construit avec `archive::vm::ArchiveVm::for_page` et le
+  monte avec `archive::view::ArchiveView`. Le menu Partager du shell construit un `ArchiveVm::for_page` pour son
+  exportation (`shell/view.rs`).
+- Le tiroir du shell. Le tiroir des notes de la page de rue (`street/view/notes_tray.rs`) est fait avec `shell::tray`.
+- Le montage du shell. Les pages de rue, de jonction, de carte et de compte montent le shell avec `shell::mount`, en
+  indiquant avec `shell::NotesAtStart` comment leurs notes s’ouvrent. Sa cible est un `shell::Target`, que mettent en
+  œuvre `StreetVm`, `JunctionVm` et `MapVm`; la page Compte et une jonction qui ne peut pas être dessinée lui donnent un
+  `shell::Bare`.
+- Le dessin d’une zone. La carte utilise `restriction::draw`, la machine à états pure qui dessine le contour d’une zone
+  (`map/vm/mod.rs`, `map/vm/areas.rs`, `map/view/mod.rs`, `map/view/areas_view.rs`).
+- Le rapport. `map/vm/report.rs` dessine ses figures avec `street::view::drawing` et `junction::view::figure`.
+- Un test du shell, qui construit un `street::vm::StreetVm`.
+
+De `street/`, `junction/` et `map/`, une autre tranche n’utilise que ce qui se trouve sous `model/`, sauf pour le
+rapport et ce test du shell.
+
+Les tests utilisent aussi davantage des autres tranches, pour mettre en place ce qu’ils testent :
+
+- `project::ProjectStore` et `project::store::PROJECTS_KEY` : les tests de l’archive, de la ville, de la jonction, de
+  la carte, du partage, du shell, de la rue et de la synchronisation.
+- `restriction::fixtures` : les tests de la ville, de la carte et de la rue.
+- `shell::view::i18n_keys` : les tests du compte, de la jonction, de la carte et des projets.
+- `sync::SyncVm` et `sync::Status` : les tests du compte.
+- `sync::tests::Device`, `sync::local::ids`, `share::links::ProjectShares`, `share::store` et `timeline::store` : les
+  tests des projets.
+- `city::scenario::Action` : les tests de la rue et de la jonction.
 
 Quelques magasins sont aussi utilisés d’une tranche à l’autre. `sync::local` utilise `project::store` et
 `project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` utilise `city::edits`, `city::store` et
-`restriction::store`. `sync::local` et `project::store` utilisent `timeline::store`.
+`restriction::store`. `sync::local` et `project::store` utilisent `timeline::store`. La page Compte (`account/mod.rs`)
+exécute `project::migrate::move_legacy_work` avant de synchroniser.
 
 Les magasins et les éditeurs utilisent aussi `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), qui ne
 dépend que de `shared`. Le shell construit `sync::SyncVm`; toute autre tranche n’accède à la synchronisation que par
 `sync::hub` et `sync::model`. `shared` ne dépend d’aucune tranche.
 
-Les éditeurs atteignent le shell par `shell::Target`, que mettent en œuvre `StreetVm`, `JunctionVm` et `MapVm`, et par
-`shell::mount`. Une page faite de plusieurs tranches est assemblée dans `lib.rs`, la racine de composition (voir
-[Pages et points d’entrée](#pages-et-points-dentrée)).
+Une page faite de plusieurs tranches est assemblée dans `lib.rs`, la racine de composition, qui peut utiliser toute
+tranche (voir [Pages et points d’entrée](#pages-et-points-dentrée)).
 
 ## Couches dans une tranche
 
