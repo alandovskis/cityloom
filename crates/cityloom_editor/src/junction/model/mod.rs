@@ -34,7 +34,7 @@ use crate::junction::model::turbo::{BLOCKS, LAYOUTS, Turbo};
 use crate::street::model::{Beyond, Editor, EndStop, EndUse, Street, View, named_said};
 
 #[cfg(test)]
-mod fixtures;
+pub(crate) mod fixtures;
 #[cfg(test)]
 pub use fixtures::{JUNCTION_SAMPLES, junction_biked, junction_of, junction_two_way, junction_with_walkways, suspended_turbo};
 
