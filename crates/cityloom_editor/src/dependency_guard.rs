@@ -14,6 +14,12 @@
 //! - It does not see a path in a string (`#[serde(with = "..")]`), a path through the crate's own name, or what a macro
 //!   builds.
 //! - Only exactly `cfg(test)` is test code: what is under `cfg(any(.., test))` is production.
+//! - After the first braces of an item, a statement or a list's element under `#[cfg(test)]`, the rest of it (an `else`,
+//!   a method call) is production.
+//! - A generic parameter, or a closure's parameter, under `#[cfg(test)]` may hide the rest of what it is a parameter of.
+//! - Under `#[cfg(test)]`, a `<` with no space before it opens generic arguments, so a comparison rustfmt has not spaced
+//!   may hide the elements after it, up to a `>`.
+//! - In a macro whose elements end at anything but a `;`, a comma or braces, one under `#[cfg(test)]` may hide the next.
 //! - Cycles between slices are accepted.
 
 use std::collections::BTreeMap;
@@ -284,37 +290,72 @@ impl Reader<'_> {
 }
 
 /// Where what is under a `#[cfg(test)]` ends, from what follows it: an item or a statement at its `;` or its braces, a
-/// field or a struct literal's entry at its comma.
+/// field or a struct literal's entry at its comma, anything else (an element of a list, a match arm, an expression
+/// statement, a macro) at the first of the three. Without a comma outside `<..>`, the first comma is the one.
 fn after_test_code(t: &[TokenTree], start: usize) -> usize {
-    if !is_field(t, start) {
-        let end = (start..t.len()).find(|&i| is_punct(&t[i], ';') || braced(&t[i]).is_some());
-        return end.map_or(t.len(), |end| end + 1);
-    }
+    let begin = after_visibility(t, start);
+    let field = is_field(t, begin);
+    let item = is_item(t, begin);
     let mut depth = 0_usize;
-    for i in start..t.len() {
-        if is_punct(&t[i], '<') {
+    let mut first_comma = None;
+    for i in begin..t.len() {
+        if is_punct(&t[i], ';') || !field && braced(&t[i]).is_some() {
+            return i + 1;
+        }
+        if opens_angle(t, i) {
             depth += 1;
         } else if is_punct(&t[i], '>') && !is_joint(&t[i - 1], '-') && !is_joint(&t[i - 1], '=') {
             depth = depth.saturating_sub(1);
-        } else if is_punct(&t[i], ',') && depth == 0 {
-            return i + 1;
+        } else if is_punct(&t[i], ',') && !item {
+            if depth == 0 {
+                return i + 1;
+            }
+            first_comma.get_or_insert(i + 1);
         }
     }
-    t.len()
+    first_comma.unwrap_or(t.len())
 }
 
-/// Whether a field or a struct literal's entry is at `t[i]`: after its attributes and its visibility, a name and one `:`.
-fn is_field(t: &[TokenTree], mut i: usize) -> bool {
+/// Where the attributes and the visibility at `t[i]` end.
+fn after_visibility(t: &[TokenTree], mut i: usize) -> usize {
     while t.get(i).is_some_and(|x| is_punct(x, '#')) {
         i += 2;
     }
     if t.get(i).is_some_and(|x| is_word(x, "pub")) {
         i += 1;
-        if matches!(t.get(i), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis) {
+        if t.get(i).is_some_and(parenthesized) {
             i += 1;
         }
     }
+    i
+}
+
+/// Whether a field or a struct literal's entry is at `t[i]`: a name and one `:`.
+fn is_field(t: &[TokenTree], i: usize) -> bool {
     matches!(t.get(i), Some(TokenTree::Ident(_))) && t.get(i + 1).is_some_and(|x| is_punct(x, ':')) && !is_separator(t, i + 1)
+}
+
+/// Whether an item or a statement with a keyword of its own is at `t[i]`, so it has a `;` or braces and a comma before
+/// them does not end it. The types `fn(..)` and `for<..> fn(..)` are neither.
+fn is_item(t: &[TokenTree], mut i: usize) -> bool {
+    const WORDS: &[&str] = &["use", "mod", "impl", "struct", "enum", "trait", "type", "const", "static", "let", "if", "match", "for", "while", "loop"];
+    while t.get(i).is_some_and(|x| ["async", "unsafe", "extern"].iter().any(|word| is_word(x, word))) {
+        i += 1;
+        if is_word(&t[i - 1], "extern") && matches!(t.get(i), Some(TokenTree::Literal(_))) {
+            i += 1;
+        }
+    }
+    let (Some(word), Some(next)) = (t.get(i), t.get(i + 1)) else { return false };
+    if is_word(word, "fn") {
+        return !parenthesized(next);
+    }
+    WORDS.iter().any(|w| is_word(word, w)) && !(is_word(word, "for") && is_punct(next, '<'))
+}
+
+/// Whether `t[i]` opens generic arguments: a `<` right after what it belongs to. A comparison or a shift has a space
+/// before it.
+fn opens_angle(t: &[TokenTree], i: usize) -> bool {
+    is_punct(&t[i], '<') && !is_joint(&t[i - 1], '<') && t[i - 1].span().end() == t[i].span().start()
 }
 
 /// Whether a path from the crate, this module or the one above begins at `t[i]`.
@@ -350,6 +391,10 @@ fn braced(t: &TokenTree) -> Option<&Group> {
         TokenTree::Group(g) if g.delimiter() == Delimiter::Brace => Some(g),
         _ => None,
     }
+}
+
+fn parenthesized(t: &TokenTree) -> bool {
+    matches!(t, TokenTree::Group(g) if g.delimiter() == Delimiter::Parenthesis)
 }
 
 /// The name without the `r#` a raw identifier has.
