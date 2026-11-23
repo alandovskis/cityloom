@@ -398,14 +398,14 @@ fn pieces(s: &str) -> Vec<String> {
     bare.split('\n').filter(|p| !p.trim().is_empty()).map(str::to_string).collect()
 }
 
-fn is_cfg_test(attr: &TokenTree) -> bool {
+pub(crate) fn is_cfg_test(attr: &TokenTree) -> bool {
     let TokenTree::Group(g) = attr else { return false };
     let t: Vec<TokenTree> = g.stream().into_iter().collect();
     matches!(t.as_slice(), [TokenTree::Ident(c), TokenTree::Group(a)]
         if c == "cfg" && a.stream().to_string() == "test")
 }
 
-fn is_punct(t: &TokenTree, c: char) -> bool {
+pub(crate) fn is_punct(t: &TokenTree, c: char) -> bool {
     matches!(t, TokenTree::Punct(p) if p.as_char() == c)
 }
 
