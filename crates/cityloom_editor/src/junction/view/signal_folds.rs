@@ -212,6 +212,8 @@ mod tests {
                 let want = if other == fold { planted + warnings(*other, &base) } else { warnings(*other, &base) };
                 assert_eq!(warnings(*other, &v), want, "{other:?} with {planted} planted in {fold:?}");
             }
+            // the plans fold counts the plans' own findings, not the shown signal's lists
+            assert_eq!(warnings(SignalFold::Plans, &v), warnings(SignalFold::Plans, &base), "Plans with {planted} planted in {fold:?}");
         }
         // the plans fold counts each plan's findings, whatever they hold
         let mut v = Junction::new(0).view();
