@@ -188,6 +188,25 @@ The street network is prepared ahead of time, not in the browser: `citymodel_bui
 osm2streets, behind its `import` feature, so osm2streets never reaches the browser. The server, `cityloom_server`, is
 not built to WebAssembly. [Project layout](../project-layout.md#the-crates) lists every crate.
 
+How the crates depend on one another, outside their tests (an arrow reads "depends on"):
+
+```mermaid
+flowchart LR
+  subgraph browser [In the browser]
+    editor[cityloom_editor]
+    pdf[cityloom_report_pdf]
+  end
+  report[cityloom_report]
+  model[cityloom_model]
+  builder[citymodel_builder]
+  server[cityloom_server]
+  editor --> model
+  editor --> report
+  pdf --> report
+  builder -. import feature .-> model
+  server -- without import --> builder
+```
+
 `city/import.rs` turns a network into the city's layout: roads become streets, and a meeting of three to five arms that
 the junction editor can draw becomes a junction.
 

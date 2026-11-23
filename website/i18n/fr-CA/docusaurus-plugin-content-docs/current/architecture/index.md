@@ -201,6 +201,25 @@ réseau (`cityloom_model`) en tuiles JSON que l’éditeur télécharge et dans 
 navigateur. Le serveur, `cityloom_server`, n’est pas construit en WebAssembly.
 [Organisation du dépôt](../project-layout.md#les-caisses) énumère toutes les caisses.
 
+Comment les caisses dépendent les unes des autres, hors de leurs tests (une flèche se lit « dépend de ») :
+
+```mermaid
+flowchart LR
+  subgraph browser [Dans le navigateur]
+    editor[cityloom_editor]
+    pdf[cityloom_report_pdf]
+  end
+  report[cityloom_report]
+  model[cityloom_model]
+  builder[citymodel_builder]
+  server[cityloom_server]
+  editor --> model
+  editor --> report
+  pdf --> report
+  builder -. fonctionnalité import .-> model
+  server -- sans import --> builder
+```
+
 `city/import.rs` transforme un réseau en disposition de la ville : les routes deviennent des rues, et la rencontre de
 trois à cinq branches que l’éditeur de jonction sait dessiner devient une jonction.
 

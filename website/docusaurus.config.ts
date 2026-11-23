@@ -24,10 +24,13 @@ const config: Config = {
   onBrokenLinks: "throw",
   onBrokenAnchors: "throw",
   markdown: {
+    // ```mermaid blocks are drawn as diagrams (the Architecture pages' data model and flows).
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: "throw",
     },
   },
+  themes: ["@docusaurus/theme-mermaid"],
 
   // The app speaks English and Canadian French, and so does this site.
   i18n: {
@@ -61,6 +64,10 @@ const config: Config = {
   themeConfig: {
     colorMode: {
       respectPrefersColorScheme: true,
+    },
+    // Diagrams follow the colour mode, so they read in both.
+    mermaid: {
+      theme: { light: "neutral", dark: "dark" },
     },
     navbar: {
       title: "CityLoom",
