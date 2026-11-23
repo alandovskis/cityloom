@@ -51,11 +51,12 @@ The files at the top level:
 
 ## The crates
 
-The workspace has six crates, all in `crates/`. Those that run in the browser are built to WebAssembly.
+The workspace has seven crates, all in `crates/`. Those that run in the browser are built to WebAssembly.
 
 | Crate                 | Runs in                   | What it is                                                                                                                                                                                                                                                   |
 | --------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `cityloom_editor`     | The browser               | The editor: every page's logic and views. Its `Cargo.toml` holds the product's version, which every pull request that changes the app raises.                                                                                                                |
+| `cityloom_ui`         | The browser               | The controls the editor's pages share: the radio group, the stepper and its number field, the section of the details and the question asked before something is done. It holds no wording and uses no other crate of the workspace.                          |
 | `cityloom_model`      | Browser, builder          | The plain street network that `citymodel_builder` produces and the editor reads (serde only).                                                                                                                                                                |
 | `cityloom_report`     | The browser               | The design-review report as plain data (serde only). The editor fills it and hands it to the PDF writer.                                                                                                                                                     |
 | `cityloom_report_pdf` | The browser               | The PDF writer. It is a module of its own, `web/pkg/cityloom_report_pdf*`, that `web/report.js` loads the first time a report is asked for, so its large dependency (krilla) stays out of the editor's module. The build fails if the editor links it.       |

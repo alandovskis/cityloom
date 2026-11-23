@@ -2687,7 +2687,9 @@ svg pattern circle {
   overflow-wrap: anywhere;
 }
 #inspector > .insp-columns .insp-sec > .opts[role="radiogroup"] .opt[role="radio"][aria-checked="true"],
-#inspector :is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect) .opt[role="radio"][aria-checked="true"] {
+#inspector
+  :is(.act-mode, .bike-mode, .transit-mode, .preempt-mode, .call-detect)
+  .opt[role="radio"][aria-checked="true"] {
   padding-top: 16px;
 }
 @media (any-pointer: coarse) {

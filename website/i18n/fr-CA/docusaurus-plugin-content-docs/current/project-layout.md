@@ -53,12 +53,13 @@ Les fichiers du premier niveau :
 
 ## Les caisses
 
-L’espace de travail compte six caisses, toutes dans `crates/`. Celles qui s’exécutent dans le navigateur sont
+L’espace de travail compte sept caisses, toutes dans `crates/`. Celles qui s’exécutent dans le navigateur sont
 construites en WebAssembly.
 
 | Caisse                | S’exécute dans                  | Contenu                                                                                                                                                                                                                                                                             |
 | --------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cityloom_editor`     | Le navigateur                   | L’éditeur : la logique et les vues de chaque page. Son `Cargo.toml` porte la version du produit, que chaque demande de fusion qui modifie l’application augmente.                                                                                                                   |
+| `cityloom_ui`         | Le navigateur                   | Les commandes que partagent les pages de l’éditeur : le groupe de boutons radio, le champ à boutons plus et moins, la section des détails et la question posée avant de faire quelque chose. Elle ne contient aucun texte et n’utilise aucune autre caisse de l’espace de travail.  |
 | `cityloom_model`      | Le navigateur, le constructeur  | Le réseau de rues simple que produit `citymodel_builder` et que lit l’éditeur (serde seulement).                                                                                                                                                                                    |
 | `cityloom_report`     | Le navigateur                   | Le rapport d’examen de la conception sous forme de données simples (serde seulement). L’éditeur le remplit et le remet au générateur de PDF.                                                                                                                                        |
 | `cityloom_report_pdf` | Le navigateur                   | Le générateur de PDF. C’est un module distinct, `web/pkg/cityloom_report_pdf*`, que `web/report.js` charge la première fois qu’un rapport est demandé, pour que sa lourde dépendance (krilla) reste hors du module de l’éditeur. La construction échoue si l’éditeur le lie.        |
