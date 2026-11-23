@@ -9,7 +9,7 @@ Takes one planned CityLoom issue from its plan to a green branch on `origin`. Th
 
 The flow is the `Flow:` line of the issue's `**Factory · triage: feasible**` record (none: `code`; README, **Two flows**). The steps 1 to 4 below are the code flow's; an issue of the docs flow goes to **The docs flow** instead.
 
-Run the gates from the main checkout's copy of `gate.py` (`$F`), never from the worktree's: the worktree is what is judged. They need the database: `just db` prints the `DATABASE_URL` to export. The base is the commit the branch started from: `BASE=$(git -C <wt> merge-base HEAD origin/main)`.
+Run the gates from the main checkout's copy of `gate.py` (`$F`), never from the worktree's: the worktree is what is judged. They need the database: `just db` prints the `DATABASE_URL` to export. The base is the commit the branch started from: `BASE=$(git -C <wt> merge-base HEAD origin/main)`. Other issues build beside this one (README, **Side by side**): run every gate with the issue's port, `E2E_PORT=$((20000 + <n>))`, in the environment, and give that port to every agent you dispatch for it.
 
 ## 1. The red commit
 

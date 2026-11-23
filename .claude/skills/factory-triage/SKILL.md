@@ -19,7 +19,7 @@ Decides whether one CityLoom issue can go down the factory's line without a pers
 | `needs-review` | `labels.needsReview` | `**Factory · handed back** (triage)`, then the question for a person to answer |
 | `needs-setup` | `labels.needsSetup` | `**Factory · handed back** (triage)`, then what must be set up |
 
-Add the label with `save_issue` and `addLabels` (never `labels`, which would replace the others), and the comment with `save_comment`. A feasible issue is also moved to `linear.states.working` (`save_issue` with `state`), so the queue's room counts it from now on. A handed-back issue stays in the intake state: the person answers on the issue and removes the label, and the queue picks it again.
+Add the label with `save_issue` and `addLabels` (never `labels`, which would replace the others), and the comment with `save_comment`. A feasible issue is also moved to `linear.states.working` (`save_issue` with `state`), so the queue's room counts it from now on. A handed-back issue stays in the state it was in (the intake, or a state of `linear.fallback`): the person answers on the issue and removes the label, and the queue picks it again.
 
 ## Report
 

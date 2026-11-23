@@ -3,6 +3,7 @@
   "linear": {
     "team": "Cityloom",
     "intake": "Todo",
+    "fallback": ["Triage", "Backlog"],
     "states": {
       "working": "In Progress",
       "review": "In Review",
@@ -23,8 +24,8 @@
   },
   "worktrees": "../worktrees",
   "caps": {
-    "inFlight": 3,
-    "awaitingApproval": 3
+    "inFlight": 5,
+    "awaitingApproval": 5
   },
   "rounds": {
     "red": 3,

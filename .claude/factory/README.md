@@ -1,6 +1,6 @@
 # The software factory
 
-A line of agents that takes a CityLoom issue from Linear to a merged and deployed change (CLM-18). Each station is one agent with one job; a script, not an agent's word, decides whether its work goes on. A person decides at two points only: an issue the line cannot judge on its own (it is handed back), and the approval of the pull request. Moving an issue from Backlog to Todo is how a person gives it to the line.
+A line of agents that takes a CityLoom issue from Linear to a merged and deployed change (CLM-18). Each station is one agent with one job; a script, not an agent's word, decides whether its work goes on. A person decides at two points only: an issue the line cannot judge on its own (it is handed back), and the approval of the pull request. Moving an issue to Todo (`linear.intake`) is how a person gives it to the line first; when nothing there is ready, the line takes issues from the states of `linear.fallback` (Triage, then Backlog) itself, and triage judges them as any other.
 
 ```
 Todo ─ queue ─ triage ─ plan ─ test-writer ─ red gate ─ implement ─ green gate ─ review ─ evidence ─ PR ─ approval ─ merge ─ deploy
@@ -70,9 +70,20 @@ Read in this order; the first that holds says where the issue is:
 7. A worktree and a `plan` record: build (factory-build), from the test-writer in the code flow, from the writer in the docs flow. Code flow, commits after the base but no `red` record: the red gate is run on them first. Docs flow, commits after the base but no `docs` record at the HEAD: the docs gate is run on them first.
 8. A `plan` record: make the worktree, then build.
 9. A `triage: feasible` record: plan (factory-plan).
-10. In the intake state: queue and triage (factory-queue, factory-triage).
+10. In the intake state, or a state of `linear.fallback`: queue and triage (factory-queue, factory-triage).
 
 The worktree, red commit and local commits after it live only on this machine until green; that is by design (the red commit alone cannot pass CI, which denies warnings). A docs branch is likewise pushed only once its gate passes. If the worktree is lost, the issue goes back to step 8 and is built again from its plan.
+
+## Side by side
+
+The line works up to `caps.inFlight` issues and `caps.awaitingApproval` open PRs at once. The orchestrator runs every issue's stations itself, interleaved, each agent and each gate in the background (factory, **Issues in flight**). What the issues share is kept apart this way:
+
+- **Worktree and target.** Each issue has its own worktree and so its own `target/` (never a shared `CARGO_TARGET_DIR`: a stale binary would keep another checkout's paths). Five builds at once need the disk for five targets, a few GB each.
+- **Port.** Each issue's browser tests and app run on their own port, `E2E_PORT=$((20000 + <n>))` for CLM-<n>, set for every gate, `just e2e`, `just serve` and capture of that issue and given to every agent dispatched for it (test-writer, implement, writer, merge). Playwright reuses a server already listening on its port, so two issues on one port would test each other's build.
+- **Database.** One Postgres (`just db`) serves them all: the server's tests make a database of their own for each test (`#[sqlx::test]`).
+- **The main checkout's git.** Commands that change the main repository's refs or worktrees (`git fetch`, `git worktree add` and `remove`, `git branch -D`, the evidence branch's scratch worktree) run one at a time; a lock error (`cannot lock ref`, `index.lock`) is waited out and run again, not handed back. Commits inside an issue's worktree need no turn.
+- **The evidence branch.** Several issues push to it: a rejected push is fetched, rebased onto `origin/<evidenceBranch>` and pushed again, up to five times.
+- **Merging.** The `merge` agent prepares several PRs at once, each in its PR's worktree; the `deploy` agent merges and deploys them one at a time, since each merge moves `main` and deploys it (factory, **Approved PRs**). Each PR then needs the version line rebased, which the `deploy` agent does.
 
 ## Acting on GitHub as the App
 

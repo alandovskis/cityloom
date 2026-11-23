@@ -76,6 +76,13 @@ def load_config(root: Path = ROOT) -> dict:
             problems.append(f"{key} must be a whole number above 0")
         elif key in texts and (not isinstance(value, str) or not value.strip()):
             problems.append(f"{key} must be a text that is not blank")
+    fallback = _get(config, "linear.fallback")
+    if fallback is None:
+        problems.append("linear.fallback is missing")
+    elif not isinstance(fallback, list) or not all(isinstance(s, str) and s.strip() for s in fallback):
+        problems.append("linear.fallback must be a list of texts that are not blank")
+    elif _get(config, "linear.intake") in fallback:
+        problems.append("linear.fallback must not hold linear.intake")
     key_path = _get(config, "app.privateKeyPath")
     if key_path is not None and (not isinstance(key_path, str) or not key_path.startswith("/")):
         problems.append("app.privateKeyPath must be an absolute path")
