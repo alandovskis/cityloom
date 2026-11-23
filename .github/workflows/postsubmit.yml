@@ -365,21 +365,23 @@ jobs:
       # The key hashes only the sources that decide the tiles: citymodel_builder's tiles, metro_index and network_tiles
       # modules, and the importer that makes the network they are cut from (citymodel_builder's importer module, and
       # cityloom_model, which holds the network's shape and IMPORTER_VERSION, but not its street and catalogue modules,
-      # the street as the editor keeps it, which the importer does not use). A change to any of them makes the tiles
+      # the street as the editor keeps it, which the importer does not use), and cities/montreal.toml, which will hold
+      # Montréal's grid (CLM-75) and changes nothing in the key until it exists. A change to any of them makes the tiles
       # again; a change to the progress display, the archive, the street model or a dependency does not.
       - id: tiles
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             web/data/metro
-          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/metro_index.rs', 'crates/citymodel_builder/src/network_tiles.rs', 'crates/citymodel_builder/src/importer/**', 'crates/cityloom_model/src/**', '!crates/cityloom_model/src/street/**', '!crates/cityloom_model/src/catalogue.rs') }}
+          key: tiles-${{ hashFiles('crates/citymodel_builder/src/tiles.rs', 'crates/citymodel_builder/src/metro_index.rs', 'crates/citymodel_builder/src/network_tiles.rs', 'crates/citymodel_builder/src/importer/**', 'cities/montreal.toml', 'crates/cityloom_model/src/**', '!crates/cityloom_model/src/street/**', '!crates/cityloom_model/src/catalogue.rs') }}
       - if: steps.tiles.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends osmium-tool
           # osmium keeps the area's roads; the importer then reads them whole (several GB of the runner's 16 GB) and
-          # the network is cut into tiles.
-          just prepare
+          # the network is cut into tiles. Once the cities are config files, prepare takes one (CLM-75); before, it would
+          # read the name as the extract's path. The else can go once CLM-75 has shipped.
+          if [ -f cities/montreal.toml ]; then just prepare montreal; else just prepare; fi
 
       - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
       - run: just deploy
