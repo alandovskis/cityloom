@@ -1,0 +1,11 @@
+Step 1. The docs gate at 5716ddc35130adf1d8eb95e76fc7ccb8c2ef9d19: only documentation changed, every page has its other language's, Prettier passes and the site builds in English and fr-CA.
+
+$ npm run build
+PASS docs gate
+  page: website/docs/architecture/data-model-projects.md
+  page: website/docs/architecture/index.md
+  page: website/docs/projects.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/architecture/data-model-projects.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/architecture/index.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/projects.md
+  page: website/sidebars.ts
