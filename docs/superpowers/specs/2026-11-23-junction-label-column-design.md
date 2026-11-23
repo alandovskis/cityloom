@@ -76,5 +76,5 @@ section's heading over its controls, so the two editors' panels read differently
 - The junction's column is 88 px (« Signalisation » does not fit 76), and at 270 px or less the name is above its control.
 - The bus lane's chooser is still cut where its route is longer than the panel (two streets' names, « Avenue Laurier Est
   (nord-est) vers Avenue Laurier Ouest (sud-ouest) »), as it was before; the bus lane's own level says the route whole.
-- So are the longer transit measures in French (« G2 Voie de dépassement de file en bordure de trottoir »): measured on
+- So are the longer transit measures (« G2 Voie de dépassement de file en bordure de trottoir »): measured on
   main's code, their lists had the same 278 px at 1,440 px, and less of the text on a 280 px phone than now.
