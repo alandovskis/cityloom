@@ -1,0 +1,19 @@
+Read-only: every button, field and list of each level's column that is NOT disabled
+
+Cycle track: []
+
+Bus lane: []
+
+Junction (roundabout): ["NE Avenue Laurier Est","SE Boulevard Saint-Laurent","SW Avenue Laurier Ouest","NW Boulevard Saint-Laurent"]
+
+Street (folds open): ["Lane 1nearest the middle","Lane 2nearest the curb","12.0 m to cross"]
+
+Crossing: []
+
+Lane: ["Select the whole street"]
+
+Junction (signal): ["NE Avenue Laurier Est","SE Boulevard Saint-Laurent","SW Avenue Laurier Ouest","NW Boulevard Saint-Laurent","Signal plan"]
+
+Street with a signal (folds open): ["Lane 1nearest the middle","Lane 2nearest the curb","12.0 m to cross","Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+Corner: []
