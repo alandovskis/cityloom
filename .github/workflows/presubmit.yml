@@ -97,11 +97,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
           just-version: ${{ env.JUST_VERSION }}
-      - run: just test-scripts
+      # The base the limit on unmapped tests may not be raised from (test_features.py).
+      - env:
+          FEATURES_BASE: ${{ github.event.pull_request.base.sha }}
+        run: just test-scripts
 
   # The crates the change touches and the crates that depend on them (`rust_args`; every crate when something they all read
   # changed, such as web/ or Cargo.lock).
