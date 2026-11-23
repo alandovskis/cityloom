@@ -11,6 +11,10 @@
     "message": "Documentation",
     "description": "Navbar item with label Documentation"
   },
+  "item.label.Testing": {
+    "message": "Tests",
+    "description": "Navbar item with label Testing"
+  },
   "item.label.GitHub": {
     "message": "GitHub",
     "description": "Navbar item with label GitHub"
