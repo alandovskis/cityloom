@@ -23,6 +23,7 @@ use crate::junction::model::{
 };
 use crate::junction::model::{preemption, preemption::Outcome as EmergencyOutcome};
 use crate::junction::view::phase_svg::phase_drawings;
+use crate::junction::view::signal_folds::{SignalFold, set_line, shown, warnings, warnings_line};
 use crate::junction::view::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::keys;
@@ -1691,7 +1692,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
     move || {
         shown.get().then(|| {
             view! {
-                {plans_section(w)}
+                {signal_fold(w, SignalFold::Plans, plans_section)}
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
@@ -1720,11 +1721,11 @@ fn signal_overview(w: Watch) -> impl IntoView {
                         </button>
                     </div> })}
                 </section>
-                {calls_section(w)}
-                {actuation_section(w)}
-                {bikes_section(w)}
-                {priority_section(w)}
-                {preemption_section(w)}
+                {signal_fold(w, SignalFold::Calls, calls_section)}
+                {signal_fold(w, SignalFold::Actuation, actuation_section)}
+                {signal_fold(w, SignalFold::Bikes, bikes_section)}
+                {signal_fold(w, SignalFold::Priority, priority_section)}
+                {signal_fold(w, SignalFold::Preemption, preemption_section)}
             }
         })
     }
@@ -3210,12 +3211,36 @@ fn act_field(w: Watch, uid: u32, field: Field, settings: impl Fn() -> Option<Act
     .into_any()
 }
 
-/// A part of a street's level that is rarely set, folded: its name and, beside it, what is set, so a measure in place is
-/// never out of sight.
-fn fold(w: Watch, id: &'static str, heading: &'static str, set: impl Fn() -> String + Send + Sync + 'static, body: impl IntoView + 'static) -> impl IntoView {
+/// One signal option of the plan level, folded (CLM-49): its line says what it has set and its warnings
+/// (`signal_folds`); the section inside, made by `section`, is as it was. Drawn only where the option has something to
+/// list (`signal_folds::shown`), as the section itself is.
+fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: fn(Watch) -> V) -> impl IntoView {
+    let on = Memo::new(move |_| shown(f, &w.view()));
+    move || {
+        on.get().then(|| {
+            fold(w, f.id(), f.heading(), move || set_line(f, &w.view(), &w.i18n()), move || warnings_line(warnings(f, &w.view()), &w.i18n()), section(w))
+        })
+    }
+}
+
+/// A part of a level that is rarely set, folded: its name and, beside it, what is set and its warnings (`warn`, empty
+/// when it has none), so a measure in place or a problem is never out of sight.
+fn fold(
+    w: Watch,
+    id: &'static str,
+    heading: &'static str,
+    set: impl Fn() -> String + Send + Sync + 'static,
+    warn: impl Fn() -> String + Send + Sync + 'static,
+    body: impl IntoView + 'static,
+) -> impl IntoView {
+    let warn = Memo::new(move |_| warn());
     view! {
         <details class="jn-fold" id=id>
-            <summary><span class="jn-fold-name">{words(w, heading)}</span><span class="jn-fold-set">{set}</span></summary>
+            <summary>
+                <span class="jn-fold-name">{words(w, heading)}</span>
+                <span class="jn-fold-set">{set}</span>
+                {move || { let text = warn.get(); (!text.is_empty()).then(|| view! { <span class="jn-fold-warn">{text}</span> }) }}
+            </summary>
             {body}
         </details>
     }
@@ -3331,12 +3356,13 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         {crossing_entry(w, uid)}
         {move || (!walk.get()).then(|| view! { {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
-        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), transit_section(w, uid)))}
+        {move || (!walk.get()).then(|| fold(w, "jn-fold-transit", "jn-insp-transit", move || transit_set(w, uid), String::new, transit_section(w, uid)))}
         {fold(
             w,
             "jn-fold-position",
             "jn-fold-position",
             move || position_set(w, uid),
+            String::new,
             view! {
                 {num_field(
                     w,

@@ -1,20 +1,4 @@
-import {
-  chooseCell,
-  addFromMenu,
-  TURBO_TILE,
-  expect,
-  live,
-  openJunction,
-  openStreet,
-  placesOnMap,
-  pickRunAt,
-  pickToEnd,
-  planBoundaries,
-  streetLength,
-  test,
-  tileFrom,
-  transform,
-} from "./fixtures";
+import { addFromMenu, chooseCell, expect, live, openJunction, openSignalFolds, openStreet, pickRunAt, pickToEnd, placesOnMap, planBoundaries, streetLength, test, tileFrom, transform, TURBO_TILE } from "./fixtures";
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -378,10 +362,12 @@ test.describe("a junction of a street made pedestrian", () => {
   });
 });
 
-/** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen). */
-async function openPlan(page: Page) {
+/** Opens the signal plan, a level of the junction's details of its own (from the Junction level, nothing chosen), and
+ *  with `folds` its options' folds (CLM-49), to reach what is inside them. */
+async function openPlan(page: Page, folds = true) {
   await page.locator("#jn-go-plan").click();
   await expect(page.locator("#signal-plan-state")).toBeVisible();
+  if (folds) await openSignalFolds(page);
 }
 
 test.describe("signal timing on a junction of the city", () => {
@@ -390,6 +376,24 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#drawing")).toBeVisible();
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await openPlan(page);
+  });
+
+  test("the signal plan's options are folds, closed, each saying what is set; Enter on one opens it", async ({ page }) => {
+    await page.reload();
+    await openPlan(page, false);
+    const folds = page.locator("#inspector details.jn-fold");
+    expect(await folds.count()).toBeGreaterThanOrEqual(5);
+    for (const d of await folds.all()) await expect(d).not.toHaveAttribute("open", "");
+    // the phases come before every option but the plans
+    const phases = await page.locator("#i-h-signal").boundingBox();
+    const calls = await page.locator("#jn-fold-calls").boundingBox();
+    expect(phases!.y).toBeLessThan(calls!.y);
+    await expect(page.locator("#jn-fold-calls summary")).toContainText("Pedestrian calls");
+    await expect(page.locator("#jn-fold-calls summary")).toContainText("None on call");
+    await expect(page.locator("#signal-calls")).toBeHidden();
+    await page.locator("#jn-fold-calls summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#signal-calls")).toBeVisible();
   });
 
   test("a street's green is typed, the cycle follows, and a reload keeps it", async ({ page }) => {

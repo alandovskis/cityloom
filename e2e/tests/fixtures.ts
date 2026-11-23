@@ -362,3 +362,15 @@ export async function openStreetWithUnfitTemplate(page: Page): Promise<void> {
   }
   throw new Error("no street of the Plateau tile is too narrow for some template");
 }
+
+/** Opens every closed fold of a junction's signal plan level (CLM-49), as a person does to reach what is inside. */
+export async function openSignalFolds(page: Page) {
+  await expect(page.locator("#signal-plan-state")).toBeVisible();
+  // the closed ones, first to last: each one opened leaves the list, so the first closed is always the next
+  // only the options' own folds (`jn-fold-…`): the lists of calls inside them are folds too, and stay as they are
+  const closed = page.locator(`#inspector details.jn-fold[id^="jn-fold-"]:not([open])`);
+  for (let n = await closed.count(); n > 0; n--) {
+    await closed.first().locator(":scope > summary").click();
+    await expect(closed).toHaveCount(n - 1);
+  }
+}

@@ -1,4 +1,4 @@
-import { expect, live, mapReady, openJunction, openStreet, test } from "./fixtures";
+import { expect, live, mapReady, openJunction, openSignalFolds, openStreet, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 // A design opened read-only (#222): an address with `view=1` shows its project's map, streets and junctions to look
@@ -121,6 +121,7 @@ test.describe("a design opened read-only", () => {
     const href = await openJunction(page);
     await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     const box = page.locator(".call-crossing input[type=checkbox]").first();
     const uid = (await box.getAttribute("id"))!.replace("call-on-", "");
     await box.click();
@@ -148,6 +149,7 @@ test.describe("a design opened read-only", () => {
     await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
     await page.locator("#jn-path-up-0").click();
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     await page.locator(`#transit-mode-${street}-both`).check();
     await expect(page.locator(`#transit-rate-${street}`)).toHaveValue("12");
     // The same street's emergency calls pre-empting the signal (CLM-15).
@@ -171,6 +173,7 @@ test.describe("a design opened read-only", () => {
     await page.goto(`/${href}&${VIEW}`);
     await saysReadOnly(page, "Read-only", "This design is open read-only: you can look at it, but not change it.");
     await page.locator("#jn-go-plan").click();
+    await openSignalFolds(page);
     await expect(page.locator("#signal-calls")).toBeVisible();
     await expect(page.locator(`#call-on-${uid}`)).toBeChecked();
     const boxes = page.locator("#signal-calls .call-crossing input[type=checkbox]");

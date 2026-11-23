@@ -66,6 +66,20 @@ pub fn set_line(fold: SignalFold, v: &JView, i18n: &I18n) -> String {
     }
 }
 
+/// Whether the option's fold is drawn: where its section has something to list (a crossing, a street, a movement
+/// cyclists may ride), as the section itself is drawn; the plans wherever the junction has a signal.
+pub fn shown(fold: SignalFold, v: &JView) -> bool {
+    let Some(s) = v.signal.as_ref() else { return false };
+    match fold {
+        SignalFold::Plans => v.plans.is_some(),
+        SignalFold::Calls => !s.calls.crossings.is_empty(),
+        SignalFold::Actuation => !s.actuation.streets.is_empty(),
+        SignalFold::Bikes => !s.bicycles.movements.is_empty(),
+        SignalFold::Priority => !s.transit.streets.is_empty(),
+        SignalFold::Preemption => !s.preemption.streets.is_empty(),
+    }
+}
+
 /// How many warnings the option has: its findings; for the plans, every plan's.
 pub fn warnings(fold: SignalFold, v: &JView) -> usize {
     let Some(s) = v.signal.as_ref() else { return 0 };
@@ -185,6 +199,20 @@ mod tests {
             assert!(!en.tr_now(f.heading(), &crate::shared::i18n::Args::new()).is_empty());
         }
         assert!(en.missing().is_empty(), "{:?}", en.missing());
+    }
+
+    #[test]
+    fn a_fold_is_shown_only_where_its_option_has_something_to_list() {
+        let v = Junction::new(0).view();
+        // the sample's streets have no bike lane: no movement cyclists ride, so no bicycles section and no fold
+        assert!(!shown(SignalFold::Bikes, &v));
+        for f in [SignalFold::Plans, SignalFold::Calls, SignalFold::Actuation, SignalFold::Preemption] {
+            assert!(shown(f, &v), "{f:?}");
+        }
+        assert!(shown(SignalFold::Bikes, &crate::junction::model::fixtures::junction_biked().view()));
+        let mut stop = Junction::new(0);
+        assert!(stop.set_control(crate::junction::model::PRIORITY));
+        assert!(SignalFold::ALL.iter().all(|f| !shown(*f, &stop.view())), "no signal, no folds");
     }
 
     #[test]
