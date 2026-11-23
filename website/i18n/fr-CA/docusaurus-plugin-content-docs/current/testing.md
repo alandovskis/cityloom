@@ -47,12 +47,13 @@ flowchart LR
 
 `just test` exécute `just test-host`, puis `just test-wasm`. `just e2e` construit une fois et exécute les trois
 niveaux. `just check` exécute les deux. `just test-host` exige toujours `DATABASE_URL`, quelles que soient les caisses
-qu’il teste; `cargo test -p <caisse>` exécute les tests d’une caisse sans elle.
+qu’il teste; `cargo test -p <caisse>` exécute les tests d’une caisse sans elle, pour chaque caisse sauf `cityloom_server`, dont les
+tests de base de données l’exigent.
 
 | Palier                                           | Ce qu’il prouve                                                                                                    | Où il se trouve                                                                                  | Comment l’exécuter                                     | Ce qu’il exige                             |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------ |
 | Tests unitaires du modèle                        | Les règles d’édition et les calculs purs                                                                           | `#[cfg(test)] mod tests` à côté du code                                                          | `cargo test -p <caisse> <module>`                      | Rien                                       |
-| Tests des modèles de vue                         | Ce que montre un modèle de vue et ce que font ses commandes                                                        | Les tests des modules `vm`, p. ex. `street/vm/mod.rs`                                            | `just test-host`                                       | Les doublures des ports                    |
+| Tests des modèles de vue                         | Ce que montre un modèle de vue et ce que font ses commandes                                                        | Les tests des modules `vm`, p. ex. `street/vm/mod.rs`                                            | `cargo test -p cityloom_editor`                        | Les doublures des ports                    |
 | Tests de composant                               | Ce que rend une vue                                                                                                | Le `tests.rs` de chaque tranche                                                                  | `cargo test -p cityloom_editor`                        | Rien                                       |
 | Vérification de la construction wasm32           | Le code que seule la construction pour le navigateur compile compile toujours                                      | L’espace de travail sans `cityloom_server` ni `citymodel_builder`                                | `just test-wasm`                                       | La cible `wasm32-unknown-unknown`          |
 | Tests du serveur                                 | Les routes du serveur, sa base de données et son scellement                                                        | `crates/cityloom_server/tests/`                                                                  | `just test-host`                                       | `DATABASE_URL`                             |
@@ -389,9 +390,12 @@ Ce que les tests et l’intégration continue ne couvrent pas aujourd’hui :
 - Les glissers du plan de la rue et des coins d’une zone ne sont testés que par les tests dans le navigateur; les
   tests natifs n’atteignent que ce qui est derrière eux, la machine à états du plan (`street/vm/plan.rs`) et le modèle
   de vue de la carte (`map/vm/areas.rs`).
-- Les glissers dans les bandes du bord de rue, des éléments surélevés et des arbres et plantations
-  (`on:pointerdown` dans `street/view/curb_strip.rs`, `calming_strip.rs` et `green_strip.rs`) ne sont couverts par
-  aucun test : aucune spécification ne glisse une bande.
+- Aucune spécification ne glisse une bande : les gestionnaires `on:pointerdown` des bandes du bord de rue, des
+  éléments surélevés et des arbres et plantations (`street/view/curb_strip.rs`, `calming_strip.rs` et
+  `green_strip.rs`) ne sont donc pas testés; les tests natifs n’atteignent que ce qui est derrière eux, le calcul des
+  glissers (`drag_span` et `dragged_from_mm` dans `curb_strip.rs`, que reprend `calming_strip.rs`, et
+  `dragged_green_from_mm` dans `green_strip.rs`) et les commandes de glisser des arbres et plantations du modèle de vue
+  (`begin_green_drag`, `drag_green_to`, `end_green_drag` dans `street/vm/mod.rs`).
 - Le niveau de bout en bout ne s’exécute que dans le flux de postvérification, après la fusion.
 - La construction de la documentation ne fait pas partie de la vérification `CI`.
 - Seul Chromium est testé : chaque projet Playwright est Desktop Chrome, et `just setup` n’installe que Chromium.

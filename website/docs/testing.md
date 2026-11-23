@@ -46,12 +46,12 @@ flowchart LR
 
 `just test` runs `just test-host` and then `just test-wasm`. `just e2e` builds once and runs the three tiers. `just check`
 runs both. `just test-host` always needs `DATABASE_URL`, whichever crates it tests; `cargo test -p <crate>` runs one
-crate's tests without it.
+crate's tests without it, for every crate but `cityloom_server`, whose database tests need it.
 
 | Level                                    | What it proves                                                                  | Where it lives                                                                                   | How to run                                             | What it needs                       |
 | ---------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------- |
 | Model unit tests                         | The editing rules and pure computation                                          | `#[cfg(test)] mod tests` beside the code                                                         | `cargo test -p <crate> <module>`                       | Nothing                             |
-| View-model tests                         | What a view-model shows and what its commands do                                | The `vm` modules' tests, e.g. `street/vm/mod.rs`                                                 | `just test-host`                                       | The port fakes                      |
+| View-model tests                         | What a view-model shows and what its commands do                                | The `vm` modules' tests, e.g. `street/vm/mod.rs`                                                 | `cargo test -p cityloom_editor`                        | The port fakes                      |
 | Component tests                          | What a view renders                                                             | Each slice's `tests.rs`                                                                          | `cargo test -p cityloom_editor`                        | Nothing                             |
 | wasm32 build check                       | The code only the browser build compiles still compiles                         | The workspace without `cityloom_server` and `citymodel_builder`                                  | `just test-wasm`                                       | The `wasm32-unknown-unknown` target |
 | Server tests                             | The server's routes, its database and its sealing                               | `crates/cityloom_server/tests/`                                                                  | `just test-host`                                       | `DATABASE_URL`                      |
@@ -357,8 +357,11 @@ What the tests and CI do not cover today:
 - The drags of the street's plan and of an area's corners are tested only by the browser tests; the native tests reach
   only what is behind them, the plan's state machine (`street/vm/plan.rs`) and the map's view-model
   (`map/vm/areas.rs`).
-- The drags in the curb, calming and green strips (`on:pointerdown` in `street/view/curb_strip.rs`,
-  `calming_strip.rs` and `green_strip.rs`) are covered by no test: no spec drags a strip.
+- No spec drags a strip, so the `on:pointerdown` handlers of the curb, calming and green strips
+  (`street/view/curb_strip.rs`, `calming_strip.rs` and `green_strip.rs`) are not tested; the native tests reach only
+  what is behind them, the drag arithmetic (`drag_span` and `dragged_from_mm` in `curb_strip.rs`, which
+  `calming_strip.rs` reuses, and `dragged_green_from_mm` in `green_strip.rs`) and the view-model's green drag commands
+  (`begin_green_drag`, `drag_green_to`, `end_green_drag` in `street/vm/mod.rs`).
 - The E2E tier runs only in postsubmit, after the merge.
 - The documentation build is not part of the `CI` check.
 - Only Chromium is tested: every Playwright project is Desktop Chrome, and `just setup` installs only Chromium.
