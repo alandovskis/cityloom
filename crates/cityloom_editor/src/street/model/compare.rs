@@ -36,14 +36,15 @@ fn direction_message(direction: usize) -> &'static str {
     }
 }
 
-/// One difference between the base sections of the two designs; a piece is the same piece in both by its `uid`.
+/// One difference between the base sections of the two designs. A piece is the same piece in both by its `uid`, else by
+/// the longest common subsequence of the kinds, left to right, between the pieces paired by `uid` (see `pair`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceChange {
     /// A piece only B has.
     Added { kind: usize, width_mm: i32 },
     /// A piece only A has.
     Removed { kind: usize, width_mm: i32 },
-    /// A piece that is of another kind in B.
+    /// A piece that is of another kind in B; only a pair by `uid` can be.
     Kind { from: usize, to: usize },
     /// A piece of one kind that is wider or narrower in B.
     Width { kind: usize, a_mm: i32, b_mm: i32 },
@@ -69,8 +70,8 @@ impl PieceChange {
 pub enum Other {
     Speed,
     Stretches,
-    /// Something of the base pieces other than their kinds and widths (surface, curb, direction of a piece that
-    /// need not have one, times of day), or their order.
+    /// Something other than their kinds and widths of the base pieces paired as `pieces` pairs them (surface, curb,
+    /// direction of a piece that need not have one, times of day), or the order of those paired by `uid`.
     PieceDetails,
     Curbside,
     Stops,
@@ -101,12 +102,77 @@ pub fn lanes(a: &Street, b: &Street) -> Vec<LaneCount> {
     (0..DIRECTIONS.len()).map(|direction| LaneCount { direction, a: count(a, direction), b: count(b, direction) }).filter(|c| c.a != c.b).collect()
 }
 
+/// A piece that is the same in both designs: its index among A's base pieces and among B's.
+struct Paired {
+    a: usize,
+    b: usize,
+}
+
+/// The base pieces of designs A and B that are the same piece: those with the same `uid`, whatever their kinds, and,
+/// since a Transform measure or a template gives its pieces new uids, those a longest common subsequence of the kinds,
+/// left to right, pairs among the rest. The pairs by `uid` that keep their order part the street in gaps, and the
+/// alignment stays within a gap, so it crosses none of them.
+///
+/// Not `matching::match_pieces`, which pairs the pieces of a taper: it refuses a pair by `uid` of another kind, and
+/// takes a non-crossing set greedily, which need not be the longest.
+fn pair(a: &[Segment], b: &[Segment]) -> Vec<Paired> {
+    let mut pairs: Vec<Paired> =
+        b.iter().enumerate().filter_map(|(j, now)| a.iter().position(|was| was.uid == now.uid).map(|i| Paired { a: i, b: j })).collect();
+    let free_a: Vec<usize> = (0..a.len()).filter(|&i| !pairs.iter().any(|p| p.a == i)).collect();
+    let free_b: Vec<usize> = (0..b.len()).filter(|&j| !pairs.iter().any(|p| p.b == j)).collect();
+    pairs.sort_by_key(|p| p.a);
+    // the gaps, each up to (and without) its end in A and in B: one before each pair that keeps its order, and the last
+    let mut ends: Vec<(usize, usize)> = Vec::new();
+    for p in &pairs {
+        if ends.last().is_none_or(|&(_, end_b)| p.b > end_b) {
+            ends.push((p.a, p.b));
+        }
+    }
+    ends.push((a.len(), b.len()));
+    let (mut from_a, mut from_b) = (0, 0);
+    for (end_a, end_b) in ends {
+        let gap_a: Vec<usize> = free_a.iter().copied().filter(|i| (from_a..end_a).contains(i)).collect();
+        let gap_b: Vec<usize> = free_b.iter().copied().filter(|j| (from_b..end_b).contains(j)).collect();
+        pairs.extend(align(a, &gap_a, b, &gap_b));
+        (from_a, from_b) = (end_a, end_b);
+    }
+    pairs
+}
+
+/// A longest common subsequence of the kinds of some of A's pieces and some of B's (their indices, left to right), the
+/// one that pairs the pieces furthest to the left.
+fn align(a: &[Segment], of_a: &[usize], b: &[Segment], of_b: &[usize]) -> Vec<Paired> {
+    let same_kind = |i: usize, j: usize| a[of_a[i]].kind == b[of_b[j]].kind;
+    // `longest[i][j]`: how many pairs the pieces from `i` on and from `j` on can make
+    let mut longest = vec![vec![0usize; of_b.len() + 1]; of_a.len() + 1];
+    for i in (0..of_a.len()).rev() {
+        for j in (0..of_b.len()).rev() {
+            longest[i][j] = if same_kind(i, j) { longest[i + 1][j + 1] + 1 } else { longest[i + 1][j].max(longest[i][j + 1]) };
+        }
+    }
+    let mut pairs = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while i < of_a.len() && j < of_b.len() {
+        if same_kind(i, j) {
+            pairs.push(Paired { a: of_a[i], b: of_b[j] });
+            (i, j) = (i + 1, j + 1);
+        } else if longest[i + 1][j] == longest[i][j] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    pairs
+}
+
 /// The pieces added, removed or changed from design A to design B in the base section, in B's order and then A's
-/// removed ones, and whether the stretches along the street (where each starts, and how many) differ.
+/// removed ones, and whether the stretches along the street (where each starts, and how many) differ. A piece is the
+/// same in both as `pair` pairs them; one it leaves unpaired is added or removed.
 pub fn pieces(a: &Street, b: &Street) -> (bool, Vec<PieceChange>) {
+    let pairs = pair(&a.segments, &b.segments);
     let mut changes = Vec::new();
-    for now in &b.segments {
-        match a.segments.iter().find(|p| p.uid == now.uid) {
+    for (j, now) in b.segments.iter().enumerate() {
+        match pairs.iter().find(|p| p.b == j).map(|p| &a.segments[p.a]) {
             None => changes.push(PieceChange::Added { kind: now.kind, width_mm: now.width_mm }),
             Some(was) => {
                 if was.kind != now.kind {
@@ -118,7 +184,7 @@ pub fn pieces(a: &Street, b: &Street) -> (bool, Vec<PieceChange>) {
             }
         }
     }
-    for was in a.segments.iter().filter(|p| !b.segments.iter().any(|n| n.uid == p.uid)) {
+    for (_, was) in a.segments.iter().enumerate().filter(|(i, _)| !pairs.iter().any(|p| p.a == *i)) {
         changes.push(PieceChange::Removed { kind: was.kind, width_mm: was.width_mm });
     }
     (starts(a) != starts(b), changes)
@@ -129,17 +195,16 @@ fn without_uids(section: &[Segment]) -> Vec<Segment> {
     section.iter().map(|p| Segment { uid: 0, ..p.clone() }).collect()
 }
 
-/// Whether the base sections differ in more than what `pieces` lists: a field other than kind and width of a piece
-/// both have (a driving lane's direction is `lanes`'), or the order of the pieces both have.
+/// Whether the base sections differ in more than what `pieces` lists: a field other than uid, kind and width of a piece
+/// both have, as `pair` pairs them (a driving lane's direction is `lanes`'), or the order of the pieces paired by uid.
 fn piece_details_differ(a: &Street, b: &Street) -> bool {
     let shared =
         |from: &Street, other: &Street| from.segments.iter().filter(|p| other.segments.iter().any(|q| q.uid == p.uid)).map(|p| p.uid).collect::<Vec<_>>();
-    b.segments.iter().any(|now| {
-        a.segments.iter().find(|p| p.uid == now.uid).is_some_and(|was| {
-            let driving = |p: &Segment| KINDS[p.kind].direction == DirectionRule::Required;
-            let direction = if driving(was) || driving(now) { now.direction } else { was.direction };
-            Segment { kind: now.kind, width_mm: now.width_mm, direction, ..was.clone() } != *now
-        })
+    pair(&a.segments, &b.segments).iter().any(|p| {
+        let (was, now) = (&a.segments[p.a], &b.segments[p.b]);
+        let driving = |p: &Segment| KINDS[p.kind].direction == DirectionRule::Required;
+        let direction = if driving(was) || driving(now) { now.direction } else { was.direction };
+        Segment { uid: now.uid, kind: now.kind, width_mm: now.width_mm, direction, ..was.clone() } != *now
     }) || shared(a, b) != shared(b, a)
 }
 
