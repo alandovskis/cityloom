@@ -3,7 +3,7 @@
 
 use crate::junction::model::read_model::JView;
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::said::say_now;
+use crate::shared::said::say;
 use crate::shared::units::Units;
 
 /// One signal option of the plan level, in the level's order: the time-of-day plans above the phases, the others under
@@ -47,16 +47,18 @@ impl SignalFold {
     }
 }
 
+/// The fold's words are tracked (`I18n::tr`, `say`): a line kept in a memo follows a switch of language.
+///
 /// What the option has set, as its fold's line says it: how many crossings, streets or movements it is on for, or, for
 /// the plans, how many there are and which is shown. Empty where the junction has no signal.
 pub fn set_line(fold: SignalFold, v: &JView, i18n: &I18n) -> String {
     let Some(s) = v.signal.as_ref() else { return String::new() };
-    let count = |key: &'static str, n: usize| i18n.tr_now(key, &Args::new().num("n", n as i64));
+    let count = |key: &'static str, n: usize| i18n.tr(key, &Args::new().num("n", n as i64));
     match fold {
         SignalFold::Plans => {
             let Some(plans) = v.plans.as_ref() else { return String::new() };
-            let name = plans.plans.iter().find(|p| p.id == plans.viewing).map(|p| say_now(i18n, Units::Metres, &p.name)).unwrap_or_default();
-            i18n.tr_now("jn-fold-plans-set", &Args::new().num("n", plans.plans.len() as i64).str("name", name))
+            let name = plans.plans.iter().find(|p| p.id == plans.viewing).map(|p| say(i18n, Units::Metres, &p.name)).unwrap_or_default();
+            i18n.tr("jn-fold-plans-set", &Args::new().num("n", plans.plans.len() as i64).str("name", name))
         }
         SignalFold::Calls => count("jn-fold-calls-set", s.calls.crossings.iter().filter(|c| c.on_call).count()),
         SignalFold::Actuation => count("jn-fold-actuation-set", s.actuation.streets.iter().filter(|a| a.settings.is_some()).count()),
@@ -95,7 +97,7 @@ pub fn warnings(fold: SignalFold, v: &JView) -> usize {
 
 /// The warnings as the fold's line says them, nothing when there are none.
 pub fn warnings_line(n: usize, i18n: &I18n) -> String {
-    if n == 0 { String::new() } else { i18n.tr_now("jn-fold-warnings", &Args::new().num("n", n as i64)) }
+    if n == 0 { String::new() } else { i18n.tr("jn-fold-warnings", &Args::new().num("n", n as i64)) }
 }
 
 #[cfg(test)]
@@ -189,6 +191,33 @@ mod tests {
         assert_eq!(warnings(SignalFold::Calls, &v), v.signal.as_ref().unwrap().calls.findings.len());
         let plans = v.plans.as_ref().unwrap();
         assert_eq!(warnings(SignalFold::Plans, &v), plans.plans.iter().map(|p| p.findings.len()).sum::<usize>());
+    }
+
+    #[test]
+    fn each_fold_counts_its_own_option_s_findings_and_no_other_s() {
+        use crate::shared::said::Said;
+        let base = Junction::new(0).view();
+        let lists: [(SignalFold, fn(&mut JView) -> &mut Vec<Said>); 5] = [
+            (SignalFold::Calls, |v| &mut v.signal.as_mut().unwrap().calls.findings),
+            (SignalFold::Actuation, |v| &mut v.signal.as_mut().unwrap().actuation.findings),
+            (SignalFold::Bikes, |v| &mut v.signal.as_mut().unwrap().bicycles.findings),
+            (SignalFold::Priority, |v| &mut v.signal.as_mut().unwrap().transit.findings),
+            (SignalFold::Preemption, |v| &mut v.signal.as_mut().unwrap().preemption.findings),
+        ];
+        for (n, (fold, list)) in lists.iter().enumerate() {
+            let mut v = Junction::new(0).view();
+            let planted = n + 1;
+            list(&mut v).extend((0..planted).map(|_| Said::new("jn-fold-none")));
+            for (other, _) in lists.iter() {
+                let want = if other == fold { planted + warnings(*other, &base) } else { warnings(*other, &base) };
+                assert_eq!(warnings(*other, &v), want, "{other:?} with {planted} planted in {fold:?}");
+            }
+        }
+        // the plans fold counts each plan's findings, whatever they hold
+        let mut v = Junction::new(0).view();
+        let plan = &mut v.plans.as_mut().unwrap().plans[0];
+        plan.findings.extend([Said::new("jn-fold-none"), Said::new("jn-fold-none")]);
+        assert_eq!(warnings(SignalFold::Plans, &v), warnings(SignalFold::Plans, &base) + 2);
     }
 
     #[test]

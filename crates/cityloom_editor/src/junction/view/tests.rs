@@ -405,6 +405,23 @@ fn a_street_folds_its_transit_priority_and_position_and_says_on_each_what_is_set
 }
 
 #[test]
+fn a_signal_fold_s_line_follows_a_switch_of_language() {
+    use crate::junction::view::signal_folds::{SignalFold, set_line, warnings_line};
+    use crate::junction::vm::watch::Watch;
+    use crate::shared::i18n::Locale;
+    let owner = Owner::new();
+    owner.set();
+    let s = shared(0);
+    let w = Watch::new(s.clone());
+    // as the page keeps them: watched, and worked out again only when what they read changes
+    let set = Memo::new(move |_| set_line(SignalFold::Calls, &w.view(), &w.i18n()));
+    let warn = Memo::new(move |_| warnings_line(2, &w.i18n()));
+    assert_eq!((set.get(), warn.get()), ("None on call".to_string(), "· 2 warnings".to_string()));
+    s.i18n().set(Locale::FrCa);
+    assert_eq!((set.get(), warn.get()), ("Aucun passage sur appel".to_string(), "· 2 avertissements".to_string()));
+}
+
+#[test]
 fn the_signal_plan_folds_each_option_and_says_what_is_set_and_its_warnings() {
     use crate::junction::view::signal_folds::{SignalFold, set_line, shown};
     let s = shared(0);
