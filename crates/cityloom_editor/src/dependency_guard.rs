@@ -552,6 +552,36 @@ mod tests {
     }
 
     #[test]
+    fn what_is_under_cfg_test_in_a_list_ends_at_its_own_comma() {
+        let shorthand = "fn new() -> S {\n    S {\n        #[cfg(test)]\n        seen,\n        city: crate::city::store::open(),\n    }\n}\n";
+        let arm = "fn f(k: Kind) -> u32 {\n    match k {\n        #[cfg(test)]\n        Kind::Seen => crate::street::vm::open(),\n        Kind::Kept => crate::city::store::open(),\n    }\n}\n";
+        let variant = "enum Kind {\n    #[cfg(test)]\n    Seen(crate::street::vm::Key),\n    Kept(crate::city::store::Key),\n}\n";
+        let tuple = "struct S(\n    #[cfg(test)]\n    crate::street::vm::Key,\n    crate::city::store::Key,\n);\n";
+        let call = "fn f() {\n    g(\n        #[cfg(test)]\n        crate::street::vm::open(),\n        crate::city::store::open(),\n    );\n}\n";
+        let in_macro = "fn f() {\n    g![\n        #[cfg(test)]\n        crate::street::vm::open(),\n        crate::city::store::open(),\n    ];\n}\n";
+        let comparison = "fn new() -> S {\n    S {\n        #[cfg(test)]\n        n: a < b,\n        city: crate::street::vm::open(),\n    }\n}\n";
+        let shift = "fn new() -> S {\n    S {\n        #[cfg(test)]\n        n: 1 << 2,\n        city: crate::street::vm::open(),\n    }\n}\n";
+        let samples = [
+            ("a shorthand field", shorthand, (5, "city::store::open")),
+            ("a match arm", arm, (5, "city::store::open")),
+            ("an enum variant", variant, (4, "city::store::Key")),
+            ("a field of a tuple struct", tuple, (4, "city::store::Key")),
+            ("a call's argument", call, (5, "city::store::open")),
+            ("a macro's argument", in_macro, (5, "city::store::open")),
+            ("a field whose value holds a comparison", comparison, (5, "street::vm::open")),
+            ("a field whose value holds a shift", shift, (5, "street::vm::open")),
+        ];
+        let mut wrong = Vec::new();
+        for (name, code, expected) in samples {
+            let (found, expected) = (found(code), at(&[expected]));
+            if found != expected {
+                wrong.push(format!("{name}: found {found:?}, not {expected:?}"));
+            }
+        }
+        assert!(wrong.is_empty(), "{} of {} samples:\n{}", wrong.len(), samples.len(), wrong.join("\n"));
+    }
+
+    #[test]
     fn a_file_is_test_code_by_its_declaration_not_its_name() {
         let declared_for_tests = tree(&[
             ("lib.rs", "mod junction;"),
