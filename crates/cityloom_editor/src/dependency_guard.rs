@@ -16,7 +16,8 @@
 //! - Only exactly `cfg(test)` is test code: what is under `cfg(any(.., test))` is production.
 //! - After the first braces of an item, a statement or a list's element under `#[cfg(test)]`, the rest of it (an `else`,
 //!   a method call) is production.
-//! - A generic parameter, or a closure's parameter, under `#[cfg(test)]` may hide the rest of what it is a parameter of.
+//! - A generic parameter, or a closure's parameter, under `#[cfg(test)]` may hide what follows it, up to the next `;` or
+//!   comma, in other items too.
 //! - Under `#[cfg(test)]`, a `<` with no space before it opens generic arguments, so a comparison rustfmt has not spaced
 //!   may hide the elements after it, up to a `>`.
 //! - In a macro whose elements end at anything but a `;`, a comma or braces, one under `#[cfg(test)]` may hide the next.
@@ -352,10 +353,10 @@ fn is_item(t: &[TokenTree], mut i: usize) -> bool {
     WORDS.iter().any(|w| is_word(word, w)) && !(is_word(word, "for") && is_punct(next, '<'))
 }
 
-/// Whether `t[i]` opens generic arguments: a `<` right after what it belongs to. A comparison or a shift has a space
-/// before it.
+/// Whether `t[i]` opens generic arguments: a `<` right after what it belongs to, or after another that opens them. A
+/// comparison or a shift has a space before it.
 fn opens_angle(t: &[TokenTree], i: usize) -> bool {
-    is_punct(&t[i], '<') && !is_joint(&t[i - 1], '<') && t[i - 1].span().end() == t[i].span().start()
+    is_punct(&t[i], '<') && if is_joint(&t[i - 1], '<') { opens_angle(t, i - 1) } else { t[i - 1].span().end() == t[i].span().start() }
 }
 
 /// Whether a path from the crate, this module or the one above begins at `t[i]`.
