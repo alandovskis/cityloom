@@ -1,0 +1,25 @@
+Step 2. The issues filed for the gaps (Linear, team Cityloom, Backlog, no priority, related to CLM-45), in the order of the plan's G1 to G23:
+
+G1: CLM-76  Drag a strip's things, and the plan's other things, in a browser test
+G2: CLM-77  Test the plan's drag of a stop, a raised element and a planting
+G3: CLM-78  Test the region's change of side on variants, and what a replayed edit carries
+G4: CLM-79  Test what the street's view-models say: bad numbers, refused drags and compared pieces
+G5: CLM-80  Test the markup of the Add a piece menu's search results
+G6: CLM-81  Test the junction's untested refusals: phases, bus lane and time-of-day periods
+G7: CLM-82  Test what the junction's view-models say of a stop and of a compared turbo
+G8: CLM-83  Test the junction panel of a street that nothing enters from, and the cell with no wait
+G9: CLM-84  Test a corridor change and its undo when a street cannot be kept
+G10: CLM-85  Test the map's Shift+Enter, its half-kept undo and the report's place lines
+G11: CLM-86  Test the map's list of a place's failing checks
+G12: CLM-87  Test opening and closing a standards profile, and its width warning
+G13: CLM-88  Test the markup of a standards profile's question, widths, warnings and exported file
+G14: CLM-89  Add the standards slice's parity test of its messages
+G15: CLM-90  Add the timeline slice's parity test of its messages
+G16: CLM-91  Test the timeline's author, its unreadable work and its words for junctions and rules
+G17: CLM-92  Test the markup of the question before a milestone is deleted
+G18: CLM-93  Test what the archive panel says when this device's work or storage refuses an import
+G19: CLM-94  Test a sync whose session has ended, and one over a newer sync document
+G20: CLM-95  Test what the home page says when a project cannot be deleted
+G21: CLM-96  Test two importer cases: carriageways of different types, and a turned road with a two-way lane
+G22: CLM-97  Measure the contrast of the danger buttons and of the attribution's focus ring
+G23: CLM-98  Test the share page's Copy button in a browser

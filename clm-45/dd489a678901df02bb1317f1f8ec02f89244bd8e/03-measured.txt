@@ -1,0 +1,16 @@
+en 200 ["Introduction","Projects","Sharing a design","Getting started","Project layout","Testing","Test inventory","Coverage matrix","Architecture","Reporting a problem"] ["Features against levels​","Unmapped tests​","Line coverage​","The gaps​"]
+en 1440 px: page scrolls sideways by 0 ; matrix 1314 px wide in 823
+en 375 px: page scrolls sideways by 0 ; matrix 1314 px wide in 343
+en table 1 rows 48
+en table 2 rows 13
+en table 3 rows 9
+en table 4 rows 18
+en CLM numbers on Testing ["CLM-22","CLM-78","CLM-81","CLM-84","CLM-79","CLM-82","CLM-85","CLM-87","CLM-91","CLM-93","CLM-94","CLM-95","CLM-77","CLM-76","CLM-80","CLM-83","CLM-86","CLM-88","CLM-92","CLM-96","CLM-89","CLM-90","CLM-97","CLM-98"] linear links 0
+fr-CA 200 ["Introduction","Projets","Partager un aménagement","Démarrage","Organisation du dépôt","Tests","Inventaire des tests","Matrice de couverture","Architecture","Signaler un problème"] ["Fonctionnalités et paliers​","Tests non associés​","Couverture de lignes​","Les lacunes​"]
+fr-CA 1440 px: page scrolls sideways by 0 ; matrix 1428 px wide in 823
+fr-CA 375 px: page scrolls sideways by 0 ; matrix 1428 px wide in 343
+fr-CA table 1 rows 48
+fr-CA table 2 rows 13
+fr-CA table 3 rows 9
+fr-CA table 4 rows 18
+fr-CA CLM numbers on Testing ["CLM-22","CLM-78","CLM-81","CLM-84","CLM-79","CLM-82","CLM-85","CLM-87","CLM-91","CLM-93","CLM-94","CLM-95","CLM-77","CLM-76","CLM-80","CLM-83","CLM-86","CLM-88","CLM-92","CLM-96","CLM-89","CLM-90","CLM-97","CLM-98"] linear links 0
