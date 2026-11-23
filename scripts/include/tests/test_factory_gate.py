@@ -457,17 +457,31 @@ class Gates(unittest.TestCase):
 
     def test_the_red_gate_says_a_spec_does_not_load_instead_of_naming_its_tests_gone(self):
         red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n", "e2e/tests/map.spec.ts": "// a bad import\n"})
-        splits = ("street.spec.ts", ["splits"], "unexpected")
-        listing = playwright_report(*self.BASE_SPECS[:2], self.BASE_SPECS[4], ("street.spec.ts", ["splits"], "expected"))
-        listing["errors"] = [
-            {
-                "message": "Error: Cannot find module './missing'\n\n   at map.spec.ts:3",
-                "location": {"file": str(self.repo / "e2e/tests/map.spec.ts"), "line": 3, "column": 1},
-            }
-        ]
-        runner = self.browser_red_runner(red, red_listing=listing, red_run=self.BASE_SPECS[:2] + (splits,))
+        # One file that does not load empties Playwright's whole listing (1.65): no suite, only the error.
+        listing = {
+            "suites": [],
+            "errors": [
+                {
+                    "message": "Error: Cannot find module './missing'\n\n   at map.spec.ts:3",
+                    "location": {"file": str(self.repo / "e2e/tests/map.spec.ts"), "line": 3, "column": 1},
+                }
+            ],
+        }
+        runner = self.browser_red_runner(red, red_listing=listing, red_run=())
         report = gate.Gate(self.repo, runner).red(self.base)
         self.assertEqual(report.problems, ["Playwright: map.spec.ts does not load: Error: Cannot find module './missing'"])
+        self.assertEqual(self.playwright_runs(runner), [])
+
+    def test_a_new_spec_listed_in_the_tiers_runs_alone(self):
+        red = self.red_commit({"e2e/tests/split.spec.ts": "// a new spec\n", "e2e/tiers.json": "{}\n", "e2e/CLAUDE.md": "notes\n"})
+        runner = self.browser_red_runner(
+            red,
+            red_listing=self.BASE_SPECS + (("split.spec.ts", ["splits"], "expected"),),
+            red_run=(("split.spec.ts", ["splits"], "unexpected"),),
+        )
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, [])
+        self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "tests/split.spec.ts", "--reporter=json")])
 
     def playwright_runs(self, runner: FakeRunner) -> list[tuple[str, ...]]:
         return [c for c in runner.commands if c[:3] == ("npx", "playwright", "test") and "--list" not in c]

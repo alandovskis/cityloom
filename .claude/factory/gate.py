@@ -425,10 +425,13 @@ class Gate:
         changed = self._changed(base, red)
         rust = any(p.endswith(".rs") or p.endswith("Cargo.toml") for p in changed)
         specs = self._specs(changed)
-        # Any change under e2e/ touches the browser tests; one that is not a spec (a helper every spec imports, the
-        # fixtures, the configuration) can change any spec's outcome.
+        # Any change under e2e/ touches the browser tests. One that is not a spec (a helper every spec imports, the
+        # fixtures, the configuration, the packages) can change any spec's outcome; the tiers and the notes cannot,
+        # and every new spec is listed in the tiers.
         browser = [p for p in changed if p.startswith("e2e/")]
-        shared = any(not glob("e2e/tests/*.spec.ts", p) for p in browser)
+        shared = any(
+            not glob("e2e/tests/*.spec.ts", p) and p != "e2e/tiers.json" and not p.endswith(".md") for p in browser
+        )
         if browser:
             self._prepare_browser()
 
@@ -459,13 +462,15 @@ class Gate:
                 report.new_tests += new
         if browser:
             listing = self._playwright_report([], listing=True)
-            listed = set(playwright_results(listing))
-            # A spec that does not load is said once, with its error, rather than as each of its tests gone.
+            # One file that does not load empties Playwright's whole listing: say which and why, and judge nothing
+            # else from a listing that holds no test.
             unloaded = playwright_load_errors(listing)
-            report.problems += [f"Playwright: {spec} does not load: {error}" for spec, error in sorted(unloaded.items())]
+            if unloaded:
+                report.problems += [f"Playwright: {spec} does not load: {error}" for spec, error in sorted(unloaded.items())]
+                return report
+            listed = set(playwright_results(listing))
             # A test of the base the red commit no longer lists is gone, in whichever spec it was.
-            gone = sorted(n for n in browser_before - listed if spec_of(n) not in unloaded)
-            report.problems += [f"Playwright: the test {name} is gone" for name in gone]
+            report.problems += [f"Playwright: the test {name} is gone" for name in sorted(browser_before - listed)]
             # Run every spec after a shared change; otherwise the specs that gain a test and the changed specs that
             # still hold one, since an unchanged spec with unchanged helpers runs as it did at the base.
             listed_specs = {spec_of(n) for n in listed}
