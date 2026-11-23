@@ -8,7 +8,23 @@ Todo ─ queue ─ triage ─ plan ─ test-writer ─ red gate ─ implement �
        queue    triage   plan                                                  review    evidence                  merge.md, deploy.md
 ```
 
-`/factory` (`.claude/skills/factory/SKILL.md`) runs the line; each station is a skill beside it, and the agents it dispatches are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `reviewer`, `evidence-check`, and the existing `merge` and `deploy`).
+`/factory` (`.claude/skills/factory/SKILL.md`) runs the line; each station is a skill beside it, and the agents it dispatches are in `.claude/agents/` (`triage`, `planner`, `test-writer`, `implement`, `writer`, `reviewer`, `evidence-check`, and the existing `merge` and `deploy`).
+
+## Two flows
+
+Triage gives each feasible issue a **flow**, and the stations after it follow that flow:
+
+- **code** (above): a change to the product, proved by tests written before the code.
+- **docs**: an issue that asks only for documentation (the documentation site's pages in `website/`, in English and fr-CA, or `docs/`, a `CLAUDE.md`, a README), not the site's configuration, code or dependencies (`gate.py`'s `SITE_CONFIGURATION`). There is no failing test to write first, so the build station is one agent and one gate:
+
+```
+Todo ─ queue ─ triage ─ plan ─ writer ─ docs gate ─ review ─ evidence ─ PR ─ approval ─ merge ─ deploy
+                (docs)  (docs)  └─ factory-build ─┘  (docs)   (pages)                       (Documentation workflow)
+```
+
+The `writer` agent writes the pages from the plan, in both languages, and commits locally; `gate.py docs` decides whether they go on (below); the reviewer checks every fact the pages state against the code; the evidence is the pages as built, in both languages. A documentation change raises no version (it is documentation only: see `CLAUDE.md`, CI), starts neither Presubmit nor Postsubmit, and is published by the Documentation workflow (`.github/workflows/docs.yml`) once merged, when it changes `website/`; the `deploy` agent already watches that workflow.
+
+An issue whose triage record says no flow (one triaged before there were two) is **code**.
 
 ## Files
 
@@ -16,7 +32,7 @@ Todo ─ queue ─ triage ─ plan ─ test-writer ─ red gate ─ implement �
 | --- | --- |
 | `config.json` | Linear's team, intake state, states and labels; GitHub's repository; where worktrees go; the caps and the rounds. `factory.py config` validates it with `.github/issue-flow.json` (the App, `run`, `evidence`, `deploy`). |
 | `factory.py` | `config` prints the merged configuration; `token` mints the App's installation token. |
-| `gate.py` | The red and green gates. |
+| `gate.py` | The red and green gates, and the docs gate. |
 | `guard.py` | The implementer's guard, the PreToolUse hook of `.claude/settings.json`. |
 
 Their tests are in `scripts/include/tests/test_factory_*.py` (`just test-scripts`). Paths below are relative to the main checkout; `$F` is `$CLAUDE_PROJECT_DIR/.claude/factory`.
@@ -31,10 +47,11 @@ Everything the line knows, it reads back each pass from three places, so stoppin
 
 | Record (comment's first line) | Written by | Says |
 | --- | --- | --- |
-| `**Factory · triage: feasible**` | factory-triage | how to build and how to exercise the change |
+| `**Factory · triage: feasible**` | factory-triage | the flow (`Flow: code` or `Flow: docs`, its second line), how to build and how to exercise the change |
 | `**Factory · plan**` | factory-plan (or a person) | the plan the tests are written from |
 | `**Factory · red** \`<sha>\`` | factory-build | the red gate passed at `<sha>`, with its report |
 | `**Factory · green** \`<sha>\`` | factory-build | the green gate passed at `<sha>`, and the branch was pushed |
+| `**Factory · docs** \`<sha>\`` | factory-build (docs flow) | the docs gate passed at `<sha>`, and the branch was pushed: the docs flow's green |
 | `**Factory · review <k>: pass** \`<sha>\`` or `**Factory · review <k>: findings** \`<sha>\`` | factory-review | round `<k>`'s verdict on `<sha>`, and its findings |
 | `**Factory · PR** <url>` | factory-evidence | the PR is open, with its evidence |
 | `**Factory · deployed** <run url>` | factory | the merge deployed |
@@ -47,15 +64,15 @@ Read in this order; the first that holds says where the issue is:
 1. Closed (Done, Canceled, Duplicate): nothing to do, unless it has a factory PR merged without a `deployed` record: watch that deploy (factory, **Deploy**).
 2. Labelled `needsReview`, `needsSetup`, `deployFailed` or `blocked`: waiting for a person. Left alone; when the person removes the label, the issue is read again from step 3 (the person may have answered on the issue, changed the plan, or fixed the worktree).
 3. A factory PR, open: waiting for approval, or merge (factory, **Approved PRs**).
-4. A `green` record at the worktree's HEAD, and the latest `review` record at that HEAD is `pass`: evidence and PR (factory-evidence).
-5. A `green` record at the worktree's HEAD: review (factory-review).
-6. A `red` record whose sha is in the worktree's history, or, after a rebase, a commit carrying the trailer `Factory-Red: CLM-<n>`: build, from the implementer (factory-build, step 3).
-7. A worktree and a `plan` record: build, from the test-writer (factory-build). Commits after the base but no `red` record: the red gate is run on them first.
+4. A `green` (or, docs flow, `docs`) record at the worktree's HEAD, and the latest `review` record at that HEAD is `pass`: evidence and PR (factory-evidence).
+5. A `green` (or `docs`) record at the worktree's HEAD: review (factory-review).
+6. Code flow: a `red` record whose sha is in the worktree's history, or, after a rebase, a commit carrying the trailer `Factory-Red: CLM-<n>`: build, from the implementer (factory-build, step 3).
+7. A worktree and a `plan` record: build (factory-build), from the test-writer in the code flow, from the writer in the docs flow. Code flow, commits after the base but no `red` record: the red gate is run on them first. Docs flow, commits after the base but no `docs` record at the HEAD: the docs gate is run on them first.
 8. A `plan` record: make the worktree, then build.
 9. A `triage: feasible` record: plan (factory-plan).
 10. In the intake state: queue and triage (factory-queue, factory-triage).
 
-The worktree, red commit and local commits after it live only on this machine until green; that is by design (the red commit alone cannot pass CI, which denies warnings). If the worktree is lost, the issue goes back to step 8 and is built again from its plan.
+The worktree, red commit and local commits after it live only on this machine until green; that is by design (the red commit alone cannot pass CI, which denies warnings). A docs branch is likewise pushed only once its gate passes. If the worktree is lost, the issue goes back to step 8 and is built again from its plan.
 
 ## Acting on GitHub as the App
 

@@ -1,11 +1,13 @@
 ---
 name: factory-build
-description: Use when the software factory has a planned CityLoom issue and its worktree and must turn the plan into tests and code - the test-writer's red commit, the red gate, the implementer, the green gate and the push - or when the review sends findings back to the implementer.
+description: Use when the software factory has a planned CityLoom issue and its worktree and must turn the plan into tests and code - the test-writer's red commit, the red gate, the implementer, the green gate and the push - or, for a documentation issue, into pages - the writer, the docs gate and the push - or when the review sends findings back to the implementer or the writer.
 ---
 
 # Factory build: tests first, then the code, each through its gate
 
 Takes one planned CityLoom issue from its plan to a green branch on `origin`. The tests are written first by the `test-writer`, who never sees an implementation; the code by the `implement` agent, who may not change a test. A script decides each hand-over: `gate.py red` and `gate.py green`. Read `.claude/factory/README.md` first. Below, `$F` is `$CLAUDE_PROJECT_DIR/.claude/factory`, `<wt>` the issue's worktree, and every round limit is `rounds.*` of `python3 "$F/factory.py" config`.
+
+The flow is the `Flow:` line of the issue's `**Factory · triage: feasible**` record (none: `code`; README, **Two flows**). The steps 1 to 4 below are the code flow's; an issue of the docs flow goes to **The docs flow** instead.
 
 Run the gates from the main checkout's copy of `gate.py` (`$F`), never from the worktree's: the worktree is what is judged. They need the database: `just db` prints the `DATABASE_URL` to export. The base is the commit the branch started from: `BASE=$(git -C <wt> merge-base HEAD origin/main)`.
 
@@ -47,8 +49,26 @@ python3 "$F/gate.py" green --repo <wt> --base "$BASE" --red <red sha>
 
 A push that git rejects (someone else pushed to the branch) is a hand-back: never force-push.
 
+## The docs flow
+
+Its build is one agent and one gate. Skip to step D2 when `<wt>` already has commits after `BASE` and no `**Factory · docs**` record names its HEAD (the line stopped mid-station); skip the station when one does.
+
+**D1. The writer.** Dispatch the `writer` agent with `<wt>`, the issue's key, title, description and comments, the `**Factory · plan**` record's plan, and on a later round the docs gate's problems or the review's findings (the `factory-review` skill sends you back here with them). Do not write the pages yourself. It returns `{ head, commits, pages, checks, notes }`, or `{ question }`: hand the question back (below).
+
+**D2. The docs gate.** It needs no database.
+
+```sh
+python3 "$F/gate.py" docs --repo <wt> --base "$BASE"
+```
+
+- `PASS`: push the branch as the App (README, **Acting on GitHub as the App**): `git -C <wt> push -u origin HEAD` with the App's credential helper. Then post `**Factory · docs** \`<HEAD sha>\``, the gate's report in a code block and the writer's `notes`. The issue goes on to `factory-review`.
+- `FAIL`: back to D1 with the gate's problems, quoted; at most `rounds.green` rounds in all, then hand back with the last report. A problem that names a file that is not documentation, or a guarded one, is never fixed by you: send it back, and if it comes again, hand back.
+- `REFUSED`: as for the red gate (a site not set up: `npm ci` in `e2e/` and `just setup-docs` in `<wt>`, then gate again).
+
+A push that git rejects is a hand-back: never force-push.
+
 **Hand-back**: `labels.needsReview` (`save_issue`, `addLabels`), `**Factory · handed back** (build)` with the station, the round, and the exact output that blocked it. The worktree and its commits stay as they are.
 
 ## Report
 
-Each step taken, each gate's verdict with its report, the red and green shas, the push, the records posted, and any hand-back with its reason.
+Each step taken, each gate's verdict with its report, the red and green shas (docs flow: the docs record's sha), the push, the records posted, and any hand-back with its reason.
