@@ -1,0 +1,54 @@
+The uses in the code at 069a05ae3252bbf677cd4e09dbd75dd91207d67d. Paths are relative to crates/cityloom_editor/src/.
+
+city::edits, outside city/ (a tests.rs file or a line inside a #[cfg(test)] item is marked [test]; a comment is shown too):
+       archive/model.rs:41: use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, NEWEST, STREETS, VERSION as EDITS_VERSION};
+       archive/model.rs:154: /// How many street and junction records were left out as stale (`city::edits::is_stale`).
+[test] archive/tests.rs:14: use crate::city::edits::{self, EDITS_KEY, NEWEST};
+[test] junction/vm/mod.rs:962: r.storage.refuse(crate::city::edits::EDITS_KEY);
+[test] junction/vm/mod.rs:2063: assert_eq!(r.storage.recall(crate::city::edits::EDITS_KEY), None);
+       map/view/home.rs:55: if e.key().is_none_or(|k| k == crate::city::edits::EDITS_KEY) {
+       map/view/mod.rs:195: if e.key().is_none_or(|k| k == crate::city::edits::EDITS_KEY) {
+       project/copies.rs:159: pub const FORKED_KEYS: [&str; 2] = [crate::city::edits::EDITS_KEY, crate::restriction::store::RESTRICTIONS_KEY];
+[test] project/copies.rs:312: let mut draft = crate::city::edits::Draft::new();
+[test] project/copies.rs:313: assert!(draft.put_raw(crate::city::edits::STREETS, key, json!({ "v": 1 })));
+       project/migrate.rs:18: use crate::city::edits::{self, EDITS_KEY, JUNCTIONS, STREETS};
+       project/store.rs:10: use crate::city::edits::{self, EDITS_KEY, JUNCTIONS, STREETS};
+[test] project/tests.rs:273: let mut draft = crate::city::edits::Draft::new();
+[test] project/tests.rs:274: assert!(draft.put_raw(crate::city::edits::STREETS, "w9", serde_json::json!({"mine": "first"})));
+[test] project/tests.rs:275: assert!(draft.put_raw(crate::city::edits::STREETS, &stray, serde_json::json!({"stray": 1})));
+[test] project/tests.rs:555: let mut draft = crate::city::edits::Draft::new();
+[test] project/tests.rs:557: assert!(draft.put_raw(crate::city::edits::STREETS, key, serde_json::json!({ "v": v })));
+[test] project/tests.rs:563: let draft = crate::city::edits::draft(storage.recall(key).as_deref()).ok()?;
+[test] project/tests.rs:564: draft.get_raw(crate::city::edits::STREETS, id)?["v"].as_str().map(str::to_string)
+[test] project/tests.rs:850: let mut draft = crate::city::edits::draft(d.storage.recall("cityloom-edits").as_deref()).unwrap();
+[test] project/tests.rs:851: assert!(draft.put_raw(crate::city::edits::JUNCTIONS, "n7", serde_json::json!({ "v": "legacy" })));
+[test] project/tests.rs:1192: let edits = crate::city::edits::EDITS_KEY;
+[test] project/tests.rs:1214: let edits = crate::city::edits::EDITS_KEY;
+[test] project/tests.rs:1263: assert!(!look.storage.remember(crate::city::edits::EDITS_KEY, "{\"version\":5}"));
+[test] project/tests.rs:1287: &[(crate::city::edits::EDITS_KEY, "{\"version\":5}")],
+[test] project/tests.rs:1296: assert_eq!(ports.storage.recall(crate::city::edits::EDITS_KEY).as_deref(), Some("{\"version\":5}"));
+[test] project/tests.rs:1297: assert!(!ports.storage.remember(crate::city::edits::EDITS_KEY, "{}"));
+[test] project/tests.rs:1401: use crate::city::edits::EDITS_KEY;
+       share/model.rs:32: use crate::city::edits::EDITS_KEY;
+[test] share/tests.rs:7: use crate::city::edits::EDITS_KEY;
+[test] share/tests.rs:21: // Stamped by a current importer (`city::edits::STALE_BEFORE_IMPORT`): an unstamped record is stale, never applied.
+[test] share/tests.rs:22: let import = crate::city::edits::STALE_BEFORE_IMPORT;
+[test] shell/tests.rs:895: serde_json::json!({"version": crate::city::edits::IMPORT_STAMP_VERSION, "streets": {"w1~n1~n2": record}, "junctions": {}}).to_string()
+[test] shell/tests.rs:933: let storage = storage_with("cityloom-edits@p1", &edits_document(Some(crate::city::edits::STALE_BEFORE_IMPORT)));
+[test] street/vm/mod.rs:2036: r.storage.refuse(crate::city::edits::EDITS_KEY);
+[test] street/vm/mod.rs:2609: assert_eq!(r.storage.recall(crate::city::edits::EDITS_KEY), None);
+       sync/local.rs:15: use crate::city::edits::{self, Document, Draft, EDITS_KEY, JUNCTIONS, STREETS};
+[test] sync/local.rs:367: use crate::city::edits::StreetRecord;
+[test] sync/tests.rs:257: /// (`city::edits::is_stale`): the sync neither keeps nor sends a stale one.
+[test] sync/tests.rs:259: body["import"] = json!(crate::city::edits::STALE_BEFORE_IMPORT);
+[test] sync/tests.rs:1401: let body = json!({"ways": [1], "street": {"x": 1}, "import": crate::city::edits::STALE_BEFORE_IMPORT});
+       sync/vm.rs:495: if matches!(id.kind, Kind::Street | Kind::Junction) && !remote.deleted && remote.body.as_ref().is_some_and(crate::city::edits::is_stale) {
+[test] timeline/tests.rs:6: use crate::city::edits::{EDITS_KEY, IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
+       timeline/work.rs:10: use crate::city::edits::{self, Document as EditsDocument, EDITS_KEY, JUNCTIONS, STREETS};
+[test] timeline/work.rs:268: use crate::city::edits::{IMPORT_STAMP_VERSION, STALE_BEFORE_IMPORT};
+
+shell::tray, outside shell/:
+       junction/view/notes_tray.rs:1: //! The junction page's notes: the shell's tray (`shell::tray`) with the junction's three tabs, each a function giving
+       junction/view/notes_tray.rs:12: use crate::shell::tray::{Tray, TrayPage, TrayTab, Words, changes_page, checks_page, tr};
+       street/view/notes_tray.rs:1: //! The street page's notes: the shell's tray (`shell::tray`) with the street's three tabs, each a function giving its
+       street/view/notes_tray.rs:10: use crate::shell::tray::{Tray, TrayPage, TrayTab, Words, changes_page, checks_page, tr};

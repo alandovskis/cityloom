@@ -1,0 +1,8 @@
+Step 1. The docs gate at 069a05ae3252bbf677cd4e09dbd75dd91207d67d (on 47a1d62b0abac87452dd5427e5629e4efbd84b0f).
+
+$ npx prettier --ignore-path ../.prettierignore --check ../website
+$ npm run build
+PASS docs gate
+  page: CLAUDE.md
+  page: website/docs/architecture/index.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/architecture/index.md
