@@ -1,0 +1,265 @@
+Checks of the plan at 55d1301e19313e96935f1128cb3247e1bdb95431.
+
+$ git grep -nE "junction::(view|vm)|super::super|junction::\{" -- crates/cityloom_editor/src/junction/model
+crates/cityloom_editor/src/junction/model/read_model.rs:2881:        let iso = crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+crates/cityloom_editor/src/junction/model/read_model.rs:2891:        use crate::junction::view::iso::flatten;
+crates/cityloom_editor/src/junction/model/read_model.rs:3008:        assert!(!crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+crates/cityloom_editor/src/junction/model/read_model.rs:3019:        assert!(!crate::junction::view::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+crates/cityloom_editor/src/junction/model/read_model.rs:4311:        let drawings = crate::junction::view::phase_svg::phase_drawings(&v);
+crates/cityloom_editor/src/junction/model/read_model.rs:4318:        assert_ne!(crate::junction::view::phase_svg::phase_drawings(&v2)[0], drawings[0], "the drawing follows the choice");
+crates/cityloom_editor/src/junction/model/read_model.rs:4319:        assert_eq!(crate::junction::view::phase_svg::phase_drawings(&v2)[1], drawings[1], "the other phases are drawn as they were");
+
+The #[cfg(test)] of read_model.rs starts at line 2812, so every hit above is test code.
+
+$ git grep -nE "fn (point|compass_key|compass_name_key)\b|COMPASS_|pub use|turns::\{?compass" -- crates/cityloom_editor/src/junction/view
+(nothing)
+
+The functions in the model at the head (crates/cityloom_editor/src/junction/model/mod.rs):
+
+/// The point of the compass a bearing is nearest, named in a sentence ("north-east").
+pub fn compass(bearing: i32) -> Said {
+    const KEYS: [&str; 8] =
+        ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+    Said::new(KEYS[(((bearing + 22).rem_euclid(360)) / 45) as usize])
+}
+
+const COMPASS_KEYS: [&str; 8] = [
+    "jn-compass-short-n",
+    "jn-compass-short-ne",
+    "jn-compass-short-e",
+    "jn-compass-short-se",
+    "jn-compass-short-s",
+    "jn-compass-short-sw",
+    "jn-compass-short-w",
+    "jn-compass-short-nw",
+];
+
+const COMPASS_NAMES: [&str; 8] =
+    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+
+fn point(bearing: i32) -> usize {
+    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+}
+
+/// The message of the compass point a bearing is nearest, as a short tag ("NE").
+pub fn compass_key(bearing: i32) -> &'static str {
+    COMPASS_KEYS[point(bearing)]
+}
+
+/// The message of the compass point a bearing is nearest, in full ("north-east").
+pub fn compass_name_key(bearing: i32) -> &'static str {
+    COMPASS_NAMES[point(bearing)]
+}
+
+/// An arm by its street and the way it leaves the junction: "Main Street (north)".
+pub fn arm_name(a: &Arm) -> Said {
+    Said::new("jn-arm-name").with("street", Arg::Said(Box::new(a.street_name()))).with("compass", Arg::Said(Box::new(compass(a.bearing))))
+}
+
+/// Something said about one arm.
+/// `change`, followed by how many crossings it took off call (`jn-rev-calls-lost`).
+fn calls_lost_label(change: Said, n: usize) -> Said {
+    Said::new("jn-rev-calls-lost").with("change", Arg::Said(Box::new(change))).with("n", Arg::Num(n as i64))
+}
+
+The same functions as they were in the view at the base (crates/cityloom_editor/src/junction/view/turns.rs):
+//! The "Turns allowed" table: rows are the street traffic comes from, columns
+//! the street it goes to, and a cell allows or bans that turn.
+
+use std::rc::Rc;
+
+use leptos::prelude::*;
+
+use crate::junction::model::read_model::JView;
+use crate::junction::model::{LEFT, THROUGH};
+use crate::junction::vm::JunctionVm;
+use crate::junction::vm::watch::Watch;
+use crate::shared::i18n::Args;
+
+const COMPASS_KEYS: [&str; 8] = [
+    "jn-compass-short-n",
+    "jn-compass-short-ne",
+    "jn-compass-short-e",
+    "jn-compass-short-se",
+    "jn-compass-short-s",
+    "jn-compass-short-sw",
+    "jn-compass-short-w",
+    "jn-compass-short-nw",
+];
+
+const COMPASS_NAMES: [&str; 8] =
+    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+
+fn point(bearing: i32) -> usize {
+    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+}
+
+/// The message of the compass point a bearing is nearest, as a short tag ("NE").
+pub fn compass_key(bearing: i32) -> &'static str {
+    COMPASS_KEYS[point(bearing)]
+}
+
+/// The message of the compass point a bearing is nearest, in full ("north-east").
+pub fn compass_name_key(bearing: i32) -> &'static str {
+    COMPASS_NAMES[point(bearing)]
+}
+
+/// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
+pub fn turn_glyph(class: u8, size: u32) -> impl IntoView {
+    let branch = match class {
+        LEFT => "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7",
+        THROUGH => "M8 9V2M5.5 4.5 8 2l2.5 2.5",
+        _ => "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7",
+    };
+    view! {
+        <svg class="turn-ico" viewBox="0 0 16 16" width=size height=size aria-hidden="true" focusable="false">
+            <path d="M8 14V9"/>
+            <path d=branch/>
+        </svg>
+    }
+}
+
+fn table(v: &JView, w: Watch, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
+    let columns = v
+        .arms
+        .iter()
+
+$ git diff --stat 47a1d62b0abac87452dd5427e5629e4efbd84b0f 55d1301e19313e96935f1128cb3247e1bdb95431 (the whole change):
+ Cargo.lock                                         |  2 +-
+ crates/cityloom_editor/Cargo.toml                  |  2 +-
+ crates/cityloom_editor/src/junction/model/mod.rs   | 84 ++++++++++++++++++++++
+ .../src/junction/model/read_model.rs               |  5 +-
+ .../cityloom_editor/src/junction/view/inspector.rs |  4 +-
+ crates/cityloom_editor/src/junction/view/notes.rs  |  2 +-
+ crates/cityloom_editor/src/junction/view/turns.rs  | 30 +-------
+ 7 files changed, 93 insertions(+), 36 deletions(-)
+
+$ git diff 47a1d62b0abac87452dd5427e5629e4efbd84b0f 55d1301e19313e96935f1128cb3247e1bdb95431 -- . ':(exclude)crates/cityloom_editor/src/junction/model/mod.rs' (every file but model/mod.rs, whose functions are above and whose tests are steps 1 to 3):
+diff --git a/Cargo.lock b/Cargo.lock
+index ad8a33e9..be740b8f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -678,7 +678,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "cityloom_editor"
+-version = "0.113.1"
++version = "0.113.2"
+ dependencies = [
+  "any_spawner",
+  "cityloom_model",
+diff --git a/crates/cityloom_editor/Cargo.toml b/crates/cityloom_editor/Cargo.toml
+index 59f72929..e2090cb4 100644
+--- a/crates/cityloom_editor/Cargo.toml
++++ b/crates/cityloom_editor/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+ name = "cityloom_editor"
+-version = "0.113.1"
++version = "0.113.2"
+ edition = "2024"
+ 
+ [dependencies]
+diff --git a/crates/cityloom_editor/src/junction/model/read_model.rs b/crates/cityloom_editor/src/junction/model/read_model.rs
+index f5ea6506..8156c0f9 100644
+--- a/crates/cityloom_editor/src/junction/model/read_model.rs
++++ b/crates/cityloom_editor/src/junction/model/read_model.rs
+@@ -14,7 +14,8 @@ use crate::junction::model::{
+     ALL_WAY_STOP, APPROACH_DEFAULT_MM, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD,
+     ISLAND_MIN_ROAD_MM, ISLAND_MM, Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT,
+     RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
+-    TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
++    TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, compass_name_key, in_force, protected_blocker, protected_island_mm, traffic_arms,
++    turn_class,
+ };
+ use crate::junction::model::{actuation, bicycles, calls, preemption, transit};
+ use crate::street::model::{StopKindExt, UseExt};
+@@ -1342,7 +1343,7 @@ pub struct PatternView {
+ 
+ /// The compass point an arm leaves by, said in full ("north-east").
+ fn compass_said(bearing: i32) -> Said {
+-    Said::new(crate::junction::view::turns::compass_name_key(bearing))
++    Said::new(compass_name_key(bearing))
+ }
+ 
+ /// "a", "a and b", "a, b and c", each item a `Said`.
+diff --git a/crates/cityloom_editor/src/junction/view/inspector.rs b/crates/cityloom_editor/src/junction/view/inspector.rs
+index 9d569847..dd38bc20 100644
+--- a/crates/cityloom_editor/src/junction/view/inspector.rs
++++ b/crates/cityloom_editor/src/junction/view/inspector.rs
+@@ -19,12 +19,12 @@ use crate::junction::model::transit::{self, Mode};
+ use crate::junction::model::{
+     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
+     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
+-    RULES, STOPS, THROUGH, Target, TimingField,
++    RULES, STOPS, THROUGH, Target, TimingField, compass_key,
+ };
+ use crate::junction::model::{preemption, preemption::Outcome as EmergencyOutcome};
+ use crate::junction::view::phase_svg::phase_drawings;
+ use crate::junction::view::signal_folds::{SignalFold, set_line, shown, warnings, warnings_line};
+-use crate::junction::view::turns::{compass_key, turn_glyph};
++use crate::junction::view::turns::turn_glyph;
+ use crate::junction::vm::JunctionVm;
+ use crate::junction::vm::keys;
+ use crate::junction::vm::watch::Watch;
+diff --git a/crates/cityloom_editor/src/junction/view/notes.rs b/crates/cityloom_editor/src/junction/view/notes.rs
+index 94cdb713..c872393c 100644
+--- a/crates/cityloom_editor/src/junction/view/notes.rs
++++ b/crates/cityloom_editor/src/junction/view/notes.rs
+@@ -5,9 +5,9 @@ use std::rc::Rc;
+ 
+ use leptos::prelude::*;
+ 
++use crate::junction::model::compass_key;
+ use crate::junction::model::read_model::Check;
+ use crate::junction::model::read_model::{CrossingView, JView};
+-use crate::junction::view::turns::compass_key;
+ use crate::junction::vm::JunctionVm;
+ use crate::junction::vm::watch::Watch;
+ use crate::shared::i18n::{Args, I18n, Locale};
+diff --git a/crates/cityloom_editor/src/junction/view/turns.rs b/crates/cityloom_editor/src/junction/view/turns.rs
+index 3f91e928..7dd47c9f 100644
+--- a/crates/cityloom_editor/src/junction/view/turns.rs
++++ b/crates/cityloom_editor/src/junction/view/turns.rs
+@@ -6,39 +6,11 @@ use std::rc::Rc;
+ use leptos::prelude::*;
+ 
+ use crate::junction::model::read_model::JView;
+-use crate::junction::model::{LEFT, THROUGH};
++use crate::junction::model::{LEFT, THROUGH, compass_key};
+ use crate::junction::vm::JunctionVm;
+ use crate::junction::vm::watch::Watch;
+ use crate::shared::i18n::Args;
+ 
+-const COMPASS_KEYS: [&str; 8] = [
+-    "jn-compass-short-n",
+-    "jn-compass-short-ne",
+-    "jn-compass-short-e",
+-    "jn-compass-short-se",
+-    "jn-compass-short-s",
+-    "jn-compass-short-sw",
+-    "jn-compass-short-w",
+-    "jn-compass-short-nw",
+-];
+-
+-const COMPASS_NAMES: [&str; 8] =
+-    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+-
+-fn point(bearing: i32) -> usize {
+-    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+-}
+-
+-/// The message of the compass point a bearing is nearest, as a short tag ("NE").
+-pub fn compass_key(bearing: i32) -> &'static str {
+-    COMPASS_KEYS[point(bearing)]
+-}
+-
+-/// The message of the compass point a bearing is nearest, in full ("north-east").
+-pub fn compass_name_key(bearing: i32) -> &'static str {
+-    COMPASS_NAMES[point(bearing)]
+-}
+-
+ /// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
+ pub fn turn_glyph(class: u8, size: u32) -> impl IntoView {
+     let branch = match class {
+Message files (.ftl) changed: 0
