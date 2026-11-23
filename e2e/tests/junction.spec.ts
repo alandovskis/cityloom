@@ -400,8 +400,9 @@ test.describe("signal timing on a junction of the city", () => {
   }) => {
     await page.reload();
     await openPlan(page, false);
-    const folds = page.locator("#inspector details.jn-fold");
-    expect(await folds.count()).toBeGreaterThanOrEqual(5);
+    // the options' own folds; the sample has no bike lane, so no bicycles fold
+    const folds = page.locator('#inspector details.jn-fold[id^="jn-fold-"]');
+    await expect(folds).toHaveCount(5);
     for (const d of await folds.all()) await expect(d).not.toHaveAttribute("open", "");
     // the phases come before every option but the plans
     const phases = await page.locator("#i-h-signal").boundingBox();
@@ -1601,6 +1602,11 @@ test.describe("signal timing on a junction of the city", () => {
     const name = (await crossing.locator(".call-name").innerText()).trim();
     await expect(page.locator("#calls-findings")).toHaveText(
       `The crossing of ${name} cannot be served safely: its walk and clearance need 21 s of green, and no phase that walks it can give more than 20 s.`,
+    );
+    // the calls' fold says so on its line, apart from what is set, and so does its name for a screen reader (CLM-49)
+    await expect(page.locator("#jn-fold-calls > summary .jn-fold-warn")).toHaveText("· 1 warning");
+    await expect(page.locator("#jn-fold-calls > summary")).toHaveAccessibleName(
+      /^Pedestrian calls\s*\d+ crossings on call\s*· 1 warning$/,
     );
     // Its totals count its calls and mark them not served, with no wait to report.
     const row = page.locator("#calls-totals tbody tr").filter({ hasText: name });

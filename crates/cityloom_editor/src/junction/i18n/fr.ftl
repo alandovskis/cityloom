@@ -1101,9 +1101,9 @@ jn-fold-calls-set = { $n ->
    *[other] { $n } passages sur appel
 }
 jn-fold-actuation-set = { $n ->
-    [0] Aucune rue actionnée
-    [one] 1 rue actionnée
-   *[other] { $n } rues actionnées
+    [0] Aucune rue à la demande
+    [one] 1 rue à la demande
+   *[other] { $n } rues à la demande
 }
 jn-fold-bikes-set = { $n ->
     [0] Aucun mouvement sur détection
@@ -1121,6 +1121,6 @@ jn-fold-preemption-set = { $n ->
    *[other] { $n } rues avec préemption
 }
 jn-fold-warnings = { $n ->
-    [one] 1 avertissement
-   *[other] { $n } avertissements
+    [one] · 1 avertissement
+   *[other] · { $n } avertissements
 }

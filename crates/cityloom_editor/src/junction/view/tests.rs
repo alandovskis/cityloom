@@ -459,7 +459,7 @@ fn the_signal_plan_folds_each_option_and_says_what_is_set_and_its_warnings() {
     }
     let h = panel(&s).replace('\u{a0}', " ");
     let calls = summary(&h, "jn-fold-calls");
-    assert!(calls.contains("jn-fold-warn") && calls.contains("1 warning"), "{calls}");
+    assert!(calls.contains("jn-fold-warn") && calls.contains("· 1 warning"), "{calls}");
 }
 
 #[test]

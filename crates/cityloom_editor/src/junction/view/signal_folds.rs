@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(set_line(SignalFold::Actuation, &v, &en), "1 street actuated");
         assert_eq!(set_line(SignalFold::Preemption, &v, &en), "1 street with pre-emption");
         // the sample's streets have no bike lane: a junction with bike lanes for the movements cyclists ride
-        let mut biked = crate::junction::model::fixtures::junction_biked();
+        let mut biked = crate::junction::model::junction_biked();
         let ridden = biked.view().signal.as_ref().unwrap().bicycles.movements.iter().find(|m| m.ridden).expect("a movement cyclists ride").uid;
         assert!(biked.set_bike_detection(ridden, true));
         assert_eq!(set_line(SignalFold::Bikes, &biked.view(), &en), "1 movement on detection");
@@ -171,8 +171,9 @@ mod tests {
     fn warnings_are_counted_from_the_findings_and_said_only_when_there_are_some() {
         let en = en();
         assert_eq!(warnings_line(0, &en), "");
-        assert_eq!(warnings_line(1, &en), "1 warning");
-        assert_eq!(warnings_line(3, &en), "3 warnings");
+        // after what is set, apart from it: "None on call · 1 warning", so a screen reader does not run the two together
+        assert_eq!(warnings_line(1, &en), "· 1 warning");
+        assert_eq!(warnings_line(3, &en), "· 3 warnings");
         // a crossing left on call that no phase walks any more is a finding of the calls
         let mut j = Junction::new(0);
         let e = at(&j, 90);
@@ -209,7 +210,7 @@ mod tests {
         for f in [SignalFold::Plans, SignalFold::Calls, SignalFold::Actuation, SignalFold::Preemption] {
             assert!(shown(f, &v), "{f:?}");
         }
-        assert!(shown(SignalFold::Bikes, &crate::junction::model::fixtures::junction_biked().view()));
+        assert!(shown(SignalFold::Bikes, &crate::junction::model::junction_biked().view()));
         let mut stop = Junction::new(0);
         assert!(stop.set_control(crate::junction::model::PRIORITY));
         assert!(SignalFold::ALL.iter().all(|f| !shown(*f, &stop.view())), "no signal, no folds");
@@ -224,10 +225,9 @@ mod tests {
         assert!(!none.is_empty() && none != "None on call", "{none}");
         let with_phase = v.signal.as_ref().unwrap().actuation.streets.iter().find(|a| a.has_phase).unwrap().uid;
         assert!(j.set_actuated(with_phase, true));
-        let one = set_line(SignalFold::Actuation, &j.view(), &fr);
-        assert!(one.starts_with('1') && !one.contains("street"), "{one}");
-        let two = warnings_line(2, &fr);
-        assert!(two.starts_with('2') && !two.contains("warning"), "{two}");
+        // the glossary's term for actuated, as the section's own radio says it (« À la demande »)
+        assert_eq!(set_line(SignalFold::Actuation, &j.view(), &fr), "1 rue à la demande");
+        assert_eq!(warnings_line(2, &fr), "· 2 avertissements");
         assert!(fr.missing().is_empty(), "{:?}", fr.missing());
     }
 }

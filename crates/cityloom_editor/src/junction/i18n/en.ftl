@@ -1121,6 +1121,6 @@ jn-fold-preemption-set = { $n ->
    *[other] { $n } streets with pre-emption
 }
 jn-fold-warnings = { $n ->
-    [one] 1 warning
-   *[other] { $n } warnings
+    [one] · 1 warning
+   *[other] · { $n } warnings
 }
