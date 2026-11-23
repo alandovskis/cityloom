@@ -98,6 +98,9 @@ d’avertissement.
 
 ## Leptos et SVG
 
+Ce qui relève d’une vue, et ce qui relève de son modèle de vue, est décrit dans Architecture ([Couches dans une
+tranche](architecture/index.md#couches-dans-une-tranche)).
+
 - Les fichiers des modèles de vue (`vm.rs`, `vm/`) ne nomment ni `web_sys`, ni `js_sys`, ni `wasm_bindgen` : le
   navigateur est derrière les ports (voir [Ports](architecture/index.md#ports)). Exemple : `project/vm.rs`
   (`ProjectsVm`). **Revue**

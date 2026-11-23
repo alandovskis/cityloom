@@ -93,6 +93,9 @@ Clippy denies nothing: it runs only for [SonarCloud](testing.md#sonarcloud), wit
 
 ## Leptos and SVG
 
+What belongs in a view, and what in its view-model, is in Architecture ([Layers inside a
+slice](architecture/index.md#layers-inside-a-slice)).
+
 - The files of the view-models (`vm.rs`, `vm/`) name no `web_sys`, `js_sys` or `wasm_bindgen`: the browser is behind
   the ports (see [Ports](architecture/index.md#ports)). Example: `project/vm.rs` (`ProjectsVm`). **Review**
 - A component is named in `PascalCase`. Example: `map/view/network_view.rs` (`NetworkChecks`). **Review**
