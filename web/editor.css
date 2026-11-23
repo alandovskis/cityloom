@@ -73,11 +73,6 @@
 .bar .surfaces {
   justify-self: start;
 }
-.panel.right {
-  width: var(--notes-w);
-  bottom: var(--pad);
-  max-height: none;
-}
 .tab {
   white-space: nowrap;
   padding-inline: 8px;
@@ -196,28 +191,14 @@
 .scenario-slot:empty {
   display: none;
 }
-/* In the head's row beside the title card (the street) or the toolbar (the junction, whose title takes its row): a
-   basis small enough to fit beside either in a wide typeface, growing to 30rem where there is room. Its width comes
+/* In the head's row beside the title card (the street and junction pages): a basis small enough to fit beside it in
+   a wide typeface, growing to 30rem where there is room. Its width comes
    from the row, never from what it holds, so a longer label (Delete becoming Confirm delete) wraps inside it and moves
    nothing beside it. */
 .scenario-slot {
   flex: 1 1 18rem;
   min-width: 0;
   max-width: min(30rem, 100%);
-}
-/* On the junction page the scenarios head the details panel (web/intersection.html): its two sidebars leave the
-   drawing's column too narrow for them in the head, whose height the drawing cannot give back (`junction::view::frame`).
-   There they are part of the panel, not a card of their own. */
-.panel > .scenario-slot {
-  flex: none;
-  max-width: none;
-}
-.panel .scenarios {
-  max-width: none;
-  padding: 14px 20px 12px;
-  border-bottom: 1px solid var(--rule);
-  border-radius: 0;
-  box-shadow: none;
 }
 .scenarios {
   display: grid;
@@ -341,31 +322,19 @@
   font-size: 17px;
 }
 
-/* Under 1360px there is not room for the notes beside the drawing until they are asked for. */
-@media (min-width: 900px) and (max-width: 1359px) {
-  :root:not([data-notes="open"]) {
-    --rw: 0px;
-  }
-  :root:not([data-notes="open"]) .panel.right {
-    display: none;
-  }
-  :root:not([data-notes="open"]) .stage-main {
-    right: var(--tab-w);
-  }
-}
-
-/* ---- the street page: the drawing's column, the details on the right, the notes as a tray under it -------
-   Layout option 1 of the editors' review (docs/superpowers/specs/2026-11-14-street-editor-layout-design.md). The
-   junction page shares this file and keeps its two sidebars, so everything here is under .street-page. The column
+/* ---- the editors' layout: the drawing's column, the details on the right, the notes as a tray under it -----
+   Layout option 1 of the editors' review (docs/superpowers/specs/2026-11-14-street-editor-layout-design.md), on the
+   street page and, since CLM-32, the junction page (docs/superpowers/specs/2026-11-22-junction-editor-layout-design.md):
+   both bodies carry .tray-page, and everything here is under it. The compare page shares this file. The column
    is three parts: the title and tools, which never scroll away; the drawing and the strips, which scroll; and the
    notes' tray, whose handle (the status line, the tabs, the toggle) is always in view and whose body opens above it.
    The tray's own styles are in tray.css (`shell::tray`). */
 
-.street-page {
+.tray-page {
   --lw: 0px;
   --rw: calc(var(--pad) + var(--notes-w));
 }
-:root[data-inspector="closed"] .street-page {
+:root[data-inspector="closed"] .tray-page {
   --rw: 0px;
 }
 :root[data-inspector="closed"] .panel.details {
@@ -379,7 +348,7 @@
   }
   /* `:root` matches the specificity of the rules above that move the column's edges as the sidebars open and close,
      and comes after them: on the street page the column runs from the window's edge to the details' edge tab. */
-  :root .street-page .stage-main {
+  :root .tray-page .stage-main {
     left: var(--pad);
     right: calc(var(--rw) + var(--tab-w));
     overflow: hidden;
@@ -395,7 +364,13 @@
     /* room for the focus outline of what is at its edges */
     padding: 2px;
   }
-  .street-page .stage-head {
+  .tray-page .stage-head {
+    flex: none;
+  }
+  /* The junction's card is as tall as its drawing, which is laid out to the room the column leaves it
+     (`junction::view::drawing::frame_of`): grown to fill the column, the card would hold slack the drawing then
+     measured as its own. */
+  .tray-page .plan-drawing {
     flex: none;
   }
 }
@@ -454,18 +429,6 @@
   -webkit-user-select: none;
 }
 
-.statusbar {
-  position: static;
-  left: auto;
-  bottom: auto;
-  transform: none;
-  max-width: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding-bottom: 2px;
-}
 .fit-row {
   display: flex;
   flex-wrap: wrap;
@@ -500,7 +463,6 @@
   font-size: 13px;
   text-align: center;
 }
-.drawing:has(.wrap:focus-visible) ~ .statusbar .focus-hint,
 .stage-main:has(.wrap:focus-visible) .focus-hint {
   visibility: visible;
 }
@@ -2012,9 +1974,6 @@ svg pattern circle {
 
 /* ---- the inspector ----------------------------------------------------------- */
 
-.panel.left {
-  border-top: 4px solid var(--kc);
-}
 .inspector {
   display: flex;
   flex-direction: column;
@@ -3540,7 +3499,7 @@ svg pattern circle {
 }
 
 @media (max-width: 899px) {
-  .street-page {
+  .tray-page {
     --rw: 0px;
   }
   .panel.details {
@@ -3561,16 +3520,6 @@ svg pattern circle {
     position: static;
     overflow: visible;
     padding: 0;
-  }
-  .panel.left {
-    order: 2;
-    max-width: calc(100% - 16px);
-  }
-  .panel.right {
-    order: 3;
-    bottom: auto;
-    /* never wider than the window less its margins (the Notes are 340 px at a desktop width) */
-    max-width: calc(100% - 16px);
   }
   .stage-head {
     align-items: stretch;
@@ -3594,8 +3543,6 @@ svg pattern circle {
   .drawing > .scroll {
     overflow-x: auto;
   }
-  /* The Notes' edge tab stands at the window's right edge here, fixed half-way down: the toggle keeps clear of it
-     across, as it scrolls past. */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3612,8 +3559,7 @@ svg pattern circle {
   .tools,
   .scenarios,
   .welcome,
-  .clock,
-  .statusbar {
+  .clock {
     display: none;
   }
   .stage-main,
@@ -3622,7 +3568,9 @@ svg pattern circle {
     overflow: visible;
   }
 }
-.tools[hidden] {
+.tools[hidden],
+/* a page shown read-only draws no history: the card would be an empty dot */
+.tools:not(:has(button, a, select, input)) {
   display: none;
 }
 

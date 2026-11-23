@@ -235,8 +235,8 @@ fn typing(e: &KeyboardEvent) -> bool {
 /// Where that column does not scroll (a phone: the page scrolls), nothing limits the drawing's height.
 #[cfg(target_arch = "wasm32")]
 fn watch_size(wrap: Element, width: RwSignal<f64>, room: RwSignal<f64>) {
+    use crate::shared::column_room::{height, room_in_column};
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
-    use leptos::web_sys::HtmlElement;
 
     let column = wrap.closest(".stage-scroll").ok().flatten();
     let card = wrap.closest(".drawing").ok().flatten();
@@ -248,22 +248,7 @@ fn watch_size(wrap: Element, width: RwSignal<f64>, room: RwSignal<f64>) {
             if (width.get_untracked() - now).abs() >= 0.5 {
                 width.set(now);
             }
-            let scrolls = |el: &Element| {
-                leptos::prelude::window()
-                    .get_computed_style(el)
-                    .ok()
-                    .flatten()
-                    .and_then(|s| s.get_property_value("overflow-y").ok())
-                    .is_some_and(|o| o == "auto" || o == "scroll")
-            };
-            let high = |el: &Element| el.dyn_ref::<HtmlElement>().map_or(0.0, |h| h.offset_height() as f64);
-            let left = match (&column, &card) {
-                (Some(column), Some(card)) if scrolls(column) => {
-                    // the column's own padding, top and bottom (`web/editor.css`, `.stage-scroll`)
-                    column.client_height() as f64 - (high(card) - high(&wrap)) - 4.0
-                }
-                _ => f64::INFINITY,
-            };
+            let left = room_in_column(column.as_ref(), card.as_ref(), height(&wrap));
             if room.get_untracked() != left {
                 room.set(left);
             }

@@ -116,9 +116,9 @@ pub struct RegionOption {
 pub enum NotesAtStart {
     /// Open (the pages whose notes take no room from a drawing).
     Open,
-    /// Open on a screen roomy enough for them beside the drawing, else closed (the junction page and the map).
+    /// Open on a screen roomy enough for them beside the drawing, else closed (the map).
     OpenWhenRoomy,
-    /// Closed (the street page, whose notes are a tray under the drawing: its handle stays in view).
+    /// Closed (the street and junction pages, whose notes are a tray under the drawing: its handle stays in view).
     Closed,
 }
 
@@ -137,7 +137,7 @@ pub struct ShellVm {
     ports: Ports,
     i18n: Rc<I18n>,
     target: Rc<dyn Target>,
-    /// The message that names what the left sidebar holds on this page: `details-details`, `details-places`.
+    /// The message that names what the details panel holds on this page: `details-details`, `details-places`.
     details_word: &'static str,
     tabs: Vec<String>,
     units: ArcRwSignal<Units>,
@@ -900,7 +900,7 @@ mod tests {
     fn where_the_notes_start_open_follows_the_page() {
         assert!(NotesAtStart::Open.open(false) && NotesAtStart::Open.open(true));
         assert!(!NotesAtStart::OpenWhenRoomy.open(false) && NotesAtStart::OpenWhenRoomy.open(true));
-        assert!(!NotesAtStart::Closed.open(false) && !NotesAtStart::Closed.open(true), "the street page's tray starts closed to its handle");
+        assert!(!NotesAtStart::Closed.open(false) && !NotesAtStart::Closed.open(true), "the street and junction pages' trays start closed to their handles");
     }
 
     #[test]

@@ -8,7 +8,7 @@ use leptos::prelude::*;
 
 use crate::junction::model::signal::Pattern;
 use crate::junction::model::*;
-use crate::junction::view::{drawing, inspector, notes, page, turns};
+use crate::junction::view::{drawing, inspector, notes, notes_tray, page, turns};
 use crate::junction::vm::JunctionVm;
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
@@ -2010,7 +2010,8 @@ fn every_data_i18n_key_in_intersection_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
     let keys = i18n_keys(INTERSECTION_HTML);
-    assert!(keys.len() > 42, "the page should have been converted: {}", keys.len());
+    // The notes' words are the tray's (`junction::view::notes_tray`), not the page's.
+    assert!(keys.len() > 24, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
         fr.tr_now(&key, &Args::new());
@@ -2043,7 +2044,7 @@ fn intersection_html_leaves_no_text_without_its_message() {
     // Every text between tags in the body that holds a letter is a message, unless it is a unit, a key cap, a
     // language's own name or the Atlas's name.
     use crate::shell::view::i18n_keys;
-    let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
+    let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body").unwrap()..];
     // The page's start-failure notice is worded in both languages in its own markup, because the module that holds
     // the messages is what failed to load: `shell::tests` checks it against them.
     let notice = body.find(r#"<div id="boot-failed""#).unwrap();
@@ -3875,7 +3876,8 @@ fn the_checks_list_what_fails_first_and_fold_what_passes_until_asked() {
 
 #[test]
 fn the_checks_tab_puts_the_checks_first_and_the_goal_and_its_measures_in_a_column_beside_them() {
-    let page = include_str!("../../../../../web/intersection.html");
+    let s = shared(0);
+    let page = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
     let panel = &page[page.find(r#"id="p-checks""#).unwrap()..page.find(r#"id="p-changes""#).unwrap()];
     let at = |s: &str| panel.find(s).unwrap_or_else(|| panic!("{s}: {panel}"));
     assert!(at(r#"class="checks-split""#) < at(r#"id="h-checks""#) && at(r#"id="checks""#) < at(r#"id="checks-fold-slot""#), "{panel}");
@@ -4792,4 +4794,43 @@ fn the_time_of_day_plans_speak_french() {
     for english in ["Weekdays", "Default plan", "Starts the day", "Which plan runs"] {
         assert!(!p.contains(english), "{english}: {p}");
     }
+}
+
+// ---- the notes' tray ------------------------------------------------------------
+
+#[test]
+fn the_junction_notes_are_the_shells_tray_with_its_three_tabs_in_order() {
+    let s = shared(0);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    assert!(h.contains(r#"class="notes tray""#) && h.contains(r#"id="notes""#), "{h}");
+    let at = |id: &str| h.find(&format!(r#"id="{id}""#)).unwrap_or_else(|| panic!("no #{id}"));
+    assert!(at("t-space") < at("t-checks") && at("t-checks") < at("t-changes"));
+    for (tab, panel) in [("t-space", "p-space"), ("t-checks", "p-checks"), ("t-changes", "p-changes")] {
+        assert!(h.contains(&format!(r#"aria-controls="{panel}""#)) && h.contains(&format!(r#"aria-labelledby="{tab}""#)), "{tab}");
+    }
+    assert!(h.contains(">Streets<") && h.contains(">Checks<") && h.contains(">Changes<"));
+    assert_eq!(count(&h, r#"role="tabpanel""#), 3);
+    assert_eq!(count(&h, r#"role="tabpanel" aria-labelledby="t-space" hidden"#), 0, "the first panel starts shown");
+    assert_eq!(count(&h, r#"role="tabpanel" aria-labelledby="t-checks" hidden"#) + count(&h, r#"role="tabpanel" aria-labelledby="t-changes" hidden"#), 2);
+}
+
+#[test]
+fn every_slot_mount_page_fills_in_the_notes_is_inside_the_tray() {
+    let s = shared(0);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    for id in ["fit-slot", "across", "turns", "conflicts", "conflict-note", "checks", "checks-fold-slot", "goal-slot", "atlas-source", "revs", "title-block"] {
+        assert!(h.contains(&format!(r#"id="{id}""#)), "no #{id}");
+    }
+    assert!(h.find(r#"id="title-block""#) > h.find(r#"id="p-changes""#), "the title block follows the panels");
+}
+
+#[test]
+fn the_junction_notes_speak_french() {
+    use crate::shared::i18n::Locale;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
+    let h = html(|| view! { <notes_tray::JunctionNotes vm=s.clone()/> }.into_any());
+    for words in [">Rues<", ">Vérifications<", ">Virages permis<", "Chiffres et limites d’exemple pour l’instant, pas de vraies mesures."] {
+        assert!(h.contains(words), "no {words}: {h}");
+    }
+    assert!(!h.contains(">Streets<") && !h.contains(">Turns allowed<"));
 }

@@ -10,7 +10,7 @@ use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::junction::model::Target;
 use crate::junction::view::frame::Frame;
-use crate::junction::view::iso::{iso_label, iso_svg};
+use crate::junction::view::iso::{iso_label, iso_svg_framed};
 use crate::junction::vm::JunctionVm;
 use crate::junction::vm::keys;
 use crate::junction::vm::watch::Watch;
@@ -37,24 +37,31 @@ pub fn pressed(attribute: impl Fn(&str) -> Option<String>) -> Target {
     selected_by(&attribute("data-role").unwrap_or_default(), number("data-uid") as u32, number("data-lane"))
 }
 
-/// Where the window's size and the drawing's width are now.
+/// The frame the drawing is laid out in now (`Frame::in_room`): as wide as its group, and as tall as the room its
+/// column under the title leaves it (`shared::column_room`): the scroller's height less what else the drawing's card
+/// holds around the picture (the part buttons, the plan key, its padding). The card does not grow to fill the column
+/// (`web/editor.css`, `.tray-page .plan-drawing`), so this holds no slack and the same room gives the same drawing,
+/// whatever came before. Where that column does not scroll (a phone: the page scrolls), the window's height decides.
 #[cfg(target_arch = "wasm32")]
-fn viewport_of(wrap: &Element) -> (f64, f64) {
-    let height = leptos::web_sys::window().and_then(|w| w.inner_height().ok()).and_then(|h| h.as_f64()).unwrap_or(800.0);
-    (wrap.client_width() as f64, height)
+fn frame_of(wrap: &Element, column: Option<&Element>, card: Option<&Element>) -> Frame {
+    use crate::shared::column_room::{height, room_in_column};
+    let picture = wrap.query_selector("svg").ok().flatten().map_or_else(|| height(wrap), |svg| svg.get_bounding_client_rect().height());
+    let room = room_in_column(column, card, picture);
+    let window = leptos::web_sys::window().and_then(|w| w.inner_height().ok()).and_then(|h| h.as_f64()).unwrap_or(800.0);
+    Frame::in_room(wrap.client_width() as f64, room, window)
 }
 
 #[component]
 pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
-    let viewport = RwSignal::new((1000.0, 800.0));
+    let frame = RwSignal::new(Frame::fit(1000.0, 800.0));
 
     let wrap = NodeRef::<leptos::html::Div>::new();
     #[cfg(target_arch = "wasm32")]
     {
         Effect::new(move |_| {
             if let Some(el) = wrap.get() {
-                watch_size(el.into(), viewport);
+                watch_size(el.into(), frame);
             }
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
@@ -96,14 +103,10 @@ pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
 
     let markup = move || {
         let (v, units) = w.now();
-        let (width, window) = viewport.get();
-        iso_svg(&v, &w.i18n(), width, window, units).markup
+        iso_svg_framed(&v, &w.i18n(), frame.get(), units).markup
     };
     let label = move || iso_label(&w.view(), &w.i18n());
-    let size = move || {
-        let (width, window) = viewport.get();
-        Frame::fit(width, window)
-    };
+    let size = move || frame.get();
 
     // A press on a part of the drawing selects it, as the keys do.
     let press = move |e: PointerEvent| {
@@ -161,21 +164,33 @@ fn typing(e: &KeyboardEvent) -> bool {
         .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
 }
 
-/// Keeps `viewport` as wide as the drawing's group and as high as the window.
+/// Keeps `frame` as the drawing is laid out now (`frame_of`), as its group, its column and the window change size.
 #[cfg(target_arch = "wasm32")]
-fn watch_size(wrap: Element, viewport: RwSignal<(f64, f64)>) {
+fn watch_size(wrap: Element, frame: RwSignal<Frame>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
 
+    let column = wrap.closest(".stage-scroll").ok().flatten();
+    let card = wrap.closest(".drawing").ok().flatten();
     let update = {
-        let wrap = wrap.clone();
-        move || viewport.set(viewport_of(&wrap))
+        let (wrap, column, card) = (wrap.clone(), column.clone(), card.clone());
+        move || {
+            let now = frame_of(&wrap, column.as_ref(), card.as_ref());
+            if frame.get_untracked() != now {
+                frame.set(now);
+            }
+        }
     };
     update();
     let on_resize = update.clone();
     let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| on_resize());
-    if let Some(scroll) = wrap.parent_element() {
-        if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+    if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
+        if let Some(scroll) = wrap.parent_element() {
             o.observe(&scroll);
+        }
+        // The column changes height as the notes' tray opens and closes, and as the head wraps; the card as the key
+        // under the drawing gains or loses a row; the group as the part buttons wrap.
+        for el in [column.as_ref(), card.as_ref(), Some(&wrap)].into_iter().flatten() {
+            o.observe(el);
         }
     }
     observer.forget();

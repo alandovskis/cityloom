@@ -8,6 +8,7 @@ pub mod inspector;
 pub mod iso;
 pub mod iso_marks;
 pub mod notes;
+pub mod notes_tray;
 pub mod page;
 pub mod phase_svg;
 #[cfg(test)]

@@ -99,7 +99,7 @@ fn focus_after_notice() {
 }
 
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
-/// is the message that names what the left sidebar holds on this page.
+/// is the message that names what the details panel holds on this page.
 pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes: NotesAtStart) {
     let tabs = all(".notes .tab").iter().map(|t| t.id()).collect();
     let dark = leptos::prelude::window().match_media("(prefers-color-scheme: dark)").ok().flatten();

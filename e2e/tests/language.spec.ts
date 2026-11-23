@@ -302,8 +302,16 @@ test("a junction that cannot be drawn says so, keeps its shell and follows the l
   expect(page.url()).toContain(href);
   const stuck = page.locator(".stuck");
   await expect(stuck.locator(".note-h")).toHaveText("This junction cannot be drawn");
+  // the page has nothing to note: no tray and no toggle for one
+  await expect(page.locator("#notes-toggle")).toHaveCount(0);
   await expect(page.locator(".tools")).toBeHidden();
   await expect(page.locator(".plan-drawing")).toHaveCount(0);
+  // the message sits under the title, not at the bottom of an empty column
+  const head = (await page.locator(".stage-head").boundingBox())!;
+  const message = (await stuck.boundingBox())!;
+  expect(message.y - (head.y + head.height)).toBeLessThan(40);
+  // in the column's scroller, so a short window can still scroll to its link back to the map
+  await expect(page.locator(".stage-scroll .stuck")).toHaveCount(1);
   const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
   expect(name).not.toBe("");
   expect(await page.title()).toContain(name);
