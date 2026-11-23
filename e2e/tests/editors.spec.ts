@@ -217,6 +217,8 @@ test.describe("on a screen too narrow for the notes beside the drawing", () => {
     await page.locator("details.scenario-manage summary").click();
     await expect(page.locator("#scenario-new")).toBeDisabled();
     await expect(page.locator("#undo")).toHaveCount(0);
+    // with no history to offer, the tools' card is not drawn at all (an empty card shows as a dot)
+    await expect(page.locator(".stage-head .tools")).toBeHidden();
   });
 
   test("on the map they are open as before", async ({ page }) => {

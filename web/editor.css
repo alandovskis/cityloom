@@ -3568,7 +3568,9 @@ svg pattern circle {
     overflow: visible;
   }
 }
-.tools[hidden] {
+.tools[hidden],
+/* a page shown read-only draws no history: the card would be an empty dot */
+.tools:not(:has(button, a, select, input)) {
   display: none;
 }
 
