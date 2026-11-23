@@ -2610,7 +2610,7 @@ svg pattern circle {
   min-width: 2em;
   color: var(--ink-2);
 }
-/* A street's rarely set parts, folded, with what is set beside the name (`fold` in the junction's inspector). */
+/* A street's rarely set parts, folded, with what is set beside the name, an h3 in the summary (`fold` in the junction's inspector). */
 .jn-fold {
   border-top: 1px solid var(--rule);
 }

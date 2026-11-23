@@ -1277,7 +1277,6 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     };
     view! {
         {locked(w.read_only(), view! { <section class="insp-sec">
-            <h3 class="note-h" id="i-h-transit">{words(w, "jn-insp-transit")}</h3>
             <ul class="opts">
                 {option_btn(
                     bus_lane,
@@ -1911,7 +1910,6 @@ fn plans_section(w: Watch) -> impl IntoView {
     };
     view! {
         <section class="insp-sec" id="signal-plans" aria-labelledby="i-h-plans">
-            <h3 class="note-h" id="i-h-plans">{words(w, "jn-plans-heading")}</h3>
             <p class="insp-range">{words(w, "jn-plans-intro")}</p>
             {chooser}
             <h4 class="phase-moves-h" id="plans-list-h">{words(w, "jn-plans-list")}</h4>
@@ -2278,7 +2276,6 @@ fn calls_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
         drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
-                    <h3 class="note-h" id="i-h-calls">{words(w, "jn-calls-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-calls-intro")}</p>
                     <p class="insp-range" id="calls-bounds">{bounds}</p>
                     // The on-call boxes and the rate fields edit: offered disabled on a junction shown read-only.
@@ -2478,7 +2475,6 @@ fn actuation_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
         drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
-                    <h3 class="note-h" id="i-h-actuation">{words(w, "jn-act-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-act-intro")}</p>
                     <p class="insp-range" id="actuation-bounds">{bounds}</p>
                     // The modes and the settings edit: offered disabled on a junction shown read-only.
@@ -2774,7 +2770,6 @@ fn bikes_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
         drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
-                    <h3 class="note-h" id="i-h-bikes">{words(w, "jn-bikes-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-bikes-intro")}</p>
                     <p class="insp-range" id="bikes-bounds">{bounds}</p>
                     // The modes and the rate fields edit: offered disabled on a junction shown read-only.
@@ -2965,7 +2960,6 @@ fn priority_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
         drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
-                    <h3 class="note-h" id="i-h-transit-priority">{words(w, "jn-transit-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-transit-intro")}</p>
                     <p class="insp-range" id="transit-bounds">{bounds}</p>
                     // The priorities and the rate fields edit: offered disabled on a junction shown read-only.
@@ -3138,7 +3132,6 @@ fn preemption_section(w: Watch, drawn: Memo<bool>) -> impl IntoView {
         drawn.get().then(|| {
             view! {
                 <section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
-                    <h3 class="note-h" id="i-h-preemption">{words(w, "jn-preempt-heading")}</h3>
                     <p class="insp-range">{words(w, "jn-preempt-intro")}</p>
                     <p class="insp-range" id="preempt-bounds">{bounds}</p>
                     // The settings and the rate fields edit: offered disabled on a junction shown read-only.
@@ -3235,7 +3228,8 @@ fn signal_fold<V: IntoView + 'static>(w: Watch, f: SignalFold, section: impl Fn(
     }
 }
 
-/// A part of a level that is rarely set, folded: its name and, beside it, what is set and its warnings (`warn`, empty
+/// A part of a level that is rarely set, folded: its name, a level-3 heading `heading_id` inside the summary so heading
+/// navigation reaches it open or closed (CLM-50), and, beside it, what is set and its warnings (`warn`, empty
 /// when it has none), so a measure in place or a problem is never out of sight.
 fn fold(
     w: Watch,
@@ -3246,12 +3240,11 @@ fn fold(
     warn: impl Fn() -> String + Send + Sync + 'static,
     body: impl IntoView + 'static,
 ) -> impl IntoView {
-    let _ = heading_id; // CLM-50: the id of the heading that names the fold, not drawn yet
     let warn = Memo::new(move |_| warn());
     view! {
         <details class="jn-fold" id=id>
             <summary>
-                <span class="jn-fold-name">{words(w, heading)}</span>
+                <h3 class="jn-fold-name" id=heading_id>{words(w, heading)}</h3>
                 <span class="jn-fold-set">{set}</span>
                 {move || { let text = warn.get(); (!text.is_empty()).then(|| view! { <span class="jn-fold-warn">{text}</span> }) }}
             </summary>
