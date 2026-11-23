@@ -32,7 +32,7 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | `timeline/`    | A project's milestones and their page, `timeline.html`.                                                                                                                                                                                                                                |
 
 A slice may use another slice's `model` (junction uses the street's, city uses both, `sync::local` uses
-`project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits` (project, sync),
+`project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits`,
 `restriction::store`, `standards::model` and `standards::store` (street), `place::area` (and `place::Bounds`, the box
 that `Area::bounds` gives and `city::projection` takes), `project::copies` (share, for the copy of a shared design; the
 shell, to make a copy one of the person's projects), `project::context` (which project a page is opened in, and whether
@@ -42,7 +42,8 @@ except as this section says:
 - The archive panel. The Account page (`account/mod.rs`) builds it with `archive::vm::ArchiveVm::for_page` and mounts
   it with `archive::view::ArchiveView`. The shell's Share menu builds an `ArchiveVm::for_page` for its export
   (`shell/view.rs`).
-- The shell's tray. The street page's Notes tray (`street/view/notes_tray.rs`) is made with `shell::tray`.
+- The shell's tray. The Notes trays of the street page (`street/view/notes_tray.rs`) and of the junction page
+  (`junction/view/notes_tray.rs`) are made with `shell::tray`.
 - The shell's mount. The street, junction, map and account pages mount the shell with `shell::mount`, saying with
   `shell::NotesAtStart` how their notes start. Its target is a `shell::Target`, which `StreetVm`, `JunctionVm` and
   `MapVm` implement; the account page and a junction that cannot be drawn hand it a `shell::Bare`.

@@ -34,8 +34,8 @@ qui possède la fonctionnalité.
 | `timeline/`    | Les jalons d’un projet et leur page, `timeline.html`.                                                                                                                                                                                                                                                                  |
 
 Une tranche peut utiliser le `model` d’une autre tranche (la jonction utilise celui de la rue, la ville les deux,
-`sync::local` utilise `project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits` (projet,
-synchronisation), `restriction::store`, `standards::model` et `standards::store` (rue), `place::area` (et
+`sync::local` utilise `project::model`), `city::store`, `city::binding`, `city::projection`, `city::edits`,
+`restriction::store`, `standards::model` et `standards::store` (rue), `place::area` (et
 `place::Bounds`, le cadre que donne `Area::bounds` et que prend `city::projection`), `project::copies` (le partage, pour
 la copie d’un aménagement partagé; le shell, pour faire d’une copie un projet de la personne), `project::context` (le
 projet dans lequel une page est ouverte, et s’il est affiché en lecture seule) et `shared`. Elle n’utilise jamais le
@@ -44,7 +44,8 @@ modèle de vue, les vues ni les textes d’une autre tranche, ni ses autres modu
 - Le panneau de l’archive. La page Compte (`account/mod.rs`) le construit avec `archive::vm::ArchiveVm::for_page` et le
   monte avec `archive::view::ArchiveView`. Le menu Partager du shell construit un `ArchiveVm::for_page` pour son
   exportation (`shell/view.rs`).
-- Le tiroir du shell. Le tiroir des notes de la page de rue (`street/view/notes_tray.rs`) est fait avec `shell::tray`.
+- Le tiroir du shell. Les tiroirs des notes de la page de rue (`street/view/notes_tray.rs`) et de la page de jonction
+  (`junction/view/notes_tray.rs`) sont faits avec `shell::tray`.
 - Le montage du shell. Les pages de rue, de jonction, de carte et de compte montent le shell avec `shell::mount`, en
   indiquant avec `shell::NotesAtStart` comment leurs notes s’ouvrent. Sa cible est un `shell::Target`, que mettent en
   œuvre `StreetVm`, `JunctionVm` et `MapVm`; la page Compte et une jonction qui ne peut pas être dessinée lui donnent un
