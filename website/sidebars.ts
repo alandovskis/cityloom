@@ -9,6 +9,7 @@ const sidebars: SidebarsConfig = {
     "sharing",
     "getting-started",
     "project-layout",
+    "testing",
     {
       type: "category",
       label: "Architecture",

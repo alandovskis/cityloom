@@ -72,6 +72,8 @@ exécutent un service Postgres; les tâches de tests de l’interface et de bout
 touche que la documentation et la configuration de l’intégration continue (`CI_CONFIGURATION` dans `scripts/ci/ci_changes.py` : `.github/`,
 `scripts/ci/`, `scripts/include/` et `.claude/`).
 
+[Tests](testing.md) indique à quel palier appartient un test, où va un nouveau test et ce qui doit réussir avant une fusion.
+
 `just db` démarre le Postgres dans un conteneur nommé `cityloom-db`, sur 127.0.0.1:55432, et affiche la ligne à
 exécuter : `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. Les tests du serveur et la
 spécification du compte (`e2e/tests/account-server.spec.ts`) l’exigent et le disent quand il manque. `just db-stop`
