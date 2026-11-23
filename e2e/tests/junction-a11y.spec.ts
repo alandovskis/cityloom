@@ -575,7 +575,7 @@ test.describe("pedestrian calls in the signal plan (#60)", () => {
         if (lang === "Français") {
           await page.locator("#account-btn").click();
           await page.getByRole("button", { name: "Français" }).click();
-          await expect(page.locator("#signal-calls")).toContainText("Appels piétons");
+          await expect(page.locator("#jn-fold-calls")).toContainText("Appels piétons");
           await page.keyboard.press("Escape");
         }
         const tables = await callTables(page);
@@ -677,5 +677,91 @@ test.describe("the drawing's label, focus and colours", () => {
       });
     expect(paint.fill).toBe(paint.white);
     expect(paint.stroke).not.toMatch(/^(none|transparent)$/);
+  });
+});
+
+test.describe("the junction's folds are reached by heading (CLM-50)", () => {
+  // Each signal option's fold, by its id, and the name its heading gives it.
+  const SIGNAL_FOLDS: [string, string][] = [
+    ["jn-fold-plans", "Time-of-day plans"],
+    ["jn-fold-calls", "Pedestrian calls"],
+    ["jn-fold-actuation", "Vehicle actuation"],
+    ["jn-fold-bikes", "Bicycle detection"],
+    ["jn-fold-priority", "Transit signal priority"],
+    ["jn-fold-preemption", "Emergency vehicle pre-emption"],
+  ];
+
+  test("each signal option's fold is named by a level-3 heading, open or closed, and opens with Enter or Space", async ({
+    page,
+  }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+    await page.locator("#jn-go-plan").click();
+    await expect(page.locator("#signal-plan-state")).toBeVisible();
+    const inspector = page.locator("#inspector");
+    const heading = (name: string) => inspector.getByRole("heading", { level: 3, name, exact: true });
+    await expect(heading("Signal timing")).toHaveCount(1);
+    // every fold closed: each still named by a heading, inside its summary
+    await expect(inspector.locator('details.jn-fold[id^="jn-fold-"][open]')).toHaveCount(0);
+    const drawn: [string, string][] = [];
+    for (const [id, name] of SIGNAL_FOLDS) {
+      const fold = page.locator(`#${id}`);
+      // transit signal priority is drawn only where some street has transit; the others on this junction always
+      if (id !== "jn-fold-priority") await expect(fold, id).toHaveCount(1);
+      if ((await fold.count()) === 0) continue;
+      drawn.push([id, name]);
+      await expect(heading(name), `${id} closed`).toHaveCount(1);
+      await expect(fold.locator(":scope > summary").getByRole("heading", { level: 3, name, exact: true })).toHaveCount(
+        1,
+      );
+    }
+    // the keys still open a fold: Space on the calls', Enter on the pre-emption's
+    await page.locator("#jn-fold-calls > summary").focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator("#jn-fold-calls")).toHaveAttribute("open");
+    await expect(page.locator("#signal-calls")).toBeVisible();
+    await page.locator("#jn-fold-preemption > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#jn-fold-preemption")).toHaveAttribute("open");
+    await expect(page.locator("#signal-preemption")).toBeVisible();
+    // every fold open: each name is still one level-3 heading, not two
+    await openSignalFolds(page);
+    await expect(heading("Signal timing")).toHaveCount(1);
+    for (const [id, name] of drawn) {
+      await expect(heading(name), `${id} open`).toHaveCount(1);
+      await expect(page.locator(`#${id} > summary`).getByRole("heading", { level: 3, name, exact: true })).toHaveCount(
+        1,
+      );
+    }
+  });
+
+  test("a street's folds are named by level-3 headings, open or closed", async ({ page }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    // The first street, as the keys reach it.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#jn-fold-transit")).toHaveCount(1);
+    const inspector = page.locator("#inspector");
+    const heading = (name: string) => inspector.getByRole("heading", { level: 3, name, exact: true });
+    for (const [id, name] of [
+      ["jn-fold-transit", "Transit priority"],
+      ["jn-fold-position", "Position"],
+    ]) {
+      await expect(page.locator(`#${id}`)).not.toHaveAttribute("open");
+      await expect(heading(name), `${id} closed`).toHaveCount(1);
+      await expect(page.locator(`#${id} > summary`).getByRole("heading", { level: 3, name, exact: true })).toHaveCount(
+        1,
+      );
+    }
+    await page.locator("#jn-fold-transit > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#jn-fold-transit")).toHaveAttribute("open");
+    await page.locator("#jn-fold-position > summary").focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator("#jn-fold-position")).toHaveAttribute("open");
+    await expect(heading("Transit priority")).toHaveCount(1);
+    await expect(heading("Position")).toHaveCount(1);
   });
 });

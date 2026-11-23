@@ -45,6 +45,18 @@ impl SignalFold {
             SignalFold::Preemption => "jn-preempt-heading",
         }
     }
+
+    /// The id of the heading that names the fold, in its summary, which its section is labelled by.
+    pub fn heading_id(self) -> &'static str {
+        match self {
+            SignalFold::Plans => "i-h-plans",
+            SignalFold::Calls => "i-h-calls",
+            SignalFold::Actuation => "i-h-actuation",
+            SignalFold::Bikes => "i-h-bikes",
+            SignalFold::Priority => "i-h-transit-priority",
+            SignalFold::Preemption => "i-h-preemption",
+        }
+    }
 }
 
 /// The fold's words are tracked (`I18n::tr`, `say`): a line kept in a memo follows a switch of language.

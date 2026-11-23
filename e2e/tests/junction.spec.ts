@@ -919,7 +919,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     const section = page.locator("#signal-calls");
-    await expect(section).toContainText("Pedestrian calls");
+    await expect(page.locator("#jn-fold-calls")).toContainText("Pedestrian calls");
     await expect(page.locator("#calls-bounds")).toHaveText(
       "Placeholder figures: walk 7 s, then clearance at 1.0 m/s, rounded up to the second; a green is extended by at most 15 s; with passive detection a pedestrian leaves after waiting 30 s; the calls are spread over one hour.",
     );
@@ -988,7 +988,7 @@ test.describe("signal timing on a junction of the city", () => {
     // The same in French.
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
-    await expect(section).toContainText("Appels piétons");
+    await expect(page.locator("#jn-fold-calls")).toContainText("Appels piétons");
     await expect(page.locator("#calls-bounds")).toContainText("Valeurs provisoires");
     await expect(page.locator("#calls-bounds")).toContainText("1,0 m/s");
     await expect(page.locator(`#call-status-${first}`)).toHaveText(
@@ -1092,7 +1092,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     const section = page.locator("#signal-actuation");
-    await expect(section).toContainText("Vehicle actuation");
+    await expect(page.locator("#jn-fold-actuation")).toContainText("Vehicle actuation");
     await expect(page.locator("#actuation-bounds")).toHaveText(
       "Placeholder figures: a street made actuated has a minimum green of 7 s, a gap of 3 s, a maximum green of 45 s and 300 vehicles an hour, spread over one hour. A walk being served holds the green as long as it needs; the yellow and all-red are never shortened.",
     );
@@ -1190,7 +1190,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
-    await expect(section.locator("#i-h-actuation")).toHaveText("Actionnement par les véhicules");
+    await expect(page.locator("#i-h-actuation")).toHaveText("Actionnement par les véhicules");
     await expect(page.locator(`label:has(#act-mode-${uid}-actuated)`)).toHaveText("À la demande");
     await expect(page.locator(`label[for=act-min-${uid}]`)).toHaveText("Vert minimal");
     await expect(page.locator(`label[for=act-gap-${uid}]`)).toHaveText("Intervalle de passage");
@@ -1211,7 +1211,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     const section = page.locator("#signal-bikes");
-    await expect(section).toContainText("Bicycle detection");
+    await expect(page.locator("#jn-fold-bikes")).toContainText("Bicycle detection");
     await expect(page.locator("#bikes-bounds")).toContainText(
       "Placeholder figures: a bike movement put on detection has 30 cyclists an hour, spread over one hour. Each call needs a minimum green of 5 s, then a clearance at 4.0 m/s",
     );
@@ -1290,7 +1290,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
-    await expect(section.locator("#i-h-bikes")).toHaveText("Détection des vélos");
+    await expect(page.locator("#i-h-bikes")).toHaveText("Détection des vélos");
     await expect(page.locator(`label:has(#bike-mode-${uid}-detection)`)).toHaveText("Sur détection");
     await expect(page.locator(`label[for=bike-rate-${uid}]`)).toHaveText("Cyclistes par heure");
     await expect(status).toContainText("Chaque appel demande un vert minimal de 5 s");
@@ -1327,7 +1327,7 @@ test.describe("signal timing on a junction of the city", () => {
     const both = page.locator(`#transit-mode-${uid}-both`);
     const status = page.locator(`#transit-status-${uid}`);
     const rate = page.locator(`#transit-rate-${uid}`);
-    await expect(section).toContainText("Transit signal priority");
+    await expect(page.locator("#jn-fold-priority")).toContainText("Transit signal priority");
     await expect(page.locator("#transit-bounds")).toContainText(
       "Placeholder figures: a street given priority has 12 buses an hour, spread over one hour. An early green brings the street's green forward by at most 10 s, and an extension holds it by at most 10 s",
     );
@@ -1407,7 +1407,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
-    await expect(section.locator("#i-h-transit-priority")).toHaveText("Priorité aux feux pour le transport en commun");
+    await expect(page.locator("#i-h-transit-priority")).toHaveText("Priorité aux feux pour le transport en commun");
     await expect(page.locator(`label:has(#transit-mode-${uid}-both)`)).toHaveText("Les deux");
     await expect(page.locator(`label:has(#transit-mode-${uid}-early-green)`)).toHaveText("Vert hâtif");
     await expect(page.locator(`label[for=transit-rate-${uid}]`)).toHaveText("Autobus par heure");
@@ -1426,7 +1426,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     const section = page.locator("#signal-preemption");
-    await expect(section).toContainText("Emergency vehicle pre-emption");
+    await expect(page.locator("#jn-fold-preemption")).toContainText("Emergency vehicle pre-emption");
     await expect(section).toContainText("Pre-emption has the highest priority of all");
     await expect(page.locator("#preempt-bounds")).toContainText(
       "Placeholder figures: a street given pre-emption has 2 emergency calls an hour, spread over one hour, and its green then runs at least 20 s for the vehicle",
@@ -1514,7 +1514,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
-    await expect(section.locator("#i-h-preemption")).toHaveText("Préemption pour les véhicules d’urgence");
+    await expect(page.locator("#i-h-preemption")).toHaveText("Préemption pour les véhicules d’urgence");
     await expect(page.locator(`label:has(#preempt-mode-${uid}-on)`)).toHaveText("Activée");
     await expect(page.locator(`label:has(#preempt-mode-${uid}-off)`)).toHaveText("Désactivée");
     await expect(page.locator(`label[for=preempt-rate-${uid}]`)).toHaveText("Appels d’urgence par heure");
@@ -1640,11 +1640,10 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     test.setTimeout(90_000);
-    const section = page.locator("#signal-plans");
     const chooser = page.locator("#plan-shown");
     const cycle = page.locator("#inspector").getByText(/^Cycle: \d+ s$/);
     const cycleOf = async () => Number((await cycle.innerText()).match(/\d+/)![0]);
-    await expect(section.locator("#i-h-plans")).toHaveText("Time-of-day plans");
+    await expect(page.locator("#i-h-plans")).toHaveText("Time-of-day plans");
     await expect(chooser).toHaveValue("0");
     await expect(chooser.locator("option")).toHaveText(["Default plan"]);
     await expect(page.locator("#plan-0")).toContainText("default, cannot be removed");
@@ -1720,7 +1719,7 @@ test.describe("signal timing on a junction of the city", () => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
     await page.keyboard.press("Escape");
-    await expect(section.locator("#i-h-plans")).toHaveText("Plans selon l’heure");
+    await expect(page.locator("#i-h-plans")).toHaveText("Plans selon l’heure");
     await expect(page.locator("label[for=plan-shown]")).toHaveText("Plan affiché et modifié");
     await expect(page.locator("#schedule-weekday-caption")).toHaveText("En semaine (du lundi au vendredi)");
     await expect(page.locator("#runs-at")).toHaveText("À 08:00 en semaine, le plan « Plan par défaut » s’applique.");
