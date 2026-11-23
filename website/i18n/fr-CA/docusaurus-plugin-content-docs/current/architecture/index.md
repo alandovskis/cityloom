@@ -55,7 +55,7 @@ Les éditeurs atteignent le shell par `shell::Target`, que mettent en œuvre `St
 
 ## Couches dans une tranche
 
-Chaque tranche garde les mêmes couches :
+Une tranche contient, selon ses besoins, ces couches :
 
 - Le modèle : les règles d’édition et les calculs purs sur le domaine, sans Leptos et sans texte. Dans les tranches de
   la rue et de la jonction, il n’a aucun DOM, aucun signal et aucune entrée-sortie. Une modification renvoie un `bool`,
@@ -97,7 +97,10 @@ Chaque page de `web/` a un script qui charge le module de l’éditeur et appell
 | `share.html`        | `share.js`    | `mount_share` (`lib.rs`) : les liens de partage d’un projet, ou un lien de partage qu’on ouvre. |
 | `compare.html`      | `compare.js`  | `mount_compare` (`lib.rs`) : deux conceptions d’une même rue ou jonction.                       |
 
-`credits.html` ne charge aucun module. Chaque script monte ensuite le shell (`mount_shell`).
+`credits.html` ne charge aucun module. Chaque script monte ensuite le shell (`mount_shell`). Les pages qui ouvrent la
+ville (`about.js`, `map.js`, `app.js`, `junction.js` et `compare.js`) appellent `prepare_city` (`place/mod.rs`) avant de
+l’ouvrir : cette fonction obtient les routes de la zone où la personne travaille, à moins qu’elles ne soient déjà
+conservées.
 
 `lib.rs` est la racine de composition, où les tranches peuvent se rencontrer. La page d’accueil est
 `project::mount_list`, à qui l’on remet `share::links::ProjectShares` de la tranche du partage comme
@@ -207,13 +210,13 @@ chaque appareil.
 
 ## JavaScript
 
-La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `about.js`, `map.js`, `app.js` pour la page
-de la rue, `junction.js`, `account.js`, `timeline.js`, `share.js` et `compare.js`) servent au démarrage : ils chargent
-le module, appellent `mount_*` et montent le shell. Les scripts de la rue et de la jonction préparent aussi les motifs
-de hachures et enregistrent les modifications de la page à `pagehide`, et `map.js` crée la carte. `boot.js` affiche un
-avis quand le module d’une page ne peut pas être chargé ou démarré, `city.js` lit pour quel lieu une page a été
-ouverte, et `report.js` charge le générateur de PDF. La seule exception à la règle est `web/mapcanvas.js`,
-l’adaptateur qui possède la carte MapLibre.
+La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `about.js`, `map.js`, `app.js` pour la page de
+la rue, `junction.js`, `account.js`, `timeline.js`, `share.js` et `compare.js`) servent au démarrage : ils chargent le
+module, appellent `mount_*` et montent le shell. Les scripts de la rue, de la jonction et de la comparaison préparent
+aussi les motifs de hachures; ceux de la rue et de la jonction enregistrent les modifications de la page à `pagehide`,
+et `map.js` crée la carte. `boot.js` affiche un avis quand le module d’une page ne peut pas être chargé ou démarré,
+`city.js` lit pour quel lieu une page a été ouverte, et `report.js` charge le générateur de PDF. La seule exception à la
+règle est `web/mapcanvas.js`, l’adaptateur qui possède la carte MapLibre.
 
 ## Persistance
 

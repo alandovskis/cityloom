@@ -52,7 +52,7 @@ The editors reach the shell through `shell::Target`, which `StreetVm`, `Junction
 
 ## Layers inside a slice
 
-Each slice keeps the same layers:
+A slice holds, as it needs them, these layers:
 
 - The model: the editing rules and pure computation over the domain, with no Leptos and no wording. In the street and
   junction slices it has no DOM, no signals and no I/O. An edit returns a `bool`, and a refusal carries a reason.
@@ -90,7 +90,9 @@ Each page of `web/` has a script that loads the editor's module and calls its en
 | `share.html`        | `share.js`    | `mount_share` (`lib.rs`): a project's share links, or a share link being opened.       |
 | `compare.html`      | `compare.js`  | `mount_compare` (`lib.rs`): two designs of one street or junction.                     |
 
-`credits.html` loads no module. Each script then mounts the shell (`mount_shell`).
+`credits.html` loads no module. Each script then mounts the shell (`mount_shell`). The pages that open the city
+(`about.js`, `map.js`, `app.js`, `junction.js` and `compare.js`) call `prepare_city` (`place/mod.rs`) before they open
+it: it gets the roads of the area the person is working in, unless they are already kept.
 
 `lib.rs` is the composition root, where slices may meet. The home page is `project::mount_list`, handed the share
 slice's `share::links::ProjectShares` as its `project::model::ProjectLinks`, so that a project's share links end before
@@ -193,10 +195,10 @@ deleting the account deletes the server copy too. Preferences (theme, language, 
 
 Logic belongs in Rust. The page scripts in `web/` (`home.js`, `about.js`, `map.js`, `app.js` for the street page,
 `junction.js`, `account.js`, `timeline.js`, `share.js` and `compare.js`) are start-up glue: they load the module, call
-`mount_*` and mount the shell. The street and junction scripts also set up the hatch patterns and flush the page's
-edits on `pagehide`, and `map.js` creates the map. `boot.js` shows a notice when a page's module cannot be loaded or
-started, `city.js` reads which place a page was opened for, and `report.js` loads the PDF writer. The one exception to
-the rule is `web/mapcanvas.js`, the adapter that owns the MapLibre map.
+`mount_*` and mount the shell. The street, junction and comparison scripts also set up the hatch patterns; the street
+and junction scripts flush the page's edits on `pagehide`, and `map.js` creates the map. `boot.js` shows a notice when a
+page's module cannot be loaded or started, `city.js` reads which place a page was opened for, and `report.js` loads the
+PDF writer. The one exception to the rule is `web/mapcanvas.js`, the adapter that owns the MapLibre map.
 
 ## Persistence
 
