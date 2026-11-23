@@ -102,8 +102,9 @@ d’avertissement.
   navigateur est derrière les ports (voir [Ports](architecture/index.md#ports)). Exemple : `project/vm.rs`
   (`ProjectsVm`). **Revue**
 - Un composant est nommé en `PascalCase`. Exemple : `map/view/network_view.rs` (`NetworkChecks`). **Revue**
-- Les fonctions qui dessinent du SVG (voir [Couches dans une tranche](architecture/index.md#couches-dans-une-tranche))
-  n’utilisent ni Leptos, ni signal, ni DOM. Exemple : `street/view/plan/mod.rs` (`plan_svg`). **Revue**
+- Les fonctions qui renvoient du SVG sous forme de chaîne (voir
+  [Couches dans une tranche](architecture/index.md#couches-dans-une-tranche)) n’utilisent ni Leptos, ni signal, ni
+  DOM. Exemple : `street/view/plan/mod.rs` (`plan_svg`). **Revue**
 - Un texte mis dans du balisage SVG passe par `esc`. Exemple : `street/view/plan/mod.rs` (`thing`). **Revue**
 - Une coordonnée est presque toujours arrondie avant d’être écrite dans du balisage SVG, par exemple par `f1`.
   Exemple : `shared/iso/format.rs` (`f1`). **Revue**

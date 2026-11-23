@@ -96,8 +96,8 @@ Clippy denies nothing: it runs only for [SonarCloud](testing.md#sonarcloud), wit
 - The files of the view-models (`vm.rs`, `vm/`) name no `web_sys`, `js_sys` or `wasm_bindgen`: the browser is behind
   the ports (see [Ports](architecture/index.md#ports)). Example: `project/vm.rs` (`ProjectsVm`). **Review**
 - A component is named in `PascalCase`. Example: `map/view/network_view.rs` (`NetworkChecks`). **Review**
-- The functions that draw SVG (see [Layers inside a slice](architecture/index.md#layers-inside-a-slice)) use no
-  Leptos, no signal and no DOM. Example: `street/view/plan/mod.rs` (`plan_svg`). **Review**
+- The functions that return SVG as a string (see [Layers inside a slice](architecture/index.md#layers-inside-a-slice))
+  use no Leptos, no signal and no DOM. Example: `street/view/plan/mod.rs` (`plan_svg`). **Review**
 - Text put into SVG markup goes through `esc`. Example: `street/view/plan/mod.rs` (`thing`). **Review**
 - A coordinate is almost always rounded before it is written into SVG markup, for example by `f1`. Example:
   `shared/iso/format.rs` (`f1`). **Review**
