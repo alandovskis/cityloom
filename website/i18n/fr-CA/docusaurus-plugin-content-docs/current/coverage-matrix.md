@@ -9,8 +9,8 @@ Cette page met les fonctionnalités de CityLoom en regard des paliers de tests, 
 case. Elle donne aussi les tests qui n’appartiennent à aucune fonctionnalité, et la couverture de lignes que mesure
 SonarCloud. Les nombres sont copiés de l’[inventaire des tests](test-inventory.md), qui dit comment les tests sont
 comptés et nomme leurs fichiers. Ce sont ceux du commit `0d9cb8b9` (version 0.113.0). Aucun script ne produit ni ne
-vérifie ces nombres : ils restent donc ceux de ce commit jusqu’au prochain décompte. Ce que les tests ne couvrent pas
-est dans [Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
+vérifie ces nombres : ils restent donc ceux de ce commit jusqu’au prochain décompte. Les lacunes des tests sont dans
+[Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
 
 ## Fonctionnalités et paliers
 

@@ -387,13 +387,14 @@ avec `--cap-lints warn`. Il n’a pas de `-D warnings`.
 
 ## Lacunes et risques connus
 
-Cette partie dit ce que les tests et l’intégration continue ne couvrent pas aujourd’hui. La
-[matrice de couverture](coverage-matrix.md) compte les tests de chaque fonctionnalité à chaque palier.
+Cette partie énumère les lacunes des tests, et les autres limites des tests et de l’intégration continue aujourd’hui.
+La [matrice de couverture](coverage-matrix.md) compte les tests de chaque fonctionnalité à chaque palier.
 
 ### Lacunes : ce que le guide demande et qu’aucun test ne fait encore
 
-Chaque lacune est sous la ligne d’[Où va un nouveau test](#où-va-un-nouveau-test) qu’elle enfreint. Chacune dit ce
-qu’aucun test ne couvre, le palier du test absent et le numéro de son billet.
+Chaque lacune est sous la ligne d’[Où va un nouveau test](#où-va-un-nouveau-test) qu’elle enfreint, ou sous la liste,
+au même endroit, de ce que seuls les tests dans le navigateur atteignent. Chacune dit ce qu’aucun test du palier nommé
+ne couvre, ce palier et le numéro de son billet.
 
 - **Une règle d’édition**
   - Rue (`street/model/mod.rs`, `street/model/replay.rs`) : une région qui change le côté de la circulation inverse le

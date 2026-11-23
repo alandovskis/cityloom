@@ -354,13 +354,14 @@ the site to GitHub Pages from `main`. A change to `docs/**` or to a `*.md` outsi
 
 ## Known gaps and risks
 
-This part says what the tests and CI do not cover today. The [coverage matrix](coverage-matrix.md) counts the tests of
-each feature at each level.
+This part lists the gaps in the tests, and the other limits of the tests and CI today. The
+[coverage matrix](coverage-matrix.md) counts the tests of each feature at each level.
 
 ### Gaps: what the guide asks for and no test does yet
 
-Each gap is under the row of [Where a new test goes](#where-a-new-test-goes) that it breaks. A line says what no test
-covers, the level of the missing test and the number of the gap's issue.
+Each gap is under the row of [Where a new test goes](#where-a-new-test-goes) that it breaks, or under the list there
+of what only the browser tests reach. A line says what no test of the named level covers, that level, and the number
+of the gap's issue.
 
 - **An editing rule**
   - Street (`street/model/mod.rs`, `street/model/replay.rs`): a region that changes the side of the road mirrors the

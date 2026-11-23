@@ -9,8 +9,7 @@ This page sets CityLoom's features against the levels of tests, with the number 
 the tests that belong to no feature, and the line coverage that SonarCloud measures. The counts are copied from the
 [Test inventory](test-inventory.md), which says how tests are counted and names their files. They are those of commit
 `0d9cb8b9` (version 0.113.0). No script makes these figures or checks them, so they stay those of that commit until
-the tests are counted again. What the tests do not cover is in [Known gaps and
-risks](testing.md#known-gaps-and-risks).
+the tests are counted again. The gaps in the tests are in [Known gaps and risks](testing.md#known-gaps-and-risks).
 
 ## Features against levels
 
