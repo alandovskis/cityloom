@@ -472,6 +472,20 @@ class Gates(unittest.TestCase):
         self.assertEqual(report.problems, ["Playwright: map.spec.ts does not load: Error: Cannot find module './missing'"])
         self.assertEqual(self.playwright_runs(runner), [])
 
+    def test_a_shared_file_renamed_to_a_note_still_runs_every_spec(self):
+        self.base = commit(self.repo, {"e2e/fixtures/plateau.osm": "<osm/>\n"}, "a fixture")
+        git(self.repo, "mv", "e2e/fixtures/plateau.osm", "e2e/fixtures/plateau.md")
+        red = self.red_commit({"e2e/tests/street.spec.ts": "// a new test\n"})
+        splits = ("street.spec.ts", ["splits"], "unexpected")
+        runner = self.browser_red_runner(
+            red,
+            red_listing=self.BASE_SPECS + (("street.spec.ts", ["splits"], "expected"),),
+            red_run=self.BASE_SPECS + (splits,),
+        )
+        report = gate.Gate(self.repo, runner).red(self.base)
+        self.assertEqual(report.problems, [])
+        self.assertEqual(self.playwright_runs(runner), [("npx", "playwright", "test", "--reporter=json")])
+
     def test_a_new_spec_listed_in_the_tiers_runs_alone(self):
         red = self.red_commit({"e2e/tests/split.spec.ts": "// a new spec\n", "e2e/tiers.json": "{}\n", "e2e/CLAUDE.md": "notes\n"})
         runner = self.browser_red_runner(

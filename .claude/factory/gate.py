@@ -376,7 +376,8 @@ class Gate:
         return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], cwd=self.repo).returncode == 0
 
     def _changed(self, a: str, b: str) -> List[str]:
-        return [p for p in self.git("diff", "--name-only", f"{a}..{b}").splitlines() if p]
+        # Both sides of a rename: a file renamed away is a change to the path it had.
+        return [p for p in self.git("diff", "--name-only", "--no-renames", f"{a}..{b}").splitlines() if p]
 
     def _ready(self, database: bool = True) -> None:
         if database and not os.environ.get("DATABASE_URL"):
