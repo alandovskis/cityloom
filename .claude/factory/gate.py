@@ -187,6 +187,23 @@ def playwright_results(report: dict) -> Dict[str, Optional[str]]:
     return results
 
 
+def spec_of(name: str) -> str:
+    """The spec file (relative to e2e/tests) of a test named as `playwright_results` names it."""
+    return name.split("::", 1)[0]
+
+
+def playwright_load_errors(report: dict) -> Dict[str, str]:
+    """The files a Playwright report could not load (relative to e2e/tests when they are there), each with its error's
+    first line. Playwright leaves such a file's tests out of the report and says why in its top-level `errors`."""
+    errors: Dict[str, str] = {}
+    for error in report.get("errors", []):
+        path = (error.get("location") or {}).get("file", "")
+        name = path.split("/e2e/tests/", 1)[1] if "/e2e/tests/" in path else (path or "the specs")
+        message = (error.get("message") or "").strip()
+        errors.setdefault(name, message.splitlines()[0] if message else "")
+    return errors
+
+
 # ---- #[cfg(test)] blocks --------------------------------------------------------------------------------------------
 
 _CFG_TEST = re.compile(r"#\[cfg\((?:test|(?:all|any)\((?:[^\[\]]*[\s(,])?test(?![\w-])[^\[\]]*\))\)\]")
@@ -359,7 +376,8 @@ class Gate:
         return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], cwd=self.repo).returncode == 0
 
     def _changed(self, a: str, b: str) -> List[str]:
-        return [p for p in self.git("diff", "--name-only", f"{a}..{b}").splitlines() if p]
+        # Both sides of a rename: a file renamed away is a change to the path it had.
+        return [p for p in self.git("diff", "--name-only", "--no-renames", f"{a}..{b}").splitlines() if p]
 
     def _ready(self, database: bool = True) -> None:
         if database and not os.environ.get("DATABASE_URL"):
@@ -378,13 +396,16 @@ class Gate:
         return cargo_results(out), problems
 
     def _playwright(self, files: List[str], listing: bool) -> Dict[str, Optional[str]]:
+        return playwright_results(self._playwright_report(files, listing))
+
+    def _playwright_report(self, files: List[str], listing: bool) -> dict:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "report.json"
             args = ["npx", "playwright", "test"] + (["--list"] if listing else files) + ["--reporter=json"]
             self._tool(args, self.repo / "e2e", {"PLAYWRIGHT_JSON_OUTPUT_FILE": str(out), "PLAYWRIGHT_JSON_OUTPUT_NAME": str(out)})
             if not out.exists():
                 raise Refused("Playwright wrote no report: run `just e2e` by hand to see why")
-            return playwright_results(json.loads(out.read_text(encoding="utf-8")))
+            return json.loads(out.read_text(encoding="utf-8"))
 
     def _prepare_browser(self) -> None:
         for recipe in ("build", "server", "e2e-fixtures"):
@@ -405,7 +426,14 @@ class Gate:
         changed = self._changed(base, red)
         rust = any(p.endswith(".rs") or p.endswith("Cargo.toml") for p in changed)
         specs = self._specs(changed)
-        if specs:
+        # Any change under e2e/ touches the browser tests. One that is not a spec (a helper every spec imports, the
+        # fixtures, the configuration, the packages) can change any spec's outcome; the tiers and the notes cannot,
+        # and every new spec is listed in the tiers.
+        browser = [p for p in changed if p.startswith("e2e/")]
+        shared = any(
+            not glob("e2e/tests/*.spec.ts", p) and p != "e2e/tiers.json" and not p.endswith(".md") for p in browser
+        )
+        if browser:
             self._prepare_browser()
 
         # What the base has, listed in the same worktree; always back to where the gate started.
@@ -418,7 +446,7 @@ class Gate:
             if rust:
                 _, listed = self.run(CARGO_TEST + ["--", "--list"], self.repo)
                 rust_before = cargo_listing(listed)
-            if specs:
+            if browser:
                 browser_before = set(self._playwright([], listing=True))
         finally:
             self.git("checkout", "-q", start)
@@ -433,12 +461,27 @@ class Gate:
                 found, new = judge_red(rust_before, results, "Rust")
                 report.problems += found + problems
                 report.new_tests += new
-        if specs:
-            asked = set(self._playwright([], listing=True)) - browser_before
-            files = sorted({"tests/" + name.split("::", 1)[0] for name in asked})
-            if files:
+        if browser:
+            listing = self._playwright_report([], listing=True)
+            # One file that does not load empties Playwright's whole listing: say which and why, and judge nothing
+            # else from a listing that holds no test.
+            unloaded = playwright_load_errors(listing)
+            if unloaded:
+                report.problems += [f"Playwright: {spec} does not load: {error}" for spec, error in sorted(unloaded.items())]
+                return report
+            listed = set(playwright_results(listing))
+            # A test of the base the red commit no longer lists is gone, in whichever spec it was.
+            report.problems += [f"Playwright: the test {name} is gone" for name in sorted(browser_before - listed)]
+            # Run every spec after a shared change; otherwise the specs that gain a test and the changed specs that
+            # still hold one, since an unchanged spec with unchanged helpers runs as it did at the base.
+            listed_specs = {spec_of(n) for n in listed}
+            changed_specs = {spec[len("tests/") :] for spec in specs}
+            to_run = listed_specs if shared else ({spec_of(n) for n in listed - browser_before} | changed_specs) & listed_specs
+            if to_run:
+                files = [] if shared else sorted("tests/" + spec for spec in to_run)
                 results = self._playwright(files, listing=False)
-                found, new = judge_red(browser_before, results, "Playwright")
+                before = {name for name in browser_before & listed if spec_of(name) in to_run}
+                found, new = judge_red(before, results, "Playwright")
                 report.problems += found
                 report.new_tests += new
         if not report.new_tests and not report.problems:
