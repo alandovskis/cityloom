@@ -23,6 +23,8 @@ The Rust list needs no database. The Playwright list needs `npm ci` in `e2e/` an
 
 The paths are from the repository's root, or relative to `crates/cityloom_editor/src/` where the text names the editor.
 
+How the tests of each feature spread over the levels is in the [Coverage matrix](coverage-matrix.md).
+
 ## How tests are counted
 
 ### One test

@@ -25,6 +25,8 @@ fichier.
 
 Les chemins partent de la racine du dépôt, ou de `crates/cityloom_editor/src/` là où le texte nomme l’éditeur.
 
+La répartition des tests de chaque fonctionnalité entre les paliers est dans la [matrice de couverture](coverage-matrix.md).
+
 ## Comment les tests sont comptés
 
 ### Un test

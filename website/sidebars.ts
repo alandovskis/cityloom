@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
     "project-layout",
     "testing",
     "test-inventory",
+    "coverage-matrix",
     {
       type: "category",
       label: "Architecture",
