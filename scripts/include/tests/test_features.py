@@ -7,12 +7,19 @@ cover it. The checks below hold the file against the repository, and are tried a
 
 Every slice of the editor, every other crate, every page of `web/` and every spec of `e2e/tiers.json` belongs to at
 least one feature: a slice or a crate when a feature names it as its owner or one of its globs lies inside it.
+
+A Rust test is mapped to a feature when a glob of its `code` matches the test's file. The share of the Rust tests that
+are not stays at or below the list's limit, which a change may lower and never raise. Only the Rust tests are counted:
+a Playwright test is mapped by its spec, which every feature check above holds, and the script tests hold the checks
+and the factory, not a feature of the product.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,12 +35,56 @@ TIERS = Path("e2e/tiers.json")
 
 FIELDS = {"id", "en", "fr-CA", "pages", "owner", "code", "specs"}
 ID = re.compile(r"[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*")
+LIMIT = "unmapped_limit_percent"
+
+
+# A Rust test, by its attribute at the start of a line (read from the source, so that nothing is built): a commented one
+# does not count, and one inside a block comment or a raw string would.
+RUST_TEST = re.compile(r"^[ \t]*#\[(?:test|sqlx::test|tokio::test)\b", re.MULTILINE)
+
+
+def rust_tests(root: Path) -> dict[str, int]:
+    """How many tests each Rust file of `crates/` holds, by its path; the files with none are left out."""
+    counts = {path.relative_to(root).as_posix(): len(RUST_TEST.findall(path.read_text(encoding="utf-8")))
+              for path in (root / CRATES).glob("**/*.rs")}
+    return {path: count for path, count in counts.items() if count}
+
+
+def is_percentage(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 100
+
+
+def too_many_unmapped(limit: object, tests: dict[str, int], mapped: set[str]) -> list[str]:
+    """What is wrong with the limit on unmapped Rust tests, or with their share against it."""
+    if not is_percentage(limit):
+        return [f"{FEATURES}: `{LIMIT}` is {limit!r}, not a percentage (0 to 100)"]
+    unmapped = {path: count for path, count in tests.items() if path not in mapped}
+    total, loose = sum(tests.values()), sum(unmapped.values())
+    if 100 * loose <= limit * total:
+        return []
+    files = ", ".join(f"{path} ({count})" for path, count in sorted(unmapped.items()))
+    return [f"{loose} of {total} Rust tests ({100 * loose / total:.2f} %) are in files that no feature's `code` matches, "
+            f"above the limit of {limit} % ({FEATURES}, `{LIMIT}`): name the new tests' file in a feature. Such files: {files}"]
+
+
+def raised(now: str, base: str) -> list[str]:
+    """Whether the limit of the list `now` is above the one it had at the base; both as the file's text."""
+    then = json.loads(base).get(LIMIT)
+    limit = json.loads(now).get(LIMIT)
+    if not is_percentage(then) or not is_percentage(limit) or limit <= then:
+        return []
+    return [f"{FEATURES}: `{LIMIT}` goes up from {then} to {limit}; it can only be lowered"]
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=False)
 
 
 def problems(root: Path) -> list[str]:
     """Everything wrong with the feature list of the tree at `root`, one line each; empty when it is whole."""
     try:
-        features = json.loads((root / FEATURES).read_text(encoding="utf-8"))["features"]
+        listed = json.loads((root / FEATURES).read_text(encoding="utf-8"))
+        features = listed["features"]
     except (OSError, ValueError, KeyError, TypeError) as error:
         return [f"{FEATURES}: cannot be read as {{\"features\": [...]}} ({error})"]
 
@@ -49,6 +100,7 @@ def problems(root: Path) -> list[str]:
     reached: set[str] = set()
     paged: set[str] = set()
     specced: set[str] = set()
+    mapped: set[str] = set()
     for index, entry in enumerate(features):
         name = entry.get("id") if isinstance(entry, dict) else None
         where = f"{FEATURES} feature {name or index}"
@@ -84,6 +136,7 @@ def problems(root: Path) -> list[str]:
                 found.append(f"{where}: the glob {pattern} matches no file")
             for path in matched:
                 text = path.relative_to(root).as_posix()
+                mapped.add(text)
                 reached.update(part for part in slices | crates if text.startswith(part + "/"))
 
         for page in entry.get("pages", []):
@@ -103,6 +156,7 @@ def problems(root: Path) -> list[str]:
     found += [f"the crate {crate} belongs to no feature" for crate in sorted(crates - reached)]
     found += [f"the page {WEB / page} belongs to no feature" for page in sorted(pages - paged)]
     found += [f"the spec {spec} of {TIERS} belongs to no feature" for spec in sorted(tiered - specced)]
+    found += too_many_unmapped(listed.get(LIMIT), rust_tests(root), mapped)
     return found
 
 
@@ -131,10 +185,11 @@ def feature(**changes) -> dict:
 
 def tree(root: Path, features: list[dict] | None = None, *, slices=("street",), crates=("cityloom_editor",),
          pages=("street.html",), ui=("street",), others: dict[str, list[str]] | None = None,
-         spec_files: tuple[str, ...] | None = None) -> Path:
+         spec_files: tuple[str, ...] | None = None, limit: object = 0, rust: dict[str, str] | None = None) -> Path:
     """A small repository: the editor's slices, the other crates, the pages, the specs and their tiers, and the list.
 
-    By default the one feature covers everything; a test changes one thing to see the check fail.
+    By default the one feature covers everything; a test changes one thing to see the check fail. `limit` is the list's
+    limit on unmapped tests (None: the list has none) and `rust` more Rust files, by their path in `crates/`.
     """
     for name in slices:
         write(root, EDITOR_SRC / name / "mod.rs", "")
@@ -148,8 +203,12 @@ def tree(root: Path, features: list[dict] | None = None, *, slices=("street",), 
     write(root, TIERS, json.dumps(tiers))
     for name in spec_files if spec_files is not None else tuple(ui) + tuple(n for v in (others or {}).values() for n in v):
         write(root, TESTS / f"{name}.spec.ts", "")
-    listed = features if features is not None else [feature()]
-    write(root, FEATURES, json.dumps({"_comment": "fixture", "features": listed}, ensure_ascii=False))
+    for name, text in (rust or {}).items():
+        write(root, CRATES / name, text)
+    listed = {"_comment": "fixture", "features": features if features is not None else [feature()]}
+    if limit is not None:
+        listed[LIMIT] = limit
+    write(root, FEATURES, json.dumps(listed, ensure_ascii=False))
     return root
 
 
@@ -256,11 +315,92 @@ class Coverage(Case):
         self.assertOneProblem(tree(self.root, others={"integration": ["sync"]}), "sync")
 
 
+MAPPED = "cityloom_editor/src/street/model/pieces.rs"
+UNMAPPED = "cityloom_editor/src/lib.rs"
+
+
+def tests(count: int, attribute: str = "#[test]") -> str:
+    return "".join(f"    {attribute}\n    fn t{n}() {{}}\n" for n in range(count))
+
+
+class Unmapped(Case):
+    """A Rust test is mapped when a feature's `code` matches its file; the share that is not stays within the limit."""
+
+    def test_each_kind_of_rust_test_counts_by_its_file(self) -> None:
+        root = tree(self.root, rust={MAPPED: tests(2) + tests(1, '#[sqlx::test(migrations = "x")]'),
+                                     UNMAPPED: tests(1, "#[tokio::test]")})
+        self.assertEqual(rust_tests(root), {f"crates/{MAPPED}": 3, f"crates/{UNMAPPED}": 1})
+
+    def test_a_commented_test_another_attribute_and_a_file_with_no_test_do_not_count(self) -> None:
+        root = tree(self.root, rust={MAPPED: "// #[test]\n/// #[test]\n#[test_case]\n#[cfg(test)]\nlet a = \"#[test]\";\n"})
+        self.assertEqual(rust_tests(root), {})
+
+    def test_a_share_at_the_limit_is_no_problem(self) -> None:
+        self.assertEqual(problems(tree(self.root, limit=25, rust={MAPPED: tests(3), UNMAPPED: tests(1)})), [])
+
+    def test_a_share_above_the_limit_names_the_figures_and_the_files(self) -> None:
+        root = tree(self.root, limit=24.99, rust={MAPPED: tests(3), UNMAPPED: tests(1)})
+        self.assertOneProblem(root, "1 of 4", "25.00 %", "24.99 %", f"crates/{UNMAPPED} (1)")
+
+    def test_a_mapped_file_is_not_named(self) -> None:
+        root = tree(self.root, limit=0, rust={MAPPED: tests(3), UNMAPPED: tests(1)})
+        self.assertNotIn(MAPPED, problems(root)[0])
+
+    def test_a_star_stays_in_one_folder(self) -> None:
+        flat = feature(code=["crates/cityloom_editor/src/street/*.rs"])
+        self.assertOneProblem(tree(self.root, [flat], rust={MAPPED: tests(1)}), MAPPED)
+
+    def test_a_tree_with_no_rust_test_is_within_any_limit(self) -> None:
+        self.assertEqual(problems(tree(self.root, limit=0)), [])
+
+    def test_a_missing_limit_is_a_problem(self) -> None:
+        self.assertOneProblem(tree(self.root, limit=None), LIMIT)
+
+    def test_a_limit_that_is_not_a_percentage_is_a_problem(self) -> None:
+        for limit in ("19", True, -1, 100.5, float("nan")):
+            with self.subTest(limit=limit):
+                self.assertOneProblem(tree(self.root, limit=limit), LIMIT)
+
+
+class OnlyLowered(unittest.TestCase):
+    """The limit is never above the one it had at the base of the change."""
+
+    def test_a_limit_above_the_bases_is_a_problem(self) -> None:
+        found = raised(json.dumps({LIMIT: 20.01}), json.dumps({LIMIT: 20}))
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("20.01", found[0])
+
+    def test_a_limit_kept_or_lowered_is_not(self) -> None:
+        self.assertEqual(raised(json.dumps({LIMIT: 20}), json.dumps({LIMIT: 20})), [])
+        self.assertEqual(raised(json.dumps({LIMIT: 3}), json.dumps({LIMIT: 20})), [])
+
+    def test_a_limit_taken_out_is_left_to_the_check_of_the_list(self) -> None:
+        self.assertEqual(raised(json.dumps({"features": []}), json.dumps({LIMIT: 20})), [])
+
+    def test_a_base_with_no_limit_yet_allows_any(self) -> None:
+        self.assertEqual(raised(json.dumps({LIMIT: 20}), json.dumps({"features": []})), [])
+
+
 class TheRepository(unittest.TestCase):
-    """The list in the repository: this fails when a slice, crate, page or spec is added and no feature takes it."""
+    """The list in the repository: this fails when a slice, crate, page or spec is added and no feature takes it, and
+    when too many Rust tests are in files that no feature takes."""
 
     def test_the_feature_list_is_whole(self) -> None:
         self.assertEqual(problems(ROOT), [])
+
+    def test_the_limit_on_unmapped_tests_is_not_raised(self) -> None:
+        """Against `FEATURES_BASE` (presubmit's pull request base), else the commit the branch left `origin/main` at."""
+        base = os.environ.get("FEATURES_BASE")
+        if not base:
+            left = git("merge-base", "origin/main", "HEAD")
+            if left.returncode:
+                self.skipTest("no origin/main to compare with")
+            base = left.stdout.strip()
+        self.assertEqual(git("cat-file", "-e", f"{base}^{{commit}}").returncode, 0, f"the base {base} is not in this clone")
+        then = git("show", f"{base}:{FEATURES.as_posix()}")
+        if then.returncode:
+            self.skipTest(f"{base} has no {FEATURES}")
+        self.assertEqual(raised((ROOT / FEATURES).read_text(encoding="utf-8"), then.stdout), [])
 
     def test_it_stays_at_tens_of_features(self) -> None:
         count = len(json.loads((ROOT / FEATURES).read_text(encoding="utf-8"))["features"])

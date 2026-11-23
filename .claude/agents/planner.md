@@ -23,7 +23,7 @@ Reply with only the plan, in Markdown, with exactly these sections in this order
 What will be true when it is done, one line per behaviour, each tied to the issue's words.
 
 ## Where
-Each file to change or add, with what changes in it (types, functions, messages), slice by slice.
+Each file to change or add, with what changes in it (types, functions, messages), slice by slice; and the id of the feature of `scripts/ci/features.json` it changes or adds, with that file when its list changes.
 
 ## Tests
 One line per test: its kind (model, view-model, component, server, builder, browser), its file, its name, the behaviour it proves and, for a browser test, its tier (ui, integration, e2e) and spec-map group. Every behaviour of Change has at least one test. Say which existing tests must keep passing untouched.
