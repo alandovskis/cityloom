@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { expect, live, openJunction, openStreet, test } from "./fixtures";
+import { expect, live, openJunction, openStreet, test, transform } from "./fixtures";
 
 // The scenario comparison page (compare.html): two designs of one place side by side, and what differs in the second.
 // Opened from a street's or junction's scenario row; it reads the place's edits and writes nothing.
@@ -191,6 +191,28 @@ test.describe("comparing a street's designs", () => {
       /^Wider bike lane diffère de Référence sur \d+ points?\.$/,
     );
     await expect(page.locator("#compare-summary h3", { hasText: "Espace" })).toBeVisible();
+  });
+
+  test("a scenario made by a template says only what really changed, not every piece removed and added", async ({
+    page,
+  }) => {
+    await openStreet(page);
+    await expect(page.locator("#piece-list [role=option]").first()).toBeVisible();
+    const baseline = await page.locator("#piece-list [role=option]").count();
+    await makeScenario(page, "Greenway");
+    await transform(page, '[data-template="greenway"]', "templates");
+    await expect(page.locator("#undo")).toBeEnabled();
+    const scenario = await page.locator("#piece-list [role=option]").count();
+    await page.locator("#scenario-compare").click();
+
+    const pieces = page.locator('#compare-summary h3:has-text("Pieces") + ul');
+    await expect(pieces.locator("li").first()).toBeVisible();
+    // the template rebuilds every piece with a new id: the pieces it keeps in place are still the same pieces
+    const removed = await pieces.locator("li", { hasText: /^Removed: / }).count();
+    const added = await pieces.locator("li", { hasText: /^Added: / }).count();
+    expect(removed, "pieces listed as removed").toBeLessThan(baseline);
+    expect(added, "pieces listed as added").toBeLessThan(scenario);
+    await expect(pieces.locator("li", { hasText: /^(Removed|Added): sidewalk,/ })).toHaveCount(0);
   });
 });
 
