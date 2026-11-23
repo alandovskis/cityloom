@@ -1,0 +1,12 @@
+Step 1. The docs gate at 4e74f5104ff3d18752a48ebe25ad72e18b641712 (on main 5aa14a10): only documentation changed, every page has its other language's, Prettier passes and the site builds in English and fr-CA.
+
+$ npx prettier --ignore-path ../.prettierignore --check ../website
+$ npm run build
+PASS docs gate
+  page: CLAUDE.md
+  page: e2e/CLAUDE.md
+  page: website/docs/getting-started.md
+  page: website/docs/testing.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing.md
+  page: website/sidebars.ts
