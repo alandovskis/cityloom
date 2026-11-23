@@ -609,4 +609,135 @@ mod tests {
         sidewalk.curb = Some((curb + 1) % crate::shared::catalogue::CURBS.len());
         assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
     }
+
+    // Two designs can give one uid to two pieces that are not the same: each scenario numbers its new pieces from the
+    // baseline's next uid. Where the uids of the two sections are not the same set, the pairing is by uid (with the
+    // alignment in its gaps, "U" below) when it has at least as many pairs of one kind as a longest common subsequence of
+    // the kinds over both whole sections ("L" below) has pairs; else it is L. A pair by uid of two kinds does not count.
+
+    /// `s` laid out by a template in 18 m, its pieces numbered from the street's next uid.
+    fn arranged(s: &Street, template: crate::street::model::Template) -> Street {
+        let mut next_uid = s.next_uid;
+        let segments = template.arrange(s.class, 18_000, Side::Right, &mut next_uid).expect("the sample street fits the template");
+        Street { segments, next_uid, ..s.clone() }
+    }
+
+    /// The uid and the kind's id of each piece, left to right.
+    fn uids_and_kinds(s: &Street) -> Vec<(u32, &'static str)> {
+        s.segments.iter().map(|p| (p.uid, KINDS[p.kind].id)).collect()
+    }
+
+    /// The sample street with these pieces, each 3 m wide.
+    fn made_of(section: &[(u32, &str)]) -> Street {
+        Street { segments: section.iter().map(|&(uid, id)| Segment::new(uid, kind(id), 3_000)).collect(), ..sample() }
+    }
+
+    /// Two scenarios of one baseline, each made by a template, whose new pieces have the same uids: Greenway is A and
+    /// Industrial is B. U has 2 pairs of one kind (uids 7 and 10; 8, 9, 11 and 12 each name two kinds) and L has 4 (the
+    /// sidewalks and the travel lanes), so the pairing is L.
+    fn two_templates() -> (Street, Street) {
+        use crate::street::model::Template;
+        let baseline = sample();
+        assert_eq!(baseline.next_uid, 7);
+        let (a, b) = (arranged(&baseline, Template::Greenway), arranged(&baseline, Template::Industrial));
+        assert_eq!(
+            uids_and_kinds(&a),
+            [(7, "sidewalk"), (8, "planting"), (9, "bike"), (10, "travel"), (11, "travel"), (12, "bike"), (13, "planting"), (14, "sidewalk")]
+        );
+        assert_eq!(uids_and_kinds(&b), [(7, "sidewalk"), (8, "loading"), (9, "travel"), (10, "travel"), (11, "loading"), (12, "sidewalk")]);
+        (a, b)
+    }
+
+    #[test]
+    fn a_baseline_piece_with_the_uid_of_a_template_piece_of_another_kind_is_not_that_piece() {
+        // the scenario is made first, so it numbers its pieces from 7; the baseline then gains a bike lane, also 7
+        let b = arranged(&sample(), crate::street::model::Template::Greenway);
+        let mut a = sample();
+        a.segments.insert(1, Segment::new(7, kind("bike"), 1_800));
+        assert_eq!(uids_and_kinds(&a), [(1, "sidewalk"), (7, "bike"), (2, "parking"), (3, "travel"), (4, "travel"), (5, "parking"), (6, "sidewalk")]);
+        assert_eq!(
+            uids_and_kinds(&b),
+            [(7, "sidewalk"), (8, "planting"), (9, "bike"), (10, "travel"), (11, "travel"), (12, "bike"), (13, "planting"), (14, "sidewalk")]
+        );
+        // U pairs uid 7, of two kinds, which parts the street before B's first piece: 3 pairs of one kind (the travel
+        // lanes and the right sidewalk). L has 5 (the left sidewalk and the bike lane too), so the pairing is L.
+        let (sidewalk, planting, bike, travel, parking) = (kind("sidewalk"), kind("planting"), kind("bike"), kind("travel"), kind("parking"));
+        assert_eq!(
+            pieces(&a, &b),
+            (
+                false,
+                vec![
+                    PieceChange::Width { kind: sidewalk, a_mm: 3_300, b_mm: 3_000 },
+                    PieceChange::Added { kind: planting, width_mm: 1_800 },
+                    PieceChange::Width { kind: bike, a_mm: 1_800, b_mm: 1_500 },
+                    PieceChange::Width { kind: travel, a_mm: 3_300, b_mm: 2_700 },
+                    PieceChange::Width { kind: travel, a_mm: 3_300, b_mm: 2_700 },
+                    PieceChange::Added { kind: bike, width_mm: 1_500 },
+                    PieceChange::Added { kind: planting, width_mm: 1_800 },
+                    PieceChange::Width { kind: sidewalk, a_mm: 3_300, b_mm: 3_000 },
+                    PieceChange::Removed { kind: parking, width_mm: 2_400 },
+                    PieceChange::Removed { kind: parking, width_mm: 2_400 },
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn two_template_scenarios_numbered_alike_pair_their_sidewalks_and_travel_lanes() {
+        let (a, b) = two_templates();
+        let (planting, bike, travel, loading) = (kind("planting"), kind("bike"), kind("travel"), kind("loading"));
+        // the sidewalks are 3 m in both, so nothing is said of them
+        assert_eq!(
+            pieces(&a, &b),
+            (
+                false,
+                vec![
+                    PieceChange::Added { kind: loading, width_mm: 2_400 },
+                    PieceChange::Width { kind: travel, a_mm: 2_700, b_mm: 3_600 },
+                    PieceChange::Width { kind: travel, a_mm: 2_700, b_mm: 3_600 },
+                    PieceChange::Added { kind: loading, width_mm: 2_400 },
+                    PieceChange::Removed { kind: planting, width_mm: 1_800 },
+                    PieceChange::Removed { kind: bike, width_mm: 1_500 },
+                    PieceChange::Removed { kind: bike, width_mm: 1_500 },
+                    PieceChange::Removed { kind: planting, width_mm: 1_800 },
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn two_template_scenarios_numbered_alike_differ_in_no_piece_detail() {
+        // by uid a bike lane, which has a curb, would be a travel lane, which has none; the sidewalks and travel lanes
+        // that L pairs have the same surfaces and curbs
+        let (a, b) = two_templates();
+        assert_eq!(others(&a, &b), vec![]);
+    }
+
+    #[test]
+    fn pieces_with_colliding_uids_pair_by_uid_only_when_both_sections_hold_the_same_uids() {
+        let a = made_of(&[(1, "sidewalk"), (2, "planting"), (3, "bike"), (4, "travel"), (5, "sidewalk")]);
+        // the same uids: by uid, though U has 3 pairs of one kind (1, 3 and 5) and L has 5
+        let same = made_of(&[(5, "sidewalk"), (4, "planting"), (3, "bike"), (2, "travel"), (1, "sidewalk")]);
+        let (planting, travel) = (kind("planting"), kind("travel"));
+        assert_eq!(pieces(&a, &same), (false, vec![PieceChange::Kind { from: travel, to: planting }, PieceChange::Kind { from: planting, to: travel }]));
+        assert_eq!(others(&a, &same), vec![Other::PieceDetails]);
+        // one uid only B has: U has 2 pairs of one kind (1 and 3; the pieces 5 and 9 are in no common gap) and L has 5, so
+        // the pairing is L, which has no order by uid to differ
+        let fresh = made_of(&[(9, "sidewalk"), (4, "planting"), (3, "bike"), (2, "travel"), (1, "sidewalk")]);
+        assert_eq!(pieces(&a, &fresh), (false, vec![]));
+        assert_eq!(others(&a, &fresh), vec![]);
+    }
+
+    #[test]
+    fn a_kept_piece_moved_to_the_far_side_does_not_unpair_a_rebuilt_roadway() {
+        let a = made_of(&[(1, "sidewalk"), (2, "planting"), (3, "travel"), (4, "travel"), (5, "planting"), (6, "sidewalk")]);
+        let mut b = made_of(&[(2, "planting"), (7, "travel"), (8, "travel"), (5, "planting"), (6, "sidewalk"), (1, "sidewalk")]);
+        b.segments[2].width_mm = 3_500;
+        // the uid pairs in A's order are at 5, 0, 3 and 4 in B: the longest rising run, 0, 3 and 4, is the anchors, so the
+        // roadway pieces share the gap between the plantings. U has 6 pairs of one kind (1, 2, 5 and 6 by uid, the two
+        // lanes by alignment) and L has 5 (all but a sidewalk), so the pairing is U.
+        assert_eq!(pieces(&a, &b), (false, vec![PieceChange::Width { kind: kind("travel"), a_mm: 3_000, b_mm: 3_500 }]));
+        // the moved sidewalk changes the order of the pieces paired by uid
+        assert_eq!(others(&a, &b), vec![Other::PieceDetails]);
+    }
 }
