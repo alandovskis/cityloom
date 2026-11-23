@@ -38,8 +38,9 @@ synchronisation), `restriction::store`, `standards::model` et `standards::store`
 `project::copies` (le partage, pour la copie d’un aménagement partagé; le shell, pour faire d’une copie un projet de la
 personne), `project::context` (le projet dans lequel une page est ouverte, et s’il est affiché en lecture seule) et
 `shared`. Elle n’utilise jamais le modèle de vue, les vues ni les textes d’une autre tranche. De `street/`, `junction/`
-et `map/`, une autre tranche n’utilise que ce qui se trouve sous `model/`; la seule exception est le rapport, dont
-`map/vm/report.rs` dessine les figures avec `street::view::drawing` et `junction::view::figure`.
+et `map/`, une autre tranche n’utilise que ce qui se trouve sous `model/`, à deux exceptions près : le rapport, dont
+`map/vm/report.rs` dessine les figures avec `street::view::drawing` et `junction::view::figure`, et un test du shell,
+qui construit un `street::vm::StreetVm`.
 
 Quelques magasins sont aussi utilisés d’une tranche à l’autre. `sync::local` utilise `project::store` et
 `project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` utilise `city::edits`, `city::store` et

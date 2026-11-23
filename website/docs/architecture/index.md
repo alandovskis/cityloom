@@ -35,8 +35,9 @@ A slice may use another slice's `model` (junction uses the street's, city uses b
 `restriction::store`, `standards::model` and `standards::store` (street), `place::area`, `project::copies` (share, for
 the copy of a shared design; the shell, to make a copy one of the person's projects), `project::context` (which project
 a page is opened in, and whether it is shown read-only) and `shared`. It never uses another slice's view-model, views or
-text. Of `street/`, `junction/` and `map/`, another slice uses only what is under `model/`; the one exception is the
-report, whose figures `map/vm/report.rs` draws with `street::view::drawing` and `junction::view::figure`.
+text. Of `street/`, `junction/` and `map/`, another slice uses only what is under `model/`, with two exceptions: the
+report, whose figures `map/vm/report.rs` draws with `street::view::drawing` and `junction::view::figure`, and a shell
+test, which builds a `street::vm::StreetVm`.
 
 A few stores are used across slices too. `sync::local` uses `project::store` and
 `project::migrate::{legacy_waiting, legacy_kept, area_moved}`. `project::store` uses `city::edits`, `city::store` and
