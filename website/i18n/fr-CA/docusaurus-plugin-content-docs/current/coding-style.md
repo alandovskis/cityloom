@@ -122,9 +122,13 @@ porte sur le code hors des tests.
 ### Modèle de vue
 
 - L’état d’un modèle de vue est dans des champs privés : une vue le lit par des méthodes, les accesseurs, et le change
-  par des méthodes, les commandes. Un accesseur d’où une vue tire ce qu’elle dessine suit le plus souvent les signaux
-  qu’il lit, pour que la vue soit redessinée quand ils changent. Seule `version`, de `StreetVm` et de `JunctionVm`,
-  donne un signal. Exemple : `project/vm.rs` (`rows`, `create`). **Revue**
+  par des méthodes, les commandes. Les exceptions sont l’objectif (`GoalChoice`) et le repli des vérifications
+  réussies (`PassFold`), dont aucun ne fait partie de l’aménagement : un modèle de vue donne ces objets, et les vues
+  les changent par leurs propres méthodes. Les vues ne font que lire les autres objets donnés qui contiennent des
+  signaux et ne sont pas des modèles de vue, comme `I18n`. Un accesseur d’où une vue tire ce qu’elle dessine suit le
+  plus souvent les signaux qu’il lit, pour que la vue soit redessinée quand ils changent. Seule `version`, de
+  `StreetVm` et de `JunctionVm`, donne un signal nu, un `RwSignal`. Exemple : `project/vm.rs` (`rows`, `create`).
+  **Revue**
 - Un accesseur donne souvent ce qui est prêt à présenter, dans la langue de la page. Dans la rue et la jonction, une
   grande partie vient sous la forme des `Said` de la vue du modèle (`View`, `JView`), que les vues Leptos mettent en
   mots. Exemple : `project/vm.rs` (`Row`, que donne `rows`). **Revue**
@@ -152,7 +156,7 @@ porte sur le code hors des tests.
 - Ce que fait une touche dans les dessins de la rue et de la jonction est le plus souvent décidé par une fonction pure
   et testée, dont la vue exécute la réponse ou la transmet à son modèle de vue. Le dessin du contour d’une zone sur la
   carte est une machine à états pure et testée, que fait avancer le modèle de vue. Ailleurs, comme pour la touche
-  Entrée dans un champ ou les flèches dans la zone de recherche de la carte, la vue distingue souvent elle-même les
+  Entrée dans un champ ou les flèches dans la boîte de recherche de la carte, la vue distingue souvent elle-même les
   touches. Exemples : `street/vm/keys.rs` (`on_section`), `junction/vm/keys.rs` (`on_drawing`), `restriction/draw.rs`
   (`Draw`). **Revue**
 

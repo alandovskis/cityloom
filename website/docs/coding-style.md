@@ -115,8 +115,11 @@ rule here that says what a layer does not use is about the code outside tests.
 ### View-model
 
 - The state of a view-model is in private fields: a view reads it through methods, the getters, and changes it through
-  methods, the commands. A getter that a view draws from usually tracks the signals it reads, so that the view is
-  drawn again when they change. Only `version` of `StreetVm` and of `JunctionVm` hands out a signal. Example:
+  methods, the commands. The exceptions are the goal (`GoalChoice`) and the fold of the passing checks (`PassFold`),
+  neither of which is part of the design: a view-model hands out these objects, and the views change them by their own
+  methods. The views only read the other objects handed out that hold signals and are not view-models, such as `I18n`.
+  A getter that a view draws from usually tracks the signals it reads, so that the view is drawn again when they
+  change. Only `version` of `StreetVm` and of `JunctionVm` hands out a bare signal, an `RwSignal`. Example:
   `project/vm.rs` (`rows`, `create`). **Review**
 - A getter often gives what is ready to show, in the page's language. In the street and the junction, much of it comes
   as the `Said`s of the model's view (`View`, `JView`), which the Leptos views put into words. Example:
