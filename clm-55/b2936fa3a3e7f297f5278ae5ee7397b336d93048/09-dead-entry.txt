@@ -1,0 +1,38 @@
+Scratch copy, with an entry nothing uses added to ALLOWED (street may use account::vm). Expected: the dead entry fails.
+$ cargo test -p cityloom_editor --lib dependency_guard::tests::
+(exit 101)
+running 20 tests
+test dependency_guard::tests::an_entry_nothing_uses_is_dead ... ok
+test dependency_guard::tests::a_use_not_allowed_is_refused_with_its_file_line_and_path ... ok
+test dependency_guard::tests::a_super_path_is_found_only_when_it_leaves_the_slice ... ok
+test dependency_guard::tests::a_file_is_test_code_by_its_declaration_not_its_name ... ok
+test dependency_guard::tests::a_folder_that_is_no_known_slice_is_unknown ... ok
+test dependency_guard::tests::the_composition_root_may_use_any_slice_and_shared_none ... ok
+test dependency_guard::tests::a_pub_use_of_another_slice_is_found ... ok
+test dependency_guard::tests::a_plain_use_of_another_slice_is_found ... ok
+test dependency_guard::tests::self_in_a_group_is_the_module_itself ... ok
+test dependency_guard::tests::a_path_written_in_place_is_found ... ok
+test dependency_guard::tests::a_glob_is_a_use_of_what_it_opens ... ok
+test dependency_guard::tests::a_path_inside_view_is_found ... ok
+test dependency_guard::tests::every_name_of_a_grouped_and_nested_use_is_found_on_its_line ... ok
+test dependency_guard::tests::an_alias_does_not_hide_a_use ... ok
+test dependency_guard::tests::comments_and_strings_do_not_count ... ok
+test dependency_guard::tests::the_table_holds_the_dependency_rule ... ok
+test dependency_guard::tests::a_qualified_path_in_generic_arguments_does_not_end_what_is_under_cfg_test ... ok
+test dependency_guard::tests::what_is_under_cfg_test_does_not_count_and_only_that ... ok
+test dependency_guard::tests::what_is_under_cfg_test_in_a_list_ends_at_its_own_comma ... ok
+test dependency_guard::tests::production_code_uses_only_what_the_table_allows ... FAILED
+
+failures:
+
+---- dependency_guard::tests::production_code_uses_only_what_the_table_allows stdout ----
+
+thread 'dependency_guard::tests::production_code_uses_only_what_the_table_allows' (55647051) panicked at crates/cityloom_editor/src/dependency_guard.rs:757:9:
+ALLOWED: nothing in street uses account::vm
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    dependency_guard::tests::production_code_uses_only_what_the_table_allows
+
+test result: FAILED. 19 passed; 1 failed; 0 ignored; 0 measured; 3927 filtered out; finished in 1.16s
