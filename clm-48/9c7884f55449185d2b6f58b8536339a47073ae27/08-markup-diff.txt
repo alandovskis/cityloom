@@ -1,0 +1,86 @@
+Part 1. Steppers (street width, actuation fields with their labels, a street's numbers with their units, the turbo size), each section's tag and heading (street, junction, signal plan, a street, a turbo) and the questions (account delete and stop, project, timeline, archive), base against head. Share's question needs a signed-in server: its spec is in step 4.
+
+As written, a tag a line:
+--- before
++++ after
+@@ -54 +54 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-min-2" aria-describedby="act-min-range-2" value="7">
++<input type="text" id="act-min-2" inputmode="numeric" autocomplete="off" value="7" aria-describedby="act-min-range-2">
+@@ -72 +72 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-gap-2" aria-describedby="act-gap-range-2" value="3">
++<input type="text" id="act-gap-2" inputmode="numeric" autocomplete="off" value="3" aria-describedby="act-gap-range-2">
+@@ -90 +90 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-max-2" aria-describedby="act-max-range-2" value="45">
++<input type="text" id="act-max-2" inputmode="numeric" autocomplete="off" value="45" aria-describedby="act-max-range-2">
+@@ -108 +108 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-rate-2" aria-describedby="act-rate-range-2" value="300">
++<input type="text" id="act-rate-2" inputmode="numeric" autocomplete="off" value="300" aria-describedby="act-rate-range-2">
+@@ -306 +306 @@
+-<div class="confirm" role="group" aria-labelledby="h-confirm" aria-describedby="delete-warning" id="delete-confirm">
++<div class="confirm" role="group" id="delete-confirm" aria-labelledby="h-confirm" aria-describedby="delete-warning">
+@@ -314 +314 @@
+-<div class="confirm" role="group" aria-labelledby="h-stop" aria-describedby="stop-warning" id="stop-confirm">
++<div class="confirm" role="group" id="stop-confirm" aria-labelledby="h-stop" aria-describedby="stop-warning">
+@@ -321 +321 @@
+-<div class="confirm" role="group" aria-labelledby="h-confirm" aria-describedby="delete-warning" id="delete-confirm">
++<div class="confirm" role="group" id="delete-confirm" aria-labelledby="h-confirm" aria-describedby="delete-warning">
+@@ -348 +348 @@
+-<div class="confirm" role="group" aria-labelledby="h-archive-confirm" aria-describedby="archive-confirm-summary" id="archive-confirm">
++<div class="confirm" role="group" id="archive-confirm" aria-labelledby="h-archive-confirm" aria-describedby="archive-confirm-summary">
+
+With each tag's attributes in one order:
+no difference
+
+The street's radio groups and the stop question, from the first capture:
+The two dumps compared, a tag a line.
+
+--- before
++++ after
+@@ -24,3 +24,3 @@
+ <ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">
+-<li>
++<li role="none">
+ <button class="opt" type="button" role="radio" aria-checked="true" tabindex="0">
+@@ -43,3 +43,3 @@
+ </li>
+-<li>
++<li role="none">
+ <button class="opt" type="button" role="radio" aria-checked="false" tabindex="-1">
+@@ -75,3 +75,3 @@
+ ## account: the question before syncing stops: 1
+-<div class="confirm" role="group" aria-labelledby="h-stop" aria-describedby="stop-warning" id="stop-confirm">
++<div class="confirm" role="group" id="stop-confirm" aria-labelledby="h-stop" aria-describedby="stop-warning">
+ <h3 id="h-stop">Stop storing your work on the server?</h3>
+
+--- With each tag's attributes in one order, so that only real differences are left:
+
+--- before
++++ after
+@@ -25 +25 @@
+-<li>
++<li role="none">
+@@ -44 +44 @@
+-<li>
++<li role="none">
+
+
+Part 2. Every state of the second part of 06 and 07, base against head. Reached: the four tools' sections (calming, curbside, stops, green), the street's width, surface, curb, direction, vehicle and times, and every section and number of the junction's levels that has a heading of its own (the folds are named by their summary and are not this component), with the roundabout's size and its long unit and the approach length. "Attributes in one order" compares each tag with its attributes sorted.
+
+As written, a tag a line:
+--- base
++++ head
+@@ -945 +945 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-min-2" aria-describedby="act-min-range-2" value="7">
++<input type="text" id="act-min-2" inputmode="numeric" autocomplete="off" value="7" aria-describedby="act-min-range-2">
+@@ -963 +963 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-gap-2" aria-describedby="act-gap-range-2" value="3">
++<input type="text" id="act-gap-2" inputmode="numeric" autocomplete="off" value="3" aria-describedby="act-gap-range-2">
+@@ -981 +981 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-max-2" aria-describedby="act-max-range-2" value="45">
++<input type="text" id="act-max-2" inputmode="numeric" autocomplete="off" value="45" aria-describedby="act-max-range-2">
+@@ -999 +999 @@
+-<input type="text" inputmode="numeric" autocomplete="off" id="act-rate-2" aria-describedby="act-rate-range-2" value="300">
++<input type="text" id="act-rate-2" inputmode="numeric" autocomplete="off" value="300" aria-describedby="act-rate-range-2">
+
+With each tag's attributes in one order:
+no difference

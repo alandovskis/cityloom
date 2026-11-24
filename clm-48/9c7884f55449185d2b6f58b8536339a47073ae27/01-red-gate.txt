@@ -1,0 +1,52 @@
+The red gate at abd780c109cbbaab5d079006efab5b11ae218ebe (base 58e70a86), run before the rebase: each new test fails, every other passes. After the rebase onto 8edd3d32 this commit is 40a2c6497f2b2ac1913373c07cfa314d90d1d9ed; git range-diff shows the two identical. The red gate was not run again.
+
+$ just build
+$ just server
+$ just e2e-fixtures
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ npx playwright test --list --reporter=json
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ npx playwright test --list --reporter=json
+$ npx playwright test tests/account-server.spec.ts tests/account.spec.ts tests/junction-a11y.spec.ts tests/junction.spec.ts tests/read-only.spec.ts tests/street.spec.ts tests/sync.spec.ts --reporter=json
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::account::tests::the_storage_choice_made_is_the_checked_radio_button_and_the_tab_stop
+  new test: cityloom_editor unittests src/lib.rs::account::tests::the_storage_choices_are_radio_buttons_with_their_help_and_nothing_chosen_puts_the_first_in_the_tab_order
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::a_signal_option_chosen_takes_the_check_and_the_tab_stop
+  new test: cityloom_editor unittests src/lib.rs::junction::view::tests::the_signal_options_are_radio_buttons_with_one_tab_stop_on_the_chosen_one
+  new test: cityloom_editor unittests src/lib.rs::ui_guard::tests::every_confirmation_is_the_ui_crate_s
+  new test: cityloom_editor unittests src/lib.rs::ui_guard::tests::every_headed_inspector_section_is_the_ui_crate_s
+  new test: cityloom_editor unittests src/lib.rs::ui_guard::tests::every_radio_group_is_the_ui_crate_s
+  new test: cityloom_editor unittests src/lib.rs::ui_guard::tests::every_stepper_is_the_ui_crate_s
+  new test: cityloom_editor unittests src/lib.rs::ui_guard::tests::the_helpers_the_ui_crate_replaced_are_gone
+  new test: cityloom_ui unittests src/lib.rs::confirm::tests::a_question_has_no_word_of_its_own
+  new test: cityloom_ui unittests src/lib.rs::confirm::tests::a_question_is_a_labelled_group_holding_its_contents
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::a_key_held_down_keeps_moving
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::a_modifier_a_composition_or_a_taken_key_moves_nothing
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::choosing_the_option_already_chosen_or_one_that_cannot_be_is_no_choice
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::from_an_option_that_cannot_be_chosen_the_keys_go_to_the_ends_and_never_to_it
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::the_arrow_keys_step_a_number_and_enter_and_escape_end_it
+  new test: cityloom_ui unittests src/lib.rs::keys::tests::the_arrows_move_from_the_focused_option_and_wrap_and_home_and_end_go_to_the_ends
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::a_group_is_a_labelled_list_of_radio_buttons_with_the_chosen_one_checked
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::a_group_takes_its_id_its_label_its_description_and_its_class
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::a_radio_group_has_no_word_of_its_own
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::an_option_s_help_is_in_its_button_and_its_description_after_it
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::an_option_that_cannot_be_chosen_is_said_to_be_and_keeps_the_tab_stop_while_checked
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::only_the_chosen_option_is_in_the_tab_order
+  new test: cityloom_ui unittests src/lib.rs::radio::tests::with_nothing_chosen_only_the_first_option_is_in_the_tab_order
+  new test: cityloom_ui unittests src/lib.rs::section::tests::a_section_has_no_word_of_its_own
+  new test: cityloom_ui unittests src/lib.rs::section::tests::a_section_is_its_heading_then_its_contents
+  new test: cityloom_ui unittests src/lib.rs::section::tests::a_section_that_spans_both_columns_or_is_labelled_says_so
+  new test: cityloom_ui unittests src/lib.rs::stepper::tests::a_field_described_by_nothing_has_no_description
+  new test: cityloom_ui unittests src/lib.rs::stepper::tests::a_long_unit_is_marked_only_where_asked
+  new test: cityloom_ui unittests src/lib.rs::stepper::tests::a_named_size_is_a_labelled_group_with_its_ends_aria_disabled
+  new test: cityloom_ui unittests src/lib.rs::stepper::tests::a_number_is_a_field_between_two_buttons_with_its_unit
+  new test: cityloom_ui unittests src/lib.rs::stepper::tests::a_stepper_has_no_word_of_its_own
+  new test: account.spec.ts::Space chooses the storage choice that has the focus::ui
+  new test: account.spec.ts::an arrow from the server to the device asks first, and Escape leaves the server chosen::ui
+  new test: account.spec.ts::the storage choices are cards with their help line, at 280 px, in both languages::ui
+  new test: account.spec.ts::with nothing chosen only the first storage choice is in the tab order, and an arrow chooses::ui
+  new test: junction-a11y.spec.ts::the signal options' radio groups (CLM-48) > each signal option is a radio group with one tab stop, in which the arrows, Home and End choose::ui
+  new test: junction-a11y.spec.ts::the signal options' radio groups (CLM-48) > the signal options are tiles, each with its whole name clear of its tick, at the usual width and at 280 px (en)::ui
+  new test: junction-a11y.spec.ts::the signal options' radio groups (CLM-48) > the signal options are tiles, each with its whole name clear of its tick, at the usual width and at 280 px (fr-CA)::ui
+  new test: street.spec.ts::the street editor on a street of the city > Home and End choose the first and the last surface of a piece::ui

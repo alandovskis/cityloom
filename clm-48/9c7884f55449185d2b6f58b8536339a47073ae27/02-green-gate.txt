@@ -1,0 +1,11 @@
+The green gate at 9c7884f55449185d2b6f58b8536339a47073ae27 (red 40a2c649, base 8edd3d32): every test passes, warnings denied.
+
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ just format-check
+$ scripts/check-version.sh 8edd3d3228edf04e92b7697daa81e6aa4dea4607
+$ just build
+$ just server
+$ just e2e-fixtures
+$ npx playwright test tests/account-server.spec.ts tests/account.spec.ts tests/junction-a11y.spec.ts tests/junction.spec.ts tests/read-only.spec.ts tests/street.spec.ts tests/sync.spec.ts --reporter=json
+PASS green gate

@@ -1,0 +1,46 @@
+The new Rust tests, run at the head (first line: the head; no uncommitted file): cityloom_ui, then in cityloom_editor the filters ui_guard, radio_button, a_signal_option_chosen, the_storage_choice.
+
+9c7884f55449185d2b6f58b8536339a47073ae27
+test keys::tests::the_arrow_keys_step_a_number_and_enter_and_escape_end_it ... ok
+test keys::tests::choosing_the_option_already_chosen_or_one_that_cannot_be_is_no_choice ... ok
+test keys::tests::a_key_held_down_keeps_moving ... ok
+test keys::tests::a_modifier_a_composition_or_a_taken_key_moves_nothing ... ok
+test keys::tests::from_an_option_that_cannot_be_chosen_the_keys_go_to_the_ends_and_never_to_it ... ok
+test keys::tests::the_arrows_move_from_the_focused_option_and_wrap_and_home_and_end_go_to_the_ends ... ok
+test section::tests::a_section_has_no_word_of_its_own ... ok
+test section::tests::a_section_is_its_heading_then_its_contents ... ok
+test confirm::tests::a_question_has_no_word_of_its_own ... ok
+test stepper::tests::a_named_size_is_a_labelled_group_with_its_ends_aria_disabled ... ok
+test section::tests::a_section_that_spans_both_columns_or_is_labelled_says_so ... ok
+test confirm::tests::a_question_is_a_labelled_group_holding_its_contents ... ok
+test stepper::tests::a_field_described_by_nothing_has_no_description ... ok
+test stepper::tests::a_stepper_has_no_word_of_its_own ... ok
+test stepper::tests::a_number_is_a_field_between_two_buttons_with_its_unit ... ok
+test radio::tests::a_group_is_a_labelled_list_of_radio_buttons_with_the_chosen_one_checked ... ok
+test radio::tests::only_the_chosen_option_is_in_the_tab_order ... ok
+test radio::tests::a_radio_group_has_no_word_of_its_own ... ok
+test radio::tests::an_option_that_cannot_be_chosen_is_said_to_be_and_keeps_the_tab_stop_while_checked ... ok
+test stepper::tests::a_long_unit_is_marked_only_where_asked ... ok
+test radio::tests::an_option_s_help_is_in_its_button_and_its_description_after_it ... ok
+test radio::tests::with_nothing_chosen_only_the_first_option_is_in_the_tab_order ... ok
+test radio::tests::a_group_takes_its_id_its_label_its_description_and_its_class ... ok
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test ui_guard::tests::the_helpers_the_ui_crate_replaced_are_gone ... ok
+test ui_guard::tests::every_confirmation_is_the_ui_crate_s ... ok
+test ui_guard::tests::every_stepper_is_the_ui_crate_s ... ok
+test ui_guard::tests::every_radio_group_is_the_ui_crate_s ... ok
+test ui_guard::tests::every_headed_inspector_section_is_the_ui_crate_s ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 3944 filtered out; finished in 0.32s
+test account::tests::the_storage_choices_are_radio_buttons_with_their_help_and_nothing_chosen_puts_the_first_in_the_tab_order ... ok
+test account::tests::the_storage_choice_made_is_the_checked_radio_button_and_the_tab_stop ... ok
+test junction::view::tests::the_signal_options_are_radio_buttons_with_one_tab_stop_on_the_chosen_one ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 3946 filtered out; finished in 0.11s
+test junction::view::tests::a_signal_option_chosen_takes_the_check_and_the_tab_stop ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3948 filtered out; finished in 0.06s
+test account::tests::the_storage_choices_are_radio_buttons_with_their_help_and_nothing_chosen_puts_the_first_in_the_tab_order ... ok
+test account::tests::a_new_account_sees_the_storage_choice_first_with_two_options_and_nothing_selected ... ok
+test account::vm::tests::a_first_load_with_nothing_chosen_asks_for_the_storage_choice_and_one_made_does_not ... ok
+test account::tests::the_storage_choice_made_is_the_checked_radio_button_and_the_tab_stop ... ok
+test account::tests::the_storage_choice_says_what_each_option_does_including_the_shared_computer_and_the_deleted_copy ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 3944 filtered out; finished in 0.05s

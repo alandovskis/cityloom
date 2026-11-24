@@ -1,0 +1,15 @@
+Escape pressed in Chromium inside each question, with a listener on the document that counts the Escapes that reach it: at the base 8edd3d32, then at the head 9c7884f55449185d2b6f58b8536339a47073ae27.
+
+base
+account, stop storing: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=h-storage
+account, delete: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=delete-btn
+project, delete: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=project-delete-p-bf69d2157f7a
+timeline, restore: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=timeline-restore-m-6cbca852e9ea
+archive, replace: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=archive-import
+
+head
+account, stop storing: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=h-storage
+account, delete: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=delete-btn
+project, delete: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=project-delete-p-193a0ec5cabe
+timeline, restore: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=timeline-restore-m-263c91667e88
+archive, replace: focus inside before=true, question left=0, Escapes that reached the document=0, focus after=archive-import

@@ -1,0 +1,471 @@
+The base 8edd3d32, in Chromium: every stepper, each section's tag and heading, and the questions.
+## street, a driving lane: steppers: 1
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="1.50" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## street, a driving lane, each section's tag and heading: 4
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3>
+## street page, every labelled section: 13
+<section class="scenarios" aria-labelledby="scenario-h">
+<section class="drawing" aria-labelledby="h-drawing">
+<section class="piece-list-section" aria-labelledby="h-pieces">
+<section class="curb-strip-section" aria-labelledby="h-curb">
+<section class="curb-strip-section" aria-labelledby="h-calming">
+<section class="impact" id="impact-card" aria-labelledby="h-impact" aria-live="polite" aria-atomic="true">
+<section class="impact-width" aria-labelledby="h-space">
+<section class="impact-people" aria-labelledby="h-cap">
+<section class="checks-main" aria-labelledby="h-checks">
+<section aria-labelledby="h-goal">
+<section aria-labelledby="h-atlas">
+<section class="revs" aria-labelledby="h-rev">
+<section class="standards zone-row" aria-labelledby="standards-heading"><h3 class="sr-only" id="standards-heading">Standards</h3>
+
+## junction, an actuated street's fields: steppers: 4
+<div class="stepper"><button class="ico" type="button" id="act-min-2-less" aria-label="Minimum green, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-min-2" aria-describedby="act-min-range-2" value="7"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-min-2-more" aria-label="Minimum green, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-gap-2-less" aria-label="Gap, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-gap-2" aria-describedby="act-gap-range-2" value="3"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-gap-2-more" aria-label="Gap, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-max-2-less" aria-label="Maximum green, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-max-2" aria-describedby="act-max-range-2" value="45"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-max-2-more" aria-label="Maximum green, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-rate-2-less" aria-label="Vehicles an hour, 10 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-rate-2" aria-describedby="act-rate-range-2" value="300"><span class="unit-tag" aria-hidden="true">veh./h</span></span><button class="ico" type="button" id="act-rate-2-more" aria-label="Vehicles an hour, 10 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## junction, the actuation fields' labels: 4
+<label for="act-min-2">Minimum green</label>
+<label for="act-gap-2">Gap</label>
+<label for="act-max-2">Maximum green</label>
+<label for="act-rate-2">Vehicles an hour</label>
+## junction, signal plan, each section's tag and heading: 7
+<section class="insp-sec" id="signal-plans" aria-labelledby="i-h-plans">
+<section class="insp-sec"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
+<section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
+<section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
+<section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
+<section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
+## junction, each section's tag and heading: 4
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-raised">Raised table</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+## junction, a street: steppers: 6
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0" aria-labelledby="i-h-lead" aria-describedby="i-h-lead-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## junction, a street, each section's tag and heading: 12
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-lead">Transit early green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+
+## junction, a turbo: steppers (the turbo size, the junction's numbers): 1
+<div class="stepper" role="group" aria-labelledby="i-h-turbo-size"><button class="ico" type="button" aria-label="Next smaller size" aria-disabled="true"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield turbo-size">Mini</span><button class="ico" type="button" aria-label="Next larger size"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## junction, a turbo, each section's tag and heading: 6
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo">Roundabout layout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo-size">Turbo size</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo-main">Main road</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+
+## account, delete question: 1
+<div class="confirm" role="group" aria-labelledby="h-confirm" aria-describedby="delete-warning" id="delete-confirm"><h3 id="h-confirm">Delete your account?</h3><p id="delete-warning">This removes your account, your linked sign-ins and everything stored under them from the server at once, including the work you stored there. Copies in the server’s backups are removed when those backups expire, according to Railway’s retention period. Work kept on this device is not affected.</p><button class="btn" type="button" id="delete-no">Keep my account</button><button class="btn danger" type="button">Delete my account</button></div>
+
+## account, stop storing
+<div class="confirm" role="group" aria-labelledby="h-stop" aria-describedby="stop-warning" id="stop-confirm"><h3 id="h-stop">Stop storing your work on the server?</h3><p id="stop-warning">This deletes your work from the server and keeps the copy in this browser. Your other devices keep their own copies but stop syncing.</p><button class="btn" type="button" id="stop-no">Keep storing my work</button><button class="btn danger" type="button" id="stop-yes">Delete the server copy</button></div>
+## account, delete
+<div class="confirm" role="group" aria-labelledby="h-confirm" aria-describedby="delete-warning" id="delete-confirm"><h3 id="h-confirm">Delete your account?</h3><p id="delete-warning">This removes your account, your linked sign-ins and everything stored under them from the server at once, including the work you stored there. Copies in the server’s backups are removed when those backups expire, according to Railway’s retention period. Work kept on this device is not affected.</p><button class="btn" type="button" id="delete-no">Keep my account</button><button class="btn danger" type="button">Delete my account</button></div>
+## project, delete
+<div class="confirm" role="group" aria-labelledby="project-delete-question"><p id="project-delete-question">Delete Verdun and everything in it? This cannot be undone.</p><p id="project-delete-status" role="status"></p><p class="project-error" hidden=""></p><div class="project-buttons"><button class="btn" type="button" id="project-delete-safe" aria-disabled="false">Cancel</button><button class="btn danger" type="button" id="project-delete-yes" aria-disabled="false">Delete the project</button></div></div>
+## timeline, restore
+<div class="confirm" role="group" aria-labelledby="timeline-restore-question"><p id="timeline-restore-question">Put the work back as it was in Base? The work as it is now is saved first as a milestone, so you can come back to it.</p><div class="timeline-buttons"><button class="btn" type="button" id="timeline-restore-safe">Cancel</button><button class="btn" type="button" id="timeline-restore-yes">Restore this milestone</button></div></div>
+## archive, replace
+<div class="confirm" role="group" aria-labelledby="h-archive-confirm" aria-describedby="archive-confirm-summary" id="archive-confirm"><h3 id="h-archive-confirm">Some places differ from this device</h3><p id="archive-confirm-summary">In this archive, 1 differ from the same places on this device, and 0 are new here and will be added either way. Nothing has been changed yet.</p><p class="hint">Streets: 1. Junctions: 0. Area rules: 0.</p><button class="btn" type="button" id="archive-keep">Keep mine</button><button class="btn danger" type="button" id="archive-use">Use the archive's</button><button class="btn" type="button" id="archive-cancel">Cancel</button></div>
+
+
+(The first capture, with the street's radio groups and the stop question:)
+## street: headings of the sections: 2
+<h3 class="note-h" id="i-h-width">Width</h3>
+<h3 class="note-h" id="i-h-surface">Surface</h3>
+## street: steppers: 1
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="0.15" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## street: radio groups: 1
+<ul class="opts" role="radiogroup" aria-labelledby="i-h-surface"><li><button class="opt" type="button" role="radio" aria-checked="true" tabindex="0"><svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><g><rect width="44" height="22" fill="var(--sheet)" stroke="none"></rect></g><rect width="44" height="22" fill="url(#m-concrete)" stroke="none"></rect></svg><span>Concrete</span><svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><g><path d="M2.5 8.5 6.5 12.5 13.5 3.5"></path></g></svg></button></li><li><button class="opt" type="button" role="radio" aria-checked="false" tabindex="-1"><svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><g><rect width="44" height="22" fill="var(--sheet)" stroke="none"></rect></g><rect width="44" height="22" fill="url(#m-asphalt)" stroke="none"></rect></svg><span>Asphalt</span><svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><g><path d="M2.5 8.5 6.5 12.5 13.5 3.5"></path></g></svg></button></li></ul>
+## junction: headings of the sections: 4
+<h3 class="note-h" id="i-h-control">Junction control</h3>
+<h3 class="note-h" id="i-h-raised">Raised table</h3>
+<h3 class="note-h" id="i-h-streets">Streets</h3>
+<h3 class="note-h" id="i-h-signal">Signal timing</h3>
+## junction: steppers: 0
+
+## junction, signal plan: headings of the sections: 1
+<h3 class="note-h" id="i-h-signal">Signal timing</h3>
+## junction, signal plan: steppers: 0
+
+## account: the question before syncing stops: 1
+<div class="confirm" role="group" aria-labelledby="h-stop" aria-describedby="stop-warning" id="stop-confirm"><h3 id="h-stop">Stop storing your work on the server?</h3><p id="stop-warning">This deletes your work from the server and keeps the copy in this browser. Your other devices keep their own copies but stop syncing.</p><button class="btn" type="button" id="stop-no">Keep storing my work</button><button class="btn danger" type="button" id="stop-yes">Delete the server copy</button></div>
+
+
+===== Second part: every state reached in the street page (its pieces, the transit lane's vehicle, the four tools with something chosen), the junction (each control, each target the arrow key visits, the levels) and the turbo: each section's tag and heading, and every stepper.
+## street, piece 1
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="1.50" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## street, piece 2
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="0.15" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## street, piece 3
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="1.50" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## street, piece 4
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-times">Other times</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="3.00" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## after adding Transit lane
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-veh">Vehicle</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-times">Other times</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="3.30" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## after adding Planting strip
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Planting</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="1.80" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## after adding Bike lane
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-width">Width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" id="width" inputmode="decimal" autocomplete="off" value="1.80" aria-labelledby="i-h-width" aria-describedby="i-width-range i-width-varies"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+
+## a raised table chosen
+sections
+<section class="insp-sec" aria-labelledby="h-calming-tools"><h3 class="note-h" id="h-calming-tools">Raised table commands</h3>
+steppers
+
+## a curbside stretch chosen
+sections
+<section class="insp-sec" aria-labelledby="h-curb-tools"><h3 class="note-h" id="h-curb-tools">Curbside commands</h3>
+steppers
+
+## a stop chosen
+sections
+<section class="insp-sec" aria-labelledby="h-stop-tools"><h3 class="note-h" id="h-stop-tools">Stop commands</h3>
+steppers
+
+## a planting bed chosen
+sections
+<section class="insp-sec" aria-labelledby="h-green-tools"><h3 class="note-h" id="h-green-tools">Tree and planting commands</h3>
+steppers
+
+
+## No control: the junction
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-raised">Raised table</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+steppers
+
+## No control: press 1 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="35" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## No control: press 2 of the right arrow
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-setback">Set back from the junction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cwidth">Crossing width</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-refuge">Halfway island</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-continuous">Continuous sidewalk</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bulb">Shorten the crossing</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Closer by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3.0" aria-labelledby="i-h-setback" aria-describedby="i-h-setback-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Farther by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3.0" aria-labelledby="i-h-cwidth" aria-describedby="i-h-cwidth-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## No control: press 3 of the right arrow
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-corner">Curb radius</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-protected">Protected corner</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Tighter by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="1.0" aria-labelledby="i-h-corner" aria-describedby="i-h-corner-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## No control: press 4 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## No control: press 5 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-serves">Where this lane goes</h3>
+steppers
+
+## No control: press 9 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="215" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Traffic signal: the junction
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-raised">Raised table</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+steppers
+
+## Traffic signal: press 1 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="35" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Traffic signal: press 4 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Traffic signal: press 9 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="215" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Roundabout: the junction
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo">Roundabout layout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-ring">Size of the roundabout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-bus">Bus lane through the middle</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Smaller by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25.0" aria-labelledby="i-h-ring" aria-describedby="i-h-ring-hint"><span class="unit-tag unit-long" aria-hidden="true">m across</span></span><button class="ico" type="button" aria-label="Larger by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Roundabout: with the cycle track
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo">Roundabout layout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-ring">Size of the roundabout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle-width">Track width</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-bus">Bus lane through the middle</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Smaller by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25.0" aria-labelledby="i-h-ring" aria-describedby="i-h-ring-hint"><span class="unit-tag unit-long" aria-hidden="true">m across</span></span><button class="ico" type="button" aria-label="Larger by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2.0" aria-labelledby="i-h-cycle-width" aria-describedby="i-h-cycle-width-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Roundabout: press 10 of the right arrow
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="305" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## Roundabout: press 12 of the right arrow
+sections
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle-width">Track width</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Narrower by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2.0" aria-labelledby="i-h-cycle-width" aria-describedby="i-h-cycle-width-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Wider by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+
+## the signal plan, its folds open
+sections
+<section class="insp-sec" id="signal-plans" aria-labelledby="i-h-plans">
+<section class="insp-sec"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec" id="signal-calls" aria-labelledby="i-h-calls">
+<section class="insp-sec" id="signal-actuation" aria-labelledby="i-h-actuation">
+<section class="insp-sec" id="signal-bikes" aria-labelledby="i-h-bikes">
+<section class="insp-sec" id="signal-transit" aria-labelledby="i-h-transit-priority">
+<section class="insp-sec" id="signal-preemption" aria-labelledby="i-h-preemption">
+steppers
+<div class="stepper"><button class="ico" type="button" id="act-min-2-less" aria-label="Minimum green, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-min-2" aria-describedby="act-min-range-2" value="7"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-min-2-more" aria-label="Minimum green, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-gap-2-less" aria-label="Gap, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-gap-2" aria-describedby="act-gap-range-2" value="3"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-gap-2-more" aria-label="Gap, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-max-2-less" aria-label="Maximum green, 1 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-max-2" aria-describedby="act-max-range-2" value="45"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" id="act-max-2-more" aria-label="Maximum green, 1 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" id="act-rate-2-less" aria-label="Vehicles an hour, 10 less"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="numeric" autocomplete="off" id="act-rate-2" aria-describedby="act-rate-range-2" value="300"><span class="unit-tag" aria-hidden="true">veh./h</span></span><button class="ico" type="button" id="act-rate-2-more" aria-label="Vehicles an hour, 10 more"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## a street, its folds open
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-lead">Transit early green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0" aria-labelledby="i-h-lead" aria-describedby="i-h-lead-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## the transit fold, after pressing its control 1
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## transit approach option 1
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-alen">Length of the queue jump</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 5.0 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="10.0" aria-labelledby="i-h-alen" aria-describedby="i-h-alen-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Longer by 5.0 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## transit approach option 4
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-signal">Signal timing</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-green">Green</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-yellow">Yellow</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-all-red">All-red</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bike-box">Bike box</h3>
+<section class="insp-sec insp-span">
+<section class="insp-sec"><h3 class="note-h" id="i-h-alen">Gate distance upstream</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-bearing">Direction</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-offset">Shift sideways</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="25" aria-labelledby="i-h-green" aria-describedby="i-h-green-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="3" aria-labelledby="i-h-yellow" aria-describedby="i-h-yellow-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="2" aria-labelledby="i-h-all-red" aria-describedby="i-h-all-red-hint"><span class="unit-tag" aria-hidden="true">s</span></span><button class="ico" type="button" aria-label="Longer by 1 s"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shorter by 5.0 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="10.0" aria-labelledby="i-h-alen" aria-describedby="i-h-alen-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Longer by 5.0 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Turn anticlockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="125" aria-labelledby="i-h-bearing" aria-describedby="i-h-bearing-hint"><span class="unit-tag" aria-hidden="true">°</span></span><button class="ico" type="button" aria-label="Turn clockwise by 5°"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+<div class="stepper"><button class="ico" type="button" aria-label="Shift left by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="0.00" aria-labelledby="i-h-offset" aria-describedby="i-h-offset-hint"><span class="unit-tag" aria-hidden="true">m</span></span><button class="ico" type="button" aria-label="Shift right by 0.1 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+
+## a turbo roundabout
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo">Roundabout layout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo-size">Turbo size</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo-main">Main road</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+steppers
+<div class="stepper" role="group" aria-labelledby="i-h-turbo-size"><button class="ico" type="button" aria-label="Next smaller size" aria-disabled="true"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield turbo-size">Mini</span><button class="ico" type="button" aria-label="Next larger size"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>
+## back to a single lane
+sections
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-control">Junction control</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-turbo">Roundabout layout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-ring">Size of the roundabout</h3>
+<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-bus">Bus lane through the middle</h3>
+<section class="insp-sec insp-span"><h3 class="note-h" id="i-h-streets">Streets</h3>
+steppers
+<div class="stepper"><button class="ico" type="button" aria-label="Smaller by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"></path></svg></button><span class="wfield"><input type="text" inputmode="decimal" autocomplete="off" value="27.0" aria-labelledby="i-h-ring" aria-describedby="i-h-ring-hint"><span class="unit-tag unit-long" aria-hidden="true">m across</span></span><button class="ico" type="button" aria-label="Larger by 0.5 m"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"></path></svg></button></div>

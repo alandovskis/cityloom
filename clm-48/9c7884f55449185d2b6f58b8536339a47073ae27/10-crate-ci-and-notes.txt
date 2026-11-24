@@ -1,0 +1,213 @@
+$ cat crates/cityloom_ui/Cargo.toml
+[package]
+name = "cityloom_ui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+leptos = { version = "0.8.23", features = ["csr"] }
+web-sys = { version = "0.3.107", features = ["Element", "HtmlElement", "HtmlInputElement", "KeyboardEvent", "Event", "EventTarget", "Node", "NodeList"] }
+
+[dev-dependencies]
+leptos = { version = "0.8.23", features = ["ssr"] }
+
+$ git diff --stat 8edd3d32 9c7884f55449185d2b6f58b8536339a47073ae27
+ CLAUDE.md                                          |   4 +-
+ Cargo.lock                                         |  11 +-
+ crates/cityloom_editor/Cargo.toml                  |   3 +-
+ crates/cityloom_editor/src/account/CLAUDE.md       |   2 +-
+ crates/cityloom_editor/src/account/tests.rs        |  69 ++-
+ crates/cityloom_editor/src/account/view.rs         |  94 ++--
+ crates/cityloom_editor/src/archive/view.rs         |  18 +-
+ crates/cityloom_editor/src/junction/CLAUDE.md      |   2 +-
+ .../cityloom_editor/src/junction/view/inspector.rs | 535 +++++++--------------
+ crates/cityloom_editor/src/junction/view/tests.rs  | 120 +++--
+ crates/cityloom_editor/src/junction/vm/keys.rs     |  48 +-
+ crates/cityloom_editor/src/lib.rs                  |   3 +
+ crates/cityloom_editor/src/project/view.rs         |  15 +-
+ crates/cityloom_editor/src/share/view.rs           |  15 +-
+ crates/cityloom_editor/src/street/CLAUDE.md        |   2 +-
+ .../src/street/view/calming_tools.rs               |   6 +-
+ .../cityloom_editor/src/street/view/curb_tools.rs  |   6 +-
+ .../cityloom_editor/src/street/view/green_tools.rs |   6 +-
+ .../cityloom_editor/src/street/view/inspector.rs   | 280 ++++-------
+ .../cityloom_editor/src/street/view/stop_tools.rs  |   6 +-
+ crates/cityloom_editor/src/timeline/view.rs        |  15 +-
+ crates/cityloom_editor/src/ui_guard.rs             | 136 ++++++
+ crates/cityloom_ui/Cargo.toml                      |  11 +
+ crates/cityloom_ui/src/confirm.rs                  |  64 +++
+ crates/cityloom_ui/src/icons.rs                    |   8 +
+ crates/cityloom_ui/src/keys.rs                     | 163 +++++++
+ crates/cityloom_ui/src/lib.rs                      |  16 +
+ crates/cityloom_ui/src/radio.rs                    | 284 +++++++++++
+ crates/cityloom_ui/src/section.rs                  |  62 +++
+ crates/cityloom_ui/src/stepper.rs                  | 256 ++++++++++
+ crates/cityloom_ui/src/testing.rs                  |  42 ++
+ e2e/tests/account-server.spec.ts                   |   4 +-
+ e2e/tests/account.spec.ts                          |  91 +++-
+ e2e/tests/junction-a11y.spec.ts                    |  92 ++++
+ e2e/tests/junction.spec.ts                         |  14 +-
+ e2e/tests/read-only.spec.ts                        |  22 +-
+ e2e/tests/street.spec.ts                           |  14 +
+ e2e/tests/sync.spec.ts                             |   9 +-
+ scripts/ci/features.json                           |  28 +-
+ scripts/ci/spec-map.json                           |   4 +-
+ scripts/include/tests/test_ci_changes.py           |   4 +
+ sonar-project.properties                           |   2 +-
+ web/account.css                                    |  46 +-
+ web/editor.css                                     |  57 +--
+ website/docs/architecture/index.md                 |   2 +
+ website/docs/project-layout.md                     |   7 +-
+ website/docs/testing.md                            |  60 +--
+ .../current/architecture/index.md                  |   2 +
+ .../current/project-layout.md                      |  23 +-
+ .../current/testing.md                             |  60 +--
+ 50 files changed, 1950 insertions(+), 893 deletions(-)
+
+$ git diff 8edd3d32 9c7884f55449185d2b6f58b8536339a47073ae27 -- '*.ftl' crates/cityloom_editor/src/i18n_guard.rs crates/cityloom_editor/src/shared/contrast.rs (empty: True)
+
+$ git diff 8edd3d32 9c7884f55449185d2b6f58b8536339a47073ae27 -- CLAUDE.md scripts/ci sonar-project.properties
+diff --git a/CLAUDE.md b/CLAUDE.md
+index fc73d38b..d4e3718a 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -2,7 +2,7 @@
+ 
+ CityLoom is a street, junction and city-map editor in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). Pages: `web/index.html` (home: the person's projects), `web/about.html` (About CityLoom, with the city of the project opened last behind it), `web/map.html`, `web/street.html`, `web/intersection.html` (and `web/account.html`, `web/credits.html`, `web/timeline.html`, a project's milestones, `web/share.html`, a project's share links or a share link being opened, and `web/compare.html`, two designs (the baseline or a scenario) of one street or junction side by side, with what differs in the second; read-only, opened by the Compare link of a street's or junction's scenario panel). Every page's top bar links Projects (`index.html`) and About (`about.html`), the page's own `aria-current="page"`, and the logo goes to `index.html`; there is no Map link: a map is opened from its project. Streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
+ 
+-Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
++Layout: every crate lives in `crates/` (`cityloom_editor`, the wasm editor, whose `src/` the paths below name as `src/…`; `cityloom_ui`, the controls its pages share, with no wording: `RadioGroup`, `Stepper` and `NumberField`, `Section`, `Confirm`, each word a signal of the caller's, the keys' decisions in `keys.rs`; `cityloom_model`, the street network the importer makes and the street as the city keeps it, `cityloom_report`, `cityloom_report_pdf`, `cityloom_server`, `citymodel_builder`, which also holds the OpenStreetMap importer); the root `Cargo.toml` is only the workspace. The product's `version` is in `crates/cityloom_editor/Cargo.toml`. `web/`, `e2e/`, `scripts/`, `website/` and `data/` stay at the root. Other paths below that start with a crate name (`cityloom_server/…`, `citymodel_builder/…`) are inside `crates/`.
+ 
+ ## Commands
+ 
+@@ -44,7 +44,7 @@ Vertical slices, one folder per feature, MVVM inside each:
+ - `share/` shares a project by a link (#221): the share format, `share.html` (making a project's links; opening one into a copy, `project::copies`, never synced, shown read-only), the `ShareApi` port to `/api/share`.
+ - `project/` holds the projects: a project is a named container tied to an area (`model.rs`), the list in browser storage (`store.rs`, `cityloom-projects`), the move of the work from before projects into the first project (`migrate.rs`), which project a page is opened in (`context.rs`), and the home page's list (`vm.rs`, `view.rs`, `text.rs`). Each project keeps its documents under `<key>@<id>` (`shared::scoped`); the sync carries every project, the first one under bare keys.
+ - **What OpenStreetMap can say of a street is `cityloom_model`:** the catalogue of pieces (`cityloom_model::catalogue`, re-exported by `shared::catalogue`, which adds the regions, the add menu's groups and the message keys), the street's data (`cityloom_model::street`: `Street`, `Segment`, `Zone`, `Speed`, the curbside uses, stops, raised elements and green, with their serde form and the methods that only read or rearrange them; re-exported by `street::model`) and the reading of a road's lanes as pieces (`cityloom_model::street::{class_of, pieces, legacy_pieces, one_way_bike_lanes, refs}`, in `cityloom_model/src/street/from_road.rs`, used by `city::import`); a street's or junction's OSM source is `cityloom_model::SourceRef` (the editor's `shared::provenance::OsmRef`). The editing rules, checks, thresholds, message keys and anything that reads the standards profile stay in the editor, on extension traits of those types (`street::model::{StreetExt, UseExt, StopKindExt, CalmingKindExt, CalmingExt, GreenKindExt, GreenExt, TreeSizeExt}`); bring the trait into scope to call them.
+-- **Dependency rule:** a slice may use another slice's `model` (junction uses the street model; city uses both; `sync::local` uses `project::model`), `city::store` / `city::binding` / `city::projection` / `city::edits`, `restriction::store`, `standards::model` / `standards::store` (street), `place::area` (and `place::Bounds`, the box `Area::bounds` gives, which `city::projection` takes), `project::copies` (share: the copy of a shared design; the shell: `copies::{is_copy, fork}`, making a copy one of the person's projects, #223), `project::context` (which project a page is opened in: map, street, junction, place, archive, and `city::store` for the area a project's record names; the shell, for whether the page shows it read-only, `context::read_only`) and `shared`; never another slice's `vm`, views or text, nor its other modules, except: the archive panel (`archive::vm::ArchiveVm::for_page`, built by `account::mount_account`, which mounts it with `archive::view::ArchiveView`, and by the shell's Share menu for its export, `shell/view.rs`); the shell's tray (`shell::tray`, the Notes trays of the street and junction pages, `street/view/notes_tray.rs` and `junction/view/notes_tray.rs`); the shell's mount (`shell::mount` with `shell::NotesAtStart`, from the street, junction, map and account pages) and its target, `shell::Target` (implemented by `StreetVm`, `JunctionVm`, `MapVm`; the account page and a junction that cannot be drawn pass `shell::Bare`); the map's `restriction::draw` (the pure draw state machine of an area's outline: `map/vm/{mod,areas}.rs`, `map/view/{mod,areas_view}.rs`); in `street/`, `junction/` and `map/`: only what is under `model/`, except the report's figures, `street::view::drawing` and `junction::view::figure`, which `map/vm/report.rs` draws; and a shell test builds a `street::vm::StreetVm`. Tests also reach further, to set up what they test: `project::ProjectStore` / `project::store::PROJECTS_KEY` (archive, city, junction, map, share, shell, street, sync), `restriction::fixtures` (city, map, street), `shell::view::i18n_keys` (account, junction, map, project), `sync::SyncVm` / `sync::Status` (account), `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`) / `sync::local::ids`, `share::links::ProjectShares` / `share::store` and `timeline::store` (project), `city::scenario::Action` (street, junction). `project::store` and `project::migrate::{legacy_waiting, legacy_kept, area_moved}` are used by `sync::local` (every project's records and the projects' own; the places wait while work from before projects waits to be moved); `project::store` itself uses `city::edits`, `city::store`, `restriction::store` and `timeline::store` (a project's records, and blanking them on delete); `sync::local` also uses `timeline::store`. Stores and editors (`city/`, `restriction/`, `project/`, `street/`, `junction/`) also use `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), which depends only on `shared`; the shell builds `sync::SyncVm`; every other slice reaches the sync only through `sync::hub` and `sync::model`. `shared` depends on no slice. A page made of several slices is put together in `lib.rs`, the composition root, which may use any slice: the home page is `project::mount_list` alone (handed the share slice's `share::links::ProjectShares` as its `project::model::ProjectLinks`, so a project's share links end before it does), and the About page is `project::migrate::move_legacy_work` and then `map::mount_about`, so `project` uses no other slice's page. A page in no project that syncs (the home page, the About page, `account::mount_account`) first runs `project::migrate::move_legacy_work`. New code goes in the slice that owns the feature, not in a layer folder.
++- **Dependency rule:** a slice may use another slice's `model` (junction uses the street model; city uses both; `sync::local` uses `project::model`), `city::store` / `city::binding` / `city::projection` / `city::edits`, `restriction::store`, `standards::model` / `standards::store` (street), `place::area` (and `place::Bounds`, the box `Area::bounds` gives, which `city::projection` takes), `project::copies` (share: the copy of a shared design; the shell: `copies::{is_copy, fork}`, making a copy one of the person's projects, #223), `project::context` (which project a page is opened in: map, street, junction, place, archive, and `city::store` for the area a project's record names; the shell, for whether the page shows it read-only, `context::read_only`) and `shared`; never another slice's `vm`, views or text, nor its other modules, except: the archive panel (`archive::vm::ArchiveVm::for_page`, built by `account::mount_account`, which mounts it with `archive::view::ArchiveView`, and by the shell's Share menu for its export, `shell/view.rs`); the shell's tray (`shell::tray`, the Notes trays of the street and junction pages, `street/view/notes_tray.rs` and `junction/view/notes_tray.rs`); the shell's mount (`shell::mount` with `shell::NotesAtStart`, from the street, junction, map and account pages) and its target, `shell::Target` (implemented by `StreetVm`, `JunctionVm`, `MapVm`; the account page and a junction that cannot be drawn pass `shell::Bare`); the map's `restriction::draw` (the pure draw state machine of an area's outline: `map/vm/{mod,areas}.rs`, `map/view/{mod,areas_view}.rs`); in `street/`, `junction/` and `map/`: only what is under `model/`, except the report's figures, `street::view::drawing` and `junction::view::figure`, which `map/vm/report.rs` draws; and a shell test builds a `street::vm::StreetVm`. Tests also reach further, to set up what they test: `project::ProjectStore` / `project::store::PROJECTS_KEY` (archive, city, junction, map, share, shell, street, sync), `restriction::fixtures` (city, map, street), `shell::view::i18n_keys` (account, junction, map, project), `sync::SyncVm` / `sync::Status` (account), `sync::tests` (`Device`, `ServerSim`, `device`, `ada`, `T0`) / `sync::local::ids`, `share::links::ProjectShares` / `share::store` and `timeline::store` (project), `city::scenario::Action` (street, junction). `project::store` and `project::migrate::{legacy_waiting, legacy_kept, area_moved}` are used by `sync::local` (every project's records and the projects' own; the places wait while work from before projects waits to be moved); `project::store` itself uses `city::edits`, `city::store`, `restriction::store` and `timeline::store` (a project's records, and blanking them on delete); `sync::local` also uses `timeline::store`. Stores and editors (`city/`, `restriction/`, `project/`, `street/`, `junction/`) also use `sync::model` (`Id`, `Kind`, `Change`, `Origin`, `Report`, `mark`), which depends only on `shared`; the shell builds `sync::SyncVm`; every other slice reaches the sync only through `sync::hub` and `sync::model`. `shared` depends on no slice. Any slice may use the crate `cityloom_ui`, which uses no other crate of the workspace; no slice draws its own radio group, stepper, headed section of the details or question (`ui_guard.rs` fails otherwise). A component's body is not tracked, so a word given inside one of its children is a closure (`{move || tr(…)}`). A page made of several slices is put together in `lib.rs`, the composition root, which may use any slice: the home page is `project::mount_list` alone (handed the share slice's `share::links::ProjectShares` as its `project::model::ProjectLinks`, so a project's share links end before it does), and the About page is `project::migrate::move_legacy_work` and then `map::mount_about`, so `project` uses no other slice's page. A page in no project that syncs (the home page, the About page, `account::mount_account`) first runs `project::migrate::move_legacy_work`. New code goes in the slice that owns the feature, not in a layer folder.
+ - **View-models** expose presentation-ready reactive getters and take commands. They reach the browser only through the ports, so they are tested natively against `test_ports()` / `test_ports_with_time()`.
+ - **Views** bind to a view-model and forward events; they decide nothing. Rendering is by pure functions returning SVG strings (`junction/view/iso/`, `street/view/iso/`, `map/view/svg.rs` for the About page's city only) set with `inner_html`; pointer and keyboard logic are pure state machines with tests. `shell/view.rs` binds the shared static markup to `ShellVm`. `map/` draws with MapLibre, no SVG.
+ - **Entry points** are in each slice's `mod.rs` (wasm-bindgen exports: `Editor`/`open_junction`/`mount_page`, `Sheet`/`open_street`/`mount_street_page`, `mount_map(canvas)`) and `lib.rs` (`mount_projects`, the home page, which `web/home.js` calls; `mount_about`, the About page, which `web/about.js` calls before `prepare_city` and `.mount_city()`; `mount_compare`, the comparison page, which `web/compare.js` calls and which hands the street or junction slice its half through `mount_compare_street` / `mount_compare_junction`). Each opens inside the page's project (`project::context::open_page`: `?project=<id>`, else the one opened last; none here sends the page to `index.html?missing=1` and gives nothing); links to `map.html`, `street.html`, `intersection.html` carry `project=<id>` (`shared::project_id::link`; the shell rewrites the markup's). `&view=1` opens the project read-only (#222; `Storage::read_only`, every view-model's `read_only()`, the shell's top-bar tag; the links keep it). A page script (`web/app.js`, `junction.js`, `map.js`) only loads the module, sets up the hatch `<defs>` (not `map.js`, which passes `createMapCanvas` from `web/mapcanvas.js` to `mount_map`) and calls `mount_*` and `.mount_shell()`.
+diff --git a/scripts/ci/features.json b/scripts/ci/features.json
+index 0bdaa1a3..95f610c4 100644
+--- a/scripts/ci/features.json
++++ b/scripts/ci/features.json
+@@ -22,7 +22,11 @@
+         "crates/cityloom_editor/src/street/view/page.rs",
+         "crates/cityloom_editor/src/shared/catalogue.rs",
+         "crates/cityloom_model/src/catalogue.rs",
+-        "crates/cityloom_model/src/street/*.rs"
++        "crates/cityloom_model/src/street/*.rs",
++        "crates/cityloom_ui/src/keys.rs",
++        "crates/cityloom_ui/src/radio.rs",
++        "crates/cityloom_ui/src/stepper.rs",
++        "crates/cityloom_ui/src/section.rs"
+       ],
+       "specs": ["street", "editors"]
+     },
+@@ -171,7 +175,11 @@
+         "crates/cityloom_editor/src/junction/model/stops.rs",
+         "crates/cityloom_editor/src/junction/vm/*.rs",
+         "crates/cityloom_editor/src/junction/view/*.rs",
+-        "crates/cityloom_editor/src/junction/view/iso/*.rs"
++        "crates/cityloom_editor/src/junction/view/iso/*.rs",
++        "crates/cityloom_ui/src/keys.rs",
++        "crates/cityloom_ui/src/radio.rs",
++        "crates/cityloom_ui/src/stepper.rs",
++        "crates/cityloom_ui/src/section.rs"
+       ],
+       "specs": ["junction", "junction-a11y", "focus-touch"]
+     },
+@@ -427,7 +435,8 @@
+       "owner": "crates/cityloom_editor/src/project",
+       "code": [
+         "crates/cityloom_editor/src/project/*.rs",
+-        "crates/cityloom_editor/src/shared/project_id.rs"
++        "crates/cityloom_editor/src/shared/project_id.rs",
++        "crates/cityloom_ui/src/confirm.rs"
+       ],
+       "specs": ["home", "projects"]
+     },
+@@ -437,7 +446,7 @@
+       "fr-CA": "Les jalons d’un projet conservent son travail à un moment donné, et se comparent au travail actuel",
+       "pages": ["timeline.html"],
+       "owner": "crates/cityloom_editor/src/timeline",
+-      "code": ["crates/cityloom_editor/src/timeline/*.rs"],
++      "code": ["crates/cityloom_editor/src/timeline/*.rs", "crates/cityloom_ui/src/confirm.rs"],
+       "specs": ["timeline"]
+     },
+     {
+@@ -446,7 +455,7 @@
+       "fr-CA": "L’aménagement d’un projet s’exporte en un seul fichier et s’importe sur un autre appareil",
+       "pages": ["street.html", "account.html"],
+       "owner": "crates/cityloom_editor/src/archive",
+-      "code": ["crates/cityloom_editor/src/archive/*.rs"],
++      "code": ["crates/cityloom_editor/src/archive/*.rs", "crates/cityloom_ui/src/confirm.rs"],
+       "specs": ["design-archive"]
+     },
+     {
+@@ -459,7 +468,8 @@
+         "crates/cityloom_editor/src/share/*.rs",
+         "crates/cityloom_editor/src/project/copies.rs",
+         "crates/cityloom_server/src/share.rs",
+-        "crates/cityloom_server/src/db/share.rs"
++        "crates/cityloom_server/src/db/share.rs",
++        "crates/cityloom_ui/src/confirm.rs"
+       ],
+       "specs": ["share"]
+     },
+@@ -491,7 +501,10 @@
+         "crates/cityloom_server/src/providers/**/*.rs",
+         "crates/cityloom_server/src/session.rs",
+         "crates/cityloom_server/src/crypto.rs",
+-        "crates/cityloom_server/src/db.rs"
++        "crates/cityloom_server/src/db.rs",
++        "crates/cityloom_ui/src/keys.rs",
++        "crates/cityloom_ui/src/radio.rs",
++        "crates/cityloom_ui/src/confirm.rs"
+       ],
+       "specs": ["account", "account-server"]
+     },
+@@ -542,6 +555,7 @@
+       "owner": "crates/cityloom_editor/src/shared",
+       "code": [
+         "crates/cityloom_editor/src/shared/contrast.rs",
++        "crates/cityloom_editor/src/ui_guard.rs",
+         "web/app.css",
+         "web/editor.css"
+       ],
+diff --git a/scripts/ci/spec-map.json b/scripts/ci/spec-map.json
+index 0de0d8f0..fadc3c7f 100644
+--- a/scripts/ci/spec-map.json
++++ b/scripts/ci/spec-map.json
+@@ -17,7 +17,7 @@
+   "rules": [
+     { "paths": ["website/**", "docs/**", "**/*.md", "LICENSE*"], "docs": true },
+     { "paths": ["e2e/tests/*.spec.ts"], "specs": "self" },
+-    { "paths": ["**/tests.rs", "crates/cityloom_editor/src/i18n_guard.rs", "crates/cityloom_editor/src/layout_guard.rs", "scripts/include/tests/**", "crates/*/tests/**", ".github/ISSUE_TEMPLATE/**", ".github/labels.yml", ".github/issue-labeler.yml", ".github/issue-flow.json", ".github/dependabot.yml", "sonar-project.properties"], "specs": "none" },
++    { "paths": ["**/tests.rs", "crates/cityloom_editor/src/i18n_guard.rs", "crates/cityloom_editor/src/layout_guard.rs", "crates/cityloom_editor/src/ui_guard.rs", "scripts/include/tests/**", "crates/*/tests/**", ".github/ISSUE_TEMPLATE/**", ".github/labels.yml", ".github/issue-labeler.yml", ".github/issue-flow.json", ".github/dependabot.yml", "sonar-project.properties"], "specs": "none" },
+     { "paths": ["crates/cityloom_editor/src/street/**"], "specs": ["@street", "@junction", "@map", "@cross"] },
+     { "paths": ["crates/cityloom_editor/src/standards/**"], "specs": ["@standards", "@street", "@cross"] },
+     { "paths": ["crates/cityloom_editor/src/junction/**"], "specs": ["@junction", "@cross"] },
+@@ -46,6 +46,6 @@
+     { "paths": ["e2e/tests/account-helpers.ts"], "specs": ["account-server", "share", "sync"] },
+     { "paths": ["scripts/e2e-archive.sh"], "specs": ["@archive", "@static"] },
+     { "paths": ["scripts/check-no-fake.sh", "scripts/check-version.sh", "scripts/deploy.sh", "deploy/**", ".github/workflows/docs.yml", ".github/workflows/sonar.yml"], "specs": "none" },
+-    { "paths": ["crates/cityloom_editor/src/city/**", "crates/cityloom_editor/src/shared/**", "crates/cityloom_editor/src/shell/**", "crates/cityloom_editor/src/lib.rs", "crates/cityloom_editor/src/atlas_contract.rs", "crates/cityloom_model/**", "crates/cityloom_server/**", "web/**", "e2e/**", "scripts/**", "deploy/**", "justfile", "Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock", ".github/**", "package.json", "package-lock.json", "rustfmt.toml", ".prettierrc.json", ".prettierignore", ".gitignore", ".env.example"], "specs": "all" }
++    { "paths": ["crates/cityloom_editor/src/city/**", "crates/cityloom_editor/src/shared/**", "crates/cityloom_editor/src/shell/**", "crates/cityloom_editor/src/lib.rs", "crates/cityloom_editor/src/atlas_contract.rs", "crates/cityloom_model/**", "crates/cityloom_ui/**", "crates/cityloom_server/**", "web/**", "e2e/**", "scripts/**", "deploy/**", "justfile", "Cargo.toml", "crates/*/Cargo.toml", "Cargo.lock", ".github/**", "package.json", "package-lock.json", "rustfmt.toml", ".prettierrc.json", ".prettierignore", ".gitignore", ".env.example"], "specs": "all" }
+   ]
+ }
+diff --git a/sonar-project.properties b/sonar-project.properties
+index 10abd2e2..cbf781ca 100644
+--- a/sonar-project.properties
++++ b/sonar-project.properties
+@@ -2,7 +2,7 @@
+ sonar.organization=alandovskis
+ sonar.projectKey=alandovskis_cityloom
+ 
+-sonar.sources=crates/cityloom_editor/src,crates/cityloom_model/src,web,scripts,crates/citymodel_builder/src
++sonar.sources=crates/cityloom_editor/src,crates/cityloom_ui/src,crates/cityloom_model/src,web,scripts,crates/citymodel_builder/src
+ sonar.tests=e2e/tests,scripts/include/tests,crates/citymodel_builder/tests
+ sonar.sourceEncoding=UTF-8
+ 
