@@ -91,13 +91,63 @@ Clippy denies nothing: it runs only for [SonarCloud](testing.md#sonarcloud), wit
   `shared/units.rs`, and a number the person types is read by `parse_number`. Example: `shared/units.rs` (`length_in`,
   `parse_number`). **Review**
 
-## Leptos and SVG
+## MVVM
 
-What belongs in a view, and what in its view-model, is in Architecture ([Layers inside a
-slice](architecture/index.md#layers-inside-a-slice)).
+Inside each slice, the code follows MVVM: a model, a view-model and a view, as the slice needs them. How these layers
+are laid out in folders is in Architecture ([Layers inside a slice](architecture/index.md#layers-inside-a-slice)). A
+rule here that says what a layer does not use is about the code outside tests.
 
+### Model
+
+- A model (`model.rs`, `model/`) names neither Leptos nor the browser (`web_sys`, `js_sys`, `wasm_bindgen`), and holds
+  no signal. Example: `street/model/pick.rs` (`Pick`). **Review**
+- The models of the street and the junction name no port and no store, so they read and keep nothing outside the
+  page's memory. Of the other models, `archive/model.rs`, `share/model.rs` and `sync/model.rs` take the `Storage`
+  port, and `map/model/corridor.rs` takes a `CityStore`. Example: `street/model/mod.rs` (`Editor`). **Review**
+- A model has no words of its own for the person: it says a thing by a message key, alone or with its arguments
+  (`Said`), and the thing is put into words outside the model, in the page's language. Only `Problem::say` in
+  `street/model/measures.rs` asks for its words itself. Example: `street/model/calming.rs` (`calming_label`).
+  **Guard** (`i18n_guard.rs`) against a literal that looks like words in the files of its `MIGRATED` list, **Review**
+  for the rest.
+- A model uses no view-model, view or `text.rs` of any slice. Example: `map/model/corridor.rs` (`plan`), which uses
+  other models. **Review**
+
+### View-model
+
+- The state of a view-model is in private fields: a view reads it through methods, the getters, and changes it through
+  methods, the commands. A getter that a view draws from usually tracks the signals it reads, so that the view is
+  drawn again when they change. Only `version` of `StreetVm` and of `JunctionVm` hands out a signal. Example:
+  `project/vm.rs` (`rows`, `create`). **Review**
+- A getter often gives what is ready to show, in the page's language. In the street and the junction, much of it comes
+  as the `Said`s of the model's view (`View`, `JView`), which the Leptos views put into words. Example:
+  `project/vm.rs` (`Row`, which `rows` gives). **Review**
 - The files of the view-models (`vm.rs`, `vm/`) name no `web_sys`, `js_sys` or `wasm_bindgen`: the browser is behind
   the ports (see [Ports](architecture/index.md#ports)). Example: `project/vm.rs` (`ProjectsVm`). **Review**
+- A view-model uses no view, except `map/vm/report.rs`, which draws the report's figures with functions of the
+  street's and the junction's views. Example: `project/vm.rs` (`ProjectsVm`). **Review**
+- A view-model that takes the ports is tested natively against their fakes, through `test_ports()`,
+  `test_ports_with_time()` or another helper of `shared/ports.rs` (see [View-model
+  tests](testing.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**
+
+### View
+
+- Almost every component takes its view-model (`vm: Rc<…Vm>`), shows what its getters give and calls its commands for
+  what the person does. Example: `map/view/network_view.rs` (`NetworkChecks`, whose `row` calls `show_check`).
+  **Review**
+- A view changes the design only by a command of its view-model, and holds no `Editor`, `Junction` or `CityStore` of
+  its own. In the street and the junction the command is often `edit`, which takes the model's edit as a closure.
+  Example: `street/view/inspector.rs` (`commit_width`). **Review**
+- A signal of a view's own holds only what its component needs while it is shown, such as what is typed or chosen
+  there, what is open or pointed at, or a measured size. Only views of the street and the junction, and
+  `shared/scenarios_view.rs`, have such signals. Example: `street/view/green_tools.rs` (`Fields`). **Review**
+- What a key does in the drawings of the street and the junction is mostly decided by a pure function with tests,
+  whose answer the view carries out or hands to its view-model. The drawing of an area's outline on the map is a pure
+  state machine with tests, which the view-model steps. Elsewhere, as for Enter in a field or the arrows in the map's
+  search box, the view often tells the keys apart itself. Examples: `street/vm/keys.rs` (`on_section`),
+  `junction/vm/keys.rs` (`on_drawing`), `restriction/draw.rs` (`Draw`). **Review**
+
+## Leptos and SVG
+
 - A component is named in `PascalCase`. Example: `map/view/network_view.rs` (`NetworkChecks`). **Review**
 - The functions that return SVG as a string (see [Layers inside a slice](architecture/index.md#layers-inside-a-slice))
   use no Leptos, no signal and no DOM. Example: `street/view/plan/mod.rs` (`plan_svg`). **Review**

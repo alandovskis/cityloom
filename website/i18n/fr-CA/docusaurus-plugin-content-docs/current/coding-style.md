@@ -96,14 +96,68 @@ d’avertissement.
   `shared/units.rs`, et un nombre que la personne saisit est lu par `parse_number`. Exemple : `shared/units.rs`
   (`length_in`, `parse_number`). **Revue**
 
-## Leptos et SVG
+## MVVM
 
-Ce qui relève d’une vue, et ce qui relève de son modèle de vue, est décrit dans Architecture ([Couches dans une
-tranche](architecture/index.md#couches-dans-une-tranche)).
+Dans chaque tranche, le code suit MVVM : un modèle, un modèle de vue et une vue, selon les besoins de la tranche. La
+répartition de ces couches en dossiers est décrite dans Architecture ([Couches dans une
+tranche](architecture/index.md#couches-dans-une-tranche)). Une règle d’ici qui dit ce qu’une couche n’utilise pas
+porte sur le code hors des tests.
 
+### Modèle
+
+- Un modèle (`model.rs`, `model/`) ne nomme ni Leptos, ni le navigateur (`web_sys`, `js_sys`, `wasm_bindgen`), et ne
+  contient aucun signal. Exemple : `street/model/pick.rs` (`Pick`). **Revue**
+- Les modèles de la rue et de la jonction ne nomment aucun port ni aucun magasin : ils ne lisent et ne conservent donc
+  rien hors de la mémoire de la page. Parmi les autres modèles, `archive/model.rs`, `share/model.rs` et
+  `sync/model.rs` prennent le port `Storage`, et `map/model/corridor.rs` prend un `CityStore`. Exemple :
+  `street/model/mod.rs` (`Editor`). **Revue**
+- Un modèle n’a pas de mots à lui pour la personne : il dit une chose par la clé d’un message, seule ou avec ses
+  arguments (`Said`), et la chose est mise en mots hors du modèle, dans la langue de la page. Seule `Problem::say`
+  dans `street/model/measures.rs` demande elle-même ses mots. Exemple : `street/model/calming.rs` (`calming_label`).
+  **Garde** (`i18n_guard.rs`) contre un littéral qui ressemble à des mots dans les fichiers de sa liste `MIGRATED`,
+  **Revue** pour le reste.
+- Un modèle n’utilise le modèle de vue, la vue ni le `text.rs` d’aucune tranche. Exemple : `map/model/corridor.rs`
+  (`plan`), qui utilise d’autres modèles. **Revue**
+
+### Modèle de vue
+
+- L’état d’un modèle de vue est dans des champs privés : une vue le lit par des méthodes, les accesseurs, et le change
+  par des méthodes, les commandes. Un accesseur d’où une vue tire ce qu’elle dessine suit le plus souvent les signaux
+  qu’il lit, pour que la vue soit redessinée quand ils changent. Seule `version`, de `StreetVm` et de `JunctionVm`,
+  donne un signal. Exemple : `project/vm.rs` (`rows`, `create`). **Revue**
+- Un accesseur donne souvent ce qui est prêt à présenter, dans la langue de la page. Dans la rue et la jonction, une
+  grande partie vient sous la forme des `Said` de la vue du modèle (`View`, `JView`), que les vues Leptos mettent en
+  mots. Exemple : `project/vm.rs` (`Row`, que donne `rows`). **Revue**
 - Les fichiers des modèles de vue (`vm.rs`, `vm/`) ne nomment ni `web_sys`, ni `js_sys`, ni `wasm_bindgen` : le
   navigateur est derrière les ports (voir [Ports](architecture/index.md#ports)). Exemple : `project/vm.rs`
   (`ProjectsVm`). **Revue**
+- Un modèle de vue n’utilise aucune vue, sauf `map/vm/report.rs`, qui dessine les figures du rapport avec des
+  fonctions des vues de la rue et de la jonction. Exemple : `project/vm.rs` (`ProjectsVm`). **Revue**
+- Un modèle de vue qui prend les ports est testé en natif contre leurs doublures, par `test_ports()`,
+  `test_ports_with_time()` ou une autre fonction de `shared/ports.rs` (voir [Tests des modèles de
+  vue](testing.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**
+
+### Vue
+
+- Presque chaque composant prend son modèle de vue (`vm: Rc<…Vm>`), montre ce que donnent ses accesseurs et appelle
+  ses commandes pour ce que fait la personne. Exemple : `map/view/network_view.rs` (`NetworkChecks`, dont `row`
+  appelle `show_check`). **Revue**
+- Une vue ne change l’aménagement que par une commande de son modèle de vue, et n’a pas à elle d’`Editor`, de
+  `Junction` ni de `CityStore`. Dans la rue et la jonction, la commande est souvent `edit`, qui prend la modification
+  du modèle sous forme de fermeture. Exemple : `street/view/inspector.rs` (`commit_width`). **Revue**
+- Un signal propre à une vue ne contient que ce dont son composant a besoin pendant qu’il est affiché, comme ce qui y
+  est saisi ou choisi, ce qui est ouvert ou pointé, ou une taille mesurée. Seules des vues de la rue et de la
+  jonction, et `shared/scenarios_view.rs`, ont de tels signaux. Exemple : `street/view/green_tools.rs` (`Fields`).
+  **Revue**
+- Ce que fait une touche dans les dessins de la rue et de la jonction est le plus souvent décidé par une fonction pure
+  et testée, dont la vue exécute la réponse ou la transmet à son modèle de vue. Le dessin du contour d’une zone sur la
+  carte est une machine à états pure et testée, que fait avancer le modèle de vue. Ailleurs, comme pour la touche
+  Entrée dans un champ ou les flèches dans la zone de recherche de la carte, la vue distingue souvent elle-même les
+  touches. Exemples : `street/vm/keys.rs` (`on_section`), `junction/vm/keys.rs` (`on_drawing`), `restriction/draw.rs`
+  (`Draw`). **Revue**
+
+## Leptos et SVG
+
 - Un composant est nommé en `PascalCase`. Exemple : `map/view/network_view.rs` (`NetworkChecks`). **Revue**
 - Les fonctions qui renvoient du SVG sous forme de chaîne (voir
   [Couches dans une tranche](architecture/index.md#couches-dans-une-tranche)) n’utilisent ni Leptos, ni signal, ni
