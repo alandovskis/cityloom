@@ -16,10 +16,9 @@
 //! - Only exactly `cfg(test)` is test code: what is under `cfg(any(.., test))` is production.
 //! - After the first braces of an item, a statement or a list's element under `#[cfg(test)]`, the rest of it (an `else`,
 //!   a method call) is production.
-//! - A generic parameter, or a closure's parameter, under `#[cfg(test)]` may hide what follows it, up to the next `;` or
-//!   comma, in other items too.
-//! - Under `#[cfg(test)]`, a `<` with no space before it opens generic arguments, so a comparison rustfmt has not spaced
-//!   may hide the elements after it, up to a `>`.
+//! - A generic parameter, or a closure's parameter, under `#[cfg(test)]` may hide what follows it, in other items too.
+//! - Under `#[cfg(test)]`, a `<` with no space before it opens generic arguments, so a comparison or a shift rustfmt has
+//!   not spaced may hide the elements after it, up to a `>`.
 //! - In a macro whose elements end at anything but a `;`, a comma or braces, one under `#[cfg(test)]` may hide the next.
 //! - Cycles between slices are accepted.
 
