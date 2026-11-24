@@ -627,6 +627,26 @@ mod tests {
     }
 
     #[test]
+    fn a_qualified_path_in_generic_arguments_does_not_end_what_is_under_cfg_test() {
+        let field = "struct S {\n    #[cfg(test)]\n    seen: Map<<X as Tr>::Out, crate::street::vm::Key>,\n    city: crate::city::store::Key,\n}\n";
+        let tuple = "struct S(\n    #[cfg(test)]\n    Map<<X as Tr>::Out, crate::street::vm::Key>,\n    crate::city::store::Key,\n);\n";
+        let first = "struct S {\n    #[cfg(test)]\n    seen: Map<Vec<<X as Tr>::Out>, crate::street::vm::Key>,\n    city: crate::city::store::Key,\n}\n";
+        let samples = [
+            ("a field", field, (4, "city::store::Key")),
+            ("a field of a tuple struct", tuple, (4, "city::store::Key")),
+            ("a field whose first argument holds it", first, (4, "city::store::Key")),
+        ];
+        let mut wrong = Vec::new();
+        for (name, code, expected) in samples {
+            let (found, expected) = (found(code), at(&[expected]));
+            if found != expected {
+                wrong.push(format!("{name}: found {found:?}, not {expected:?}"));
+            }
+        }
+        assert!(wrong.is_empty(), "{} of {} samples:\n{}", wrong.len(), samples.len(), wrong.join("\n"));
+    }
+
+    #[test]
     fn a_file_is_test_code_by_its_declaration_not_its_name() {
         let declared_for_tests = tree(&[
             ("lib.rs", "mod junction;"),
