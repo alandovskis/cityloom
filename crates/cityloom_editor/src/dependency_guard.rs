@@ -1,8 +1,17 @@
-//! What each slice may use of another: the dependency rule of the root `CLAUDE.md`, held by a test.
+//! What each slice may use of another, and each layer inside a slice: the dependency rule and the layers of the root
+//! `CLAUDE.md`, held by tests.
 //!
 //! `ALLOWED` is the rule. A use of another slice by production code that no entry allows fails, and so does an entry
 //! nothing uses, so the table says neither less nor more than the code does. `shared` uses no slice, whatever the table
 //! says; `lib.rs`, the composition root, may use any; a folder of `src/` that is neither in `SLICES` nor `shared` fails.
+//!
+//! The layer rules: in the slices of `layout_guard::LAYERED`, the model uses neither the view-model nor the view of its
+//! slice, and the view-model does not use the view; neither takes the slice whole (`use crate::junction`, its glob), which
+//! would open them. The library rules, in every slice: the model names neither Leptos nor the browser's crates, whether in
+//! a path, an import or an attribute, nor a crate of the same family (`gloo_timers`); the view-model may name Leptos, but
+//! neither the browser's crates, even through Leptos, nor Leptos's `document()` and `window()`. The slice's `model.rs` and
+//! what is under its `model/` are the model, `vm.rs` and what is under `vm/` the view-model; no other file is held to these
+//! rules. `EXCEPTIONS` lets a break pass, with the reason; an entry no break matches fails, and so does a blank reason.
 //!
 //! The files are read from disk with Rust's own lexer (`proc_macro2`), from `lib.rs` down the `mod` declarations, so a
 //! path in a macro's body (`view!`, `vec!`) counts and one in a comment or a string does not. Test code is exempt: an
@@ -21,6 +30,12 @@
 //!   not spaced may hide the elements after it, up to a `>`.
 //! - In a macro whose elements end at anything but a `;`, a comma or braces, one under `#[cfg(test)]` may hide the next.
 //! - Cycles between slices are accepted.
+//! - An item of a layer that the slice's root, or another module, re-exports passes as theirs.
+//! - The layer is the file's: an inline `mod model { .. }` elsewhere is in none.
+//! - A bare `document()` or `window()` in a view-model counts as Leptos's, even when it is the file's own function.
+//! - Leptos's `document` or `window` given as a value without a call, or called through an alias or an imported module of
+//!   Leptos (`prelude::window()`), passes.
+//! - A name of the code's own that begins as a library's does (`leptos_rules`, a field `web_sys`) counts as the library.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -29,6 +44,7 @@ use std::str::FromStr;
 use proc_macro2::{Delimiter, Group, Ident, Spacing, TokenStream, TokenTree};
 
 use crate::i18n_guard::{is_cfg_test, is_punct};
+use crate::layout_guard::LAYERED;
 
 /// The composition root, which may use any slice.
 const ROOT: &str = "lib.rs";
@@ -43,7 +59,20 @@ const SLICES: &[&str] =
 /// Any slice of `SLICES`, as an entry's `by` or as the first component of its `uses`.
 const ANY: &str = "*";
 
-/// What some code may use of another slice.
+/// Leptos, which a model may not name. A crate whose name goes on after a `_` is of its family.
+const LEPTOS_CRATE: &str = "leptos";
+
+/// The browser's crates, with their families, which neither a model nor a view-model may name.
+const BROWSER_CRATES: &[&str] = &["web_sys", "js_sys", "gloo", "wasm_bindgen"];
+
+/// Leptos's functions that give the browser's objects, which a view-model may not call.
+const BROWSER_CALLS: &[&str] = &["document", "window"];
+
+/// The layers, as a break names them.
+const MODEL: &str = "model";
+const VIEW_MODEL: &str = "view-model";
+
+/// What some code may use of another slice, or a layer against its rules.
 struct Entry {
     /// Who: a slice's folder, a file (`map/vm/report.rs`), or `ANY` slice.
     by: &'static [&'static str],
@@ -172,17 +201,103 @@ fn add_sources(dir: &Path, prefix: &str, out: &mut Sources) {
     }
 }
 
+/// What a path is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// From the crate's root.
+    Crate,
+    /// From the crate's root, after `in`, as in a visibility.
+    Visibility,
+    /// From Leptos or a crate of the browser's.
+    Library,
+    /// `document` or `window` called by its name alone.
+    Call,
+}
+
+/// A path production code holds.
+struct Reading {
+    file: String,
+    line: usize,
+    /// From the crate's root or the library.
+    path: Vec<String>,
+    kind: Kind,
+    /// Whether it opens what it names to other names: an alias, or `self` in a group.
+    opens: bool,
+}
+
+impl Reading {
+    fn used(&self, path: String) -> Use {
+        Use { file: self.file.clone(), line: self.line, path }
+    }
+}
+
 /// Every use of another slice by production code, sorted, each once.
 fn uses(sources: &Sources) -> Vec<Use> {
+    sorted(readings(sources).iter().filter_map(use_of_another))
+}
+
+/// Every path production code holds.
+fn readings(sources: &Sources) -> Vec<Reading> {
     let mut found = Vec::new();
     read(sources, ROOT, &[], &mut found);
+    found
+}
+
+/// `found` in order, each once.
+fn sorted<T: Ord>(found: impl Iterator<Item = T>) -> Vec<T> {
+    let mut found: Vec<T> = found.collect();
     found.sort();
     found.dedup();
     found
 }
 
-/// Adds to `found` the uses in `file`, which is `module`, and in the files of the modules it declares.
-fn read(sources: &Sources, file: &str, module: &[String], found: &mut Vec<Use>) {
+/// The use `reading` is, if it is of another slice, or of the crate's root itself when it opens it to other names. The
+/// composition root's are its own business.
+fn use_of_another(reading: &Reading) -> Option<Use> {
+    if reading.file == ROOT || !matches!(reading.kind, Kind::Crate | Kind::Visibility) {
+        return None;
+    }
+    let path = match reading.path.as_slice() {
+        [] if reading.opens => "crate".to_string(),
+        [star] if star == "*" => "crate::*".to_string(),
+        [slice, ..] if SLICES.contains(&slice.as_str()) && folder(&reading.file) != Some(slice) => reading.path.join("::"),
+        _ => return None,
+    };
+    Some(reading.used(path))
+}
+
+/// The break `reading` is, if its file is in a layer whose rules do not allow it.
+fn break_by(reading: &Reading) -> Option<Break> {
+    let layer = layer(&reading.file)?;
+    let breaks = match reading.kind {
+        Kind::Crate | Kind::Visibility => breaks_layer(layer, reading),
+        Kind::Library => layer == MODEL || reaches_browser(&reading.path),
+        Kind::Call => layer == VIEW_MODEL,
+    };
+    breaks.then(|| Break { used: reading.used(reading.path.join("::")), layer })
+}
+
+/// Whether `reading`, a path of the crate in a file of `layer`, is of a layer of its own slice that `layer` may not use, or
+/// takes the slice whole.
+fn breaks_layer(layer: &str, reading: &Reading) -> bool {
+    let [slice, rest @ ..] = reading.path.as_slice() else { return false };
+    if folder(&reading.file) != Some(slice) || !LAYERED.contains(&slice.as_str()) {
+        return false;
+    }
+    match rest {
+        [] => reading.kind != Kind::Visibility,
+        [next, ..] => next == "*" || next == "view" || next == "vm" && layer == MODEL,
+    }
+}
+
+/// Whether `path`, of a library, names a crate of the browser's, through Leptos or not, or is of Leptos's `document` or
+/// `window`.
+fn reaches_browser(path: &[String]) -> bool {
+    path.iter().any(|name| is_browser(name)) || path.last().is_some_and(|name| BROWSER_CALLS.contains(&name.as_str()))
+}
+
+/// Adds to `found` the paths in `file`, which is `module`, and in the files of the modules it declares.
+fn read(sources: &Sources, file: &str, module: &[String], found: &mut Vec<Reading>) {
     let stream = TokenStream::from_str(&sources[file]).unwrap_or_else(|e| panic!("src/{file} does not lex: {e}"));
     Reader { sources, file, found }.walk(stream, module);
 }
@@ -191,7 +306,7 @@ fn read(sources: &Sources, file: &str, module: &[String], found: &mut Vec<Use>) 
 struct Reader<'a> {
     sources: &'a Sources,
     file: &'a str,
-    found: &'a mut Vec<Use>,
+    found: &'a mut Vec<Reading>,
 }
 
 impl Reader<'_> {
@@ -200,35 +315,50 @@ impl Reader<'_> {
         let t: Vec<TokenTree> = stream.into_iter().collect();
         let mut i = 0;
         while i < t.len() {
-            if is_punct(&t[i], '#') && t.get(i + 1).is_some_and(is_cfg_test) {
-                i = after_test_code(&t, i + 2);
-                continue;
-            }
-            if is_word(&t[i], "mod")
-                && let [TokenTree::Ident(name), body, ..] = &t[i + 1..]
-            {
-                let mut inner = module.to_vec();
-                inner.push(bare(name));
-                if let Some(group) = braced(body) {
-                    self.walk(group.stream(), &inner);
-                    i += 3;
-                    continue;
-                }
-                if is_punct(body, ';') {
-                    self.declared(&inner);
-                    i += 3;
-                    continue;
-                }
-            }
-            if starts_path(&t, i) {
-                i = self.path(&t, i, module, false);
-                continue;
-            }
-            if let TokenTree::Group(group) = &t[i] {
-                self.walk(group.stream(), module);
-            }
-            i += 1;
+            i = self.step(&t, i, module);
         }
+    }
+
+    /// Reads what begins at `t[i]`, and gives where it ends.
+    fn step(&mut self, t: &[TokenTree], i: usize, module: &[String]) -> usize {
+        if is_punct(&t[i], '#') && t.get(i + 1).is_some_and(is_cfg_test) {
+            return after_test_code(t, i + 2);
+        }
+        if let Some(end) = self.declaration(t, i, module) {
+            return end;
+        }
+        if starts_path(t, i) {
+            let kind = if i >= 1 && is_word(&t[i - 1], "in") { Kind::Visibility } else { Kind::Crate };
+            return self.path(t, i, module, kind, false);
+        }
+        if starts_library(t, i) {
+            return self.path(t, i, &[], Kind::Library, false);
+        }
+        if is_bare_call(t, i) {
+            self.keep(t[i].span().start().line, &[t[i].to_string()], Kind::Call, false);
+        }
+        if let TokenTree::Group(group) = &t[i] {
+            self.walk(group.stream(), module);
+        }
+        i + 1
+    }
+
+    /// Reads the module that a `mod` at `t[i]` declares in `module`, if there is one, and gives where it ends.
+    fn declaration(&mut self, t: &[TokenTree], i: usize, module: &[String]) -> Option<usize> {
+        let [keyword, TokenTree::Ident(name), body, ..] = &t[i..] else { return None };
+        if !is_word(keyword, "mod") {
+            return None;
+        }
+        let mut inner = module.to_vec();
+        inner.push(bare(name));
+        if let Some(group) = braced(body) {
+            self.walk(group.stream(), &inner);
+        } else if is_punct(body, ';') {
+            self.declared(&inner);
+        } else {
+            return None;
+        }
+        Some(i + 3)
     }
 
     /// Reads the file of `module`, which this file declares.
@@ -241,9 +371,9 @@ impl Reader<'_> {
         read(self.sources, file, module, self.found);
     }
 
-    /// Finds what the path at `t[i]` names, from the module `from` (a group's names are `grouped`), and gives where the
-    /// path ends.
-    fn path(&mut self, t: &[TokenTree], mut i: usize, from: &[String], grouped: bool) -> usize {
+    /// Finds what the path of `kind` at `t[i]` names, from `from` (a group's names are `grouped`), and gives where the path
+    /// ends.
+    fn path(&mut self, t: &[TokenTree], mut i: usize, from: &[String], kind: Kind, grouped: bool) -> usize {
         let mut at = from.to_vec();
         while let Some(part) = t.get(i) {
             let mut opens = false;
@@ -257,7 +387,7 @@ impl Reader<'_> {
                 star if is_punct(star, '*') => at.push("*".to_string()),
                 group => {
                     let Some(group) = braced(group) else { return i };
-                    self.names(group, &at);
+                    self.names(group, &at, kind);
                     return i + 1;
                 }
             }
@@ -267,36 +397,25 @@ impl Reader<'_> {
                 continue;
             }
             opens |= t.get(i).is_some_and(|next| is_word(next, "as"));
-            self.keep(part.span().start().line, &at, opens);
+            self.keep(part.span().start().line, &at, kind, opens);
             return i;
         }
         i
     }
 
-    /// Finds what each name of the group of a path names, from the module `from`.
-    fn names(&mut self, group: &Group, from: &[String]) {
+    /// Finds what each name of the group of a path of `kind` names, from `from`.
+    fn names(&mut self, group: &Group, from: &[String], kind: Kind) {
         let t: Vec<TokenTree> = group.stream().into_iter().collect();
         let mut i = 0;
         while i < t.len() {
-            i = self.path(&t, i, from, true);
+            i = self.path(&t, i, from, kind, true);
             // An alias changes nothing in what is used.
             i += t[i..].iter().take_while(|x| !is_punct(x, ',')).count() + 1;
         }
     }
 
-    /// Keeps the use of `path` (from the crate's root) if it is of another slice, or of the crate's root itself when it
-    /// `opens` it to other names. The composition root's are its own business.
-    fn keep(&mut self, line: usize, path: &[String], opens: bool) {
-        if self.file == ROOT {
-            return;
-        }
-        let path = match path {
-            [] if opens => "crate".to_string(),
-            [star] if star == "*" => "crate::*".to_string(),
-            [slice, ..] if SLICES.contains(&slice.as_str()) && folder(self.file) != Some(slice) => path.join("::"),
-            _ => return,
-        };
-        self.found.push(Use { file: self.file.to_string(), line, path });
+    fn keep(&mut self, line: usize, path: &[String], kind: Kind, opens: bool) {
+        self.found.push(Reading { file: self.file.to_string(), line, path: path.to_vec(), kind, opens });
     }
 }
 
@@ -378,6 +497,36 @@ fn starts_path(t: &[TokenTree], i: usize) -> bool {
     is_separator(t, i + 1) || above && t.get(i + 1).is_some_and(|x| is_word(x, "as"))
 }
 
+/// Whether Leptos or a crate of the browser's is named at `t[i]`, with a path after it or not. A field or a method is not
+/// one; what follows a `::` is, as in `::web_sys`.
+fn starts_library(t: &[TokenTree], i: usize) -> bool {
+    let TokenTree::Ident(name) = &t[i] else { return false };
+    let name = bare(name);
+    (is_of(LEPTOS_CRATE, &name) || is_browser(&name)) && !follows_dot(t, i)
+}
+
+/// Whether `document()` or `window()` is at `t[i]`, called by its name alone.
+fn is_bare_call(t: &[TokenTree], i: usize) -> bool {
+    let called = matches!(t.get(i + 1), Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis && g.stream().is_empty());
+    let declared = i >= 1 && is_word(&t[i - 1], "fn");
+    let in_path = i >= 2 && is_separator(t, i - 2);
+    called && BROWSER_CALLS.iter().any(|name| is_word(&t[i], name)) && !declared && !in_path && !follows_dot(t, i)
+}
+
+/// Whether `t[i]` follows a `.`, and not the `..` of a range.
+fn follows_dot(t: &[TokenTree], i: usize) -> bool {
+    i >= 1 && is_punct(&t[i - 1], '.') && !(i >= 2 && is_joint(&t[i - 2], '.'))
+}
+
+/// Whether `name` is the crate `library` or one of its family: its name, then `_` and more.
+fn is_of(library: &str, name: &str) -> bool {
+    name.strip_prefix(library).is_some_and(|rest| rest.is_empty() || rest.starts_with('_'))
+}
+
+fn is_browser(name: &str) -> bool {
+    BROWSER_CRATES.iter().any(|library| is_of(library, name))
+}
+
 /// Whether `t` can follow a `::` in a path: a name, a glob or a group. A turbofish cannot, so the path stops before it.
 fn is_part(t: &TokenTree) -> bool {
     matches!(t, TokenTree::Ident(_)) || is_punct(t, '*') || braced(t).is_some()
@@ -418,6 +567,19 @@ fn folder(file: &str) -> Option<&str> {
     file.split_once('/').map(|(folder, _)| folder)
 }
 
+/// The layer of its slice that `file` is in, if it is in one the rules hold.
+fn layer(file: &str) -> Option<&'static str> {
+    let (slice, rest) = file.split_once('/')?;
+    if !SLICES.contains(&slice) {
+        return None;
+    }
+    match rest.split('/').next()? {
+        "model" | "model.rs" => Some(MODEL),
+        "vm" | "vm.rs" => Some(VIEW_MODEL),
+        _ => None,
+    }
+}
+
 /// Whether an entry's `by` names `file`.
 fn names(by: &str, file: &str) -> bool {
     by == file || folder(file).is_some_and(|folder| by == folder || by == ANY && SLICES.contains(&folder))
@@ -442,27 +604,46 @@ fn refused(uses: &[Use], allowed: &[Entry]) -> Vec<String> {
 
 /// Each pair of who and what in `allowed` that no use matches, in the table's order.
 fn dead(uses: &[Use], allowed: &[Entry]) -> Vec<String> {
-    let pairs = allowed.iter().flat_map(|e| e.by.iter().flat_map(|by| e.uses.iter().map(move |pattern| (by, pattern))));
-    pairs
+    pairs(allowed)
         .filter(|(by, pattern)| !uses.iter().any(|u| names(by, &u.file) && covers(pattern, &u.path)))
         .map(|(by, pattern)| format!("ALLOWED: nothing in {by} uses {pattern}"))
         .collect()
 }
 
+/// Each pair of who and what in `entries`, in the table's order.
+fn pairs(entries: &[Entry]) -> impl Iterator<Item = (&'static str, &'static str)> {
+    entries.iter().flat_map(|e| e.by.iter().flat_map(|by| e.uses.iter().map(move |pattern| (*by, *pattern))))
+}
+
 /// Every break of a layer rule or a library rule by production code, sorted, each once.
 fn broken(sources: &Sources) -> Vec<Break> {
-    todo!()
+    sorted(readings(sources).iter().filter_map(break_by))
+}
+
+/// Whether an exception's `by` and `pattern` let `broken` pass: the file is named, and the path begins with the pattern,
+/// component by component.
+fn excepts(by: &str, pattern: &str, broken: &Break) -> bool {
+    let mut path = broken.used.path.split("::");
+    names(by, &broken.used.file) && pattern.split("::").all(|p| path.next() == Some(p))
 }
 
 /// What is wrong with each break that no entry of `exceptions` lets pass, in their order.
 fn unexcepted(breaks: &[Break], exceptions: &[Entry]) -> Vec<String> {
-    todo!()
+    breaks
+        .iter()
+        .filter(|b| !pairs(exceptions).any(|(by, pattern)| excepts(by, pattern, b)))
+        .map(|Break { used, layer }| format!("src/{}:{}: uses {}, which a {layer} may not use", used.file, used.line, used.path))
+        .collect()
 }
 
 /// Each pair of who and what in `exceptions` that no break matches, in the table's order, then each entry without a
 /// reason.
 fn faulty(breaks: &[Break], exceptions: &[Entry]) -> Vec<String> {
-    todo!()
+    let idle = pairs(exceptions)
+        .filter(|(by, pattern)| !breaks.iter().any(|b| excepts(by, pattern, b)))
+        .map(|(by, pattern)| format!("EXCEPTIONS: nothing in {by} breaks a rule with {pattern}"));
+    let unexplained = exceptions.iter().filter(|e| e.why.trim().is_empty()).map(|e| format!("EXCEPTIONS: no reason for what {:?} may use: {:?}", e.by, e.uses));
+    idle.chain(unexplained).collect()
 }
 
 /// The folders of `src` that are neither a slice nor `shared`, sorted. A hidden one is the system's or an editor's.
