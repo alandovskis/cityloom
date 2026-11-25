@@ -541,6 +541,7 @@
       "pages": ["index.html", "about.html", "map.html", "street.html", "intersection.html", "account.html", "timeline.html", "share.html", "compare.html"],
       "owner": "crates/cityloom_editor/src/shared",
       "code": [
+        "crates/cityloom_editor/src/i18n_guard.rs",
         "crates/cityloom_editor/src/shared/i18n.rs",
         "crates/cityloom_editor/src/shared/said.rs",
         "crates/cityloom_editor/src/shell/i18n/*.ftl"
