@@ -1,0 +1,42 @@
+en 200 ["Introduction","Projects","Sharing a design","Getting started","Project layout","Coding style","Architecture","Reporting a problem"]
+en headings ["What tools decide​","Rust​","Names​","Modules and files​","Errors and refusals​","Ownership and shared state​","Constants and units​","MVVM​","Model​","View-model​","View​","Leptos and SVG​","Comments​","Tests​","Other languages​","JavaScript​","TypeScript​","Python​","Shell​","CSS​","SQL migrations​","Fluent messages​","Commits and pull requests​"]
+en links [["The guards","/cityloom/testing#the-guards"],["Architecture","/cityloom/architecture"],["Testing","/cityloom/testing"],["docs/glossary-fr-ca.md","https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md"],["Tests and formatting","/cityloom/getting-started#tests-and-formatting"],["SonarCloud","/cityloom/testing#sonarcloud"],["Layers inside a slice","/cityloom/architecture#layers-inside-a-slice"],["Translation","/cityloom/architecture#translation"],["Layers inside a slice","/cityloom/architecture#layers-inside-a-slice"],["Ports","/cityloom/architecture#ports"],["View-model tests","/cityloom/testing#view-model-tests"],["Layers inside a slice","/cityloom/architecture#layers-inside-a-slice"],["Testing","/cityloom/testing#where-a-new-test-goes"],["Architecture","/cityloom/architecture#javascript"],["Translation","/cityloom/testing#translation"],["What must pass before a merge","/cityloom/testing#what-must-pass-before-a-merge"]]
+en bullets [73,{"Tool":6,"Guard":7,"Review":63},["","Coding style"]]
+en 375 px: sideways 0
+en link /cityloom/testing#the-guards 200 found
+en link /cityloom/architecture 200 found
+en link /cityloom/testing 200 found
+en link /cityloom/getting-started#tests-and-formatting 200 found
+en link /cityloom/testing#sonarcloud 200 found
+en link /cityloom/architecture#layers-inside-a-slice 200 found
+en link /cityloom/architecture#translation 200 found
+en link /cityloom/architecture#layers-inside-a-slice 200 found
+en link /cityloom/architecture#ports 200 found
+en link /cityloom/testing#view-model-tests 200 found
+en link /cityloom/architecture#layers-inside-a-slice 200 found
+en link /cityloom/testing#where-a-new-test-goes 200 found
+en link /cityloom/architecture#javascript 200 found
+en link /cityloom/testing#translation 200 found
+en link /cityloom/testing#what-must-pass-before-a-merge 200 found
+fr-CA 200 ["Introduction","Projets","Partager un aménagement","Démarrage","Organisation du dépôt","Style du code","Architecture","Signaler un problème"]
+fr-CA headings ["Ce que les outils décident​","Rust​","Noms​","Modules et fichiers​","Erreurs et refus​","Possession et état partagé​","Constantes et unités​","MVVM​","Modèle​","Modèle de vue​","Vue​","Leptos et SVG​","Commentaires​","Tests​","Autres langages​","JavaScript​","TypeScript​","Python​","Shell​","CSS​","Migrations SQL​","Messages Fluent​","Commits et demandes de fusion​"]
+fr-CA links [["Les gardes","/cityloom/fr-CA/testing#les-gardes"],["Architecture","/cityloom/fr-CA/architecture"],["Tests","/cityloom/fr-CA/testing"],["docs/glossary-fr-ca.md","https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md"],["Tests et mise en forme","/cityloom/fr-CA/getting-started#tests-et-mise-en-forme"],["SonarCloud","/cityloom/fr-CA/testing#sonarcloud"],["Couches dans une tranche","/cityloom/fr-CA/architecture#couches-dans-une-tranche"],["Traduction","/cityloom/fr-CA/architecture#traduction"],["Couches dans une tranche","/cityloom/fr-CA/architecture#couches-dans-une-tranche"],["Ports","/cityloom/fr-CA/architecture#ports"],["Tests des modèles de vue","/cityloom/fr-CA/testing#tests-des-mod%C3%A8les-de-vue"],["Couches dans une tranche","/cityloom/fr-CA/architecture#couches-dans-une-tranche"],["Tests","/cityloom/fr-CA/testing#o%C3%B9-va-un-nouveau-test"],["Architecture","/cityloom/fr-CA/architecture#javascript"],["Traduction","/cityloom/fr-CA/testing#traduction"],["Ce qui doit réussir avant une fusion","/cityloom/fr-CA/testing#ce-qui-doit-r%C3%A9ussir-avant-une-fusion"]]
+fr-CA bullets [73,{"Outil":6,"Garde":7,"Revue":63},["","Style du code"]]
+fr-CA 375 px: sideways 0
+fr-CA link /cityloom/fr-CA/testing#les-gardes 200 found
+fr-CA link /cityloom/fr-CA/architecture 200 found
+fr-CA link /cityloom/fr-CA/testing 200 found
+fr-CA link /cityloom/fr-CA/getting-started#tests-et-mise-en-forme 200 found
+fr-CA link /cityloom/fr-CA/testing#sonarcloud 200 found
+fr-CA link /cityloom/fr-CA/architecture#couches-dans-une-tranche 200 found
+fr-CA link /cityloom/fr-CA/architecture#traduction 200 found
+fr-CA link /cityloom/fr-CA/architecture#couches-dans-une-tranche 200 found
+fr-CA link /cityloom/fr-CA/architecture#ports 200 found
+fr-CA link /cityloom/fr-CA/testing#tests-des-mod%C3%A8les-de-vue 200 found
+fr-CA link /cityloom/fr-CA/architecture#couches-dans-une-tranche 200 found
+fr-CA link /cityloom/fr-CA/testing#o%C3%B9-va-un-nouveau-test 200 found
+fr-CA link /cityloom/fr-CA/architecture#javascript 200 found
+fr-CA link /cityloom/fr-CA/testing#traduction 200 found
+fr-CA link /cityloom/fr-CA/testing#ce-qui-doit-r%C3%A9ussir-avant-une-fusion 200 found
+
+The glossary link, on GitHub: 200

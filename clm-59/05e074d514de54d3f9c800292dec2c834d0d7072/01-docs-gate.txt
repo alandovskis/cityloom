@@ -1,0 +1,9 @@
+Step 1. The docs gate at 05e074d514de54d3f9c800292dec2c834d0d7072 (on 8edd3d3228edf04e92b7697daa81e6aa4dea4607), as recorded on CLM-59.
+
+$ npx prettier --ignore-path ../.prettierignore --check ../website
+$ npm run build
+PASS docs gate
+  page: CLAUDE.md
+  page: website/docs/coding-style.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
+  page: website/sidebars.ts

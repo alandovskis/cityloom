@@ -1,0 +1,35 @@
+$ git diff 8edd3d3228edf04e92b7697daa81e6aa4dea4607 05e074d514de54d3f9c800292dec2c834d0d7072 -- CLAUDE.md website/sidebars.ts
+diff --git a/CLAUDE.md b/CLAUDE.md
+index fc73d38b..c3505739 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -58,14 +58,15 @@ Translation: English and fr-CA on every app page (all but `credits.html`) and th
+ 
+ ## Conventions and gotchas
+ 
++- How the code is written (Rust, Leptos and SVG, comments, tests, JavaScript, TypeScript, Python, shell, CSS, SQL, Fluent, commits and pull requests): `website/docs/coding-style.md`, which says what enforces each rule. The bullets below are what to know before starting.
+ - Test-driven: write the failing test first. Commit each change separately once the tests pass.
+ - Logic belongs in Rust; JS in `web/` is start-up glue only. The exception is `web/mapcanvas.js`, the adapter owning the MapLibre map (vendored MapLibre in `web/vendor`).
+-- Adding a string: add it to both `.ftl` files with the same id and variables (a parity test fails otherwise). Whole sentences with named placeables, never concatenated pieces; plurals use selectors (`[one]` / `*[other]`). Write an ordinary space before `:` in the `.ftl`. fr-CA follows the OQLF: no-break space before `:` and inside `« »`, none before `;` `!` `?`. Terms: `docs/glossary-fr-ca.md`. Lengths and typed numbers go through `Units::*_in(…, locale)` and `parse_number`, never `format!("{:.1}")`.
++- Adding a string: add it to both `.ftl` files with the same id and variables (a parity test fails otherwise). Write an ordinary space before `:` in the `.ftl`. fr-CA follows the OQLF: no-break space before `:` and inside `« »`, none before `;` `!` `?`. Terms: `docs/glossary-fr-ca.md`. Lengths and typed numbers go through `Units::*_in(…, locale)` and `parse_number`, never `format!("{:.1}")`.
+ - `src/i18n_guard.rs` fails on any wording in the files listed in `MIGRATED` (add a file when its slice migrates; `LEFT_OUT` names the few left out; a file of a translated slice (account, archive, map, place, junction, city, restriction, sync, project) in neither list fails). A literal that only looks like a word goes in `ALLOWED_LITERALS`, a kebab-case literal that is not a message (an element id, a CSS class) in `NOT_MESSAGE_IDS`, each with its reason; any other kebab-case literal must be a message in both languages, and a dead entry fails.
+ - Still English: `web/credits.html`, OSM data, MapLibre's strings.
+ - Accessibility (WCAG 2.2 AA): `shared/contrast.rs` (tests only) measures the colour tokens of `web/app.css` and `editor.css`; a new colour pair for text or a control goes there. `shell/header.rs` keeps `--bar-stuck` and `html` has that much `scroll-padding-top`, so focus is never hidden under the sticky bar. Editors open with a skip link to `#wrap`; an `h2` heads the details panel.
+ - View-model behaviour gets a native test against the port fakes (see `website/docs/testing.md`). Component tests render to HTML on the host (each slice's `tests.rs`, helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively.
+-- Non-`Send` values inside reactive closures go in `StoredValue::new_local`; views take a `Copy` handle (`junction::vm::watch::Watch`, `street::vm::watch::SheetWatch`) over an `Rc<…Vm>`.
++- Non-`Send` values inside reactive closures go in `StoredValue::new_local`.
+ - `any_spawner::Executor::init_wasm_bindgen()` must run at the top of every `mount_*` function before any component creates an effect.
+ - `#![recursion_limit = "1024"]` is needed for the Leptos `view!` macros. New web-sys APIs need their feature added in `Cargo.toml`.
+ - Versioning: `version` in `crates/cityloom_editor/Cargo.toml` (semver) is the product's version, shown in the app pages' footer. Every pull request raises it (major: breaking, minor: feature, patch: fix), except one made only of documentation and CI configuration (see CI above), and runs `cargo update -p cityloom_editor` for `Cargo.lock`; presubmit's `version` job (`scripts/check-version.sh`) fails the PR otherwise.
+diff --git a/website/sidebars.ts b/website/sidebars.ts
+index 88f48925..1e9d0f16 100644
+--- a/website/sidebars.ts
++++ b/website/sidebars.ts
+@@ -9,6 +9,7 @@ const sidebars: SidebarsConfig = {
+     "sharing",
+     "getting-started",
+     "project-layout",
++    "coding-style",
+     {
+       type: "category",
+       label: "Architecture",
