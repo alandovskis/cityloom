@@ -1,0 +1,5 @@
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::what_is_under_cfg_test_in_a_list_ends_at_its_own_comma

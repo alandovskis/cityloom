@@ -1,0 +1,5 @@
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+$ just format-check
+$ scripts/check-version.sh 6ca594e56eaa517bf84610d7c8b4d544cff62003
+PASS green gate
