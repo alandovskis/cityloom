@@ -1,0 +1,130 @@
+== English: 327 lines of testing.md at 9b04a54a, 316 on the five pages word for word, each as often as before
+-- lines of the old page that are not there word for word:
+   - This page is the one place that says how CityLoom is tested: the levels of tests, where a new test goes, the test data,
+   - when the tests run and what must pass before a pull request is merged. How the code is organised (slices, MVVM, ports)
+   - is in [Architecture](architecture/index.md); how to set up and run the commands is in
+   - [Getting started](getting-started.md). How many tests there are, by level, by crate and tier, and by feature, is in
+   - [Coverage matrix](coverage-matrix.md). The paths of the editor's files are relative to `crates/cityloom_editor/src/`.
+   - | Script tests | CI's change selector, the factory's gates and guard, the issue system | `scripts/include/tests/` | `just test-scripts` | Python 3 |
+   - `test_factory_config.py`, `test_factory_gate.py` and `test_factory_guard.py` (the software factory) and
+   - `test_issue_system.py` (the labels, the issue forms and the labeler rules agree).
+   - - `shared/contrast.rs` measures the colour tokens of the CSS (see [The guards](#the-guards)).
+   - - `i18n_guard` finds wording left in the code (see [The guards](#the-guards)).
+   - [manual checks](getting-started.md#manual-checks-once-per-provider) are done by hand.
+-- lines of the new pages that were not on the old page:
+   + [index] These pages are the one place that says how CityLoom is tested: the [levels of tests](levels.md),
+   + [index] [where a new test goes](#where-a-new-test-goes), the [test data](test-data.md), the
+   + [index] [quality attributes](quality-attributes.md), [when the tests run](when-tests-run.md) and
+   + [index] [what must pass before a pull request is merged](when-tests-run.md#what-must-pass-before-a-merge). How the code is
+   + [index] organised (slices, MVVM, ports) is in [Architecture](../architecture/index.md); how to set up and run the commands is in
+   + [index] [Getting started](../getting-started.md). How many tests there are, by level, by crate and tier, and by feature, is in
+   + [index] [Coverage matrix](coverage-matrix.md). On this page, in [Levels of tests](levels.md) and in
+   + [index] [Quality attributes](quality-attributes.md), the paths of the editor's files are relative to
+   + [index] `crates/cityloom_editor/src/`.
+   + [index] | Script tests | CI's change selector, the factory's gates and guard, the issue system, the Architecture pages, the feature list | `scripts/include/tests/` | `just test-scripts` | Python 3 |
+   + [index] [manual checks](../getting-started.md#manual-checks-once-per-provider) are done by hand.
+   + [levels] This page describes each level of tests, and the guards. The recipe and the CI job that run each level, where a new
+   + [levels] test goes and the root of the editor's paths are in the [overview](index.md).
+   + [levels] `test_factory_config.py`, `test_factory_gate.py` and `test_factory_guard.py` (the software factory),
+   + [levels] `test_issue_system.py` (the labels, the issue forms and the labeler rules agree), `test_architecture_docs.py` (the
+   + [levels] Architecture pages name every slice, storage key and server table, in both languages) and `test_features.py` (the
+   + [levels] feature list is whole, and the share of Rust tests that no feature names stays within its limit).
+   + [test-data] This page describes the test data. The levels that use it are in [Levels of tests](levels.md).
+   + [quality-attributes] This page says what checks accessibility, translation and security. The levels are in
+   + [quality-attributes] [Levels of tests](levels.md), and the root of the editor's paths is in the [overview](index.md).
+   + [quality-attributes] - `shared/contrast.rs` measures the colour tokens of the CSS (see [The guards](levels.md#the-guards)).
+   + [quality-attributes] - `i18n_guard` finds wording left in the code (see [The guards](levels.md#the-guards)).
+   + [when-tests-run] This page says what each workflow runs, and what must pass before a merge. The levels they run are in the
+   + [when-tests-run] [overview](index.md).
+-- headings: 34 before; not there now: ['The levels'] ; twice: [] ; new: ['Levels of tests']
+-- test-inventory.md, moved, its diff:
+   --- before
+   +++ after
+   @@ -3,0 +4 @@
+   +slug: /test-inventory
+   @@ -9 +10 @@
+   -feature. The levels themselves are described in [Testing](testing.md). The counts are those of commit `0d9cb8b9`
+   +feature. The levels themselves are described in [Levels of tests](levels.md). The counts are those of commit `0d9cb8b9`
+   @@ -41 +42 @@
+   -The [wasm32 build check](testing.md#the-wasm32-build-check) runs no test, so it is not here.
+   +The [wasm32 build check](levels.md#the-wasm32-build-check) runs no test, so it is not here.
+-- coverage-matrix.md, moved, its diff:
+   --- before
+   +++ after
+   @@ -3,0 +4 @@
+   +slug: /coverage-matrix
+   @@ -12 +13 @@
+   -the tests are counted again. The gaps in the tests are in [Known gaps and risks](testing.md#known-gaps-and-risks).
+   +the tests are counted again. The gaps in the tests are in [Known gaps and risks](index.md#known-gaps-and-risks).
+   @@ -161 +162 @@
+   -A gap is a break of [Where a new test goes](testing.md#where-a-new-test-goes), that is of a row of its table or of its
+   +A gap is a break of [Where a new test goes](index.md#where-a-new-test-goes), that is of a row of its table or of its
+   @@ -163 +164 @@
+   -and risks](testing.md#known-gaps-and-risks).
+   +and risks](index.md#known-gaps-and-risks).
+== fr-CA: 372 lines of testing.md at 9b04a54a, 360 on the five pages word for word, each as often as before
+-- lines of the old page that are not there word for word:
+   - Cette page est le seul endroit qui dit comment CityLoom est testé : les paliers de tests, où va un nouveau test, les
+   - données d’essai, quand les tests s’exécutent et ce qui doit réussir avant qu’une demande de fusion soit fusionnée.
+   - L’organisation du code (tranches, MVVM, ports) est décrite dans [Architecture](architecture/index.md); la façon de
+   - préparer et d’exécuter les commandes, dans [Démarrage](getting-started.md). Le nombre de tests, par palier, par caisse
+   - et par niveau, et par fonctionnalité, est dans l’[inventaire des tests](test-inventory.md), et la répartition des
+   - tests de chaque fonctionnalité entre les paliers, dans la [matrice de couverture](coverage-matrix.md). Les chemins des
+   - | Tests des scripts | Le sélecteur de changements de l’intégration continue, les barrières et la garde de l’usine, le système de billets | `scripts/include/tests/` | `just test-scripts` | Python 3 |
+   - `test_factory_guard.py` (l’usine logicielle) et `test_issue_system.py` (les étiquettes, les formulaires de billets et
+   - les règles d’étiquetage concordent).
+   - - `shared/contrast.rs` mesure les jetons de couleur du CSS (voir [Les gardes](#les-gardes)).
+   - - `i18n_guard` trouve la formulation restée dans le code (voir [Les gardes](#les-gardes)).
+   - fournisseur, et les [vérifications manuelles](getting-started.md#vérifications-manuelles-une-fois-par-fournisseur)
+-- lines of the new pages that were not on the old page:
+   + [index] Ces pages sont le seul endroit qui dit comment CityLoom est testé : les [paliers de tests](levels.md),
+   + [index] [où va un nouveau test](#où-va-un-nouveau-test), les [données d’essai](test-data.md), les
+   + [index] [attributs de qualité](quality-attributes.md), [quand les tests s’exécutent](when-tests-run.md) et
+   + [index] [ce qui doit réussir avant qu’une demande de fusion soit fusionnée](when-tests-run.md#ce-qui-doit-réussir-avant-une-fusion).
+   + [index] L’organisation du code (tranches, MVVM, ports) est décrite dans [Architecture](../architecture/index.md); la façon de
+   + [index] préparer et d’exécuter les commandes, dans [Démarrage](../getting-started.md). Le nombre de tests, par palier, par
+   + [index] caisse et par niveau, et par fonctionnalité, est dans l’[inventaire des tests](test-inventory.md), et la répartition
+   + [index] des tests de chaque fonctionnalité entre les paliers, dans la [matrice de couverture](coverage-matrix.md). Dans
+   + [index] cette page, dans [Paliers de tests](levels.md) et dans [Attributs de qualité](quality-attributes.md), les chemins des
+   + [index] | Tests des scripts | Le sélecteur de changements de l’intégration continue, les barrières et la garde de l’usine, le système de billets, les pages d’Architecture, la liste des fonctionnalités | `scripts/include/tests/` | `just test-scripts` | Python 3 |
+   + [index] fournisseur, et les [vérifications manuelles](../getting-started.md#vérifications-manuelles-une-fois-par-fournisseur)
+   + [levels] Cette page décrit chaque palier de tests, et les gardes. La recette et la tâche d’intégration continue qui exécutent
+   + [levels] chaque palier, l’endroit où va un nouveau test et la racine des chemins de l’éditeur sont dans la
+   + [levels] [vue d’ensemble](index.md).
+   + [levels] `test_factory_guard.py` (l’usine logicielle), `test_issue_system.py` (les étiquettes, les formulaires de billets et
+   + [levels] les règles d’étiquetage concordent), `test_architecture_docs.py` (les pages d’Architecture nomment chaque tranche, clé
+   + [levels] de stockage et table du serveur, dans les deux langues) et `test_features.py` (la liste des fonctionnalités est
+   + [levels] complète, et la part des tests Rust qu’aucune fonctionnalité ne nomme reste dans sa limite).
+   + [test-data] Cette page décrit les données d’essai. Les paliers qui s’en servent sont dans [Paliers de tests](levels.md).
+   + [quality-attributes] Cette page dit ce qui vérifie l’accessibilité, la traduction et la sécurité. Les paliers sont dans
+   + [quality-attributes] [Paliers de tests](levels.md), et la racine des chemins de l’éditeur, dans la [vue d’ensemble](index.md).
+   + [quality-attributes] - `shared/contrast.rs` mesure les jetons de couleur du CSS (voir [Les gardes](levels.md#les-gardes)).
+   + [quality-attributes] - `i18n_guard` trouve la formulation restée dans le code (voir [Les gardes](levels.md#les-gardes)).
+   + [when-tests-run] Cette page dit ce qu’exécute chaque flux de travail, et ce qui doit réussir avant une fusion. Les paliers qu’ils
+   + [when-tests-run] exécutent sont dans la [vue d’ensemble](index.md).
+-- headings: 34 before; not there now: ['Les paliers'] ; twice: [] ; new: ['Paliers de tests']
+-- test-inventory.md, moved, its diff:
+   --- before
+   +++ after
+   @@ -3,0 +4 @@
+   +slug: /test-inventory
+   @@ -9 +10 @@
+   -n’appartiennent à aucune fonctionnalité. Les paliers eux-mêmes sont décrits dans [Tests](testing.md). Les nombres sont
+   +n’appartiennent à aucune fonctionnalité. Les paliers eux-mêmes sont décrits dans [Paliers de tests](levels.md). Les nombres sont
+   @@ -43 +44 @@
+   -La [vérification de la construction wasm32](testing.md#la-vérification-de-la-construction-wasm32) n’exécute aucun test :
+   +La [vérification de la construction wasm32](levels.md#la-vérification-de-la-construction-wasm32) n’exécute aucun test :
+-- coverage-matrix.md, moved, its diff:
+   --- before
+   +++ after
+   @@ -3,0 +4 @@
+   +slug: /coverage-matrix
+   @@ -13 +14 @@
+   -[Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
+   +[Lacunes et risques connus](index.md#lacunes-et-risques-connus).
+   @@ -165 +166 @@
+   -Une lacune est un manquement à [Où va un nouveau test](testing.md#où-va-un-nouveau-test), c’est-à-dire à une ligne de
+   +Une lacune est un manquement à [Où va un nouveau test](index.md#où-va-un-nouveau-test), c’est-à-dire à une ligne de
+   @@ -167 +168 @@
+   -lacunes, chacune avec son billet, sont dans [Lacunes et risques connus](testing.md#lacunes-et-risques-connus).
+   +lacunes, chacune avec son billet, sont dans [Lacunes et risques connus](index.md#lacunes-et-risques-connus).

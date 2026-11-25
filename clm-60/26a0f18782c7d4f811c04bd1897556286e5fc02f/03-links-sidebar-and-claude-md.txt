@@ -1,0 +1,219 @@
+At 26a0f187, against 9b04a54a:
+diff --git a/CLAUDE.md b/CLAUDE.md
+index b0462a87..74b077c4 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -32,7 +32,7 @@ just setup           # once: wasm-bindgen-cli (version from Cargo.toml), `npm ci
+ just setup-deploy    # once, for deploy: cargo-zigbuild, musl target; zig via `brew install zig` or `pip install ziglang`
+ ```
+ 
+-CI is two workflows, `.github/workflows/presubmit.yml` (a pull request) and `.github/workflows/postsubmit.yml` (main once merged, then the deploy), each running `just format-check`, `just test` and the browser tests with `RUSTFLAGS=-D warnings`, so a new compiler warning fails either; run `just format` before committing. A change to documentation alone (`website/**`, `docs/**`, `*.md`, `LICENSE*`: the `paths-ignore` of each, kept in step with the `docs` rule of `scripts/ci/spec-map.json`) starts neither. A new spec goes in exactly one tier of `e2e/tiers.json` and a group of `scripts/ci/spec-map.json`, and a new source folder gets a rule there, or `just test-scripts` fails. A change made only of documentation and CI configuration (`.github/**`, `scripts/ci/**`, `scripts/include/**`, `.claude/**`: `CI_CONFIGURATION` in `scripts/ci/ci_changes.py`) needs no version bump (the Version bump job is skipped) but still runs the tests its files select. Presubmit's `CI` job is the one check to require; the documentation has its own workflow, `.github/workflows/docs.yml`, and a broken docs build shows only in its Documentation check, not in `CI`. No clippy configuration. `build.sh` strips the wasm's name and producers sections (~2 MB instead of ~7.6 MB). The `proc-macro-error2` future-incompat warning (from Leptos dependencies) is harmless. How CityLoom is tested, which level a test belongs to, what presubmit and postsubmit select and run, and what must pass before a merge: `website/docs/testing.md`.
++CI is two workflows, `.github/workflows/presubmit.yml` (a pull request) and `.github/workflows/postsubmit.yml` (main once merged, then the deploy), each running `just format-check`, `just test` and the browser tests with `RUSTFLAGS=-D warnings`, so a new compiler warning fails either; run `just format` before committing. A change to documentation alone (`website/**`, `docs/**`, `*.md`, `LICENSE*`: the `paths-ignore` of each, kept in step with the `docs` rule of `scripts/ci/spec-map.json`) starts neither. A new spec goes in exactly one tier of `e2e/tiers.json` and a group of `scripts/ci/spec-map.json`, and a new source folder gets a rule there, or `just test-scripts` fails. A change made only of documentation and CI configuration (`.github/**`, `scripts/ci/**`, `scripts/include/**`, `.claude/**`: `CI_CONFIGURATION` in `scripts/ci/ci_changes.py`) needs no version bump (the Version bump job is skipped) but still runs the tests its files select. Presubmit's `CI` job is the one check to require; the documentation has its own workflow, `.github/workflows/docs.yml`, and a broken docs build shows only in its Documentation check, not in `CI`. No clippy configuration. `build.sh` strips the wasm's name and producers sections (~2 MB instead of ~7.6 MB). The `proc-macro-error2` future-incompat warning (from Leptos dependencies) is harmless. How CityLoom is tested: `website/docs/testing/` (`index.md`: the levels at a glance, where a new test goes, the policies, the known gaps; `levels.md`: each level and the guards; `test-data.md`; `quality-attributes.md`; `when-tests-run.md`: what presubmit and postsubmit select and run, and what must pass before a merge).
+ 
+ Issues: labels (families `A-` area, `C-` category, `O-` browser, `P-` priority, `S-` status, plus `needs-triage`; names `<prefix>-<english> · <français>`, descriptions `<Family>: … / <Famille> : …`) live in `.github/labels.yml`, synced on push to main; the sync deletes a label not listed, so a label an automation applies must be in the file. Issue forms (`.github/ISSUE_TEMPLATE`) apply their `C-` label and `needs-triage`; `.github/issue-labeler.yml` turns dropdown answers into `A-`/`O-` labels; the maintainer sets `P-` and `S-`. `scripts/include/tests/test_issue_system.py` fails when the three disagree.
+ 
+@@ -65,7 +65,7 @@ Translation: English and fr-CA on every app page (all but `credits.html`) and th
+ - `src/i18n_guard.rs` fails on any wording in the files listed in `MIGRATED` (add a file when its slice migrates; `LEFT_OUT` names the few left out; a file of a translated slice (account, archive, map, place, junction, city, restriction, sync, project) in neither list fails). A literal that only looks like a word goes in `ALLOWED_LITERALS`, a kebab-case literal that is not a message (an element id, a CSS class) in `NOT_MESSAGE_IDS`, each with its reason; any other kebab-case literal must be a message in both languages, and a dead entry fails.
+ - Still English: `web/credits.html`, OSM data, MapLibre's strings.
+ - Accessibility (WCAG 2.2 AA): `shared/contrast.rs` (tests only) measures the colour tokens of `web/app.css` and `editor.css`; a new colour pair for text or a control goes there. `shell/header.rs` keeps `--bar-stuck` and `html` has that much `scroll-padding-top`, so focus is never hidden under the sticky bar. Editors open with a skip link to `#wrap`; an `h2` heads the details panel.
+-- View-model behaviour gets a native test against the port fakes (see `website/docs/testing.md`). Component tests render to HTML on the host (each slice's `tests.rs`, helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively.
++- View-model behaviour gets a native test against the port fakes (see `website/docs/testing/levels.md`). Component tests render to HTML on the host (each slice's `tests.rs`, helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively.
+ - Non-`Send` values inside reactive closures go in `StoredValue::new_local`.
+ - `any_spawner::Executor::init_wasm_bindgen()` must run at the top of every `mount_*` function before any component creates an effect.
+ - `#![recursion_limit = "1024"]` is needed for the Leptos `view!` macros. New web-sys APIs need their feature added in `Cargo.toml`.
+diff --git a/e2e/CLAUDE.md b/e2e/CLAUDE.md
+index 78fa7d1f..3d54145a 100644
+--- a/e2e/CLAUDE.md
++++ b/e2e/CLAUDE.md
+@@ -12,11 +12,11 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
+ ## Tiers
+ 
+ - Each spec is in exactly one tier of `e2e/tiers.json` (`playwright.config.ts` throws and `just test-scripts` fails otherwise) and in one group of `scripts/ci/spec-map.json`. `archive_also` (map, street) are UI specs the E2E tier runs again over the archive.
+-- The tiers, their recipes and CI jobs: `website/docs/testing.md`.
++- The tiers and their recipes: `website/docs/testing/levels.md`; their CI jobs: `website/docs/testing/when-tests-run.md`.
+ 
+ ## Fixtures
+ 
+-- The OSM fixtures are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures`, which every browser recipe runs first; `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`, and `tileFrom(file)` answers a request for a tile with one. Test data: `website/docs/testing.md`.
++- The OSM fixtures are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures`, which every browser recipe runs first; `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`, and `tileFrom(file)` answers a request for a tile with one. Test data: `website/docs/testing/test-data.md`.
+ - `about.spec.ts` checks the city behind the About card is read from the metro tile and no other host is asked (no Overpass), and, on every page, the top bar (Projects and About, the current one `aria-current="page"`, no Map link, the logo to `index.html`); `home.spec.ts` that the list asks for no road tile; `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
+ - `junction.spec.ts` turbo tests serve `TURBO_TILE`: no Plateau junction has room for the basic layout. `street.spec.ts` serves `OPEN_ENDS_TILE` for open street ends (its source `open-ends.osm` has a `<bounds>` element: the importer panics inside osm2streets on OSM XML without one).
+ - `restrictions.spec.ts`: area by clicks and by keyboard (map focused, Enter places a corner at the centre, Shift+Enter closes).
+diff --git a/website/docs/coding-style.md b/website/docs/coding-style.md
+index 24092940..322ecb26 100644
+--- a/website/docs/coding-style.md
++++ b/website/docs/coding-style.md
+@@ -11,11 +11,11 @@ files differ from it. Where the code has no settled way, the page states no rule
+ Each rule ends with what enforces it:
+ 
+ - **Tool**: a formatter, the compiler or a script checks it.
+-- **Guard**: a test about the code checks it (see [The guards](testing.md#the-guards)); the rule names the test.
++- **Guard**: a test about the code checks it (see [The guards](testing/levels.md#the-guards)); the rule names the test.
+ - **Review**: only the review of the pull request checks it.
+ 
+ How the code is organised (slices, layers, ports) is in [Architecture](architecture/index.md). How it is tested is in
+-[Testing](testing.md). The French terms and the spacing are in
++[Testing](testing/index.md). The French terms and the spacing are in
+ [`docs/glossary-fr-ca.md`](https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md). The paths of the
+ editor's files are relative to `crates/cityloom_editor/src/`.
+ 
+@@ -29,7 +29,7 @@ editor's files are relative to `crates/cityloom_editor/src/`.
+ - No formatter covers the rest, such as `web/*.css`, the HTML, `scripts/`, the SQL, the `.ftl` files, and the Markdown
+   outside `website/` and `e2e/`: these are laid out by hand. Example: `web/app.css` (`:root`). **Review**
+ 
+-Clippy denies nothing: it runs only for [SonarCloud](testing.md#sonarcloud), with its lints capped at warnings.
++Clippy denies nothing: it runs only for [SonarCloud](testing/when-tests-run.md#sonarcloud), with its lints capped at warnings.
+ 
+ ## Rust
+ 
+@@ -130,7 +130,7 @@ rule here that says what a layer does not use is about the code outside tests.
+   street's and the junction's views. Example: `project/vm.rs` (`ProjectsVm`). **Review**
+ - A view-model that takes the ports is tested natively against their fakes, through `test_ports()`,
+   `test_ports_with_time()` or another helper of `shared/ports.rs` (see [View-model
+-  tests](testing.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**
++  tests](testing/levels.md#view-model-tests)). Example: `standards/tests.rs` (`setup`). **Review**
+ 
+ ### View
+ 
+@@ -169,7 +169,7 @@ rule here that says what a layer does not use is about the code outside tests.
+ 
+ ## Tests
+ 
+-Where a new test goes is in [Testing](testing.md#where-a-new-test-goes).
++Where a new test goes is in [Testing](testing/index.md#where-a-new-test-goes).
+ 
+ - The name of almost every Rust test is a sentence that states the behaviour; none has a `test_` prefix. Example:
+   `crates/cityloom_server/src/crypto.rs` (`two_seals_of_one_value_differ`). **Review**
+@@ -247,7 +247,7 @@ What belongs in JavaScript is in [Architecture](architecture/index.md#javascript
+   (`every_message_id_used_in_a_migrated_file_exists_in_both_languages`). **Guard** (`i18n_guard.rs`)
+ - Both languages have the same ids, with the same variables. Example: `shared/i18n.rs` (`parity_problems`). **Guard**
+   (the parity test of the slice), **Review** for `timeline` and `standards`, which have no parity test (see
+-  [Translation](testing.md#translation)).
++  [Translation](testing/quality-attributes.md#translation)).
+ 
+ ## Commits and pull requests
+ 
+@@ -263,6 +263,6 @@ What belongs in JavaScript is in [Architecture](architecture/index.md#javascript
+   **Review**
+ - A pull request raises the version in `crates/cityloom_editor/Cargo.toml` (major for a breaking change, minor for a
+   feature, patch for a fix) and updates `Cargo.lock`, unless it changes only documentation and CI configuration (see
+-  [What must pass before a merge](testing.md#what-must-pass-before-a-merge)). Example: `scripts/check-version.sh`
++  [What must pass before a merge](testing/when-tests-run.md#what-must-pass-before-a-merge)). Example: `scripts/check-version.sh`
+   (`version_of`). **Tool** (presubmit's Version bump job) for raising it, **Review** for the choice of major, minor or
+   patch and for `Cargo.lock`.
+diff --git a/website/docs/getting-started.md b/website/docs/getting-started.md
+index aca8bd2f..da3be6c5 100644
+--- a/website/docs/getting-started.md
++++ b/website/docs/getting-started.md
+@@ -72,7 +72,9 @@ and E2E browser jobs need none. Every pull request raises the version in `crates
+ made only of documentation and CI configuration (`CI_CONFIGURATION` in `scripts/ci/ci_changes.py`: `.github/`,
+ `scripts/ci/`, `scripts/include/` and `.claude/`).
+ 
+-[Testing](testing.md) says which level a test belongs to, where a new one goes and what must pass before a merge.
++[Testing](testing/index.md) says which level a test belongs to and where a new one goes, and
++[What must pass before a merge](testing/when-tests-run.md#what-must-pass-before-a-merge) says what must pass before a
++merge.
+ 
+ `just db` starts the Postgres in a container named `cityloom-db` on 127.0.0.1:55432 and prints the line to run:
+ `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. The server's tests and the account spec
+diff --git a/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md b/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
+index 09f4841c..959fd333 100644
+--- a/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
++++ b/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
+@@ -11,11 +11,11 @@ code : certains fichiers s’en écartent donc. Là où le code n’a pas de fa
+ Chaque règle se termine par ce qui l’applique :
+ 
+ - **Outil** : un outil de mise en forme, le compilateur ou un script la vérifie.
+-- **Garde** : un test sur le code la vérifie (voir [Les gardes](testing.md#les-gardes)); la règle nomme le test.
++- **Garde** : un test sur le code la vérifie (voir [Les gardes](testing/levels.md#les-gardes)); la règle nomme le test.
+ - **Revue** : seule la revue de la demande de fusion la vérifie.
+ 
+ L’organisation du code (tranches, couches, ports) est décrite dans [Architecture](architecture/index.md). La façon dont
+-il est testé est décrite dans [Tests](testing.md). Les termes français et les espacements sont dans
++il est testé est décrite dans [Tests](testing/index.md). Les termes français et les espacements sont dans
+ [`docs/glossary-fr-ca.md`](https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md). Les chemins des
+ fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
+ 
+@@ -31,7 +31,7 @@ fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
+   et le Markdown hors de `website/` et de `e2e/` : ils sont mis en forme à la main. Exemple : `web/app.css` (`:root`).
+   **Revue**
+ 
+-Clippy ne refuse rien : il ne s’exécute que pour [SonarCloud](testing.md#sonarcloud), ses constats plafonnés au niveau
++Clippy ne refuse rien : il ne s’exécute que pour [SonarCloud](testing/when-tests-run.md#sonarcloud), ses constats plafonnés au niveau
+ d’avertissement.
+ 
+ ## Rust
+@@ -139,7 +139,7 @@ porte sur le code hors des tests.
+   fonctions des vues de la rue et de la jonction. Exemple : `project/vm.rs` (`ProjectsVm`). **Revue**
+ - Un modèle de vue qui prend les ports est testé en natif contre leurs doublures, par `test_ports()`,
+   `test_ports_with_time()` ou une autre fonction de `shared/ports.rs` (voir [Tests des modèles de
+-  vue](testing.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**
++  vue](testing/levels.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**
+ 
+ ### Vue
+ 
+@@ -183,7 +183,7 @@ porte sur le code hors des tests.
+ 
+ ## Tests
+ 
+-L’endroit où va un nouveau test est indiqué dans [Tests](testing.md#où-va-un-nouveau-test).
++L’endroit où va un nouveau test est indiqué dans [Tests](testing/index.md#où-va-un-nouveau-test).
+ 
+ - Le nom de presque chaque test Rust est une phrase qui énonce le comportement; aucun n’a de préfixe `test_`.
+   Exemple : `crates/cityloom_server/src/crypto.rs` (`two_seals_of_one_value_differ`). **Revue**
+@@ -266,7 +266,7 @@ Ce qui relève de JavaScript est décrit dans [Architecture](architecture/index.
+   (`i18n_guard.rs`)
+ - Les deux langues ont les mêmes identifiants, avec les mêmes variables. Exemple : `shared/i18n.rs`
+   (`parity_problems`). **Garde** (le test de parité de la tranche), **Revue** pour `timeline` et `standards`, qui
+-  n’ont pas de test de parité (voir [Traduction](testing.md#traduction)).
++  n’ont pas de test de parité (voir [Traduction](testing/quality-attributes.md#traduction)).
+ 
+ ## Commits et demandes de fusion
+ 
+@@ -283,6 +283,6 @@ Ce qui relève de JavaScript est décrit dans [Architecture](architecture/index.
+ - Une demande de fusion augmente la version dans `crates/cityloom_editor/Cargo.toml` (majeure pour un changement
+   incompatible, mineure pour une fonctionnalité, corrective pour un correctif) et met à jour `Cargo.lock`, à moins de
+   ne changer que la documentation et la configuration de l’intégration continue (voir [Ce qui doit réussir avant une
+-  fusion](testing.md#ce-qui-doit-réussir-avant-une-fusion)). Exemple : `scripts/check-version.sh` (`version_of`).
++  fusion](testing/when-tests-run.md#ce-qui-doit-réussir-avant-une-fusion)). Exemple : `scripts/check-version.sh` (`version_of`).
+   **Outil** (la tâche Version bump du flux de prévérification) pour l’augmenter, **Revue** pour le choix de majeure,
+   mineure ou corrective et pour `Cargo.lock`.
+diff --git a/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md b/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md
+index 9f30eb2b..f06c5ff2 100644
+--- a/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md
++++ b/website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md
+@@ -72,7 +72,9 @@ exécutent un service Postgres; les tâches de tests de l’interface et de bout
+ touche que la documentation et la configuration de l’intégration continue (`CI_CONFIGURATION` dans `scripts/ci/ci_changes.py` : `.github/`,
+ `scripts/ci/`, `scripts/include/` et `.claude/`).
+ 
+-[Tests](testing.md) indique à quel palier appartient un test, où va un nouveau test et ce qui doit réussir avant une fusion.
++[Tests](testing/index.md) indique à quel palier appartient un test et où va un nouveau test;
++[Ce qui doit réussir avant une fusion](testing/when-tests-run.md#ce-qui-doit-réussir-avant-une-fusion) indique ce qui
++doit réussir avant une fusion.
+ 
+ `just db` démarre le Postgres dans un conteneur nommé `cityloom-db`, sur 127.0.0.1:55432, et affiche la ligne à
+ exécuter : `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. Les tests du serveur et la
+diff --git a/website/sidebars.ts b/website/sidebars.ts
+index 1e9d0f16..86207318 100644
+--- a/website/sidebars.ts
++++ b/website/sidebars.ts
+@@ -23,7 +23,15 @@ const sidebars: SidebarsConfig = {
+     },
+     "issues",
+   ],
+-  testingSidebar: ["testing", "test-inventory", "coverage-matrix"],
++  testingSidebar: [
++    "testing/index",
++    "testing/levels",
++    "testing/test-data",
++    "testing/quality-attributes",
++    "testing/when-tests-run",
++    "testing/test-inventory",
++    "testing/coverage-matrix",
++  ],
+ };
+ 
+ export default sidebars;
+
+$ git grep -n "testing\.md" (references left to the old page)
+(none)
