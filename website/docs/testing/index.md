@@ -13,7 +13,8 @@ These pages are the one place that says how CityLoom is tested: the [levels of t
 organised (slices, MVVM, ports) is in [Architecture](../architecture/index.md); how to set up and run the commands is in
 [Getting started](../getting-started.md). How many tests there are, by level, by crate and tier, and by feature, is in
 the [Test inventory](test-inventory.md), and how the tests of each feature spread over the levels is in the
-[Coverage matrix](coverage-matrix.md). On the pages of this section, the paths of the editor's files are relative to
+[Coverage matrix](coverage-matrix.md). On this page, in [Levels of tests](levels.md) and in
+[Quality attributes](quality-attributes.md), the paths of the editor's files are relative to
 `crates/cityloom_editor/src/`.
 
 ## The levels at a glance

@@ -13,8 +13,9 @@ Ces pages sont le seul endroit qui dit comment CityLoom est testé : les [palie
 L’organisation du code (tranches, MVVM, ports) est décrite dans [Architecture](../architecture/index.md); la façon de
 préparer et d’exécuter les commandes, dans [Démarrage](../getting-started.md). Le nombre de tests, par palier, par
 caisse et par niveau, et par fonctionnalité, est dans l’[inventaire des tests](test-inventory.md), et la répartition
-des tests de chaque fonctionnalité entre les paliers, dans la [matrice de couverture](coverage-matrix.md). Dans les
-pages de cette section, les chemins des fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
+des tests de chaque fonctionnalité entre les paliers, dans la [matrice de couverture](coverage-matrix.md). Dans
+cette page, dans [Paliers de tests](levels.md) et dans [Attributs de qualité](quality-attributes.md), les chemins des
+fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
 
 ## Les paliers en un coup d’œil
 
