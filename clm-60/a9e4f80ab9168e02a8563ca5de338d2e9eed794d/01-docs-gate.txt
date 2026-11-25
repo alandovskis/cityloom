@@ -1,0 +1,30 @@
+$ npx prettier --ignore-path ../.prettierignore --check ../website
+$ npm run build
+PASS docs gate
+  page: CLAUDE.md
+  page: e2e/CLAUDE.md
+  page: website/docs/coding-style.md
+  page: website/docs/coverage-matrix.md
+  page: website/docs/getting-started.md
+  page: website/docs/test-inventory.md
+  page: website/docs/testing.md
+  page: website/docs/testing/coverage-matrix.md
+  page: website/docs/testing/index.md
+  page: website/docs/testing/levels.md
+  page: website/docs/testing/quality-attributes.md
+  page: website/docs/testing/test-data.md
+  page: website/docs/testing/test-inventory.md
+  page: website/docs/testing/when-tests-run.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coding-style.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/coverage-matrix.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/getting-started.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/test-inventory.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/coverage-matrix.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/index.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/levels.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/quality-attributes.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/test-data.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/test-inventory.md
+  page: website/i18n/fr-CA/docusaurus-plugin-content-docs/current/testing/when-tests-run.md
+  page: website/sidebars.ts
