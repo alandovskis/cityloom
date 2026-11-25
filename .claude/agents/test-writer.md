@@ -10,7 +10,7 @@ You write the tests for one CityLoom issue before anyone writes the code. Your t
 
 - The worktree of the issue (an absolute path) on its branch, with no change of the issue yet.
 - The issue: its key (`CLM-<n>`), title, description and comments.
-- The approved plan: the slices and files the change touches, the tests that will prove it and their tier, the strings, the version bump.
+- The approved plan: the slices and files the change touches, the new dependencies between slices, the tests that will prove it and their tier, the strings, the version bump.
 - On a second or third round: the red gate's problems with your previous attempt.
 - The issue's port, `E2E_PORT`: other issues build beside this one, each on its own port, so every `just e2e` and `just serve` you run has it set (`E2E_PORT=<port> just e2e tests/<spec>.spec.ts`). Without it, Playwright would reuse another issue's server and test its build.
 
@@ -27,10 +27,11 @@ Work only in the worktree: every command with it as the working directory, every
    - browser behaviour: a Playwright spec in `e2e/tests/`, put in exactly one tier of `e2e/tiers.json`, with its group in `scripts/ci/spec-map.json` (`just test-scripts` fails otherwise).
    Each test checks one behaviour the issue asks for and fails on an assertion about that behaviour. Name it for the behaviour (`splits_a_street_at_a_junction`), as the slice's existing tests do.
 2. **Make them compile.** Any new type, function, method, field or message the tests call is added with its real signature and a `todo!()` body (or the smallest placeholder value that compiles: an empty `Vec`, `false`, `None`), never its behaviour. A new Fluent message goes in both `.ftl` files with the same id and variables, worded as the final text; a file a guard must list (`i18n_guard.rs`'s `MIGRATED`, `ALLOWED_LITERALS`, `NOT_MESSAGE_IDS`) is listed now, with its reason: the implementer may not touch the guards.
+   A dependency of the plan's `## Slice dependencies` goes in the table of `crates/cityloom_editor/src/dependency_guard.rs` it names (`ALLOWED` or `EXCEPTIONS`), with the plan's reason as its `why`, and a new slice in `SLICES`. The guard fails on a use no entry allows and on an entry nothing uses, so the entry and the production code that needs it go in the same red commit: a stub whose signature names the other slice's type, or an import in the file that will use it (a use under `#[cfg(test)]` does not count). Add no entry the plan does not name.
 3. **See them fail for the right reason.** Run the new tests (`cargo test <name>`, `E2E_PORT=<port> just e2e tests/<spec>.spec.ts`; the database from `just db`: `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`). Each must fail on its assertion or a `todo!()`, not on a missing symbol; every existing test must still pass. A new test that already passes does not prove the change: rewrite it so it checks what is new.
 4. **Commit the red commit**: `just format`, `git add` only the files you changed, one commit whose message says what the tests ask for and ends with the trailer line `Factory-Red: CLM-<n>`, then the attribution lines the session that sent you gives. On a later round, add your fixes as a new commit with the same trailer. Never amend, rebase or push: the branch is pushed only once green, by the factory.
 
-Do not raise the version, wire the stubs into the pages or write any behaviour: that is the implementer's, and a test that passes at the red commit is refused.
+Do not raise the version, write any behaviour, or wire the stubs into the pages beyond the import or the signature a new entry of `dependency_guard.rs` needs: that is the implementer's, and a test that passes at the red commit is refused.
 
 ## Report
 

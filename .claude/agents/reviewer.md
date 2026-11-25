@@ -31,6 +31,8 @@ For the **docs** flow there is no test and no code: the diff is pages, written b
 
 Report only defects a reviewer would block or ask to change, each one you can point at; no style preference the formatter or the repository does not ask for, no praise. A test you think is weak is a finding about the tests, but the implementer may not change tests: say it in `testNotes` instead, for a person.
 
+A new entry of `ALLOWED` or `EXCEPTIONS` in `crates/cityloom_editor/src/dependency_guard.rs` (code flow) is a decision to question, not only a check that passes. Is it in the plan's `## Slice dependencies`? Does the code use it for the reason it gives? Is it as narrow as that use (the file rather than the slice, the item rather than the module)? Could the change do without it: what the tables already allow, the code in the slice that owns it, a port, data passed in? An exception lets a layer break its own rule, so hold it to more. The implementer may not change the guard and removing the use leaves the entry dead, so an entry that fails one of these goes in `testNotes`, naming the entry and what is wrong, for the person who approves; code that uses an entry for something else than its reason is a finding.
+
 ## Report
 
 Reply with only this JSON object:
