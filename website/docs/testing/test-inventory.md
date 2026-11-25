@@ -1,12 +1,13 @@
 ---
 id: test-inventory
 title: Test inventory
+slug: /test-inventory
 ---
 
 # Test inventory
 
 This page counts CityLoom's tests by level, by crate and tier, and by feature, and says which tests belong to no
-feature. The levels themselves are described in [Testing](testing.md). The counts are those of commit `0d9cb8b9`
+feature. The levels themselves are described in [Levels of tests](levels.md). The counts are those of commit `0d9cb8b9`
 (version 0.113.0). No script makes these counts or checks them, so they stay those of that commit until
 the tests are counted again.
 
@@ -38,7 +39,7 @@ How the tests of each feature spread over the levels is in the [Coverage matrix]
   are not counted again.
 - **Script**: one test method of `scripts/include/tests/test_*.py`.
 
-The [wasm32 build check](testing.md#the-wasm32-build-check) runs no test, so it is not here.
+The [wasm32 build check](levels.md#the-wasm32-build-check) runs no test, so it is not here.
 
 ### The file of a test
 

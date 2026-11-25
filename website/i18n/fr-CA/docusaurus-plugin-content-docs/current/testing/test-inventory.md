@@ -1,12 +1,13 @@
 ---
 id: test-inventory
 title: Inventaire des tests
+slug: /test-inventory
 ---
 
 # Inventaire des tests
 
 Cette page compte les tests de CityLoom par palier, par caisse et par niveau, et par fonctionnalité, et dit quels tests
-n’appartiennent à aucune fonctionnalité. Les paliers eux-mêmes sont décrits dans [Tests](testing.md). Les nombres sont
+n’appartiennent à aucune fonctionnalité. Les paliers eux-mêmes sont décrits dans [Paliers de tests](levels.md). Les nombres sont
 ceux du commit `0d9cb8b9` (version 0.113.0). Aucun script ne produit ni ne vérifie ces nombres : ils restent donc
 ceux de ce commit jusqu’au prochain décompte.
 
@@ -40,7 +41,7 @@ La répartition des tests de chaque fonctionnalité entre les paliers est dans l
   ceux du niveau de l’interface exécutés de nouveau, et ne sont pas comptés une seconde fois.
 - **Script** : une méthode de test de `scripts/include/tests/test_*.py`.
 
-La [vérification de la construction wasm32](testing.md#la-vérification-de-la-construction-wasm32) n’exécute aucun test :
+La [vérification de la construction wasm32](levels.md#la-vérification-de-la-construction-wasm32) n’exécute aucun test :
 elle n’est donc pas ici.
 
 ### Le fichier d’un test

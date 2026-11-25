@@ -11,11 +11,11 @@ code : certains fichiers s’en écartent donc. Là où le code n’a pas de fa
 Chaque règle se termine par ce qui l’applique :
 
 - **Outil** : un outil de mise en forme, le compilateur ou un script la vérifie.
-- **Garde** : un test sur le code la vérifie (voir [Les gardes](testing.md#les-gardes)); la règle nomme le test.
+- **Garde** : un test sur le code la vérifie (voir [Les gardes](testing/levels.md#les-gardes)); la règle nomme le test.
 - **Revue** : seule la revue de la demande de fusion la vérifie.
 
 L’organisation du code (tranches, couches, ports) est décrite dans [Architecture](architecture/index.md). La façon dont
-il est testé est décrite dans [Tests](testing.md). Les termes français et les espacements sont dans
+il est testé est décrite dans [Tests](testing/index.md). Les termes français et les espacements sont dans
 [`docs/glossary-fr-ca.md`](https://github.com/alandovskis/cityloom/blob/main/docs/glossary-fr-ca.md). Les chemins des
 fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
 
@@ -31,7 +31,7 @@ fichiers de l’éditeur sont relatifs à `crates/cityloom_editor/src/`.
   et le Markdown hors de `website/` et de `e2e/` : ils sont mis en forme à la main. Exemple : `web/app.css` (`:root`).
   **Revue**
 
-Clippy ne refuse rien : il ne s’exécute que pour [SonarCloud](testing.md#sonarcloud), ses constats plafonnés au niveau
+Clippy ne refuse rien : il ne s’exécute que pour [SonarCloud](testing/when-tests-run.md#sonarcloud), ses constats plafonnés au niveau
 d’avertissement.
 
 ## Rust
@@ -139,7 +139,7 @@ porte sur le code hors des tests.
   fonctions des vues de la rue et de la jonction. Exemple : `project/vm.rs` (`ProjectsVm`). **Revue**
 - Un modèle de vue qui prend les ports est testé en natif contre leurs doublures, par `test_ports()`,
   `test_ports_with_time()` ou une autre fonction de `shared/ports.rs` (voir [Tests des modèles de
-  vue](testing.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**
+  vue](testing/levels.md#tests-des-modèles-de-vue)). Exemple : `standards/tests.rs` (`setup`). **Revue**
 
 ### Vue
 
@@ -183,7 +183,7 @@ porte sur le code hors des tests.
 
 ## Tests
 
-L’endroit où va un nouveau test est indiqué dans [Tests](testing.md#où-va-un-nouveau-test).
+L’endroit où va un nouveau test est indiqué dans [Tests](testing/index.md#où-va-un-nouveau-test).
 
 - Le nom de presque chaque test Rust est une phrase qui énonce le comportement; aucun n’a de préfixe `test_`.
   Exemple : `crates/cityloom_server/src/crypto.rs` (`two_seals_of_one_value_differ`). **Revue**
@@ -266,7 +266,7 @@ Ce qui relève de JavaScript est décrit dans [Architecture](architecture/index.
   (`i18n_guard.rs`)
 - Les deux langues ont les mêmes identifiants, avec les mêmes variables. Exemple : `shared/i18n.rs`
   (`parity_problems`). **Garde** (le test de parité de la tranche), **Revue** pour `timeline` et `standards`, qui
-  n’ont pas de test de parité (voir [Traduction](testing.md#traduction)).
+  n’ont pas de test de parité (voir [Traduction](testing/quality-attributes.md#traduction)).
 
 ## Commits et demandes de fusion
 
@@ -283,6 +283,6 @@ Ce qui relève de JavaScript est décrit dans [Architecture](architecture/index.
 - Une demande de fusion augmente la version dans `crates/cityloom_editor/Cargo.toml` (majeure pour un changement
   incompatible, mineure pour une fonctionnalité, corrective pour un correctif) et met à jour `Cargo.lock`, à moins de
   ne changer que la documentation et la configuration de l’intégration continue (voir [Ce qui doit réussir avant une
-  fusion](testing.md#ce-qui-doit-réussir-avant-une-fusion)). Exemple : `scripts/check-version.sh` (`version_of`).
+  fusion](testing/when-tests-run.md#ce-qui-doit-réussir-avant-une-fusion)). Exemple : `scripts/check-version.sh` (`version_of`).
   **Outil** (la tâche Version bump du flux de prévérification) pour l’augmenter, **Revue** pour le choix de majeure,
   mineure ou corrective et pour `Cargo.lock`.

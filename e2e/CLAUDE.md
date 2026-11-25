@@ -12,11 +12,11 @@ Loaded when working in this folder; the root `CLAUDE.md` has the project-wide ru
 ## Tiers
 
 - Each spec is in exactly one tier of `e2e/tiers.json` (`playwright.config.ts` throws and `just test-scripts` fails otherwise) and in one group of `scripts/ci/spec-map.json`. `archive_also` (map, street) are UI specs the E2E tier runs again over the archive.
-- The tiers, their recipes and CI jobs: `website/docs/testing.md`.
+- The tiers and their recipes: `website/docs/testing/levels.md`; their CI jobs: `website/docs/testing/when-tests-run.md`.
 
 ## Fixtures
 
-- The OSM fixtures are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures`, which every browser recipe runs first; `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`, and `tileFrom(file)` answers a request for a tile with one. Test data: `website/docs/testing.md`.
+- The OSM fixtures are imported into JSON network tiles in `e2e/fixtures/generated/` (gitignored) by `just e2e-fixtures`, which every browser recipe runs first; `fixtures.ts` names them `PLATEAU_TILE`, `TURBO_TILE`, `OPEN_ENDS_TILE`, and `tileFrom(file)` answers a request for a tile with one. Test data: `website/docs/testing/test-data.md`.
 - `about.spec.ts` checks the city behind the About card is read from the metro tile and no other host is asked (no Overpass), and, on every page, the top bar (Projects and About, the current one `aria-current="page"`, no Map link, the logo to `index.html`); `home.spec.ts` that the list asks for no road tile; `world.spec.ts` serves a one-place tile from `PLATEAU_TILE`.
 - `junction.spec.ts` turbo tests serve `TURBO_TILE`: no Plateau junction has room for the basic layout. `street.spec.ts` serves `OPEN_ENDS_TILE` for open street ends (its source `open-ends.osm` has a `<bounds>` element: the importer panics inside osm2streets on OSM XML without one).
 - `restrictions.spec.ts`: area by clicks and by keyboard (map focused, Enter places a corner at the centre, Shift+Enter closes).

@@ -72,7 +72,9 @@ and E2E browser jobs need none. Every pull request raises the version in `crates
 made only of documentation and CI configuration (`CI_CONFIGURATION` in `scripts/ci/ci_changes.py`: `.github/`,
 `scripts/ci/`, `scripts/include/` and `.claude/`).
 
-[Testing](testing.md) says which level a test belongs to, where a new one goes and what must pass before a merge.
+[Testing](testing/index.md) says which level a test belongs to and where a new one goes, and
+[What must pass before a merge](testing/when-tests-run.md#what-must-pass-before-a-merge) says what must pass before a
+merge.
 
 `just db` starts the Postgres in a container named `cityloom-db` on 127.0.0.1:55432 and prints the line to run:
 `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/cityloom`. The server's tests and the account spec
