@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-const LAYERED: &[&str] = &["street", "junction", "map"];
+pub(crate) const LAYERED: &[&str] = &["street", "junction", "map"];
 const ROOT_DIRS: &[&str] = &["model", "vm", "view", "i18n"];
 const ROOT_FILES: &[&str] = &["mod.rs", "CLAUDE.md"];
 

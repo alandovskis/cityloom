@@ -129,6 +129,9 @@ const ALLOWED: &[Entry] = &[
     },
 ];
 
+/// The breaks of a layer's rules that are let pass, if any.
+const EXCEPTIONS: &[Entry] = &[];
+
 /// The text of each file, by its path from `src/` with `/` between the folders.
 type Sources = BTreeMap<String, String>;
 
@@ -139,6 +142,14 @@ struct Use {
     line: usize,
     /// From the slice, without `crate::`: `city::store::CityStore`, `city::store::*`. The crate's root is `crate`.
     path: String,
+}
+
+/// A use a layer's rules do not allow its file. Their order is their uses'.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Break {
+    used: Use,
+    /// `model` or `view-model`.
+    layer: &'static str,
 }
 
 /// Every `.rs` file under `src`.
@@ -436,6 +447,22 @@ fn dead(uses: &[Use], allowed: &[Entry]) -> Vec<String> {
         .filter(|(by, pattern)| !uses.iter().any(|u| names(by, &u.file) && covers(pattern, &u.path)))
         .map(|(by, pattern)| format!("ALLOWED: nothing in {by} uses {pattern}"))
         .collect()
+}
+
+/// Every break of a layer rule or a library rule by production code, sorted, each once.
+fn broken(sources: &Sources) -> Vec<Break> {
+    todo!()
+}
+
+/// What is wrong with each break that no entry of `exceptions` lets pass, in their order.
+fn unexcepted(breaks: &[Break], exceptions: &[Entry]) -> Vec<String> {
+    todo!()
+}
+
+/// Each pair of who and what in `exceptions` that no break matches, in the table's order, then each entry without a
+/// reason.
+fn faulty(breaks: &[Break], exceptions: &[Entry]) -> Vec<String> {
+    todo!()
 }
 
 /// The folders of `src` that are neither a slice nor `shared`, sorted. A hidden one is the system's or an editor's.
@@ -792,5 +819,536 @@ mod tests {
                 ("account/mod.rs", "project::migrate::move_legacy_work"),
             ],
         );
+    }
+
+    /// A sample's lines, each with the paths that break a rule on it. `SLICE` and `LAYER` stand for a slice and a layer.
+    type Lines<'a> = &'a [(&'a str, &'a [&'a str])];
+
+    /// The slices whose layers are held to the layer rules.
+    const LAYERED_SLICES: &[&str] = &["street", "junction", "map"];
+
+    /// The ways a file at the top of a layer takes the `LAYER` of its slice.
+    const FROM_THE_TOP: Lines = &[
+        ("use crate::SLICE::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+        ("use crate::{SLICE::{RESOURCES, LAYER::{Panel, frame::Frame}}, shared::units::Units};", &["SLICE::LAYER::Panel", "SLICE::LAYER::frame::Frame"]),
+        ("use crate::SLICE::LAYER::{self, frame};", &["SLICE::LAYER", "SLICE::LAYER::frame"]),
+        ("use crate::SLICE::{", &[]),
+        ("    LAYER::Panel,", &["SLICE::LAYER::Panel"]),
+        ("    LAYER::{", &[]),
+        ("        Frame,", &["SLICE::LAYER::Frame"]),
+        ("    },", &[]),
+        ("};", &[]),
+        ("use crate::SLICE::LAYER::Panel as P;", &["SLICE::LAYER::Panel"]),
+        ("use crate::SLICE::LAYER as other;", &["SLICE::LAYER"]),
+        ("use crate::SLICE::{LAYER as again, RESOURCES};", &["SLICE::LAYER"]),
+        ("use crate::SLICE::LAYER::*;", &["SLICE::LAYER::*"]),
+        ("use crate::SLICE::{LAYER::*, RESOURCES};", &["SLICE::LAYER::*"]),
+        ("fn f(p: &crate::SLICE::LAYER::Panel) { <crate::SLICE::LAYER::Frame as Default>::default(); }", &["SLICE::LAYER::Frame", "SLICE::LAYER::Panel"]),
+        ("fn g() { for p in crate::SLICE::LAYER::PANELS {} vec![crate::SLICE::LAYER::open::<u32>(1)]; }", &["SLICE::LAYER::PANELS", "SLICE::LAYER::open"]),
+        ("fn h() { view! { <crate::SLICE::LAYER::Panel on:click=move |_| crate::SLICE::LAYER::go()/> } }", &["SLICE::LAYER::Panel", "SLICE::LAYER::go"]),
+        ("use super::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+        ("use super::{LAYER::frame, RESOURCES};", &["SLICE::LAYER::frame"]),
+        ("use self::super::LAYER;", &["SLICE::LAYER"]),
+        ("use super::super::SLICE::LAYER::draw;", &["SLICE::LAYER::draw"]),
+        ("mod inner { use super::super::LAYER::draw; }", &["SLICE::LAYER::draw"]),
+        ("fn k() { super::LAYER::draw(); }", &["SLICE::LAYER::draw"]),
+        ("pub use crate::SLICE::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+        ("pub(crate) use super::LAYER::{Frame, draw};", &["SLICE::LAYER::Frame", "SLICE::LAYER::draw"]),
+    ];
+
+    /// The ways a deeper file of a layer takes the `LAYER` of its slice.
+    const FROM_BELOW: Lines = &[
+        ("use crate::SLICE::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+        ("use super::super::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+        ("use super::super::{LAYER::{Frame, draw as d}, RESOURCES};", &["SLICE::LAYER::Frame", "SLICE::LAYER::draw"]),
+        ("use super::{super::LAYER, Rule};", &["SLICE::LAYER"]),
+        ("use super::super::LAYER::*;", &["SLICE::LAYER::*"]),
+        ("use super::super::super::SLICE::LAYER as other;", &["SLICE::LAYER"]),
+        ("mod inner { use super::super::super::LAYER::draw; }", &["SLICE::LAYER::draw"]),
+        ("fn f() { super::super::LAYER::draw(); }", &["SLICE::LAYER::draw"]),
+        ("fn g() { view! { <super::super::LAYER::Panel/> } }", &["SLICE::LAYER::Panel"]),
+        ("pub use super::super::LAYER::Panel;", &["SLICE::LAYER::Panel"]),
+    ];
+
+    /// The ways a file names the browser's crates, without Leptos.
+    const BROWSER: Lines = &[
+        ("use web_sys::Window;", &["web_sys::Window"]),
+        ("use js_sys::Date;", &["js_sys::Date"]),
+        ("use gloo::events;", &["gloo::events"]),
+        ("use gloo_timers::callback::Timeout;", &["gloo_timers::callback::Timeout"]),
+        ("use wasm_bindgen::prelude::*;", &["wasm_bindgen::prelude::*"]),
+        ("use wasm_bindgen_futures::spawn_local;", &["wasm_bindgen_futures::spawn_local"]),
+        ("use web_sys;", &["web_sys"]),
+        ("use web_sys::{self, Document, console::log_1};", &["web_sys", "web_sys::Document", "web_sys::console::log_1"]),
+        ("use {js_sys::Math, web_sys::Event};", &["js_sys::Math", "web_sys::Event"]),
+        ("use web_sys::{", &[]),
+        ("    Document,", &["web_sys::Document"]),
+        ("};", &[]),
+        ("use js_sys as js;", &["js_sys"]),
+        ("use js_sys::Array as List;", &["js_sys::Array"]),
+        ("use ::gloo::net;", &["gloo::net"]),
+        ("use l::web_sys::Element;", &["web_sys::Element"]),
+        ("pub(crate) use js_sys::Map;", &["js_sys::Map"]),
+        ("fn f(e: &web_sys::Event) -> f64 { js_sys::Date::now() }", &["js_sys::Date::now", "web_sys::Event"]),
+        ("fn g() { ::web_sys::window(); vec![gloo::net::get::<u32>(1)]; }", &["gloo::net::get", "web_sys::window"]),
+        ("fn h() { for i in 0..js_sys::Math::floor(2.5) {} }", &["js_sys::Math::floor"]),
+        ("#[wasm_bindgen] pub fn k() {}", &["wasm_bindgen"]),
+        ("#[wasm_bindgen(js_name = m)] pub fn l() {}", &["wasm_bindgen"]),
+        ("#[wasm_bindgen::prelude::wasm_bindgen] pub fn n() {}", &["wasm_bindgen::prelude::wasm_bindgen"]),
+        ("#[cfg_attr(target_arch = \"wasm32\", wasm_bindgen)] pub fn o() {}", &["wasm_bindgen"]),
+        ("use gloomy::Sky;", &[]),
+        ("use crate::shared::web_sys::Ports;", &[]),
+        ("fn p(ports: &Ports) { ports.web_sys().js_sys; }", &[]),
+    ];
+
+    /// `file` holding `code`, in a slice whose `mod.rs` declares the three layers, the other files holding nothing but
+    /// the declaration of `file` where it is deeper than its layer's own file.
+    fn sample(file: &str, code: &str) -> Sources {
+        let (slice, rest) = file.split_once('/').unwrap();
+        let mut files = tree(&[("lib.rs", &format!("mod {slice};")), (&format!("{slice}/mod.rs"), "mod model;\nmod vm;\nmod view;\n")]);
+        for layer in ["model", "vm", "view"] {
+            let deeper = rest.strip_prefix(&format!("{layer}/")).and_then(|name| name.strip_suffix(".rs")).filter(|name| *name != "mod");
+            let own = if rest == format!("{layer}.rs") { file.to_string() } else { format!("{slice}/{layer}/mod.rs") };
+            files.insert(own, deeper.map(|name| format!("mod {name};")).unwrap_or_default());
+        }
+        files.insert(file.to_string(), code.to_string());
+        files
+    }
+
+    /// Holds that the rules break in `file` holding `lines`, with the paths beside each line and no other.
+    #[track_caller]
+    fn breaks(file: &str, lines: Lines) {
+        breaks_as(file, lines, "SLICE", "LAYER");
+    }
+
+    /// `breaks`, with `slice` for `SLICE` and `layer` for `LAYER`.
+    #[track_caller]
+    fn breaks_as(file: &str, lines: Lines, slice: &str, layer: &str) {
+        let fill = |text: &str| text.replace("SLICE", slice).replace("LAYER", layer);
+        let file = fill(file);
+        let code: String = lines.iter().map(|(text, _)| fill(text) + "\n").collect();
+        let side = if file.split('/').nth(1).unwrap().starts_with("model") { "model" } else { "view-model" };
+        let mut expected = Vec::new();
+        for (i, (_, paths)) in lines.iter().enumerate() {
+            expected.extend(paths.iter().map(|path| Break { used: used(&file, i + 1, &fill(path)), layer: side }));
+        }
+        expected.sort();
+        assert_eq!(broken(&sample(&file, &code)), expected, "in {file}:\n{code}");
+    }
+
+    fn model_breaks(file: &str, path: &str) -> Break {
+        Break { used: one(file, path), layer: "model" }
+    }
+
+    fn vm_breaks(file: &str, path: &str) -> Break {
+        Break { used: one(file, path), layer: "view-model" }
+    }
+
+    #[test]
+    fn a_model_that_uses_its_view_model_or_view_breaks_a_rule() {
+        for slice in LAYERED_SLICES {
+            for layer in ["vm", "view"] {
+                breaks_as("SLICE/model/mod.rs", FROM_THE_TOP, slice, layer);
+                breaks_as("SLICE/model.rs", FROM_THE_TOP, slice, layer);
+                breaks_as("SLICE/model/rules.rs", FROM_BELOW, slice, layer);
+            }
+        }
+    }
+
+    #[test]
+    fn a_view_model_that_uses_its_view_breaks_a_rule() {
+        for slice in LAYERED_SLICES {
+            breaks_as("SLICE/vm/mod.rs", FROM_THE_TOP, slice, "view");
+            breaks_as("SLICE/vm.rs", FROM_THE_TOP, slice, "view");
+            breaks_as("SLICE/vm/keys.rs", FROM_BELOW, slice, "view");
+        }
+    }
+
+    #[test]
+    fn a_layer_may_use_what_is_below_it() {
+        breaks(
+            "junction/model/rules.rs",
+            &[
+                ("use crate::junction::model::Junction;", &[]),
+                ("use super::{Junction, geometry::*, view::sight, vm};", &[]),
+                ("use super::super::model as own;", &[]),
+                ("use crate::junction::viewer::Viewer;", &[]),
+                ("use super::super::view::draw;", &["junction::view::draw"]),
+            ],
+        );
+        breaks(
+            "junction/vm/keys.rs",
+            &[
+                ("use crate::junction::model::{self, Junction};", &[]),
+                ("use super::super::model::*;", &[]),
+                ("use crate::junction::vm::{JunctionVm, text::*};", &[]),
+                ("use super::{super::vm as own, watch::Watch};", &[]),
+                ("use crate::junction::vm::view::Shown;", &[]),
+                ("use super::view::Shown as S;", &[]),
+                ("use crate::junction::view::Shown as T;", &["junction::view::Shown"]),
+            ],
+        );
+
+        let above = tree(&[
+            ("lib.rs", "mod junction;"),
+            (
+                "junction/mod.rs",
+                "mod model;\nmod vm;\nmod view;\nuse view::Page;\nuse self::vm::JunctionVm;\npub use crate::junction::{model::Junction, view::*};\n",
+            ),
+            ("junction/model/mod.rs", "use crate::junction::vm::JunctionVm;"),
+            ("junction/vm/mod.rs", ""),
+            ("junction/view/mod.rs", "use crate::junction::{model::Junction, view::Panel, vm::JunctionVm};\nuse super::*;\nuse crate::junction;\n"),
+        ]);
+        assert_eq!(broken(&above), [model_breaks("junction/model/mod.rs", "junction::vm::JunctionVm")]);
+
+        breaks(
+            "share/model.rs",
+            &[
+                ("use crate::share::vm::ShareVm;", &[]),
+                ("use super::view::Panel;", &[]),
+                ("use super::*;", &[]),
+                ("use crate::share;", &[]),
+                ("use web_sys::Window;", &["web_sys::Window"]),
+            ],
+        );
+        breaks("share/vm.rs", &[("use crate::share::view::Panel;", &[]), ("use super::*;", &[]), ("use web_sys::Window;", &["web_sys::Window"])]);
+    }
+
+    #[test]
+    fn taking_the_slice_whole_from_a_layer_breaks_a_rule() {
+        const TOP: Lines = &[
+            ("use crate::SLICE;", &["SLICE"]),
+            ("use crate::SLICE as j;", &["SLICE"]),
+            ("use crate::SLICE::{self};", &["SLICE"]),
+            ("use crate::SLICE::{self as k, RESOURCES};", &["SLICE"]),
+            ("use crate::{SLICE, shared::units::Units};", &["SLICE"]),
+            ("use crate::SLICE::*;", &["SLICE::*"]),
+            ("pub(in crate::SLICE) fn f() {}", &[]),
+            ("pub(in super::super::SLICE) fn g() {}", &[]),
+            ("use crate::SLICE::RESOURCES;", &[]),
+            ("fn h() { crate::SLICE::open(); super::open(); }", &[]),
+            ("use super::super::SLICE as l;", &["SLICE"]),
+            ("use super as m;", &["SLICE"]),
+            ("use super::{self as n};", &["SLICE"]),
+            ("use super::*;", &["SLICE::*"]),
+            ("pub(in crate::SLICE) use super::{*, RESOURCES};", &["SLICE::*"]),
+        ];
+        const BELOW: Lines = &[
+            ("use crate::SLICE as j;", &["SLICE"]),
+            ("use super::super as k;", &["SLICE"]),
+            ("use super::super::{self as l};", &["SLICE"]),
+            ("use super::super::*;", &["SLICE::*"]),
+            ("use super::{super::*, Rule};", &["SLICE::*"]),
+            ("pub(in super::super) fn f() {}", &[]),
+            ("pub(in crate::SLICE) struct S;", &[]),
+            ("pub(super) fn g() {}", &[]),
+            ("use super::*;", &[]),
+            ("use super::super::RESOURCES;", &[]),
+        ];
+        for slice in LAYERED_SLICES {
+            for layer in ["model", "vm"] {
+                breaks_as("SLICE/LAYER/mod.rs", TOP, slice, layer);
+                breaks_as("SLICE/LAYER/rules.rs", BELOW, slice, layer);
+            }
+        }
+    }
+
+    #[test]
+    fn the_report_may_draw_other_slices_figures() {
+        breaks(
+            "map/vm/report.rs",
+            &[
+                ("use crate::street::view::drawing;", &[]),
+                ("use crate::junction::view::figure;", &[]),
+                ("fn f() { crate::street::view::drawing::draw(); }", &[]),
+                ("use crate::{junction, street::*};", &[]),
+                ("use crate::map::view::details;", &["map::view::details"]),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_model_that_names_leptos_or_the_browser_breaks_a_rule() {
+        const LEPTOS: Lines = &[
+            ("use leptos::prelude::RwSignal;", &["leptos::prelude::RwSignal"]),
+            ("use leptos::{prelude::*, web_sys::Window};", &["leptos::prelude::*", "leptos::web_sys::Window"]),
+            ("use {leptos::prelude::*, web_sys::Window};", &["leptos::prelude::*", "web_sys::Window"]),
+            ("use leptos as l;", &["leptos"]),
+            ("use leptos::prelude::Memo as M;", &["leptos::prelude::Memo"]),
+            ("use leptos_dom::helpers;", &["leptos_dom::helpers"]),
+            ("fn f(n: ::leptos::prelude::RwSignal<u32>) { leptos::prelude::signal(0); }", &["leptos::prelude::RwSignal", "leptos::prelude::signal"]),
+            ("fn g() { leptos::prelude::document(); leptos::view! { <p/> } }", &["leptos::prelude::document", "leptos::view"]),
+            ("use leptosphere::Crust;", &[]),
+            ("use crate::shared::leptos::Glue;", &[]),
+            ("fn h() { document(); window(); }", &[]),
+        ];
+        for file in ["junction/model/mod.rs", "junction/model/rules.rs", "share/model.rs"] {
+            breaks(file, LEPTOS);
+            breaks(file, BROWSER);
+        }
+    }
+
+    #[test]
+    fn a_view_model_that_names_the_browser_breaks_a_rule() {
+        const THROUGH_LEPTOS: Lines = &[
+            ("use leptos::web_sys::HtmlElement;", &["leptos::web_sys::HtmlElement"]),
+            ("use leptos::wasm_bindgen::JsCast;", &["leptos::wasm_bindgen::JsCast"]),
+            ("use leptos::{prelude::*, web_sys::Window};", &["leptos::web_sys::Window"]),
+            ("use {leptos::prelude::*, web_sys::Window};", &["web_sys::Window"]),
+            ("use leptos::web_sys as w;", &["leptos::web_sys"]),
+            ("fn f() { leptos::leptos_dom::helpers::set_timeout(); leptos::reexport::js_sys::eval(); }", &["leptos::reexport::js_sys::eval"]),
+            ("use leptos as l;", &[]),
+            ("use leptos_dom::helpers;", &[]),
+        ];
+        for file in ["junction/vm/mod.rs", "junction/vm/keys.rs", "share/vm.rs"] {
+            breaks(file, THROUGH_LEPTOS);
+            breaks(file, BROWSER);
+        }
+    }
+
+    #[test]
+    fn leptos_document_and_window_in_a_view_model_break_a_rule() {
+        const CALLS: Lines = &[
+            ("fn f() { leptos::prelude::document(); }", &["leptos::prelude::document"]),
+            ("fn g() { leptos::leptos_dom::helpers::window(); }", &["leptos::leptos_dom::helpers::window"]),
+            ("fn h() { document().body(); }", &["document"]),
+            ("fn k() -> String { let at = window().location(); format!(\"{:?}\", window().name()) }", &["window"]),
+            ("fn l() { if let Some(body) = document().body() { show(&body, || window()); } }", &["document", "window"]),
+        ];
+        const IMPORTS: Lines = &[
+            ("use leptos::prelude::{document, RwSignal};", &["leptos::prelude::document"]),
+            ("use leptos::prelude::window as w;", &["leptos::prelude::window"]),
+            ("use leptos::{prelude::*, leptos_dom::helpers::{window, set_timeout}};", &["leptos::leptos_dom::helpers::window"]),
+            ("use leptos_dom::helpers::document as d;", &["leptos_dom::helpers::document"]),
+            ("use leptos::prelude::*;", &[]),
+            ("fn f() { document().body(); }", &["document"]),
+            ("fn g() { window().location(); }", &["window"]),
+        ];
+        for file in ["junction/vm/mod.rs", "junction/vm/keys.rs", "share/vm.rs"] {
+            breaks(file, CALLS);
+            breaks(file, IMPORTS);
+        }
+    }
+
+    #[test]
+    fn a_document_or_window_of_the_code_itself_breaks_no_rule() {
+        breaks(
+            "junction/vm/mod.rs",
+            &[
+                ("use leptos::prelude::*;", &[]),
+                ("fn f(page: &Page) { page.document(); }", &[]),
+                ("fn g(&self) { self.window().open(); }", &[]),
+                ("impl Page { fn document(&self) {} fn window() {} }", &[]),
+                ("fn h() { let window = 3; f(window); }", &[]),
+                ("fn k() { f(|window| (window + 1)); }", &[]),
+                ("fn l() { window(1); }", &[]),
+                ("fn m() { Self::document(); }", &[]),
+                ("fn n() { crate::shared::page::document(); }", &[]),
+                ("fn o() { storage::window(); }", &[]),
+                ("fn p() { super::document(); }", &[]),
+                ("use crate::shared::page::{document, window as w};", &[]),
+                ("fn q() { document(); }", &["document"]),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_view_model_may_use_leptos_signals() {
+        breaks(
+            "junction/vm/mod.rs",
+            &[
+                ("use leptos::prelude::*;", &[]),
+                ("use leptos::prelude::{RwSignal, Memo};", &[]),
+                ("fn f() { leptos::prelude::signal(0); }", &[]),
+                ("fn g() { leptos::task::spawn_local(); }", &[]),
+            ],
+        );
+        breaks(
+            "junction/model/mod.rs",
+            &[
+                ("use leptos::prelude::*;", &["leptos::prelude::*"]),
+                ("use leptos::prelude::{RwSignal, Memo};", &["leptos::prelude::Memo", "leptos::prelude::RwSignal"]),
+                ("fn f() { leptos::prelude::signal(0); }", &["leptos::prelude::signal"]),
+                ("fn g() { leptos::task::spawn_local(); }", &["leptos::task::spawn_local"]),
+            ],
+        );
+    }
+
+    #[test]
+    fn the_layer_rules_read_production_code_only() {
+        breaks(
+            "junction/vm/mod.rs",
+            &[
+                ("//! crate::junction::view::Panel, web_sys::Window", &[]),
+                ("/// See [`crate::junction::view`], `web_sys::Window` and `document()`.", &[]),
+                ("fn f() { /* web_sys::window() */ let a = \"crate::junction::view document()\"; } // document()", &[]),
+                ("fn g() { r#\"js_sys::Date\"#; document(); }", &["document"]),
+                ("#[cfg(test)]", &[]),
+                ("use crate::junction::view::{Panel, draw};", &[]),
+                ("#[cfg(test)]", &[]),
+                ("fn h() { web_sys::window(); document(); }", &[]),
+                ("#[cfg(test)]", &[]),
+                ("mod fixtures { use super::super::view::Panel; use js_sys::Date; }", &[]),
+                ("use super::view::Panel;", &["junction::view::Panel"]),
+                ("fn k() {", &[]),
+                ("    #[cfg(test)]", &[]),
+                ("    document().body();", &[]),
+                ("    js_sys::Date::now();", &["js_sys::Date::now"]),
+                ("}", &[]),
+                ("struct Shown {", &[]),
+                ("    #[cfg(test)]", &[]),
+                ("    seen: Vec<web_sys::Window>,", &[]),
+                ("    kept: crate::junction::view::Kept,", &["junction::view::Kept"]),
+                ("}", &[]),
+                ("#[cfg(target_arch = \"wasm32\")]", &[]),
+                ("use web_sys::Event;", &["web_sys::Event"]),
+                ("#[cfg(not(test))]", &[]),
+                ("fn l() { crate::junction::view::draw(); window(); }", &["junction::view::draw", "window"]),
+            ],
+        );
+
+        let code = "use crate::junction::view::Panel;\nuse leptos::prelude::*;\n";
+        let by_declaration = tree(&[
+            ("lib.rs", "mod junction;"),
+            ("junction/mod.rs", "mod model;"),
+            ("junction/model/mod.rs", "#[cfg(test)]\nmod fixtures;\nmod tests;\n"),
+            ("junction/model/fixtures.rs", code),
+            ("junction/model/tests.rs", code),
+        ]);
+        let expected = [(1, "junction::view::Panel"), (2, "leptos::prelude::*")]
+            .map(|(line, path)| Break { used: used("junction/model/tests.rs", line, path), layer: "model" });
+        assert_eq!(broken(&by_declaration), expected);
+    }
+
+    #[test]
+    fn only_a_slices_model_and_view_model_are_held_to_the_library_rules() {
+        let code = "use leptos::prelude::*; use web_sys::Window; fn f() { document(); }\n";
+        let declaring = |modules: &str| format!("{modules}\n{code}");
+        let sources = tree(&[
+            ("lib.rs", &declaring("mod junction; mod share; mod shared;")),
+            ("junction/mod.rs", &declaring("mod view;")),
+            ("junction/view/mod.rs", &declaring("mod model; mod vm;")),
+            ("junction/view/model.rs", code),
+            ("junction/view/vm.rs", code),
+            ("share/mod.rs", &declaring("mod models; mod store; mod view; mod vm;")),
+            ("share/models.rs", code),
+            ("share/store.rs", code),
+            ("share/view.rs", code),
+            ("share/vm.rs", code),
+            ("shared/mod.rs", &declaring("mod model; mod vm;")),
+            ("shared/model.rs", code),
+            ("shared/vm.rs", code),
+        ]);
+        assert_eq!(broken(&sources), [vm_breaks("share/vm.rs", "document"), vm_breaks("share/vm.rs", "web_sys::Window")]);
+    }
+
+    #[test]
+    fn a_break_is_refused_with_its_file_line_path_and_layer() {
+        let sources = tree(&[
+            ("lib.rs", "mod junction;"),
+            ("junction/mod.rs", "mod model;\nmod vm;\n"),
+            (
+                "junction/vm/mod.rs",
+                "mod keys;\nuse web_sys::Window;\nuse super::view::Panel;\nuse leptos::{prelude::*, web_sys::Event};\nfn f() { document(); document(); leptos::prelude::window(); }\n",
+            ),
+            ("junction/vm/keys.rs", "use super::super::*;\n"),
+            (
+                "junction/model/mod.rs",
+                "use crate::junction::{vm::JunctionVm, view::{draw, draw as d}};\nuse super::super::junction;\nuse leptos::prelude::*;\n\nuse js_sys::Date;\n",
+            ),
+        ]);
+        let expected = [
+            "src/junction/model/mod.rs:1: uses junction::view::draw, which a model may not use",
+            "src/junction/model/mod.rs:1: uses junction::vm::JunctionVm, which a model may not use",
+            "src/junction/model/mod.rs:2: uses junction, which a model may not use",
+            "src/junction/model/mod.rs:3: uses leptos::prelude::*, which a model may not use",
+            "src/junction/model/mod.rs:5: uses js_sys::Date, which a model may not use",
+            "src/junction/vm/keys.rs:1: uses junction::*, which a view-model may not use",
+            "src/junction/vm/mod.rs:2: uses web_sys::Window, which a view-model may not use",
+            "src/junction/vm/mod.rs:3: uses junction::view::Panel, which a view-model may not use",
+            "src/junction/vm/mod.rs:4: uses leptos::web_sys::Event, which a view-model may not use",
+            "src/junction/vm/mod.rs:5: uses document, which a view-model may not use",
+            "src/junction/vm/mod.rs:5: uses leptos::prelude::window, which a view-model may not use",
+        ];
+        assert_eq!(unexcepted(&broken(&sources), &[]), expected);
+    }
+
+    #[test]
+    fn an_exception_lets_its_break_pass_and_no_other() {
+        let exceptions = [
+            Entry { by: &["junction/vm/mod.rs"], uses: &["web_sys", "junction::view"], why: "A sample." },
+            Entry { by: &["map"], uses: &["leptos::prelude", "js_sys::Date"], why: "A sample." },
+        ];
+        let covered = [
+            vm_breaks("junction/vm/mod.rs", "web_sys"),
+            vm_breaks("junction/vm/mod.rs", "web_sys::Window"),
+            vm_breaks("junction/vm/mod.rs", "junction::view"),
+            vm_breaks("junction/vm/mod.rs", "junction::view::Panel"),
+            model_breaks("map/model/mod.rs", "leptos::prelude::*"),
+            vm_breaks("map/vm/camera.rs", "js_sys::Date::now"),
+        ];
+        assert_eq!(unexcepted(&covered, &exceptions), Vec::<String>::new());
+
+        let others = [
+            model_breaks("junction/model/mod.rs", "web_sys::Window"),
+            model_breaks("junction/model/mod.rs", "junction::view::Panel"),
+            model_breaks("junction/model/mod.rs", "leptos::prelude::*"),
+            vm_breaks("junction/vm/keys.rs", "web_sys::Window"),
+            vm_breaks("junction/vm/mod.rs", "junction"),
+            vm_breaks("junction/vm/mod.rs", "junction::viewer::Viewer"),
+            vm_breaks("junction/vm/mod.rs", "web_sys_more::Window"),
+            vm_breaks("junction/vm/mod.rs", "leptos::web_sys::Window"),
+            model_breaks("map/model/mod.rs", "leptos"),
+            vm_breaks("map/vm/camera.rs", "js_sys"),
+            vm_breaks("map/vm/camera.rs", "web_sys::Window"),
+        ];
+        for other in others {
+            let message = format!("src/{}:1: uses {}, which a {} may not use", other.used.file, other.used.path, other.layer);
+            assert_eq!(unexcepted(&[covered[0].clone(), other], &exceptions), [message]);
+        }
+    }
+
+    #[test]
+    fn an_exception_nothing_uses_or_without_a_reason_is_faulty() {
+        let breaks = broken(&tree(&[
+            ("lib.rs", "mod junction;\nmod share;\n"),
+            ("junction/mod.rs", "mod vm;"),
+            ("junction/vm/mod.rs", "mod keys;\nuse leptos::prelude::*;\nuse web_sys::Window;\n"),
+            ("junction/vm/keys.rs", "use super::super::view::Panel;"),
+            ("share/mod.rs", "mod model;"),
+            ("share/model.rs", "use leptos::prelude::*;"),
+        ]));
+        let sound = [
+            Entry { by: &["junction/vm/mod.rs"], uses: &["web_sys"], why: "A sample." },
+            Entry { by: &["junction"], uses: &["junction::view", "web_sys::Window"], why: "A sample." },
+            Entry { by: &["share/model.rs"], uses: &["leptos"], why: "A sample." },
+        ];
+        assert_eq!(faulty(&breaks, &sound), Vec::<String>::new());
+
+        let unsound = [
+            Entry { by: &["share"], uses: &["leptos::prelude"], why: " \n" },
+            Entry { by: &["junction/vm/mod.rs", "junction/vm/keys.rs"], uses: &["web_sys", "junction::view"], why: "A sample." },
+            Entry { by: &["junction/vm/mod.rs"], uses: &["leptos::prelude"], why: "A sample." },
+            Entry { by: &["map", "street"], uses: &["js_sys"], why: "" },
+        ];
+        let expected = [
+            "EXCEPTIONS: nothing in junction/vm/mod.rs breaks a rule with junction::view",
+            "EXCEPTIONS: nothing in junction/vm/keys.rs breaks a rule with web_sys",
+            "EXCEPTIONS: nothing in junction/vm/mod.rs breaks a rule with leptos::prelude",
+            "EXCEPTIONS: nothing in map breaks a rule with js_sys",
+            "EXCEPTIONS: nothing in street breaks a rule with js_sys",
+            "EXCEPTIONS: no reason for what [\"share\"] may use: [\"leptos::prelude\"]",
+            "EXCEPTIONS: no reason for what [\"map\", \"street\"] may use: [\"js_sys\"]",
+        ];
+        assert_eq!(faulty(&breaks, &unsound), expected);
+    }
+
+    #[test]
+    fn production_code_keeps_to_its_layer() {
+        let breaks = broken(&sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src")));
+        let refused = unexcepted(&breaks, EXCEPTIONS);
+        assert!(refused.is_empty(), "{}", refused.join("\n"));
+        let faulty = faulty(&breaks, EXCEPTIONS);
+        assert!(faulty.is_empty(), "{}", faulty.join("\n"));
     }
 }
