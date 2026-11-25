@@ -1,0 +1,12 @@
+Files changed since the red commit 824e70d5:
+ Cargo.lock                                     |   2 +-
+ crates/cityloom_editor/Cargo.toml              |   2 +-
+ crates/cityloom_editor/src/dependency_guard.rs | 299 ++++++++++++++++++++-----
+ 3 files changed, 242 insertions(+), 61 deletions(-)
+
+mod tests of dependency_guard.rs, shasum at red and at the head:
+f334c5cb26f5acacb23ab3b6e47b397d3c071e41  -
+f334c5cb26f5acacb23ab3b6e47b397d3c071e41  -
+
+EXCEPTIONS at the head:
+162:const EXCEPTIONS: &[Entry] = &[];

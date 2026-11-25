@@ -1,0 +1,32 @@
+In a scratch copy of abff085b, one line added to each of six files (the file, its line, the line):
+junction/model/read_model.rs:5: use crate::junction::vm::text;
+junction/vm/text.rs:15: use crate::junction::view::figure;
+street/model/mod.rs:13: use leptos::web_sys::Element;
+share/vm.rs:6: use web_sys::Window;
+map/vm/mod.rs:17: fn title() -> String { document().title() }
+junction/model/stops.rs:6: use crate::junction;
+
+$ cargo test -p cityloom_editor production_code_keeps_to_its_layer
+running 1 test
+test dependency_guard::tests::production_code_keeps_to_its_layer ... FAILED
+
+failures:
+
+---- dependency_guard::tests::production_code_keeps_to_its_layer stdout ----
+
+thread 'dependency_guard::tests::production_code_keeps_to_its_layer' (57528669) panicked at crates/cityloom_editor/src/dependency_guard.rs:1531:9:
+src/junction/model/read_model.rs:5: uses junction::vm::text, which a model may not use
+src/junction/model/stops.rs:6: uses junction, which a model may not use
+src/junction/vm/text.rs:15: uses junction::view::figure, which a view-model may not use
+src/map/vm/mod.rs:17: uses document, which a view-model may not use
+src/share/vm.rs:6: uses web_sys::Window, which a view-model may not use
+src/street/model/mod.rs:13: uses leptos::web_sys::Element, which a model may not use
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    dependency_guard::tests::production_code_keeps_to_its_layer
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3984 filtered out; finished in 1.21s
+
+error: test failed, to rerun pass `-p cityloom_editor --lib`

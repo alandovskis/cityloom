@@ -1,0 +1,20 @@
+$ cargo test --workspace --features cityloom_server/test-provider -- --list
+$ cargo test --workspace --features cityloom_server/test-provider --no-fail-fast
+$ cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude citymodel_builder
+PASS red gate
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_break_is_refused_with_its_file_line_path_and_layer
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_document_or_window_of_the_code_itself_breaks_no_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_layer_may_use_what_is_below_it
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_model_that_names_leptos_or_the_browser_breaks_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_model_that_uses_its_view_model_or_view_breaks_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_view_model_may_use_leptos_signals
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_view_model_that_names_the_browser_breaks_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::a_view_model_that_uses_its_view_breaks_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::an_exception_lets_its_break_pass_and_no_other
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::an_exception_nothing_uses_or_without_a_reason_is_faulty
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::leptos_document_and_window_in_a_view_model_break_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::only_a_slices_model_and_view_model_are_held_to_the_library_rules
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::production_code_keeps_to_its_layer
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::taking_the_slice_whole_from_a_layer_breaks_a_rule
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::the_layer_rules_read_production_code_only
+  new test: cityloom_editor unittests src/lib.rs::dependency_guard::tests::the_report_may_draw_other_slices_figures
